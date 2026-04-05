@@ -1,0 +1,327 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ==================== ENUMS ====================
+
+enum UserRole {
+  USER
+  FIXER
+  ADMIN
+}
+
+enum FixerTier {
+  ECONOMY
+  STANDARD
+  CORPORATE
+  EXPERT
+  GURU
+}
+
+enum FixerStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum OrderStatus {
+  CREATED
+  MATCHING
+  ASSIGNED
+  DEPOSIT_PENDING
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  PROMPTPAY
+  BANK_TRANSFER
+  CREDIT_CARD
+}
+
+enum NotificationType {
+  PUSH
+  SMS
+  EMAIL
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+// ==================== MODELS ====================
+
+model User {
+  id        String   @id @default(uuid())
+  phone     String   @unique
+  email     String?  @unique
+  name      String?
+  role      UserRole @default(USER)
+  isActive  Boolean  @default(true)
+
+  addresses     Address[]
+  fixer         Fixer?
+  orders        Order[]
+  reviews       Review[]
+  notifications Notification[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+model Address {
+  id          String  @id @default(uuid())
+  userId      String
+  user        User    @relation(fields: [userId], references: [id])
+
+  label       String? // home, office
+  province    String
+  district    String
+  subdistrict String
+  postalCode  String
+  street      String?
+  building    String?
+  unit        String?
+  notes       String?
+
+  latitude    Float?
+  longitude   Float?
+  isDefault   Boolean @default(false)
+
+  orders    Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([province, district])
+  @@map("addresses")
+}
+
+model Fixer {
+  id              String      @id @default(uuid())
+  userId          String      @unique
+  user            User        @relation(fields: [userId], references: [id])
+
+  tier            FixerTier   @default(ECONOMY)
+  status          FixerStatus @default(PENDING)
+  rating          Float       @default(5)
+  completedJobs   Int         @default(0)
+  responseTime    Int?        // average in minutes
+  verified        Boolean     @default(false)
+  travelRadius    Int         @default(10) // km
+  yearsExperience Int?
+  bio             String?
+
+  skills       FixerSkill[]
+  availability FixerAvailability[]
+  orders       Order[]
+  reviews      Review[]
+  images       Image[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("fixers")
+}
+
+model FixerSkill {
+  id              String @id @default(uuid())
+  fixerId         String
+  fixer           Fixer  @relation(fields: [fixerId], references: [id])
+
+  category        String // e.g., "plumbing", "electrical", "aircon"
+  name            String // e.g., "pipe repair", "wiring"
+  yearsExperience Int?
+
+  createdAt DateTime @default(now())
+
+  @@unique([fixerId, category, name])
+  @@index([category])
+  @@map("fixer_skills")
+}
+
+model FixerAvailability {
+  id        String    @id @default(uuid())
+  fixerId   String
+  fixer     Fixer     @relation(fields: [fixerId], references: [id])
+
+  dayOfWeek DayOfWeek
+  startTime String    // "08:00"
+  endTime   String    // "18:00"
+  isActive  Boolean   @default(true)
+
+  @@unique([fixerId, dayOfWeek])
+  @@map("fixer_availability")
+}
+
+model Order {
+  id              String      @id @default(uuid())
+  userId          String
+  user            User        @relation(fields: [userId], references: [id])
+
+  fixerId         String?
+  fixer           Fixer?      @relation(fields: [fixerId], references: [id])
+
+  addressId       String
+  address         Address     @relation(fields: [addressId], references: [id])
+
+  status          OrderStatus @default(CREATED)
+  serviceCategory String
+  description     String
+  isUrgent        Boolean     @default(false)
+  scheduledAt     DateTime?
+  estimatedPrice  Float?
+  finalPrice      Float?
+
+  statusHistory OrderStatusHistory[]
+  payment       Payment?
+  review        Review?
+  images        Image[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([fixerId])
+  @@index([status])
+  @@index([serviceCategory])
+  @@map("orders")
+}
+
+model OrderStatusHistory {
+  id        String      @id @default(uuid())
+  orderId   String
+  order     Order       @relation(fields: [orderId], references: [id])
+
+  status    OrderStatus
+  note      String?
+  changedBy String?     // userId who changed the status
+
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@map("order_status_history")
+}
+
+model Payment {
+  id             String        @id @default(uuid())
+  orderId        String        @unique
+  order          Order         @relation(fields: [orderId], references: [id])
+
+  amount         Float
+  method         PaymentMethod @default(PROMPTPAY)
+  status         PaymentStatus @default(PENDING)
+  transactionRef String?       @unique
+  qrCodeUrl      String?
+
+  paidAt    DateTime?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([status])
+  @@map("payments")
+}
+
+model Review {
+  id      String @id @default(uuid())
+  orderId String @unique
+  order   Order  @relation(fields: [orderId], references: [id])
+
+  userId  String
+  user    User   @relation(fields: [userId], references: [id])
+
+  fixerId String
+  fixer   Fixer  @relation(fields: [fixerId], references: [id])
+
+  rating  Int    // 1-5
+  comment String?
+
+  createdAt DateTime @default(now())
+
+  @@index([fixerId])
+  @@index([userId])
+  @@map("reviews")
+}
+
+model Notification {
+  id     String             @id @default(uuid())
+  userId String
+  user   User               @relation(fields: [userId], references: [id])
+
+  type   NotificationType
+  status NotificationStatus @default(PENDING)
+  title  String
+  body   String
+  data   Json?              // extra payload
+
+  sentAt DateTime?
+  readAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([status])
+  @@map("notifications")
+}
+
+model Image {
+  id      String @id @default(uuid())
+  fixerId String?
+  fixer   Fixer? @relation(fields: [fixerId], references: [id])
+
+  orderId String?
+  order   Order?  @relation(fields: [orderId], references: [id])
+
+  type    String  // "kyc", "portfolio", "order_photo"
+  url     String
+  key     String  // S3/Spaces key
+
+  createdAt DateTime @default(now())
+
+  @@index([fixerId])
+  @@index([orderId])
+  @@map("images")
+}
+
+model OtpCode {
+  id        String   @id @default(uuid())
+  phone     String
+  code      String
+  expiresAt DateTime
+  verified  Boolean  @default(false)
+  attempts  Int      @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([phone])
+  @@map("otp_codes")
+}
