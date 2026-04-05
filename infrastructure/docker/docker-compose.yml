@@ -47,6 +47,33 @@ services:
       timeout: 10s
       retries: 5
 
+  backend:
+    image: ghcr.io/${GITHUB_REPOSITORY:-cblue}/backend:latest
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    ports:
+      - "3002:3002"
+    environment:
+      DATABASE_URL: postgresql://admin:${POSTGRES_PASSWORD:-NewPass456!}@postgres:5432/cblue
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-admin}:${RABBITMQ_PASSWORD:-password}@rabbitmq:5672
+      JWT_SECRET: ${JWT_SECRET:-change-in-production}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-in-production}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-15m}
+      JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-7d}
+      PORT: 3002
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:

@@ -15,6 +15,7 @@ import { PaymentModule } from './modules/payment/payment.module';
 import { ReviewModule } from './modules/review/review.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { QueueModule } from './queue/queue.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -36,6 +37,9 @@ import configuration from './config/configuration';
 
     // Database
     PrismaModule,
+
+    // Message queue (RabbitMQ)
+    QueueModule,
 
     // Feature modules
     AuthModule,
