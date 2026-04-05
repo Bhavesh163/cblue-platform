@@ -113,6 +113,103 @@ export class AdminService {
     });
   }
 
+  // ── Fraud detection ──
+
+  async getFraudFlags() {
+    // 1. Fixers with suspiciously high ratings but very few completed jobs
+    const suspiciousRatings = await this.prisma.fixer.findMany({
+      where: {
+        rating: { gte: 4.9 },
+        completedJobs: { lt: 3 },
+        status: FixerStatus.APPROVED,
+      },
+      include: { user: { select: { id: true, phone: true, name: true } } },
+    });
+
+    // 2. Approved fixers with zero skills (incomplete/fake registrations)
+    const noSkillFixers = await this.prisma.fixer.findMany({
+      where: {
+        status: FixerStatus.APPROVED,
+        skills: { none: {} },
+      },
+      include: { user: { select: { id: true, phone: true, name: true } } },
+    });
+
+    // 3. Users who registered as fixers but never completed KYC (not verified)
+    const unverifiedActive = await this.prisma.fixer.findMany({
+      where: {
+        status: FixerStatus.APPROVED,
+        verified: false,
+      },
+      include: { user: { select: { id: true, phone: true, name: true } } },
+    });
+
+    // 4. Fixers with abnormally fast response times (possible bot behaviour)
+    const suspiciousResponseTime = await this.prisma.fixer.findMany({
+      where: {
+        responseTime: { lt: 1 },
+        completedJobs: { gt: 0 },
+        status: FixerStatus.APPROVED,
+      },
+      include: { user: { select: { id: true, phone: true, name: true } } },
+    });
+
+    const flags = [
+      ...suspiciousRatings.map((f) => ({
+        fixerId: f.id,
+        user: f.user,
+        type: 'SUSPICIOUS_RATING' as const,
+        detail: `Rating ${f.rating} with only ${f.completedJobs} completed jobs`,
+      })),
+      ...noSkillFixers.map((f) => ({
+        fixerId: f.id,
+        user: f.user,
+        type: 'NO_SKILLS' as const,
+        detail: 'Approved fixer with no registered skills',
+      })),
+      ...unverifiedActive.map((f) => ({
+        fixerId: f.id,
+        user: f.user,
+        type: 'UNVERIFIED_ACTIVE' as const,
+        detail: 'Approved but not verified (KYC incomplete)',
+      })),
+      ...suspiciousResponseTime.map((f) => ({
+        fixerId: f.id,
+        user: f.user,
+        type: 'SUSPICIOUS_RESPONSE_TIME' as const,
+        detail: `Response time ${f.responseTime} min — possible bot`,
+      })),
+    ];
+
+    return { flags, total: flags.length };
+  }
+
+  async suspendFixer(fixerId: string, reason: string) {
+    const fixer = await this.prisma.fixer.findUnique({
+      where: { id: fixerId },
+    });
+    if (!fixer) throw new NotFoundException('Fixer not found');
+
+    const updated = await this.prisma.fixer.update({
+      where: { id: fixerId },
+      data: {
+        status: FixerStatus.SUSPENDED,
+        verified: false,
+      },
+      include: { user: true },
+    });
+
+    this.logger.warn(`Fixer ${fixerId} suspended. Reason: ${reason}`);
+
+    this.eventEmitter.emit('fixer.suspended', {
+      fixerId,
+      userId: fixer.userId,
+      reason,
+    });
+
+    return updated;
+  }
+
   // ── Dashboard stats ──
 
   async getDashboardStats() {

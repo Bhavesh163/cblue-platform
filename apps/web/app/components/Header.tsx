@@ -15,6 +15,7 @@ const navLinks = [
     ],
   },
   { href: "/fixers/register", label: "For Fixers" },
+  { href: "/dashboard", label: "Dashboard" },
 ];
 
 export function Header() {

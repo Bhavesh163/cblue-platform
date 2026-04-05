@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { OrderStatus, PaymentStatus } from '@prisma/client';
+import generatePayload from 'promptpay-qr';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { VerifyPaymentDto } from './dto/verify-payment.dto';
@@ -114,10 +115,9 @@ export class PaymentService {
   }
 
   private generatePromptPayQR(amount: number): string {
-    // TODO: Implement real PromptPay QR generation
-    // This would use a library like promptpay-qr to generate
-    // the actual QR code data URL
-    this.logger.log(`[DEV] PromptPay QR generated for ${amount} THB`);
-    return `promptpay://pay?amount=${amount}`;
+    const merchantId = process.env.PROMPTPAY_ID || '0000000000';
+    const payload = generatePayload(merchantId, { amount });
+    this.logger.log(`PromptPay QR generated for ${amount} THB`);
+    return payload;
   }
 }

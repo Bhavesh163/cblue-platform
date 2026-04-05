@@ -9,6 +9,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { RegisterFixerDto } from './dto/register-fixer.dto';
 import { AddSkillDto } from './dto/add-skill.dto';
 import { SetAvailabilityDto } from './dto/set-availability.dto';
+import { UploadKycDto } from './dto/upload-kyc.dto';
 
 @Injectable()
 export class FixerService {
@@ -67,6 +68,44 @@ export class FixerService {
     if (!fixer) throw new NotFoundException('Fixer profile not found');
     return fixer;
   }
+
+  // ── KYC / Image uploads ──
+
+  async uploadKyc(userId: string, dto: UploadKycDto) {
+    const fixer = await this.getFixerByUserId(userId);
+
+    return this.prisma.image.create({
+      data: {
+        fixerId: fixer.id,
+        type: 'kyc',
+        url: dto.url,
+        key: dto.key,
+      },
+    });
+  }
+
+  async uploadPortfolio(userId: string, dto: UploadKycDto) {
+    const fixer = await this.getFixerByUserId(userId);
+
+    return this.prisma.image.create({
+      data: {
+        fixerId: fixer.id,
+        type: 'portfolio',
+        url: dto.url,
+        key: dto.key,
+      },
+    });
+  }
+
+  async getImages(userId: string) {
+    const fixer = await this.getFixerByUserId(userId);
+    return this.prisma.image.findMany({
+      where: { fixerId: fixer.id },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  // ── Skills ──
 
   async addSkill(userId: string, dto: AddSkillDto) {
     const fixer = await this.getFixerByUserId(userId);

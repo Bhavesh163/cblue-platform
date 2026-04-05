@@ -11,6 +11,7 @@ import { FixerService } from './fixer.service';
 import { RegisterFixerDto } from './dto/register-fixer.dto';
 import { AddSkillDto } from './dto/add-skill.dto';
 import { SetAvailabilityDto } from './dto/set-availability.dto';
+import { UploadKycDto } from './dto/upload-kyc.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
@@ -33,6 +34,29 @@ export class FixerController {
   @Get(':fixerId')
   getProfile(@Param('fixerId') fixerId: string) {
     return this.fixerService.getProfile(fixerId);
+  }
+
+  // ── KYC / Images ──
+
+  @Post('me/upload-kyc')
+  @UseGuards(JwtAuthGuard)
+  uploadKyc(@CurrentUser('id') userId: string, @Body() dto: UploadKycDto) {
+    return this.fixerService.uploadKyc(userId, dto);
+  }
+
+  @Post('me/upload-portfolio')
+  @UseGuards(JwtAuthGuard)
+  uploadPortfolio(
+    @CurrentUser('id') userId: string,
+    @Body() dto: UploadKycDto,
+  ) {
+    return this.fixerService.uploadPortfolio(userId, dto);
+  }
+
+  @Get('me/images')
+  @UseGuards(JwtAuthGuard)
+  getMyImages(@CurrentUser('id') userId: string) {
+    return this.fixerService.getImages(userId);
   }
 
   // ── Skills ──
