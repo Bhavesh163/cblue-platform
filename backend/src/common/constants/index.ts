@@ -24,3 +24,40 @@ export const DEPOSIT_AMOUNT = 300;
 
 // Max matching results
 export const MAX_MATCHING_RESULTS = 5;
+
+// Service categories by order type
+export const HOUSEHOLD_SERVICES = [
+  'PLUMBING',
+  'ELECTRICAL',
+  'AC',
+  'INTERIOR',
+  'LANDSCAPING',
+  'GARDENING',
+  'CLADDING_ROOFING',
+] as const;
+
+export const PROJECT_SERVICES = [
+  'WEBSITE_DEVELOPMENT',
+  'MOBILE_APP_DEVELOPMENT',
+  'AI_INTEGRATION',
+  'CONSULTING',
+  'AI_CHATBOT',
+  'SOFTWARE_DEV',
+  'ML_AI',
+  'SOLAR_PANELS',
+  'EV_CHARGING',
+  'ECO_FRIENDLY_BUILDING_DESIGN',
+  'AC',
+  'PLUMBING',
+  'SMART_BUILDING_AUTOMATION',
+  'ENVIRONMENTAL_SERVICES',
+  'SECURITY_CCTV',
+  'DOOR_ACCESS_CONTROL',
+  'ECO_FRIENDLY_CONSTRUCTION',
+  'SMART_HOME',
+  'SMART_FARMING',
+] as const;
+
+export const ALL_SERVICE_CATEGORIES = [
+  ...new Set([...HOUSEHOLD_SERVICES, ...PROJECT_SERVICES]),
+] as const;

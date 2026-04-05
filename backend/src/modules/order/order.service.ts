@@ -41,6 +41,7 @@ export class OrderService {
       data: {
         userId,
         addressId: dto.addressId,
+        orderType: dto.orderType,
         serviceCategory: dto.serviceCategory,
         description: dto.description,
         isUrgent: dto.isUrgent ?? false,
