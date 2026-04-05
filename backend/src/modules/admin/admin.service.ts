@@ -50,9 +50,7 @@ export class AdminService {
       include: { user: true },
     });
 
-    this.logger.log(
-      `Fixer ${fixerId} status changed to ${dto.status}`,
-    );
+    this.logger.log(`Fixer ${fixerId} status changed to ${dto.status}`);
 
     this.eventEmitter.emit('fixer.status_changed', {
       fixerId,

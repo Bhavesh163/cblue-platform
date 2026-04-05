@@ -34,7 +34,9 @@ export class OrderService {
       where: { id: dto.addressId, userId },
     });
     if (!address) {
-      throw new BadRequestException('Address not found or does not belong to user');
+      throw new BadRequestException(
+        'Address not found or does not belong to user',
+      );
     }
 
     const order = await this.prisma.order.create({

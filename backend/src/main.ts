@@ -15,13 +15,14 @@ async function bootstrap() {
 
   // CORS
   app.enableCors({
-    origin: configService.get('nodeEnv') === 'development'
-      ? '*'
-      : [
-          'https://yourdomain.com',
-          'https://www.yourdomain.com',
-          'https://admin.yourdomain.com',
-        ],
+    origin:
+      configService.get('nodeEnv') === 'development'
+        ? '*'
+        : [
+            'https://yourdomain.com',
+            'https://www.yourdomain.com',
+            'https://admin.yourdomain.com',
+          ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
@@ -47,4 +48,4 @@ async function bootstrap() {
   logger.log(`Application running on port ${port}`);
   logger.log(`Environment: ${configService.get('nodeEnv')}`);
 }
-bootstrap();
+void bootstrap();

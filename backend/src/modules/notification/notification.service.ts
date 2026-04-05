@@ -24,13 +24,13 @@ export class NotificationService {
     // Dispatch to appropriate channel
     switch (dto.type) {
       case NotificationType.PUSH:
-        await this.sendPush(dto);
+        this.sendPush(dto);
         break;
       case NotificationType.SMS:
-        await this.sendSms(dto);
+        this.sendSms(dto);
         break;
       case NotificationType.EMAIL:
-        await this.sendEmail(dto);
+        this.sendEmail(dto);
         break;
     }
 
@@ -73,10 +73,7 @@ export class NotificationService {
   }
 
   @OnEvent('payment.completed')
-  async onPaymentCompleted(payload: {
-    orderId: string;
-    amount: number;
-  }) {
+  async onPaymentCompleted(payload: { orderId: string; amount: number }) {
     const order = await this.prisma.order.findUnique({
       where: { id: payload.orderId },
     });
@@ -103,17 +100,17 @@ export class NotificationService {
 
   // ── Channel implementations (stubs) ──
 
-  private async sendPush(dto: SendNotificationDto) {
+  private sendPush(dto: SendNotificationDto) {
     // TODO: Integrate Firebase Cloud Messaging
     this.logger.log(`[DEV] Push notification to ${dto.userId}: ${dto.title}`);
   }
 
-  private async sendSms(dto: SendNotificationDto) {
+  private sendSms(dto: SendNotificationDto) {
     // TODO: Integrate SMS provider (Twilio / AWS SNS)
     this.logger.log(`[DEV] SMS to ${dto.userId}: ${dto.body}`);
   }
 
-  private async sendEmail(dto: SendNotificationDto) {
+  private sendEmail(dto: SendNotificationDto) {
     // TODO: Integrate email provider (SendGrid / SES)
     this.logger.log(`[DEV] Email to ${dto.userId}: ${dto.title}`);
   }

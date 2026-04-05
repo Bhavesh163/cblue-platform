@@ -44,7 +44,8 @@ export class AuthService {
     }
 
     const code = this.generateOtp();
-    const expiryMinutes = this.configService.get<number>('otp.expiryMinutes') ?? 5;
+    const expiryMinutes =
+      this.configService.get<number>('otp.expiryMinutes') ?? 5;
 
     await this.prisma.otpCode.create({
       data: {
@@ -148,13 +149,15 @@ export class AuthService {
     const payload: JwtPayload = { sub: userId, phone, role };
 
     const [accessToken, refreshToken] = await Promise.all([
-      this.jwtService.signAsync(payload as any, {
+      this.jwtService.signAsync(payload, {
         secret: this.configService.getOrThrow<string>('jwt.secret'),
-        expiresIn: this.configService.getOrThrow<string>('jwt.expiration') as any,
+        expiresIn: this.configService.getOrThrow<string>('jwt.expiration'),
       }),
-      this.jwtService.signAsync(payload as any, {
+      this.jwtService.signAsync(payload, {
         secret: this.configService.getOrThrow<string>('jwt.refreshSecret'),
-        expiresIn: this.configService.getOrThrow<string>('jwt.refreshExpiration') as any,
+        expiresIn: this.configService.getOrThrow<string>(
+          'jwt.refreshExpiration',
+        ),
       }),
     ]);
 

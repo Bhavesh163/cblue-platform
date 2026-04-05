@@ -7,7 +7,9 @@ export default () => ({
   jwt: {
     secret: process.env.JWT_SECRET || 'dev-secret-change-in-production',
     expiration: process.env.JWT_EXPIRATION || '15m',
-    refreshSecret: process.env.JWT_REFRESH_SECRET || 'dev-refresh-secret-change-in-production',
+    refreshSecret:
+      process.env.JWT_REFRESH_SECRET ||
+      'dev-refresh-secret-change-in-production',
     refreshExpiration: process.env.JWT_REFRESH_EXPIRATION || '7d',
   },
   redis: {

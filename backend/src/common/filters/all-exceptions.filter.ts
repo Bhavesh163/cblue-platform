@@ -37,7 +37,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       message:
         typeof message === 'string'
           ? message
-          : (message as any)?.message || message,
+          : ((message as Record<string, unknown>)?.message ?? message),
       timestamp: new Date().toISOString(),
     });
   }

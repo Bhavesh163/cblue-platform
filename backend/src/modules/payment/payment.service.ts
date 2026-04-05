@@ -56,9 +56,7 @@ export class PaymentService {
       },
     });
 
-    this.logger.log(
-      `Payment created for order ${dto.orderId}: ${amount} THB`,
-    );
+    this.logger.log(`Payment created for order ${dto.orderId}: ${amount} THB`);
 
     return payment;
   }

@@ -20,10 +20,7 @@ export class FixerController {
 
   @Post('register')
   @UseGuards(JwtAuthGuard)
-  register(
-    @CurrentUser('id') userId: string,
-    @Body() dto: RegisterFixerDto,
-  ) {
+  register(@CurrentUser('id') userId: string, @Body() dto: RegisterFixerDto) {
     return this.fixerService.register(userId, dto);
   }
 
@@ -42,10 +39,7 @@ export class FixerController {
 
   @Post('me/skills')
   @UseGuards(JwtAuthGuard)
-  addSkill(
-    @CurrentUser('id') userId: string,
-    @Body() dto: AddSkillDto,
-  ) {
+  addSkill(@CurrentUser('id') userId: string, @Body() dto: AddSkillDto) {
     return this.fixerService.addSkill(userId, dto);
   }
 

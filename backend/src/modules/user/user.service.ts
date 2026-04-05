@@ -46,7 +46,11 @@ export class UserService {
     });
   }
 
-  async updateAddress(userId: string, addressId: string, dto: CreateAddressDto) {
+  async updateAddress(
+    userId: string,
+    addressId: string,
+    dto: CreateAddressDto,
+  ) {
     const address = await this.prisma.address.findFirst({
       where: { id: addressId, userId },
     });

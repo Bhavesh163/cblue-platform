@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
+import { OrderStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrderService } from '../order/order.service';
 import {
@@ -39,7 +40,7 @@ export class MatchingService {
     // Transition order to MATCHING
     await this.orderService.updateStatus(
       payload.orderId,
-      { status: 'MATCHING' as any },
+      { status: OrderStatus.MATCHING },
       'system',
     );
 
@@ -80,9 +81,7 @@ export class MatchingService {
     });
 
     if (fixers.length === 0) {
-      this.logger.warn(
-        `No fixers found for category: ${serviceCategory}`,
-      );
+      this.logger.warn(`No fixers found for category: ${serviceCategory}`);
       return [];
     }
 

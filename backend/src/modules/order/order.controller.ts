@@ -14,6 +14,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { UserRole } from '@prisma/client';
 
 @Controller('orders')
 @UseGuards(JwtAuthGuard)
@@ -21,10 +22,7 @@ export class OrderController {
   constructor(private readonly orderService: OrderService) {}
 
   @Post()
-  create(
-    @CurrentUser('id') userId: string,
-    @Body() dto: CreateOrderDto,
-  ) {
+  create(@CurrentUser('id') userId: string, @Body() dto: CreateOrderDto) {
     return this.orderService.create(userId, dto);
   }
 
@@ -40,7 +38,7 @@ export class OrderController {
 
   @Put(':orderId/status')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'FIXER' as any)
+  @Roles(UserRole.ADMIN, UserRole.FIXER)
   updateStatus(
     @Param('orderId') orderId: string,
     @Body() dto: UpdateOrderStatusDto,
