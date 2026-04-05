@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import ms from 'ms';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
@@ -151,11 +152,12 @@ export class AuthService {
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
         secret: this.configService.getOrThrow<string>('jwt.secret'),
-        expiresIn: this.configService.getOrThrow<string>('jwt.expiration'),
+        expiresIn:
+          this.configService.getOrThrow<ms.StringValue>('jwt.expiration'),
       }),
       this.jwtService.signAsync(payload, {
         secret: this.configService.getOrThrow<string>('jwt.refreshSecret'),
-        expiresIn: this.configService.getOrThrow<string>(
+        expiresIn: this.configService.getOrThrow<ms.StringValue>(
           'jwt.refreshExpiration',
         ),
       }),
