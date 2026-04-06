@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, type FormEvent, type ChangeEvent } from "react";
+import { useState, useCallback, type FormEvent, type ChangeEvent } from "react";
 import { FIXER_ALL_SERVICES, THAI_PROVINCES } from "../../lib/constants";
+import ReCaptcha from "../../components/ReCaptcha";
+import GpsDetectButton from "../../components/GpsDetectButton";
 
 interface FormData {
   name: string;
@@ -50,6 +52,11 @@ export default function FixerRegisterPage() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+  const [recaptchaToken, setRecaptchaToken] = useState("");
+  const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  const handleRecaptcha = useCallback((token: string) => setRecaptchaToken(token), []);
+  const handleRecaptchaExpire = useCallback(() => setRecaptchaToken(""), []);
 
   function handleChange(
     e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -75,6 +82,10 @@ export default function FixerRegisterPage() {
     e.preventDefault();
     if (!form.consent) {
       setError("กรุณายอมรับเงื่อนไขก่อนส่งแบบฟอร์ม");
+      return;
+    }
+    if (!recaptchaToken) {
+      setError("กรุณายืนยัน reCAPTCHA");
       return;
     }
     if (form.selectedSkills.length === 0) {
@@ -108,6 +119,8 @@ export default function FixerRegisterPage() {
           postalCode: form.postalCode,
         },
         description: form.description,
+        gpsCoords: gpsCoords || undefined,
+        recaptchaToken,
         kycImageCount: kycImages.length,
         portfolioImageCount: portfolioImages.length,
       };
@@ -408,6 +421,14 @@ export default function FixerRegisterPage() {
               สถานที่ตั้ง / พื้นที่ให้บริการ
             </legend>
             <div className="space-y-4">
+              {/* GPS Auto-detect */}
+              <GpsDetectButton onDetected={(coords) => setGpsCoords(coords)} />
+              {gpsCoords && (
+                <p className="text-xs text-green-600">
+                  📍 ตำแหน่ง: {gpsCoords.lat.toFixed(6)}, {gpsCoords.lng.toFixed(6)}
+                </p>
+              )}
+
               <div className="flex gap-4">
                 <label className="flex items-center gap-2 text-sm">
                   <input
@@ -563,6 +584,8 @@ export default function FixerRegisterPage() {
                 </a>
               </label>
             </div>
+
+            <ReCaptcha onVerify={handleRecaptcha} onExpire={handleRecaptchaExpire} />
 
             <button
               type="submit"

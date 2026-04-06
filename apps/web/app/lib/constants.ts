@@ -6,6 +6,8 @@ export const HOUSEHOLD_SERVICES = [
   { value: "LANDSCAPING", label: "จัดสวน (Landscaping)" },
   { value: "GARDENING", label: "ทำสวน (Gardening)" },
   { value: "CLADDING_ROOFING", label: "หลังคา/ผนัง (Cladding/Roofing)" },
+  { value: "ACCOUNTANT", label: "บัญชี (Accountant)" },
+  { value: "LAWYER", label: "ทนายความ (Lawyer)" },
 ] as const;
 
 export const PROJECT_SERVICES = [
@@ -22,6 +24,7 @@ export const PROJECT_SERVICES = [
   { value: "AC", label: "แอร์ (AC)" },
   { value: "PLUMBING", label: "ประปา (Plumbing)" },
   { value: "SMART_BUILDING_AUTOMATION", label: "Smart Building Automation" },
+  { value: "FIRE_LIFE_SAFETY", label: "Fire Life Safety" },
   { value: "ENVIRONMENTAL_SERVICES", label: "Environmental Services" },
   { value: "SECURITY_CCTV", label: "Security & CCTV" },
   { value: "DOOR_ACCESS_CONTROL", label: "Door & Access Control" },

@@ -69,6 +69,9 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Downcase repo name
+        run: echo "REPO=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -82,8 +85,8 @@ jobs:
           context: ./backend
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}/backend:${{ github.sha }}
-            ghcr.io/${{ github.repository }}/backend:latest
+            ghcr.io/${{ env.REPO }}/backend:${{ github.sha }}
+            ghcr.io/${{ env.REPO }}/backend:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -101,7 +104,8 @@ jobs:
           username: ${{ secrets.DROPLET_USER }}
           key: ${{ secrets.DROPLET_SSH_KEY }}
           script: |
+            REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
             cd /opt/cblue-platform
-            docker pull ghcr.io/${{ github.repository }}/backend:latest
+            docker pull ghcr.io/${REPO}/backend:latest
             docker compose -f infrastructure/docker/docker-compose.yml up -d --no-deps backend
             echo "Deployed backend:${{ github.sha }}"

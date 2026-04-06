@@ -4,7 +4,6 @@ export const TIER_MULTIPLIERS = {
   STANDARD: 1.2,
   CORPORATE: 1.4,
   EXPERT: 1.6,
-  GURU: 1.8,
 } as const;
 
 // Matching weights
@@ -34,6 +33,8 @@ export const HOUSEHOLD_SERVICES = [
   'LANDSCAPING',
   'GARDENING',
   'CLADDING_ROOFING',
+  'ACCOUNTANT',
+  'LAWYER',
 ] as const;
 
 export const PROJECT_SERVICES = [
@@ -50,6 +51,7 @@ export const PROJECT_SERVICES = [
   'AC',
   'PLUMBING',
   'SMART_BUILDING_AUTOMATION',
+  'FIRE_LIFE_SAFETY',
   'ENVIRONMENTAL_SERVICES',
   'SECURITY_CCTV',
   'DOOR_ACCESS_CONTROL',

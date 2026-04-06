@@ -111,7 +111,8 @@ export class MatchingService {
         distance: null, // Would be calculated with real coordinates
         rating: fixer.rating,
         tier: fixer.tier,
-        tierMultiplier: TIER_MULTIPLIERS[fixer.tier],
+        tierMultiplier:
+          TIER_MULTIPLIERS[fixer.tier as keyof typeof TIER_MULTIPLIERS],
       };
     });
 
@@ -140,11 +141,10 @@ export class MatchingService {
 
   private calculateTierScore(tier: string): number {
     const scores: Record<string, number> = {
-      ECONOMY: 0.2,
-      STANDARD: 0.4,
-      CORPORATE: 0.6,
-      EXPERT: 0.8,
-      GURU: 1.0,
+      ECONOMY: 0.25,
+      STANDARD: 0.5,
+      CORPORATE: 0.75,
+      EXPERT: 1.0,
     };
     return scores[tier] ?? 0.5;
   }

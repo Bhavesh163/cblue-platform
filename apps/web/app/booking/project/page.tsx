@@ -1,7 +1,18 @@
 "use client";
 
-import { useState, type FormEvent, type ChangeEvent } from "react";
+import { useState, useCallback, type FormEvent, type ChangeEvent } from "react";
 import { PROJECT_SERVICES, THAI_PROVINCES } from "../../lib/constants";
+import ReCaptcha from "../../components/ReCaptcha";
+import GpsDetectButton from "../../components/GpsDetectButton";
+
+const BUDGET_RANGES = [
+  { value: "UNDER_50000", label: "ต่ำกว่า 50,000 บาท" },
+  { value: "50000_200000", label: "50,000 – 200,000 บาท" },
+  { value: "200000_500000", label: "200,000 – 500,000 บาท" },
+  { value: "500000_1M", label: "500,000 – 1,000,000 บาท" },
+  { value: "1M_5M", label: "1 – 5 ล้านบาท" },
+  { value: "OVER_5M", label: "มากกว่า 5 ล้านบาท" },
+];
 
 interface FormData {
   name: string;
@@ -10,6 +21,8 @@ interface FormData {
   company: string;
   serviceCategory: string;
   scheduledDate: string;
+  scheduledTime: string;
+  budgetRange: string;
   locationType: "dropdown" | "address";
   province: string;
   district: string;
@@ -27,6 +40,8 @@ const initialForm: FormData = {
   company: "",
   serviceCategory: "",
   scheduledDate: "",
+  scheduledTime: "",
+  budgetRange: "",
   locationType: "dropdown",
   province: "",
   district: "",
@@ -43,6 +58,11 @@ export default function ProjectBookingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+  const [recaptchaToken, setRecaptchaToken] = useState("");
+  const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  const handleRecaptcha = useCallback((token: string) => setRecaptchaToken(token), []);
+  const handleRecaptchaExpire = useCallback(() => setRecaptchaToken(""), []);
 
   function handleChange(
     e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -67,6 +87,10 @@ export default function ProjectBookingPage() {
       setError("กรุณายอมรับเงื่อนไขก่อนส่งแบบฟอร์ม");
       return;
     }
+    if (!recaptchaToken) {
+      setError("กรุณายืนยัน reCAPTCHA");
+      return;
+    }
     setSubmitting(true);
     setError("");
 
@@ -79,8 +103,9 @@ export default function ProjectBookingPage() {
         company: form.company,
         serviceCategory: form.serviceCategory,
         scheduledAt: form.scheduledDate
-          ? `${form.scheduledDate}T09:00:00`
+          ? `${form.scheduledDate}T${form.scheduledTime || "09:00"}:00`
           : undefined,
+        budgetRange: form.budgetRange || undefined,
         description: form.description,
         address: {
           province: form.province,
@@ -88,6 +113,8 @@ export default function ProjectBookingPage() {
           subdistrict: form.subdistrict,
           postalCode: form.postalCode,
         },
+        gpsCoords: gpsCoords || undefined,
+        recaptchaToken,
         imageCount: images.length,
       };
       console.log("Project booking submission:", payload);
@@ -251,6 +278,39 @@ export default function ProjectBookingPage() {
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                 />
               </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="scheduledTime" className="block text-sm font-medium text-gray-700 mb-1">
+                    เวลา
+                  </label>
+                  <input
+                    id="scheduledTime"
+                    name="scheduledTime"
+                    type="time"
+                    value={form.scheduledTime}
+                    onChange={handleChange}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="budgetRange" className="block text-sm font-medium text-gray-700 mb-1">
+                    งบประมาณโดยประมาณ
+                  </label>
+                  <select
+                    id="budgetRange"
+                    name="budgetRange"
+                    value={form.budgetRange}
+                    onChange={handleChange}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none bg-white"
+                  >
+                    <option value="">-- ไม่ระบุ --</option>
+                    {BUDGET_RANGES.map((b) => (
+                      <option key={b.value} value={b.value}>{b.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </div>
           </fieldset>
 
@@ -260,6 +320,14 @@ export default function ProjectBookingPage() {
               สถานที่ตั้งโครงการ
             </legend>
             <div className="space-y-4">
+              {/* GPS Auto-detect */}
+              <GpsDetectButton onDetected={(coords) => setGpsCoords(coords)} />
+              {gpsCoords && (
+                <p className="text-xs text-green-600">
+                  📍 ตำแหน่ง: {gpsCoords.lat.toFixed(6)}, {gpsCoords.lng.toFixed(6)}
+                </p>
+              )}
+
               <div className="flex gap-4">
                 <label className="flex items-center gap-2 text-sm">
                   <input
@@ -440,6 +508,8 @@ export default function ProjectBookingPage() {
                 </a>
               </label>
             </div>
+
+            <ReCaptcha onVerify={handleRecaptcha} onExpire={handleRecaptchaExpire} />
 
             <button
               type="submit"

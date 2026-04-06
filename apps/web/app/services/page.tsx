@@ -50,6 +50,20 @@ const householdServices = [
     desc: "ซ่อมหลังคา หลังคารั่วซึม ผนัง กันสาด รางน้ำฝน",
     examples: ["ซ่อมหลังคารั่ว", "เปลี่ยนกระเบื้องหลังคา", "ติดกันสาด", "ซ่อมรางน้ำฝน"],
   },
+  {
+    id: "accountant",
+    icon: "📊",
+    title: "บัญชี (Accountant)",
+    desc: "บริการบัญชี ภาษี วางระบบบัญชี ปิดงบการเงิน",
+    examples: ["ยื่นภาษี", "ปิดงบการเงิน", "วางระบบบัญชี", "ตรวจสอบบัญชี"],
+  },
+  {
+    id: "lawyer",
+    icon: "⚖️",
+    title: "ทนายความ (Lawyer)",
+    desc: "ที่ปรึกษากฎหมาย สัญญา คดีทรัพย์สิน งานนิติกรรม",
+    examples: ["ร่างสัญญา", "ที่ปรึกษากฎหมาย", "คดีอสังหาริมทรัพย์", "จดทะเบียน"],
+  },
 ];
 
 const projectServices = [
@@ -87,6 +101,16 @@ const projectServices = [
       "Smart Farming",
       "Security & CCTV",
       "Door & Access Control",
+    ],
+  },
+  {
+    id: "mep",
+    icon: "🔥",
+    title: "MEP & Safety",
+    items: [
+      "AC (ระบบปรับอากาศ)",
+      "Plumbing (ระบบสุขาภิบาล)",
+      "Fire Life Safety",
     ],
   },
   {

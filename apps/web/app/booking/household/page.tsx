@@ -1,7 +1,18 @@
 "use client";
 
-import { useState, type FormEvent, type ChangeEvent } from "react";
+import { useState, useCallback, type FormEvent, type ChangeEvent } from "react";
 import { HOUSEHOLD_SERVICES, THAI_PROVINCES } from "../../lib/constants";
+import ReCaptcha from "../../components/ReCaptcha";
+import GpsDetectButton from "../../components/GpsDetectButton";
+
+const BUDGET_RANGES = [
+  { value: "UNDER_5000", label: "ต่ำกว่า 5,000 บาท" },
+  { value: "5000_10000", label: "5,000 – 10,000 บาท" },
+  { value: "10000_30000", label: "10,000 – 30,000 บาท" },
+  { value: "30000_50000", label: "30,000 – 50,000 บาท" },
+  { value: "50000_100000", label: "50,000 – 100,000 บาท" },
+  { value: "OVER_100000", label: "มากกว่า 100,000 บาท" },
+];
 
 interface FormData {
   name: string;
@@ -18,6 +29,7 @@ interface FormData {
   postalCode: string;
   addressText: string;
   description: string;
+  budgetRange: string;
   isUrgent: boolean;
   consent: boolean;
 }
@@ -37,6 +49,7 @@ const initialForm: FormData = {
   postalCode: "",
   addressText: "",
   description: "",
+  budgetRange: "",
   isUrgent: false,
   consent: false,
 };
@@ -47,6 +60,11 @@ export default function HouseholdBookingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+  const [recaptchaToken, setRecaptchaToken] = useState("");
+  const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  const handleRecaptcha = useCallback((token: string) => setRecaptchaToken(token), []);
+  const handleRecaptchaExpire = useCallback(() => setRecaptchaToken(""), []);
 
   function handleChange(
     e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -71,6 +89,10 @@ export default function HouseholdBookingPage() {
       setError("กรุณายอมรับเงื่อนไขก่อนส่งแบบฟอร์ม");
       return;
     }
+    if (!recaptchaToken) {
+      setError("กรุณายืนยัน reCAPTCHA");
+      return;
+    }
     setSubmitting(true);
     setError("");
 
@@ -88,6 +110,7 @@ export default function HouseholdBookingPage() {
           ? `${form.scheduledDate}T${form.scheduledTime || "09:00"}:00`
           : undefined,
         isUrgent: form.isUrgent,
+        budgetRange: form.budgetRange || undefined,
         description: form.description,
         address: {
           province: form.province,
@@ -95,6 +118,8 @@ export default function HouseholdBookingPage() {
           subdistrict: form.subdistrict,
           postalCode: form.postalCode,
         },
+        gpsCoords: gpsCoords || undefined,
+        recaptchaToken,
         imageCount: images.length,
       };
       console.log("Household booking submission:", payload);
@@ -288,6 +313,25 @@ export default function HouseholdBookingPage() {
                   🚨 ต้องการด่วน (Need urgent?)
                 </label>
               </div>
+
+              {/* Budget Range */}
+              <div>
+                <label htmlFor="budgetRange" className="block text-sm font-medium text-gray-700 mb-1">
+                  งบประมาณโดยประมาณ
+                </label>
+                <select
+                  id="budgetRange"
+                  name="budgetRange"
+                  value={form.budgetRange}
+                  onChange={handleChange}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none bg-white"
+                >
+                  <option value="">-- ไม่ระบุ --</option>
+                  {BUDGET_RANGES.map((b) => (
+                    <option key={b.value} value={b.value}>{b.label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </fieldset>
 
@@ -297,6 +341,14 @@ export default function HouseholdBookingPage() {
               สถานที่ตั้งบ้าน
             </legend>
             <div className="space-y-4">
+              {/* GPS Auto-detect */}
+              <GpsDetectButton onDetected={(coords) => setGpsCoords(coords)} />
+              {gpsCoords && (
+                <p className="text-xs text-green-600">
+                  📍 ตำแหน่ง: {gpsCoords.lat.toFixed(6)}, {gpsCoords.lng.toFixed(6)}
+                </p>
+              )}
+
               {/* Location type toggle */}
               <div className="flex gap-4">
                 <label className="flex items-center gap-2 text-sm">
@@ -478,6 +530,8 @@ export default function HouseholdBookingPage() {
                 </a>
               </label>
             </div>
+
+            <ReCaptcha onVerify={handleRecaptcha} onExpire={handleRecaptchaExpire} />
 
             <button
               type="submit"
