@@ -5,6 +5,7 @@ WORKDIR /app
 
 COPY package*.json ./
 COPY prisma ./prisma/
+COPY prisma.config.ts ./
 
 RUN npm ci
 
@@ -23,7 +24,9 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 
 RUN npm ci --omit=dev
-RUN npx prisma generate
+
+# Copy generated Prisma client from builder (prisma CLI is a devDep)
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 # Don't run as root
 RUN addgroup -g 1001 -S nodejs && \
