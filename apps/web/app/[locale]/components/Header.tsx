@@ -2,32 +2,39 @@
 
 import Link from "next/link";
 import { useState } from "react";
-
-const navLinks = [
-  { href: "/", label: "หน้าหลัก" },
-  { href: "/services", label: "บริการ" },
-  {
-    href: "/booking",
-    label: "Get Project Team / Support",
-    children: [
-      { href: "/booking/household", label: "งานซ่อมบำรุงบ้าน" },
-      { href: "/booking/project", label: "โปรเจกต์" },
-    ],
-  },
-  { href: "/fixers/register", label: "For Fixers" },
-  { href: "/dashboard", label: "Dashboard" },
-];
+import { useTranslations, useLocale } from "next-intl";
+import { LanguageToggle } from "./LanguageToggle";
 
 export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const t = useTranslations("nav");
+  const locale = useLocale();
+
+  const prefix = `/${locale}`;
+
+  const navLinks = [
+    { href: `${prefix}`, label: t("home") },
+    { href: `${prefix}/services`, label: t("services") },
+    {
+      href: `${prefix}/booking`,
+      label: t("projectTeam"),
+      children: [
+        { href: `${prefix}/booking/household`, label: t("household") },
+        { href: `${prefix}/booking/project`, label: t("project") },
+      ],
+    },
+    { href: `${prefix}/fixers/register`, label: t("forFixers") },
+    { href: `${prefix}/properties`, label: t("realEstate") },
+    { href: `${prefix}/dashboard`, label: t("dashboard") },
+  ];
 
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2">
+          <Link href={`${prefix}`} className="flex items-center gap-2">
             <div className="h-9 w-9 rounded-lg bg-blue-700 flex items-center justify-center">
               <span className="text-white font-bold text-lg">C</span>
             </div>
@@ -87,13 +94,16 @@ export function Header() {
             )}
           </nav>
 
-          {/* CTA + Mobile toggle */}
-          <div className="flex items-center gap-3">
+          {/* Language Toggle + CTA + Mobile toggle */}
+          <div className="flex items-center gap-2">
+            <div className="hidden sm:block">
+              <LanguageToggle />
+            </div>
             <Link
-              href="/booking/household"
+              href={`${prefix}/booking/household`}
               className="hidden sm:inline-flex items-center px-4 py-2 text-sm font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded-lg transition-colors"
             >
-              จองช่างเลย
+              {t("bookNow")}
             </Link>
             <button
               onClick={() => setMobileOpen(!mobileOpen)}
@@ -143,12 +153,15 @@ export function Header() {
               </Link>
             )
           )}
+          <div className="mt-2 px-3 py-2">
+            <LanguageToggle />
+          </div>
           <Link
-            href="/booking/household"
+            href={`${prefix}/booking/household`}
             onClick={() => setMobileOpen(false)}
             className="mt-2 block w-full text-center px-4 py-2.5 text-sm font-semibold text-white bg-blue-700 rounded-lg"
           >
-            จองช่างเลย
+            {t("bookNow")}
           </Link>
         </div>
       )}

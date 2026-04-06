@@ -69,6 +69,29 @@ enum OrderType {
   PROJECT
 }
 
+enum PropertyType {
+  CONDO
+  HOUSE
+  TOWNHOUSE
+  LAND
+  COMMERCIAL
+  APARTMENT
+}
+
+enum ListingType {
+  SALE
+  RENT
+}
+
+enum PropertyStatus {
+  DRAFT
+  ACTIVE
+  SOLD
+  RENTED
+  EXPIRED
+  REMOVED
+}
+
 enum DayOfWeek {
   MONDAY
   TUESDAY
@@ -95,6 +118,7 @@ model User {
   orders        Order[]
   reviews       Review[]
   notifications Notification[]
+  properties    Property[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -330,4 +354,72 @@ model OtpCode {
 
   @@index([phone])
   @@map("otp_codes")
+}
+
+// ==================== REAL ESTATE ====================
+
+model Property {
+  id          String         @id @default(uuid())
+  userId      String
+  user        User           @relation(fields: [userId], references: [id])
+
+  propertyType PropertyType
+  listingType  ListingType
+  status       PropertyStatus @default(ACTIVE)
+
+  title       String
+  description String
+
+  price       Float
+  area        Float?        // sq.m.
+  bedrooms    Int?
+  bathrooms   Int?
+  floors      Int?
+
+  // Location
+  province    String
+  district    String
+  subdistrict String?
+  postalCode  String?
+  addressLine String?
+  latitude    Float?
+  longitude   Float?
+
+  // Contact
+  contactName  String
+  contactPhone String
+  contactEmail String?
+
+  // Features
+  features    Json?         // amenities, parking, etc.
+  yearBuilt   Int?
+
+  images      PropertyImage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([propertyType])
+  @@index([listingType])
+  @@index([status])
+  @@index([province, district])
+  @@index([price])
+  @@map("properties")
+}
+
+model PropertyImage {
+  id         String   @id @default(uuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  url        String
+  key        String   // S3/Spaces key
+  sortOrder  Int      @default(0)
+  isPrimary  Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([propertyId])
+  @@map("property_images")
 }

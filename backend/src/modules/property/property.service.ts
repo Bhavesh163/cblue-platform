@@ -1,0 +1,151 @@
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
+import { CreatePropertyDto } from './dto/create-property.dto';
+import { SearchPropertyDto } from './dto/search-property.dto';
+import { Prisma } from '@prisma/client';
+
+@Injectable()
+export class PropertyService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async create(userId: string, dto: CreatePropertyDto) {
+    return this.prisma.property.create({
+      data: {
+        userId,
+        propertyType: dto.propertyType,
+        listingType: dto.listingType,
+        title: dto.title,
+        description: dto.description,
+        price: dto.price,
+        area: dto.area,
+        bedrooms: dto.bedrooms,
+        bathrooms: dto.bathrooms,
+        floors: dto.floors,
+        province: dto.province,
+        district: dto.district,
+        subdistrict: dto.subdistrict,
+        postalCode: dto.postalCode,
+        addressLine: dto.addressLine,
+        latitude: dto.latitude,
+        longitude: dto.longitude,
+        contactName: dto.contactName,
+        contactPhone: dto.contactPhone,
+        contactEmail: dto.contactEmail,
+        features: dto.features as Prisma.InputJsonValue,
+        yearBuilt: dto.yearBuilt,
+      },
+      include: { images: true },
+    });
+  }
+
+  async search(dto: SearchPropertyDto) {
+    const page = dto.page || 1;
+    const limit = dto.limit || 20;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.PropertyWhereInput = {
+      status: 'ACTIVE',
+    };
+
+    if (dto.propertyType) where.propertyType = dto.propertyType;
+    if (dto.listingType) where.listingType = dto.listingType;
+    if (dto.province) where.province = dto.province;
+    if (dto.district) where.district = dto.district;
+    if (dto.bedrooms) where.bedrooms = { gte: dto.bedrooms };
+    if (dto.bathrooms) where.bathrooms = { gte: dto.bathrooms };
+
+    if (dto.minPrice || dto.maxPrice) {
+      where.price = {};
+      if (dto.minPrice) where.price.gte = dto.minPrice;
+      if (dto.maxPrice) where.price.lte = dto.maxPrice;
+    }
+
+    if (dto.minArea || dto.maxArea) {
+      where.area = {};
+      if (dto.minArea) where.area.gte = dto.minArea;
+      if (dto.maxArea) where.area.lte = dto.maxArea;
+    }
+
+    if (dto.keyword) {
+      where.OR = [
+        { title: { contains: dto.keyword, mode: 'insensitive' } },
+        { description: { contains: dto.keyword, mode: 'insensitive' } },
+      ];
+    }
+
+    const [properties, total] = await Promise.all([
+      this.prisma.property.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          images: { where: { isPrimary: true }, take: 1 },
+        },
+      }),
+      this.prisma.property.count({ where }),
+    ]);
+
+    return {
+      properties,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async findById(id: string) {
+    return this.prisma.property.findUnique({
+      where: { id },
+      include: {
+        images: { orderBy: { sortOrder: 'asc' } },
+        user: { select: { id: true, name: true } },
+      },
+    });
+  }
+
+  async findByUser(userId: string) {
+    return this.prisma.property.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        images: { where: { isPrimary: true }, take: 1 },
+      },
+    });
+  }
+
+  async update(id: string, userId: string, data: Partial<CreatePropertyDto>) {
+    const property = await this.prisma.property.findUnique({
+      where: { id },
+    });
+
+    if (!property || property.userId !== userId) {
+      return null;
+    }
+
+    return this.prisma.property.update({
+      where: { id },
+      data: {
+        ...data,
+        features: data.features as Prisma.InputJsonValue,
+      },
+      include: { images: true },
+    });
+  }
+
+  async remove(id: string, userId: string) {
+    const property = await this.prisma.property.findUnique({
+      where: { id },
+    });
+
+    if (!property || property.userId !== userId) {
+      return null;
+    }
+
+    return this.prisma.property.update({
+      where: { id },
+      data: { status: 'REMOVED' },
+    });
+  }
+}

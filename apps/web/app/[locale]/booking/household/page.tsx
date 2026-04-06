@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, type FormEvent, type ChangeEvent } from "react";
+import { useTranslations } from "next-intl";
 import { HOUSEHOLD_SERVICES, THAI_PROVINCES } from "../../lib/constants";
 import ReCaptcha from "../../components/ReCaptcha";
 import GpsDetectButton from "../../components/GpsDetectButton";
@@ -55,6 +56,7 @@ const initialForm: FormData = {
 };
 
 export default function HouseholdBookingPage() {
+  const t = useTranslations("booking");
   const [form, setForm] = useState<FormData>(initialForm);
   const [images, setImages] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -86,11 +88,11 @@ export default function HouseholdBookingPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!form.consent) {
-      setError("กรุณายอมรับเงื่อนไขก่อนส่งแบบฟอร์ม");
+      setError(t("consentError"));
       return;
     }
     if (!recaptchaToken) {
-      setError("กรุณายืนยัน reCAPTCHA");
+      setError(t("recaptchaError"));
       return;
     }
     setSubmitting(true);
@@ -125,7 +127,7 @@ export default function HouseholdBookingPage() {
       console.log("Household booking submission:", payload);
       setSuccess(true);
     } catch {
-      setError("เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง");
+      setError(t("submitError"));
     } finally {
       setSubmitting(false);
     }
@@ -135,9 +137,9 @@ export default function HouseholdBookingPage() {
     return (
       <div className="mx-auto max-w-2xl px-4 py-20 text-center">
         <div className="text-6xl mb-6">✅</div>
-        <h1 className="text-3xl font-bold text-gray-900">ส่งคำขอสำเร็จ!</h1>
+        <h1 className="text-3xl font-bold text-gray-900">{t("successHousehold")}</h1>
         <p className="mt-4 text-lg text-gray-600">
-          ทีมงาน CBLUE จะติดต่อกลับภายใน 24 ชั่วโมง
+          {t("successHouseholdDesc")}
         </p>
         <button
           onClick={() => {
@@ -147,7 +149,7 @@ export default function HouseholdBookingPage() {
           }}
           className="mt-8 px-6 py-2.5 text-sm font-semibold text-blue-700 border border-blue-700 rounded-lg hover:bg-blue-50"
         >
-          ส่งคำขอใหม่
+          {t("newBooking")}
         </button>
       </div>
     );
@@ -159,10 +161,10 @@ export default function HouseholdBookingPage() {
         {/* Header */}
         <div className="text-center mb-10">
           <h1 className="text-3xl font-bold text-gray-900">
-            จองช่างซ่อมบำรุงบ้าน
+            {t("householdTitle")}
           </h1>
           <p className="mt-3 text-lg text-gray-500">
-            กรอกข้อมูลด้านล่างเพื่อให้เราจับคู่ช่างที่เหมาะสมกับคุณ
+            {t("householdDesc")}
           </p>
         </div>
 
@@ -176,7 +178,7 @@ export default function HouseholdBookingPage() {
           {/* Personal Info */}
           <fieldset>
             <legend className="text-lg font-semibold text-gray-900 mb-4">
-              ข้อมูลผู้ติดต่อ
+              {t("contactInfo")}
             </legend>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -245,7 +247,7 @@ export default function HouseholdBookingPage() {
           {/* Service Selection */}
           <fieldset>
             <legend className="text-lg font-semibold text-gray-900 mb-4">
-              รายละเอียดบริการ
+              {t("serviceDetails")}
             </legend>
             <div className="space-y-4">
               <div>
@@ -338,7 +340,7 @@ export default function HouseholdBookingPage() {
           {/* Location */}
           <fieldset>
             <legend className="text-lg font-semibold text-gray-900 mb-4">
-              สถานที่ตั้งบ้าน
+              {t("locationHome")}
             </legend>
             <div className="space-y-4">
               {/* GPS Auto-detect */}
@@ -465,7 +467,7 @@ export default function HouseholdBookingPage() {
           {/* Description & Images */}
           <fieldset>
             <legend className="text-lg font-semibold text-gray-900 mb-4">
-              รายละเอียดปัญหา
+              {t("issueDetails")}
             </legend>
             <div className="space-y-4">
               <div>
@@ -538,7 +540,7 @@ export default function HouseholdBookingPage() {
               disabled={submitting}
               className="w-full py-3 px-6 text-base font-semibold text-white bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 rounded-xl transition-colors"
             >
-              {submitting ? "กำลังส่ง..." : "ส่งคำขอจองช่าง"}
+              {submitting ? t("submitting") : t("submitHousehold")}
             </button>
           </div>
         </form>

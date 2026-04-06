@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, type FormEvent, type ChangeEvent } from "react";
+import { useTranslations } from "next-intl";
 import { PROJECT_SERVICES, THAI_PROVINCES } from "../../lib/constants";
 import ReCaptcha from "../../components/ReCaptcha";
 import GpsDetectButton from "../../components/GpsDetectButton";
@@ -53,6 +54,7 @@ const initialForm: FormData = {
 };
 
 export default function ProjectBookingPage() {
+  const t = useTranslations("booking");
   const [form, setForm] = useState<FormData>(initialForm);
   const [images, setImages] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -84,11 +86,11 @@ export default function ProjectBookingPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!form.consent) {
-      setError("กรุณายอมรับเงื่อนไขก่อนส่งแบบฟอร์ม");
+      setError(t("consentError"));
       return;
     }
     if (!recaptchaToken) {
-      setError("กรุณายืนยัน reCAPTCHA");
+      setError(t("recaptchaError"));
       return;
     }
     setSubmitting(true);
@@ -120,7 +122,7 @@ export default function ProjectBookingPage() {
       console.log("Project booking submission:", payload);
       setSuccess(true);
     } catch {
-      setError("เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง");
+      setError(t("submitError"));
     } finally {
       setSubmitting(false);
     }
@@ -130,9 +132,9 @@ export default function ProjectBookingPage() {
     return (
       <div className="mx-auto max-w-2xl px-4 py-20 text-center">
         <div className="text-6xl mb-6">✅</div>
-        <h1 className="text-3xl font-bold text-gray-900">ส่งคำขอโปรเจกต์สำเร็จ!</h1>
+        <h1 className="text-3xl font-bold text-gray-900">{t("successProject")}</h1>
         <p className="mt-4 text-lg text-gray-600">
-          ทีมงาน CBLUE จะติดต่อกลับเพื่อประเมินโปรเจกต์ของท่าน
+          {t("successProjectDesc")}
         </p>
         <button
           onClick={() => {
@@ -142,7 +144,7 @@ export default function ProjectBookingPage() {
           }}
           className="mt-8 px-6 py-2.5 text-sm font-semibold text-blue-700 border border-blue-700 rounded-lg hover:bg-blue-50"
         >
-          ส่งคำขอใหม่
+          {t("newBooking")}
         </button>
       </div>
     );
@@ -154,10 +156,10 @@ export default function ProjectBookingPage() {
         {/* Header */}
         <div className="text-center mb-10">
           <h1 className="text-3xl font-bold text-gray-900">
-            จองทีมโปรเจกต์
+            {t("projectTitle")}
           </h1>
           <p className="mt-3 text-lg text-gray-500">
-            ส่งรายละเอียดโปรเจกต์ของท่าน เพื่อให้เราจัดทีมที่เหมาะสม
+            {t("projectDesc")}
           </p>
         </div>
 
@@ -516,7 +518,7 @@ export default function ProjectBookingPage() {
               disabled={submitting}
               className="w-full py-3 px-6 text-base font-semibold text-white bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 rounded-xl transition-colors"
             >
-              {submitting ? "กำลังส่ง..." : "ส่งคำขอโปรเจกต์"}
+              {submitting ? t("submitting") : t("submitProject")}
             </button>
           </div>
         </form>

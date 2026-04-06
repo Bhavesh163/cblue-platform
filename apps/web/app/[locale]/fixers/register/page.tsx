@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, type FormEvent, type ChangeEvent } from "react";
+import { useTranslations } from "next-intl";
 import { FIXER_ALL_SERVICES, THAI_PROVINCES } from "../../lib/constants";
 import ReCaptcha from "../../components/ReCaptcha";
 import GpsDetectButton from "../../components/GpsDetectButton";
@@ -46,6 +47,7 @@ const initialForm: FormData = {
 };
 
 export default function FixerRegisterPage() {
+  const t = useTranslations("fixer");
   const [form, setForm] = useState<FormData>(initialForm);
   const [kycImages, setKycImages] = useState<File[]>([]);
   const [portfolioImages, setPortfolioImages] = useState<File[]>([]);
@@ -81,19 +83,19 @@ export default function FixerRegisterPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!form.consent) {
-      setError("กรุณายอมรับเงื่อนไขก่อนส่งแบบฟอร์ม");
+      setError(t("consent"));
       return;
     }
     if (!recaptchaToken) {
-      setError("กรุณายืนยัน reCAPTCHA");
+      setError("reCAPTCHA");
       return;
     }
     if (form.selectedSkills.length === 0) {
-      setError("กรุณาเลือกบริการที่ให้บริการอย่างน้อย 1 รายการ");
+      setError(t("skillError"));
       return;
     }
     if (kycImages.length === 0) {
-      setError("กรุณาอัพโหลดรูปบัตรประชาชน");
+      setError(t("kycError"));
       return;
     }
     setSubmitting(true);
@@ -127,7 +129,7 @@ export default function FixerRegisterPage() {
       console.log("Fixer registration submission:", payload);
       setSuccess(true);
     } catch {
-      setError("เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง");
+      setError(t("consent"));
     } finally {
       setSubmitting(false);
     }
@@ -137,11 +139,9 @@ export default function FixerRegisterPage() {
     return (
       <div className="mx-auto max-w-2xl px-4 py-20 text-center">
         <div className="text-6xl mb-6">🎉</div>
-        <h1 className="text-3xl font-bold text-gray-900">สมัครสำเร็จ!</h1>
+        <h1 className="text-3xl font-bold text-gray-900">{t("successTitle")}</h1>
         <p className="mt-4 text-lg text-gray-600">
-          ทีมงาน CBLUE จะตรวจสอบข้อมูลและ KYC ของท่าน
-          <br />
-          แจ้งผลอนุมัติภายใน 1–3 วันทำการ
+          {t("successDesc")}
         </p>
         <button
           onClick={() => {
@@ -152,7 +152,7 @@ export default function FixerRegisterPage() {
           }}
           className="mt-8 px-6 py-2.5 text-sm font-semibold text-blue-700 border border-blue-700 rounded-lg hover:bg-blue-50"
         >
-          สมัครอีกครั้ง
+          {t("submitAgain")}
         </button>
       </div>
     );
@@ -163,9 +163,9 @@ export default function FixerRegisterPage() {
       <div className="mx-auto max-w-3xl px-4 sm:px-6">
         {/* Header */}
         <div className="text-center mb-10">
-          <h1 className="text-3xl font-bold text-gray-900">สมัครเป็นช่าง CBLUE</h1>
+          <h1 className="text-3xl font-bold text-gray-900">{t("registerTitle")}</h1>
           <p className="mt-3 text-lg text-gray-500">
-            เข้าร่วมเครือข่ายช่างมืออาชีพ รับงานทั่วประเทศ
+            {t("registerDesc")}
           </p>
         </div>
 

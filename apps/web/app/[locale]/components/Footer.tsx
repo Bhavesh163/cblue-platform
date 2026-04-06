@@ -1,27 +1,33 @@
-import Link from "next/link";
+"use client";
 
-const footerLinks = {
-  services: [
-    { label: "งานประปา (Plumbing)", href: "/services#plumbing" },
-    { label: "งานไฟฟ้า (Electrical)", href: "/services#electrical" },
-    { label: "แอร์ (AC)", href: "/services#ac" },
-    { label: "ตกแต่งภายใน (Interior)", href: "/services#interior" },
-    { label: "จัดสวน (Landscaping)", href: "/services#landscaping" },
-  ],
-  company: [
-    { label: "เกี่ยวกับเรา", href: "/about" },
-    { label: "บริการ", href: "/services" },
-    { label: "สมัครเป็นช่าง", href: "/fixers/register" },
-    { label: "ติดต่อเรา", href: "/contact" },
-  ],
-  support: [
-    { label: "ศูนย์ช่วยเหลือ", href: "/help" },
-    { label: "เงื่อนไขการใช้งาน", href: "/terms" },
-    { label: "นโยบายความเป็นส่วนตัว", href: "/privacy" },
-  ],
-};
+import Link from "next/link";
+import { useTranslations, useLocale } from "next-intl";
 
 export function Footer() {
+  const t = useTranslations();
+  const locale = useLocale();
+  const prefix = `/${locale}`;
+
+  const footerLinks = {
+    services: [
+      { label: t("services.plumbing"), href: `${prefix}/services#plumbing` },
+      { label: t("services.electrical"), href: `${prefix}/services#electrical` },
+      { label: t("services.ac"), href: `${prefix}/services#ac` },
+      { label: t("services.interior"), href: `${prefix}/services#interior` },
+      { label: t("services.landscaping"), href: `${prefix}/services#landscaping` },
+    ],
+    company: [
+      { label: t("footer.about"), href: `${prefix}/about` },
+      { label: t("nav.services"), href: `${prefix}/services` },
+      { label: t("nav.forFixers"), href: `${prefix}/fixers/register` },
+      { label: t("footer.contact"), href: `${prefix}/contact` },
+    ],
+    support: [
+      { label: t("booking.terms"), href: `${prefix}/terms` },
+      { label: t("booking.privacy"), href: `${prefix}/privacy` },
+    ],
+  };
+
   return (
     <footer className="bg-gray-900 text-gray-300">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">
@@ -35,15 +41,14 @@ export function Footer() {
               <span className="text-lg font-bold text-white">CBLUE.co.th</span>
             </div>
             <p className="text-sm text-gray-400 leading-relaxed">
-              แพลตฟอร์มเชื่อมต่อช่างมืออาชีพกับเจ้าของบ้าน
-              ทั่วประเทศไทย ครบทุกบริการซ่อมบำรุง
+              {t("home.heroDesc")}
             </p>
           </div>
 
           {/* Services */}
           <div>
             <h3 className="text-sm font-semibold text-white uppercase tracking-wider mb-4">
-              บริการ
+              {t("nav.services")}
             </h3>
             <ul className="space-y-2">
               {footerLinks.services.map((link) => (
@@ -59,7 +64,7 @@ export function Footer() {
           {/* Company */}
           <div>
             <h3 className="text-sm font-semibold text-white uppercase tracking-wider mb-4">
-              บริษัท
+              {t("footer.company")}
             </h3>
             <ul className="space-y-2">
               {footerLinks.company.map((link) => (
@@ -72,26 +77,29 @@ export function Footer() {
             </ul>
           </div>
 
-          {/* Support */}
+          {/* Real Estate */}
           <div>
             <h3 className="text-sm font-semibold text-white uppercase tracking-wider mb-4">
-              ช่วยเหลือ
+              {t("nav.realEstate")}
             </h3>
             <ul className="space-y-2">
-              {footerLinks.support.map((link) => (
-                <li key={link.href}>
-                  <Link href={link.href} className="text-sm hover:text-white transition-colors">
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
+              <li>
+                <Link href={`${prefix}/properties`} className="text-sm hover:text-white transition-colors">
+                  {t("realEstate.searchProperty")}
+                </Link>
+              </li>
+              <li>
+                <Link href={`${prefix}/properties/register`} className="text-sm hover:text-white transition-colors">
+                  {t("realEstate.listProperty")}
+                </Link>
+              </li>
             </ul>
           </div>
         </div>
 
         <div className="mt-10 pt-8 border-t border-gray-800 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm text-gray-500">
-            &copy; {new Date().getFullYear()} CBLUE Co., Ltd. All rights reserved.
+            &copy; {new Date().getFullYear()} CBLUE Co., Ltd. {t("footer.allRights")}
           </p>
           <div className="flex gap-4">
             <a href="https://cblue.co.th" target="_blank" rel="noopener noreferrer" className="text-sm text-gray-500 hover:text-white">

@@ -1,0 +1,299 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { useTranslations, useLocale } from "next-intl";
+import { THAI_PROVINCES } from "../lib/constants";
+
+const PROPERTY_TYPES = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "APARTMENT"] as const;
+const LISTING_TYPES = ["SALE", "RENT"] as const;
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
+
+interface Property {
+  id: string;
+  title: string;
+  description: string;
+  propertyType: string;
+  listingType: string;
+  price: number;
+  area: number | null;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  province: string;
+  district: string;
+  images: { url: string }[];
+}
+
+export default function PropertiesPage() {
+  const t = useTranslations("realEstate");
+  const tc = useTranslations("common");
+  const locale = useLocale();
+  const prefix = `/${locale}`;
+
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
+  const [filters, setFilters] = useState({
+    propertyType: "",
+    listingType: "",
+    province: "",
+    minPrice: "",
+    maxPrice: "",
+    bedrooms: "",
+    keyword: "",
+  });
+
+  async function handleSearch() {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (filters.propertyType) params.set("propertyType", filters.propertyType);
+      if (filters.listingType) params.set("listingType", filters.listingType);
+      if (filters.province) params.set("province", filters.province);
+      if (filters.minPrice) params.set("minPrice", filters.minPrice);
+      if (filters.maxPrice) params.set("maxPrice", filters.maxPrice);
+      if (filters.bedrooms) params.set("bedrooms", filters.bedrooms);
+      if (filters.keyword) params.set("keyword", filters.keyword);
+
+      const res = await fetch(`${API_BASE}/properties?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setProperties(data.properties || []);
+      }
+    } catch {
+      // API not available
+    } finally {
+      setLoading(false);
+      setSearched(true);
+    }
+  }
+
+  function formatPrice(price: number) {
+    return new Intl.NumberFormat("th-TH").format(price);
+  }
+
+  const typeKeys: Record<string, string> = {
+    CONDO: "condo",
+    HOUSE: "house",
+    TOWNHOUSE: "townhouse",
+    LAND: "land",
+    COMMERCIAL: "commercial",
+    APARTMENT: "apartment",
+  };
+
+  return (
+    <div className="bg-gray-50 min-h-screen">
+      {/* Hero */}
+      <section className="bg-gradient-to-br from-green-700 to-green-900 text-white py-16">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
+          <h1 className="text-4xl font-bold">{t("title")}</h1>
+          <p className="mt-4 text-lg text-green-100">{t("desc")}</p>
+        </div>
+      </section>
+
+      {/* Search Filters */}
+      <section className="py-8">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Keyword */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{tc("search")}</label>
+                <input
+                  type="text"
+                  value={filters.keyword}
+                  onChange={(e) => setFilters({ ...filters, keyword: e.target.value })}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none"
+                  placeholder="..."
+                />
+              </div>
+
+              {/* Property Type */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t("propertyType")}</label>
+                <select
+                  value={filters.propertyType}
+                  onChange={(e) => setFilters({ ...filters, propertyType: e.target.value })}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-green-500 outline-none bg-white"
+                >
+                  <option value="">--</option>
+                  {PROPERTY_TYPES.map((pt) => (
+                    <option key={pt} value={pt}>{t(`types.${typeKeys[pt]}`)}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Listing Type */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t("listingType")}</label>
+                <select
+                  value={filters.listingType}
+                  onChange={(e) => setFilters({ ...filters, listingType: e.target.value })}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-green-500 outline-none bg-white"
+                >
+                  <option value="">--</option>
+                  <option value="SALE">{t("forSale")}</option>
+                  <option value="RENT">{t("forRent")}</option>
+                </select>
+              </div>
+
+              {/* Province */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {locale === "th" ? "จังหวัด" : "Province"}
+                </label>
+                <select
+                  value={filters.province}
+                  onChange={(e) => setFilters({ ...filters, province: e.target.value })}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-green-500 outline-none bg-white"
+                >
+                  <option value="">--</option>
+                  {THAI_PROVINCES.map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Price Range */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t("priceRange")}</label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    value={filters.minPrice}
+                    onChange={(e) => setFilters({ ...filters, minPrice: e.target.value })}
+                    className="w-1/2 rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none"
+                    placeholder="Min"
+                  />
+                  <input
+                    type="number"
+                    value={filters.maxPrice}
+                    onChange={(e) => setFilters({ ...filters, maxPrice: e.target.value })}
+                    className="w-1/2 rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none"
+                    placeholder="Max"
+                  />
+                </div>
+              </div>
+
+              {/* Bedrooms */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t("bedrooms")}</label>
+                <select
+                  value={filters.bedrooms}
+                  onChange={(e) => setFilters({ ...filters, bedrooms: e.target.value })}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-green-500 outline-none bg-white"
+                >
+                  <option value="">--</option>
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <option key={n} value={n}>{n}+</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Search button */}
+              <div className="flex items-end">
+                <button
+                  onClick={handleSearch}
+                  className="w-full py-2.5 px-6 text-sm font-semibold text-white bg-green-700 hover:bg-green-800 rounded-lg transition-colors"
+                >
+                  {tc("search")}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Results */}
+      <section className="pb-16">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          {loading ? (
+            <div className="text-center py-12 text-gray-500">{tc("loading")}</div>
+          ) : searched && properties.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-gray-500 mb-4">No properties found</p>
+              <Link
+                href={`${prefix}/properties/register`}
+                className="inline-block px-6 py-2.5 bg-green-700 text-white rounded-lg hover:bg-green-800 transition"
+              >
+                {t("listProperty")}
+              </Link>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {properties.map((prop) => (
+                <Link
+                  key={prop.id}
+                  href={`${prefix}/properties/${prop.id}`}
+                  className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+                >
+                  <div className="h-48 bg-gray-200 flex items-center justify-center">
+                    {prop.images[0] ? (
+                      <img src={prop.images[0].url} alt={prop.title} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-4xl">🏠</span>
+                    )}
+                  </div>
+                  <div className="p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                        prop.listingType === "SALE" ? "bg-blue-100 text-blue-800" : "bg-green-100 text-green-800"
+                      }`}>
+                        {prop.listingType === "SALE" ? t("forSale") : t("forRent")}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {t(`types.${typeKeys[prop.propertyType]}`)}
+                      </span>
+                    </div>
+                    <h3 className="font-semibold text-gray-900 line-clamp-1">{prop.title}</h3>
+                    <p className="text-lg font-bold text-green-700 mt-1">
+                      ฿{formatPrice(prop.price)}
+                      {prop.listingType === "RENT" && "/mo"}
+                    </p>
+                    <div className="flex items-center gap-3 mt-2 text-sm text-gray-500">
+                      {prop.bedrooms && <span>{prop.bedrooms} bed</span>}
+                      {prop.bathrooms && <span>{prop.bathrooms} bath</span>}
+                      {prop.area && <span>{prop.area} sqm</span>}
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2">{prop.province}, {prop.district}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+
+          {/* CTA to register property */}
+          {!searched && (
+            <div className="text-center py-12">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+                {["CONDO", "HOUSE", "LAND"].map((type) => (
+                  <div key={type} className="bg-white rounded-xl p-6 border border-gray-200 text-center">
+                    <div className="text-4xl mb-3">
+                      {type === "CONDO" ? "🏢" : type === "HOUSE" ? "🏠" : "🌳"}
+                    </div>
+                    <h3 className="font-semibold text-gray-900">{t(`types.${typeKeys[type]}`)}</h3>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
+                <button
+                  onClick={handleSearch}
+                  className="px-8 py-3 text-sm font-semibold text-white bg-green-700 hover:bg-green-800 rounded-xl transition-colors"
+                >
+                  {t("searchProperty")}
+                </button>
+                <Link
+                  href={`${prefix}/properties/register`}
+                  className="px-8 py-3 text-sm font-semibold text-green-700 border border-green-700 hover:bg-green-50 rounded-xl transition-colors text-center"
+                >
+                  {t("listProperty")}
+                </Link>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
