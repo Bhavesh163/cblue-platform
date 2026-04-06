@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useCallback, type FormEvent, type ChangeEvent } from "react";
+import { useState, useCallback, useEffect, Suspense, type FormEvent, type ChangeEvent } from "react";
 import { useTranslations } from "next-intl";
+import { useSearchParams } from "next/navigation";
 import { PROJECT_SERVICES, THAI_PROVINCES } from "../../lib/constants";
 import ReCaptcha from "../../components/ReCaptcha";
 import GpsDetectButton from "../../components/GpsDetectButton";
@@ -54,14 +55,34 @@ const initialForm: FormData = {
 };
 
 export default function ProjectBookingPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600" /></div>}>
+      <ProjectBookingContent />
+    </Suspense>
+  );
+}
+
+function ProjectBookingContent() {
   const t = useTranslations("booking");
-  const [form, setForm] = useState<FormData>(initialForm);
+  const searchParams = useSearchParams();
+  const prefilledService = searchParams.get("service") || "";
+
+  const [form, setForm] = useState<FormData>({
+    ...initialForm,
+    serviceCategory: prefilledService,
+  });
   const [images, setImages] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
   const [recaptchaToken, setRecaptchaToken] = useState("");
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  useEffect(() => {
+    if (prefilledService) {
+      setForm((prev) => ({ ...prev, serviceCategory: prefilledService }));
+    }
+  }, [prefilledService]);
 
   const handleRecaptcha = useCallback((token: string) => setRecaptchaToken(token), []);
   const handleRecaptchaExpire = useCallback(() => setRecaptchaToken(""), []);
@@ -79,8 +100,17 @@ export default function ProjectBookingPage() {
 
   function handleImageChange(e: ChangeEvent<HTMLInputElement>) {
     if (e.target.files) {
-      setImages(Array.from(e.target.files).slice(0, 5));
+      const newFiles = Array.from(e.target.files);
+      setImages((prev) => {
+        const combined = [...prev, ...newFiles];
+        return combined.slice(0, 5);
+      });
+      e.target.value = "";
     }
+  }
+
+  function removeImage(index: number) {
+    setImages((prev) => prev.filter((_, i) => i !== index));
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -474,14 +504,21 @@ export default function ProjectBookingPage() {
                   type="file"
                   accept="image/*"
                   multiple
-                  required
+                  required={images.length === 0}
                   onChange={handleImageChange}
                   className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                 />
+                <p className="mt-1 text-xs text-gray-400">สูงสุด 5 รูป — เลือกทีละรูปหรือหลายรูปได้</p>
                 {images.length > 0 && (
-                  <p className="mt-2 text-xs text-gray-500">
-                    {images.length} ไฟล์ที่เลือก (สูงสุด 5 รูป)
-                  </p>
+                  <div className="mt-2 space-y-1">
+                    {images.map((file, i) => (
+                      <div key={i} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-1.5 text-xs">
+                        <span className="text-gray-600 truncate">{file.name}</span>
+                        <button type="button" onClick={() => removeImage(i)} className="text-red-500 hover:text-red-700 ml-2 font-bold">✕</button>
+                      </div>
+                    ))}
+                    <p className="text-xs text-gray-500">{images.length}/5 ไฟล์</p>
+                  </div>
                 )}
               </div>
             </div>
@@ -515,8 +552,12 @@ export default function ProjectBookingPage() {
 
             <button
               type="submit"
-              disabled={submitting}
-              className="w-full py-3 px-6 text-base font-semibold text-white bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 rounded-xl transition-colors"
+              disabled={submitting || !form.consent || !recaptchaToken}
+              className={`w-full py-3 px-6 text-base font-semibold rounded-xl transition-colors ${
+                form.consent && recaptchaToken
+                  ? "text-white bg-blue-700 hover:bg-blue-800"
+                  : "text-gray-400 bg-gray-200 cursor-not-allowed"
+              }`}
             >
               {submitting ? t("submitting") : t("submitProject")}
             </button>

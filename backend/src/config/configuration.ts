@@ -29,4 +29,10 @@ export default () => ({
     secret: process.env.SPACES_SECRET,
     bucket: process.env.SPACES_BUCKET,
   },
+  mailjet: {
+    apiKey: process.env.MAILJET_API_KEY || '',
+    apiSecret: process.env.MAILJET_API_SECRET || '',
+    fromEmail: process.env.MAILJET_FROM_EMAIL || 'noreply@cblue.co.th',
+  },
+  frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
 });

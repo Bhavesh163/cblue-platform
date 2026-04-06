@@ -3,17 +3,17 @@
 import { useState, useCallback, useEffect, Suspense, type FormEvent, type ChangeEvent } from "react";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
-import { HOUSEHOLD_SERVICES, THAI_PROVINCES } from "../../lib/constants";
+import { PROFESSIONAL_SERVICES, THAI_PROVINCES } from "../../lib/constants";
 import ReCaptcha from "../../components/ReCaptcha";
 import GpsDetectButton from "../../components/GpsDetectButton";
 
 const BUDGET_RANGES = [
-  { value: "UNDER_5000", label: "ต่ำกว่า 5,000 บาท" },
-  { value: "5000_10000", label: "5,000 – 10,000 บาท" },
+  { value: "UNDER_10000", label: "ต่ำกว่า 10,000 บาท" },
   { value: "10000_30000", label: "10,000 – 30,000 บาท" },
   { value: "30000_50000", label: "30,000 – 50,000 บาท" },
   { value: "50000_100000", label: "50,000 – 100,000 บาท" },
-  { value: "OVER_100000", label: "มากกว่า 100,000 บาท" },
+  { value: "100000_500000", label: "100,000 – 500,000 บาท" },
+  { value: "OVER_500000", label: "มากกว่า 500,000 บาท" },
 ];
 
 interface FormData {
@@ -32,8 +32,8 @@ interface FormData {
   addressText: string;
   description: string;
   budgetRange: string;
-  isUrgent: boolean;
   consent: boolean;
+  subscriptionConsent: boolean;
 }
 
 const initialForm: FormData = {
@@ -52,19 +52,19 @@ const initialForm: FormData = {
   addressText: "",
   description: "",
   budgetRange: "",
-  isUrgent: false,
   consent: false,
+  subscriptionConsent: false,
 };
 
-export default function HouseholdBookingPage() {
+export default function ProfessionalBookingPage() {
   return (
     <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600" /></div>}>
-      <HouseholdBookingContent />
+      <ProfessionalBookingContent />
     </Suspense>
   );
 }
 
-function HouseholdBookingContent() {
+function ProfessionalBookingContent() {
   const t = useTranslations("booking");
   const searchParams = useSearchParams();
   const prefilledService = searchParams.get("service") || "";
@@ -79,6 +79,8 @@ function HouseholdBookingContent() {
   const [error, setError] = useState("");
   const [recaptchaToken, setRecaptchaToken] = useState("");
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [showTerms, setShowTerms] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
 
   useEffect(() => {
     if (prefilledService) {
@@ -107,7 +109,6 @@ function HouseholdBookingContent() {
         const combined = [...prev, ...newFiles];
         return combined.slice(0, 5);
       });
-      // Reset input so the same file can be re-selected
       e.target.value = "";
     }
   }
@@ -130,10 +131,8 @@ function HouseholdBookingContent() {
     setError("");
 
     try {
-      // In production, this would call the API with auth tokens
-      // For now, log the submission
       const payload = {
-        orderType: "HOUSEHOLD",
+        orderType: "PROFESSIONAL",
         name: form.name,
         email: form.email,
         phone: form.phone,
@@ -142,7 +141,6 @@ function HouseholdBookingContent() {
         scheduledAt: form.scheduledDate
           ? `${form.scheduledDate}T${form.scheduledTime || "09:00"}:00`
           : undefined,
-        isUrgent: form.isUrgent,
         budgetRange: form.budgetRange || undefined,
         description: form.description,
         address: {
@@ -154,8 +152,9 @@ function HouseholdBookingContent() {
         gpsCoords: gpsCoords || undefined,
         recaptchaToken,
         imageCount: images.length,
+        subscriptionConsent: form.subscriptionConsent,
       };
-      console.log("Household booking submission:", payload);
+      console.log("Professional booking submission:", payload);
       setSuccess(true);
     } catch {
       setError(t("submitError"));
@@ -168,9 +167,9 @@ function HouseholdBookingContent() {
     return (
       <div className="mx-auto max-w-2xl px-4 py-20 text-center">
         <div className="text-6xl mb-6">✅</div>
-        <h1 className="text-3xl font-bold text-gray-900">{t("successHousehold")}</h1>
+        <h1 className="text-3xl font-bold text-gray-900">{t("successProfessional")}</h1>
         <p className="mt-4 text-lg text-gray-600">
-          {t("successHouseholdDesc")}
+          {t("successProfessionalDesc")}
         </p>
         <button
           onClick={() => {
@@ -192,10 +191,10 @@ function HouseholdBookingContent() {
         {/* Header */}
         <div className="text-center mb-10">
           <h1 className="text-3xl font-bold text-gray-900">
-            {t("householdTitle")}
+            {t("professionalTitle")}
           </h1>
           <p className="mt-3 text-lg text-gray-500">
-            {t("householdDesc")}
+            {t("professionalDesc")}
           </p>
         </div>
 
@@ -294,7 +293,7 @@ function HouseholdBookingContent() {
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none bg-white"
                 >
                   <option value="">-- เลือกบริการ --</option>
-                  {HOUSEHOLD_SERVICES.map((svc) => (
+                  {PROFESSIONAL_SERVICES.map((svc) => (
                     <option key={svc.value} value={svc.value}>
                       {svc.label}
                     </option>
@@ -332,21 +331,6 @@ function HouseholdBookingContent() {
                 </div>
               </div>
 
-              {/* Urgent toggle */}
-              <div className="flex items-center gap-3">
-                <input
-                  id="isUrgent"
-                  name="isUrgent"
-                  type="checkbox"
-                  checked={form.isUrgent}
-                  onChange={handleChange}
-                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <label htmlFor="isUrgent" className="text-sm font-medium text-gray-700">
-                  🚨 ต้องการด่วน (Need urgent?)
-                </label>
-              </div>
-
               {/* Budget Range */}
               <div>
                 <label htmlFor="budgetRange" className="block text-sm font-medium text-gray-700 mb-1">
@@ -374,7 +358,6 @@ function HouseholdBookingContent() {
               {t("locationHome")}
             </legend>
             <div className="space-y-4">
-              {/* GPS Auto-detect */}
               <GpsDetectButton onDetected={(coords) => setGpsCoords(coords)} />
               {gpsCoords && (
                 <p className="text-xs text-green-600">
@@ -382,7 +365,6 @@ function HouseholdBookingContent() {
                 </p>
               )}
 
-              {/* Location type toggle */}
               <div className="flex gap-4">
                 <label className="flex items-center gap-2 text-sm">
                   <input
@@ -513,13 +495,13 @@ function HouseholdBookingContent() {
                   value={form.description}
                   onChange={handleChange}
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none resize-none"
-                  placeholder="อธิบายปัญหาหรือบริการที่ต้องการ เช่น ท่อน้ำรั่วในห้องน้ำชั้น 2"
+                  placeholder="อธิบายรายละเอียดบริการที่ต้องการ เช่น ต้องการที่ปรึกษาด้านกฎหมายอสังหาริมทรัพย์"
                 />
               </div>
 
               <div>
                 <label htmlFor="images" className="block text-sm font-medium text-gray-700 mb-1">
-                  อัพโหลดรูปภาพปัญหา <span className="text-red-500">*</span>
+                  อัพโหลดรูปภาพประกอบ <span className="text-red-500">*</span>
                 </label>
                 <input
                   id="images"
@@ -561,13 +543,28 @@ function HouseholdBookingContent() {
               <label htmlFor="consent" className="text-sm text-gray-600">
                 ข้าพเจ้ายินยอมให้ CBLUE ติดต่อกลับเพื่อให้บริการ
                 และยอมรับ{" "}
-                <a href="/terms" className="text-blue-600 hover:underline">
+                <button type="button" onClick={() => setShowTerms(true)} className="text-blue-600 hover:underline">
                   เงื่อนไขการใช้งาน
-                </a>{" "}
+                </button>{" "}
                 และ{" "}
-                <a href="/privacy" className="text-blue-600 hover:underline">
+                <button type="button" onClick={() => setShowPrivacy(true)} className="text-blue-600 hover:underline">
                   นโยบายความเป็นส่วนตัว
-                </a>
+                </button>
+              </label>
+            </div>
+
+            {/* Subscription consent */}
+            <div className="flex items-start gap-3 bg-sky-50 border border-sky-200 rounded-lg p-4">
+              <input
+                id="subscriptionConsent"
+                name="subscriptionConsent"
+                type="checkbox"
+                checked={form.subscriptionConsent}
+                onChange={handleChange}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <label htmlFor="subscriptionConsent" className="text-sm text-gray-700">
+                {t("subscriptionConsent")}
               </label>
             </div>
 
@@ -582,11 +579,77 @@ function HouseholdBookingContent() {
                   : "text-gray-400 bg-gray-200 cursor-not-allowed"
               }`}
             >
-              {submitting ? t("submitting") : t("submitHousehold")}
+              {submitting ? t("submitting") : t("submitProfessional")}
             </button>
           </div>
         </form>
       </div>
+
+      {/* Terms Modal */}
+      {showTerms && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onClick={() => setShowTerms(false)}>
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-y-auto p-6 sm:p-8" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-gray-900">เงื่อนไขการใช้งาน</h2>
+              <button onClick={() => setShowTerms(false)} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+            </div>
+            <div className="prose prose-sm max-w-none text-gray-700 space-y-4">
+              <h3>1. การยอมรับเงื่อนไข</h3>
+              <p>การใช้บริการแพลตฟอร์ม CBLUE ถือว่าท่านยอมรับเงื่อนไขการใช้งานทั้งหมด หากท่านไม่ยอมรับเงื่อนไขเหล่านี้ กรุณาหยุดใช้บริการ</p>
+              <h3>2. ขอบเขตบริการ</h3>
+              <p>CBLUE เป็นแพลตฟอร์มเชื่อมต่อผู้ใช้กับช่างมืออาชีพและผู้เชี่ยวชาญ เราไม่ได้เป็นผู้ให้บริการซ่อมบำรุงโดยตรง แต่เป็นตัวกลางในการจับคู่ผู้ใช้กับผู้ให้บริการที่เหมาะสม</p>
+              <h3>3. การลงทะเบียนและบัญชีผู้ใช้</h3>
+              <p>ผู้ใช้ต้องให้ข้อมูลที่ถูกต้องและเป็นปัจจุบันในการลงทะเบียน ผู้ใช้มีหน้าที่รักษาความปลอดภัยของบัญชีและรหัสผ่าน</p>
+              <h3>4. การชำระเงิน</h3>
+              <p>การชำระเงินผ่าน PromptPay QR จำนวน 300 บาทเป็นค่ามัดจำเพื่อยืนยันการจอง ซึ่งจะหักจากยอดชำระทั้งหมด ค่าบริการสุดท้ายขึ้นอยู่กับประเภทบริการ ระดับช่าง และขอบเขตงาน</p>
+              <h3>5. การยกเลิก</h3>
+              <p>ผู้ใช้สามารถยกเลิกคำขอได้ก่อนช่างยืนยันการรับงาน หลังจากยืนยันแล้ว ค่ามัดจำจะไม่สามารถขอคืนได้ ยกเว้นกรณีที่ช่างไม่สามารถมาให้บริการได้</p>
+              <h3>6. ความรับผิดชอบ</h3>
+              <p>CBLUE มีมาตรการตรวจสอบช่างผ่านระบบ KYC แต่ไม่รับผิดชอบต่อความเสียหายที่เกิดจากการให้บริการของช่าง ผู้ใช้ควรตรวจสอบงานก่อนชำระเงินค่าบริการสุดท้าย</p>
+              <h3>7. ทรัพย์สินทางปัญญา</h3>
+              <p>เนื้อหาทั้งหมดบนแพลตฟอร์มเป็นทรัพย์สินของ CBLUE Co., Ltd. ห้ามคัดลอก ดัดแปลง หรือเผยแพร่โดยไม่ได้รับอนุญาต</p>
+              <h3>8. การเปลี่ยนแปลงเงื่อนไข</h3>
+              <p>CBLUE ขอสงวนสิทธิ์ในการเปลี่ยนแปลงเงื่อนไขการใช้งานได้ทุกเมื่อ โดยจะแจ้งให้ผู้ใช้ทราบผ่านแพลตฟอร์ม</p>
+            </div>
+            <button onClick={() => setShowTerms(false)} className="mt-6 w-full py-2.5 bg-blue-700 text-white rounded-lg font-semibold hover:bg-blue-800 transition">
+              ปิด
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Privacy Modal */}
+      {showPrivacy && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onClick={() => setShowPrivacy(false)}>
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-y-auto p-6 sm:p-8" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-gray-900">นโยบายความเป็นส่วนตัว</h2>
+              <button onClick={() => setShowPrivacy(false)} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+            </div>
+            <div className="prose prose-sm max-w-none text-gray-700 space-y-4">
+              <h3>1. ข้อมูลที่เราเก็บรวบรวม</h3>
+              <p>เราเก็บรวบรวมข้อมูลส่วนบุคคลที่ท่านให้ผ่านแบบฟอร์ม ได้แก่ ชื่อ-นามสกุล อีเมล เบอร์โทรศัพท์ ที่อยู่ รูปภาพประกอบ รวมถึงข้อมูลการใช้งานแพลตฟอร์ม</p>
+              <h3>2. วัตถุประสงค์ในการใช้ข้อมูล</h3>
+              <p>เราใช้ข้อมูลเพื่อ: จับคู่ผู้ใช้กับช่างที่เหมาะสม, ดำเนินการชำระเงิน, ส่งการแจ้งเตือนสถานะงาน, ปรับปรุงคุณภาพบริการ, และติดต่อกลับตามที่ท่านร้องขอ</p>
+              <h3>3. การแบ่งปันข้อมูล</h3>
+              <p>เราอาจแบ่งปันข้อมูลกับ: ช่างที่ได้รับการจับคู่ (ชื่อ เบอร์โทร ที่อยู่), ผู้ให้บริการชำระเงิน (PromptPay), และหน่วยงานราชการตามที่กฎหมายกำหนด</p>
+              <h3>4. การรักษาความปลอดภัย</h3>
+              <p>เราใช้มาตรการรักษาความปลอดภัยที่เหมาะสม รวมถึงการเข้ารหัสข้อมูล การจำกัดการเข้าถึง และการเฝ้าระวังระบบ เพื่อป้องกันการเข้าถึงข้อมูลโดยไม่ได้รับอนุญาต</p>
+              <h3>5. สิทธิ์ของเจ้าของข้อมูล</h3>
+              <p>ท่านมีสิทธิ์: เข้าถึงข้อมูลส่วนบุคคลของท่าน, ขอแก้ไขข้อมูลที่ไม่ถูกต้อง, ขอให้ลบข้อมูล, เพิกถอนความยินยอม, และร้องเรียนต่อหน่วยงานที่เกี่ยวข้อง</p>
+              <h3>6. คุกกี้และเทคโนโลยีติดตาม</h3>
+              <p>เราใช้คุกกี้เพื่อปรับปรุงประสบการณ์การใช้งาน จดจำการตั้งค่าภาษา และวิเคราะห์ข้อมูลการใช้งานเว็บไซต์</p>
+              <h3>7. การเก็บรักษาข้อมูล</h3>
+              <p>เราเก็บรักษาข้อมูลส่วนบุคคลตามระยะเวลาที่จำเป็นสำหรับวัตถุประสงค์ที่ระบุไว้ หรือตามที่กฎหมายกำหนด</p>
+              <h3>8. ติดต่อเรา</h3>
+              <p>หากมีคำถามเกี่ยวกับนโยบายความเป็นส่วนตัว กรุณาติดต่อ: cblue.thailand@gmail.com หรือ +66 (0)81 854 4291</p>
+            </div>
+            <button onClick={() => setShowPrivacy(false)} className="mt-6 w-full py-2.5 bg-blue-700 text-white rounded-lg font-semibold hover:bg-blue-800 transition">
+              ปิด
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

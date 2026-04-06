@@ -33,6 +33,21 @@ export const PROJECT_SERVICES = [
   { value: "SMART_FARMING", label: "Smart Farming" },
 ] as const;
 
+export const PROFESSIONAL_SERVICES = [
+  { value: "LAWYER", label: "ทนายความ (Lawyer)" },
+  { value: "ACCOUNTANT", label: "บัญชี (Accountant)" },
+  { value: "CPA", label: "ผู้สอบบัญชี (CPA)" },
+  { value: "ARCHITECT", label: "สถาปนิก (Architect)" },
+  { value: "INTERIOR_DESIGNER", label: "มัณฑนากร (Interior Designer)" },
+  { value: "DESIGN_CIVIL_ENGINEER", label: "วิศวกรโยธาออกแบบ (Design Civil Engineer)" },
+  { value: "CONSTRUCTION_CIVIL_ENGINEER", label: "วิศวกรโยธาก่อสร้าง (Construction Civil Engineer)" },
+  { value: "DESIGN_MECHANICAL_ENGINEER", label: "วิศวกรเครื่องกลออกแบบ (Design Mechanical Engineer)" },
+  { value: "CONSTRUCTION_MECHANICAL_ENGINEER", label: "วิศวกรเครื่องกลก่อสร้าง (Construction Mechanical Engineer)" },
+  { value: "DESIGN_ELECTRICAL_ENGINEER", label: "วิศวกรไฟฟ้าออกแบบ (Design Electrical Engineer)" },
+  { value: "CONSTRUCTION_ELECTRICAL_ENGINEER", label: "วิศวกรไฟฟ้าก่อสร้าง (Construction Electrical Engineer)" },
+  { value: "OTHERS", label: "อื่น ๆ (Others)" },
+] as const;
+
 export const FIXER_ALL_SERVICES = [
   ...HOUSEHOLD_SERVICES,
   ...PROJECT_SERVICES.filter(

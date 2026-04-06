@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useTranslations, useLocale } from "next-intl";
 
 interface Order {
   id: string;
@@ -17,17 +18,6 @@ interface Order {
   fixer?: { user: { name: string } } | null;
   address?: { province: string; district: string } | null;
 }
-
-const STATUS_LABELS: Record<string, string> = {
-  CREATED: "รอดำเนินการ",
-  MATCHING: "กำลังจับคู่ช่าง",
-  ASSIGNED: "จับคู่ช่างแล้ว",
-  DEPOSIT_PENDING: "รอชำระมัดจำ",
-  CONFIRMED: "ยืนยันแล้ว",
-  IN_PROGRESS: "กำลังดำเนินงาน",
-  COMPLETED: "เสร็จสิ้น",
-  CANCELLED: "ยกเลิก",
-};
 
 const STATUS_COLORS: Record<string, string> = {
   CREATED: "bg-gray-100 text-gray-800",
@@ -53,6 +43,13 @@ const STATUS_STEPS = [
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
 
 export default function OrdersPage() {
+  const t = useTranslations("dashboard");
+  const tc = useTranslations("common");
+  const locale = useLocale();
+  const prefix = `/${locale}`;
+
+  const dateFmtLocale = locale === "th" ? "th-TH" : locale === "zh" ? "zh-CN" : "en-US";
+
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -87,24 +84,24 @@ export default function OrdersPage() {
     <div className="max-w-6xl mx-auto px-4 py-8">
       {/* Breadcrumb */}
       <nav className="text-sm text-gray-500 mb-4">
-        <Link href="/dashboard" className="hover:underline">
-          แดชบอร์ด
+        <Link href={`${prefix}/dashboard`} className="hover:underline">
+          {t("title")}
         </Link>
         <span className="mx-2">/</span>
-        <span className="text-gray-900">งานของฉัน</span>
+        <span className="text-gray-900">{t("myOrders")}</span>
       </nav>
 
       <h1 className="text-2xl font-bold text-gray-900 mb-6">
-        งานของฉัน (My Orders)
+        {t("myOrders")}
       </h1>
 
       {/* Filter Tabs */}
       <div className="flex flex-wrap gap-2 mb-6">
         {[
-          { value: "ALL", label: "ทั้งหมด" },
-          { value: "IN_PROGRESS", label: "กำลังดำเนินการ" },
-          { value: "COMPLETED", label: "เสร็จสิ้น" },
-          { value: "CANCELLED", label: "ยกเลิก" },
+          { value: "ALL", label: t("allOrders") },
+          { value: "IN_PROGRESS", label: t("inProgress") },
+          { value: "COMPLETED", label: t("completed") },
+          { value: "CANCELLED", label: t("cancelled") },
         ].map((tab) => (
           <button
             key={tab.value}
@@ -125,16 +122,16 @@ export default function OrdersPage() {
         <div className="lg:col-span-2">
           {loading ? (
             <div className="bg-white border rounded-xl p-8 text-center text-gray-500">
-              กำลังโหลด...
+              {tc("loading")}
             </div>
           ) : filtered.length === 0 ? (
             <div className="bg-white border rounded-xl p-8 text-center">
-              <p className="text-gray-500 mb-4">ไม่พบงาน</p>
+              <p className="text-gray-500 mb-4">{t("noOrdersFound")}</p>
               <Link
-                href="/services"
+                href={`${prefix}/services`}
                 className="inline-block px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
               >
-                จองบริการ
+                {t("bookService")}
               </Link>
             </div>
           ) : (
@@ -154,14 +151,14 @@ export default function OrdersPage() {
                       {order.serviceCategory}
                       {order.isUrgent && (
                         <span className="ml-2 text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
-                          ด่วน
+                          {t("urgent")}
                         </span>
                       )}
                     </h3>
                     <span
                       className={`text-xs font-medium px-3 py-1 rounded-full ${STATUS_COLORS[order.status] || "bg-gray-100"}`}
                     >
-                      {STATUS_LABELS[order.status] || order.status}
+                      {t(`statusLabels.${order.status}`)}
                     </span>
                   </div>
                   <p className="text-sm text-gray-500 line-clamp-2">
@@ -169,7 +166,7 @@ export default function OrdersPage() {
                   </p>
                   <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
                     <span>
-                      {new Date(order.createdAt).toLocaleDateString("th-TH")}
+                      {new Date(order.createdAt).toLocaleDateString(dateFmtLocale)}
                     </span>
                     {order.address && (
                       <span>
@@ -177,7 +174,7 @@ export default function OrdersPage() {
                       </span>
                     )}
                     {order.fixer?.user?.name && (
-                      <span>ช่าง: {order.fixer.user.name}</span>
+                      <span>{t("fixer")}: {order.fixer.user.name}</span>
                     )}
                   </div>
                 </li>
@@ -191,34 +188,34 @@ export default function OrdersPage() {
           {selectedOrder ? (
             <div className="bg-white border rounded-xl p-5 sticky top-24">
               <h2 className="text-lg font-bold text-gray-900 mb-4">
-                รายละเอียดงาน
+                {t("orderDetail")}
               </h2>
 
               <dl className="space-y-3 text-sm mb-6">
                 <div>
-                  <dt className="text-gray-500">ประเภท</dt>
+                  <dt className="text-gray-500">{t("type")}</dt>
                   <dd className="font-medium">
                     {selectedOrder.orderType === "HOUSEHOLD"
-                      ? "งานซ่อมบ้าน"
-                      : "โปรเจกต์"}
+                      ? t("household")
+                      : t("project")}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-gray-500">หมวดหมู่</dt>
+                  <dt className="text-gray-500">{t("category")}</dt>
                   <dd className="font-medium">
                     {selectedOrder.serviceCategory}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-gray-500">รายละเอียด</dt>
+                  <dt className="text-gray-500">{t("details")}</dt>
                   <dd>{selectedOrder.description}</dd>
                 </div>
                 {selectedOrder.scheduledAt && (
                   <div>
-                    <dt className="text-gray-500">วันนัดหมาย</dt>
+                    <dt className="text-gray-500">{t("scheduledDate")}</dt>
                     <dd>
                       {new Date(selectedOrder.scheduledAt).toLocaleDateString(
-                        "th-TH",
+                        dateFmtLocale,
                         { dateStyle: "long" },
                       )}
                     </dd>
@@ -226,13 +223,13 @@ export default function OrdersPage() {
                 )}
                 {selectedOrder.estimatedPrice && (
                   <div>
-                    <dt className="text-gray-500">ราคาประเมิน</dt>
+                    <dt className="text-gray-500">{t("estimatedPrice")}</dt>
                     <dd>฿{selectedOrder.estimatedPrice.toLocaleString()}</dd>
                   </div>
                 )}
                 {selectedOrder.finalPrice && (
                   <div>
-                    <dt className="text-gray-500">ราคาสุดท้าย</dt>
+                    <dt className="text-gray-500">{t("finalPrice")}</dt>
                     <dd className="font-bold text-green-700">
                       ฿{selectedOrder.finalPrice.toLocaleString()}
                     </dd>
@@ -242,11 +239,11 @@ export default function OrdersPage() {
 
               {/* Progress Tracker */}
               <h3 className="text-sm font-semibold text-gray-700 mb-3">
-                สถานะงาน
+                {t("statusProgress")}
               </h3>
               {selectedOrder.status === "CANCELLED" ? (
                 <p className="text-sm text-red-600 font-medium">
-                  งานนี้ถูกยกเลิก
+                  {t("orderCancelled")}
                 </p>
               ) : (
                 <ol className="space-y-2">
@@ -272,7 +269,7 @@ export default function OrdersPage() {
                         <span
                           className={`text-sm ${isCurrent ? "font-semibold text-blue-700" : isDone ? "text-gray-700" : "text-gray-400"}`}
                         >
-                          {STATUS_LABELS[step]}
+                          {t(`statusLabels.${step}`)}
                         </span>
                       </li>
                     );
@@ -282,7 +279,7 @@ export default function OrdersPage() {
             </div>
           ) : (
             <div className="bg-gray-50 border border-dashed border-gray-300 rounded-xl p-8 text-center text-gray-400">
-              <p>เลือกงานเพื่อดูรายละเอียด</p>
+              <p>{t("selectOrder")}</p>
             </div>
           )}
         </div>

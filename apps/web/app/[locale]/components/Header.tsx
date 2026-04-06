@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { LanguageToggle } from "./LanguageToggle";
@@ -22,6 +23,7 @@ export function Header() {
       children: [
         { href: `${prefix}/booking/household`, label: t("household") },
         { href: `${prefix}/booking/project`, label: t("project") },
+        { href: `${prefix}/booking/professional`, label: t("professional") },
       ],
     },
     { href: `${prefix}/fixers/register`, label: t("forFixers") },
@@ -30,17 +32,18 @@ export function Header() {
   ];
 
   return (
-    <header className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
+    <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md shadow-sm border-b border-sky-100">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-16 items-center justify-between">
+        <div className="flex h-20 items-center justify-between">
           {/* Logo */}
           <Link href={`${prefix}`} className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-lg bg-blue-700 flex items-center justify-center">
-              <span className="text-white font-bold text-lg">C</span>
-            </div>
-            <span className="text-xl font-bold text-gray-900">
-              CBLUE<span className="text-blue-600">.co.th</span>
-            </span>
+            <Image
+              src="/images/logo.jpg"
+              alt="CBLUE"
+              width={120}
+              height={48}
+              className="h-12 w-auto object-contain"
+            />
           </Link>
 
           {/* Desktop nav */}
@@ -51,7 +54,7 @@ export function Header() {
                   <button
                     onClick={() => setDropdownOpen(!dropdownOpen)}
                     onBlur={() => setTimeout(() => setDropdownOpen(false), 150)}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                    className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition-colors"
                   >
                     {link.label}
                     <svg
@@ -74,7 +77,7 @@ export function Header() {
                         <Link
                           key={child.href}
                           href={child.href}
-                          className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700"
+                          className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-sky-50 hover:text-sky-600"
                         >
                           {child.label}
                         </Link>
@@ -86,7 +89,7 @@ export function Header() {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                  className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition-colors"
                 >
                   {link.label}
                 </Link>
@@ -101,7 +104,7 @@ export function Header() {
             </div>
             <Link
               href={`${prefix}/booking/household`}
-              className="hidden sm:inline-flex items-center px-4 py-2 text-sm font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded-lg transition-colors"
+              className="hidden sm:inline-flex items-center px-4 py-2 text-sm font-semibold text-white bg-sky-600 hover:bg-sky-700 rounded-lg transition-colors"
             >
               {t("bookNow")}
             </Link>
@@ -136,7 +139,7 @@ export function Header() {
                     key={child.href}
                     href={child.href}
                     onClick={() => setMobileOpen(false)}
-                    className="block px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 rounded-lg"
+                    className="block px-3 py-2 text-sm text-gray-700 hover:bg-sky-50 rounded-lg"
                   >
                     {child.label}
                   </Link>
@@ -147,7 +150,7 @@ export function Header() {
                 key={link.href}
                 href={link.href}
                 onClick={() => setMobileOpen(false)}
-                className="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-blue-50 rounded-lg"
+                className="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-sky-50 rounded-lg"
               >
                 {link.label}
               </Link>
@@ -159,7 +162,7 @@ export function Header() {
           <Link
             href={`${prefix}/booking/household`}
             onClick={() => setMobileOpen(false)}
-            className="mt-2 block w-full text-center px-4 py-2.5 text-sm font-semibold text-white bg-blue-700 rounded-lg"
+            className="mt-2 block w-full text-center px-4 py-2.5 text-sm font-semibold text-white bg-sky-600 rounded-lg"
           >
             {t("bookNow")}
           </Link>

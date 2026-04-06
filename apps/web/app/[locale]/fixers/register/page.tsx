@@ -589,8 +589,12 @@ export default function FixerRegisterPage() {
 
             <button
               type="submit"
-              disabled={submitting}
-              className="w-full py-3 px-6 text-base font-semibold text-white bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 rounded-xl transition-colors"
+              disabled={submitting || !form.consent || !recaptchaToken}
+              className={`w-full py-3 px-6 text-base font-semibold rounded-xl transition-colors ${
+                form.consent && recaptchaToken
+                  ? "text-white bg-blue-700 hover:bg-blue-800"
+                  : "text-gray-400 bg-gray-200 cursor-not-allowed"
+              }`}
             >
               {submitting ? "กำลังส่ง..." : "สมัครเป็นช่าง CBLUE"}
             </button>

@@ -423,3 +423,37 @@ model PropertyImage {
   @@index([propertyId])
   @@map("property_images")
 }
+
+// ==================== SUBSCRIPTION ====================
+
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+}
+
+model Subscriber {
+  id              String             @id @default(uuid())
+  email           String             @unique
+  passwordHash    String
+  name            String
+  phone           String
+  company         String?
+  status          SubscriptionStatus @default(PENDING)
+
+  // From professional search form
+  serviceCategory String?
+  description     String?
+
+  // Password reset
+  resetToken      String?            @unique
+  resetTokenExpiry DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@index([status])
+  @@map("subscribers")
+}

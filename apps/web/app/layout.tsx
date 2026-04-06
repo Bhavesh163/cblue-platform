@@ -15,6 +15,10 @@ export const metadata: Metadata = {
   title: "CBLUE - Find Fixers | แพลตฟอร์มช่างซ่อมบำรุงอันดับ 1",
   description:
     "CBLUE เชื่อมต่อคุณกับช่างมืออาชีพทั่วประเทศไทย บริการซ่อมบ้าน ไฟฟ้า ประปา แอร์ และอื่น ๆ",
+  icons: {
+    icon: "/images/favicon-c.png",
+    apple: "/images/favicon-c.png",
+  },
 };
 
 export default function RootLayout({

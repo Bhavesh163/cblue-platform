@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import {useTranslations, useLocale} from "next-intl";
 
 export default function Home() {
@@ -7,12 +8,12 @@ export default function Home() {
   const prefix = `/${locale}`;
 
   const services = [
-    { icon: "🔧", titleKey: "plumbing" as const, descKey: "plumbingDesc" as const },
-    { icon: "⚡", titleKey: "electrical" as const, descKey: "electricalDesc" as const },
-    { icon: "❄️", titleKey: "ac" as const, descKey: "acDesc" as const },
-    { icon: "🏠", titleKey: "interior" as const, descKey: "interiorDesc" as const },
-    { icon: "🌿", titleKey: "landscaping" as const, descKey: "landscapingDesc" as const },
-    { icon: "🏗️", titleKey: "cladding" as const, descKey: "claddingDesc" as const },
+    { titleKey: "plumbing" as const, descKey: "plumbingDesc" as const, image: "/images/hvac.png" },
+    { titleKey: "electrical" as const, descKey: "electricalDesc" as const, image: "/images/ev-charger.jpg" },
+    { titleKey: "ac" as const, descKey: "acDesc" as const, image: "/images/smart-home.jpg" },
+    { titleKey: "interior" as const, descKey: "interiorDesc" as const, image: "/images/green-construction.jpg" },
+    { titleKey: "landscaping" as const, descKey: "landscapingDesc" as const, image: "/images/smart-farming.jpg" },
+    { titleKey: "cladding" as const, descKey: "claddingDesc" as const, image: "/images/solar-panel.jpg" },
   ];
 
   const stats = [
@@ -30,37 +31,37 @@ export default function Home() {
   ];
 
   return (
-    <>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30">
       {/* Hero */}
-      <section className="relative bg-gradient-to-br from-blue-800 via-blue-700 to-blue-900 text-white overflow-hidden">
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-20 left-10 w-72 h-72 bg-white rounded-full blur-3xl" />
-          <div className="absolute bottom-10 right-10 w-96 h-96 bg-blue-400 rounded-full blur-3xl" />
+      <section className="relative min-h-[600px] flex items-center justify-center overflow-hidden">
+        <div className="absolute inset-0 z-0">
+          <Image src="/images/swimming-pool.jpg" alt="" fill className="object-cover" priority />
+          <div className="absolute inset-0 bg-gradient-to-r from-slate-900/90 to-blue-900/40" />
         </div>
-        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-24 sm:py-32">
-          <div className="max-w-3xl">
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight">
+        <div className="relative z-10 mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-24 sm:py-32 text-center text-white">
+          <h1 className="text-4xl sm:text-5xl lg:text-7xl font-bold leading-tight tracking-tight">
+            <span className="bg-clip-text text-transparent bg-gradient-to-r from-sky-400 to-white">
               {t("home.heroTitle")}
-              <br />
-              <span className="text-blue-300">{t("home.heroTitleAccent")}</span>
-            </h1>
-            <p className="mt-6 text-lg sm:text-xl text-blue-100 leading-relaxed max-w-2xl">
-              {t("home.heroDesc")}
-            </p>
-            <div className="mt-10 flex flex-col sm:flex-row gap-4">
-              <Link
-                href={`${prefix}/booking/household`}
-                className="inline-flex items-center justify-center px-8 py-3.5 text-base font-semibold text-blue-800 bg-white hover:bg-blue-50 rounded-xl shadow-lg transition-all"
-              >
-                {t("home.bookHousehold")}
-              </Link>
-              <Link
-                href={`${prefix}/booking/project`}
-                className="inline-flex items-center justify-center px-8 py-3.5 text-base font-semibold text-white border-2 border-white/30 hover:bg-white/10 rounded-xl transition-all"
-              >
-                {t("home.bookProject")}
-              </Link>
-            </div>
+            </span>
+            <br />
+            <span className="text-blue-200">{t("home.heroTitleAccent")}</span>
+          </h1>
+          <p className="mt-6 text-lg sm:text-xl text-gray-200 leading-relaxed max-w-3xl mx-auto">
+            {t("home.heroDesc")}
+          </p>
+          <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
+            <Link
+              href={`${prefix}/booking/household`}
+              className="inline-flex items-center justify-center px-8 py-3.5 text-base font-semibold text-slate-900 bg-white hover:bg-sky-50 rounded-xl shadow-lg transition-all"
+            >
+              {t("home.bookHousehold")}
+            </Link>
+            <Link
+              href={`${prefix}/booking/project`}
+              className="inline-flex items-center justify-center px-8 py-3.5 text-base font-semibold text-white border-2 border-white/30 hover:bg-white/10 rounded-xl transition-all"
+            >
+              {t("home.bookProject")}
+            </Link>
           </div>
         </div>
       </section>
@@ -80,23 +81,28 @@ export default function Home() {
       </section>
 
       {/* Services Grid */}
-      <section className="bg-gray-50 py-20">
+      <section className="py-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-gray-900">{t("home.ourServices")}</h2>
             <p className="mt-3 text-lg text-gray-500">
               {t("home.ourServicesDesc")}
             </p>
+            <div className="mt-4 w-24 h-1 bg-sky-500 mx-auto rounded-full" />
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
             {services.map((svc) => (
               <div
                 key={svc.titleKey}
-                className="bg-white rounded-xl p-6 shadow-sm hover:shadow-md border border-gray-100 transition-shadow"
+                className="group bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1"
               >
-                <div className="text-4xl mb-4">{svc.icon}</div>
-                <h3 className="text-lg font-semibold text-gray-900">{t(`services.${svc.titleKey}`)}</h3>
-                <p className="mt-2 text-sm text-gray-500">{t(`services.${svc.descKey}`)}</p>
+                <div className="relative h-48 w-full overflow-hidden">
+                  <Image src={svc.image} alt={svc.titleKey} fill className="object-cover transform group-hover:scale-110 transition-transform duration-500" />
+                </div>
+                <div className="p-6">
+                  <h3 className="text-lg font-bold text-gray-900">{t(`services.${svc.titleKey}`)}</h3>
+                  <p className="mt-2 text-sm text-gray-600 leading-relaxed">{t(`services.${svc.descKey}`)}</p>
+                </div>
               </div>
             ))}
           </div>
@@ -112,52 +118,64 @@ export default function Home() {
       </section>
 
       {/* Real Estate Section */}
-      <section className="bg-white py-20">
+      <section className="bg-white/60 py-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-gray-900">{t("realEstate.title")}</h2>
             <p className="mt-3 text-lg text-gray-500">{t("realEstate.desc")}</p>
+            <div className="mt-4 w-24 h-1 bg-emerald-500 mx-auto rounded-full" />
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto">
             <Link
               href={`${prefix}/properties`}
-              className="bg-blue-50 border border-blue-200 rounded-xl p-8 text-center hover:shadow-md transition-shadow"
+              className="group relative bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1"
             >
-              <div className="text-4xl mb-4">🏘️</div>
-              <h3 className="text-lg font-semibold text-blue-900">{t("realEstate.searchProperty")}</h3>
-              <p className="mt-2 text-sm text-blue-700">{t("realEstate.browse")}</p>
+              <div className="relative h-48 overflow-hidden">
+                <Image src="/images/green-construction.jpg" alt="" fill className="object-cover group-hover:scale-110 transition-transform duration-500" />
+                <div className="absolute inset-0 bg-gradient-to-t from-blue-900/70 to-transparent" />
+              </div>
+              <div className="p-6 text-center">
+                <h3 className="text-lg font-bold text-gray-900">{t("realEstate.searchProperty")}</h3>
+                <p className="mt-2 text-sm text-gray-600">{t("realEstate.browse")}</p>
+              </div>
             </Link>
             <Link
               href={`${prefix}/properties/register`}
-              className="bg-green-50 border border-green-200 rounded-xl p-8 text-center hover:shadow-md transition-shadow"
+              className="group relative bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1"
             >
-              <div className="text-4xl mb-4">📝</div>
-              <h3 className="text-lg font-semibold text-green-900">{t("realEstate.listProperty")}</h3>
-              <p className="mt-2 text-sm text-green-700">{t("realEstate.registerDesc")}</p>
+              <div className="relative h-48 overflow-hidden">
+                <Image src="/images/swimming-pool.jpg" alt="" fill className="object-cover group-hover:scale-110 transition-transform duration-500" />
+                <div className="absolute inset-0 bg-gradient-to-t from-emerald-900/70 to-transparent" />
+              </div>
+              <div className="p-6 text-center">
+                <h3 className="text-lg font-bold text-gray-900">{t("realEstate.listProperty")}</h3>
+                <p className="mt-2 text-sm text-gray-600">{t("realEstate.registerDesc")}</p>
+              </div>
             </Link>
           </div>
         </div>
       </section>
 
       {/* Tier Transparency */}
-      <section className="bg-gray-50 py-20">
+      <section className="py-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-gray-900">{t("home.tierTitle")}</h2>
             <p className="mt-3 text-lg text-gray-500">
               {t("home.tierDesc")}
             </p>
+            <div className="mt-4 w-24 h-1 bg-sky-500 mx-auto rounded-full" />
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {tiers.map((tier) => (
               <div
                 key={tier.name}
-                className="rounded-xl p-6 text-center border border-gray-200 hover:border-blue-300 transition-colors"
+                className="bg-white rounded-xl p-6 text-center shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1"
               >
-                <span className={`inline-block px-3 py-1 text-xs font-semibold rounded-full ${tier.color}`}>
+                <span className={`inline-block px-4 py-1.5 text-xs font-bold rounded-full ${tier.color}`}>
                   {tier.name}
                 </span>
-                <p className="mt-4 text-xl font-bold text-gray-900">{tier.price}</p>
+                <p className="mt-4 text-2xl font-bold text-gray-900">{tier.price}</p>
               </div>
             ))}
           </div>
@@ -165,16 +183,20 @@ export default function Home() {
       </section>
 
       {/* CTA */}
-      <section className="bg-blue-700 py-16">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
+      <section className="relative py-20 overflow-hidden">
+        <div className="absolute inset-0 z-0">
+          <Image src="/images/green-theme.jpg" alt="" fill className="object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-r from-slate-900/90 to-blue-900/60" />
+        </div>
+        <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl font-bold text-white">{t("home.ctaTitle")}</h2>
-          <p className="mt-4 text-lg text-blue-100">
+          <p className="mt-4 text-lg text-gray-200">
             {t("home.ctaDesc")}
           </p>
           <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
             <Link
               href={`${prefix}/booking/household`}
-              className="inline-flex items-center justify-center px-8 py-3.5 text-base font-semibold text-blue-800 bg-white hover:bg-blue-50 rounded-xl shadow-lg transition-all"
+              className="inline-flex items-center justify-center px-8 py-3.5 text-base font-semibold text-slate-900 bg-white hover:bg-sky-50 rounded-xl shadow-lg transition-all"
             >
               {t("home.bookHousehold")}
             </Link>
@@ -187,6 +209,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-    </>
+    </div>
   );
 }

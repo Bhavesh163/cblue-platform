@@ -34,12 +34,6 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Brand */}
           <div>
-            <div className="flex items-center gap-2 mb-4">
-              <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center">
-                <span className="text-white font-bold">C</span>
-              </div>
-              <span className="text-lg font-bold text-white">CBLUE.co.th</span>
-            </div>
             <p className="text-sm text-gray-400 leading-relaxed">
               {t("home.heroDesc")}
             </p>

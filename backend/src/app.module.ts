@@ -16,6 +16,7 @@ import { ReviewModule } from './modules/review/review.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { PropertyModule } from './modules/property/property.module';
+import { SubscriptionModule } from './modules/subscription/subscription.module';
 import { QueueModule } from './queue/queue.module';
 import configuration from './config/configuration';
 
@@ -53,6 +54,7 @@ import configuration from './config/configuration';
     NotificationModule,
     AdminModule,
     PropertyModule,
+    SubscriptionModule,
   ],
   controllers: [AppController],
   providers: [

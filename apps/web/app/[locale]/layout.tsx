@@ -3,6 +3,7 @@ import {setRequestLocale} from 'next-intl/server';
 import {routing} from '../../i18n/routing';
 import {Header} from './components/Header';
 import {Footer} from './components/Footer';
+import {ChatbotWidget} from './components/ChatbotWidget';
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({locale}));
@@ -30,6 +31,7 @@ export default async function LocaleLayout({
       <Header />
       <main className="min-h-screen">{children}</main>
       <Footer />
+      <ChatbotWidget />
     </NextIntlClientProvider>
   );
 }
