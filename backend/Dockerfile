@@ -35,4 +35,4 @@ USER nestjs
 
 EXPOSE 3002
 
-CMD ["node", "dist/main.js"]
+CMD ["node", "dist/src/main.js"]

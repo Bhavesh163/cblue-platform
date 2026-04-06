@@ -44,17 +44,19 @@ export default function PropertiesPage() {
     keyword: "",
   });
 
-  async function handleSearch() {
+  async function handleSearch(overrides?: Partial<typeof filters>) {
+    const f = overrides ? { ...filters, ...overrides } : filters;
+    if (overrides) setFilters(f);
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (filters.propertyType) params.set("propertyType", filters.propertyType);
-      if (filters.listingType) params.set("listingType", filters.listingType);
-      if (filters.province) params.set("province", filters.province);
-      if (filters.minPrice) params.set("minPrice", filters.minPrice);
-      if (filters.maxPrice) params.set("maxPrice", filters.maxPrice);
-      if (filters.bedrooms) params.set("bedrooms", filters.bedrooms);
-      if (filters.keyword) params.set("keyword", filters.keyword);
+      if (f.propertyType) params.set("propertyType", f.propertyType);
+      if (f.listingType) params.set("listingType", f.listingType);
+      if (f.province) params.set("province", f.province);
+      if (f.minPrice) params.set("minPrice", f.minPrice);
+      if (f.maxPrice) params.set("maxPrice", f.maxPrice);
+      if (f.bedrooms) params.set("bedrooms", f.bedrooms);
+      if (f.keyword) params.set("keyword", f.keyword);
 
       const res = await fetch(`${API_BASE}/properties?${params.toString()}`);
       if (res.ok) {
@@ -194,7 +196,7 @@ export default function PropertiesPage() {
               {/* Search button */}
               <div className="flex items-end">
                 <button
-                  onClick={handleSearch}
+                  onClick={() => handleSearch()}
                   className="w-full py-2.5 px-6 text-sm font-semibold text-white bg-green-700 hover:bg-green-800 rounded-lg transition-colors"
                 >
                   {tc("search")}
@@ -268,17 +270,21 @@ export default function PropertiesPage() {
             <div className="text-center py-12">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
                 {["CONDO", "HOUSE", "LAND"].map((type) => (
-                  <div key={type} className="bg-white rounded-xl p-6 border border-gray-200 text-center">
+                  <button
+                    key={type}
+                    onClick={() => handleSearch({ propertyType: type })}
+                    className="bg-white rounded-xl p-6 border border-gray-200 text-center hover:border-green-500 hover:shadow-md transition cursor-pointer"
+                  >
                     <div className="text-4xl mb-3">
                       {type === "CONDO" ? "🏢" : type === "HOUSE" ? "🏠" : "🌳"}
                     </div>
                     <h3 className="font-semibold text-gray-900">{t(`types.${typeKeys[type]}`)}</h3>
-                  </div>
+                  </button>
                 ))}
               </div>
               <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
                 <button
-                  onClick={handleSearch}
+                  onClick={() => handleSearch()}
                   className="px-8 py-3 text-sm font-semibold text-white bg-green-700 hover:bg-green-800 rounded-xl transition-colors"
                 >
                   {t("searchProperty")}

@@ -59,8 +59,8 @@ export default function DashboardPage() {
     async function fetchData() {
       try {
         const [statsRes, ordersRes] = await Promise.all([
-          fetch(`${API_BASE}/api/dashboard/stats`, { credentials: "include" }),
-          fetch(`${API_BASE}/api/orders?limit=5`, { credentials: "include" }),
+          fetch(`${API_BASE}/dashboard/stats`, { credentials: "include" }),
+          fetch(`${API_BASE}/orders?limit=5`, { credentials: "include" }),
         ]);
 
         if (statsRes.ok) {

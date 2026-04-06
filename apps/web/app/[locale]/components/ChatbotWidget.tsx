@@ -22,6 +22,7 @@ export function ChatbotWidget() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showFaq, setShowFaq] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -99,12 +100,16 @@ export function ChatbotWidget() {
 
   return (
     <>
-      {/* Floating Button */}
+      {/* Floating Button with blinking ring */}
       <button
         onClick={() => setOpen(!open)}
         className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-blue-700 text-white shadow-lg hover:bg-blue-800 transition-all flex items-center justify-center"
         aria-label="Chat"
       >
+        {!open && (
+          <span className="absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75 animate-ping" />
+        )}
+        <span className="relative flex items-center justify-center">
         {open ? (
           <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -112,6 +117,7 @@ export function ChatbotWidget() {
         ) : (
           <Image src="/images/customer-support.png" alt="Chat" width={32} height={32} className="w-8 h-8 rounded-full object-cover" />
         )}
+        </span>
       </button>
 
       {/* Chat Panel */}
@@ -164,19 +170,32 @@ export function ChatbotWidget() {
             )}
           </div>
 
-          {/* FAQ Quick Buttons */}
-          <div className="px-4 py-2 border-t border-gray-100 flex-shrink-0">
-            <div className="flex flex-wrap gap-1.5">
-              {FAQ_KEYS.filter((k) => k.startsWith("q")).map((key) => (
-                <button
-                  key={key}
-                  onClick={() => handleFaq(key)}
-                  className="text-xs px-2.5 py-1.5 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 transition whitespace-nowrap"
-                >
-                  {t(`faq.${key}` as Parameters<typeof t>[0])}
-                </button>
-              ))}
-            </div>
+          {/* FAQ Quick Buttons - collapsible */}
+          <div className="border-t border-gray-100 flex-shrink-0">
+            <button
+              onClick={() => setShowFaq(!showFaq)}
+              className="w-full px-4 py-1.5 flex items-center justify-between text-xs font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition"
+            >
+              <span>{locale === "th" ? "คำถามที่พบบ่อย" : locale === "zh" ? "常见问题" : "Quick Questions"}</span>
+              <svg className={`w-3.5 h-3.5 transition-transform ${showFaq ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+              </svg>
+            </button>
+            {showFaq && (
+              <div className="px-4 py-2 max-h-[100px] overflow-y-auto">
+                <div className="flex flex-wrap gap-1.5">
+                  {FAQ_KEYS.filter((k) => k.startsWith("q")).map((key) => (
+                    <button
+                      key={key}
+                      onClick={() => handleFaq(key)}
+                      className="text-xs px-2.5 py-1.5 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 transition whitespace-nowrap"
+                    >
+                      {t(`faq.${key}` as Parameters<typeof t>[0])}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Input */}
