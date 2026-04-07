@@ -117,6 +117,46 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Professional Search */}
+      <section className="bg-white/60 py-20">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-gray-900">{t("booking.professionalTitle")}</h2>
+            <p className="mt-3 text-lg text-gray-500">{t("booking.professionalDesc")}</p>
+            <div className="mt-4 w-24 h-1 bg-indigo-500 mx-auto rounded-full" />
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 max-w-4xl mx-auto">
+            {[
+              { key: "Lawyer", emoji: "⚖️" },
+              { key: "Architect", emoji: "📐" },
+              { key: "Interior Designer", emoji: "🎨" },
+              { key: "CPA", emoji: "📊" },
+              { key: "Civil Engineer", emoji: "🏗️" },
+              { key: "Mechanical Engineer", emoji: "⚙️" },
+              { key: "Electrical Engineer", emoji: "⚡" },
+              { key: "Accountant", emoji: "🧮" },
+            ].map((pro) => (
+              <Link
+                key={pro.key}
+                href={`${prefix}/booking/professional`}
+                className="bg-white rounded-xl p-4 text-center shadow-md hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 border border-gray-100"
+              >
+                <span className="text-3xl block mb-2">{pro.emoji}</span>
+                <span className="text-sm font-semibold text-gray-800">{pro.key}</span>
+              </Link>
+            ))}
+          </div>
+          <div className="text-center mt-8">
+            <Link
+              href={`${prefix}/booking/professional`}
+              className="inline-flex items-center justify-center px-8 py-3 text-base font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg transition-all"
+            >
+              {t("home.bookProject")}
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* Real Estate Section */}
       <section className="bg-white/60 py-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">

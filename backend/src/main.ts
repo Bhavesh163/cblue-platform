@@ -19,14 +19,7 @@ async function bootstrap() {
 
   // CORS
   app.enableCors({
-    origin:
-      configService.get('nodeEnv') === 'development'
-        ? '*'
-        : [
-            'https://yourdomain.com',
-            'https://www.yourdomain.com',
-            'https://admin.yourdomain.com',
-          ],
+    origin: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });

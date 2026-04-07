@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, Suspense, type FormEvent, type ChangeEvent } from "react";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { PROFESSIONAL_SERVICES, THAI_PROVINCES } from "../../lib/constants";
 import ReCaptcha from "../../components/ReCaptcha";
@@ -34,7 +34,12 @@ interface FormData {
   budgetRange: string;
   consent: boolean;
   subscriptionConsent: boolean;
+  password: string;
+  confirmPassword: string;
+  tier: string;
 }
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
 
 const initialForm: FormData = {
   name: "",
@@ -54,6 +59,9 @@ const initialForm: FormData = {
   budgetRange: "",
   consent: false,
   subscriptionConsent: false,
+  password: "",
+  confirmPassword: "",
+  tier: "standard",
 };
 
 export default function ProfessionalBookingPage() {
@@ -66,6 +74,8 @@ export default function ProfessionalBookingPage() {
 
 function ProfessionalBookingContent() {
   const t = useTranslations("booking");
+  const locale = useLocale();
+  const prefix = `/${locale}`;
   const searchParams = useSearchParams();
   const prefilledService = searchParams.get("service") || "";
 
@@ -131,6 +141,20 @@ function ProfessionalBookingContent() {
     setError("");
 
     try {
+      // If subscription consent is checked, validate password
+      if (form.subscriptionConsent) {
+        if (!form.password || form.password.length < 8) {
+          setError(locale === "th" ? "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร" : "Password must be at least 8 characters");
+          setSubmitting(false);
+          return;
+        }
+        if (form.password !== form.confirmPassword) {
+          setError(locale === "th" ? "รหัสผ่านไม่ตรงกัน" : "Passwords do not match");
+          setSubmitting(false);
+          return;
+        }
+      }
+
       const payload = {
         orderType: "PROFESSIONAL",
         name: form.name,
@@ -143,6 +167,7 @@ function ProfessionalBookingContent() {
           : undefined,
         budgetRange: form.budgetRange || undefined,
         description: form.description,
+        tier: form.tier,
         address: {
           province: form.province,
           district: form.district,
@@ -155,6 +180,33 @@ function ProfessionalBookingContent() {
         subscriptionConsent: form.subscriptionConsent,
       };
       console.log("Professional booking submission:", payload);
+
+      // Auto-register subscriber if subscription consent is checked
+      if (form.subscriptionConsent) {
+        try {
+          const regRes = await fetch(`${API_BASE}/subscription/register`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: form.name,
+              email: form.email,
+              phone: form.phone,
+              company: form.company || undefined,
+              password: form.password,
+              serviceCategory: form.serviceCategory,
+              description: form.description,
+            }),
+          });
+          if (regRes.ok) {
+            const data = await regRes.json();
+            localStorage.setItem("subscriber_token", data.accessToken);
+            localStorage.setItem("subscriber", JSON.stringify(data.subscriber));
+          }
+        } catch {
+          // Subscription registration failed silently — booking still succeeds
+        }
+      }
+
       setSuccess(true);
     } catch {
       setError(t("submitError"));
@@ -567,6 +619,71 @@ function ProfessionalBookingContent() {
                 {t("subscriptionConsent")}
               </label>
             </div>
+
+            {/* Tier + Password fields (shown when subscription consent is checked) */}
+            {form.subscriptionConsent && (
+              <div className="bg-sky-50 border border-sky-200 rounded-lg p-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {locale === "th" ? "เลือกระดับบริการ" : locale === "zh" ? "选择服务等级" : "Select Service Tier"} <span className="text-red-500">*</span>
+                  </label>
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      { value: "standard", label: "Standard", deposit: "฿200", emoji: "⭐" },
+                      { value: "corporate", label: "Corporate", deposit: "฿400", emoji: "🏢" },
+                      { value: "expert", label: "Expert", deposit: "฿600", emoji: "👑" },
+                    ].map((tier) => (
+                      <button
+                        key={tier.value}
+                        type="button"
+                        onClick={() => setForm((prev) => ({ ...prev, tier: tier.value }))}
+                        className={`p-3 rounded-xl border-2 text-center transition ${
+                          form.tier === tier.value
+                            ? "border-blue-500 bg-blue-50"
+                            : "border-gray-200 bg-white hover:border-gray-300"
+                        }`}
+                      >
+                        <span className="text-xl block">{tier.emoji}</span>
+                        <span className="text-sm font-semibold block mt-1">{tier.label}</span>
+                        <span className="text-xs text-gray-500 block">{locale === "th" ? "มัดจำ" : "Deposit"} {tier.deposit}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                    {locale === "th" ? "ตั้งรหัสผ่านสมาชิก" : locale === "zh" ? "设置会员密码" : "Set Member Password"} <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="password"
+                    name="password"
+                    type="password"
+                    required
+                    minLength={8}
+                    value={form.password}
+                    onChange={handleChange}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                    placeholder="••••••••"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                    {locale === "th" ? "ยืนยันรหัสผ่าน" : locale === "zh" ? "确认密码" : "Confirm Password"} <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type="password"
+                    required
+                    minLength={8}
+                    value={form.confirmPassword}
+                    onChange={handleChange}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                    placeholder="••••••••"
+                  />
+                </div>
+              </div>
+            )}
 
             <ReCaptcha onVerify={handleRecaptcha} onExpire={handleRecaptchaExpire} />
 

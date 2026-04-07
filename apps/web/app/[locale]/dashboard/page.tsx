@@ -154,6 +154,40 @@ export default function DashboardPage() {
         </Link>
       </div>
 
+      {/* Real Estate & Pro Zone */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <Link
+          href={`${prefix}/properties`}
+          className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl hover:bg-green-100 transition"
+        >
+          <span className="text-2xl">🏢</span>
+          <div>
+            <p className="font-semibold text-green-900">{locale === "th" ? "ค้นหาอสังหาฯ" : locale === "zh" ? "搜索房产" : "Search Properties"}</p>
+            <p className="text-sm text-green-700">{locale === "th" ? "คอนโด บ้าน ที่ดิน" : locale === "zh" ? "公寓、别墅、土地" : "Condo, House, Land"}</p>
+          </div>
+        </Link>
+        <Link
+          href={`${prefix}/properties/register`}
+          className="flex items-center gap-3 p-4 bg-teal-50 border border-teal-200 rounded-xl hover:bg-teal-100 transition"
+        >
+          <span className="text-2xl">📋</span>
+          <div>
+            <p className="font-semibold text-teal-900">{locale === "th" ? "ลงประกาศอสังหาฯ" : locale === "zh" ? "发布房产" : "List Property"}</p>
+            <p className="text-sm text-teal-700">{locale === "th" ? "ขาย / ให้เช่า ทั่วประเทศ" : locale === "zh" ? "出售/出租全国" : "Sell / Rent nationwide"}</p>
+          </div>
+        </Link>
+        <Link
+          href={`${prefix}/pro-zone`}
+          className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl hover:bg-amber-100 transition"
+        >
+          <span className="text-2xl">⭐</span>
+          <div>
+            <p className="font-semibold text-amber-900">{locale === "th" ? "Pro Zone" : locale === "zh" ? "专业区" : "Pro Zone"}</p>
+            <p className="text-sm text-amber-700">{locale === "th" ? "แดชบอร์ดสำหรับช่าง/ผู้เชี่ยวชาญ" : locale === "zh" ? "技工/专业人士面板" : "Dashboard for fixers & pros"}</p>
+          </div>
+        </Link>
+      </div>
+
       {/* Subscription Status */}
       {subscriber && (
         <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6 mb-8">

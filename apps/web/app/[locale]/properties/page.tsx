@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useTranslations, useLocale } from "next-intl";
 import { THAI_PROVINCES } from "../lib/constants";
@@ -32,6 +32,7 @@ export default function PropertiesPage() {
   const prefix = `/${locale}`;
 
   const [properties, setProperties] = useState<Property[]>([]);
+  const [latestProperties, setLatestProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [filters, setFilters] = useState({
@@ -43,6 +44,21 @@ export default function PropertiesPage() {
     bedrooms: "",
     keyword: "",
   });
+
+  useEffect(() => {
+    async function fetchLatest() {
+      try {
+        const res = await fetch(`${API_BASE}/properties?limit=20`);
+        if (res.ok) {
+          const data = await res.json();
+          setLatestProperties(data.properties || []);
+        }
+      } catch {
+        // API not available
+      }
+    }
+    fetchLatest();
+  }, []);
 
   async function handleSearch(overrides?: Partial<typeof filters>) {
     const f = overrides ? { ...filters, ...overrides } : filters;
@@ -214,17 +230,43 @@ export default function PropertiesPage() {
             <div className="text-center py-12 text-gray-500">{tc("loading")}</div>
           ) : searched && properties.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-gray-500 mb-4">No properties found</p>
-              <Link
-                href={`${prefix}/properties/register`}
-                className="inline-block px-6 py-2.5 bg-green-700 text-white rounded-lg hover:bg-green-800 transition"
-              >
-                {t("listProperty")}
-              </Link>
+              <div className="text-5xl mb-4">🔍</div>
+              <p className="text-gray-500 mb-2">
+                {locale === "th" ? "ไม่พบประกาศในขณะนี้" : locale === "zh" ? "暂无相关房源" : "No properties found for this search"}
+              </p>
+              <p className="text-sm text-gray-400 mb-6">
+                {locale === "th" ? "ลองเปลี่ยนตัวกรอง หรือลงประกาศของคุณ" : locale === "zh" ? "请尝试调整筛选条件，或发布您的房产" : "Try adjusting your filters, or list your own property"}
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <button
+                  onClick={() => { setSearched(false); setProperties([]); setFilters({ propertyType: "", listingType: "", province: "", minPrice: "", maxPrice: "", bedrooms: "", keyword: "" }); }}
+                  className="px-6 py-2.5 text-green-700 border border-green-700 rounded-lg hover:bg-green-50 transition text-sm font-semibold"
+                >
+                  {locale === "th" ? "← กลับหน้าหลัก" : locale === "zh" ? "← 返回" : "← Back to browse"}
+                </button>
+                <Link
+                  href={`${prefix}/properties/register`}
+                  className="inline-block px-6 py-2.5 bg-green-700 text-white rounded-lg hover:bg-green-800 transition text-sm font-semibold"
+                >
+                  {t("listProperty")}
+                </Link>
+              </div>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {properties.map((prop) => (
+          ) : searched ? (
+            <>
+              <div className="flex items-center justify-between mb-6">
+                <button
+                  onClick={() => { setSearched(false); setProperties([]); setFilters({ propertyType: "", listingType: "", province: "", minPrice: "", maxPrice: "", bedrooms: "", keyword: "" }); }}
+                  className="text-sm text-green-700 hover:text-green-800 font-semibold flex items-center gap-1"
+                >
+                  ← {locale === "th" ? "กลับ" : locale === "zh" ? "返回" : "Back"}
+                </button>
+                <span className="text-sm text-gray-500">
+                  {properties.length} {locale === "th" ? "ผลลัพธ์" : locale === "zh" ? "个结果" : "results"}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {properties.map((prop) => (
                 <Link
                   key={prop.id}
                   href={`${prefix}/properties/${prop.id}`}
@@ -262,8 +304,9 @@ export default function PropertiesPage() {
                   </div>
                 </Link>
               ))}
-            </div>
-          )}
+              </div>
+            </>
+          ) : null}
 
           {/* CTA to register property */}
           {!searched && (
@@ -296,6 +339,55 @@ export default function PropertiesPage() {
                   {t("listProperty")}
                 </Link>
               </div>
+
+              {/* Latest 20 Properties */}
+              {latestProperties.length > 0 && (
+                <div className="mt-16">
+                  <h2 className="text-2xl font-bold text-gray-900 text-center mb-8">
+                    {locale === "th" ? "ประกาศล่าสุด" : locale === "zh" ? "最新房源" : "Latest Listings"}
+                  </h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {latestProperties.map((prop) => (
+                      <Link
+                        key={prop.id}
+                        href={`${prefix}/properties/${prop.id}`}
+                        className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+                      >
+                        <div className="h-40 bg-gray-200 flex items-center justify-center">
+                          {prop.images[0] ? (
+                            <img src={prop.images[0].url} alt={prop.title} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-4xl">🏠</span>
+                          )}
+                        </div>
+                        <div className="p-3">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                              prop.listingType === "SALE" ? "bg-blue-100 text-blue-800" : "bg-green-100 text-green-800"
+                            }`}>
+                              {prop.listingType === "SALE" ? t("forSale") : t("forRent")}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {t(`types.${typeKeys[prop.propertyType]}`)}
+                            </span>
+                          </div>
+                          <h3 className="font-semibold text-gray-900 text-sm line-clamp-1">{prop.title}</h3>
+                          <p className="text-base font-bold text-green-700 mt-1">
+                            ฿{formatPrice(prop.price)}
+                            {prop.listingType === "RENT" && "/mo"}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
+                            {prop.bedrooms && <span>{prop.bedrooms} bed</span>}
+                            {prop.bathrooms && <span>{prop.bathrooms} bath</span>}
+                            {prop.area && <span>{prop.area} sqm</span>}
+                          </div>
+                          <p className="text-xs text-gray-400 mt-1">{prop.province}</p>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
