@@ -77,7 +77,7 @@ const TIER_STYLE: Record<string, string> = {
   Expert: "bg-red-50 text-red-700",
 };
 
-type TabKey = "overview" | "jobs" | "requests" | "history" | "chat" | "notifications";
+type TabKey = "overview" | "jobs" | "requests" | "history" | "chat" | "notifications" | "profile";
 
 export default function FixerProPage() {
   const t = useTranslations("nav");
@@ -106,6 +106,7 @@ export default function FixerProPage() {
     { key: "history", label: locale === "th" ? "ประวัติงาน" : "History", icon: "📜" },
     { key: "chat", label: locale === "th" ? "แชท" : "Chat", icon: "💬", badge: DEMO_CHATS.reduce((a, c) => a + c.unread, 0) },
     { key: "notifications", label: locale === "th" ? "แจ้งเตือน" : "Alerts", icon: "🔔", badge: DEMO_NOTIFICATIONS.filter(n => n.unread).length },
+    { key: "profile", label: locale === "th" ? "โปรไฟล์" : "Profile", icon: "👤" },
   ];
 
   return (
@@ -142,39 +143,6 @@ export default function FixerProPage() {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 -mt-6 relative z-10 pb-12">
-        {/* Dashboard Area (when logged in) */}
-        {isSubscribed && (
-          <>
-            {/* Tab Navigation */}
-            <div className="flex gap-1 bg-white rounded-xl shadow-sm border border-gray-200 p-1.5 mb-6 overflow-x-auto">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.key}
-                  onClick={() => setActiveTab(tab.key)}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${
-                    activeTab === tab.key ? "bg-purple-600 text-white shadow" : "text-gray-600 hover:bg-gray-100"
-                  }`}
-                >
-                  <span>{tab.icon}</span> {tab.label}
-                  {tab.badge ? (
-                    <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${activeTab === tab.key ? "bg-white/30 text-white" : "bg-red-100 text-red-700"}`}>{tab.badge}</span>
-                  ) : null}
-                </button>
-              ))}
-            </div>
-
-            {/* Tab Content */}
-            {activeTab === "overview" && <PartnerOverview locale={locale} partner={partner} />}
-            {activeTab === "jobs" && <PartnerJobs locale={locale} />}
-            {activeTab === "requests" && <PartnerRequests locale={locale} />}
-            {activeTab === "history" && <PartnerHistory locale={locale} />}
-            {activeTab === "chat" && <PartnerChat locale={locale} />}
-            {activeTab === "notifications" && <PartnerNotifications locale={locale} />}
-
-            <div className="my-10 border-t border-gray-200" />
-          </>
-        )}
-
         {/* Not logged in CTA */}
         {!isSubscribed && !loading && (
           <div className="bg-gradient-to-r from-purple-600 to-indigo-700 rounded-2xl p-8 mb-8 text-white shadow-xl">
@@ -194,6 +162,35 @@ export default function FixerProPage() {
             </div>
           </div>
         )}
+
+        {/* Tab Navigation - visible for all users */}
+        <div className="flex gap-1 bg-white rounded-xl shadow-sm border border-gray-200 p-1.5 mb-6 overflow-x-auto">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${
+                activeTab === tab.key ? "bg-purple-600 text-white shadow" : "text-gray-600 hover:bg-gray-100"
+              }`}
+            >
+              <span>{tab.icon}</span> {tab.label}
+              {tab.badge ? (
+                <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${activeTab === tab.key ? "bg-white/30 text-white" : "bg-red-100 text-red-700"}`}>{tab.badge}</span>
+              ) : null}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === "overview" && <PartnerOverview locale={locale} partner={partner} />}
+        {activeTab === "jobs" && <PartnerJobs locale={locale} />}
+        {activeTab === "requests" && <PartnerRequests locale={locale} />}
+        {activeTab === "history" && <PartnerHistory locale={locale} />}
+        {activeTab === "chat" && <PartnerChat locale={locale} />}
+        {activeTab === "notifications" && <PartnerNotifications locale={locale} />}
+        {activeTab === "profile" && <PartnerProfile locale={locale} prefix={prefix} partner={partner} />}
+
+        <div className="my-10 border-t border-gray-200" />
 
         {/* Registration Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
@@ -639,6 +636,87 @@ function PartnerNotifications({ locale }: { locale: string }) {
             {n.unread && <span className="w-2 h-2 bg-purple-500 rounded-full" />}
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+/* ===== PARTNER PROFILE ===== */
+function PartnerProfile({ locale, prefix, partner }: { locale: string; prefix: string; partner: PartnerInfo | null }) {
+  if (!partner) {
+    return (
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-10 text-center">
+        <div className="text-5xl mb-4">👤</div>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">{locale === "th" ? "เข้าสู่ระบบเพื่อดูโปรไฟล์" : "Log in to view profile"}</h2>
+        <p className="text-sm text-gray-500 mb-6">{locale === "th" ? "เข้าสู่ระบบเพื่อจัดการข้อมูลและการตั้งค่า" : "Sign in to manage your partner account"}</p>
+        <Link href={`${prefix}/subscription/login`} className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm rounded-xl transition inline-block">
+          {locale === "th" ? "เข้าสู่ระบบ" : "Log In"}
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Profile Card */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <div className="flex items-center gap-5 mb-6">
+          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white text-3xl font-bold shadow-lg">{partner.name?.charAt(0) || "P"}</div>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">{partner.name}</h2>
+            <p className="text-sm text-gray-500">{partner.email}</p>
+            <p className="text-sm text-gray-400">{partner.phone}</p>
+          </div>
+          <div className="ml-auto flex flex-col gap-1.5 items-end">
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">Active</span>
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-700">Corporate Tier</span>
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-sky-100 text-sky-700">KYC ✓</span>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[
+            { label: locale === "th" ? "งานทั้งหมด" : "Total Jobs", value: DEMO_PARTNER_STATS.completedJobs + DEMO_PARTNER_STATS.activeJobs, icon: "📋" },
+            { label: locale === "th" ? "งานปัจจุบัน" : "Active", value: DEMO_PARTNER_STATS.activeJobs, icon: "🔧" },
+            { label: locale === "th" ? "คะแนน" : "Rating", value: `${DEMO_PARTNER_STATS.rating} ⭐`, icon: "🏆" },
+            { label: locale === "th" ? "ลูกค้าประจำ" : "Repeat Clients", value: DEMO_PARTNER_STATS.repeatClients, icon: "🤝" },
+          ].map((s) => (
+            <div key={s.label} className="bg-gray-50 rounded-xl p-4 text-center">
+              <span className="text-xl block mb-1">{s.icon}</span>
+              <p className="text-lg font-bold text-gray-900">{s.value}</p>
+              <p className="text-xs text-gray-500">{s.label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Skills & Settings */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">🛠️ {locale === "th" ? "ทักษะและบริการ" : "Skills & Services"}</h3>
+          <div className="flex flex-wrap gap-2">
+            {["Plumbing", "Electrical", "AC", "Interior", "Smart Home"].map((skill) => (
+              <span key={skill} className="px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg text-xs font-semibold border border-purple-200">{skill}</span>
+            ))}
+          </div>
+          <p className="text-xs text-gray-400 mt-3">{locale === "th" ? "ติดต่อแอดมินเพื่อเพิ่มทักษะ" : "Contact admin to add more skills"}</p>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">⚙️ {locale === "th" ? "การตั้งค่า" : "Settings"}</h3>
+          <div className="space-y-3">
+            {[
+              { label: locale === "th" ? "แก้ไขโปรไฟล์" : "Edit Profile", icon: "✏️" },
+              { label: locale === "th" ? "เปลี่ยนรหัสผ่าน" : "Change Password", icon: "🔒" },
+              { label: locale === "th" ? "ปฏิทินว่าง" : "Availability Calendar", icon: "📅" },
+              { label: locale === "th" ? "รัศมีพื้นที่ให้บริการ" : "Service Area Radius", icon: "📍" },
+            ].map((item) => (
+              <button key={item.label} className="flex items-center gap-3 p-3 rounded-xl border border-gray-200 hover:border-purple-300 hover:bg-purple-50/50 transition text-left w-full">
+                <span className="text-lg">{item.icon}</span>
+                <span className="font-medium text-gray-900 text-sm">{item.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -58,8 +58,7 @@ export function Footer() {
     { label: t("nav.services"), href: `${prefix}/services` },
     { label: locale === "th" ? "ลูกค้า" : locale === "zh" ? "客户" : "Customer", href: `${prefix}/dashboard` },
     { label: t("nav.forFixers"), href: `${prefix}/fixers` },
-    { label: t("footer.contact"), href: `${prefix}/contact` },
-    { label: t("footer.getSupport"), href: `${prefix}/get-support` },
+    { label: t("footer.contact"), href: `${prefix}/get-support` },
   ];
 
   return (

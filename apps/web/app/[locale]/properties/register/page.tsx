@@ -2,6 +2,7 @@
 
 import { useState, FormEvent } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useTranslations, useLocale } from "next-intl";
 import { THAI_PROVINCES } from "../../lib/constants";
 import { getDistrictsForProvince } from "../../lib/thai-address-data";
@@ -168,13 +169,17 @@ export default function PropertyRegisterPage() {
 
   return (
     <div className="bg-gray-50 min-h-screen">
-      {/* Hero */}
-      <section className="bg-gradient-to-br from-green-700 to-green-900 text-white py-12">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 text-center">
-          <h1 className="text-3xl sm:text-4xl font-bold">{t("registerTitle")}</h1>
+      {/* Scenic Hero */}
+      <div className="relative overflow-hidden">
+        <Image src="/images/scenic-house.jpg" alt="" fill className="object-cover" priority />
+        <div className="absolute inset-0 bg-gradient-to-r from-green-900/90 to-emerald-800/75" />
+        <div className="relative max-w-4xl mx-auto px-4 sm:px-6 py-14 text-center">
+          <span className="inline-block px-4 py-1.5 bg-white/10 backdrop-blur text-green-200 rounded-full text-sm font-bold mb-4 border border-white/20">🏠 {locale === "th" ? "ลงประกาศอสังหาริมทรัพย์" : "List Property"}</span>
+          <h1 className="text-3xl sm:text-4xl font-bold text-white">{t("registerTitle")}</h1>
           <p className="mt-3 text-green-100">{t("registerDesc")}</p>
+          <div className="w-20 h-1 bg-white/50 mx-auto rounded-full mt-5" />
         </div>
-      </section>
+      </div>
 
       {/* Form */}
       <section className="py-10">

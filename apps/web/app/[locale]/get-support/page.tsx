@@ -6,7 +6,7 @@ import { useLocale } from "next-intl";
 
 const T: Record<string, Record<string, string>> = {
   en: {
-    title: "Get Support",
+    title: "Contact Us",
     subtitle: "Having an issue? We're here to help.",
     categoryLabel: "Support Category",
     catFixer: "Fixer / Maintenance Issue",
@@ -46,7 +46,7 @@ const T: Record<string, Record<string, string>> = {
     contactWeb: "cblue.co.th",
   },
   th: {
-    title: "ขอรับการสนับสนุน",
+    title: "ติดต่อเรา",
     subtitle: "มีปัญหา? เราพร้อมช่วยเหลือคุณ",
     categoryLabel: "หมวดหมู่การสนับสนุน",
     catFixer: "ปัญหาช่าง / ซ่อมบำรุง",
@@ -86,7 +86,7 @@ const T: Record<string, Record<string, string>> = {
     contactWeb: "cblue.co.th",
   },
   zh: {
-    title: "获取支持",
+    title: "联系我们",
     subtitle: "遇到问题？我们随时为您提供帮助。",
     categoryLabel: "支持类别",
     catFixer: "技工/维护问题",

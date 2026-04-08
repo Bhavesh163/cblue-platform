@@ -58,7 +58,7 @@ const TIER_STYLE: Record<string, string> = {
   Expert: "bg-red-50 text-red-700",
 };
 
-type TabKey = "overview" | "bookings" | "history" | "chat" | "notifications";
+type TabKey = "overview" | "bookings" | "history" | "chat" | "notifications" | "profile";
 
 export default function DashboardPage() {
   const t = useTranslations("dashboard");
@@ -83,6 +83,7 @@ export default function DashboardPage() {
     { key: "history", label: locale === "th" ? "ประวัติ" : "History", icon: "📜" },
     { key: "chat", label: locale === "th" ? "แชท" : "Chat", icon: "💬", badge: DEMO_CHATS.reduce((a, c) => a + c.unread, 0) },
     { key: "notifications", label: locale === "th" ? "แจ้งเตือน" : "Alerts", icon: "🔔", badge: DEMO_NOTIFICATIONS.filter(n => n.unread).length },
+    { key: "profile", label: locale === "th" ? "โปรไฟล์" : "Profile", icon: "👤" },
   ];
 
   return (
@@ -180,6 +181,7 @@ export default function DashboardPage() {
         {activeTab === "history" && <HistoryTab locale={locale} />}
         {activeTab === "chat" && <ChatTab locale={locale} />}
         {activeTab === "notifications" && <NotificationsTab locale={locale} />}
+        {activeTab === "profile" && <ProfileTab locale={locale} prefix={prefix} subscriber={subscriber} />}
 
         {/* Tier Comparison */}
         <div className="mt-8 bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
@@ -468,6 +470,75 @@ function NotificationsTab({ locale }: { locale: string }) {
             {n.unread && <span className="w-2 h-2 bg-sky-500 rounded-full" />}
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+/* ===== PROFILE TAB ===== */
+function ProfileTab({ locale, prefix, subscriber }: { locale: string; prefix: string; subscriber: SubscriberInfo | null }) {
+  if (!subscriber) {
+    return (
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-10 text-center">
+        <div className="text-5xl mb-4">👤</div>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">{locale === "th" ? "เข้าสู่ระบบเพื่อดูโปรไฟล์" : "Log in to view profile"}</h2>
+        <p className="text-sm text-gray-500 mb-6">{locale === "th" ? "เข้าสู่ระบบเพื่อจัดการข้อมูลบัญชีและการตั้งค่า" : "Sign in to manage account details and preferences"}</p>
+        <Link href={`${prefix}/subscription/login`} className="px-6 py-3 bg-sky-600 hover:bg-sky-700 text-white font-bold text-sm rounded-xl transition inline-block">
+          {locale === "th" ? "เข้าสู่ระบบ" : "Log In"}
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Profile Card */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <div className="flex items-center gap-5 mb-6">
+          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-white text-3xl font-bold shadow-lg">{subscriber.name?.charAt(0) || "U"}</div>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">{subscriber.name}</h2>
+            <p className="text-sm text-gray-500">{subscriber.email}</p>
+            <p className="text-sm text-gray-400">{subscriber.phone}</p>
+            {subscriber.company && <p className="text-xs text-gray-400 mt-0.5">{subscriber.company}</p>}
+          </div>
+          <span className={`ml-auto px-3 py-1.5 rounded-full text-xs font-bold ${subscriber.status === "ACTIVE" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>{subscriber.status}</span>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[
+            { label: locale === "th" ? "บริการทั้งหมด" : "Total Bookings", value: DEMO_HISTORY.length + DEMO_ACTIVE.length, icon: "📋" },
+            { label: locale === "th" ? "กำลังดำเนินการ" : "Active", value: DEMO_ACTIVE.length, icon: "⚡" },
+            { label: locale === "th" ? "ความพึงพอใจ" : "Avg Rating", value: "4.8 ⭐", icon: "🏆" },
+            { label: locale === "th" ? "สมาชิกตั้งแต่" : "Member Since", value: "Mar 2026", icon: "📅" },
+          ].map((s) => (
+            <div key={s.label} className="bg-gray-50 rounded-xl p-4 text-center">
+              <span className="text-xl block mb-1">{s.icon}</span>
+              <p className="text-lg font-bold text-gray-900">{s.value}</p>
+              <p className="text-xs text-gray-500">{s.label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">⚙️ {locale === "th" ? "การตั้งค่า" : "Settings"}</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {[
+            { label: locale === "th" ? "แก้ไขโปรไฟล์" : "Edit Profile", icon: "✏️", desc: locale === "th" ? "อัปเดตชื่อ อีเมล เบอร์โทร" : "Update name, email, phone" },
+            { label: locale === "th" ? "เปลี่ยนรหัสผ่าน" : "Change Password", icon: "🔒", desc: locale === "th" ? "อัปเดตรหัสผ่านเพื่อความปลอดภัย" : "Update password for security" },
+            { label: locale === "th" ? "การแจ้งเตือน" : "Notification Preferences", icon: "🔔", desc: locale === "th" ? "จัดการอีเมลและ Push" : "Manage email & push alerts" },
+            { label: locale === "th" ? "ที่อยู่" : "Saved Addresses", icon: "📍", desc: locale === "th" ? "จัดการที่อยู่ที่บันทึกไว้" : "Manage saved locations" },
+          ].map((item) => (
+            <button key={item.label} className="flex items-center gap-3 p-4 rounded-xl border border-gray-200 hover:border-sky-300 hover:bg-sky-50/50 transition text-left w-full">
+              <span className="text-xl">{item.icon}</span>
+              <div>
+                <p className="font-semibold text-gray-900 text-sm">{item.label}</p>
+                <p className="text-xs text-gray-500">{item.desc}</p>
+              </div>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

@@ -201,11 +201,29 @@ export default function FixerResults({
 }) {
   const t = (key: string) => T[locale]?.[key] || T["en"]![key] || key;
   const [fixers] = useState<Fixer[]>(() => generateDemoFixers(service));
-  const [step, setStep] = useState<"list" | "confirm" | "payment" | "chat" | "done">("list");
+  const [step, setStep] = useState<"matching" | "list" | "confirm" | "payment" | "chat" | "done">("matching");
   const [selectedFixer, setSelectedFixer] = useState<Fixer | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const [aiStep, setAiStep] = useState(0);
+
+  // AI Matching animation sequence
+  useEffect(() => {
+    if (step !== "matching") return;
+    const steps = 5;
+    const timer = setInterval(() => {
+      setAiStep((prev) => {
+        if (prev >= steps) {
+          clearInterval(timer);
+          setTimeout(() => setStep("list"), 400);
+          return prev;
+        }
+        return prev + 1;
+      });
+    }, 800);
+    return () => clearInterval(timer);
+  }, [step]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -273,6 +291,66 @@ export default function FixerResults({
 
   const fee = selectedFixer ? getProcessingFee(bookingType, selectedFixer.tier) : 200;
   const tierLabel = selectedFixer ? t(selectedFixer.tier) : "";
+
+  // Step: AI Matching Animation
+  if (step === "matching") {
+    const aiSteps = locale === "th"
+      ? [
+          { label: "วิเคราะห์ความต้องการของคุณ...", icon: "🧠" },
+          { label: "ค้นหาฐานข้อมูลผู้เชี่ยวชาญ...", icon: "🔍" },
+          { label: "คำนวณคะแนนความเข้ากัน...", icon: "⚡" },
+          { label: "จัดอันดับตามทำเล ระดับ และคะแนน...", icon: "📊" },
+          { label: "เตรียมรายชื่อผู้เชี่ยวชาญ 5 อันดับแรก...", icon: "✅" },
+        ]
+      : locale === "zh"
+      ? [
+          { label: "分析您的需求...", icon: "🧠" },
+          { label: "搜索专业人士数据库...", icon: "🔍" },
+          { label: "计算匹配分数...", icon: "⚡" },
+          { label: "按位置、等级和评分排名...", icon: "📊" },
+          { label: "准备前 5 名专业人士...", icon: "✅" },
+        ]
+      : [
+          { label: "Analyzing your requirements...", icon: "🧠" },
+          { label: "Searching professional database...", icon: "🔍" },
+          { label: "Computing compatibility scores...", icon: "⚡" },
+          { label: "Ranking by location, tier & rating...", icon: "📊" },
+          { label: "Preparing top 5 matches...", icon: "✅" },
+        ];
+
+    return (
+      <div className="mx-auto max-w-lg px-4 py-16">
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 text-center">
+          {/* Pulsing AI brain icon */}
+          <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-sky-500 to-indigo-600 flex items-center justify-center shadow-lg animate-pulse">
+            <span className="text-3xl">🤖</span>
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-1">
+            {locale === "th" ? "AI กำลังจับคู่" : locale === "zh" ? "AI 智能匹配中" : "AI Smart Matching"}
+          </h2>
+          <p className="text-sm text-gray-500 mb-8">
+            {locale === "th" ? "ระบบ AI กำลังค้นหาผู้เชี่ยวชาญที่เหมาะสมที่สุดสำหรับคุณ" : locale === "zh" ? "AI 正在为您寻找最合适的专业人士" : "Our AI engine is finding the best professionals for you"}
+          </p>
+          <div className="space-y-3 text-left">
+            {aiSteps.map((s, i) => (
+              <div key={i} className={`flex items-center gap-3 p-3 rounded-lg transition-all duration-500 ${
+                i < aiStep ? "bg-green-50 border border-green-200" : i === aiStep ? "bg-sky-50 border border-sky-200 animate-pulse" : "bg-gray-50 border border-gray-100 opacity-40"
+              }`}>
+                <span className="text-lg flex-shrink-0">{i < aiStep ? "✅" : s.icon}</span>
+                <span className={`text-sm font-medium ${i < aiStep ? "text-green-700" : i === aiStep ? "text-sky-700" : "text-gray-400"}`}>{s.label}</span>
+                {i === aiStep && <span className="ml-auto"><span className="inline-block w-4 h-4 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" /></span>}
+              </div>
+            ))}
+          </div>
+          {/* Progress bar */}
+          <div className="mt-6 w-full bg-gray-100 rounded-full h-2">
+            <div className="bg-gradient-to-r from-sky-500 to-indigo-600 h-2 rounded-full transition-all duration-700" style={{ width: `${Math.min(aiStep / 5 * 100, 100)}%` }} />
+          </div>
+          <p className="text-xs text-gray-400 mt-2">{Math.min(aiStep * 20, 100)}%</p>
+        </div>
+      </div>
+    );
+  }
 
   // Step: Done
   if (step === "done") {
@@ -466,6 +544,7 @@ export default function FixerResults({
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="text-center mb-8">
+        <span className="inline-block px-4 py-1.5 bg-gradient-to-r from-sky-100 to-indigo-100 text-sky-700 rounded-full text-xs font-bold mb-3 border border-sky-200">🤖 {locale === "th" ? "ผลการจับคู่ AI" : locale === "zh" ? "AI 匹配结果" : "AI-Powered Match Results"}</span>
         <h1 className="text-2xl font-bold text-gray-900">{t("matchTitle")}</h1>
         <p className="text-gray-500 mt-2">{t("matchDesc").replace("{count}", String(fixers.length))}</p>
       </div>
