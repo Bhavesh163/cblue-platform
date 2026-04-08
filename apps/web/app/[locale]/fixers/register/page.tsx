@@ -1,16 +1,27 @@
 "use client";
 
 import { useState, useCallback, type FormEvent, type ChangeEvent } from "react";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { FIXER_ALL_SERVICES, THAI_PROVINCES } from "../../lib/constants";
 import ReCaptcha from "../../components/ReCaptcha";
 import GpsDetectButton from "../../components/GpsDetectButton";
+
+interface PriceRow {
+  service: string;
+  economy: string;
+  standard: string;
+  corporate: string;
+  specialist: string;
+  expert: string;
+}
 
 interface FormData {
   name: string;
   email: string;
   phone: string;
   company: string;
+  password: string;
+  confirmPassword: string;
   bio: string;
   yearsExperience: string;
   travelRadius: string;
@@ -23,6 +34,8 @@ interface FormData {
   postalCode: string;
   addressText: string;
   description: string;
+  pastExperience: string;
+  pastProjectType: "none" | "corporate" | "specialist" | "luxury";
   consent: boolean;
 }
 
@@ -31,6 +44,8 @@ const initialForm: FormData = {
   email: "",
   phone: "",
   company: "",
+  password: "",
+  confirmPassword: "",
   bio: "",
   yearsExperience: "",
   travelRadius: "10",
@@ -43,14 +58,18 @@ const initialForm: FormData = {
   postalCode: "",
   addressText: "",
   description: "",
+  pastExperience: "",
+  pastProjectType: "none",
   consent: false,
 };
 
 export default function FixerRegisterPage() {
   const t = useTranslations("fixer");
+  const locale = useLocale();
   const [form, setForm] = useState<FormData>(initialForm);
   const [kycImages, setKycImages] = useState<File[]>([]);
   const [portfolioImages, setPortfolioImages] = useState<File[]>([]);
+  const [priceRows, setPriceRows] = useState<PriceRow[]>([{ service: "", economy: "", standard: "", corporate: "", specialist: "", expert: "" }]);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
@@ -98,6 +117,14 @@ export default function FixerRegisterPage() {
       setError(t("kycError"));
       return;
     }
+    if (!form.password || form.password.length < 6) {
+      setError(locale === "th" ? "รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร" : locale === "zh" ? "密码至少6个字符" : "Password must be at least 6 characters");
+      return;
+    }
+    if (form.password !== form.confirmPassword) {
+      setError(locale === "th" ? "รหัสผ่านไม่ตรงกัน" : locale === "zh" ? "密码不匹配" : "Passwords do not match");
+      return;
+    }
     setSubmitting(true);
     setError("");
 
@@ -107,6 +134,7 @@ export default function FixerRegisterPage() {
         email: form.email,
         phone: form.phone,
         company: form.company,
+        password: form.password,
         bio: form.bio,
         yearsExperience: form.yearsExperience
           ? parseInt(form.yearsExperience)
@@ -121,6 +149,9 @@ export default function FixerRegisterPage() {
           postalCode: form.postalCode,
         },
         description: form.description,
+        pastExperience: form.pastExperience,
+        pastProjectType: form.pastProjectType,
+        priceList: priceRows.filter((r) => r.service),
         gpsCoords: gpsCoords || undefined,
         recaptchaToken,
         kycImageCount: kycImages.length,
@@ -149,6 +180,7 @@ export default function FixerRegisterPage() {
             setForm(initialForm);
             setKycImages([]);
             setPortfolioImages([]);
+            setPriceRows([{ service: "", economy: "", standard: "", corporate: "", specialist: "", expert: "" }]);
           }}
           className="mt-8 px-6 py-2.5 text-sm font-semibold text-blue-700 border border-blue-700 rounded-lg hover:bg-blue-50"
         >
@@ -163,9 +195,11 @@ export default function FixerRegisterPage() {
       <div className="mx-auto max-w-3xl px-4 sm:px-6">
         {/* Header */}
         <div className="text-center mb-10">
-          <h1 className="text-3xl font-bold text-gray-900">{t("registerTitle")}</h1>
+          <h1 className="text-3xl font-bold text-gray-900">
+            {locale === "th" ? "สมัครเป็นช่าง CBLUE และมืออาชีพ" : locale === "zh" ? "注册为 CBLUE 技工与专业人士" : "Register as CBLUE Fixer & Pro"}
+          </h1>
           <p className="mt-3 text-lg text-gray-500">
-            {t("registerDesc")}
+            {locale === "th" ? "สมัครเพื่อเข้าถึงบริการมืออาชีพและจัดการคำขอของคุณ" : locale === "zh" ? "注册以访问专业服务并管理您的请求" : "Sign up to access professional services and manage your requests"}
           </p>
         </div>
 
@@ -240,6 +274,48 @@ export default function FixerRegisterPage() {
                   onChange={handleChange}
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                   placeholder="บริษัท / ร้าน / ส่วนตัว"
+                />
+              </div>
+            </div>
+          </fieldset>
+
+          {/* Create Subscriber Account */}
+          <fieldset className="bg-sky-50 rounded-xl p-5 border border-sky-200">
+            <legend className="text-lg font-semibold text-gray-900 mb-1">
+              {locale === "th" ? "สร้างบัญชีสมาชิก" : locale === "zh" ? "创建订阅账户" : "Create Subscriber Account"}
+            </legend>
+            <p className="text-xs text-gray-500 mb-4">
+              {locale === "th" ? "สมัครเพื่อเข้าถึงบริการมืออาชีพและจัดการคำขอของคุณ" : locale === "zh" ? "注册以访问专业服务并管理您的请求" : "Sign up to access professional services and manage your requests"}
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                  {locale === "th" ? "รหัสผ่าน" : locale === "zh" ? "密码" : "Password"} <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  required
+                  minLength={6}
+                  value={form.password}
+                  onChange={handleChange}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                />
+              </div>
+              <div>
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                  {locale === "th" ? "ยืนยันรหัสผ่าน" : locale === "zh" ? "确认密码" : "Confirm Password"} <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type="password"
+                  required
+                  minLength={6}
+                  value={form.confirmPassword}
+                  onChange={handleChange}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                 />
               </div>
             </div>
@@ -559,6 +635,110 @@ export default function FixerRegisterPage() {
                 className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none resize-none"
                 placeholder="ข้อมูลเพิ่มเติมที่ต้องการแจ้ง"
               />
+            </div>
+          </fieldset>
+
+          {/* Price List Table */}
+          <fieldset>
+            <legend className="text-lg font-semibold text-gray-900 mb-4">
+              {locale === "th" ? "ตารางราคาบริการ" : locale === "zh" ? "服务价格表" : "Service Price List"}
+            </legend>
+            <p className="text-xs text-gray-500 mb-3">
+              {locale === "th" ? "กรอกราคาบริการที่ท่านเสนอ (บาท) สำหรับแต่ละระดับ" : locale === "zh" ? "填写您提供的每个等级的服务价格（泰铢）" : "Enter your offered price (THB) for each tier per service"}
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="text-left px-3 py-2 font-medium text-gray-700 border-b">{locale === "th" ? "บริการ" : locale === "zh" ? "服务" : "Service"}</th>
+                    <th className="text-center px-3 py-2 font-medium text-green-700 border-b bg-green-50">Economy</th>
+                    <th className="text-center px-3 py-2 font-medium text-blue-700 border-b bg-blue-50">Standard</th>
+                    <th className="text-center px-3 py-2 font-medium text-purple-700 border-b bg-purple-50">Corporate</th>
+                    <th className="text-center px-3 py-2 font-medium text-rose-700 border-b bg-rose-50">Specialist</th>
+                    <th className="text-center px-3 py-2 font-medium text-amber-700 border-b bg-amber-50">Expert</th>
+                    <th className="px-2 py-2 border-b" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {priceRows.map((row, idx) => (
+                    <tr key={idx} className="border-b border-gray-100">
+                      <td className="px-2 py-1.5">
+                        <input type="text" value={row.service} placeholder={locale === "th" ? "เช่น ซ่อมท่อ" : "e.g. Pipe repair"}
+                          onChange={(e) => { const nr = [...priceRows]; nr[idx] = { ...nr[idx]!, service: e.target.value }; setPriceRows(nr); }}
+                          className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded focus:border-blue-500 outline-none" />
+                      </td>
+                      {(["economy", "standard", "corporate", "specialist", "expert"] as const).map((tier) => (
+                        <td key={tier} className="px-2 py-1.5">
+                          <input type="number" min={0} value={row[tier]} placeholder="฿"
+                            onChange={(e) => { const nr = [...priceRows]; nr[idx] = { ...nr[idx]!, [tier]: e.target.value }; setPriceRows(nr); }}
+                            className="w-full px-2 py-1.5 text-sm text-center border border-gray-200 rounded focus:border-blue-500 outline-none" />
+                        </td>
+                      ))}
+                      <td className="px-2 py-1.5">
+                        {priceRows.length > 1 && (
+                          <button type="button" onClick={() => setPriceRows(priceRows.filter((_, i) => i !== idx))}
+                            className="text-red-400 hover:text-red-600 text-lg">×</button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <button type="button"
+              onClick={() => setPriceRows([...priceRows, { service: "", economy: "", standard: "", corporate: "", specialist: "", expert: "" }])}
+              className="mt-2 text-sm text-blue-600 hover:text-blue-800 font-medium">
+              + {locale === "th" ? "เพิ่มรายการ" : locale === "zh" ? "添加行" : "Add Row"}
+            </button>
+          </fieldset>
+
+          {/* Past Work Experience */}
+          <fieldset>
+            <legend className="text-lg font-semibold text-gray-900 mb-4">
+              {locale === "th" ? "ประสบการณ์งานที่ผ่านมา" : locale === "zh" ? "过往工作经验" : "Past Work Experience"}
+            </legend>
+            <p className="text-xs text-gray-500 mb-3">
+              {locale === "th" ? "ผู้ที่มีประสบการณ์ระดับองค์กร จะมีสิทธิ์ได้รับระดับ Corporate, ผู้ชำนาญพิเศษได้รับ Specialist และผู้มีประสบการณ์โครงการหรู/มีชื่อเสียง ได้รับ Expert"
+                : locale === "zh" ? "有企业经验者获得 Corporate，专业经验获得 Specialist，豪华/知名项目经验获得 Expert"
+                : "Corporate experience qualifies for Corporate tier. Specialist experience qualifies for Specialist. Famous/luxury project experience qualifies for Expert tier."}
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="pastExperience" className="block text-sm font-medium text-gray-700 mb-1">
+                  {locale === "th" ? "อธิบายประสบการณ์งานที่ผ่านมา" : locale === "zh" ? "描述过往工作经验" : "Describe your past work experience"}
+                </label>
+                <textarea
+                  id="pastExperience"
+                  name="pastExperience"
+                  rows={3}
+                  value={form.pastExperience}
+                  onChange={handleChange}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none resize-none"
+                  placeholder={locale === "th" ? "รายละเอียดผลงาน ชื่อโครงการ บริษัทที่เคยทำงานด้วย" : "Project names, companies worked with, notable projects"}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  {locale === "th" ? "ประเภทผลงานที่ผ่านมา" : locale === "zh" ? "过往项目类型" : "Past Project Type"}
+                </label>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  {([
+                    { value: "none", label: locale === "th" ? "ทั่วไป (Economy/Standard)" : locale === "zh" ? "一般（Economy/Standard）" : "General (Economy/Standard)" },
+                    { value: "corporate", label: locale === "th" ? "ระดับองค์กร → Corporate" : locale === "zh" ? "企业级 → Corporate" : "Corporate Level → Corporate Tier" },
+                    { value: "specialist", label: locale === "th" ? "ผู้ชำนาญพิเศษ → Specialist" : locale === "zh" ? "专业级 → Specialist" : "Specialist Level → Specialist Tier" },
+                    { value: "luxury", label: locale === "th" ? "โครงการหรู/มีชื่อเสียง → Expert" : locale === "zh" ? "豪华/知名项目 → Expert" : "Famous/Luxury Project → Expert Tier" },
+                  ] as const).map((opt) => (
+                    <label key={opt.value} className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition ${
+                      form.pastProjectType === opt.value ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300"
+                    }`}>
+                      <input type="radio" name="pastProjectType" value={opt.value}
+                        checked={form.pastProjectType === opt.value} onChange={handleChange}
+                        className="text-blue-600 focus:ring-blue-500" />
+                      <span className="text-sm text-gray-700">{opt.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
             </div>
           </fieldset>
 

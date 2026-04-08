@@ -1,0 +1,432 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { useTranslations, useLocale } from "next-intl";
+
+const DEMO_PARTNER_STATS = {
+  activeJobs: 3,
+  completedJobs: 47,
+  monthlyEarnings: "฿18,500",
+  rating: 4.8,
+};
+
+const DEMO_ACTIVE_JOBS = [
+  { id: 1, service: "Plumbing Repair", serviceTh: "ซ่อมประปา", customer: "Customer #A2X", tier: "Standard", date: "2025-01-15", status: "IN_PROGRESS" },
+  { id: 2, service: "AC Maintenance", serviceTh: "ซ่อมแอร์", customer: "Customer #B7K", tier: "Corporate", date: "2025-01-16", status: "CONFIRMED" },
+  { id: 3, service: "Electrical Wiring", serviceTh: "งานไฟฟ้า", customer: "Customer #C4M", tier: "Economy", date: "2025-01-17", status: "PENDING" },
+];
+
+const DEMO_INCOMING_REQUESTS = [
+  { id: 4, service: "Interior Design", serviceTh: "ออกแบบภายใน", customer: "Customer #D9P", tier: "Specialist", date: "2025-01-18", budget: "฿15,000" },
+  { id: 5, service: "Landscaping", serviceTh: "จัดสวน", customer: "Customer #E3R", tier: "Expert", date: "2025-01-19", budget: "฿25,000" },
+];
+
+export default function FixerProPage() {
+  const t = useTranslations("nav");
+  const ft = useTranslations("fixer");
+  const locale = useLocale();
+  const prefix = `/${locale}`;
+
+  const [isSubscribed, setIsSubscribed] = useState(false);
+
+  useEffect(() => {
+    const sub = localStorage.getItem("subscriber");
+    if (sub) setIsSubscribed(true);
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50/30 py-12">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-gray-900 mb-3">
+            {locale === "th" ? "พาร์ทเนอร์" : locale === "zh" ? "合作伙伴" : "Partner"}
+          </h1>
+          <p className="text-gray-500 text-lg max-w-2xl mx-auto">
+            {locale === "th"
+              ? "ศูนย์กลางสำหรับช่างซ่อมบ้าน ทีมโครงการ มืออาชีพ และผู้ลงประกาศอสังหาริมทรัพย์ สมัครเป็นพาร์ทเนอร์ หรือ เข้าถึงแดชบอร์ด งาน แชท การแจ้งเตือน และโปรไฟล์"
+              : locale === "zh"
+              ? "技工、项目团队、专业人士和房地产中心。注册成为合作伙伴或访问控制面板、工作、聊天、通知和个人资料"
+              : "Hub for fixers, project teams, professionals, and property listers. Register as a partner or access your dashboard, jobs, chat, notifications, and profile."}
+          </p>
+          <div className="w-20 h-1 bg-sky-500 mx-auto rounded-full mt-4" />
+        </div>
+
+        {/* Login Area at Top */}
+        <div className="mb-8 bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-800">
+                {locale === "th" ? "เข้าสู่ระบบพาร์ทเนอร์" : locale === "zh" ? "合作伙伴登录" : "Partner Login"}
+              </h2>
+              <p className="text-sm text-gray-500 mt-1">
+                {locale === "th" ? "เข้าถึงแดชบอร์ด งาน แชท การแจ้งเตือน และโปรไฟล์ของคุณ" : locale === "zh" ? "访问控制面板、工作、聊天、通知和个人资料" : "Access your dashboard, jobs, chat, notifications, and profile"}
+              </p>
+            </div>
+            {isSubscribed ? (
+              <Link
+                href={`${prefix}/pro-zone`}
+                className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl shadow transition whitespace-nowrap"
+              >
+                {locale === "th" ? "เข้าสู่แดชบอร์ด" : locale === "zh" ? "进入控制面板" : "Go to Dashboard"}
+              </Link>
+            ) : (
+              <Link
+                href={`${prefix}/subscription/login`}
+                className="px-6 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-xl shadow transition whitespace-nowrap"
+              >
+                {locale === "th" ? "เข้าสู่ระบบ / สมัครสมาชิก" : locale === "zh" ? "登录 / 注册" : "Log In / Subscribe"}
+              </Link>
+            )}
+          </div>
+        </div>
+
+        {/* Partner Dashboard (when logged in) */}
+        {isSubscribed && (
+          <>
+            {/* Quick Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+              {[
+                { label: locale === "th" ? "งานที่กำลังทำ" : "Active Jobs", value: DEMO_PARTNER_STATS.activeJobs, icon: "🔧", color: "from-sky-500 to-blue-600" },
+                { label: locale === "th" ? "งานที่เสร็จแล้ว" : "Completed", value: DEMO_PARTNER_STATS.completedJobs, icon: "✅", color: "from-green-500 to-emerald-600" },
+                { label: locale === "th" ? "รายได้เดือนนี้" : "Monthly Earnings", value: DEMO_PARTNER_STATS.monthlyEarnings, icon: "💰", color: "from-amber-500 to-orange-600" },
+                { label: locale === "th" ? "คะแนนเฉลี่ย" : "Rating", value: `${DEMO_PARTNER_STATS.rating} ⭐`, icon: "🏆", color: "from-purple-500 to-indigo-600" },
+              ].map((stat) => (
+                <div key={stat.label} className="bg-white rounded-2xl shadow-lg border border-gray-100 p-5 hover:shadow-xl transition">
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-2xl">{stat.icon}</span>
+                    <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">{stat.label}</span>
+                  </div>
+                  <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Active Jobs */}
+            <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden mb-8">
+              <div className="h-2 bg-gradient-to-r from-sky-500 to-blue-600" />
+              <div className="p-6">
+                <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  🔧 {locale === "th" ? "งานที่กำลังดำเนินการ" : locale === "zh" ? "进行中的工作" : "Active Jobs"}
+                </h2>
+                <div className="space-y-3">
+                  {DEMO_ACTIVE_JOBS.map((job) => (
+                    <div key={job.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-sky-50/50 transition">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-full bg-sky-100 flex items-center justify-center text-lg">🔧</div>
+                        <div>
+                          <p className="font-semibold text-gray-800 text-sm">{locale === "th" ? job.serviceTh : job.service}</p>
+                          <p className="text-xs text-gray-500">{job.customer} &middot; {job.date}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${
+                          job.tier === "Economy" ? "bg-green-100 text-green-700" :
+                          job.tier === "Standard" ? "bg-blue-100 text-blue-700" :
+                          job.tier === "Corporate" ? "bg-purple-100 text-purple-700" :
+                          job.tier === "Specialist" ? "bg-amber-100 text-amber-700" :
+                          "bg-red-100 text-red-700"
+                        }`}>{job.tier}</span>
+                        <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${
+                          job.status === "IN_PROGRESS" ? "bg-sky-100 text-sky-700" :
+                          job.status === "CONFIRMED" ? "bg-green-100 text-green-700" :
+                          "bg-amber-100 text-amber-700"
+                        }`}>
+                          {job.status === "IN_PROGRESS" ? (locale === "th" ? "กำลังดำเนินการ" : "In Progress") :
+                           job.status === "CONFIRMED" ? (locale === "th" ? "ยืนยันแล้ว" : "Confirmed") :
+                           (locale === "th" ? "รอดำเนินการ" : "Pending")}
+                        </span>
+                        <button className="p-2 text-sky-600 hover:bg-sky-100 rounded-lg transition" title="Chat">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z" /></svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Incoming Requests */}
+            <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden mb-8">
+              <div className="h-2 bg-gradient-to-r from-amber-400 to-orange-500" />
+              <div className="p-6">
+                <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  📋 {locale === "th" ? "คำขอใหม่" : locale === "zh" ? "新请求" : "Incoming Requests"}
+                </h2>
+                <div className="space-y-3">
+                  {DEMO_INCOMING_REQUESTS.map((req) => (
+                    <div key={req.id} className="flex items-center justify-between p-4 bg-amber-50/50 rounded-xl border border-amber-100 hover:bg-amber-50 transition">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-lg">📋</div>
+                        <div>
+                          <p className="font-semibold text-gray-800 text-sm">{locale === "th" ? req.serviceTh : req.service}</p>
+                          <p className="text-xs text-gray-500">{req.customer} &middot; {req.date} &middot; {locale === "th" ? "งบ" : "Budget"}: {req.budget}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${
+                          req.tier === "Specialist" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"
+                        }`}>{req.tier}</span>
+                        <button className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition">
+                          {locale === "th" ? "รับงาน" : "Accept"}
+                        </button>
+                        <button className="px-4 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">
+                          {locale === "th" ? "ปฏิเสธ" : "Decline"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Notifications & Chat */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+              <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
+                <h3 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
+                  🔔 {locale === "th" ? "การแจ้งเตือน" : "Notifications"}
+                </h3>
+                <div className="space-y-2">
+                  {[
+                    { msg: locale === "th" ? "ลูกค้า #A2X ส่งข้อความใหม่" : "Customer #A2X sent a new message", time: "2m ago", dot: "bg-sky-500" },
+                    { msg: locale === "th" ? "คุณมีคำขอใหม่ 2 รายการ" : "You have 2 new requests", time: "15m ago", dot: "bg-amber-500" },
+                    { msg: locale === "th" ? "การชำระเงินจาก #C4M สำเร็จ" : "Payment from #C4M completed", time: "1h ago", dot: "bg-green-500" },
+                  ].map((n, i) => (
+                    <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <span className={`w-2 h-2 rounded-full ${n.dot} flex-shrink-0`} />
+                      <p className="text-sm text-gray-700 flex-1">{n.msg}</p>
+                      <span className="text-xs text-gray-400">{n.time}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
+                <h3 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
+                  💬 {locale === "th" ? "แชทกับลูกค้า" : "Customer Chat"}
+                </h3>
+                <div className="space-y-2">
+                  {[
+                    { name: "Customer #A2X", msg: locale === "th" ? "ขอบคุณครับ รอช่างอยู่" : "Thanks, waiting for the fixer", time: "2m ago", unread: true },
+                    { name: "Customer #B7K", msg: locale === "th" ? "วันไหนสะดวกคะ?" : "Which day works for you?", time: "30m ago", unread: true },
+                    { name: "Customer #C4M", msg: locale === "th" ? "งานเสร็จแล้วครับ ขอบคุณ" : "Job is done, thanks!", time: "2h ago", unread: false },
+                  ].map((c, i) => (
+                    <div key={i} className={`flex items-center gap-3 p-3 rounded-lg ${c.unread ? "bg-sky-50 border border-sky-100" : "bg-gray-50"}`}>
+                      <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600">{c.name.slice(-3)}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-800">{c.name}</p>
+                        <p className="text-xs text-gray-500 truncate">{c.msg}</p>
+                      </div>
+                      <span className="text-xs text-gray-400">{c.time}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Two Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+          {/* Register Card */}
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden hover:shadow-2xl transition-shadow">
+            <div className="h-3 bg-gradient-to-r from-sky-500 to-blue-600" />
+            <div className="p-8">
+              <div className="w-14 h-14 rounded-xl bg-sky-100 flex items-center justify-center mb-5">
+                <svg className="w-7 h-7 text-sky-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
+                </svg>
+              </div>
+              <h2 className="text-xl font-bold text-gray-800 mb-3">{locale === "th" ? "สมัครเป็นช่างและมืออาชีพ CBLUE" : locale === "zh" ? "注册为 CBLUE 技工与专业人士" : "Register as CBLUE Fixer & Pro"}</h2>
+              <p className="text-gray-500 text-sm mb-6 leading-relaxed">{locale === "th" ? "เข้าร่วมเครือข่ายช่างและมืออาชีพมืออาชีพ รับงานทั่วประเทศ" : locale === "zh" ? "加入我们的专业维修与专业人士网络。全国接单" : "Join our professional fixer & pro network. Receive jobs nationwide."}</p>
+              <ul className="text-sm text-gray-600 space-y-2 mb-6">
+                <li className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+                  {locale === "th" ? "รับงานทั่วประเทศ" : locale === "zh" ? "全国接单" : "Receive jobs nationwide"}
+                </li>
+                <li className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+                  {locale === "th" ? "KYC ยืนยันตัวตน" : locale === "zh" ? "KYC 身份验证" : "KYC identity verification"}
+                </li>
+                <li className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+                  {locale === "th" ? "5 ระดับ Economy / Standard / Corporate / Specialist / Expert" : locale === "zh" ? "5级 Economy / Standard / Corporate / Specialist / Expert" : "5 tiers Economy / Standard / Corporate / Specialist / Expert"}
+                </li>
+              </ul>
+              <Link
+                href={`${prefix}/fixers/register`}
+                className="inline-flex items-center justify-center w-full py-3 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-xl shadow-lg transition"
+              >
+                {locale === "th" ? "สมัครเป็นช่างและมืออาชีพ CBLUE" : locale === "zh" ? "注册为 CBLUE 技工与专业人士" : "Register as CBLUE Fixer & Pro"}
+              </Link>
+            </div>
+          </div>
+
+          {/* List New Property Card */}
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden hover:shadow-2xl transition-shadow">
+            <div className="h-3 bg-gradient-to-r from-green-500 to-emerald-600" />
+            <div className="p-8">
+              <div className="w-14 h-14 rounded-xl bg-green-100 flex items-center justify-center mb-5">
+                <svg className="w-7 h-7 text-green-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 21v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21m0 0h4.5V3.545M12.75 21h7.5V10.75M2.25 21h1.5m18 0h-18M2.25 9l4.5-1.636M18.75 3l-1.5.545m0 6.205 3 1m1.5.5-1.5-.5M6.75 7.364V3h-3v18m3-13.636 10.5-3.819" />
+                </svg>
+              </div>
+              <h2 className="text-xl font-bold text-gray-800 mb-3">{locale === "th" ? "ลงประกาศอสังหาริมทรัพย์" : locale === "zh" ? "发布房地产" : "List New Property"}</h2>
+              <p className="text-gray-500 text-sm mb-6 leading-relaxed">
+                {locale === "th"
+                  ? "ลงประกาศขายหรือให้เช่าคอนโด บ้าน ทาวน์เฮาส์ ที่ดิน หรือพาณิชย์ ทั่วประเทศไทย"
+                  : locale === "zh"
+                  ? "发布出售或出租公寓、别墅、联排、土地或商业物业，覆盖全泰国"
+                  : "List your condo, house, townhouse, land or commercial property for sale or rent across Thailand."}
+              </p>
+              <ul className="text-sm text-gray-600 space-y-2 mb-6">
+                <li className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+                  {locale === "th" ? "เข้าถึงผู้ซื้อและผู้เช่าทั่วไทย" : locale === "zh" ? "接触全泰国买家和租客" : "Reach buyers & renters nationwide"}
+                </li>
+                <li className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+                  {locale === "th" ? "อัปโหลดรูปภาพและรายละเอียด" : locale === "zh" ? "上传照片和详情" : "Upload photos & details"}
+                </li>
+                <li className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+                  {locale === "th" ? "จัดการประกาศจากแดชบอร์ด" : locale === "zh" ? "从控制面板管理列表" : "Manage listings from dashboard"}
+                </li>
+              </ul>
+              <Link
+                href={`${prefix}/properties/register`}
+                className="inline-flex items-center justify-center w-full py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl shadow-lg transition"
+              >
+                {locale === "th" ? "ลงประกาศ" : locale === "zh" ? "发布" : "List Property"}
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* Price List Table */}
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+          <div className="h-3 bg-gradient-to-r from-amber-400 to-orange-500" />
+          <div className="p-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2 text-center">
+              {locale === "th" ? "ตารางราคาค่าประสานงาน" : locale === "zh" ? "服务费价格表" : "Processing Fee Price List"}
+            </h2>
+            <p className="text-gray-500 text-sm text-center mb-6">
+              {locale === "th"
+                ? "ค่าประสานงานที่ลูกค้าจ่ายต่อการจับคู่ช่าง/มืออาชีพ 1 ครั้ง"
+                : locale === "zh"
+                ? "客户每次匹配技工/专业人士支付的服务费"
+                : "One-time processing fee paid by customers per fixer/professional matching"}
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b-2 border-gray-200">
+                    <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                      {locale === "th" ? "ระดับ" : locale === "zh" ? "等级" : "Tier"}
+                    </th>
+                    <th className="text-center py-3 px-4 font-semibold text-gray-700">
+                      {locale === "th" ? "ค่าประสานงาน" : locale === "zh" ? "服务费" : "Processing Fee"}
+                    </th>
+                    <th className="text-center py-3 px-4 font-semibold text-gray-700">
+                      {locale === "th" ? "ระดับดาว" : locale === "zh" ? "星级" : "Star Rating"}
+                    </th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                      {locale === "th" ? "คุณสมบัติ" : locale === "zh" ? "资质" : "Qualifications"}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    { tier: "Economy", thTier: "Economy", fee: "฿200", stars: "⭐", qual: locale === "th" ? "ช่างทั่วไป ประสบการณ์เบื้องต้น" : locale === "zh" ? "普通技工，基础经验" : "General fixer, basic experience", color: "bg-green-50 text-green-700" },
+                    { tier: "Standard", thTier: "Standard", fee: "฿400", stars: "⭐⭐", qual: locale === "th" ? "ช่างมีประสบการณ์ ผลงานดี" : locale === "zh" ? "有经验的技工，良好业绩" : "Experienced fixer, good track record", color: "bg-blue-50 text-blue-700" },
+                    { tier: "Corporate", thTier: "Corporate", fee: "฿600", stars: "⭐⭐⭐", qual: locale === "th" ? "ช่างมืออาชีพ หรือทีมงาน" : locale === "zh" ? "专业技工或团队" : "Professional fixer or team", color: "bg-purple-50 text-purple-700" },
+                    { tier: "Specialist", thTier: "Specialist", fee: "฿800", stars: "⭐⭐⭐⭐", qual: locale === "th" ? "ผู้เชี่ยวชาญเฉพาะทาง มีใบรับรอง" : locale === "zh" ? "持证专家" : "Certified specialist", color: "bg-amber-50 text-amber-700" },
+                    { tier: "Expert", thTier: "Expert", fee: "฿1,000", stars: "⭐⭐⭐⭐⭐", qual: locale === "th" ? "ผู้เชี่ยวชาญระดับสูง ประสบการณ์ 10+ ปี" : locale === "zh" ? "高级专家，10年以上经验" : "Senior expert, 10+ years experience", color: "bg-red-50 text-red-700" },
+                  ].map((row) => (
+                    <tr key={row.tier} className="border-b border-gray-100 hover:bg-gray-50 transition">
+                      <td className="py-3 px-4">
+                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${row.color}`}>{row.tier}</span>
+                      </td>
+                      <td className="py-3 px-4 text-center font-bold text-gray-900">{row.fee}</td>
+                      <td className="py-3 px-4 text-center">{row.stars}</td>
+                      <td className="py-3 px-4 text-gray-600">{row.qual}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-gray-400 mt-4 text-center">
+              {locale === "th"
+                ? "* ค่าประสานงานเป็นค่าบริการแพลตฟอร์ม ไม่รวมค่าจ้างช่าง ลูกค้าตกลงราคากับช่างโดยตรง"
+                : locale === "zh"
+                ? "* 服务费为平台费用，不包含技工费用。客户直接与技工协商价格"
+                : "* Processing fee is a platform fee, does not include fixer charges. Customers negotiate pricing directly with fixers."}
+            </p>
+          </div>
+        </div>
+
+        {/* Tier Qualification — Past Project Experience */}
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden mt-8">
+          <div className="h-3 bg-gradient-to-r from-purple-500 to-indigo-600" />
+          <div className="p-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2 text-center">
+              {locale === "th" ? "คุณสมบัติระดับช่าง (Tier Qualification)" : locale === "zh" ? "技工等级资质" : "Tier Qualification Criteria"}
+            </h2>
+            <p className="text-gray-500 text-sm text-center mb-6">
+              {locale === "th"
+                ? "ระดับบริการกำหนดจากประสบการณ์ ผลงาน และใบรับรอง"
+                : locale === "zh"
+                ? "服务等级根据经验、业绩和证书确定"
+                : "Service tier is determined by experience, track record, and certifications."}
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b-2 border-gray-200">
+                    <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                      {locale === "th" ? "ระดับ" : locale === "zh" ? "等级" : "Tier"}
+                    </th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                      {locale === "th" ? "ประสบการณ์ขั้นต่ำ" : locale === "zh" ? "最低经验" : "Min. Experience"}
+                    </th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                      {locale === "th" ? "ผลงานอ้างอิง" : locale === "zh" ? "参考项目" : "Past Projects"}
+                    </th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                      {locale === "th" ? "ใบรับรอง/ใบอนุญาต" : locale === "zh" ? "证书/许可证" : "Certifications"}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    { tier: "Economy", exp: locale === "th" ? "1+ ปี" : "1+ years", projects: locale === "th" ? "ไม่จำเป็น" : "Not required", certs: locale === "th" ? "ไม่จำเป็น" : "Not required", color: "bg-green-50 text-green-700" },
+                    { tier: "Standard", exp: locale === "th" ? "3+ ปี" : "3+ years", projects: locale === "th" ? "3+ โปรเจกต์" : "3+ projects", certs: locale === "th" ? "แนะนำ" : "Recommended", color: "bg-blue-50 text-blue-700" },
+                    { tier: "Corporate", exp: locale === "th" ? "5+ ปี" : "5+ years", projects: locale === "th" ? "10+ โปรเจกต์" : "10+ projects", certs: locale === "th" ? "จำเป็น" : "Required", color: "bg-purple-50 text-purple-700" },
+                    { tier: "Specialist", exp: locale === "th" ? "7+ ปี" : "7+ years", projects: locale === "th" ? "20+ โปรเจกต์" : "20+ projects", certs: locale === "th" ? "จำเป็น + เฉพาะทาง" : "Required + specialized", color: "bg-amber-50 text-amber-700" },
+                    { tier: "Expert", exp: locale === "th" ? "10+ ปี" : "10+ years", projects: locale === "th" ? "50+ โปรเจกต์" : "50+ projects", certs: locale === "th" ? "จำเป็น + ขั้นสูง" : "Required + advanced", color: "bg-red-50 text-red-700" },
+                  ].map((row) => (
+                    <tr key={row.tier} className="border-b border-gray-100 hover:bg-gray-50 transition">
+                      <td className="py-3 px-4">
+                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${row.color}`}>{row.tier}</span>
+                      </td>
+                      <td className="py-3 px-4 text-gray-600">{row.exp}</td>
+                      <td className="py-3 px-4 text-gray-600">{row.projects}</td>
+                      <td className="py-3 px-4 text-gray-600">{row.certs}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-gray-400 mt-4 text-center">
+              {locale === "th"
+                ? "* ช่างสามารถอัปเกรดระดับได้เมื่อมีคุณสมบัติครบถ้วน โดยส่งหลักฐานผ่านแดชบอร์ด"
+                : locale === "zh"
+                ? "* 技工可在满足条件后通过控制面板提交证据升级等级"
+                : "* Fixers can upgrade their tier when qualifications are met by submitting evidence through the dashboard."}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

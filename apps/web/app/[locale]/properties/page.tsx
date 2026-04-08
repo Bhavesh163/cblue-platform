@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useTranslations, useLocale } from "next-intl";
 import { THAI_PROVINCES } from "../lib/constants";
 
@@ -101,12 +102,18 @@ export default function PropertiesPage() {
   };
 
   return (
-    <div className="bg-gray-50 min-h-screen">
+    <div className="bg-gradient-to-br from-slate-50 to-sky-50/30 min-h-screen">
       {/* Hero */}
-      <section className="bg-gradient-to-br from-green-700 to-green-900 text-white py-16">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
+      <section className="relative text-white min-h-[350px] flex items-center overflow-hidden">
+        <Image src="/images/scenic-house.jpg" alt="" fill className="object-cover" priority />
+        <div className="absolute inset-0 bg-gradient-to-r from-emerald-900/90 to-green-800/70" />
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center py-16">
+          <span className="inline-block px-4 py-1.5 bg-white/10 backdrop-blur text-emerald-200 rounded-full text-sm font-bold mb-4 border border-white/20">
+            🏢 {locale === "th" ? "อสังหาริมทรัพย์" : "Real Estate"}
+          </span>
           <h1 className="text-4xl font-bold">{t("title")}</h1>
-          <p className="mt-4 text-lg text-green-100">{t("desc")}</p>
+          <p className="mt-4 text-lg text-emerald-100 max-w-2xl mx-auto">{t("desc")}</p>
+          <div className="w-20 h-1 bg-white/50 mx-auto rounded-full mt-6" />
         </div>
       </section>
 

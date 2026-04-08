@@ -228,8 +228,8 @@ export function ChatbotWidget() {
               {locale === "th" ? "อสังหาฯ" : locale === "zh" ? "房产" : "Real Estate"}
             </Link>
             <span className="text-gray-300">|</span>
-            <Link href={`${prefix}/fixers/register`} className="text-blue-600 hover:underline">
-              {locale === "th" ? "สมัครช่าง" : locale === "zh" ? "技工入驻" : "For Fixers"}
+            <Link href={`${prefix}/fixers`} className="text-blue-600 hover:underline">
+              {locale === "th" ? "ช่างและมืออาชีพ" : locale === "zh" ? "技工与专业人士" : "Fixer & Pro"}
             </Link>
           </div>
         </div>

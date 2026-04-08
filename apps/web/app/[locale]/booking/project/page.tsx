@@ -3,9 +3,12 @@
 import { useState, useCallback, useEffect, Suspense, type FormEvent, type ChangeEvent } from "react";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
+import { useLocale } from "next-intl";
 import { PROJECT_SERVICES, THAI_PROVINCES } from "../../lib/constants";
+import { getDistrictsForProvince } from "../../lib/thai-address-data";
 import ReCaptcha from "../../components/ReCaptcha";
 import GpsDetectButton from "../../components/GpsDetectButton";
+import FixerResults from "../../components/FixerResults";
 
 const BUDGET_RANGES = [
   { value: "UNDER_50000", label: "ต่ำกว่า 50,000 บาท" },
@@ -32,6 +35,7 @@ interface FormData {
   postalCode: string;
   addressText: string;
   description: string;
+  tier: string;
   consent: boolean;
 }
 
@@ -51,6 +55,7 @@ const initialForm: FormData = {
   postalCode: "",
   addressText: "",
   description: "",
+  tier: "economy",
   consent: false,
 };
 
@@ -64,6 +69,7 @@ export default function ProjectBookingPage() {
 
 function ProjectBookingContent() {
   const t = useTranslations("booking");
+  const locale = useLocale();
   const searchParams = useSearchParams();
   const prefilledService = searchParams.get("service") || "";
 
@@ -95,7 +101,11 @@ function ProjectBookingContent() {
       target instanceof HTMLInputElement && target.type === "checkbox"
         ? target.checked
         : target.value;
-    setForm((prev) => ({ ...prev, [target.name]: value }));
+    if (target.name === "province") {
+      setForm((prev) => ({ ...prev, province: value as string, district: "", subdistrict: "" }));
+    } else {
+      setForm((prev) => ({ ...prev, [target.name]: value }));
+    }
   }
 
   function handleImageChange(e: ChangeEvent<HTMLInputElement>) {
@@ -138,6 +148,7 @@ function ProjectBookingContent() {
           ? `${form.scheduledDate}T${form.scheduledTime || "09:00"}:00`
           : undefined,
         budgetRange: form.budgetRange || undefined,
+        tier: form.tier,
         description: form.description,
         address: {
           province: form.province,
@@ -160,23 +171,17 @@ function ProjectBookingContent() {
 
   if (success) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-20 text-center">
-        <div className="text-6xl mb-6">✅</div>
-        <h1 className="text-3xl font-bold text-gray-900">{t("successProject")}</h1>
-        <p className="mt-4 text-lg text-gray-600">
-          {t("successProjectDesc")}
-        </p>
-        <button
-          onClick={() => {
-            setSuccess(false);
-            setForm(initialForm);
-            setImages([]);
-          }}
-          className="mt-8 px-6 py-2.5 text-sm font-semibold text-blue-700 border border-blue-700 rounded-lg hover:bg-blue-50"
-        >
-          {t("newBooking")}
-        </button>
-      </div>
+      <FixerResults
+        locale={locale}
+        bookingType="project"
+        service={form.serviceCategory}
+        tier={form.tier}
+        onNewBooking={() => {
+          setSuccess(false);
+          setForm(initialForm);
+          setImages([]);
+        }}
+      />
     );
   }
 
@@ -346,11 +351,45 @@ function ProjectBookingContent() {
             </div>
           </fieldset>
 
+          {/* Tier Selection - PROMINENT */}
+          <fieldset className="bg-gradient-to-r from-sky-50 to-blue-50 border-2 border-sky-200 rounded-2xl p-6">
+            <legend className="text-lg font-bold text-sky-900 mb-2 flex items-center gap-2">
+              ⭐ {locale === "th" ? "เลือกระดับบริการ" : locale === "zh" ? "选择服务等级" : "Select Service Tier"} <span className="text-red-500">*</span>
+            </legend>
+            <p className="text-sm text-sky-700 mb-4">
+              {locale === "th" ? "ค่าประสานงานที่จ่ายครั้งเดียวต่อการจับคู่ช่าง/ทีม" : locale === "zh" ? "每次匹配技工/团队支付的一次性服务费" : "One-time processing fee per fixer/team matching"}
+            </p>
+            <div className="grid grid-cols-5 gap-3">
+              {[
+                { value: "economy", label: "Economy", deposit: "฿200", emoji: "🟢", stars: "⭐", desc: locale === "th" ? "ทีมทั่วไป" : "Basic" },
+                { value: "standard", label: "Standard", deposit: "฿400", emoji: "⭐", stars: "⭐⭐", desc: locale === "th" ? "มีประสบการณ์" : "Experienced" },
+                { value: "corporate", label: "Corporate", deposit: "฿600", emoji: "🏢", stars: "⭐⭐⭐", desc: locale === "th" ? "มืออาชีพ" : "Professional" },
+                { value: "specialist", label: "Specialist", deposit: "฿800", emoji: "🔶", stars: "⭐⭐⭐⭐", desc: locale === "th" ? "ผู้เชี่ยวชาญเฉพาะทาง" : "Certified specialist" },
+                { value: "expert", label: "Expert", deposit: "฿1,000", emoji: "👑", stars: "⭐⭐⭐⭐⭐", desc: locale === "th" ? "ผู้เชี่ยวชาญระดับสูง" : "Senior expert" },
+              ].map((tier) => (
+                <button
+                  key={tier.value}
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, tier: tier.value }))}
+                  className={`p-3 rounded-xl border-2 text-center transition-all ${
+                    form.tier === tier.value
+                      ? "border-sky-500 bg-white shadow-lg ring-2 ring-sky-300 scale-105"
+                      : "border-gray-200 bg-white hover:border-sky-300 hover:shadow"
+                  }`}
+                >
+                  <span className="text-xl block">{tier.emoji}</span>
+                  <span className="text-sm font-bold block mt-1">{tier.label}</span>
+                  <span className="text-xs text-gray-500 block">{tier.stars}</span>
+                  <span className="text-sm font-extrabold text-sky-700 block mt-1">{tier.deposit}</span>
+                  <span className="text-[10px] text-gray-400 block">{tier.desc}</span>
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
           {/* Location */}
           <fieldset>
-            <legend className="text-lg font-semibold text-gray-900 mb-4">
-              สถานที่ตั้งโครงการ
-            </legend>
+            <legend className="text-lg font-semibold text-gray-900 mb-4">สถานที่</legend>
             <div className="space-y-4">
               {/* GPS Auto-detect */}
               <GpsDetectButton onDetected={(coords) => setGpsCoords(coords)} />
@@ -409,16 +448,19 @@ function ProjectBookingContent() {
                     <label htmlFor="district" className="block text-sm font-medium text-gray-700 mb-1">
                       อำเภอ/เขต <span className="text-red-500">*</span>
                     </label>
-                    <input
+                    <select
                       id="district"
                       name="district"
-                      type="text"
                       required
                       value={form.district}
                       onChange={handleChange}
-                      className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                      placeholder="เขตบางนา"
-                    />
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none bg-white"
+                    >
+                      <option value="">-- เลือกอำเภอ/เขต --</option>
+                      {getDistrictsForProvince(form.province).map((d) => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label htmlFor="subdistrict" className="block text-sm font-medium text-gray-700 mb-1">

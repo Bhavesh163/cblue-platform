@@ -4,8 +4,10 @@ import { useState, useCallback, useEffect, Suspense, type FormEvent, type Change
 import { useTranslations, useLocale } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { PROFESSIONAL_SERVICES, THAI_PROVINCES } from "../../lib/constants";
+import { getDistrictsForProvince } from "../../lib/thai-address-data";
 import ReCaptcha from "../../components/ReCaptcha";
 import GpsDetectButton from "../../components/GpsDetectButton";
+import FixerResults from "../../components/FixerResults";
 
 const BUDGET_RANGES = [
   { value: "UNDER_10000", label: "ต่ำกว่า 10,000 บาท" },
@@ -61,7 +63,7 @@ const initialForm: FormData = {
   subscriptionConsent: false,
   password: "",
   confirmPassword: "",
-  tier: "standard",
+  tier: "economy",
 };
 
 export default function ProfessionalBookingPage() {
@@ -109,7 +111,11 @@ function ProfessionalBookingContent() {
       target instanceof HTMLInputElement && target.type === "checkbox"
         ? target.checked
         : target.value;
-    setForm((prev) => ({ ...prev, [target.name]: value }));
+    if (target.name === "province") {
+      setForm((prev) => ({ ...prev, province: value as string, district: "", subdistrict: "" }));
+    } else {
+      setForm((prev) => ({ ...prev, [target.name]: value }));
+    }
   }
 
   function handleImageChange(e: ChangeEvent<HTMLInputElement>) {
@@ -217,23 +223,17 @@ function ProfessionalBookingContent() {
 
   if (success) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-20 text-center">
-        <div className="text-6xl mb-6">✅</div>
-        <h1 className="text-3xl font-bold text-gray-900">{t("successProfessional")}</h1>
-        <p className="mt-4 text-lg text-gray-600">
-          {t("successProfessionalDesc")}
-        </p>
-        <button
-          onClick={() => {
-            setSuccess(false);
-            setForm(initialForm);
-            setImages([]);
-          }}
-          className="mt-8 px-6 py-2.5 text-sm font-semibold text-blue-700 border border-blue-700 rounded-lg hover:bg-blue-50"
-        >
-          {t("newBooking")}
-        </button>
-      </div>
+      <FixerResults
+        locale={locale}
+        bookingType="professional"
+        service={form.serviceCategory}
+        tier={form.tier}
+        onNewBooking={() => {
+          setSuccess(false);
+          setForm(initialForm);
+          setImages([]);
+        }}
+      />
     );
   }
 
@@ -404,6 +404,42 @@ function ProfessionalBookingContent() {
             </div>
           </fieldset>
 
+          {/* Tier Selection - PROMINENT */}
+          <fieldset className="bg-gradient-to-r from-sky-50 to-blue-50 border-2 border-sky-200 rounded-2xl p-6">
+            <legend className="text-lg font-bold text-sky-900 mb-2 flex items-center gap-2">
+              ⭐ {locale === "th" ? "เลือกระดับบริการ" : locale === "zh" ? "选择服务等级" : "Select Service Tier"} <span className="text-red-500">*</span>
+            </legend>
+            <p className="text-sm text-sky-700 mb-4">
+              {locale === "th" ? "ค่าประสานงานที่จ่ายครั้งเดียวต่อการจับคู่มืออาชีพ" : locale === "zh" ? "每次匹配专业人士支付的一次性服务费" : "One-time processing fee per professional matching"}
+            </p>
+            <div className="grid grid-cols-5 gap-3">
+              {[
+                { value: "economy", label: "Economy", deposit: "฿200", emoji: "🟢", stars: "⭐", desc: locale === "th" ? "ทั่วไป" : "Basic" },
+                { value: "standard", label: "Standard", deposit: "฿400", emoji: "⭐", stars: "⭐⭐", desc: locale === "th" ? "มีประสบการณ์" : "Experienced" },
+                { value: "corporate", label: "Corporate", deposit: "฿600", emoji: "🏢", stars: "⭐⭐⭐", desc: locale === "th" ? "มืออาชีพ/ผู้จัดการ" : "Professional / Manager" },
+                { value: "specialist", label: "Specialist", deposit: "฿800", emoji: "🔶", stars: "⭐⭐⭐⭐", desc: locale === "th" ? "ผู้เชี่ยวชาญ/ผู้อำนวยการ" : "Manager / Director" },
+                { value: "expert", label: "Expert", deposit: "฿1,000", emoji: "👑", stars: "⭐⭐⭐⭐⭐", desc: locale === "th" ? "ผู้อำนวยการ/ชั้นนำ" : "Director / Executive" },
+              ].map((tier) => (
+                <button
+                  key={tier.value}
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, tier: tier.value }))}
+                  className={`p-3 rounded-xl border-2 text-center transition-all ${
+                    form.tier === tier.value
+                      ? "border-sky-500 bg-white shadow-lg ring-2 ring-sky-300 scale-105"
+                      : "border-gray-200 bg-white hover:border-sky-300 hover:shadow"
+                  }`}
+                >
+                  <span className="text-xl block">{tier.emoji}</span>
+                  <span className="text-sm font-bold block mt-1">{tier.label}</span>
+                  <span className="text-xs text-gray-500 block">{tier.stars}</span>
+                  <span className="text-sm font-extrabold text-sky-700 block mt-1">{tier.deposit}</span>
+                  <span className="text-[10px] text-gray-400 block">{tier.desc}</span>
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
           {/* Location */}
           <fieldset>
             <legend className="text-lg font-semibold text-gray-900 mb-4">
@@ -466,16 +502,19 @@ function ProfessionalBookingContent() {
                     <label htmlFor="district" className="block text-sm font-medium text-gray-700 mb-1">
                       อำเภอ/เขต <span className="text-red-500">*</span>
                     </label>
-                    <input
+                    <select
                       id="district"
                       name="district"
-                      type="text"
                       required
                       value={form.district}
                       onChange={handleChange}
-                      className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                      placeholder="เขตบางนา"
-                    />
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none bg-white"
+                    >
+                      <option value="">-- เลือกอำเภอ/เขต --</option>
+                      {getDistrictsForProvince(form.province).map((d) => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label htmlFor="subdistrict" className="block text-sm font-medium text-gray-700 mb-1">
@@ -620,36 +659,9 @@ function ProfessionalBookingContent() {
               </label>
             </div>
 
-            {/* Tier + Password fields (shown when subscription consent is checked) */}
+            {/* Password fields (shown when subscription consent is checked) */}
             {form.subscriptionConsent && (
               <div className="bg-sky-50 border border-sky-200 rounded-lg p-4 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    {locale === "th" ? "เลือกระดับบริการ" : locale === "zh" ? "选择服务等级" : "Select Service Tier"} <span className="text-red-500">*</span>
-                  </label>
-                  <div className="grid grid-cols-3 gap-3">
-                    {[
-                      { value: "standard", label: "Standard", deposit: "฿200", emoji: "⭐" },
-                      { value: "corporate", label: "Corporate", deposit: "฿400", emoji: "🏢" },
-                      { value: "expert", label: "Expert", deposit: "฿600", emoji: "👑" },
-                    ].map((tier) => (
-                      <button
-                        key={tier.value}
-                        type="button"
-                        onClick={() => setForm((prev) => ({ ...prev, tier: tier.value }))}
-                        className={`p-3 rounded-xl border-2 text-center transition ${
-                          form.tier === tier.value
-                            ? "border-blue-500 bg-blue-50"
-                            : "border-gray-200 bg-white hover:border-gray-300"
-                        }`}
-                      >
-                        <span className="text-xl block">{tier.emoji}</span>
-                        <span className="text-sm font-semibold block mt-1">{tier.label}</span>
-                        <span className="text-xs text-gray-500 block">{locale === "th" ? "มัดจำ" : "Deposit"} {tier.deposit}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
                 <div>
                   <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
                     {locale === "th" ? "ตั้งรหัสผ่านสมาชิก" : locale === "zh" ? "设置会员密码" : "Set Member Password"} <span className="text-red-500">*</span>

@@ -4,6 +4,8 @@ import { useState, FormEvent } from "react";
 import Link from "next/link";
 import { useTranslations, useLocale } from "next-intl";
 import { THAI_PROVINCES } from "../../lib/constants";
+import { getDistrictsForProvince } from "../../lib/thai-address-data";
+import GpsDetectButton from "../../components/GpsDetectButton";
 
 const PROPERTY_TYPES = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "APARTMENT"] as const;
 const LISTING_TYPES = ["SALE", "RENT"] as const;
@@ -21,6 +23,8 @@ export default function PropertyRegisterPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [consentChecked, setConsentChecked] = useState(false);
+  const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationType, setLocationType] = useState<"dropdown" | "address">("dropdown");
 
   const [form, setForm] = useState({
     propertyType: "",
@@ -41,6 +45,8 @@ export default function PropertyRegisterPage() {
     contactName: "",
     contactPhone: "",
     contactEmail: "",
+    password: "",
+    confirmPassword: "",
   });
 
   const typeKeys: Record<string, string> = {
@@ -70,6 +76,15 @@ export default function PropertyRegisterPage() {
       return;
     }
 
+    if (form.password && form.password.length < 6) {
+      setError(locale === "th" ? "รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร" : locale === "zh" ? "密码至少6个字符" : "Password must be at least 6 characters");
+      return;
+    }
+    if (form.password && form.password !== form.confirmPassword) {
+      setError(locale === "th" ? "รหัสผ่านไม่ตรงกัน" : locale === "zh" ? "密码不匹配" : "Passwords do not match");
+      return;
+    }
+
     setSubmitting(true);
     try {
       const payload = {
@@ -91,6 +106,7 @@ export default function PropertyRegisterPage() {
         contactName: form.contactName,
         contactPhone: form.contactPhone,
         contactEmail: form.contactEmail,
+        ...(form.password ? { password: form.password } : {}),
       };
 
       const res = await fetch(`${API_BASE}/properties`, {
@@ -136,6 +152,7 @@ export default function PropertyRegisterPage() {
                   propertyType: "", listingType: "", title: "", description: "", price: "", area: "",
                   bedrooms: "", bathrooms: "", floors: "", yearBuilt: "", province: "", district: "",
                   subdistrict: "", postalCode: "", addressLine: "", contactName: "", contactPhone: "", contactEmail: "",
+                  password: "", confirmPassword: "",
                 });
                 setConsentChecked(false);
               }}
@@ -332,76 +349,135 @@ export default function PropertyRegisterPage() {
                 {tb("location")}
               </legend>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                {/* Province */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {tb("province")} <span className="text-red-500">{tc("required")}</span>
+              <div className="space-y-4 mt-4">
+                {/* GPS Auto-detect */}
+                <GpsDetectButton onDetected={(coords) => setGpsCoords(coords)} />
+                {gpsCoords && (
+                  <p className="text-xs text-green-600">
+                    📍 {locale === "th" ? "ตำแหน่ง" : "Location"}: {gpsCoords.lat.toFixed(6)}, {gpsCoords.lng.toFixed(6)}
+                  </p>
+                )}
+
+                {/* Location type toggle */}
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name="locationType"
+                      value="dropdown"
+                      checked={locationType === "dropdown"}
+                      onChange={() => setLocationType("dropdown")}
+                      className="text-green-600 focus:ring-green-500"
+                    />
+                    {locale === "th" ? "เลือกจากรายการ" : locale === "zh" ? "从列表选择" : "Select from list"}
                   </label>
-                  <select
-                    name="province"
-                    value={form.province}
-                    onChange={handleChange}
-                    required
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm bg-white outline-none focus:border-green-500"
-                  >
-                    <option value="">{tb("selectProvince")}</option>
-                    {THAI_PROVINCES.map((p) => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* District */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{tb("district")}</label>
-                  <input
-                    type="text"
-                    name="district"
-                    value={form.district}
-                    onChange={handleChange}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
-                  />
-                </div>
-
-                {/* Subdistrict */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{tb("subdistrict")}</label>
-                  <input
-                    type="text"
-                    name="subdistrict"
-                    value={form.subdistrict}
-                    onChange={handleChange}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
-                  />
-                </div>
-
-                {/* Postal Code */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{tb("postalCode")}</label>
-                  <input
-                    type="text"
-                    name="postalCode"
-                    value={form.postalCode}
-                    onChange={handleChange}
-                    maxLength={5}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
-                  />
-                </div>
-
-                {/* Address Line */}
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {tb("addressText")}
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name="locationType"
+                      value="address"
+                      checked={locationType === "address"}
+                      onChange={() => setLocationType("address")}
+                      className="text-green-600 focus:ring-green-500"
+                    />
+                    {locale === "th" ? "กรอกที่อยู่ / รหัสไปรษณีย์" : locale === "zh" ? "输入地址/邮政编码" : "Enter address / postal code"}
                   </label>
-                  <input
-                    type="text"
-                    name="addressLine"
-                    value={form.addressLine}
-                    onChange={handleChange}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
-                  />
                 </div>
+
+                {locationType === "dropdown" ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Province */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {tb("province")} <span className="text-red-500">{tc("required")}</span>
+                      </label>
+                      <select
+                        name="province"
+                        value={form.province}
+                        onChange={(e) => {
+                          setForm({ ...form, province: e.target.value, district: "", subdistrict: "" });
+                        }}
+                        required
+                        className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm bg-white outline-none focus:border-green-500"
+                      >
+                        <option value="">{tb("selectProvince")}</option>
+                        {THAI_PROVINCES.map((p) => (
+                          <option key={p} value={p}>{p}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* District - cascading */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{tb("district")}</label>
+                      <select
+                        name="district"
+                        value={form.district}
+                        onChange={handleChange}
+                        className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm bg-white outline-none focus:border-green-500"
+                      >
+                        <option value="">{locale === "th" ? "-- เลือกอำเภอ/เขต --" : "-- Select District --"}</option>
+                        {getDistrictsForProvince(form.province).map((d) => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Subdistrict */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{tb("subdistrict")}</label>
+                      <input
+                        type="text"
+                        name="subdistrict"
+                        value={form.subdistrict}
+                        onChange={handleChange}
+                        className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
+                      />
+                    </div>
+
+                    {/* Postal Code */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{tb("postalCode")}</label>
+                      <input
+                        type="text"
+                        name="postalCode"
+                        value={form.postalCode}
+                        onChange={handleChange}
+                        maxLength={5}
+                        className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Address Line */}
+                    <div className="sm:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {tb("addressText")}
+                      </label>
+                      <input
+                        type="text"
+                        name="addressLine"
+                        value={form.addressLine}
+                        onChange={handleChange}
+                        className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
+                      />
+                    </div>
+
+                    {/* Postal Code */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{tb("postalCode")}</label>
+                      <input
+                        type="text"
+                        name="postalCode"
+                        value={form.postalCode}
+                        onChange={handleChange}
+                        maxLength={5}
+                        className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </fieldset>
 
@@ -455,6 +531,46 @@ export default function PropertyRegisterPage() {
                   accept="image/*"
                   className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
                 />
+              </div>
+            </fieldset>
+
+            {/* Create Subscriber Account */}
+            <fieldset className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <legend className="text-lg font-semibold text-gray-900 px-2">
+                {locale === "th" ? "สร้างบัญชีสมาชิก (ไม่บังคับ)" : locale === "zh" ? "创建订阅者账户（可选）" : "Create Subscriber Account (Optional)"}
+              </legend>
+              <p className="text-xs text-gray-500 mt-2 mb-4">
+                {locale === "th" ? "สร้างบัญชีเพื่อจัดการประกาศและรับการแจ้งเตือน" : locale === "zh" ? "创建账户以管理房源和接收通知" : "Create an account to manage your listings and receive notifications"}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {locale === "th" ? "รหัสผ่าน" : locale === "zh" ? "密码" : "Password"}
+                  </label>
+                  <input
+                    type="password"
+                    name="password"
+                    value={form.password}
+                    onChange={handleChange}
+                    minLength={6}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
+                    placeholder="••••••"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {locale === "th" ? "ยืนยันรหัสผ่าน" : locale === "zh" ? "确认密码" : "Confirm Password"}
+                  </label>
+                  <input
+                    type="password"
+                    name="confirmPassword"
+                    value={form.confirmPassword}
+                    onChange={handleChange}
+                    minLength={6}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
+                    placeholder="••••••"
+                  />
+                </div>
               </div>
             </fieldset>
 

@@ -4,31 +4,28 @@ export const HOUSEHOLD_SERVICES = [
   { value: "AC", label: "แอร์ (AC)" },
   { value: "INTERIOR", label: "ตกแต่งภายใน (Interior)" },
   { value: "LANDSCAPING", label: "จัดสวน (Landscaping)" },
-  { value: "GARDENING", label: "ทำสวน (Gardening)" },
   { value: "CLADDING_ROOFING", label: "หลังคา/ผนัง (Cladding/Roofing)" },
-  { value: "ACCOUNTANT", label: "บัญชี (Accountant)" },
-  { value: "LAWYER", label: "ทนายความ (Lawyer)" },
 ] as const;
 
 export const PROJECT_SERVICES = [
   { value: "WEBSITE_DEVELOPMENT", label: "Website Development" },
   { value: "MOBILE_APP_DEVELOPMENT", label: "Mobile App Development" },
   { value: "AI_INTEGRATION", label: "AI Integration" },
-  { value: "CONSULTING", label: "Consulting" },
-  { value: "AI_CHATBOT", label: "AI Chatbot" },
   { value: "SOFTWARE_DEV", label: "Software Development" },
   { value: "ML_AI", label: "ML & AI" },
+  { value: "CONSULTING", label: "Consulting" },
   { value: "SOLAR_PANELS", label: "Solar Panels" },
   { value: "EV_CHARGING", label: "EV Charging" },
-  { value: "ECO_FRIENDLY_BUILDING_DESIGN", label: "Eco Friendly Building Design" },
-  { value: "AC", label: "แอร์ (AC)" },
-  { value: "PLUMBING", label: "ประปา (Plumbing)" },
+  { value: "GREEN_BUILDING_DESIGN", label: "Green Building Design" },
+  { value: "MEP_RETROFIT", label: "HVAC MEP & Retrofit" },
+  { value: "KITCHEN", label: "Kitchen" },
+  { value: "REINSTATEMENT", label: "Reinstatement" },
+  { value: "FITOUT", label: "Fit-out" },
   { value: "SMART_BUILDING_AUTOMATION", label: "Smart Building Automation" },
-  { value: "FIRE_LIFE_SAFETY", label: "Fire Life Safety" },
   { value: "ENVIRONMENTAL_SERVICES", label: "Environmental Services" },
   { value: "SECURITY_CCTV", label: "Security & CCTV" },
   { value: "DOOR_ACCESS_CONTROL", label: "Door & Access Control" },
-  { value: "ECO_FRIENDLY_CONSTRUCTION", label: "Eco Friendly Construction" },
+  { value: "GREEN_CONSTRUCTION", label: "Green Construction" },
   { value: "SMART_HOME", label: "Smart Home" },
   { value: "SMART_FARMING", label: "Smart Farming" },
 ] as const;
@@ -45,13 +42,16 @@ export const PROFESSIONAL_SERVICES = [
   { value: "CONSTRUCTION_MECHANICAL_ENGINEER", label: "วิศวกรเครื่องกลก่อสร้าง (Construction Mechanical Engineer)" },
   { value: "DESIGN_ELECTRICAL_ENGINEER", label: "วิศวกรไฟฟ้าออกแบบ (Design Electrical Engineer)" },
   { value: "CONSTRUCTION_ELECTRICAL_ENGINEER", label: "วิศวกรไฟฟ้าก่อสร้าง (Construction Electrical Engineer)" },
+  { value: "SOFTWARE_PROGRAMMER", label: "โปรแกรมเมอร์ (Software Programmer)" },
+  { value: "DIGITAL_MARKETING", label: "การตลาดดิจิทัล (Digital Marketing)" },
+  { value: "SAFETY_OFFICER", label: "เจ้าหน้าที่ความปลอดภัย (Safety Officer)" },
   { value: "OTHERS", label: "อื่น ๆ (Others)" },
 ] as const;
 
 export const FIXER_ALL_SERVICES = [
   ...HOUSEHOLD_SERVICES,
   ...PROJECT_SERVICES.filter(
-    (ps) => !HOUSEHOLD_SERVICES.some((hs) => hs.value === ps.value)
+    (ps) => !HOUSEHOLD_SERVICES.some((hs) => (hs.value as string) === (ps.value as string))
   ),
 ] as const;
 

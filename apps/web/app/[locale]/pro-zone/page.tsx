@@ -24,7 +24,7 @@ interface Job {
 
 interface ProviderProfile {
   profession: string;
-  tier: "standard" | "corporate" | "expert";
+  tier: "economy" | "standard" | "corporate" | "specialist" | "expert";
   rating: number;
   totalJobs: number;
   priceList: { service: string; price: number }[];
@@ -37,7 +37,7 @@ const TRANSLATION_KEYS = [
   "noJobs", "pending", "inProgress", "completed", "cancelled", "sendMessage",
   "typePlaceholder", "selectConversation", "anonymousCustomer", "yourProfile",
   "profession", "tier", "rating", "totalJobs", "priceList", "service", "price",
-  "standard", "corporate", "expert", "deposit", "loginRequired", "goToSubscription",
+  "economy", "standard", "corporate", "specialist", "expert", "deposit", "loginRequired", "goToSubscription",
 ] as const;
 
 type TranslationKey = typeof TRANSLATION_KEYS[number];
@@ -45,7 +45,7 @@ type Translations = Record<TranslationKey, string>;
 
 const T: Record<string, Translations> = {
   en: {
-    title: "Pro Zone",
+    title: "Fixer and Pro Member",
     subtitle: "Dashboard for professionals, fixers & sellers",
     jobs: "Jobs",
     chat: "Chat",
@@ -69,15 +69,17 @@ const T: Record<string, Translations> = {
     priceList: "Price List",
     service: "Service",
     price: "Price (฿)",
+    economy: "Economy",
     standard: "Standard",
     corporate: "Corporate",
+    specialist: "Specialist",
     expert: "Expert",
     deposit: "Deposit",
     loginRequired: "Please subscribe first to access Pro Zone",
     goToSubscription: "Subscribe Now",
   },
   th: {
-    title: "Pro Zone",
+    title: "สมาชิกช่างและมืออาชีพ",
     subtitle: "แดชบอร์ดสำหรับช่าง ผู้เชี่ยวชาญ และผู้ขาย",
     jobs: "งาน",
     chat: "แชท",
@@ -101,15 +103,17 @@ const T: Record<string, Translations> = {
     priceList: "รายการราคา",
     service: "บริการ",
     price: "ราคา (฿)",
+    economy: "ประหยัด",
     standard: "มาตรฐาน",
     corporate: "องค์กร",
+    specialist: "ผู้ชำนาญ",
     expert: "ผู้เชี่ยวชาญ",
     deposit: "ค่ามัดจำ",
     loginRequired: "กรุณาสมัครสมาชิกก่อนเข้าใช้ Pro Zone",
     goToSubscription: "สมัครสมาชิก",
   },
   zh: {
-    title: "专业区",
+    title: "技工与专业人士会员",
     subtitle: "专业人士、维修师和卖家的仪表板",
     jobs: "工作",
     chat: "聊天",
@@ -133,8 +137,10 @@ const T: Record<string, Translations> = {
     priceList: "价格表",
     service: "服务",
     price: "价格 (฿)",
+    economy: "经济",
     standard: "标准",
     corporate: "企业",
+    specialist: "专员",
     expert: "专家",
     deposit: "押金",
     loginRequired: "请先订阅才能访问专业区",
@@ -258,7 +264,7 @@ export default function ProZonePage() {
     setNewMessage("");
   }
 
-  const tierDeposit: Record<string, number> = { standard: 200, corporate: 400, expert: 600 };
+  const tierDeposit: Record<string, number> = { economy: 200, standard: 400, corporate: 600, specialist: 800, expert: 1000 };
 
   function renderStars(rating: number) {
     const full = Math.floor(rating);

@@ -22,7 +22,7 @@ export default function SubscriptionLoginPage() {
     setError("");
 
     try {
-      const res = await fetch(`${API_BASE}/subscription/login`, {
+      const res = await fetch(`${API_BASE}/api/v1/subscription/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),

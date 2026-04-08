@@ -26,9 +26,9 @@ export function Header() {
         { href: `${prefix}/booking/professional`, label: t("professional") },
       ],
     },
-    { href: `${prefix}/fixers/register`, label: t("forFixers") },
     { href: `${prefix}/properties`, label: t("realEstate") },
     { href: `${prefix}/dashboard`, label: t("dashboard") },
+    { href: `${prefix}/fixers`, label: t("forFixers") },
   ];
 
   return (
