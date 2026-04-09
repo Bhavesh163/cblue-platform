@@ -32,6 +32,11 @@ interface FormData {
   district: string;
   subdistrict: string;
   postalCode: string;
+  houseNumber: string;
+  building: string;
+  floor: string;
+  road: string;
+  soi: string;
   addressText: string;
   description: string;
   pastExperience: string;
@@ -56,6 +61,11 @@ const initialForm: FormData = {
   district: "",
   subdistrict: "",
   postalCode: "",
+  houseNumber: "",
+  building: "",
+  floor: "",
+  road: "",
+  soi: "",
   addressText: "",
   description: "",
   pastExperience: "",
@@ -147,6 +157,11 @@ export default function FixerRegisterPage() {
           district: form.district,
           subdistrict: form.subdistrict,
           postalCode: form.postalCode,
+          houseNumber: form.houseNumber || undefined,
+          building: form.building || undefined,
+          floor: form.floor || undefined,
+          road: form.road || undefined,
+          soi: form.soi || undefined,
         },
         description: form.description,
         pastExperience: form.pastExperience,
@@ -531,7 +546,7 @@ export default function FixerRegisterPage() {
               </div>
 
               {form.locationType === "dropdown" ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <><div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="province" className="block text-sm font-medium text-gray-700 mb-1">
                       จังหวัด <span className="text-red-500">*</span>
@@ -597,7 +612,37 @@ export default function FixerRegisterPage() {
                     />
                   </div>
                 </div>
-              ) : (
+                {/* Detailed Thai Address Fields */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                  <div>
+                    <label htmlFor="houseNumber" className="block text-sm font-medium text-gray-700 mb-1">
+                      บ้านเลขที่
+                    </label>
+                    <input id="houseNumber" name="houseNumber" type="text" value={form.houseNumber} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="123/45" />
+                  </div>
+                  <div>
+                    <label htmlFor="building" className="block text-sm font-medium text-gray-700 mb-1">
+                      อาคาร / ชั้น
+                    </label>
+                    <div className="flex gap-2">
+                      <input id="building" name="building" type="text" value={form.building} onChange={handleChange} className="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="อาคาร A" />
+                      <input id="floor" name="floor" type="text" value={form.floor} onChange={handleChange} className="w-20 rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="ชั้น" />
+                    </div>
+                  </div>
+                  <div>
+                    <label htmlFor="road" className="block text-sm font-medium text-gray-700 mb-1">
+                      ถนน
+                    </label>
+                    <input id="road" name="road" type="text" value={form.road} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="ถนนสุขุมวิท" />
+                  </div>
+                  <div>
+                    <label htmlFor="soi" className="block text-sm font-medium text-gray-700 mb-1">
+                      ซอย
+                    </label>
+                    <input id="soi" name="soi" type="text" value={form.soi} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="ซอย 21" />
+                  </div>
+                </div>
+              </>) : (
                 <div>
                   <label htmlFor="addressText" className="block text-sm font-medium text-gray-700 mb-1">
                     ที่อยู่ หรือ รหัสไปรษณีย์ <span className="text-red-500">*</span>

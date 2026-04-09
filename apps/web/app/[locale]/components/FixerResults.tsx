@@ -21,7 +21,7 @@ interface ChatMessage {
   time: string;
 }
 
-type BookingType = "household" | "project" | "professional";
+type BookingType = "household" | "project" | "professional" | "property";
 
 const T: Record<string, Record<string, string>> = {
   en: {
@@ -38,7 +38,7 @@ const T: Record<string, Record<string, string>> = {
     selectFixer: "Select",
     confirmTitle: "Confirm Booking",
     confirmDesc: "You selected {fixer} ({tier} tier). A processing fee of {fee} is required to confirm.",
-    confirmBtn: "Confirm & Pay",
+    confirmBtn: "Confirm & Send to Partner",
     cancel: "Cancel",
     paymentTitle: "PromptPay Payment",
     paymentDesc: "Scan the QR code to pay the processing fee",
@@ -57,6 +57,49 @@ const T: Record<string, Record<string, string>> = {
     corporate: "Corporate",
     specialist: "Specialist",
     expert: "Expert",
+    // PO & notification
+    poTitle: "Purchase Order Created",
+    poNumber: "PO Number",
+    poDate: "Date",
+    poService: "Service",
+    poTier: "Tier",
+    poFee: "Processing Fee",
+    poStatus: "Status",
+    poDisclaimer: "The final service price is negotiated directly between you and the service provider. CBLUE acts only as a matching platform and does not determine or guarantee final pricing.",
+    notifyTitle: "Waiting for Partner Confirmation",
+    notifyDesc: "We've notified {fixer} about your booking. They will review and confirm shortly.",
+    notifyWaiting: "Waiting for confirmation...",
+    partnerAccepted: "Partner Accepted!",
+    partnerAcceptedDesc: "{fixer} has accepted your booking. You may now proceed with payment.",
+    proceedPayment: "Proceed to Payment",
+    // Meeting confirmation
+    meetingTitle: "Schedule & Confirm Meeting",
+    meetingDesc: "Arrange a meeting with {fixer} to discuss the job details.",
+    meetingDate: "Meeting Date",
+    meetingTime: "Meeting Time",
+    meetingNotes: "Notes / Special Instructions",
+    meetingConfirmBtn: "Confirm Meeting",
+    meetingConfirmed: "Meeting Confirmed",
+    meetingConfirmedDesc: "Both parties have confirmed. Please attend the meeting as scheduled.",
+    // Work completion & rating
+    completeTitle: "Work Completion & Review",
+    completeDesc: "The job has been completed. Please review and rate the service.",
+    rateLabel: "Your Rating",
+    commentLabel: "Comments (optional)",
+    commentPlaceholder: "Share your experience...",
+    submitReview: "Submit Review",
+    pricingDisclaimer: "Pricing Disclaimer",
+    variationTitle: "Variation / Addendum",
+    variationDesc: "The service provider has requested a variation to the original scope.",
+    variationAmount: "Additional Amount",
+    variationReason: "Reason",
+    approveVariation: "Approve",
+    rejectVariation: "Reject",
+    finalTitle: "Job Completed — Thank You!",
+    finalDesc: "Your booking is complete. Both parties have rated the job.",
+    yourRating: "Your Rating",
+    fixerRating: "Partner's Rating of You",
+    viewDashboard: "View Dashboard",
   },
   th: {
     matchTitle: "ช่างและมืออาชีพที่เหมาะสม",
@@ -72,7 +115,7 @@ const T: Record<string, Record<string, string>> = {
     selectFixer: "เลือก",
     confirmTitle: "ยืนยันการจอง",
     confirmDesc: "คุณเลือก {fixer} (ระดับ {tier}) ค่าธรรมเนียม {fee} เพื่อยืนยัน",
-    confirmBtn: "ยืนยันและชำระเงิน",
+    confirmBtn: "ยืนยันและส่งให้พาร์ทเนอร์",
     cancel: "ยกเลิก",
     paymentTitle: "ชำระเงินผ่าน PromptPay",
     paymentDesc: "สแกน QR code เพื่อชำระค่าธรรมเนียม",
@@ -91,6 +134,46 @@ const T: Record<string, Record<string, string>> = {
     corporate: "องค์กร",
     specialist: "ผู้ชำนาญ",
     expert: "ผู้เชี่ยวชาญ",
+    poTitle: "สร้างใบสั่งซื้อแล้ว",
+    poNumber: "เลขที่ PO",
+    poDate: "วันที่",
+    poService: "บริการ",
+    poTier: "ระดับ",
+    poFee: "ค่าธรรมเนียม",
+    poStatus: "สถานะ",
+    poDisclaimer: "ราคาบริการสุดท้ายเป็นการเจรจาโดยตรงระหว่างคุณและผู้ให้บริการ CBLUE ทำหน้าที่เป็นแพลตฟอร์มจับคู่เท่านั้น ไม่ได้กำหนดหรือรับประกันราคาสุดท้าย",
+    notifyTitle: "รอการยืนยันจากพาร์ทเนอร์",
+    notifyDesc: "เราแจ้ง {fixer} เกี่ยวกับการจองของคุณแล้ว กรุณารอการยืนยัน",
+    notifyWaiting: "กำลังรอการยืนยัน...",
+    partnerAccepted: "พาร์ทเนอร์ยอมรับแล้ว!",
+    partnerAcceptedDesc: "{fixer} ยอมรับการจองของคุณแล้ว คุณสามารถชำระเงินได้",
+    proceedPayment: "ดำเนินการชำระเงิน",
+    meetingTitle: "นัดหมายและยืนยันการประชุม",
+    meetingDesc: "นัดหมายกับ {fixer} เพื่อหารือรายละเอียดงาน",
+    meetingDate: "วันนัดหมาย",
+    meetingTime: "เวลานัดหมาย",
+    meetingNotes: "หมายเหตุ / คำแนะนำพิเศษ",
+    meetingConfirmBtn: "ยืนยันนัดหมาย",
+    meetingConfirmed: "ยืนยันนัดหมายแล้ว",
+    meetingConfirmedDesc: "ทั้งสองฝ่ายยืนยันเรียบร้อย กรุณาไปตามนัดหมาย",
+    completeTitle: "งานเสร็จสิ้น & รีวิว",
+    completeDesc: "งานเสร็จเรียบร้อยแล้ว กรุณาให้คะแนนและรีวิว",
+    rateLabel: "ให้คะแนน",
+    commentLabel: "แสดงความคิดเห็น (ไม่บังคับ)",
+    commentPlaceholder: "แบ่งปันประสบการณ์ของคุณ...",
+    submitReview: "ส่งรีวิว",
+    pricingDisclaimer: "ข้อจำกัดความรับผิดชอบด้านราคา",
+    variationTitle: "แก้ไข / เพิ่มเติม",
+    variationDesc: "ผู้ให้บริการขอเปลี่ยนแปลงขอบเขตงานเดิม",
+    variationAmount: "จำนวนเพิ่มเติม",
+    variationReason: "เหตุผล",
+    approveVariation: "อนุมัติ",
+    rejectVariation: "ปฏิเสธ",
+    finalTitle: "งานเสร็จสมบูรณ์ — ขอบคุณ!",
+    finalDesc: "การจองเสร็จสมบูรณ์ ทั้งสองฝ่ายได้ให้คะแนนแล้ว",
+    yourRating: "คะแนนของคุณ",
+    fixerRating: "คะแนนจากพาร์ทเนอร์",
+    viewDashboard: "ดูแดชบอร์ด",
   },
   zh: {
     matchTitle: "匹配的技工与专业人士",
@@ -106,7 +189,7 @@ const T: Record<string, Record<string, string>> = {
     selectFixer: "选择",
     confirmTitle: "确认预约",
     confirmDesc: "您选择了 {fixer}（{tier} 等级）。需支付 {fee} 处理费确认。",
-    confirmBtn: "确认并支付",
+    confirmBtn: "确认并通知合作伙伴",
     cancel: "取消",
     paymentTitle: "PromptPay 支付",
     paymentDesc: "扫描二维码支付处理费",
@@ -125,6 +208,46 @@ const T: Record<string, Record<string, string>> = {
     corporate: "企业",
     specialist: "专员",
     expert: "专家",
+    poTitle: "采购订单已创建",
+    poNumber: "PO 编号",
+    poDate: "日期",
+    poService: "服务",
+    poTier: "等级",
+    poFee: "处理费",
+    poStatus: "状态",
+    poDisclaimer: "最终服务价格由您与服务商直接协商。CBLUE 仅作为匹配平台，不确定或保证最终价格。",
+    notifyTitle: "等待合作伙伴确认",
+    notifyDesc: "我们已通知 {fixer} 您的预约。他们将尽快确认。",
+    notifyWaiting: "等待确认中...",
+    partnerAccepted: "合作伙伴已接受！",
+    partnerAcceptedDesc: "{fixer} 已接受您的预约。您现在可以付款。",
+    proceedPayment: "继续付款",
+    meetingTitle: "安排和确认会议",
+    meetingDesc: "与 {fixer} 安排会议讨论工作细节。",
+    meetingDate: "会议日期",
+    meetingTime: "会议时间",
+    meetingNotes: "备注 / 特殊说明",
+    meetingConfirmBtn: "确认会议",
+    meetingConfirmed: "会议已确认",
+    meetingConfirmedDesc: "双方已确认。请按时参加会议。",
+    completeTitle: "工作完成 & 评价",
+    completeDesc: "工作已完成。请评价服务。",
+    rateLabel: "您的评分",
+    commentLabel: "评论（可选）",
+    commentPlaceholder: "分享您的体验...",
+    submitReview: "提交评价",
+    pricingDisclaimer: "价格免责声明",
+    variationTitle: "变更 / 补充",
+    variationDesc: "服务商请求变更原始范围。",
+    variationAmount: "附加金额",
+    variationReason: "原因",
+    approveVariation: "批准",
+    rejectVariation: "拒绝",
+    finalTitle: "工作完成 — 谢谢！",
+    finalDesc: "您的预约已完成。双方已评分。",
+    yourRating: "您的评分",
+    fixerRating: "合作伙伴对您的评分",
+    viewDashboard: "查看仪表板",
   },
 };
 
@@ -149,13 +272,29 @@ function generateDemoFixers(service: string): Fixer[] {
   return fixers.sort((a, b) => b.rating - a.rating);
 }
 
-function getProcessingFee(_bookingType: BookingType, tier: string): number {
+function getProcessingFee(bookingType: BookingType, tier: string): number {
+  if (bookingType === "property") {
+    if (tier === "economy") return 300;
+    if (tier === "standard") return 500;
+    if (tier === "corporate") return 800;
+    if (tier === "specialist") return 1200;
+    if (tier === "expert") return 2000;
+    return 300;
+  }
   if (tier === "economy") return 200;
   if (tier === "standard") return 400;
   if (tier === "corporate") return 600;
   if (tier === "specialist") return 800;
   if (tier === "expert") return 1000;
   return 200;
+}
+
+function generatePONumber(): string {
+  const now = new Date();
+  const y = now.getFullYear().toString().slice(2);
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const seq = Math.floor(Math.random() * 9000 + 1000);
+  return `PO-${y}${m}-${seq}`;
 }
 
 function Stars({ rating }: { rating: number }) {
@@ -176,6 +315,33 @@ function Stars({ rating }: { rating: number }) {
   );
 }
 
+function RatingInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const [hover, setHover] = useState(0);
+  return (
+    <div className="flex items-center gap-1">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <button
+          key={star}
+          type="button"
+          onClick={() => onChange(star)}
+          onMouseEnter={() => setHover(star)}
+          onMouseLeave={() => setHover(0)}
+          className="focus:outline-none"
+        >
+          <svg
+            className={`w-8 h-8 transition ${star <= (hover || value) ? "text-yellow-400" : "text-gray-300"}`}
+            fill="currentColor"
+            viewBox="0 0 20 20"
+          >
+            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+          </svg>
+        </button>
+      ))}
+      <span className="ml-2 text-lg font-bold text-gray-700">{value > 0 ? `${value}/5` : ""}</span>
+    </div>
+  );
+}
+
 const tierColors: Record<string, { bg: string; text: string; border: string }> = {
   economy: { bg: "bg-green-50", text: "text-green-700", border: "border-green-200" },
   standard: { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200" },
@@ -185,6 +351,8 @@ const tierColors: Record<string, { bg: string; text: string; border: string }> =
 };
 
 const getTierColor = (tier: string) => tierColors[tier] ?? tierColors["standard"]!;
+
+type Step = "matching" | "list" | "confirm" | "po" | "notify" | "payment" | "chat" | "meeting" | "variation" | "complete" | "done";
 
 export default function FixerResults({
   locale,
@@ -201,12 +369,29 @@ export default function FixerResults({
 }) {
   const t = (key: string) => T[locale]?.[key] || T["en"]![key] || key;
   const [fixers] = useState<Fixer[]>(() => generateDemoFixers(service));
-  const [step, setStep] = useState<"matching" | "list" | "confirm" | "payment" | "chat" | "done">("matching");
+  const [step, setStep] = useState<Step>("matching");
   const [selectedFixer, setSelectedFixer] = useState<Fixer | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [aiStep, setAiStep] = useState(0);
+
+  // PO state
+  const [poNumber] = useState(() => generatePONumber());
+  const [partnerConfirmed, setPartnerConfirmed] = useState(false);
+
+  // Meeting state
+  const [meetingDate, setMeetingDate] = useState("");
+  const [meetingTime, setMeetingTime] = useState("");
+  const [meetingNotes, setMeetingNotes] = useState("");
+
+  // Rating state
+  const [customerRating, setCustomerRating] = useState(0);
+  const [customerComment, setCustomerComment] = useState("");
+  const [fixerRatingOfCustomer] = useState(() => 3 + Math.floor(Math.random() * 3)); // simulated
+
+  // Variation state
+  const [showVariation, setShowVariation] = useState(false);
 
   // AI Matching animation sequence
   useEffect(() => {
@@ -229,12 +414,36 @@ export default function FixerResults({
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
 
+  // Simulate partner confirmation after entering notify step
+  useEffect(() => {
+    if (step !== "notify") return;
+    const timer = setTimeout(() => {
+      setPartnerConfirmed(true);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [step]);
+
+  // Simulate variation after meeting confirmed — 50% chance
+  useEffect(() => {
+    if (step !== "meeting") return;
+    // set variation flag randomly when meeting step loads
+    setShowVariation(Math.random() > 0.5);
+  }, [step]);
+
   const handleSelect = (fixer: Fixer) => {
     setSelectedFixer(fixer);
     setStep("confirm");
   };
 
   const handleConfirm = () => {
+    setStep("po");
+  };
+
+  const handlePOAcknowledge = () => {
+    setStep("notify");
+  };
+
+  const handleProceedPayment = () => {
     setStep("payment");
   };
 
@@ -286,6 +495,22 @@ export default function FixerResults({
   };
 
   const handleFinishChat = () => {
+    setStep("meeting");
+  };
+
+  const handleMeetingConfirm = () => {
+    if (showVariation) {
+      setStep("variation");
+    } else {
+      setStep("complete");
+    }
+  };
+
+  const handleVariationDecision = () => {
+    setStep("complete");
+  };
+
+  const handleSubmitReview = () => {
     setStep("done");
   };
 
@@ -352,19 +577,215 @@ export default function FixerResults({
     );
   }
 
-  // Step: Done
+  // Step: Done — Final summary with both ratings
   if (step === "done") {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-20 text-center">
-        <div className="text-6xl mb-6">✅</div>
-        <h1 className="text-3xl font-bold text-gray-900">{t("bookingConfirmed")}</h1>
-        <p className="mt-4 text-lg text-gray-600">{t("bookingConfirmedDesc")}</p>
-        <button
-          onClick={onNewBooking}
-          className="mt-8 px-6 py-2.5 text-sm font-semibold text-blue-700 border border-blue-700 rounded-lg hover:bg-blue-50"
-        >
-          {t("newBooking")}
-        </button>
+      <div className="mx-auto max-w-2xl px-4 py-16">
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 text-center">
+          <div className="text-6xl mb-6">🎉</div>
+          <h1 className="text-3xl font-bold text-gray-900">{t("finalTitle")}</h1>
+          <p className="mt-3 text-gray-600">{t("finalDesc")}</p>
+
+          <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="bg-sky-50 rounded-xl p-5 border border-sky-200">
+              <p className="text-sm text-sky-600 font-medium mb-2">{t("yourRating")}</p>
+              <div className="flex justify-center"><Stars rating={customerRating} /></div>
+              {customerComment && <p className="text-xs text-gray-500 mt-2 italic">&ldquo;{customerComment}&rdquo;</p>}
+            </div>
+            <div className="bg-emerald-50 rounded-xl p-5 border border-emerald-200">
+              <p className="text-sm text-emerald-600 font-medium mb-2">{t("fixerRating")}</p>
+              <div className="flex justify-center"><Stars rating={fixerRatingOfCustomer} /></div>
+            </div>
+          </div>
+
+          {/* PO reference */}
+          <div className="mt-6 text-sm text-gray-500">
+            {t("poNumber")}: <span className="font-mono font-bold text-gray-800">{poNumber}</span>
+          </div>
+
+          {/* Disclaimer */}
+          <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+            ⚠️ {t("poDisclaimer")}
+          </div>
+
+          <div className="mt-8 flex gap-3 justify-center">
+            <button
+              onClick={onNewBooking}
+              className="px-6 py-2.5 text-sm font-semibold text-sky-700 border border-sky-700 rounded-lg hover:bg-sky-50 transition"
+            >
+              {t("newBooking")}
+            </button>
+            <a
+              href={`/${locale}/dashboard`}
+              className="px-6 py-2.5 text-sm font-semibold text-white bg-sky-600 rounded-lg hover:bg-sky-700 transition"
+            >
+              {t("viewDashboard")}
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Step: Work Completion & Review
+  if (step === "complete" && selectedFixer) {
+    return (
+      <div className="mx-auto max-w-md px-4 py-12">
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8">
+          <div className="text-center mb-6">
+            <div className="text-5xl mb-3">⭐</div>
+            <h2 className="text-xl font-bold text-gray-800">{t("completeTitle")}</h2>
+            <p className="text-gray-500 text-sm mt-1">{t("completeDesc")}</p>
+          </div>
+
+          {/* Fixer info */}
+          <div className="bg-gray-50 rounded-xl p-4 mb-6 flex items-center gap-3">
+            <div className={`w-12 h-12 rounded-full ${getTierColor(selectedFixer.tier).bg} flex items-center justify-center`}>
+              <span className={`font-bold ${getTierColor(selectedFixer.tier).text}`}>{selectedFixer.alias.split("-")[1]}</span>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-800">{selectedFixer.alias}</p>
+              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${getTierColor(selectedFixer.tier).bg} ${getTierColor(selectedFixer.tier).text}`}>{tierLabel}</span>
+            </div>
+          </div>
+
+          {/* Rating input */}
+          <div className="mb-5">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">{t("rateLabel")}</label>
+            <RatingInput value={customerRating} onChange={setCustomerRating} />
+          </div>
+
+          {/* Comment */}
+          <div className="mb-6">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">{t("commentLabel")}</label>
+            <textarea
+              value={customerComment}
+              onChange={(e) => setCustomerComment(e.target.value)}
+              placeholder={t("commentPlaceholder")}
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:border-sky-500"
+            />
+          </div>
+
+          {/* Disclaimer */}
+          <div className="mb-6 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+            ⚠️ {t("poDisclaimer")}
+          </div>
+
+          <button
+            onClick={handleSubmitReview}
+            disabled={customerRating === 0}
+            className="w-full py-3 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-xl shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {t("submitReview")}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Step: Variation / Addendum
+  if (step === "variation" && selectedFixer) {
+    const variationAmount = Math.floor(fee * 0.3 + Math.random() * fee * 0.5);
+    return (
+      <div className="mx-auto max-w-md px-4 py-12">
+        <div className="bg-white rounded-2xl shadow-xl border border-orange-200 p-8">
+          <div className="text-center mb-6">
+            <div className="text-5xl mb-3">📋</div>
+            <h2 className="text-xl font-bold text-gray-800">{t("variationTitle")}</h2>
+            <p className="text-gray-500 text-sm mt-1">{t("variationDesc")}</p>
+          </div>
+
+          <div className="bg-orange-50 rounded-xl p-4 mb-6 space-y-3 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-600">{t("variationAmount")}</span>
+              <span className="font-bold text-orange-700">฿{variationAmount.toLocaleString()}</span>
+            </div>
+            <div>
+              <span className="text-gray-600">{t("variationReason")}</span>
+              <p className="mt-1 text-gray-800">
+                {locale === "th"
+                  ? "พบงานเพิ่มเติมที่จำเป็นต้องดำเนินการเพื่อให้งานสมบูรณ์"
+                  : locale === "zh"
+                    ? "发现需要额外工作以完成项目"
+                    : "Additional work discovered that is necessary to complete the job properly."}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={handleVariationDecision}
+              className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl transition"
+            >
+              {t("approveVariation")}
+            </button>
+            <button
+              onClick={handleVariationDecision}
+              className="flex-1 py-3 bg-red-100 hover:bg-red-200 text-red-700 font-semibold rounded-xl transition"
+            >
+              {t("rejectVariation")}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Step: Meeting Confirmation
+  if (step === "meeting" && selectedFixer) {
+    return (
+      <div className="mx-auto max-w-md px-4 py-12">
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8">
+          <div className="text-center mb-6">
+            <div className="text-5xl mb-3">📅</div>
+            <h2 className="text-xl font-bold text-gray-800">{t("meetingTitle")}</h2>
+            <p className="text-gray-500 text-sm mt-1">{t("meetingDesc").replace("{fixer}", selectedFixer.alias)}</p>
+          </div>
+
+          <div className="space-y-4 mb-6">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">{t("meetingDate")}</label>
+              <input
+                type="date"
+                value={meetingDate}
+                onChange={(e) => setMeetingDate(e.target.value)}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:border-sky-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">{t("meetingTime")}</label>
+              <input
+                type="time"
+                value={meetingTime}
+                onChange={(e) => setMeetingTime(e.target.value)}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:border-sky-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">{t("meetingNotes")}</label>
+              <textarea
+                value={meetingNotes}
+                onChange={(e) => setMeetingNotes(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:border-sky-500"
+              />
+            </div>
+          </div>
+
+          <button
+            onClick={handleMeetingConfirm}
+            disabled={!meetingDate || !meetingTime}
+            className="w-full py-3 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-xl shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {t("meetingConfirmBtn")}
+          </button>
+
+          {/* Disclaimer */}
+          <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+            ⚠️ {t("poDisclaimer")}
+          </div>
+        </div>
       </div>
     );
   }
@@ -422,14 +843,75 @@ export default function FixerResults({
             </button>
           </div>
 
-          {/* Finish */}
+          {/* Finish → go to meeting */}
           <div className="px-4 py-3 border-t border-gray-100 text-center">
             <button
               onClick={handleFinishChat}
               className="text-sm text-gray-500 hover:text-gray-700 underline"
             >
-              {locale === "th" ? "เสร็จสิ้นการแชท" : locale === "zh" ? "结束聊天" : "Finish Chat"}
+              {locale === "th" ? "เสร็จสิ้นการแชท → นัดหมาย" : locale === "zh" ? "结束聊天 → 安排会议" : "Finish Chat → Schedule Meeting"}
             </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Step: Partner Notification & Confirmation
+  if (step === "notify" && selectedFixer) {
+    return (
+      <div className="mx-auto max-w-md px-4 py-12">
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 text-center">
+          {!partnerConfirmed ? (
+            <>
+              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-amber-100 flex items-center justify-center">
+                <span className="text-3xl animate-pulse">🔔</span>
+              </div>
+              <h2 className="text-xl font-bold text-gray-800 mb-2">{t("notifyTitle")}</h2>
+              <p className="text-gray-500 text-sm mb-6">
+                {t("notifyDesc").replace("{fixer}", selectedFixer.alias)}
+              </p>
+
+              {/* Progress indicator */}
+              <div className="flex items-center justify-center gap-3 mb-6">
+                <span className="inline-block w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                <span className="text-sm text-amber-600 font-medium">{t("notifyWaiting")}</span>
+              </div>
+
+              {/* PO reference */}
+              <div className="bg-gray-50 rounded-xl p-4 text-sm text-left">
+                <div className="flex justify-between mb-1">
+                  <span className="text-gray-500">{t("poNumber")}</span>
+                  <span className="font-mono font-bold text-gray-800">{poNumber}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">{t("poFee")}</span>
+                  <span className="font-bold text-gray-800">฿{fee}</span>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-green-100 flex items-center justify-center">
+                <span className="text-3xl">✅</span>
+              </div>
+              <h2 className="text-xl font-bold text-green-700 mb-2">{t("partnerAccepted")}</h2>
+              <p className="text-gray-500 text-sm mb-6">
+                {t("partnerAcceptedDesc").replace("{fixer}", selectedFixer.alias)}
+              </p>
+
+              <button
+                onClick={handleProceedPayment}
+                className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl shadow-lg transition"
+              >
+                {t("proceedPayment")}
+              </button>
+            </>
+          )}
+
+          {/* Disclaimer always visible */}
+          <div className="mt-6 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 text-left">
+            ⚠️ {t("poDisclaimer")}
           </div>
         </div>
       </div>
@@ -466,6 +948,10 @@ export default function FixerResults({
               <span className="font-mono text-gray-800">{refCode}</span>
             </div>
             <div className="flex justify-between">
+              <span className="text-gray-500">{t("poNumber")}</span>
+              <span className="font-mono text-gray-800">{poNumber}</span>
+            </div>
+            <div className="flex justify-between">
               <span className="text-gray-500">{t("tier")}</span>
               <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${getTierColor(selectedFixer.tier).bg} ${getTierColor(selectedFixer.tier).text}`}>
                 {tierLabel}
@@ -480,8 +966,77 @@ export default function FixerResults({
             {t("paymentComplete")}
           </button>
           <button
-            onClick={() => setStep("confirm")}
+            onClick={() => setStep("notify")}
             className="mt-3 text-sm text-gray-500 hover:text-gray-700"
+          >
+            {t("cancel")}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Step: PO Created
+  if (step === "po" && selectedFixer) {
+    const today = new Date().toLocaleDateString(locale === "th" ? "th-TH" : locale === "zh" ? "zh-CN" : "en-US", { year: "numeric", month: "long", day: "numeric" });
+    return (
+      <div className="mx-auto max-w-md px-4 py-12">
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8">
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-100 flex items-center justify-center">
+              <span className="text-2xl">📄</span>
+            </div>
+            <h2 className="text-xl font-bold text-gray-800">{t("poTitle")}</h2>
+          </div>
+
+          {/* PO Details */}
+          <div className="bg-gray-50 rounded-xl p-5 space-y-3 text-sm mb-6">
+            <div className="flex justify-between items-center">
+              <span className="text-gray-500">{t("poNumber")}</span>
+              <span className="font-mono font-bold text-lg text-gray-900">{poNumber}</span>
+            </div>
+            <hr className="border-gray-200" />
+            <div className="flex justify-between">
+              <span className="text-gray-500">{t("poDate")}</span>
+              <span className="text-gray-800">{today}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500">{t("poService")}</span>
+              <span className="text-gray-800">{service || bookingType}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-500">{t("poTier")}</span>
+              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getTierColor(selectedFixer.tier).bg} ${getTierColor(selectedFixer.tier).text}`}>
+                {tierLabel}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500">{t("poFee")}</span>
+              <span className="font-bold text-lg text-gray-900">฿{fee}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500">{t("poStatus")}</span>
+              <span className="px-2.5 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs font-semibold">
+                {locale === "th" ? "รอการยืนยัน" : locale === "zh" ? "待确认" : "Pending Confirmation"}
+              </span>
+            </div>
+          </div>
+
+          {/* Pricing Disclaimer */}
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 mb-6">
+            <p className="font-bold mb-1">⚠️ {t("pricingDisclaimer")}</p>
+            <p>{t("poDisclaimer")}</p>
+          </div>
+
+          <button
+            onClick={handlePOAcknowledge}
+            className="w-full py-3 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-xl shadow-lg transition"
+          >
+            {locale === "th" ? "รับทราบ & ส่งให้พาร์ทเนอร์" : locale === "zh" ? "确认并通知合作伙伴" : "Acknowledge & Notify Partner"}
+          </button>
+          <button
+            onClick={() => { setSelectedFixer(null); setStep("list"); }}
+            className="mt-3 w-full text-sm text-gray-500 hover:text-gray-700"
           >
             {t("cancel")}
           </button>
@@ -521,6 +1076,11 @@ export default function FixerResults({
               <span className="text-gray-500">{t("processingFee")}</span>
               <span className="font-bold text-lg text-gray-800">฿{fee}</span>
             </div>
+          </div>
+
+          {/* Pricing Disclaimer */}
+          <div className="mb-6 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 text-left">
+            ⚠️ {t("poDisclaimer")}
           </div>
 
           <button
@@ -590,6 +1150,11 @@ export default function FixerResults({
             </table>
           </div>
         </div>
+      </div>
+
+      {/* Pricing Disclaimer banner */}
+      <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+        <span className="font-bold">⚠️ {t("pricingDisclaimer")}:</span> {t("poDisclaimer")}
       </div>
 
       <div className="space-y-4">

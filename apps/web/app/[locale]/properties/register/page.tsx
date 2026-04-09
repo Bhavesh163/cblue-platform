@@ -42,6 +42,11 @@ export default function PropertyRegisterPage() {
     district: "",
     subdistrict: "",
     postalCode: "",
+    houseNumber: "",
+    building: "",
+    floor: "",
+    road: "",
+    soi: "",
     addressLine: "",
     contactName: "",
     contactPhone: "",
@@ -103,6 +108,11 @@ export default function PropertyRegisterPage() {
         district: form.district,
         subdistrict: form.subdistrict,
         postalCode: form.postalCode,
+        houseNumber: form.houseNumber || undefined,
+        building: form.building || undefined,
+        floor: form.floor || undefined,
+        road: form.road || undefined,
+        soi: form.soi || undefined,
         addressLine: form.addressLine,
         contactName: form.contactName,
         contactPhone: form.contactPhone,
@@ -152,7 +162,8 @@ export default function PropertyRegisterPage() {
                 setForm({
                   propertyType: "", listingType: "", title: "", description: "", price: "", area: "",
                   bedrooms: "", bathrooms: "", floors: "", yearBuilt: "", province: "", district: "",
-                  subdistrict: "", postalCode: "", addressLine: "", contactName: "", contactPhone: "", contactEmail: "",
+                  subdistrict: "", postalCode: "", houseNumber: "", building: "", floor: "", road: "", soi: "",
+                  addressLine: "", contactName: "", contactPhone: "", contactEmail: "",
                   password: "", confirmPassword: "",
                 });
                 setConsentChecked(false);
@@ -390,7 +401,7 @@ export default function PropertyRegisterPage() {
                 </div>
 
                 {locationType === "dropdown" ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <><div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {/* Province */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -453,7 +464,29 @@ export default function PropertyRegisterPage() {
                       />
                     </div>
                   </div>
-                ) : (
+                  {/* Detailed Thai Address Fields */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">บ้านเลขที่</label>
+                      <input type="text" name="houseNumber" value={form.houseNumber} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500" placeholder="123/45" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">อาคาร / ชั้น</label>
+                      <div className="flex gap-2">
+                        <input type="text" name="building" value={form.building} onChange={handleChange} className="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500" placeholder="อาคาร A" />
+                        <input type="text" name="floor" value={form.floor} onChange={handleChange} className="w-20 rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500" placeholder="ชั้น" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">ถนน</label>
+                      <input type="text" name="road" value={form.road} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500" placeholder="ถนนสุขุมวิท" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">ซอย</label>
+                      <input type="text" name="soi" value={form.soi} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500" placeholder="ซอย 21" />
+                    </div>
+                  </div>
+                </>) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {/* Address Line */}
                     <div className="sm:col-span-2">

@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useTranslations, useLocale } from "next-intl";
 import { THAI_PROVINCES } from "../lib/constants";
+import PdpaConsent from "../components/PdpaConsent";
 
 const PROPERTY_TYPES = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "APARTMENT"] as const;
 const LISTING_TYPES = ["SALE", "RENT"] as const;
@@ -36,6 +37,20 @@ export default function PropertiesPage() {
   const [latestProperties, setLatestProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [subscriber, setSubscriber] = useState<{ name: string; email: string } | null>(null);
+  const [showLoginGate, setShowLoginGate] = useState(false);
+  const [showContactFlow, setShowContactFlow] = useState<Property | null>(null);
+  const [contactStep, setContactStep] = useState<"tier" | "payment" | "po" | "notify" | "chat" | "meeting" | "complete" | "done">("tier");
+  const [selectedTier, setSelectedTier] = useState("");
+  const [showPdpa, setShowPdpa] = useState(false);
+  const [poNumber, setPoNumber] = useState("");
+  const [listerConfirmed, setListerConfirmed] = useState(false);
+  const [chatMessages, setChatMessages] = useState<{ sender: "you" | "lister"; text: string }[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [meetingDate, setMeetingDate] = useState("");
+  const [meetingTime, setMeetingTime] = useState("");
+  const [rating, setRating] = useState(0);
+  const [ratingComment, setRatingComment] = useState("");
   const [filters, setFilters] = useState({
     propertyType: "",
     listingType: "",
@@ -47,6 +62,16 @@ export default function PropertiesPage() {
   });
 
   useEffect(() => {
+    // Check login
+    try {
+      const stored = localStorage.getItem("subscriber");
+      if (stored) {
+        setSubscriber(JSON.parse(stored));
+        const consent = localStorage.getItem("pdpa_consent_customer");
+        if (!consent) setShowPdpa(true);
+      }
+    } catch { /* ignore */ }
+
     async function fetchLatest() {
       try {
         const res = await fetch(`${API_BASE}/properties?limit=20`);
@@ -92,6 +117,53 @@ export default function PropertiesPage() {
     return new Intl.NumberFormat("th-TH").format(price);
   }
 
+  function handleContactLister(prop: Property) {
+    if (!subscriber) {
+      setShowLoginGate(true);
+      return;
+    }
+    setShowContactFlow(prop);
+    setContactStep("tier");
+    setSelectedTier("");
+    setPoNumber("");
+    setListerConfirmed(false);
+    setChatMessages([]);
+    setChatInput("");
+    setMeetingDate("");
+    setMeetingTime("");
+    setRating(0);
+    setRatingComment("");
+  }
+
+  function generatePO() {
+    const now = new Date();
+    const yy = String(now.getFullYear()).slice(2);
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const seq = String(Math.floor(Math.random() * 9000) + 1000);
+    return `PO-${yy}${mm}-${seq}`;
+  }
+
+  function sendChatMessage() {
+    if (!chatInput.trim()) return;
+    setChatMessages((prev) => [...prev, { sender: "you", text: chatInput.trim() }]);
+    setChatInput("");
+    setTimeout(() => {
+      const replies = locale === "th"
+        ? ["ได้ครับ/ค่ะ ยินดีให้ข้อมูลเพิ่มเติม", "ทรัพย์สินนี้ยังว่างอยู่ครับ/ค่ะ", "สามารถนัดดูได้ครับ/ค่ะ"]
+        : ["Sure, happy to provide more details!", "The property is still available.", "We can schedule a viewing anytime."];
+      const reply = replies[Math.floor(Math.random() * replies.length)] ?? replies[0] ?? "";
+      setChatMessages((prev) => [...prev, { sender: "lister", text: reply }]);
+    }, 1500);
+  }
+
+  const PROPERTY_TIERS = [
+    { name: "Economy", fee: 300, desc: locale === "th" ? "ห้องเช่า" : "Room" },
+    { name: "Standard", fee: 500, desc: locale === "th" ? "คอนโด" : "Condo" },
+    { name: "Upper", fee: 800, desc: locale === "th" ? "บ้าน" : "House" },
+    { name: "Luxury", fee: 1200, desc: locale === "th" ? "หรูหรา" : "Luxury" },
+    { name: "Grandeur", fee: 2000, desc: locale === "th" ? "พรีเมียม" : "Premium" },
+  ];
+
   const typeKeys: Record<string, string> = {
     CONDO: "condo",
     HOUSE: "house",
@@ -103,6 +175,378 @@ export default function PropertiesPage() {
 
   return (
     <div className="bg-gradient-to-br from-slate-50 to-sky-50/30 min-h-screen">
+      {/* PDPA Consent Modal */}
+      {showPdpa && (
+        <PdpaConsent
+          locale={locale}
+          prefix={prefix}
+          role="customer"
+          onAccept={(ts) => {
+            localStorage.setItem("pdpa_consent_customer", ts);
+            setShowPdpa(false);
+          }}
+        />
+      )}
+
+      {/* Login Gate Modal */}
+      {showLoginGate && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-8 text-center shadow-2xl">
+            <div className="text-5xl mb-4">🔒</div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">
+              {locale === "th" ? "กรุณาเข้าสู่ระบบก่อน" : locale === "zh" ? "请先登录" : "Login Required"}
+            </h2>
+            <p className="text-sm text-gray-500 mb-6">
+              {locale === "th" ? "คุณต้องเข้าสู่ระบบก่อนติดต่อผู้ลงประกาศ" : locale === "zh" ? "您需要登录才能联系发布者" : "You need to log in before contacting a property lister"}
+            </p>
+            <div className="flex gap-3 justify-center">
+              <Link href={`${prefix}/subscription/login`} className="px-6 py-2.5 bg-green-700 text-white rounded-xl font-bold text-sm hover:bg-green-800 transition">
+                {locale === "th" ? "เข้าสู่ระบบ" : "Log In"}
+              </Link>
+              <button onClick={() => setShowLoginGate(false)} className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-xl font-semibold text-sm hover:bg-gray-50 transition">
+                {locale === "th" ? "ยกเลิก" : "Cancel"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Contact Lister Enterprise Flow Modal */}
+      {showContactFlow && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-emerald-600 to-green-700 px-6 py-4 flex items-center justify-between flex-shrink-0">
+              <h2 className="text-white font-bold">
+                {contactStep === "tier" ? (locale === "th" ? "เลือกระดับบริการ" : "Select Service Tier") :
+                 contactStep === "payment" ? (locale === "th" ? "ชำระค่าธรรมเนียม" : "Pay Processing Fee") :
+                 contactStep === "po" ? (locale === "th" ? "ใบสั่งซื้อ (PO)" : "Purchase Order") :
+                 contactStep === "notify" ? (locale === "th" ? "แจ้งเตือนผู้ลงประกาศ" : "Notifying Lister") :
+                 contactStep === "chat" ? (locale === "th" ? "แชทนิรนาม" : "Anonymous Chat") :
+                 contactStep === "meeting" ? (locale === "th" ? "นัดหมายดูทรัพย์สิน" : "Schedule Viewing") :
+                 contactStep === "complete" ? (locale === "th" ? "ให้คะแนน" : "Rate Experience") :
+                 (locale === "th" ? "สำเร็จ!" : "Complete!")}
+              </h2>
+              <button onClick={() => setShowContactFlow(null)} className="text-white/80 hover:text-white text-xl">&times;</button>
+            </div>
+
+            {/* Step Progress */}
+            <div className="px-6 pt-4 flex-shrink-0">
+              <div className="flex items-center gap-1 mb-4">
+                {(["tier", "payment", "po", "notify", "chat", "meeting", "complete", "done"] as const).map((s, i) => (
+                  <div key={s} className={`h-1.5 flex-1 rounded-full transition-colors ${
+                    (["tier", "payment", "po", "notify", "chat", "meeting", "complete", "done"] as const).indexOf(contactStep) >= i
+                      ? "bg-emerald-500" : "bg-gray-200"
+                  }`} />
+                ))}
+              </div>
+            </div>
+
+            <div className="p-6 pt-2 overflow-y-auto flex-1">
+              {/* Property info */}
+              <div className="flex items-center gap-3 bg-gray-50 rounded-xl p-3 mb-5">
+                <span className="text-3xl">🏢</span>
+                <div>
+                  <p className="font-bold text-gray-900">{showContactFlow.title}</p>
+                  <p className="text-sm text-green-700 font-semibold">฿{formatPrice(showContactFlow.price)}{showContactFlow.listingType === "RENT" ? "/mo" : ""}</p>
+                </div>
+              </div>
+
+              {/* Step 1: Tier Selection */}
+              {contactStep === "tier" && (
+                <>
+                  <p className="text-sm text-gray-600 mb-4">
+                    {locale === "th" ? "เลือกระดับบริการเพื่อติดต่อผู้ลงประกาศ:" : "Choose a service tier to contact the lister:"}
+                  </p>
+                  <div className="grid grid-cols-1 gap-2">
+                    {PROPERTY_TIERS.map((tier) => (
+                      <button
+                        key={tier.name}
+                        onClick={() => setSelectedTier(tier.name)}
+                        className={`flex items-center justify-between p-3 rounded-xl border-2 transition ${
+                          selectedTier === tier.name ? "border-green-500 bg-green-50" : "border-gray-200 hover:border-green-300"
+                        }`}
+                      >
+                        <div className="text-left">
+                          <p className="font-bold text-gray-900">{tier.name}</p>
+                          <p className="text-xs text-gray-500">{tier.desc}</p>
+                        </div>
+                        <p className="font-extrabold text-green-700">฿{tier.fee}</p>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700 mt-4">
+                    ⚠️ {locale === "th"
+                      ? "CBLUE เป็นแพลตฟอร์มจับคู่เท่านั้น ราคาทรัพย์สินตกลงโดยตรงระหว่างผู้ซื้อ/ผู้เช่าและผู้ลงประกาศ ค่าธรรมเนียมนี้เป็นค่าดำเนินการเท่านั้น"
+                      : "CBLUE is a matching platform only. Property price is agreed directly between buyer/renter and lister. This fee covers processing only."}
+                  </div>
+                  <button
+                    onClick={() => selectedTier && setContactStep("payment")}
+                    disabled={!selectedTier}
+                    className="mt-4 w-full py-3 bg-green-700 text-white font-bold rounded-xl disabled:opacity-40 hover:bg-green-800 transition"
+                  >
+                    {locale === "th" ? "ดำเนินการต่อ" : "Continue"}
+                  </button>
+                </>
+              )}
+
+              {/* Step 2: Payment */}
+              {contactStep === "payment" && (
+                <>
+                  <div className="text-center">
+                    <p className="text-sm text-gray-600 mb-4">
+                      {locale === "th" ? "สแกน QR Code เพื่อชำระค่าธรรมเนียมดำเนินการ" : "Scan QR Code to pay the processing fee"}
+                    </p>
+                    <div className="inline-block bg-white border-2 border-gray-200 rounded-2xl p-6 mb-4">
+                      <div className="w-48 h-48 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400">
+                        <div className="text-center">
+                          <span className="text-4xl block mb-2">📱</span>
+                          <p className="text-xs font-semibold">PromptPay QR</p>
+                          <p className="text-lg font-extrabold text-green-700 mt-1">
+                            ฿{PROPERTY_TIERS.find((ti) => ti.name === selectedTier)?.fee || 0}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700 mb-4">
+                      ⚠️ {locale === "th"
+                        ? "ค่าธรรมเนียมดำเนินการเท่านั้น ราคาทรัพย์สินตกลงโดยตรงระหว่างผู้ซื้อและผู้ลงประกาศ"
+                        : "Processing fee only. Property price is agreed directly between buyer and lister."}
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <button onClick={() => setContactStep("tier")} className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl font-semibold text-sm">
+                      ← {locale === "th" ? "กลับ" : "Back"}
+                    </button>
+                    <button onClick={() => {
+                      setPoNumber(generatePO());
+                      setContactStep("po");
+                    }} className="flex-1 py-2.5 bg-green-700 text-white rounded-xl font-bold text-sm hover:bg-green-800 transition">
+                      {locale === "th" ? "ยืนยันการชำระ" : "Confirm Payment"}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {/* Step 3: PO Creation */}
+              {contactStep === "po" && (
+                <div className="text-center">
+                  <div className="text-5xl mb-4">📋</div>
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">
+                    {locale === "th" ? "สร้างใบสั่งซื้อสำเร็จ" : "Purchase Order Created"}
+                  </h3>
+                  <div className="bg-gray-50 rounded-xl p-4 mb-4 inline-block">
+                    <p className="text-xs text-gray-500 mb-1">{locale === "th" ? "เลขที่ PO" : "PO Number"}</p>
+                    <p className="text-2xl font-mono font-extrabold text-emerald-700">{poNumber}</p>
+                  </div>
+                  <div className="text-left bg-white border border-gray-200 rounded-xl p-4 mb-4 text-sm space-y-2">
+                    <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ทรัพย์สิน" : "Property"}</span><span className="font-semibold">{showContactFlow.title}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ระดับ" : "Tier"}</span><span className="font-semibold">{selectedTier}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ค่าธรรมเนียม" : "Fee"}</span><span className="font-bold text-green-700">฿{PROPERTY_TIERS.find((ti) => ti.name === selectedTier)?.fee || 0}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "วันที่" : "Date"}</span><span className="font-semibold">{new Date().toLocaleDateString()}</span></div>
+                  </div>
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700 mb-4">
+                    ⚠️ {locale === "th"
+                      ? "เก็บเลขที่ PO ไว้เป็นหลักฐาน ราคาทรัพย์สินเป็นการเจรจาระหว่างคู่สัญญาโดยตรง"
+                      : "Keep this PO number for your records. Property pricing is negotiated directly between parties."}
+                  </div>
+                  <button onClick={() => {
+                    setContactStep("notify");
+                    setListerConfirmed(false);
+                    setTimeout(() => setListerConfirmed(true), 4000);
+                  }} className="w-full py-3 bg-green-700 text-white font-bold rounded-xl hover:bg-green-800 transition">
+                    {locale === "th" ? "แจ้งเตือนผู้ลงประกาศ" : "Notify Lister"}
+                  </button>
+                </div>
+              )}
+
+              {/* Step 4: Notify Lister */}
+              {contactStep === "notify" && (
+                <div className="text-center">
+                  {!listerConfirmed ? (
+                    <>
+                      <div className="text-5xl mb-4 animate-bounce">📡</div>
+                      <h3 className="text-lg font-bold text-gray-900 mb-2">
+                        {locale === "th" ? "กำลังส่งแจ้งเตือน..." : "Notifying Lister..."}
+                      </h3>
+                      <p className="text-sm text-gray-500 mb-4">
+                        {locale === "th" ? "กำลังแจ้งเตือนผู้ลงประกาศทรัพย์สินให้ยืนยัน" : "Sending notification to property lister for confirmation"}
+                      </p>
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                        <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse [animation-delay:0.2s]" />
+                        <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse [animation-delay:0.4s]" />
+                      </div>
+                      <p className="text-xs text-gray-400 mt-4">PO: {poNumber}</p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-5xl mb-4">✅</div>
+                      <h3 className="text-lg font-bold text-gray-900 mb-2">
+                        {locale === "th" ? "ผู้ลงประกาศยืนยันแล้ว!" : "Lister Confirmed!"}
+                      </h3>
+                      <p className="text-sm text-gray-500 mb-6">
+                        {locale === "th" ? "คุณสามารถเริ่มแชทนิรนามกับผู้ลงประกาศได้แล้ว" : "You can now start an anonymous chat with the lister"}
+                      </p>
+                      <button onClick={() => setContactStep("chat")} className="w-full py-3 bg-green-700 text-white font-bold rounded-xl hover:bg-green-800 transition">
+                        {locale === "th" ? "เริ่มแชท" : "Start Chat"} 💬
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Step 5: Anonymous Chat */}
+              {contactStep === "chat" && (
+                <>
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-700 mb-4">
+                    🔒 {locale === "th" ? "แชทนิรนาม — ชื่อจริงไม่ถูกเปิดเผยเพื่อความปลอดภัย" : "Anonymous chat — real names are hidden for privacy and safety"}
+                  </div>
+                  <div className="bg-gray-50 rounded-xl p-4 h-60 overflow-y-auto mb-4 space-y-3">
+                    {chatMessages.length === 0 && (
+                      <p className="text-center text-gray-400 text-sm mt-8">
+                        {locale === "th" ? "เริ่มสนทนาเกี่ยวกับทรัพย์สิน" : "Start a conversation about the property"}
+                      </p>
+                    )}
+                    {chatMessages.map((msg, i) => (
+                      <div key={i} className={`flex ${msg.sender === "you" ? "justify-end" : "justify-start"}`}>
+                        <div className={`max-w-[75%] rounded-2xl px-4 py-2 text-sm ${
+                          msg.sender === "you" ? "bg-emerald-600 text-white rounded-br-md" : "bg-white border border-gray-200 text-gray-800 rounded-bl-md"
+                        }`}>
+                          <p className="text-xs font-bold mb-0.5">{msg.sender === "you" ? (locale === "th" ? "คุณ" : "You") : (locale === "th" ? "ผู้ลงประกาศ" : "Lister")}</p>
+                          {msg.text}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-2 mb-4">
+                    <input
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && sendChatMessage()}
+                      placeholder={locale === "th" ? "พิมพ์ข้อความ..." : "Type a message..."}
+                      className="flex-1 rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-emerald-500"
+                    />
+                    <button onClick={sendChatMessage} disabled={!chatInput.trim()} className="px-5 py-2.5 bg-emerald-600 text-white rounded-xl font-semibold text-sm disabled:opacity-40 hover:bg-emerald-700 transition">
+                      {locale === "th" ? "ส่ง" : "Send"}
+                    </button>
+                  </div>
+                  <button onClick={() => setContactStep("meeting")} className="w-full py-3 bg-green-700 text-white font-bold rounded-xl hover:bg-green-800 transition">
+                    {locale === "th" ? "นัดหมายดูทรัพย์สิน" : "Schedule Property Viewing"} 📅
+                  </button>
+                </>
+              )}
+
+              {/* Step 6: Meeting Scheduling */}
+              {contactStep === "meeting" && (
+                <div>
+                  <div className="text-center mb-6">
+                    <div className="text-4xl mb-2">📅</div>
+                    <p className="text-sm text-gray-600">
+                      {locale === "th" ? "เลือกวันและเวลาที่สะดวกดูทรัพย์สิน" : "Choose a convenient date and time for property viewing"}
+                    </p>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "วันที่" : "Date"}</label>
+                      <input type="date" value={meetingDate} onChange={(e) => setMeetingDate(e.target.value)}
+                        min={new Date().toISOString().split("T")[0]}
+                        className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-emerald-500" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "เวลา" : "Time"}</label>
+                      <select value={meetingTime} onChange={(e) => setMeetingTime(e.target.value)}
+                        className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-emerald-500 bg-white">
+                        <option value="">--</option>
+                        {["09:00", "10:00", "11:00", "13:00", "14:00", "15:00", "16:00", "17:00"].map((t) => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700 mt-4">
+                    ⚠️ {locale === "th"
+                      ? "การนัดหมายเป็นไปตามความสะดวกของทั้งสองฝ่าย ผู้ลงประกาศจะยืนยันอีกครั้ง"
+                      : "Viewing is subject to both parties' availability. Lister will confirm."}
+                  </div>
+                  <div className="flex gap-3 mt-4">
+                    <button onClick={() => setContactStep("chat")} className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl font-semibold text-sm">
+                      ← {locale === "th" ? "กลับ" : "Back"}
+                    </button>
+                    <button onClick={() => setContactStep("complete")} disabled={!meetingDate || !meetingTime}
+                      className="flex-1 py-2.5 bg-green-700 text-white rounded-xl font-bold text-sm hover:bg-green-800 transition disabled:opacity-40">
+                      {locale === "th" ? "ยืนยันนัดหมาย" : "Confirm Viewing"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 7: Rate Experience */}
+              {contactStep === "complete" && (
+                <div className="text-center">
+                  <div className="text-5xl mb-4">⭐</div>
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">
+                    {locale === "th" ? "ให้คะแนนประสบการณ์" : "Rate Your Experience"}
+                  </h3>
+                  <p className="text-sm text-gray-500 mb-4">
+                    {locale === "th" ? "ให้คะแนนบริการผู้ลงประกาศทรัพย์สิน" : "Rate the property lister's service"}
+                  </p>
+                  <div className="flex justify-center gap-2 mb-4">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button key={star} onClick={() => setRating(star)} className={`text-3xl transition ${rating >= star ? "text-yellow-400" : "text-gray-300"} hover:scale-110`}>
+                        ★
+                      </button>
+                    ))}
+                  </div>
+                  {rating > 0 && <p className="text-sm font-bold text-emerald-700 mb-4">{rating}/5</p>}
+                  <textarea
+                    value={ratingComment}
+                    onChange={(e) => setRatingComment(e.target.value)}
+                    placeholder={locale === "th" ? "ความคิดเห็นเพิ่มเติม (ไม่บังคับ)" : "Additional comments (optional)"}
+                    className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-emerald-500 h-20 resize-none mb-4"
+                  />
+                  <button onClick={() => setContactStep("done")} disabled={rating === 0}
+                    className="w-full py-3 bg-green-700 text-white font-bold rounded-xl hover:bg-green-800 transition disabled:opacity-40">
+                    {locale === "th" ? "ส่งรีวิว" : "Submit Review"}
+                  </button>
+                </div>
+              )}
+
+              {/* Step 8: Done */}
+              {contactStep === "done" && (
+                <div className="text-center">
+                  <div className="text-5xl mb-4">🎉</div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">
+                    {locale === "th" ? "เสร็จสมบูรณ์!" : locale === "zh" ? "全部完成！" : "All Done!"}
+                  </h3>
+                  <p className="text-sm text-gray-500 mb-2">
+                    {locale === "th"
+                      ? "ขอบคุณที่ใช้บริการ CBLUE สำหรับการค้นหาทรัพย์สิน"
+                      : "Thank you for using CBLUE for your property search."}
+                  </p>
+                  <div className="bg-gray-50 rounded-xl p-3 mb-4 text-sm">
+                    <p className="text-gray-500">{locale === "th" ? "เลขที่ PO" : "PO Number"}: <span className="font-mono font-bold text-emerald-700">{poNumber}</span></p>
+                    <p className="text-gray-500">{locale === "th" ? "นัดหมาย" : "Viewing"}: <span className="font-semibold">{meetingDate} {meetingTime}</span></p>
+                  </div>
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700 mb-4">
+                    ⚠️ {locale === "th"
+                      ? "ราคาทรัพย์สินและเงื่อนไขเป็นการเจรจาระหว่างคู่สัญญาโดยตรง CBLUE เป็นแพลตฟอร์มจับคู่เท่านั้น"
+                      : "Property pricing and terms are negotiated directly between parties. CBLUE is a matching platform only."}
+                  </div>
+                  <div className="flex gap-3 justify-center">
+                    <Link href={`${prefix}/dashboard`} className="px-6 py-2.5 bg-green-700 text-white rounded-xl font-bold text-sm hover:bg-green-800 transition">
+                      {locale === "th" ? "ไปที่แดชบอร์ด" : "Go to Dashboard"}
+                    </Link>
+                    <button onClick={() => setShowContactFlow(null)} className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-xl font-semibold text-sm">
+                      {locale === "th" ? "ค้นหาต่อ" : "Continue Browsing"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {/* Hero */}
       <section className="relative text-white min-h-[350px] flex items-center overflow-hidden">
         <Image src="/images/scenic-house.jpg" alt="" fill className="object-cover" priority />
@@ -274,18 +718,19 @@ export default function PropertiesPage() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {properties.map((prop) => (
-                <Link
+                <div
                   key={prop.id}
-                  href={`${prefix}/properties/${prop.id}`}
                   className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
                 >
-                  <div className="h-48 bg-gray-200 flex items-center justify-center">
-                    {prop.images[0] ? (
-                      <img src={prop.images[0].url} alt={prop.title} className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-4xl">🏠</span>
-                    )}
-                  </div>
+                  <Link href={`${prefix}/properties/${prop.id}`}>
+                    <div className="h-48 bg-gray-200 flex items-center justify-center">
+                      {prop.images[0] ? (
+                        <img src={prop.images[0].url} alt={prop.title} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-4xl">🏠</span>
+                      )}
+                    </div>
+                  </Link>
                   <div className="p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
@@ -308,8 +753,14 @@ export default function PropertiesPage() {
                       {prop.area && <span>{prop.area} sqm</span>}
                     </div>
                     <p className="text-xs text-gray-400 mt-2">{prop.province}, {prop.district}</p>
+                    <button
+                      onClick={() => handleContactLister(prop)}
+                      className="mt-3 w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg transition"
+                    >
+                      📩 {locale === "th" ? "ติดต่อผู้ลงประกาศ" : locale === "zh" ? "联系发布者" : "Contact Lister"}
+                    </button>
                   </div>
-                </Link>
+                </div>
               ))}
               </div>
             </>
