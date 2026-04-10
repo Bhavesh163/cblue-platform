@@ -12,7 +12,7 @@ export const PROJECT_SERVICES = [
   { value: "MOBILE_APP_DEVELOPMENT", label: "Mobile App Development", labelTh: "พัฒนาแอปมือถือ", labelZh: "移动应用开发" },
   { value: "AI_INTEGRATION", label: "AI Integration", labelTh: "บูรณาการ AI", labelZh: "AI集成" },
   { value: "SOFTWARE_DEV", label: "Software Development", labelTh: "พัฒนาซอฟต์แวร์", labelZh: "软件开发" },
-  { value: "ML_AI", label: "ML & AI", labelTh: "แมชชีนเลิร์นนิง & AI", labelZh: "机器学习与AI" },
+  { value: "ML_AI", label: "Machine Learning", labelTh: "แมชชีนเลิร์นนิง", labelZh: "机器学习" },
   { value: "CONSULTING", label: "Consulting", labelTh: "ที่ปรึกษา", labelZh: "咨询" },
   { value: "SOLAR_PANELS", label: "Solar Panels", labelTh: "โซลาร์เซลล์", labelZh: "太阳能板" },
   { value: "EV_CHARGING", label: "EV Charging", labelTh: "สถานีชาร์จ EV", labelZh: "电动汽车充电" },
@@ -21,12 +21,12 @@ export const PROJECT_SERVICES = [
   { value: "KITCHEN", label: "Kitchen", labelTh: "ครัว", labelZh: "厨房" },
   { value: "REINSTATEMENT", label: "Reinstatement", labelTh: "รื้อถอนคืนสภาพ", labelZh: "恢复工程" },
   { value: "FITOUT", label: "Fit-out", labelTh: "ตกแต่งภายใน", labelZh: "装修" },
-  { value: "SMART_BUILDING_AUTOMATION", label: "Smart Building Automation", labelTh: "ระบบอาคารอัจฉริยะ", labelZh: "智能楼宇自动化" },
+  { value: "SMART_BUILDING_AUTOMATION", label: "Automation", labelTh: "ระบบอัตโนมัติ", labelZh: "自动化" },
   { value: "ENVIRONMENTAL_SERVICES", label: "Environmental Services", labelTh: "บริการสิ่งแวดล้อม", labelZh: "环境服务" },
   { value: "SECURITY_CCTV", label: "Security & CCTV", labelTh: "ระบบรักษาความปลอดภัย & กล้องวงจรปิด", labelZh: "安防与监控" },
   { value: "DOOR_ACCESS_CONTROL", label: "Door & Access Control", labelTh: "ระบบประตู & คีย์การ์ด", labelZh: "门禁系统" },
   { value: "GREEN_CONSTRUCTION", label: "Green Construction", labelTh: "ก่อสร้างเขียว", labelZh: "绿色建筑" },
-  { value: "SMART_HOME", label: "Smart Home", labelTh: "สมาร์ทโฮม", labelZh: "智能家居" },
+  { value: "SMART_HOME", label: "Smart Home/Building & BMS", labelTh: "สมาร์ทโฮม & BMS", labelZh: "智能家居/建筑与BMS" },
   { value: "SMART_FARMING", label: "Smart Farming", labelTh: "เกษตรอัจฉริยะ", labelZh: "智慧农业" },
 ] as const;
 

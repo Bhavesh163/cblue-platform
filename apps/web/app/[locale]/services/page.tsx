@@ -40,7 +40,7 @@ const projectServices = [
   { id: "ai-integration", value: "AI_INTEGRATION", image: "/images/ai-chatbot.jpg", name: "AI Integration", nameTh: "AI Integration" },
   { id: "ai-chatbot", value: "AI_CHATBOT", image: "/images/ai-chatbot.jpg", name: "AI Chatbot", nameTh: "แชทบอท AI" },
   { id: "software-dev", value: "SOFTWARE_DEV", image: "/images/software.jpg", name: "Software Development", nameTh: "พัฒนาซอฟต์แวร์" },
-  { id: "ml-ai", value: "ML_AI", image: "/images/ai-chatbot.jpg", name: "ML & AI", nameTh: "ML & AI" },
+  { id: "ml-ai", value: "ML_AI", image: "/images/ai-chatbot.jpg", name: "Machine Learning", nameTh: "แมชชีนเลิร์นนิง" },
   { id: "consulting", value: "CONSULTING", image: "/images/website-development.jpg", name: "Consulting", nameTh: "ที่ปรึกษา" },
   { id: "solar-panels", value: "SOLAR_PANELS", image: "/images/solar-panel.jpg", name: "Solar Panels", nameTh: "แผงโซลาร์" },
   { id: "ev-charging", value: "EV_CHARGING", image: "/images/ev-charger.jpg", name: "EV Charging", nameTh: "สถานีชาร์จ EV" },
@@ -48,31 +48,26 @@ const projectServices = [
   { id: "kitchen", value: "KITCHEN", image: "/images/green-construction.jpg", name: "Kitchen", nameTh: "ครัว" },
   { id: "hvac-mep", value: "MEP_RETROFIT", image: "/images/hvac.png", name: "HVAC MEP & Retrofit", nameTh: "HVAC MEP" },
   { id: "reinstatement", value: "REINSTATEMENT", image: "/images/green-construction.jpg", name: "Reinstatement & Fit-out", nameTh: "คืนสภาพและตกแต่ง" },
-  { id: "automation", value: "SMART_BUILDING_AUTOMATION", image: "/images/smart-home.jpg", name: "Smart Building Automation", nameTh: "ระบบอัตโนมัติ" },
+  { id: "automation", value: "SMART_BUILDING_AUTOMATION", image: "/images/smart-home.jpg", name: "Automation", nameTh: "ระบบอัตโนมัติ" },
   { id: "environmental", value: "ENVIRONMENTAL_SERVICES", image: "/images/green-theme.jpg", name: "Environmental Services", nameTh: "บริการสิ่งแวดล้อม" },
   { id: "security-cctv", value: "SECURITY_CCTV", image: "/images/security-system.jpg", name: "Security & CCTV", nameTh: "ระบบ CCTV" },
   { id: "door-access", value: "DOOR_ACCESS_CONTROL", image: "/images/security-system.jpg", name: "Door & Access Control", nameTh: "ระบบควบคุมประตู" },
   { id: "green-construction", value: "GREEN_CONSTRUCTION", image: "/images/green-construction.jpg", name: "Green Construction", nameTh: "ก่อสร้างสีเขียว" },
-  { id: "smart-home", value: "SMART_HOME", image: "/images/smart-home.jpg", name: "Smart Home/Building", nameTh: "สมาร์ทโฮม" },
+  { id: "smart-home", value: "SMART_HOME", image: "/images/smart-home.jpg", name: "Smart Home/Building & BMS", nameTh: "สมาร์ทโฮม & BMS" },
   { id: "smart-farming", value: "SMART_FARMING", image: "/images/smart-farming.jpg", name: "Smart Farming", nameTh: "สมาร์ทฟาร์มมิ่ง" },
 ];
 
 const professionalServices = [
-  { id: "lawyer", value: "LAWYER", image: "/images/website-development.jpg", name: "Lawyer", nameTh: "ทนายความ" },
-  { id: "accountant", value: "ACCOUNTANT", image: "/images/software.jpg", name: "Accountant", nameTh: "บัญชี" },
-  { id: "cpa", value: "CPA", image: "/images/software.jpg", name: "CPA", nameTh: "ผู้สอบบัญชี" },
-  { id: "architect", value: "ARCHITECT", image: "/images/green-construction.jpg", name: "Architect", nameTh: "สถาปนิก" },
-  { id: "interior-designer", value: "INTERIOR_DESIGNER", image: "/images/loft-interior.jpg", name: "Interior Designer", nameTh: "มัณฑนากร" },
-  { id: "design-civil-engineer", value: "DESIGN_CIVIL_ENGINEER", image: "/images/green-construction.jpg", name: "Design Civil Engineer", nameTh: "วิศวกรโยธาออกแบบ" },
-  { id: "construction-civil-engineer", value: "CONSTRUCTION_CIVIL_ENGINEER", image: "/images/hvac.png", name: "Construction Civil Engineer", nameTh: "วิศวกรโยธาก่อสร้าง" },
-  { id: "design-mechanical-engineer", value: "DESIGN_MECHANICAL_ENGINEER", image: "/images/hvac.png", name: "Design Mechanical Engineer", nameTh: "วิศวกรเครื่องกลออกแบบ" },
-  { id: "construction-mechanical-engineer", value: "CONSTRUCTION_MECHANICAL_ENGINEER", image: "/images/ev-charger.jpg", name: "Construction Mechanical Engineer", nameTh: "วิศวกรเครื่องกลก่อสร้าง" },
-  { id: "design-electrical-engineer", value: "DESIGN_ELECTRICAL_ENGINEER", image: "/images/solar-panel.jpg", name: "Design Electrical Engineer", nameTh: "วิศวกรไฟฟ้าออกแบบ" },
-  { id: "construction-electrical-engineer", value: "CONSTRUCTION_ELECTRICAL_ENGINEER", image: "/images/solar-panel.jpg", name: "Construction Electrical Engineer", nameTh: "วิศวกรไฟฟ้าก่อสร้าง" },
-  { id: "software-programmer", value: "SOFTWARE_PROGRAMMER", image: "/images/ai-chatbot.jpg", name: "Software Programmer", nameTh: "โปรแกรมเมอร์" },
-  { id: "digital-marketing", value: "DIGITAL_MARKETING", image: "/images/website-development.jpg", name: "Digital Marketing", nameTh: "การตลาดดิจิทัล" },
-  { id: "safety-officer", value: "SAFETY_OFFICER", image: "/images/security-system.jpg", name: "Safety Officer", nameTh: "เจ้าหน้าที่ความปลอดภัย" },
-  { id: "others", value: "OTHERS", image: "/images/green-theme.jpg", name: "Others", nameTh: "อื่น ๆ" },
+  { id: "lawyer", value: "LAWYER", emoji: "⚖️", name: "Lawyer", nameTh: "ทนายความ" },
+  { id: "architect", value: "ARCHITECT", emoji: "📐", name: "Architect", nameTh: "สถาปนิก" },
+  { id: "interior-designer", value: "INTERIOR_DESIGNER", emoji: "🎨", name: "Interior Designer", nameTh: "มัณฑนากร" },
+  { id: "cpa", value: "CPA", emoji: "📊", name: "CPA", nameTh: "ผู้สอบบัญชี" },
+  { id: "engineer", value: "ENGINEER", emoji: "🏗️", name: "Engineer", nameTh: "วิศวกร" },
+  { id: "software-programmer", value: "SOFTWARE_PROGRAMMER", emoji: "💻", name: "Software Programmer", nameTh: "โปรแกรมเมอร์" },
+  { id: "digital-marketing", value: "DIGITAL_MARKETING", emoji: "📣", name: "Digital Marketing", nameTh: "การตลาดดิจิทัล" },
+  { id: "safety-officer", value: "SAFETY_OFFICER", emoji: "🛡️", name: "Safety Officer", nameTh: "เจ้าหน้าที่ความปลอดภัย" },
+  { id: "accountant", value: "ACCOUNTANT", emoji: "🧮", name: "Accountant", nameTh: "นักบัญชี" },
+  { id: "others", value: "OTHERS", emoji: "➕", name: "Others", nameTh: "อื่น ๆ" },
 ];
 
 const realEstateServices = [
@@ -213,7 +208,7 @@ export default function ServicesPage() {
       <section id="professional" className="py-20 scroll-mt-4">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-12">
-            <span className="inline-block px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold mb-3">👔 {locale === "th" ? "15 บริการ" : "15 Services"}</span>
+            <span className="inline-block px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold mb-3">👔 {locale === "th" ? "10 บริการ" : "10 Services"}</span>
             <h2 className="text-3xl font-bold text-gray-900 border-l-4 border-purple-500 pl-4">
               {t("services.professionalTitle")}
             </h2>
@@ -222,26 +217,16 @@ export default function ServicesPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6">
             {professionalServices.map((svc) => (
               <Link
                 key={svc.id}
                 href={`${prefix}/booking/professional?service=${svc.value}`}
-                className="group bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1"
+                className="group bg-white rounded-xl shadow-lg p-6 text-center hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 border border-gray-100"
               >
-                <div className="h-32 overflow-hidden relative">
-                  <Image
-                    src={svc.image}
-                    alt={svc.name}
-                    fill
-                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
-                    className="object-cover transform group-hover:scale-110 transition-transform duration-500"
-                  />
-                </div>
-                <div className="p-4 text-center">
-                  <h3 className="text-sm font-bold text-gray-900">{svc.name}</h3>
-                  <p className="text-xs text-gray-500 mt-1">{svc.nameTh}</p>
-                </div>
+                <span className="text-4xl block mb-3">{svc.emoji}</span>
+                <h3 className="text-sm font-bold text-gray-900">{svc.name}</h3>
+                <p className="text-xs text-gray-500 mt-1">{svc.nameTh}</p>
               </Link>
             ))}
           </div>

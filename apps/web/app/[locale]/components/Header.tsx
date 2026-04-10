@@ -40,16 +40,16 @@ export function Header() {
             <Image
               src="/images/logo.jpg"
               alt="CBLUE"
-              width={120}
-              height={48}
+              width={72}
+              height={29}
               loading="eager"
-              className="h-12 w-auto object-contain"
+              className="h-7 w-auto object-contain"
               style={{ height: "auto" }}
             />
           </Link>
 
           {/* Desktop nav */}
-          <nav className="hidden md:flex items-center gap-1">
+          <nav className="hidden md:flex items-center gap-1 ml-auto">
             {navLinks.map((link) =>
               link.children ? (
                 <div key={link.href} className="relative"

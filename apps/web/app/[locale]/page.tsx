@@ -33,15 +33,6 @@ export default function Home() {
   const locale = useLocale();
   const prefix = `/${locale}`;
 
-  const services = [
-    { titleKey: "plumbing" as const, descKey: "plumbingDesc" as const, image: "/images/hvac.png" },
-    { titleKey: "electrical" as const, descKey: "electricalDesc" as const, image: "/images/ev-charger.jpg" },
-    { titleKey: "ac" as const, descKey: "acDesc" as const, image: "/images/smart-home.jpg" },
-    { titleKey: "interior" as const, descKey: "interiorDesc" as const, image: "/images/green-construction.jpg" },
-    { titleKey: "landscaping" as const, descKey: "landscapingDesc" as const, image: "/images/smart-farming.jpg" },
-    { titleKey: "cladding" as const, descKey: "claddingDesc" as const, image: "/images/solar-panel.jpg" },
-  ];
-
   const stats = [
     { value: "1,000+", labelKey: "fixers" as const },
     { value: "77", labelKey: "provinces" as const },
@@ -205,125 +196,177 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Household Services Grid */}
-      <section className="py-20">
+      {/* About Us & Contact Us — Quick Links */}
+      <section className="py-16 bg-white/60">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <ScrollReveal>
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900">{t("home.ourServices")}</h2>
-            <p className="mt-3 text-lg text-gray-500">
-              {t("home.ourServicesDesc")}
-            </p>
-            <div className="mt-4 w-24 h-1 bg-sky-500 mx-auto rounded-full" />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-            {services.map((svc) => (
-              <div
-                key={svc.titleKey}
-                className="group bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1"
-              >
-                <div className="relative h-48 w-full overflow-hidden">
-                  <Image src={svc.image} alt={svc.titleKey} fill sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw" className="object-cover transform group-hover:scale-110 transition-transform duration-500" />
-                </div>
-                <div className="p-6">
-                  <h3 className="text-lg font-bold text-gray-900">{t(`services.${svc.titleKey}`)}</h3>
-                  <p className="mt-2 text-sm text-gray-600 leading-relaxed">{t(`services.${svc.descKey}`)}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="text-center mt-10">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-3xl mx-auto">
             <Link
-              href={`${prefix}/services`}
-              className="text-blue-700 font-semibold hover:text-blue-800 text-sm"
+              href={`${prefix}/about`}
+              className="group bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl p-8 text-center shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 border border-sky-100"
             >
-              {t("home.viewAll")}
+              <span className="text-4xl block mb-3">🏢</span>
+              <h3 className="text-xl font-bold text-gray-900 group-hover:text-sky-600 transition-colors">
+                {locale === "th" ? "เกี่ยวกับเรา" : locale === "zh" ? "关于我们" : "About Us"}
+              </h3>
+              <p className="mt-2 text-sm text-gray-500">
+                {locale === "th"
+                  ? "เรียนรู้เกี่ยวกับ CBLUE แพลตฟอร์มบริการครบวงจร AI อันดับ 1 ของไทย"
+                  : locale === "zh"
+                  ? "了解 CBLUE — 泰国第一AI全方位服务平台"
+                  : "Learn about CBLUE — Thailand's #1 AI-powered all-in-one service platform"}
+              </p>
+              <span className="mt-4 inline-flex items-center gap-1 text-sm font-bold text-sky-600 group-hover:text-sky-700">
+                {locale === "th" ? "อ่านเพิ่มเติม →" : locale === "zh" ? "了解更多 →" : "Learn More →"}
+              </span>
+            </Link>
+            <Link
+              href={`${prefix}/get-support`}
+              className="group bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-8 text-center shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 border border-emerald-100"
+            >
+              <span className="text-4xl block mb-3">💬</span>
+              <h3 className="text-xl font-bold text-gray-900 group-hover:text-emerald-600 transition-colors">
+                {locale === "th" ? "ติดต่อเรา" : locale === "zh" ? "联系我们" : "Contact Us"}
+              </h3>
+              <p className="mt-2 text-sm text-gray-500">
+                {locale === "th"
+                  ? "มีคำถาม? ต้องการความช่วยเหลือ? ทีมงานพร้อมให้บริการคุณ"
+                  : locale === "zh"
+                  ? "有问题？需要帮助？我们的团队随时为您服务"
+                  : "Have questions? Need help? Our team is ready to assist you"}
+              </p>
+              <span className="mt-4 inline-flex items-center gap-1 text-sm font-bold text-emerald-600 group-hover:text-emerald-700">
+                {locale === "th" ? "ติดต่อเลย →" : locale === "zh" ? "立即联系 →" : "Get In Touch →"}
+              </span>
             </Link>
           </div>
           </ScrollReveal>
         </div>
       </section>
 
-      {/* Professional Search */}
-      <section className="bg-white/60 py-20">
+      {/* Zone — Why Choose CBLUE */}
+      <section className="py-20 bg-gradient-to-b from-slate-50 to-white">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <ScrollReveal>
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900">{t("booking.professionalTitle")}</h2>
-            <p className="mt-3 text-lg text-gray-500">{t("booking.professionalDesc")}</p>
+          <div className="text-center mb-14">
+            <span className="inline-block px-4 py-1.5 bg-indigo-100 text-indigo-700 rounded-full text-sm font-bold mb-4">
+              {locale === "th" ? "โซน CBLUE" : "CBLUE Zone"}
+            </span>
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900">
+              {locale === "th" ? "ทำไมต้องเลือก CBLUE?" : locale === "zh" ? "为什么选择 CBLUE？" : "Why Choose CBLUE?"}
+            </h2>
+            <p className="mt-3 text-lg text-gray-500 max-w-2xl mx-auto">
+              {locale === "th"
+                ? "แพลตฟอร์มบริการครบวงจรที่ขับเคลื่อนด้วย AI เชื่อมต่อลูกค้ากับพาร์ทเนอร์คุณภาพทั่วไทย 77 จังหวัด"
+                : locale === "zh"
+                ? "AI驱动的一站式服务平台，连接客户与泰国77府优质合作伙伴"
+                : "AI-powered all-in-one service platform connecting customers with quality partners across all 77 provinces of Thailand"}
+            </p>
             <div className="mt-4 w-24 h-1 bg-indigo-500 mx-auto rounded-full" />
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 max-w-4xl mx-auto">
-            {[
-              { key: "Lawyer", emoji: "⚖️" },
-              { key: "Architect", emoji: "📐" },
-              { key: "Interior Designer", emoji: "🎨" },
-              { key: "CPA", emoji: "📊" },
-              { key: "Engineer", emoji: "🏗️" },
-              { key: "Software Programmer", emoji: "💻" },
-              { key: "Digital Marketing", emoji: "📣" },
-              { key: "Safety Officer", emoji: "🛡️" },
-              { key: "Accountant", emoji: "🧮" },
-              { key: "Others", emoji: "➕" },
-            ].map((pro) => (
-              <Link
-                key={pro.key}
-                href={`${prefix}/booking/professional`}
-                className="bg-white rounded-xl p-4 text-center shadow-md hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 border border-gray-100"
-              >
-                <span className="text-3xl block mb-2">{pro.emoji}</span>
-                <span className="text-sm font-semibold text-gray-800">{pro.key}</span>
-              </Link>
-            ))}
-          </div>
-          <div className="text-center mt-8">
-            <Link
-              href={`${prefix}/booking/professional`}
-              className="inline-flex items-center justify-center px-8 py-3 text-base font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg transition-all"
-            >
-              {t("booking.professionalTitle")}
-            </Link>
-          </div>
-          </ScrollReveal>
-        </div>
-      </section>
 
-      {/* Real Estate Section */}
-      <section className="bg-white/60 py-20">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <ScrollReveal>
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900">{t("realEstate.title")}</h2>
-            <p className="mt-3 text-lg text-gray-500">{t("realEstate.desc")}</p>
-            <div className="mt-4 w-24 h-1 bg-emerald-500 mx-auto rounded-full" />
+          {/* Customer Zone */}
+          <div className="mb-16">
+            <div className="bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl overflow-hidden shadow-xl border border-sky-100">
+              <div className="bg-gradient-to-r from-sky-600 to-blue-600 px-8 py-5">
+                <h3 className="text-xl font-bold text-white text-center">
+                  {locale === "th" ? "🏠 สำหรับลูกค้า — จองง่าย จ่ายสะดวก ช่างมืออาชีพถึงบ้าน" : locale === "zh" ? "🏠 客户专区 — 轻松预约，专业上门服务" : "🏠 For Customers — Easy Booking, Verified Pros at Your Door"}
+                </h3>
+              </div>
+              <div className="p-8">
+                <p className="text-center text-gray-600 mb-6 max-w-3xl mx-auto leading-relaxed">
+                  {locale === "th"
+                    ? "CBLUE ใช้ AI จับคู่อัจฉริยะเพื่อเสนอช่างซ่อมบ้าน ทีมโครงการ มืออาชีพ และอสังหาริมทรัพย์ที่ดีที่สุดในพื้นที่ของคุณ ราคาโปร่งใส 5 ระดับ จ่ายผ่าน PromptPay QR เริ่มต้นเพียง ฿200 พร้อมรับประกันคุณภาพและระบบรีวิวจริง"
+                    : locale === "zh"
+                    ? "CBLUE 使用 AI 智能匹配，为您推荐最优质的维修技工、项目团队、专业人士和房产。5级透明定价，PromptPay扫码支付，起价仅฿200，品质保障与真实评价"
+                    : "CBLUE uses AI smart matching to recommend the best household fixers, project teams, professionals, and properties in your area. Transparent 5-tier pricing, PromptPay QR payment starting from just ฿200, quality guarantee, and verified reviews."}
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+                  <Link href={`${prefix}/booking/household`} className="bg-white rounded-xl p-5 text-center shadow-md hover:shadow-xl transition-all transform hover:-translate-y-1 border border-sky-100 group">
+                    <span className="text-3xl block mb-2">🏠</span>
+                    <span className="text-sm font-bold text-gray-800 group-hover:text-sky-600">{locale === "th" ? "ช่างซ่อมบ้าน" : "Household Fixer"}</span>
+                    <p className="text-xs text-gray-400 mt-1">{locale === "th" ? "ประปา ไฟฟ้า แอร์" : "Plumbing, Electrical, AC"}</p>
+                  </Link>
+                  <Link href={`${prefix}/booking/project`} className="bg-white rounded-xl p-5 text-center shadow-md hover:shadow-xl transition-all transform hover:-translate-y-1 border border-sky-100 group">
+                    <span className="text-3xl block mb-2">💼</span>
+                    <span className="text-sm font-bold text-gray-800 group-hover:text-sky-600">{locale === "th" ? "ทีมโครงการ" : "Project Team"}</span>
+                    <p className="text-xs text-gray-400 mt-1">{locale === "th" ? "IT สมาร์ทโฮม โซลาร์" : "IT, Smart Home, Solar"}</p>
+                  </Link>
+                  <Link href={`${prefix}/booking/professional`} className="bg-white rounded-xl p-5 text-center shadow-md hover:shadow-xl transition-all transform hover:-translate-y-1 border border-sky-100 group">
+                    <span className="text-3xl block mb-2">👔</span>
+                    <span className="text-sm font-bold text-gray-800 group-hover:text-sky-600">{locale === "th" ? "มืออาชีพ" : "Professional"}</span>
+                    <p className="text-xs text-gray-400 mt-1">{locale === "th" ? "ทนาย สถาปนิก วิศวกร" : "Lawyer, Architect, Engineer"}</p>
+                  </Link>
+                  <Link href={`${prefix}/properties`} className="bg-white rounded-xl p-5 text-center shadow-md hover:shadow-xl transition-all transform hover:-translate-y-1 border border-sky-100 group">
+                    <span className="text-3xl block mb-2">🏢</span>
+                    <span className="text-sm font-bold text-gray-800 group-hover:text-sky-600">{locale === "th" ? "อสังหาริมทรัพย์" : "Real Estate"}</span>
+                    <p className="text-xs text-gray-400 mt-1">{locale === "th" ? "คอนโด บ้าน ที่ดิน" : "Condo, House, Land"}</p>
+                  </Link>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  <a href="https://apps.apple.com" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-black text-white rounded-xl font-semibold hover:bg-gray-800 transition shadow-lg">
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+                    {locale === "th" ? "Customer App — App Store" : "Customer App — App Store"}
+                  </a>
+                  <a href="https://play.google.com" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-black text-white rounded-xl font-semibold hover:bg-gray-800 transition shadow-lg">
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M3 20.5v-17c0-.59.34-1.11.84-1.35L13.69 12l-9.85 9.85c-.5-.24-.84-.76-.84-1.35m13.81-5.38L6.05 21.34l8.49-8.49 2.27 2.27m3.35-4.31c.34.27.56.69.56 1.19s-.22.92-.56 1.19l-2.29 1.32-2.5-2.5 2.5-2.5 2.29 1.3M6.05 2.66l10.76 6.22-2.27 2.27-8.49-8.49z"/></svg>
+                    {locale === "th" ? "Customer App — Google Play" : "Customer App — Google Play"}
+                  </a>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto">
-            <Link
-              href={`${prefix}/properties`}
-              className="group relative bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1"
-            >
-              <div className="relative h-48 overflow-hidden">
-                <Image src="/images/green-construction.jpg" alt="" fill sizes="(max-width: 768px) 100vw, 50vw" className="object-cover group-hover:scale-110 transition-transform duration-500" />
-                <div className="absolute inset-0 bg-gradient-to-t from-blue-900/70 to-transparent" />
+
+          {/* Partner Zone */}
+          <div>
+            <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl overflow-hidden shadow-xl border border-amber-100">
+              <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-8 py-5">
+                <h3 className="text-xl font-bold text-white text-center">
+                  {locale === "th" ? "🤝 สำหรับพาร์ทเนอร์ — รับงาน เพิ่มรายได้ เติบโตไปด้วยกัน" : locale === "zh" ? "🤝 合作伙伴 — 接单赚钱，共同成长" : "🤝 For Partners — Get Jobs, Grow Income, Succeed Together"}
+                </h3>
               </div>
-              <div className="p-6 text-center">
-                <h3 className="text-lg font-bold text-gray-900">{t("realEstate.searchProperty")}</h3>
-                <p className="mt-2 text-sm text-gray-600">{t("realEstate.browse")}</p>
+              <div className="p-8">
+                <p className="text-center text-gray-600 mb-6 max-w-3xl mx-auto leading-relaxed">
+                  {locale === "th"
+                    ? "สมัครเป็นพาร์ทเนอร์ CBLUE วันนี้! ระบบ AI จะประเมินโปรไฟล์และจัดอันดับคุณใน 5 ระดับ (Economy – Expert) เพื่อให้คุณได้งานที่ตรงกับทักษะ รับการแจ้งเตือนงานใหม่ทันที แชทกับลูกค้า และรับเงินผ่าน PromptPay อย่างปลอดภัย"
+                    : locale === "zh"
+                    ? "立即成为 CBLUE 合作伙伴！AI 系统评估您的资料并分配5个等级（Economy-Expert），匹配适合您技能的工作。即时通知、客户聊天、PromptPay安全收款"
+                    : "Join CBLUE as a partner today! Our AI system evaluates your profile and ranks you across 5 tiers (Economy – Expert) to match you with jobs that fit your skills. Instant job alerts, customer chat, and secure PromptPay payments."}
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+                  <Link href={`${prefix}/fixers`} className="bg-white rounded-xl p-5 text-center shadow-md hover:shadow-xl transition-all transform hover:-translate-y-1 border border-amber-100 group">
+                    <span className="text-3xl block mb-2">🔧</span>
+                    <span className="text-sm font-bold text-gray-800 group-hover:text-amber-600">{locale === "th" ? "ช่างซ่อมบ้าน" : "Fixer"}</span>
+                    <p className="text-xs text-gray-400 mt-1">{locale === "th" ? "รับงานซ่อมบำรุงทั่วไทย" : "Home repair jobs nationwide"}</p>
+                  </Link>
+                  <Link href={`${prefix}/fixers`} className="bg-white rounded-xl p-5 text-center shadow-md hover:shadow-xl transition-all transform hover:-translate-y-1 border border-amber-100 group">
+                    <span className="text-3xl block mb-2">💼</span>
+                    <span className="text-sm font-bold text-gray-800 group-hover:text-amber-600">{locale === "th" ? "ทีมโครงการ" : "Project Team"}</span>
+                    <p className="text-xs text-gray-400 mt-1">{locale === "th" ? "รับโปรเจกต์ IT โซลาร์" : "IT, solar, smart projects"}</p>
+                  </Link>
+                  <Link href={`${prefix}/fixers`} className="bg-white rounded-xl p-5 text-center shadow-md hover:shadow-xl transition-all transform hover:-translate-y-1 border border-amber-100 group">
+                    <span className="text-3xl block mb-2">👔</span>
+                    <span className="text-sm font-bold text-gray-800 group-hover:text-amber-600">{locale === "th" ? "มืออาชีพ" : "Professional"}</span>
+                    <p className="text-xs text-gray-400 mt-1">{locale === "th" ? "ทนาย สถาปนิก วิศวกร" : "Lawyers, architects, engineers"}</p>
+                  </Link>
+                  <Link href={`${prefix}/fixers`} className="bg-white rounded-xl p-5 text-center shadow-md hover:shadow-xl transition-all transform hover:-translate-y-1 border border-amber-100 group">
+                    <span className="text-3xl block mb-2">🏢</span>
+                    <span className="text-sm font-bold text-gray-800 group-hover:text-amber-600">{locale === "th" ? "ตัวแทนอสังหาฯ" : "Property Lister"}</span>
+                    <p className="text-xs text-gray-400 mt-1">{locale === "th" ? "ลงประกาศขาย/เช่า" : "List properties for sale/rent"}</p>
+                  </Link>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  <a href="https://apps.apple.com" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-amber-600 text-white rounded-xl font-semibold hover:bg-amber-700 transition shadow-lg">
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+                    {locale === "th" ? "Partner App — App Store" : "Partner App — App Store"}
+                  </a>
+                  <a href="https://play.google.com" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-amber-600 text-white rounded-xl font-semibold hover:bg-amber-700 transition shadow-lg">
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M3 20.5v-17c0-.59.34-1.11.84-1.35L13.69 12l-9.85 9.85c-.5-.24-.84-.76-.84-1.35m13.81-5.38L6.05 21.34l8.49-8.49 2.27 2.27m3.35-4.31c.34.27.56.69.56 1.19s-.22.92-.56 1.19l-2.29 1.32-2.5-2.5 2.5-2.5 2.29 1.3M6.05 2.66l10.76 6.22-2.27 2.27-8.49-8.49z"/></svg>
+                    {locale === "th" ? "Partner App — Google Play" : "Partner App — Google Play"}
+                  </a>
+                </div>
               </div>
-            </Link>
-            <Link
-              href={`${prefix}/properties/register`}
-              className="group relative bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1"
-            >
-              <div className="relative h-48 overflow-hidden">
-                <Image src="/images/swimming-pool.jpg" alt="" fill sizes="(max-width: 768px) 100vw, 50vw" className="object-cover group-hover:scale-110 transition-transform duration-500" />
-                <div className="absolute inset-0 bg-gradient-to-t from-emerald-900/70 to-transparent" />
-              </div>
-              <div className="p-6 text-center">
-                <h3 className="text-lg font-bold text-gray-900">{t("realEstate.listProperty")}</h3>
-                <p className="mt-2 text-sm text-gray-600">{t("realEstate.registerDesc")}</p>
-              </div>
-            </Link>
+            </div>
           </div>
           </ScrollReveal>
         </div>
