@@ -200,42 +200,46 @@ export default function Home() {
       <section className="py-16 bg-white/60">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <ScrollReveal>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-3xl mx-auto">
+          <div className="flex flex-col gap-4 max-w-4xl mx-auto">
             <Link
               href={`${prefix}/about`}
-              className="group bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl p-8 text-center shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 border border-sky-100"
+              className="group bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl px-8 py-5 flex items-center gap-6 shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 border border-sky-100"
             >
-              <span className="text-4xl block mb-3">🏢</span>
-              <h3 className="text-xl font-bold text-gray-900 group-hover:text-sky-600 transition-colors">
-                {locale === "th" ? "เกี่ยวกับเรา" : locale === "zh" ? "关于我们" : "About Us"}
-              </h3>
-              <p className="mt-2 text-sm text-gray-500">
-                {locale === "th"
-                  ? "เรียนรู้เกี่ยวกับ CBLUE แพลตฟอร์มบริการครบวงจร AI อันดับ 1 ของไทย"
-                  : locale === "zh"
-                  ? "了解 CBLUE — 泰国第一AI全方位服务平台"
-                  : "Learn about CBLUE — Thailand's #1 AI-powered all-in-one service platform"}
-              </p>
-              <span className="mt-4 inline-flex items-center gap-1 text-sm font-bold text-sky-600 group-hover:text-sky-700">
+              <span className="text-3xl flex-shrink-0">🏢</span>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-lg font-bold text-gray-900 group-hover:text-sky-600 transition-colors">
+                  {locale === "th" ? "เกี่ยวกับเรา" : locale === "zh" ? "关于我们" : "About Us"}
+                </h3>
+                <p className="mt-1 text-sm text-gray-500 truncate sm:whitespace-normal">
+                  {locale === "th"
+                    ? "เรียนรู้เกี่ยวกับ CBLUE แพลตฟอร์มบริการครบวงจร AI อันดับ 1 ของไทย"
+                    : locale === "zh"
+                    ? "了解 CBLUE — 泰国第一AI全方位服务平台"
+                    : "Learn about CBLUE — Thailand's #1 AI-powered all-in-one service platform"}
+                </p>
+              </div>
+              <span className="flex-shrink-0 text-sm font-bold text-sky-600 group-hover:text-sky-700 whitespace-nowrap">
                 {locale === "th" ? "อ่านเพิ่มเติม →" : locale === "zh" ? "了解更多 →" : "Learn More →"}
               </span>
             </Link>
             <Link
               href={`${prefix}/get-support`}
-              className="group bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-8 text-center shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 border border-emerald-100"
+              className="group bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl px-8 py-5 flex items-center gap-6 shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 border border-emerald-100"
             >
-              <span className="text-4xl block mb-3">💬</span>
-              <h3 className="text-xl font-bold text-gray-900 group-hover:text-emerald-600 transition-colors">
-                {locale === "th" ? "ติดต่อเรา" : locale === "zh" ? "联系我们" : "Contact Us"}
-              </h3>
-              <p className="mt-2 text-sm text-gray-500">
-                {locale === "th"
-                  ? "มีคำถาม? ต้องการความช่วยเหลือ? ทีมงานพร้อมให้บริการคุณ"
-                  : locale === "zh"
-                  ? "有问题？需要帮助？我们的团队随时为您服务"
-                  : "Have questions? Need help? Our team is ready to assist you"}
-              </p>
-              <span className="mt-4 inline-flex items-center gap-1 text-sm font-bold text-emerald-600 group-hover:text-emerald-700">
+              <span className="text-3xl flex-shrink-0">💬</span>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-lg font-bold text-gray-900 group-hover:text-emerald-600 transition-colors">
+                  {locale === "th" ? "ติดต่อเรา" : locale === "zh" ? "联系我们" : "Contact Us"}
+                </h3>
+                <p className="mt-1 text-sm text-gray-500 truncate sm:whitespace-normal">
+                  {locale === "th"
+                    ? "มีคำถาม? ต้องการความช่วยเหลือ? ทีมงานพร้อมให้บริการคุณ"
+                    : locale === "zh"
+                    ? "有问题？需要帮助？我们的团队随时为您服务"
+                    : "Have questions? Need help? Our team is ready to assist you"}
+                </p>
+              </div>
+              <span className="flex-shrink-0 text-sm font-bold text-emerald-600 group-hover:text-emerald-700 whitespace-nowrap">
                 {locale === "th" ? "ติดต่อเลย →" : locale === "zh" ? "立即联系 →" : "Get In Touch →"}
               </span>
             </Link>
@@ -319,8 +323,8 @@ export default function Home() {
 
           {/* Partner Zone */}
           <div>
-            <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl overflow-hidden shadow-xl border border-amber-100">
-              <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-8 py-5">
+            <div className="bg-gradient-to-br from-emerald-50 to-green-50 rounded-2xl overflow-hidden shadow-xl border border-emerald-100">
+              <div className="bg-gradient-to-r from-emerald-600 to-green-600 px-8 py-5">
                 <h3 className="text-xl font-bold text-white text-center">
                   {locale === "th" ? "🤝 สำหรับพาร์ทเนอร์ — รับงาน เพิ่มรายได้ เติบโตไปด้วยกัน" : locale === "zh" ? "🤝 合作伙伴 — 接单赚钱，共同成长" : "🤝 For Partners — Get Jobs, Grow Income, Succeed Together"}
                 </h3>
@@ -334,33 +338,33 @@ export default function Home() {
                     : "Join CBLUE as a partner today! Our AI system evaluates your profile and ranks you across 5 tiers (Economy – Expert) to match you with jobs that fit your skills. Instant job alerts, customer chat, and secure PromptPay payments."}
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-                  <Link href={`${prefix}/fixers`} className="bg-white rounded-xl p-5 text-center shadow-md hover:shadow-xl transition-all transform hover:-translate-y-1 border border-amber-100 group">
+                  <Link href={`${prefix}/fixers`} className="bg-white rounded-xl p-5 text-center shadow-md hover:shadow-xl transition-all transform hover:-translate-y-1 border border-emerald-100 group">
                     <span className="text-3xl block mb-2">🔧</span>
-                    <span className="text-sm font-bold text-gray-800 group-hover:text-amber-600">{locale === "th" ? "ช่างซ่อมบ้าน" : "Fixer"}</span>
+                    <span className="text-sm font-bold text-gray-800 group-hover:text-emerald-600">{locale === "th" ? "ช่างซ่อมบ้าน" : "Fixer"}</span>
                     <p className="text-xs text-gray-400 mt-1">{locale === "th" ? "รับงานซ่อมบำรุงทั่วไทย" : "Home repair jobs nationwide"}</p>
                   </Link>
-                  <Link href={`${prefix}/fixers`} className="bg-white rounded-xl p-5 text-center shadow-md hover:shadow-xl transition-all transform hover:-translate-y-1 border border-amber-100 group">
+                  <Link href={`${prefix}/fixers`} className="bg-white rounded-xl p-5 text-center shadow-md hover:shadow-xl transition-all transform hover:-translate-y-1 border border-emerald-100 group">
                     <span className="text-3xl block mb-2">💼</span>
-                    <span className="text-sm font-bold text-gray-800 group-hover:text-amber-600">{locale === "th" ? "ทีมโครงการ" : "Project Team"}</span>
+                    <span className="text-sm font-bold text-gray-800 group-hover:text-emerald-600">{locale === "th" ? "ทีมโครงการ" : "Project Team"}</span>
                     <p className="text-xs text-gray-400 mt-1">{locale === "th" ? "รับโปรเจกต์ IT โซลาร์" : "IT, solar, smart projects"}</p>
                   </Link>
-                  <Link href={`${prefix}/fixers`} className="bg-white rounded-xl p-5 text-center shadow-md hover:shadow-xl transition-all transform hover:-translate-y-1 border border-amber-100 group">
+                  <Link href={`${prefix}/fixers`} className="bg-white rounded-xl p-5 text-center shadow-md hover:shadow-xl transition-all transform hover:-translate-y-1 border border-emerald-100 group">
                     <span className="text-3xl block mb-2">👔</span>
-                    <span className="text-sm font-bold text-gray-800 group-hover:text-amber-600">{locale === "th" ? "มืออาชีพ" : "Professional"}</span>
+                    <span className="text-sm font-bold text-gray-800 group-hover:text-emerald-600">{locale === "th" ? "มืออาชีพ" : "Professional"}</span>
                     <p className="text-xs text-gray-400 mt-1">{locale === "th" ? "ทนาย สถาปนิก วิศวกร" : "Lawyers, architects, engineers"}</p>
                   </Link>
-                  <Link href={`${prefix}/fixers`} className="bg-white rounded-xl p-5 text-center shadow-md hover:shadow-xl transition-all transform hover:-translate-y-1 border border-amber-100 group">
+                  <Link href={`${prefix}/fixers`} className="bg-white rounded-xl p-5 text-center shadow-md hover:shadow-xl transition-all transform hover:-translate-y-1 border border-emerald-100 group">
                     <span className="text-3xl block mb-2">🏢</span>
-                    <span className="text-sm font-bold text-gray-800 group-hover:text-amber-600">{locale === "th" ? "ตัวแทนอสังหาฯ" : "Property Lister"}</span>
+                    <span className="text-sm font-bold text-gray-800 group-hover:text-emerald-600">{locale === "th" ? "ตัวแทนอสังหาฯ" : "Property Lister"}</span>
                     <p className="text-xs text-gray-400 mt-1">{locale === "th" ? "ลงประกาศขาย/เช่า" : "List properties for sale/rent"}</p>
                   </Link>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <a href="https://apps.apple.com" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-amber-600 text-white rounded-xl font-semibold hover:bg-amber-700 transition shadow-lg">
+                  <a href="https://apps.apple.com" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 transition shadow-lg">
                     <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
                     {locale === "th" ? "Partner App — App Store" : "Partner App — App Store"}
                   </a>
-                  <a href="https://play.google.com" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-amber-600 text-white rounded-xl font-semibold hover:bg-amber-700 transition shadow-lg">
+                  <a href="https://play.google.com" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 transition shadow-lg">
                     <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M3 20.5v-17c0-.59.34-1.11.84-1.35L13.69 12l-9.85 9.85c-.5-.24-.84-.76-.84-1.35m13.81-5.38L6.05 21.34l8.49-8.49 2.27 2.27m3.35-4.31c.34.27.56.69.56 1.19s-.22.92-.56 1.19l-2.29 1.32-2.5-2.5 2.5-2.5 2.29 1.3M6.05 2.66l10.76 6.22-2.27 2.27-8.49-8.49z"/></svg>
                     {locale === "th" ? "Partner App — Google Play" : "Partner App — Google Play"}
                   </a>

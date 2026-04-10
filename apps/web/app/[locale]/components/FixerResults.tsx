@@ -405,7 +405,7 @@ const tierColors: Record<string, { bg: string; text: string; border: string }> =
 
 const getTierColor = (tier: string) => tierColors[tier] ?? tierColors["standard"]!;
 
-type Step = "matching" | "list" | "confirm" | "po" | "notify" | "payment" | "chat" | "meeting" | "variation" | "complete" | "done";
+type Step = "matching" | "list" | "confirm" | "po" | "notify" | "payment" | "chat" | "meeting" | "variation" | "complete" | "partner-rate" | "done";
 
 export default function FixerResults({
   locale,
@@ -442,6 +442,16 @@ export default function FixerResults({
   const [customerRating, setCustomerRating] = useState(0);
   const [customerComment, setCustomerComment] = useState("");
   const [fixerRatingOfCustomer] = useState(() => 3 + Math.floor(Math.random() * 3)); // simulated
+  const [fixerCommentOfCustomer] = useState(() => {
+    const comments: Record<string, string[]> = {
+      en: ["Great customer, very clear instructions", "Punctual and polite", "Easy to work with, would serve again", "Good communication throughout"],
+      th: ["ลูกค้าดี บอกรายละเอียดชัดเจน", "ตรงเวลา สุภาพ", "ทำงานด้วยง่าย ยินดีให้บริการอีก", "สื่อสารดีตลอดงาน"],
+      zh: ["很好的客户，指示清晰", "准时且礼貌", "合作愉快，愿意再次服务", "全程沟通良好"],
+    };
+    const pool = comments[locale] ?? comments["en"]!;
+    return pool[Math.floor(Math.random() * pool.length)]!;
+  });
+  const [partnerRateReady, setPartnerRateReady] = useState(false);
 
   // Variation state
   const [showVariation, setShowVariation] = useState(false);
@@ -585,7 +595,10 @@ export default function FixerResults({
   };
 
   const handleSubmitReview = () => {
-    setStep("done");
+    setPartnerRateReady(false);
+    setStep("partner-rate");
+    // Simulate partner submitting their rating after 3 seconds
+    setTimeout(() => setPartnerRateReady(true), 3000);
   };
 
   const fee = selectedFixer ? getProcessingFee(bookingType, selectedFixer.tier) : 200;
@@ -657,6 +670,58 @@ export default function FixerResults({
     );
   }
 
+  // Step: Partner Rating — waiting for partner to rate before done
+  if (step === "partner-rate" && selectedFixer) {
+    return (
+      <div className="mx-auto max-w-md px-4 py-12">
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 text-center">
+          <div className="text-5xl mb-4">📝</div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">
+            {locale === "th" ? "รอพาร์ทเนอร์ให้คะแนน" : locale === "zh" ? "等待合作伙伴评分" : "Waiting for Partner's Rating"}
+          </h2>
+          <p className="text-sm text-gray-500 mb-6">
+            {locale === "th"
+              ? `${selectedFixer.alias} กำลังให้คะแนนและแสดงความคิดเห็นเกี่ยวกับประสบการณ์`
+              : locale === "zh"
+              ? `${selectedFixer.alias} 正在评分和评论`
+              : `${selectedFixer.alias} is rating and commenting on the experience`}
+          </p>
+
+          {/* Customer's submitted rating */}
+          <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 mb-4">
+            <p className="text-xs font-bold text-sky-700 mb-1">{locale === "th" ? "คะแนนของคุณ" : locale === "zh" ? "您的评分" : "Your Rating"}</p>
+            <div className="flex justify-center"><Stars rating={customerRating} /></div>
+            {customerComment && <p className="text-xs text-gray-500 mt-1 italic">&ldquo;{customerComment}&rdquo;</p>}
+          </div>
+
+          {/* Partner rating — loading then reveal */}
+          {!partnerRateReady ? (
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 mb-6">
+              <div className="flex items-center justify-center gap-3">
+                <span className="inline-block w-5 h-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
+                <span className="text-sm text-gray-500">{locale === "th" ? "กำลังรอพาร์ทเนอร์ให้คะแนน..." : locale === "zh" ? "等待伙伴评分中..." : "Waiting for partner to submit rating..."}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-6 animate-fade-in">
+              <p className="text-xs font-bold text-emerald-700 mb-1">{locale === "th" ? "คะแนนจากพาร์ทเนอร์" : locale === "zh" ? "合作伙伴评分" : "Partner's Rating of You"}</p>
+              <div className="flex justify-center"><Stars rating={fixerRatingOfCustomer} /></div>
+              <p className="text-xs text-gray-500 mt-1 italic">&ldquo;{fixerCommentOfCustomer}&rdquo;</p>
+            </div>
+          )}
+
+          <button
+            onClick={() => setStep("done")}
+            disabled={!partnerRateReady}
+            className="w-full py-3 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-xl shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {locale === "th" ? "ดูสรุป" : locale === "zh" ? "查看摘要" : "View Summary"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Step: Done — Final summary with both ratings
   if (step === "done") {
     return (
@@ -675,6 +740,7 @@ export default function FixerResults({
             <div className="bg-emerald-50 rounded-xl p-5 border border-emerald-200">
               <p className="text-sm text-emerald-600 font-medium mb-2">{t("fixerRating")}</p>
               <div className="flex justify-center"><Stars rating={fixerRatingOfCustomer} /></div>
+              <p className="text-xs text-gray-500 mt-2 italic">&ldquo;{fixerCommentOfCustomer}&rdquo;</p>
             </div>
           </div>
 

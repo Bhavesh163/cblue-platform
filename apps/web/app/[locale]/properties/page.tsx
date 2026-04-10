@@ -40,7 +40,7 @@ export default function PropertiesPage() {
   const [subscriber, setSubscriber] = useState<{ name: string; email: string } | null>(null);
   const [showLoginGate, setShowLoginGate] = useState(false);
   const [showContactFlow, setShowContactFlow] = useState<Property | null>(null);
-  const [contactStep, setContactStep] = useState<"tier" | "payment" | "po" | "notify" | "chat" | "meeting" | "complete" | "done">("tier");
+  const [contactStep, setContactStep] = useState<"tier" | "payment" | "po" | "notify" | "chat" | "meeting" | "complete" | "lister-rate" | "done">("tier");
   const [selectedTier, setSelectedTier] = useState("");
   const [showPdpa, setShowPdpa] = useState(false);
   const [poNumber, setPoNumber] = useState("");
@@ -51,6 +51,17 @@ export default function PropertiesPage() {
   const [meetingTime, setMeetingTime] = useState("");
   const [rating, setRating] = useState(0);
   const [ratingComment, setRatingComment] = useState("");
+  const [listerRating] = useState(() => 3 + Math.floor(Math.random() * 3));
+  const [listerComment] = useState(() => {
+    const comments: Record<string, string[]> = {
+      en: ["Polite and punctual customer", "Very interested buyer, asked good questions", "Easy to deal with, would recommend", "Serious buyer with clear requirements"],
+      th: ["ลูกค้าสุภาพ ตรงเวลา", "ผู้ซื้อสนใจจริง ถามคำถามดี", "ทำงานด้วยง่าย แนะนำได้", "ผู้ซื้อจริงจัง มีความต้องการชัดเจน"],
+      zh: ["礼貌准时的客户", "买家非常感兴趣，问了好问题", "容易打交道，愿意推荐", "认真的买家，需求明确"],
+    };
+    const pool = comments[locale] ?? comments["en"]!;
+    return pool[Math.floor(Math.random() * pool.length)]!;
+  });
+  const [listerRateReady, setListerRateReady] = useState(false);
   const [filters, setFilters] = useState({
     propertyType: "",
     listingType: "",
@@ -233,9 +244,9 @@ export default function PropertiesPage() {
             {/* Step Progress */}
             <div className="px-6 pt-4 flex-shrink-0">
               <div className="flex items-center gap-1 mb-4">
-                {(["tier", "payment", "po", "notify", "chat", "meeting", "complete", "done"] as const).map((s, i) => (
+                {(["tier", "payment", "po", "notify", "chat", "meeting", "complete", "lister-rate", "done"] as const).map((s, i) => (
                   <div key={s} className={`h-1.5 flex-1 rounded-full transition-colors ${
-                    (["tier", "payment", "po", "notify", "chat", "meeting", "complete", "done"] as const).indexOf(contactStep) >= i
+                    (["tier", "payment", "po", "notify", "chat", "meeting", "complete", "lister-rate", "done"] as const).indexOf(contactStep) >= i
                       ? "bg-emerald-500" : "bg-gray-200"
                   }`} />
                 ))}
@@ -544,9 +555,56 @@ export default function PropertiesPage() {
                     placeholder={locale === "th" ? "ความคิดเห็นเพิ่มเติม (ไม่บังคับ)" : "Additional comments (optional)"}
                     className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-emerald-500 h-20 resize-none mb-4"
                   />
-                  <button onClick={() => setContactStep("done")} disabled={rating === 0}
+                  <button onClick={() => { setListerRateReady(false); setContactStep("lister-rate"); setTimeout(() => setListerRateReady(true), 3000); }} disabled={rating === 0}
                     className="w-full py-3 bg-green-700 text-white font-bold rounded-xl hover:bg-green-800 transition disabled:opacity-40">
                     {locale === "th" ? "ส่งรีวิว" : "Submit Review"}
+                  </button>
+                </div>
+              )}
+
+              {/* Step 7b: Waiting for Lister's Rating */}
+              {contactStep === "lister-rate" && (
+                <div className="text-center">
+                  <div className="text-5xl mb-4">📝</div>
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">
+                    {locale === "th" ? "รอผู้ลงประกาศให้คะแนน" : locale === "zh" ? "等待房东评分" : "Waiting for Lister's Rating"}
+                  </h3>
+                  <p className="text-sm text-gray-500 mb-6">
+                    {locale === "th"
+                      ? "ผู้ลงประกาศกำลังให้คะแนนและแสดงความคิดเห็นเกี่ยวกับประสบการณ์"
+                      : locale === "zh"
+                      ? "房东正在评分和评论"
+                      : "The property lister is rating and commenting on the experience"}
+                  </p>
+
+                  {/* Customer's submitted rating */}
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-4 text-center">
+                    <p className="text-xs font-bold text-emerald-700 mb-1">{locale === "th" ? "คะแนนของคุณ" : locale === "zh" ? "您的评分" : "Your Rating"}</p>
+                    <div className="flex justify-center gap-0.5">{[1,2,3,4,5].map(s => <span key={s} className={`text-lg ${rating >= s ? "text-yellow-400" : "text-gray-300"}`}>★</span>)}</div>
+                    <p className="text-xs text-gray-500 mt-1">{rating}/5</p>
+                    {ratingComment && <p className="text-xs text-gray-500 mt-1 italic">&ldquo;{ratingComment}&rdquo;</p>}
+                  </div>
+
+                  {/* Lister rating — loading then reveal */}
+                  {!listerRateReady ? (
+                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 mb-6">
+                      <div className="flex items-center justify-center gap-3">
+                        <span className="inline-block w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                        <span className="text-sm text-gray-500">{locale === "th" ? "กำลังรอผู้ลงประกาศให้คะแนน..." : locale === "zh" ? "等待房东评分中..." : "Waiting for lister to submit rating..."}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+                      <p className="text-xs font-bold text-blue-700 mb-1">{locale === "th" ? "คะแนนจากผู้ลงประกาศ" : locale === "zh" ? "房东评分" : "Lister's Rating of You"}</p>
+                      <div className="flex justify-center gap-0.5">{[1,2,3,4,5].map(s => <span key={s} className={`text-lg ${listerRating >= s ? "text-yellow-400" : "text-gray-300"}`}>★</span>)}</div>
+                      <p className="text-xs text-gray-500 mt-1">{listerRating}/5</p>
+                      <p className="text-xs text-gray-500 mt-1 italic">&ldquo;{listerComment}&rdquo;</p>
+                    </div>
+                  )}
+
+                  <button onClick={() => setContactStep("done")} disabled={!listerRateReady}
+                    className="w-full py-3 bg-green-700 text-white font-bold rounded-xl hover:bg-green-800 transition disabled:opacity-40">
+                    {locale === "th" ? "ดูสรุป" : locale === "zh" ? "查看摘要" : "View Summary"}
                   </button>
                 </div>
               )}
@@ -566,6 +624,21 @@ export default function PropertiesPage() {
                   <div className="bg-gray-50 rounded-xl p-3 mb-4 text-sm">
                     <p className="text-gray-500">{locale === "th" ? "เลขที่ PO" : "PO Number"}: <span className="font-mono font-bold text-emerald-700">{poNumber}</span></p>
                     <p className="text-gray-500">{locale === "th" ? "นัดหมาย" : "Viewing"}: <span className="font-semibold">{meetingDate} {meetingTime}</span></p>
+                  </div>
+                  {/* Ratings Display */}
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
+                      <p className="text-xs font-bold text-emerald-700 mb-1">{locale === "th" ? "คะแนนของคุณ" : locale === "zh" ? "您的评分" : "Your Rating"}</p>
+                      <div className="flex justify-center gap-0.5">{[1,2,3,4,5].map(s => <span key={s} className={`text-lg ${rating >= s ? "text-yellow-400" : "text-gray-300"}`}>★</span>)}</div>
+                      <p className="text-xs text-gray-500 mt-1">{rating}/5</p>
+                      {ratingComment && <p className="text-xs text-gray-500 mt-1 italic">&ldquo;{ratingComment}&rdquo;</p>}
+                    </div>
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center">
+                      <p className="text-xs font-bold text-blue-700 mb-1">{locale === "th" ? "คะแนนจากผู้ลงประกาศ" : locale === "zh" ? "房东评分" : "Lister's Rating of You"}</p>
+                      <div className="flex justify-center gap-0.5">{[1,2,3,4,5].map(s => <span key={s} className={`text-lg ${listerRating >= s ? "text-yellow-400" : "text-gray-300"}`}>★</span>)}</div>
+                      <p className="text-xs text-gray-500 mt-1">{listerRating}/5</p>
+                      <p className="text-xs text-gray-500 mt-1 italic">&ldquo;{listerComment}&rdquo;</p>
+                    </div>
                   </div>
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700 mb-4">
                     ⚠️ {locale === "th"
