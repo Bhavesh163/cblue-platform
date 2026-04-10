@@ -1,7 +1,32 @@
 import Link from "next/link";
 import Image from "next/image";
 import {useTranslations, useLocale} from "next-intl";
+import {getTranslations} from "next-intl/server";
+import type { Metadata } from "next";
 import { ScrollReveal } from "./components/ScrollReveal";
+
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale });
+  const titles: Record<string, string> = {
+    th: "CBLUE - แพลตฟอร์มช่างซ่อมบำรุง ทีมโครงการ มืออาชีพ และอสังหาริมทรัพย์อันดับ 1 ของไทย",
+    en: "CBLUE - Thailand's #1 AI Home Services & Real Estate Platform",
+    zh: "CBLUE - 泰国第一AI家居服务与房地产平台",
+  };
+  const descriptions: Record<string, string> = {
+    th: "จองช่างซ่อมบ้าน ทีมโครงการ มืออาชีพ และค้นหาอสังหาริมทรัพย์ทั่วไทย ด้วยระบบ AI จับคู่อัตโนมัติ",
+    en: "Book verified fixers, project teams, professionals & browse property listings across Thailand with AI-powered matching.",
+    zh: "通过AI智能匹配，预约泰国各地的维修技工、项目团队、专业人士，并浏览房产列表。",
+  };
+  return {
+    title: titles[locale] ?? titles.en!,
+    description: descriptions[locale] ?? descriptions.en!,
+    alternates: {
+      canonical: `/${locale}`,
+      languages: { th: "/th", en: "/en", zh: "/zh" },
+    },
+  };
+}
 
 export default function Home() {
   const t = useTranslations();
@@ -37,7 +62,7 @@ export default function Home() {
       {/* Hero */}
       <section className="relative min-h-[600px] flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0 z-0">
-          <Image src="/images/swimming-pool.jpg" alt="" fill className="object-cover" priority />
+          <Image src="/images/swimming-pool.jpg" alt="" fill sizes="100vw" className="object-cover" priority />
           <div className="absolute inset-0 bg-gradient-to-r from-slate-900/90 to-blue-900/40" />
         </div>
         <div className="relative z-10 mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-24 sm:py-32 text-center text-white">
@@ -156,7 +181,7 @@ export default function Home() {
               <Link key={svc.href} href={svc.href} className="group relative bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 border border-gray-100">
                 <div className="flex flex-col sm:flex-row">
                   <div className="relative sm:w-2/5 h-48 sm:h-auto overflow-hidden">
-                    <Image src={svc.image} alt="" fill className="object-cover group-hover:scale-110 transition-transform duration-500" />
+                    <Image src={svc.image} alt="" fill sizes="(max-width: 640px) 100vw, 40vw" className="object-cover group-hover:scale-110 transition-transform duration-500" />
                     <div className={`absolute inset-0 bg-gradient-to-br ${svc.color} opacity-40`} />
                     <div className="absolute bottom-4 left-4 text-5xl drop-shadow-lg">{svc.icon}</div>
                   </div>
@@ -198,7 +223,7 @@ export default function Home() {
                 className="group bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1"
               >
                 <div className="relative h-48 w-full overflow-hidden">
-                  <Image src={svc.image} alt={svc.titleKey} fill className="object-cover transform group-hover:scale-110 transition-transform duration-500" />
+                  <Image src={svc.image} alt={svc.titleKey} fill sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw" className="object-cover transform group-hover:scale-110 transition-transform duration-500" />
                 </div>
                 <div className="p-6">
                   <h3 className="text-lg font-bold text-gray-900">{t(`services.${svc.titleKey}`)}</h3>
@@ -278,7 +303,7 @@ export default function Home() {
               className="group relative bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1"
             >
               <div className="relative h-48 overflow-hidden">
-                <Image src="/images/green-construction.jpg" alt="" fill className="object-cover group-hover:scale-110 transition-transform duration-500" />
+                <Image src="/images/green-construction.jpg" alt="" fill sizes="(max-width: 768px) 100vw, 50vw" className="object-cover group-hover:scale-110 transition-transform duration-500" />
                 <div className="absolute inset-0 bg-gradient-to-t from-blue-900/70 to-transparent" />
               </div>
               <div className="p-6 text-center">
@@ -291,7 +316,7 @@ export default function Home() {
               className="group relative bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1"
             >
               <div className="relative h-48 overflow-hidden">
-                <Image src="/images/swimming-pool.jpg" alt="" fill className="object-cover group-hover:scale-110 transition-transform duration-500" />
+                <Image src="/images/swimming-pool.jpg" alt="" fill sizes="(max-width: 768px) 100vw, 50vw" className="object-cover group-hover:scale-110 transition-transform duration-500" />
                 <div className="absolute inset-0 bg-gradient-to-t from-emerald-900/70 to-transparent" />
               </div>
               <div className="p-6 text-center">
@@ -335,7 +360,7 @@ export default function Home() {
       {/* CTA */}
       <section className="relative py-20 overflow-hidden">
         <div className="absolute inset-0 z-0">
-          <Image src="/images/green-theme.jpg" alt="" fill className="object-cover" />
+          <Image src="/images/green-theme.jpg" alt="" fill sizes="100vw" className="object-cover" />
           <div className="absolute inset-0 bg-gradient-to-r from-slate-900/90 to-blue-900/60" />
         </div>
         <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">

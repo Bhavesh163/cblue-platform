@@ -172,7 +172,7 @@ const LISTING_STATUS_STYLE: Record<string, string> = { active: "bg-green-100 tex
 const tierDeposit: Record<string, number> = { economy: 200, standard: 400, corporate: 600, specialist: 800, expert: 1000 };
 
 /* --- Main Component --- */
-export default function ProZonePage() {
+export default function PartnerZonePage() {
   const locale = useLocale();
   const prefix = `/${locale}`;
   const t: Translations = T[locale] ?? T.en;
@@ -205,7 +205,7 @@ export default function ProZonePage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50/30">
         <div className="relative overflow-hidden">
-          <Image src="/images/scenic-building.jpg" alt="" fill className="object-cover" priority />
+          <Image src="/images/scenic-building.jpg" alt="" fill sizes="100vw" className="object-cover" priority />
           <div className="absolute inset-0 bg-gradient-to-r from-amber-900/90 to-orange-800/80" />
           <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-16 text-center">
             <div className="text-6xl mb-6">{"\u{1F527}"}</div>
@@ -268,7 +268,7 @@ export default function ProZonePage() {
     <div className="min-h-screen bg-gradient-to-br from-amber-50/30 to-orange-50/20">
       {/* Hero Header */}
       <div className="relative overflow-hidden">
-        <Image src="/images/scenic-building.jpg" alt="" fill className="object-cover" priority />
+        <Image src="/images/scenic-building.jpg" alt="" fill sizes="100vw" className="object-cover" priority />
         <div className="absolute inset-0 bg-gradient-to-r from-amber-900/90 to-orange-800/80" />
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-10">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">

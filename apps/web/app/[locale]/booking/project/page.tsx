@@ -7,17 +7,18 @@ import { useLocale } from "next-intl";
 import Link from "next/link";
 import { PROJECT_SERVICES, THAI_PROVINCES } from "../../lib/constants";
 import { getDistrictsForProvince } from "../../lib/thai-address-data";
+import { getSubdistrictsForDistrict, lookupByPostalCode } from "../../lib/thai-subdistrict-data";
 import ReCaptcha from "../../components/ReCaptcha";
 import GpsDetectButton from "../../components/GpsDetectButton";
 import FixerResults from "../../components/FixerResults";
 
 const BUDGET_RANGES = [
-  { value: "UNDER_50000", label: "ต่ำกว่า 50,000 บาท" },
-  { value: "50000_200000", label: "50,000 – 200,000 บาท" },
-  { value: "200000_500000", label: "200,000 – 500,000 บาท" },
-  { value: "500000_1M", label: "500,000 – 1,000,000 บาท" },
-  { value: "1M_5M", label: "1 – 5 ล้านบาท" },
-  { value: "OVER_5M", label: "มากกว่า 5 ล้านบาท" },
+  { value: "UNDER_50000", th: "ต่ำกว่า 50,000 บาท", en: "Under ฿50,000", zh: "低于 ฿50,000" },
+  { value: "50000_200000", th: "50,000 – 200,000 บาท", en: "฿50,000 – ฿200,000", zh: "฿50,000 – ฿200,000" },
+  { value: "200000_500000", th: "200,000 – 500,000 บาท", en: "฿200,000 – ฿500,000", zh: "฿200,000 – ฿500,000" },
+  { value: "500000_1M", th: "500,000 – 1,000,000 บาท", en: "฿500,000 – ฿1,000,000", zh: "฿500,000 – ฿1,000,000" },
+  { value: "1M_5M", th: "1 – 5 ล้านบาท", en: "฿1M – ฿5M", zh: "฿100万 – ฿500万" },
+  { value: "OVER_5M", th: "มากกว่า 5 ล้านบาท", en: "Over ฿5M", zh: "超过 ฿500万" },
 ];
 
 interface FormData {
@@ -142,8 +143,30 @@ function ProjectBookingContent() {
         : target.value;
     if (target.name === "province") {
       setForm((prev) => ({ ...prev, province: value as string, district: "", subdistrict: "" }));
+    } else if (target.name === "district") {
+      setForm((prev) => ({ ...prev, district: value as string, subdistrict: "" }));
+    } else if (target.name === "postalCode") {
+      setForm((prev) => {
+        const next = { ...prev, postalCode: value as string };
+        if ((value as string).length === 5) {
+          const found = lookupByPostalCode(value as string);
+          if (found) { next.province = found.province; next.district = found.district; next.subdistrict = ""; }
+        }
+        return next;
+      });
     } else if (target.name === "companyProvince") {
       setForm((prev) => ({ ...prev, companyProvince: value as string, companyDistrict: "", companySubdistrict: "" }));
+    } else if (target.name === "companyDistrict") {
+      setForm((prev) => ({ ...prev, companyDistrict: value as string, companySubdistrict: "" }));
+    } else if (target.name === "companyPostalCode") {
+      setForm((prev) => {
+        const next = { ...prev, companyPostalCode: value as string };
+        if ((value as string).length === 5) {
+          const found = lookupByPostalCode(value as string);
+          if (found) { next.companyProvince = found.province; next.companyDistrict = found.district; next.companySubdistrict = ""; }
+        }
+        return next;
+      });
     } else {
       setForm((prev) => ({ ...prev, [target.name]: value }));
     }
@@ -284,12 +307,12 @@ function ProjectBookingContent() {
           {/* Personal Info */}
           <fieldset>
             <legend className="text-lg font-semibold text-gray-900 mb-4">
-              ข้อมูลผู้ติดต่อ
+              {t("contactInfo")}
             </legend>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-                  ชื่อ-นามสกุล <span className="text-red-500">*</span>
+                  {locale === "th" ? "ชื่อ-นามสกุล" : locale === "zh" ? "姓名" : "Full Name"} <span className="text-red-500">*</span>
                 </label>
                 <input
                   id="name"
@@ -299,12 +322,12 @@ function ProjectBookingContent() {
                   value={form.name}
                   onChange={handleChange}
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                  placeholder="สมชาย ใจดี"
+                  placeholder={locale === "th" ? "สมชาย ใจดี" : locale === "zh" ? "张三" : "John Doe"}
                 />
               </div>
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                  อีเมล <span className="text-red-500">*</span>
+                  {locale === "th" ? "อีเมล" : locale === "zh" ? "电子邮件" : "Email"} <span className="text-red-500">*</span>
                 </label>
                 <input
                   id="email"
@@ -319,7 +342,7 @@ function ProjectBookingContent() {
               </div>
               <div>
                 <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
-                  เบอร์โทรศัพท์ <span className="text-red-500">*</span>
+                  {locale === "th" ? "เบอร์โทรศัพท์" : locale === "zh" ? "电话号码" : "Phone Number"} <span className="text-red-500">*</span>
                 </label>
                 <input
                   id="phone"
@@ -334,7 +357,7 @@ function ProjectBookingContent() {
               </div>
               <div>
                 <label htmlFor="company" className="block text-sm font-medium text-gray-700 mb-1">
-                  บริษัท <span className="text-red-500">*</span>
+                  {locale === "th" ? "บริษัท" : locale === "zh" ? "公司" : "Company"} <span className="text-red-500">*</span>
                 </label>
                 <input
                   id="company"
@@ -344,7 +367,7 @@ function ProjectBookingContent() {
                   value={form.company}
                   onChange={handleChange}
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                  placeholder="บริษัท ABC จำกัด"
+                  placeholder={locale === "th" ? "บริษัท ABC จำกัด" : locale === "zh" ? "ABC有限公司" : "ABC Co., Ltd."}
                 />
               </div>
             </div>
@@ -360,44 +383,49 @@ function ProjectBookingContent() {
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">บ้านเลขที่ <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "บ้านเลขที่" : locale === "zh" ? "门牌号" : "House No."} <span className="text-red-500">*</span></label>
                 <input name="companyHouseNumber" type="text" required value={form.companyHouseNumber} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="123/45" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "อาคาร / ชั้น" : "Building / Floor"}</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "อาคาร / ชั้น" : locale === "zh" ? "建筑 / 楼层" : "Building / Floor"}</label>
                 <div className="flex gap-2">
-                  <input name="companyBuilding" type="text" value={form.companyBuilding} onChange={handleChange} className="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder={locale === "th" ? "อาคาร A" : "Building A"} />
-                  <input name="companyFloor" type="text" value={form.companyFloor} onChange={handleChange} className="w-20 rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder={locale === "th" ? "ชั้น" : "Fl."} />
+                  <input name="companyBuilding" type="text" value={form.companyBuilding} onChange={handleChange} className="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder={locale === "th" ? "อาคาร A" : locale === "zh" ? "A栋" : "Building A"} />
+                  <input name="companyFloor" type="text" value={form.companyFloor} onChange={handleChange} className="w-20 rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder={locale === "th" ? "ชั้น" : locale === "zh" ? "楼层" : "Fl."} />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">ถนน</label>
-                <input name="companyRoad" type="text" value={form.companyRoad} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder={locale === "th" ? "ถนนสุขุมวิท" : "Sukhumvit Road"} />
+                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "ถนน" : locale === "zh" ? "路" : "Road"}</label>
+                <input name="companyRoad" type="text" value={form.companyRoad} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder={locale === "th" ? "ถนนสุขุมวิท" : locale === "zh" ? "素坤逸路" : "Sukhumvit Road"} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">ซอย</label>
-                <input name="companySoi" type="text" value={form.companySoi} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder={locale === "th" ? "ซอย 21" : "Soi 21"} />
+                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "ซอย" : locale === "zh" ? "巷" : "Soi"}</label>
+                <input name="companySoi" type="text" value={form.companySoi} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder={locale === "th" ? "ซอย 21" : locale === "zh" ? "21巷" : "Soi 21"} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">จังหวัด <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "จังหวัด" : locale === "zh" ? "府" : "Province"} <span className="text-red-500">*</span></label>
                 <select name="companyProvince" required value={form.companyProvince} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 outline-none bg-white">
-                  <option value="">-- {locale === "th" ? "เลือกจังหวัด" : "Select Province"} --</option>
+                  <option value="">-- {locale === "th" ? "เลือกจังหวัด" : locale === "zh" ? "选择府" : "Select Province"} --</option>
                   {THAI_PROVINCES.map((p) => (<option key={p} value={p}>{p}</option>))}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "อำเภอ/เขต" : "District"} <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "อำเภอ/เขต" : locale === "zh" ? "县/区" : "District"} <span className="text-red-500">*</span></label>
                 <select name="companyDistrict" required value={form.companyDistrict} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 outline-none bg-white">
-                  <option value="">-- {locale === "th" ? "เลือกอำเภอ/เขต" : "Select District"} --</option>
+                  <option value="">-- {locale === "th" ? "เลือกอำเภอ/เขต" : locale === "zh" ? "选择县/区" : "Select District"} --</option>
                   {getDistrictsForProvince(form.companyProvince).map((d) => (<option key={d} value={d}>{d}</option>))}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "ตำบล/แขวง" : "Sub-district"} <span className="text-red-500">*</span></label>
-                <input name="companySubdistrict" type="text" required value={form.companySubdistrict} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder={locale === "th" ? "แขวงคลองเตย" : "Khlong Toei"} />
+                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "ตำบล/แขวง" : locale === "zh" ? "乡/镇" : "Sub-district"} <span className="text-red-500">*</span></label>
+                <select name="companySubdistrict" required value={form.companySubdistrict} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 outline-none bg-white">
+                  <option value="">-- {locale === "th" ? "เลือกตำบล/แขวง" : locale === "zh" ? "选择乡/镇" : "Select Sub-district"} --</option>
+                  {getSubdistrictsForDistrict(form.companyProvince, form.companyDistrict).map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "รหัสไปรษณีย์" : "Postal Code"} <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "รหัสไปรษณีย์" : locale === "zh" ? "邮政编码" : "Postal Code"} <span className="text-red-500">*</span></label>
                 <input name="companyPostalCode" type="text" required maxLength={5} value={form.companyPostalCode} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="10110" />
               </div>
             </div>
@@ -406,12 +434,12 @@ function ProjectBookingContent() {
           {/* Service Selection */}
           <fieldset>
             <legend className="text-lg font-semibold text-gray-900 mb-4">
-              รายละเอียดโปรเจกต์
+              {locale === "th" ? "รายละเอียดโปรเจกต์" : locale === "zh" ? "项目详情" : "Project Details"}
             </legend>
             <div className="space-y-4">
               <div>
                 <label htmlFor="serviceCategory" className="block text-sm font-medium text-gray-700 mb-1">
-                  บริการที่สนใจ <span className="text-red-500">*</span>
+                  {locale === "th" ? "บริการที่สนใจ" : locale === "zh" ? "感兴趣的服务" : "Service of Interest"} <span className="text-red-500">*</span>
                 </label>
                 <select
                   id="serviceCategory"
@@ -421,10 +449,10 @@ function ProjectBookingContent() {
                   onChange={handleChange}
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none bg-white"
                 >
-                  <option value="">-- เลือกบริการ --</option>
-                  {PROJECT_SERVICES.map((svc) => (
+                  <option value="">-- {locale === "th" ? "เลือกบริการ" : locale === "zh" ? "选择服务" : "Select Service"} --</option>
+                  {PROJECT_SERVICES.map((svc: typeof PROJECT_SERVICES[number]) => (
                     <option key={svc.value} value={svc.value}>
-                      {svc.label}
+                      {locale === "th" ? svc.labelTh : locale === "zh" ? svc.labelZh : svc.label}
                     </option>
                   ))}
                 </select>
@@ -432,7 +460,7 @@ function ProjectBookingContent() {
 
               <div>
                 <label htmlFor="scheduledDate" className="block text-sm font-medium text-gray-700 mb-1">
-                  วันที่ต้องการเริ่มงาน <span className="text-red-500">*</span>
+                  {locale === "th" ? "วันที่ต้องการเริ่มงาน" : locale === "zh" ? "期望开工日期" : "Preferred Start Date"} <span className="text-red-500">*</span>
                 </label>
                 <input
                   id="scheduledDate"
@@ -448,7 +476,7 @@ function ProjectBookingContent() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="scheduledTime" className="block text-sm font-medium text-gray-700 mb-1">
-                    เวลา
+                    {locale === "th" ? "เวลา" : locale === "zh" ? "时间" : "Time"}
                   </label>
                   <input
                     id="scheduledTime"
@@ -461,7 +489,7 @@ function ProjectBookingContent() {
                 </div>
                 <div>
                   <label htmlFor="budgetRange" className="block text-sm font-medium text-gray-700 mb-1">
-                    งบประมาณโดยประมาณ
+                    {locale === "th" ? "งบประมาณโดยประมาณ" : locale === "zh" ? "预估预算" : "Estimated Budget"}
                   </label>
                   <select
                     id="budgetRange"
@@ -470,9 +498,9 @@ function ProjectBookingContent() {
                     onChange={handleChange}
                     className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none bg-white"
                   >
-                    <option value="">-- ไม่ระบุ --</option>
+                    <option value="">-- {locale === "th" ? "ไม่ระบุ" : locale === "zh" ? "未指定" : "Not specified"} --</option>
                     {BUDGET_RANGES.map((b) => (
-                      <option key={b.value} value={b.value}>{b.label}</option>
+                      <option key={b.value} value={b.value}>{locale === "th" ? b.th : locale === "zh" ? b.zh : b.en}</option>
                     ))}
                   </select>
                 </div>
@@ -490,11 +518,11 @@ function ProjectBookingContent() {
             </p>
             <div className="grid grid-cols-5 gap-3">
               {[
-                { value: "economy", label: "Economy", deposit: "฿200", emoji: "🟢", stars: "⭐", desc: locale === "th" ? "ทีมทั่วไป" : "Basic" },
-                { value: "standard", label: "Standard", deposit: "฿400", emoji: "⭐", stars: "⭐⭐", desc: locale === "th" ? "มีประสบการณ์" : "Experienced" },
-                { value: "corporate", label: "Corporate", deposit: "฿600", emoji: "🏢", stars: "⭐⭐⭐", desc: locale === "th" ? "มืออาชีพ" : "Professional" },
-                { value: "specialist", label: "Specialist", deposit: "฿800", emoji: "🔶", stars: "⭐⭐⭐⭐", desc: locale === "th" ? "ผู้เชี่ยวชาญเฉพาะทาง" : "Certified specialist" },
-                { value: "expert", label: "Expert", deposit: "฿1,000", emoji: "👑", stars: "⭐⭐⭐⭐⭐", desc: locale === "th" ? "ผู้เชี่ยวชาญระดับสูง" : "Senior expert" },
+                { value: "economy", label: locale === "th" ? "ประหยัด" : locale === "zh" ? "经济型" : "Economy", deposit: "฿200", emoji: "🟢", stars: "⭐", desc: locale === "th" ? "ทีมทั่วไป" : locale === "zh" ? "普通团队" : "Basic" },
+                { value: "standard", label: locale === "th" ? "มาตรฐาน" : locale === "zh" ? "标准型" : "Standard", deposit: "฿400", emoji: "⭐", stars: "⭐⭐", desc: locale === "th" ? "มีประสบการณ์" : locale === "zh" ? "有经验" : "Experienced" },
+                { value: "corporate", label: locale === "th" ? "องค์กร" : locale === "zh" ? "企业型" : "Corporate", deposit: "฿600", emoji: "🏢", stars: "⭐⭐⭐", desc: locale === "th" ? "มืออาชีพ" : locale === "zh" ? "专业人士" : "Professional" },
+                { value: "specialist", label: locale === "th" ? "ผู้ชำนาญ" : locale === "zh" ? "专家型" : "Specialist", deposit: "฿800", emoji: "🔶", stars: "⭐⭐⭐⭐", desc: locale === "th" ? "ผู้เชี่ยวชาญเฉพาะทาง" : locale === "zh" ? "认证专家" : "Certified specialist" },
+                { value: "expert", label: locale === "th" ? "ผู้เชี่ยวชาญ" : locale === "zh" ? "大师型" : "Expert", deposit: "฿1,000", emoji: "👑", stars: "⭐⭐⭐⭐⭐", desc: locale === "th" ? "ผู้เชี่ยวชาญระดับสูง" : locale === "zh" ? "高级专家" : "Senior expert" },
               ].map((tier) => (
                 <button
                   key={tier.value}
@@ -595,16 +623,19 @@ function ProjectBookingContent() {
                     <label htmlFor="subdistrict" className="block text-sm font-medium text-gray-700 mb-1">
                       {locale === "th" ? "ตำบล/แขวง" : locale === "zh" ? "乡/镇" : "Sub-district"} <span className="text-red-500">*</span>
                     </label>
-                    <input
+                    <select
                       id="subdistrict"
                       name="subdistrict"
-                      type="text"
                       required
                       value={form.subdistrict}
                       onChange={handleChange}
-                      className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                      placeholder="แขวงบางนาใต้"
-                    />
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none bg-white"
+                    >
+                      <option value="">-- {locale === "th" ? "เลือกตำบล/แขวง" : locale === "zh" ? "选择乡/镇" : "Select Sub-district"} --</option>
+                      {getSubdistrictsForDistrict(form.province, form.district).map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label htmlFor="postalCode" className="block text-sm font-medium text-gray-700 mb-1">
@@ -636,21 +667,21 @@ function ProjectBookingContent() {
                       {locale === "th" ? "อาคาร / ชั้น" : locale === "zh" ? "建筑 / 楼层" : "Building / Floor"}
                     </label>
                     <div className="flex gap-2">
-                      <input id="building" name="building" type="text" value={form.building} onChange={handleChange} className="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="อาคาร A" />
-                      <input id="floor" name="floor" type="text" value={form.floor} onChange={handleChange} className="w-20 rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="ชั้น" />
+                      <input id="building" name="building" type="text" value={form.building} onChange={handleChange} className="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder={locale === "th" ? "อาคาร A" : locale === "zh" ? "A栋" : "Building A"} />
+                      <input id="floor" name="floor" type="text" value={form.floor} onChange={handleChange} className="w-20 rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder={locale === "th" ? "ชั้น" : locale === "zh" ? "楼层" : "Fl."} />
                     </div>
                   </div>
                   <div>
                     <label htmlFor="road" className="block text-sm font-medium text-gray-700 mb-1">
                       {locale === "th" ? "ถนน" : locale === "zh" ? "路" : "Road"}
                     </label>
-                    <input id="road" name="road" type="text" value={form.road} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="ถนนสุขุมวิท" />
+                    <input id="road" name="road" type="text" value={form.road} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder={locale === "th" ? "ถนนสุขุมวิท" : locale === "zh" ? "素坤逸路" : "Sukhumvit Road"} />
                   </div>
                   <div>
                     <label htmlFor="soi" className="block text-sm font-medium text-gray-700 mb-1">
                       {locale === "th" ? "ซอย" : locale === "zh" ? "巷" : "Soi"}
                     </label>
-                    <input id="soi" name="soi" type="text" value={form.soi} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="ซอย 21" />
+                    <input id="soi" name="soi" type="text" value={form.soi} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder={locale === "th" ? "ซอย 21" : locale === "zh" ? "21巷" : "Soi 21"} />
                   </div>
                 </div>
               </>) : (
@@ -691,13 +722,13 @@ function ProjectBookingContent() {
                   value={form.description}
                   onChange={handleChange}
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none resize-none"
-                  placeholder="อธิบายรายละเอียดโปรเจกต์ ขอบเขตงาน งบประมาณ และความต้องการพิเศษ"
+                  placeholder={locale === "th" ? "อธิบายรายละเอียดโปรเจกต์ ขอบเขตงาน งบประมาณ และความต้องการพิเศษ" : locale === "zh" ? "请描述项目详情、范围、预算和特殊要求" : "Describe project details, scope, budget, and special requirements"}
                 />
               </div>
 
               <div>
                 <label htmlFor="images" className="block text-sm font-medium text-gray-700 mb-1">
-                  อัพโหลดรูปภาพประกอบ <span className="text-red-500">*</span>
+                  {locale === "th" ? "อัพโหลดรูปภาพประกอบ" : locale === "zh" ? "上传参考图片" : "Upload Reference Photos"} <span className="text-red-500">*</span>
                 </label>
                 <input
                   id="images"
@@ -709,7 +740,7 @@ function ProjectBookingContent() {
                   onChange={handleImageChange}
                   className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                 />
-                <p className="mt-1 text-xs text-gray-400">สูงสุด 5 รูป — เลือกทีละรูปหรือหลายรูปได้</p>
+                <p className="mt-1 text-xs text-gray-400">{locale === "th" ? "สูงสุด 5 รูป — เลือกทีละรูปหรือหลายรูปได้" : locale === "zh" ? "最多5张照片" : "Max 5 photos — select one or multiple"}</p>
                 {images.length > 0 && (
                   <div className="mt-2 space-y-1">
                     {images.map((file, i) => (
@@ -718,7 +749,7 @@ function ProjectBookingContent() {
                         <button type="button" onClick={() => removeImage(i)} className="text-red-500 hover:text-red-700 ml-2 font-bold">✕</button>
                       </div>
                     ))}
-                    <p className="text-xs text-gray-500">{images.length}/5 ไฟล์</p>
+                    <p className="text-xs text-gray-500">{images.length}/5 {locale === "th" ? "ไฟล์" : locale === "zh" ? "文件" : "files"}</p>
                   </div>
                 )}
               </div>
@@ -737,15 +768,13 @@ function ProjectBookingContent() {
                 className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
               <label htmlFor="consent" className="text-sm text-gray-600">
-                ข้าพเจ้ายินยอมให้ CBLUE ติดต่อกลับเพื่อประเมินโปรเจกต์
-                และยอมรับ{" "}
-                <a href="/terms" className="text-blue-600 hover:underline">
-                  เงื่อนไขการใช้งาน
-                </a>{" "}
-                และ{" "}
-                <a href="/privacy" className="text-blue-600 hover:underline">
-                  นโยบายความเป็นส่วนตัว
-                </a>
+                {locale === "th" ? (
+                  <>ข้าพเจ้ายินยอมให้ CBLUE ติดต่อกลับเพื่อประเมินโปรเจกต์ และยอมรับ{" "}<a href="/terms" className="text-blue-600 hover:underline">เงื่อนไขการใช้งาน</a>{" "}และ{" "}<a href="/privacy" className="text-blue-600 hover:underline">นโยบายความเป็นส่วนตัว</a></>
+                ) : locale === "zh" ? (
+                  <>我同意 CBLUE 联系我以评估项目，并接受{" "}<a href="/terms" className="text-blue-600 hover:underline">服务条款</a>{" "}和{" "}<a href="/privacy" className="text-blue-600 hover:underline">隐私政策</a></>
+                ) : (
+                  <>I consent to CBLUE contacting me to evaluate the project and accept the{" "}<a href="/terms" className="text-blue-600 hover:underline">Terms of Service</a>{" "}and{" "}<a href="/privacy" className="text-blue-600 hover:underline">Privacy Policy</a></>
+                )}
               </label>
             </div>
 

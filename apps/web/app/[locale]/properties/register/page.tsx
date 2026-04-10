@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useTranslations, useLocale } from "next-intl";
 import { THAI_PROVINCES } from "../../lib/constants";
 import { getDistrictsForProvince } from "../../lib/thai-address-data";
+import { getSubdistrictsForDistrict, lookupByPostalCode } from "../../lib/thai-subdistrict-data";
 import GpsDetectButton from "../../components/GpsDetectButton";
 
 const PROPERTY_TYPES = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "APARTMENT"] as const;
@@ -65,7 +66,21 @@ export default function PropertyRegisterPage() {
   };
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    if (name === "district") {
+      setForm((prev) => ({ ...prev, district: value, subdistrict: "" }));
+    } else if (name === "postalCode") {
+      setForm((prev) => {
+        const next = { ...prev, postalCode: value };
+        if (value.length === 5) {
+          const found = lookupByPostalCode(value);
+          if (found) { next.province = found.province; next.district = found.district; next.subdistrict = ""; }
+        }
+        return next;
+      });
+    } else {
+      setForm({ ...form, [name]: value });
+    }
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -182,10 +197,10 @@ export default function PropertyRegisterPage() {
     <div className="bg-gray-50 min-h-screen">
       {/* Scenic Hero */}
       <div className="relative overflow-hidden">
-        <Image src="/images/scenic-house.jpg" alt="" fill className="object-cover" priority />
+        <Image src="/images/scenic-house.jpg" alt="" fill sizes="100vw" className="object-cover" priority />
         <div className="absolute inset-0 bg-gradient-to-r from-green-900/90 to-emerald-800/75" />
         <div className="relative max-w-4xl mx-auto px-4 sm:px-6 py-14 text-center">
-          <span className="inline-block px-4 py-1.5 bg-white/10 backdrop-blur text-green-200 rounded-full text-sm font-bold mb-4 border border-white/20">🏠 {locale === "th" ? "ลงประกาศอสังหาริมทรัพย์" : "List Property"}</span>
+          <span className="inline-block px-4 py-1.5 bg-white/10 backdrop-blur text-green-200 rounded-full text-sm font-bold mb-4 border border-white/20">🏠 {locale === "th" ? "ลงประกาศอสังหาริมทรัพย์" : locale === "zh" ? "发布房产" : "List Property"}</span>
           <h1 className="text-3xl sm:text-4xl font-bold text-white">{t("registerTitle")}</h1>
           <p className="mt-3 text-green-100">{t("registerDesc")}</p>
           <div className="w-20 h-1 bg-white/50 mx-auto rounded-full mt-5" />
@@ -242,7 +257,7 @@ export default function PropertyRegisterPage() {
                 {/* Title */}
                 <div className="sm:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {locale === "th" ? "ชื่อประกาศ" : "Title"} <span className="text-red-500">{tc("required")}</span>
+                    {locale === "th" ? "ชื่อประกาศ" : locale === "zh" ? "标题" : "Title"} <span className="text-red-500">{tc("required")}</span>
                   </label>
                   <input
                     type="text"
@@ -328,7 +343,7 @@ export default function PropertyRegisterPage() {
                 {/* Floors */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {locale === "th" ? "จำนวนชั้น" : "Floors"}
+                    {locale === "th" ? "จำนวนชั้น" : locale === "zh" ? "楼层数" : "Floors"}
                   </label>
                   <input
                     type="number"
@@ -344,7 +359,7 @@ export default function PropertyRegisterPage() {
                 {/* Year Built */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {locale === "th" ? "ปีที่สร้าง" : "Year Built"}
+                    {locale === "th" ? "ปีที่สร้าง" : locale === "zh" ? "建造年份" : "Year Built"}
                   </label>
                   <input
                     type="number"
@@ -370,7 +385,7 @@ export default function PropertyRegisterPage() {
                 <GpsDetectButton onDetected={(coords) => setGpsCoords(coords)} />
                 {gpsCoords && (
                   <p className="text-xs text-green-600">
-                    📍 {locale === "th" ? "ตำแหน่ง" : "Location"}: {gpsCoords.lat.toFixed(6)}, {gpsCoords.lng.toFixed(6)}
+                    📍 {locale === "th" ? "ตำแหน่ง" : locale === "zh" ? "位置" : "Location"}: {gpsCoords.lat.toFixed(6)}, {gpsCoords.lng.toFixed(6)}
                   </p>
                 )}
 
@@ -432,7 +447,7 @@ export default function PropertyRegisterPage() {
                         onChange={handleChange}
                         className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm bg-white outline-none focus:border-green-500"
                       >
-                        <option value="">{locale === "th" ? "-- เลือกอำเภอ/เขต --" : "-- Select District --"}</option>
+                        <option value="">{locale === "th" ? "-- เลือกอำเภอ/เขต --" : locale === "zh" ? "-- 选择县/区 --" : "-- Select District --"}</option>
                         {getDistrictsForProvince(form.province).map((d) => (
                           <option key={d} value={d}>{d}</option>
                         ))}
@@ -442,13 +457,17 @@ export default function PropertyRegisterPage() {
                     {/* Subdistrict */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">{tb("subdistrict")}</label>
-                      <input
-                        type="text"
+                      <select
                         name="subdistrict"
                         value={form.subdistrict}
                         onChange={handleChange}
-                        className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
-                      />
+                        className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm bg-white outline-none focus:border-green-500"
+                      >
+                        <option value="">{locale === "th" ? "-- เลือกตำบล/แขวง --" : locale === "zh" ? "-- 选择乡/镇 --" : "-- Select Sub-district --"}</option>
+                        {getSubdistrictsForDistrict(form.province, form.district).map((s) => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
                     </div>
 
                     {/* Postal Code */}
@@ -467,23 +486,23 @@ export default function PropertyRegisterPage() {
                   {/* Detailed Thai Address Fields */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">บ้านเลขที่</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "บ้านเลขที่" : locale === "zh" ? "门牌号" : "House No."}</label>
                       <input type="text" name="houseNumber" value={form.houseNumber} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500" placeholder="123/45" />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">อาคาร / ชั้น</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "อาคาร / ชั้น" : locale === "zh" ? "建筑 / 楼层" : "Building / Floor"}</label>
                       <div className="flex gap-2">
-                        <input type="text" name="building" value={form.building} onChange={handleChange} className="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500" placeholder="อาคาร A" />
-                        <input type="text" name="floor" value={form.floor} onChange={handleChange} className="w-20 rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500" placeholder="ชั้น" />
+                        <input type="text" name="building" value={form.building} onChange={handleChange} className="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500" placeholder={locale === "th" ? "อาคาร A" : locale === "zh" ? "A栋" : "Building A"} />
+                        <input type="text" name="floor" value={form.floor} onChange={handleChange} className="w-20 rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500" placeholder={locale === "th" ? "ชั้น" : locale === "zh" ? "楼层" : "Fl."} />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">ถนน</label>
-                      <input type="text" name="road" value={form.road} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500" placeholder="ถนนสุขุมวิท" />
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "ถนน" : locale === "zh" ? "路" : "Road"}</label>
+                      <input type="text" name="road" value={form.road} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500" placeholder={locale === "th" ? "ถนนสุขุมวิท" : locale === "zh" ? "素坤逸路" : "Sukhumvit Road"} />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">ซอย</label>
-                      <input type="text" name="soi" value={form.soi} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500" placeholder="ซอย 21" />
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "ซอย" : locale === "zh" ? "巷" : "Soi"}</label>
+                      <input type="text" name="soi" value={form.soi} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500" placeholder={locale === "th" ? "ซอย 21" : locale === "zh" ? "21巷" : "Soi 21"} />
                     </div>
                   </div>
                 </>) : (

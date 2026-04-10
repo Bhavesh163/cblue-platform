@@ -1,6 +1,29 @@
 import Link from "next/link";
 import Image from "next/image";
 import {useTranslations, useLocale} from "next-intl";
+import type { Metadata } from "next";
+
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params;
+  const titles: Record<string, string> = {
+    th: "บริการทั้งหมด - ช่างซ่อมบ้าน ทีมโครงการ มืออาชีพ",
+    en: "All Services - Home Maintenance, Projects & Professionals",
+    zh: "所有服务 - 家居维修、项目团队与专业人士",
+  };
+  const descriptions: Record<string, string> = {
+    th: "ค้นหาและจองบริการซ่อมบำรุง ประปา ไฟฟ้า แอร์ สมาร์ทโฮม สถาปนิก ทนาย วิศวกร และอสังหาริมทรัพย์ทั่วไทย",
+    en: "Find and book plumbing, electrical, AC, smart home, architecture, legal, engineering services and real estate across Thailand.",
+    zh: "查找并预约泰国各地的水管、电气、空调、智能家居、建筑、法律、工程服务和房地产。",
+  };
+  return {
+    title: titles[locale] ?? titles.en!,
+    description: descriptions[locale] ?? descriptions.en!,
+    alternates: {
+      canonical: `/${locale}/services`,
+      languages: { th: "/th/services", en: "/en/services", zh: "/zh/services" },
+    },
+  };
+}
 
 const householdServices = [
   { id: "plumbing", serviceValue: "PLUMBING", image: "/images/hvac.png", titleKey: "plumbing", descKey: "plumbingDesc" },
@@ -122,6 +145,7 @@ export default function ServicesPage() {
                     src={svc.image}
                     alt={svc.id}
                     fill
+                    sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
                     className="object-cover transform group-hover:scale-110 transition-transform duration-500"
                   />
                 </div>
@@ -171,6 +195,7 @@ export default function ServicesPage() {
                     src={svc.image}
                     alt={svc.name}
                     fill
+                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
                     className="object-cover transform group-hover:scale-110 transition-transform duration-500"
                   />
                 </div>
@@ -209,6 +234,7 @@ export default function ServicesPage() {
                     src={svc.image}
                     alt={svc.name}
                     fill
+                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
                     className="object-cover transform group-hover:scale-110 transition-transform duration-500"
                   />
                 </div>
@@ -251,6 +277,7 @@ export default function ServicesPage() {
                     src={svc.image}
                     alt={svc.name}
                     fill
+                    sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
                     className="object-cover transform group-hover:scale-110 transition-transform duration-500"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />

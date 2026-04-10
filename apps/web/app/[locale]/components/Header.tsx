@@ -42,7 +42,9 @@ export function Header() {
               alt="CBLUE"
               width={120}
               height={48}
+              loading="eager"
               className="h-12 w-auto object-contain"
+              style={{ height: "auto" }}
             />
           </Link>
 
@@ -50,15 +52,17 @@ export function Header() {
           <nav className="hidden md:flex items-center gap-1">
             {navLinks.map((link) =>
               link.children ? (
-                <div key={link.href} className="relative">
-                  <button
-                    onClick={() => setDropdownOpen(!dropdownOpen)}
-                    onBlur={() => setTimeout(() => setDropdownOpen(false), 150)}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition-colors"
+                <div key={link.href} className="relative"
+                  onMouseEnter={() => setDropdownOpen(true)}
+                  onMouseLeave={() => setDropdownOpen(false)}
+                >
+                  <Link
+                    href={link.href}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition-colors inline-flex items-center"
                   >
                     {link.label}
                     <svg
-                      className="ml-1 inline-block h-4 w-4"
+                      className={`ml-1 inline-block h-4 w-4 transition-transform ${dropdownOpen ? "rotate-180" : ""}`}
                       fill="none"
                       viewBox="0 0 24 24"
                       strokeWidth={2}
@@ -70,18 +74,21 @@ export function Header() {
                         d="m19.5 8.25-7.5 7.5-7.5-7.5"
                       />
                     </svg>
-                  </button>
+                  </Link>
                   {dropdownOpen && (
-                    <div className="absolute left-0 mt-1 w-56 rounded-lg bg-white shadow-lg ring-1 ring-gray-200 py-1">
-                      {link.children.map((child) => (
-                        <Link
-                          key={child.href}
-                          href={child.href}
-                          className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-sky-50 hover:text-sky-600"
-                        >
-                          {child.label}
-                        </Link>
-                      ))}
+                    <div className="absolute left-0 top-full w-56 z-50 pt-1">
+                      <div className="rounded-lg bg-white shadow-lg ring-1 ring-gray-200 py-1">
+                        {link.children.map((child) => (
+                          <Link
+                            key={child.href}
+                            href={child.href}
+                            onClick={() => setDropdownOpen(false)}
+                            className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-sky-50 hover:text-sky-600"
+                          >
+                            {child.label}
+                          </Link>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>

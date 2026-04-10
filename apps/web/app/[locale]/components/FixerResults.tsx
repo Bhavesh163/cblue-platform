@@ -253,23 +253,74 @@ const T: Record<string, Record<string, string>> = {
 
 function generateDemoFixers(service: string): Fixer[] {
   const tiers: ("economy" | "standard" | "corporate" | "specialist" | "expert")[] = ["economy", "standard", "corporate", "specialist", "expert"];
-  const fixers: Fixer[] = [];
-  for (let i = 0; i < 5; i++) {
-    const tier = tiers[i % 5] as "economy" | "standard" | "corporate" | "specialist" | "expert";
-    const basePrice = tier === "economy" ? 250 : tier === "standard" ? 300 : tier === "corporate" ? 500 : tier === "specialist" ? 700 : 900;
-    fixers.push({
-      id: `f-${1000 + i}`,
-      alias: `Fixer-${String(1000 + i).padStart(4, "0")}`,
+  // Generate a pool of 15–20 candidate partners in the area
+  const poolSize = 15 + Math.floor(Math.random() * 6);
+  const pool: Fixer[] = [];
+  for (let i = 0; i < poolSize; i++) {
+    const tierIdx = Math.floor(Math.random() * 5);
+    const tier = tiers[tierIdx]!;
+    const basePrice = tier === "economy" ? 200 + Math.floor(Math.random() * 100) : tier === "standard" ? 350 + Math.floor(Math.random() * 150) : tier === "corporate" ? 500 + Math.floor(Math.random() * 200) : tier === "specialist" ? 700 + Math.floor(Math.random() * 250) : 950 + Math.floor(Math.random() * 300);
+    const rating = parseFloat((2.5 + Math.random() * 2.5).toFixed(1));
+    pool.push({
+      id: `f-${2000 + i}`,
+      alias: `Partner-${String(2000 + i).padStart(4, "0")}`,
       tier,
-      rating: 3.5 + Math.random() * 1.5,
-      totalJobs: 10 + Math.floor(Math.random() * 200),
-      price: basePrice + Math.floor(Math.random() * 200),
-      satisfaction: 80 + Math.floor(Math.random() * 20),
+      rating,
+      totalJobs: 5 + Math.floor(Math.random() * 300),
+      price: basePrice,
+      satisfaction: 60 + Math.floor(Math.random() * 40),
       specialties: [service || "General"],
       experienceYears: tier === "economy" ? 1 + Math.floor(Math.random() * 3) : tier === "standard" ? 3 + Math.floor(Math.random() * 3) : tier === "corporate" ? 5 + Math.floor(Math.random() * 3) : tier === "specialist" ? 7 + Math.floor(Math.random() * 4) : 10 + Math.floor(Math.random() * 6),
     });
   }
-  return fixers.sort((a, b) => b.rating - a.rating);
+
+  // ── AI TOP-8 SELECTION ALGORITHM ──
+  // Partners MUST provide services in the area (all in pool are assumed to)
+  const tierRank = { economy: 0, standard: 1, corporate: 2, specialist: 3, expert: 4 };
+  const selected: Fixer[] = [];
+  const used = new Set<string>();
+
+  function pick(f: Fixer) {
+    if (!used.has(f.id)) { selected.push(f); used.add(f.id); }
+  }
+
+  // Sort helpers
+  const byPrice = [...pool].sort((a, b) => a.price - b.price);
+  const bySatisfaction = [...pool].sort((a, b) => {
+    if (b.rating !== a.rating) return b.rating - a.rating; // highest stars first
+    return b.totalJobs - a.totalJobs; // tiebreak: more jobs = more good reviews
+  });
+
+  // 1. TWO CHEAPEST in area
+  for (const f of byPrice) { if (selected.length < 2) pick(f); else break; }
+
+  // 2. TWO HIGHEST SATISFACTION (stars, tiebreak by totalJobs as proxy for reviews)
+  for (const f of bySatisfaction) { if (selected.filter(s => !byPrice.slice(0, 2).some(c => c.id === s.id) || used.has(s.id)).length < 2 || selected.length < 4) { if (!used.has(f.id)) { pick(f); if (selected.length >= 4) break; } } }
+  // Ensure we have 4 so far
+  for (const f of bySatisfaction) { if (selected.length >= 4) break; pick(f); }
+
+  // 3. ONE CHEAPEST OF UPPER TIER (corporate+specialist+expert)
+  const upperTiers = byPrice.filter(f => tierRank[f.tier] >= 2 && !used.has(f.id));
+  if (upperTiers[0]) pick(upperTiers[0]);
+
+  // 4. ONE HIGHEST SATISFACTION OF UPPER TIER
+  const upperBySat = bySatisfaction.filter(f => tierRank[f.tier] >= 2 && !used.has(f.id));
+  if (upperBySat[0]) pick(upperBySat[0]);
+
+  // 5. ONE RETURNING / LAST SAME-JOB PARTNER (simulate with a random pick flagged as returning)
+  const remaining = pool.filter(f => !used.has(f.id));
+  if (remaining.length > 0) {
+    const returningIdx = Math.floor(Math.random() * remaining.length);
+    const returning = remaining[returningIdx]!;
+    returning.alias = `★ ${returning.alias}`;
+    pick(returning);
+  }
+
+  // 6. SLOT 8 reserved for customer nomination — leave it open (handled in UI)
+  // If fewer than 7 partners available, fill what we can
+  for (const f of pool) { if (selected.length >= 7) break; pick(f); }
+
+  return selected;
 }
 
 function getProcessingFee(bookingType: BookingType, tier: string): number {
@@ -396,7 +447,7 @@ export default function FixerResults({
   // AI Matching animation sequence
   useEffect(() => {
     if (step !== "matching") return;
-    const steps = 5;
+    const steps = 7;
     const timer = setInterval(() => {
       setAiStep((prev) => {
         if (prev >= steps) {
@@ -406,7 +457,7 @@ export default function FixerResults({
         }
         return prev + 1;
       });
-    }, 800);
+    }, 700);
     return () => clearInterval(timer);
   }, [step]);
 
@@ -522,25 +573,31 @@ export default function FixerResults({
     const aiSteps = locale === "th"
       ? [
           { label: "วิเคราะห์ความต้องการของคุณ...", icon: "🧠" },
-          { label: "ค้นหาฐานข้อมูลผู้เชี่ยวชาญ...", icon: "🔍" },
-          { label: "คำนวณคะแนนความเข้ากัน...", icon: "⚡" },
-          { label: "จัดอันดับตามทำเล ระดับ และคะแนน...", icon: "📊" },
-          { label: "เตรียมรายชื่อผู้เชี่ยวชาญ 5 อันดับแรก...", icon: "✅" },
+          { label: "ค้นหาพาร์ทเนอร์ในพื้นที่...", icon: "🔍" },
+          { label: "กรอง 2 ราคาถูกที่สุด...", icon: "💰" },
+          { label: "กรอง 2 ความพึงพอใจสูงสุด...", icon: "⭐" },
+          { label: "เลือกระดับบนที่ดีที่สุด...", icon: "🏆" },
+          { label: "ค้นหาช่างเดิมที่เคยใช้...", icon: "🔄" },
+          { label: "เตรียม Top 8 ผู้เชี่ยวชาญ...", icon: "✅" },
         ]
       : locale === "zh"
       ? [
           { label: "分析您的需求...", icon: "🧠" },
-          { label: "搜索专业人士数据库...", icon: "🔍" },
-          { label: "计算匹配分数...", icon: "⚡" },
-          { label: "按位置、等级和评分排名...", icon: "📊" },
-          { label: "准备前 5 名专业人士...", icon: "✅" },
+          { label: "搜索区域内合作伙伴...", icon: "🔍" },
+          { label: "筛选2个最低价...", icon: "💰" },
+          { label: "筛选2个最高满意度...", icon: "⭐" },
+          { label: "选择最佳上级合作伙伴...", icon: "🏆" },
+          { label: "查找曾合作过的伙伴...", icon: "🔄" },
+          { label: "准备前8名专业人士...", icon: "✅" },
         ]
       : [
           { label: "Analyzing your requirements...", icon: "🧠" },
-          { label: "Searching professional database...", icon: "🔍" },
-          { label: "Computing compatibility scores...", icon: "⚡" },
-          { label: "Ranking by location, tier & rating...", icon: "📊" },
-          { label: "Preparing top 5 matches...", icon: "✅" },
+          { label: "Searching partners in your area...", icon: "🔍" },
+          { label: "Selecting 2 cheapest options...", icon: "💰" },
+          { label: "Selecting 2 highest satisfaction...", icon: "⭐" },
+          { label: "Finding best upper-tier partners...", icon: "🏆" },
+          { label: "Checking for returning partners...", icon: "🔄" },
+          { label: "Preparing top 8 matches...", icon: "✅" },
         ];
 
     return (
@@ -569,9 +626,9 @@ export default function FixerResults({
           </div>
           {/* Progress bar */}
           <div className="mt-6 w-full bg-gray-100 rounded-full h-2">
-            <div className="bg-gradient-to-r from-sky-500 to-indigo-600 h-2 rounded-full transition-all duration-700" style={{ width: `${Math.min(aiStep / 5 * 100, 100)}%` }} />
+            <div className="bg-gradient-to-r from-sky-500 to-indigo-600 h-2 rounded-full transition-all duration-700" style={{ width: `${Math.min(aiStep / 7 * 100, 100)}%` }} />
           </div>
-          <p className="text-xs text-gray-400 mt-2">{Math.min(aiStep * 20, 100)}%</p>
+          <p className="text-xs text-gray-400 mt-2">{Math.min(Math.round(aiStep / 7 * 100), 100)}%</p>
         </div>
       </div>
     );
@@ -1100,13 +1157,59 @@ export default function FixerResults({
     );
   }
 
-  // Step: Fixer List
+  // Step: Fixer List — AI Top 8 Selection
+  // Nomination state
+  const [nominateId, setNominateId] = useState("");
+  const [nominatedFixer, setNominatedFixer] = useState<Fixer | null>(null);
+
+  const handleNominate = () => {
+    if (!nominateId.trim()) return;
+    // Simulate finding a partner by ID
+    const found: Fixer = {
+      id: `f-nom-${nominateId}`,
+      alias: `Partner-${nominateId.padStart(4, "0")}`,
+      tier: (["economy", "standard", "corporate", "specialist", "expert"] as const)[Math.floor(Math.random() * 5)]!,
+      rating: parseFloat((3.0 + Math.random() * 2).toFixed(1)),
+      totalJobs: 5 + Math.floor(Math.random() * 100),
+      price: 300 + Math.floor(Math.random() * 500),
+      satisfaction: 70 + Math.floor(Math.random() * 30),
+      specialties: [service || "General"],
+      experienceYears: 2 + Math.floor(Math.random() * 10),
+    };
+    setNominatedFixer(found);
+  };
+
+  // Selection criteria labels
+  const getCriteriaLabel = (idx: number): string => {
+    const labels = locale === "th"
+      ? ["💰 ราคาถูกสุด", "💰 ราคาถูกอันดับ 2", "⭐ พึงพอใจสูงสุด", "⭐ พึงพอใจอันดับ 2", "🏆 ราคาถูกสุด (ระดับบน)", "🏆 พึงพอใจสูงสุด (ระดับบน)", "🔄 ช่างเดิมที่เคยใช้"]
+      : locale === "zh"
+      ? ["💰 最低价", "💰 第二低价", "⭐ 最高满意度", "⭐ 第二高满意度", "🏆 上级最低价", "🏆 上级最高满意度", "🔄 上次合作伙伴"]
+      : ["💰 Cheapest", "💰 2nd Cheapest", "⭐ Highest Rated", "⭐ 2nd Highest Rated", "🏆 Best Price (Upper Tier)", "🏆 Best Rated (Upper Tier)", "🔄 Returning Partner"];
+    return labels[idx] || "";
+  };
+
+  // Combine fixers list + nominated
+  const allDisplayFixers = nominatedFixer ? [...fixers, nominatedFixer] : fixers;
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="text-center mb-8">
-        <span className="inline-block px-4 py-1.5 bg-gradient-to-r from-sky-100 to-indigo-100 text-sky-700 rounded-full text-xs font-bold mb-3 border border-sky-200">🤖 {locale === "th" ? "ผลการจับคู่ AI" : locale === "zh" ? "AI 匹配结果" : "AI-Powered Match Results"}</span>
+        <span className="inline-block px-4 py-1.5 bg-gradient-to-r from-sky-100 to-indigo-100 text-sky-700 rounded-full text-xs font-bold mb-3 border border-sky-200">🤖 {locale === "th" ? "AI Top 8 จับคู่อัจฉริยะ" : locale === "zh" ? "AI Top 8 智能匹配" : "AI-Powered Top 8 Match"}</span>
         <h1 className="text-2xl font-bold text-gray-900">{t("matchTitle")}</h1>
-        <p className="text-gray-500 mt-2">{t("matchDesc").replace("{count}", String(fixers.length))}</p>
+        <p className="text-gray-500 mt-2">{t("matchDesc").replace("{count}", String(allDisplayFixers.length))}</p>
+      </div>
+
+      {/* AI Selection Criteria Legend */}
+      <div className="mb-6 bg-indigo-50 border border-indigo-200 rounded-xl p-4">
+        <h4 className="text-sm font-bold text-indigo-800 mb-2">{locale === "th" ? "🤖 เกณฑ์การคัดเลือก AI" : locale === "zh" ? "🤖 AI选择标准" : "🤖 AI Selection Criteria"}</h4>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-indigo-700">
+          <span>💰 {locale === "th" ? "2 ราคาถูกสุด" : locale === "zh" ? "2个最低价" : "2 Cheapest"}</span>
+          <span>⭐ {locale === "th" ? "2 พึงพอใจสูงสุด" : locale === "zh" ? "2个最高评分" : "2 Highest Rated"}</span>
+          <span>🏆 {locale === "th" ? "ดีสุดระดับบน" : locale === "zh" ? "上级最佳" : "Best Upper Tier"}</span>
+          <span>🔄 {locale === "th" ? "ช่างเดิม" : locale === "zh" ? "上次合作" : "Returning Partner"}</span>
+        </div>
+        <p className="text-[11px] text-indigo-600 mt-2">{locale === "th" ? "➕ คุณสามารถเสนอพาร์ทเนอร์ลำดับที่ 8 ได้ด้านล่าง (สูงสุด 8 คน)" : locale === "zh" ? "➕ 您可以在下方提名第8位合作伙伴（最多8位）" : "➕ You may nominate an 8th partner below (max 8 in comparison)"}</p>
       </div>
 
       {/* Processing Fee Price List */}
@@ -1157,20 +1260,24 @@ export default function FixerResults({
         <span className="font-bold">⚠️ {t("pricingDisclaimer")}:</span> {t("poDisclaimer")}
       </div>
 
+      {/* Partner Cards */}
       <div className="space-y-4">
-        {fixers.map((fixer) => {
+        {allDisplayFixers.map((fixer, idx) => {
           const feeForTier = getProcessingFee(bookingType, fixer.tier);
           const colors = getTierColor(fixer.tier);
+          const criteriaTag = idx < fixers.length ? getCriteriaLabel(idx) : (locale === "th" ? "👤 เสนอชื่อโดยคุณ" : locale === "zh" ? "👤 您提名的" : "👤 Your Nomination");
+          const isReturning = fixer.alias.startsWith("★");
           return (
             <div
               key={fixer.id}
-              className={`bg-white rounded-xl shadow-md border ${colors.border} p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4 hover:shadow-lg transition`}
+              className={`bg-white rounded-xl shadow-md border ${isReturning ? "border-amber-300 ring-1 ring-amber-200" : colors.border} p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4 hover:shadow-lg transition`}
             >
               {/* Avatar */}
-              <div className={`w-14 h-14 rounded-full ${colors.bg} flex items-center justify-center flex-shrink-0`}>
+              <div className={`w-14 h-14 rounded-full ${colors.bg} flex items-center justify-center flex-shrink-0 relative`}>
                 <span className={`text-lg font-bold ${colors.text}`}>
-                  {fixer.alias.split("-")[1]}
+                  {fixer.alias.replace("★ ", "").split("-")[1]}
                 </span>
+                {isReturning && <span className="absolute -top-1 -right-1 text-sm">🔄</span>}
               </div>
 
               {/* Info */}
@@ -1180,6 +1287,7 @@ export default function FixerResults({
                   <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${colors.bg} ${colors.text}`}>
                     {t(fixer.tier)}
                   </span>
+                  {criteriaTag && <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-indigo-50 text-indigo-600 border border-indigo-200">{criteriaTag}</span>}
                 </div>
                 <Stars rating={fixer.rating} />
                 <div className="flex flex-wrap gap-3 mt-1 text-xs text-gray-500">
@@ -1207,6 +1315,35 @@ export default function FixerResults({
           );
         })}
       </div>
+
+      {/* Nominate 8th Partner */}
+      {!nominatedFixer && (
+        <div className="mt-6 bg-white rounded-xl shadow-md border border-dashed border-sky-300 p-5">
+          <h4 className="text-sm font-bold text-gray-800 mb-2">
+            👤 {locale === "th" ? "เสนอพาร์ทเนอร์ลำดับที่ 8" : locale === "zh" ? "提名第8位合作伙伴" : "Nominate 8th Partner"}
+          </h4>
+          <p className="text-xs text-gray-500 mb-3">
+            {locale === "th" ? "กรอกหมายเลข ID ของพาร์ทเนอร์ที่คุณต้องการเพิ่มในรายการเปรียบเทียบ" : locale === "zh" ? "输入您想添加到比较列表的合作伙伴ID号" : "Enter the Partner ID number you want to add to the comparison list"}
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={nominateId}
+              onChange={(e) => setNominateId(e.target.value.replace(/\D/g, ""))}
+              placeholder={locale === "th" ? "หมายเลข ID พาร์ทเนอร์" : locale === "zh" ? "合作伙伴ID号" : "Partner ID number"}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:border-sky-500"
+              maxLength={6}
+            />
+            <button
+              onClick={handleNominate}
+              disabled={!nominateId.trim()}
+              className="px-5 py-2 bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium rounded-lg transition disabled:opacity-50"
+            >
+              {locale === "th" ? "ค้นหา" : locale === "zh" ? "搜索" : "Search"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

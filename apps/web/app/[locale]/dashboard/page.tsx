@@ -126,7 +126,7 @@ export default function DashboardPage() {
       )}
       {/* Hero Header with scenic background */}
       <div className="relative overflow-hidden">
-        <Image src="/images/scenic-building.jpg" alt="" fill className="object-cover" priority />
+        <Image src="/images/scenic-building.jpg" alt="" fill sizes="100vw" className="object-cover" priority />
         <div className="absolute inset-0 bg-gradient-to-r from-sky-900/90 to-blue-800/80" />
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-10">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">

@@ -22,7 +22,7 @@ export default function BookingLayout({ children }: { children: React.ReactNode 
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50/30">
       {/* Hero Banner */}
       <section className="relative text-white min-h-[220px] flex items-center overflow-hidden">
-        <Image src="/images/scenic-building.jpg" alt="" fill className="object-cover" priority />
+        <Image src="/images/scenic-building.jpg" alt="" fill sizes="100vw" className="object-cover" priority />
         <div className="absolute inset-0 bg-gradient-to-r from-sky-900/90 to-indigo-800/70" />
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center py-10 w-full">
           <span className="inline-block px-4 py-1.5 bg-white/10 backdrop-blur text-sky-200 rounded-full text-sm font-bold mb-3 border border-white/20">

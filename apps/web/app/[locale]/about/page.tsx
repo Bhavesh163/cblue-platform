@@ -96,6 +96,7 @@ export default function AboutPage() {
           src="/images/beach.png"
           alt="Sustainable building"
           fill
+          sizes="100vw"
           className="object-cover"
           priority
         />
@@ -113,7 +114,7 @@ export default function AboutPage() {
         <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="md:flex">
             <div className="md:w-1/3 relative min-h-[200px]">
-              <Image src="/images/smart-home.jpg" alt="Smart home" fill className="object-cover" />
+              <Image src="/images/smart-home.jpg" alt="Smart home" fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" />
             </div>
             <div className="md:w-2/3 p-8">
               <h2 className="text-2xl font-bold text-gray-900 mb-4">{t("introTitle")}</h2>
@@ -143,7 +144,7 @@ export default function AboutPage() {
         {/* Environment */}
         <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="relative h-48 w-full">
-            <Image src="/images/green-theme.jpg" alt="Green environment" fill className="object-cover" />
+            <Image src="/images/green-theme.jpg" alt="Green environment" fill sizes="100vw" className="object-cover" />
             <div className="absolute inset-0 bg-gradient-to-t from-white via-white/30 to-transparent" />
           </div>
           <div className="p-8 -mt-8 relative">
@@ -162,7 +163,7 @@ export default function AboutPage() {
               <p className="text-gray-600 leading-relaxed whitespace-pre-line">{t("designFeatures")}</p>
             </div>
             <div className="md:w-1/3 relative min-h-[250px]">
-              <Image src="/images/solar-panel.jpg" alt="Solar panel" fill className="object-cover" />
+              <Image src="/images/solar-panel.jpg" alt="Solar panel" fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" />
             </div>
           </div>
         </section>
@@ -171,7 +172,7 @@ export default function AboutPage() {
         <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="md:flex">
             <div className="md:w-1/3 relative min-h-[250px]">
-              <Image src="/images/smart-home.jpg" alt="Smart building" fill className="object-cover" />
+              <Image src="/images/smart-home.jpg" alt="Smart building" fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" />
             </div>
             <div className="md:w-2/3 p-8">
               <h2 className="text-2xl font-bold text-gray-900 mb-4">{t("smartTitle")}</h2>
@@ -184,7 +185,7 @@ export default function AboutPage() {
         {/* Carbon */}
         <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="relative h-40 w-full">
-            <Image src="/images/wind-turbine.png" alt="Wind turbine" fill className="object-cover" />
+            <Image src="/images/wind-turbine.png" alt="Wind turbine" fill sizes="100vw" className="object-cover" />
             <div className="absolute inset-0 bg-gradient-to-t from-white via-white/40 to-transparent" />
           </div>
           <div className="p-8 -mt-6 relative">

@@ -214,7 +214,7 @@ export default function GetSupportPage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50/30">
       {/* Scenic Hero */}
       <div className="relative overflow-hidden">
-        <Image src="/images/scenic-building.jpg" alt="" fill className="object-cover" priority />
+        <Image src="/images/scenic-building.jpg" alt="" fill sizes="100vw" className="object-cover" priority />
         <div className="absolute inset-0 bg-gradient-to-r from-sky-900/90 to-blue-800/75" />
         <div className="relative max-w-3xl mx-auto px-4 sm:px-6 py-16 text-center">
           <span className="inline-block px-4 py-1.5 bg-white/10 backdrop-blur text-sky-200 rounded-full text-sm font-bold mb-4 border border-white/20">🛟 {locale === "th" ? "ศูนย์ช่วยเหลือ" : "Help Center"}</span>

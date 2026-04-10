@@ -141,7 +141,7 @@ export default function SupportUsPage() {
 
         {/* Hero Image */}
         <div className="relative h-56 md:h-72 rounded-2xl overflow-hidden shadow-xl mb-10">
-          <Image src="/images/swimming-pool.jpg" alt="Support" fill className="object-cover" />
+          <Image src="/images/swimming-pool.jpg" alt="Support" fill sizes="100vw" className="object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-sky-900/70 to-transparent flex items-end p-8">
             <p className="text-white font-medium text-lg md:text-xl italic">
               &ldquo;{t("heroQuote")}&rdquo;

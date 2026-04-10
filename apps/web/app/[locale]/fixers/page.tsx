@@ -77,7 +77,7 @@ const TIER_STYLE: Record<string, string> = {
   Expert: "bg-red-50 text-red-700",
 };
 
-type TabKey = "overview" | "jobs" | "requests" | "history" | "chat" | "notifications" | "profile";
+type TabKey = "overview" | "jobs" | "requests" | "properties" | "history" | "chat" | "notifications" | "profile";
 
 export default function FixerProPage() {
   const t = useTranslations("nav");
@@ -102,8 +102,9 @@ export default function FixerProPage() {
   const tabs: { key: TabKey; label: string; icon: string; badge?: number }[] = [
     { key: "overview", label: locale === "th" ? "ภาพรวม" : "Overview", icon: "📊" },
     { key: "jobs", label: locale === "th" ? "งานปัจจุบัน" : "Active Jobs", icon: "🔧", badge: DEMO_ACTIVE_JOBS.length },
-    { key: "requests", label: locale === "th" ? "คำขอใหม่" : "Requests", icon: "📋", badge: DEMO_INCOMING.length },
-    { key: "history", label: locale === "th" ? "ประวัติงาน" : "History", icon: "📜" },
+    { key: "requests", label: locale === "th" ? "คำขอใหม่" : locale === "zh" ? "新请求" : "Requests", icon: "📋", badge: DEMO_INCOMING.length },
+    { key: "properties", label: locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房产" : "Properties", icon: "🏢" },
+    { key: "history", label: locale === "th" ? "ประวัติงาน" : locale === "zh" ? "历史" : "History", icon: "📜" },
     { key: "chat", label: locale === "th" ? "แชท" : "Chat", icon: "💬", badge: DEMO_CHATS.reduce((a, c) => a + c.unread, 0) },
     { key: "notifications", label: locale === "th" ? "แจ้งเตือน" : "Alerts", icon: "🔔", badge: DEMO_NOTIFICATIONS.filter(n => n.unread).length },
     { key: "profile", label: locale === "th" ? "โปรไฟล์" : "Profile", icon: "👤" },
@@ -113,7 +114,7 @@ export default function FixerProPage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50/30">
       {/* Hero Header */}
       <div className="relative overflow-hidden">
-        <Image src="/images/scenic-house.jpg" alt="" fill className="object-cover" priority />
+        <Image src="/images/scenic-house.jpg" alt="" fill sizes="100vw" className="object-cover" priority />
         <div className="absolute inset-0 bg-gradient-to-r from-indigo-900/90 to-purple-800/80" />
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-10">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -185,6 +186,7 @@ export default function FixerProPage() {
         {activeTab === "overview" && <PartnerOverview locale={locale} partner={partner} />}
         {activeTab === "jobs" && <PartnerJobs locale={locale} />}
         {activeTab === "requests" && <PartnerRequests locale={locale} />}
+        {activeTab === "properties" && <PartnerProperties locale={locale} prefix={prefix} />}
         {activeTab === "history" && <PartnerHistory locale={locale} />}
         {activeTab === "chat" && <PartnerChat locale={locale} />}
         {activeTab === "notifications" && <PartnerNotifications locale={locale} />}
@@ -321,6 +323,27 @@ export default function FixerProPage() {
               {locale === "th" ? "* ช่างสามารถอัปเกรดระดับได้เมื่อมีคุณสมบัติครบถ้วน" : "* Fixers can upgrade their tier when qualifications are met."}
             </p>
           </div>
+        </div>
+
+        {/* Disclaimer */}
+        <div className="mt-4 bg-gray-50 border border-gray-200 rounded-xl p-4 text-xs text-gray-500">
+          <p className="font-semibold text-gray-700 mb-1">⚠️ {locale === "th" ? "ข้อจำกัดความรับผิดชอบ" : locale === "zh" ? "免责声明" : "Disclaimer"}</p>
+          <p>{locale === "th"
+            ? "CBLUE เป็นแพลตฟอร์มจับคู่เท่านั้น ราคาที่ตกลง ขอบเขตงาน และการชำระเงินระหว่างคุณกับพาร์ทเนอร์ (ช่าง/มืออาชีพ/ผู้ลงประกาศอสังหาริมทรัพย์) เป็นข้อตกลงโดยตรงระหว่างทั้งสองฝ่าย CBLUE ไม่รับผิดชอบต่อข้อพิพาทด้านราคา คุณภาพงาน หรือข้อตกลงที่เกิดขึ้นหลังกระบวนการจับคู่"
+            : locale === "zh"
+            ? "CBLUE 仅作为匹配平台。您与合作伙伴（技工/专业人士/房产发布者）之间约定的价格、工作范围和付款为双方直接安排。CBLUE 不对匹配过程后产生的价格争议、工作质量或协议承担责任。"
+            : "CBLUE acts as a matching platform only. The agreed price, scope of work, and payment between you and the partner (fixer/professional/property lister) is a direct arrangement between both parties. CBLUE is not responsible for pricing disputes, work quality, or agreements made after the matching process."
+          }</p>
+        </div>
+        {/* Data Retention Notice */}
+        <div className="mt-3 bg-blue-50 border border-blue-200 rounded-xl p-4 text-xs text-blue-700">
+          <p className="font-semibold mb-1">🛡️ {locale === "th" ? "นโยบายการเก็บรักษาข้อมูล (PDPA)" : locale === "zh" ? "数据保留政策 (PDPA)" : "Data Retention Policy (PDPA)"}</p>
+          <p>{locale === "th"
+            ? "ความยินยอม: 3 ปี | ประวัติบริการ: 18 เดือน | บัญชีไม่ใช้งาน: ลบหลัง 12 เดือน"
+            : locale === "zh"
+            ? "同意记录: 3年 | 服务历史: 18个月 | 非活跃账户: 12个月后删除"
+            : "Consent: 3 years | Service history: 18 months | Inactive accounts: deleted after 12 months"
+          }</p>
         </div>
       </div>
     </div>
@@ -717,6 +740,192 @@ function PartnerProfile({ locale, prefix, partner }: { locale: string; prefix: s
             ))}
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ===== PARTNER PROPERTIES ===== */
+const DEMO_PROPERTY_LISTINGS = [
+  { id: "p1", title: "Condo Sukhumvit 21", titleTh: "คอนโดสุขุมวิท 21", titleZh: "素坤逸21号公寓", description: "Modern condo near BTS, 2 bed 2 bath, city view", descriptionTh: "คอนโดใกล้ BTS 2 ห้องนอน 2 ห้องน้ำ วิวเมือง", type: "CONDO", listingType: "SALE", price: "฿5,500,000", status: "active", province: "กรุงเทพมหานคร", views: 234, inquiries: 12, updatedAt: "2026-04-08", images: ["/images/scenic-building.jpg", "/images/scenic-house.jpg"] },
+  { id: "p2", title: "House Rama 9", titleTh: "บ้านพระราม 9", titleZh: "拉玛9号别墅", description: "3-storey house with pool, 4 bed 5 bath", descriptionTh: "บ้าน 3 ชั้น มีสระว่ายน้ำ 4 ห้องนอน 5 ห้องน้ำ", type: "HOUSE", listingType: "RENT", price: "฿35,000/mo", status: "active", province: "กรุงเทพมหานคร", views: 156, inquiries: 8, updatedAt: "2026-04-05", images: ["/images/scenic-house.jpg"] },
+  { id: "p3", title: "Townhouse Bangna", titleTh: "ทาวน์เฮ้าส์บางนา", titleZh: "邦纳联排别墅", description: "Corner townhouse, 3 bed, near expressway", descriptionTh: "ทาวน์เฮ้าส์มุม 3 ห้องนอน ใกล้ทางด่วน", type: "TOWNHOUSE", listingType: "SALE", price: "฿3,200,000", status: "pending", province: "สมุทรปราการ", views: 45, inquiries: 2, updatedAt: "2026-04-01", images: [] },
+];
+
+const PROP_STATUS: Record<string, string> = { active: "bg-green-100 text-green-700", pending: "bg-yellow-100 text-yellow-700", sold: "bg-gray-100 text-gray-600" };
+
+function PartnerProperties({ locale, prefix }: { locale: string; prefix: string }) {
+  const [listings, setListings] = useState(DEMO_PROPERTY_LISTINGS);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ title: "", description: "", price: "", status: "", images: [] as string[] });
+
+  const startEdit = (p: typeof DEMO_PROPERTY_LISTINGS[0]) => {
+    setEditingId(p.id);
+    setEditForm({
+      title: locale === "th" ? p.titleTh : p.title,
+      description: locale === "th" ? p.descriptionTh : p.description,
+      price: p.price,
+      status: p.status,
+      images: [...p.images],
+    });
+  };
+
+  const saveEdit = () => {
+    setListings(listings.map(l => l.id === editingId ? {
+      ...l,
+      title: locale === "th" ? l.title : editForm.title,
+      titleTh: locale === "th" ? editForm.title : l.titleTh,
+      description: locale === "th" ? l.description : editForm.description,
+      descriptionTh: locale === "th" ? editForm.description : l.descriptionTh,
+      price: editForm.price,
+      status: editForm.status as "active" | "pending" | "sold",
+      images: editForm.images,
+    } : l));
+    setEditingId(null);
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const newImages = Array.from(e.target.files).map(f => URL.createObjectURL(f));
+      setEditForm(prev => ({ ...prev, images: [...prev.images, ...newImages].slice(0, 10) }));
+    }
+  };
+
+  const removeImage = (idx: number) => {
+    setEditForm(prev => ({ ...prev, images: prev.images.filter((_, i) => i !== idx) }));
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h2 className="font-bold text-gray-900 flex items-center gap-2">🏢 {locale === "th" ? "รายการอสังหาริมทรัพย์ของฉัน" : locale === "zh" ? "我的房产列表" : "My Property Listings"}</h2>
+            <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "จัดการรายการประกาศอสังหาริมทรัพย์ของคุณ" : locale === "zh" ? "管理您的房产发布" : "Manage your property listings"}</p>
+          </div>
+          <Link href={`${prefix}/properties/register`} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-semibold transition shadow-sm">
+            + {locale === "th" ? "ลงประกาศใหม่" : locale === "zh" ? "添加新列表" : "Add Listing"}
+          </Link>
+        </div>
+
+        {listings.length === 0 ? (
+          <div className="p-10 text-center">
+            <div className="text-5xl mb-4">🏢</div>
+            <p className="text-gray-500">{locale === "th" ? "ยังไม่มีรายการอสังหาริมทรัพย์" : locale === "zh" ? "暂无房产列表" : "No property listings yet"}</p>
+            <Link href={`${prefix}/properties/register`} className="mt-4 inline-block px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-semibold transition">
+              {locale === "th" ? "ลงประกาศแรก" : locale === "zh" ? "发布第一个列表" : "Create Your First Listing"}
+            </Link>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-50">
+            {listings.map((p) => (
+              <div key={p.id} className="px-6 py-4 hover:bg-gray-50/50 transition">
+                {editingId === p.id ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <input value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})} placeholder={locale === "th" ? "ชื่อรายการ" : "Title"} className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-purple-500 outline-none" />
+                      <input value={editForm.price} onChange={e => setEditForm({...editForm, price: e.target.value})} placeholder={locale === "th" ? "ราคา" : "Price"} className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-purple-500 outline-none" />
+                      <select value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-purple-500 outline-none">
+                        <option value="active">{locale === "th" ? "เผยแพร่" : locale === "zh" ? "已发布" : "Active"}</option>
+                        <option value="pending">{locale === "th" ? "รอตรวจสอบ" : locale === "zh" ? "待审核" : "Pending"}</option>
+                        <option value="sold">{locale === "th" ? "ขายแล้ว" : locale === "zh" ? "已售出" : "Sold"}</option>
+                      </select>
+                    </div>
+                    {/* Description */}
+                    <textarea
+                      value={editForm.description}
+                      onChange={e => setEditForm({...editForm, description: e.target.value})}
+                      placeholder={locale === "th" ? "รายละเอียดอสังหาริมทรัพย์..." : locale === "zh" ? "房产描述..." : "Property description..."}
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-purple-500 outline-none resize-none"
+                    />
+                    {/* Image Management */}
+                    <div>
+                      <p className="text-xs font-semibold text-gray-700 mb-2">📷 {locale === "th" ? "รูปภาพ" : locale === "zh" ? "图片" : "Images"} ({editForm.images.length}/10)</p>
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {editForm.images.map((img, idx) => (
+                          <div key={idx} className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-200 group">
+                            <Image src={img} alt={`img-${idx}`} fill className="object-cover" sizes="80px" />
+                            <button
+                              onClick={() => removeImage(idx)}
+                              className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                            >
+                              <span className="text-white text-lg">✕</span>
+                            </button>
+                          </div>
+                        ))}
+                        {editForm.images.length < 10 && (
+                          <label className="w-20 h-20 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center cursor-pointer hover:border-purple-400 hover:bg-purple-50/50 transition">
+                            <span className="text-2xl text-gray-400">+</span>
+                            <input type="file" accept="image/*" multiple onChange={handleImageUpload} className="hidden" />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={saveEdit} className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-semibold hover:bg-purple-700 transition">{locale === "th" ? "บันทึก" : locale === "zh" ? "保存" : "Save"}</button>
+                      <button onClick={() => setEditingId(null)} className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-300 transition">{locale === "th" ? "ยกเลิก" : locale === "zh" ? "取消" : "Cancel"}</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-4">
+                    {/* Thumbnail */}
+                    {p.images.length > 0 && (
+                      <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200 flex-shrink-0">
+                        <Image src={p.images[0] ?? ""} alt={p.title} fill className="object-cover" sizes="64px" />
+                        {p.images.length > 1 && (
+                          <span className="absolute bottom-0 right-0 bg-black/60 text-white text-[9px] px-1 rounded-tl">+{p.images.length - 1}</span>
+                        )}
+                      </div>
+                    )}
+                    {p.images.length === 0 && (
+                      <div className="w-16 h-16 rounded-lg bg-green-100 flex items-center justify-center text-2xl flex-shrink-0">🏢</div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-bold text-gray-900 text-sm">{locale === "th" ? p.titleTh : locale === "zh" ? p.titleZh : p.title}</h3>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${PROP_STATUS[p.status] || ""}`}>
+                          {p.status === "active" ? (locale === "th" ? "เผยแพร่" : locale === "zh" ? "已发布" : "Active") : p.status === "pending" ? (locale === "th" ? "รอตรวจสอบ" : locale === "zh" ? "待审核" : "Pending") : (locale === "th" ? "ขายแล้ว" : locale === "zh" ? "已售出" : "Sold")}
+                        </span>
+                        <span className="text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-500">{p.type}</span>
+                        <span className="text-xs bg-blue-50 px-2 py-0.5 rounded text-blue-600">{p.listingType}</span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? p.descriptionTh : p.description}</p>
+                      <div className="flex items-center gap-4 text-xs text-gray-500 mt-1">
+                        <span>{p.province}</span>
+                        <span>📷 {p.images.length} {locale === "th" ? "รูป" : "photos"}</span>
+                        <span>👁 {p.views} {locale === "th" ? "ชม" : "views"}</span>
+                        <span>💬 {p.inquiries} {locale === "th" ? "สอบถาม" : "inquiries"}</span>
+                        <span>{locale === "th" ? "อัปเดต" : "Updated"}: {p.updatedAt}</span>
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="font-bold text-green-700 text-sm">{p.price}</p>
+                      <div className="flex gap-1 mt-1">
+                        <button onClick={() => startEdit(p)} className="px-3 py-1 text-xs bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 font-semibold transition">
+                          ✏️ {locale === "th" ? "แก้ไข" : locale === "zh" ? "编辑" : "Edit"}
+                        </button>
+                        <button onClick={() => setListings(listings.filter(l => l.id !== p.id))} className="px-3 py-1 text-xs bg-red-100 text-red-700 rounded-lg hover:bg-red-200 font-semibold transition">
+                          🗑️ {locale === "th" ? "ลบ" : locale === "zh" ? "删除" : "Delete"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Tip */}
+      <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-sm text-green-800">
+        <strong>💡 {locale === "th" ? "เคล็ดลับ:" : locale === "zh" ? "提示：" : "Tip:"}</strong>{" "}
+        {locale === "th"
+          ? "คลิก \"แก้ไข\" เพื่ออัปเดตชื่อ ราคา รายละเอียด รูปภาพ หรือสถานะของรายการ หรือคลิก \"ลงประกาศใหม่\" เพื่อเพิ่มอสังหาริมทรัพย์"
+          : locale === "zh"
+            ? "点击「编辑」更新标题、价格、描述、图片或状态，或点击「添加新列表」发布新房产"
+            : "Click \"Edit\" to update title, price, description, images or status. Click \"Add Listing\" to register a new property."}
       </div>
     </div>
   );
