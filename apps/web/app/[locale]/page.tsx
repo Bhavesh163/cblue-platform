@@ -200,7 +200,7 @@ export default function Home() {
       <section className="py-16 bg-white/60">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <ScrollReveal>
-          <div className="flex flex-col gap-4 max-w-4xl mx-auto">
+          <div className="flex flex-col gap-4 w-full">
             <Link
               href={`${prefix}/about`}
               className="group bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl px-8 py-5 flex items-center gap-6 shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 border border-sky-100"

@@ -28,6 +28,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
       "book fixer Thailand", "household maintenance Thailand", "plumber Bangkok", "electrician Thailand",
       "AC repair Thailand", "air conditioning service", "interior design Thailand", "landscaping service",
       "cladding roofing Thailand", "home repair service", "handyman Thailand",
+      "gardening service Thailand", "home renovation Bangkok",
       // Project services EN
       "project team Thailand", "website development Thailand", "mobile app development",
       "AI integration Thailand", "AI chatbot development", "software development Thailand",
@@ -36,6 +37,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
       "HVAC MEP retrofit", "building automation BAS", "smart farming Thailand",
       "environmental services", "security CCTV Thailand", "access control system",
       "green construction Thailand", "kitchen renovation Thailand",
+      "reinstatement Thailand", "fit-out contractor Thailand", "automation Thailand",
       // Professional services EN
       "book professional Thailand", "lawyer Thailand", "architect Thailand",
       "interior designer Thailand", "CPA Thailand", "accountant Thailand",
@@ -44,15 +46,18 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
       // Real estate EN
       "real estate Thailand", "condo Bangkok", "house for sale Thailand", "land for sale Thailand",
       "apartment rental Bangkok", "commercial property Thailand", "warehouse factory Thailand",
-      "property listing Thailand", "buy sell rent property",
+      "property listing Thailand", "buy sell rent property", "villa Thailand", "townhouse Bangkok",
       // AI & tech
       "AI matching platform", "AI-powered home services", "PromptPay QR payment",
       "5-tier pricing", "verified fixer", "KYC verification",
-      // Green & sustainability (from cblue.co.th)
+      "IoT building management", "AI service marketplace",
+      // Green & sustainability (from cblue.co.th / cblue-ai)
       "green building", "green architecture", "sustainable construction Thailand",
       "net zero building", "carbon neutral building", "eco-friendly construction",
       "vertical garden Thailand", "solar thermal heating", "energy efficiency",
       "renewable energy Thailand", "prefabricated modular construction",
+      "climate resilient building", "urban green infrastructure", "geothermal energy",
+      "smart window", "zero emission building", "modular housing",
       // Thai keywords
       "จองช่างซ่อมบ้าน", "ช่างประปา", "ช่างไฟฟ้า", "ช่างแอร์", "ซ่อมบ้าน",
       "ตกแต่งภายใน", "จัดสวน", "ทีมโครงการ", "จองมืออาชีพ",
@@ -62,11 +67,14 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
       "วิศวกรไฟฟ้า", "วิศวกรเครื่องกล", "เจ้าหน้าที่ความปลอดภัย",
       "ระบบรักษาความปลอดภัย", "กล้องวงจรปิด", "ระบบอัตโนมัติ",
       "แพลตฟอร์มบริการ", "จองช่างออนไลน์", "AI จับคู่ช่าง",
+      "บริการซ่อมบำรุง", "ช่างมืออาชีพ", "แพลตฟอร์ม AI", "จองออนไลน์",
+      "อาคารประหยัดพลังงาน", "สถาปัตยกรรมสีเขียว", "บ้านอัจฉริยะ",
       // Chinese keywords
       "泰国家居维修", "泰国房地产", "预约维修技工", "智能家居",
       "太阳能安装", "电动汽车充电站", "绿色建筑", "AI智能匹配",
       "曼谷公寓", "泰国买房", "律师", "建筑师", "工程师",
       "零碳建筑", "可持续建筑", "AI聊天机器人",
+      "泰国物业", "预约专业人士", "智能建筑管理", "节能建筑",
     ],
     openGraph: {
       locale: locale === "th" ? "th_TH" : locale === "zh" ? "zh_CN" : "en_US",
