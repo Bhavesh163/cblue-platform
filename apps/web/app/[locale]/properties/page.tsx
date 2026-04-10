@@ -329,36 +329,75 @@ export default function PropertiesPage() {
               )}
 
               {/* Step 3: PO Creation */}
-              {contactStep === "po" && (
+              {contactStep === "po" && (() => {
+                let custName = "";
+                let custAddr = "";
+                try {
+                  const sub = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("cblue_subscriber") || "{}") : {};
+                  custName = sub.name || sub.email || (locale === "th" ? "ลูกค้า" : locale === "zh" ? "客户" : "Customer");
+                  custAddr = sub.address || sub.province || "";
+                } catch { /* safe fallback */ }
+                return (
                 <div className="text-center">
                   <div className="text-5xl mb-4">📋</div>
                   <h3 className="text-lg font-bold text-gray-900 mb-2">
-                    {locale === "th" ? "สร้างใบสั่งซื้อสำเร็จ" : "Purchase Order Created"}
+                    {locale === "th" ? "สร้างใบสั่งซื้อสำเร็จ" : locale === "zh" ? "采购订单已创建" : "Purchase Order Created"}
                   </h3>
+                  <p className="text-xs text-gray-400 mb-3">{locale === "th" ? "CBLUE ออกให้เป็นฝ่ายที่สาม" : locale === "zh" ? "CBLUE 作为第三方签发" : "Issued by CBLUE as third party"}</p>
                   <div className="bg-gray-50 rounded-xl p-4 mb-4 inline-block">
-                    <p className="text-xs text-gray-500 mb-1">{locale === "th" ? "เลขที่ PO" : "PO Number"}</p>
+                    <p className="text-xs text-gray-500 mb-1">{locale === "th" ? "เลขที่ PO" : locale === "zh" ? "PO 编号" : "PO Number"}</p>
                     <p className="text-2xl font-mono font-extrabold text-emerald-700">{poNumber}</p>
                   </div>
-                  <div className="text-left bg-white border border-gray-200 rounded-xl p-4 mb-4 text-sm space-y-2">
-                    <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ทรัพย์สิน" : "Property"}</span><span className="font-semibold">{showContactFlow.title}</span></div>
-                    <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ระดับ" : "Tier"}</span><span className="font-semibold">{selectedTier}</span></div>
-                    <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ค่าธรรมเนียม" : "Fee"}</span><span className="font-bold text-green-700">฿{PROPERTY_TIERS.find((ti) => ti.name === selectedTier)?.fee || 0}</span></div>
-                    <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "วันที่" : "Date"}</span><span className="font-semibold">{new Date().toLocaleDateString()}</span></div>
+
+                  {/* Formal Parties */}
+                  <div className="grid grid-cols-2 gap-3 mb-4 text-left">
+                    <div className="bg-sky-50 border border-sky-200 rounded-xl p-3">
+                      <p className="text-[10px] font-bold text-sky-600 uppercase tracking-wider mb-1">{locale === "th" ? "ผู้ว่าจ้าง" : locale === "zh" ? "客户方" : "Client / Viewer"}</p>
+                      <p className="text-sm font-semibold text-gray-800 truncate">{custName}</p>
+                      {custAddr && <p className="text-[11px] text-gray-500 truncate">{custAddr}</p>}
+                    </div>
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                      <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mb-1">{locale === "th" ? "ผู้ลงประกาศ" : locale === "zh" ? "房源方" : "Property Lister"}</p>
+                      <p className="text-sm font-semibold text-gray-800 truncate">{showContactFlow.title}</p>
+                      <p className="text-[11px] text-gray-500">{selectedTier}</p>
+                    </div>
                   </div>
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700 mb-4">
+
+                  <div className="text-left bg-white border border-gray-200 rounded-xl p-4 mb-4 text-sm space-y-2">
+                    <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ทรัพย์สิน" : locale === "zh" ? "房产" : "Property"}</span><span className="font-semibold">{showContactFlow.title}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ระดับ" : locale === "zh" ? "等级" : "Tier"}</span><span className="font-semibold">{selectedTier}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}</span><span className="font-bold text-green-700">฿{PROPERTY_TIERS.find((ti) => ti.name === selectedTier)?.fee || 0}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "วันที่" : locale === "zh" ? "日期" : "Date"}</span><span className="font-semibold">{new Date().toLocaleDateString()}</span></div>
+                  </div>
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700 mb-3">
                     ⚠️ {locale === "th"
                       ? "เก็บเลขที่ PO ไว้เป็นหลักฐาน ราคาทรัพย์สินเป็นการเจรจาระหว่างคู่สัญญาโดยตรง"
+                      : locale === "zh"
+                      ? "请保留此PO编号作为凭据。房产价格由双方直接协商。"
                       : "Keep this PO number for your records. Property pricing is negotiated directly between parties."}
+                  </div>
+                  <div className="text-left bg-gray-100 border border-gray-200 rounded-xl p-3 text-[11px] text-gray-600 mb-4">
+                    <p className="font-semibold text-gray-700 mb-1">
+                      {locale === "th" ? "📎 เงื่อนไขเพิ่มเติม" : locale === "zh" ? "📎 补充条款" : "📎 Addendum Terms"}
+                    </p>
+                    <p>
+                      {locale === "th"
+                        ? "ข้อมูลราคา ข้อตกลงใหม่ หรือประเด็นสำคัญจะไม่ถูกเปิดเผยต่อบุคคลที่สามเพื่อป้องกันความเสี่ยงของทั้งสองฝ่าย"
+                        : locale === "zh"
+                        ? "价格差异、新协议或关键问题不会向第三方披露，以防范双方潜在风险。"
+                        : "Price differentials, new agreements, or crucial issues shall not be disclosed to third parties to prevent potential risks for both parties."}
+                    </p>
                   </div>
                   <button onClick={() => {
                     setContactStep("notify");
                     setListerConfirmed(false);
                     setTimeout(() => setListerConfirmed(true), 4000);
                   }} className="w-full py-3 bg-green-700 text-white font-bold rounded-xl hover:bg-green-800 transition">
-                    {locale === "th" ? "แจ้งเตือนผู้ลงประกาศ" : "Notify Lister"}
+                    {locale === "th" ? "แจ้งเตือนผู้ลงประกาศ" : locale === "zh" ? "通知房源方" : "Notify Lister"}
                   </button>
                 </div>
-              )}
+                );
+              })()}
 
               {/* Step 4: Notify Lister */}
               {contactStep === "notify" && (

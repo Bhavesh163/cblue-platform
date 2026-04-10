@@ -321,7 +321,15 @@
       "q25": "Is my data protected?",
       "a25": "Yes. CBLUE complies with Thailand's PDPA (Personal Data Protection Act). Your data is encrypted, retained only as long as necessary, and never shared without consent. You can request data deletion anytime.",
       "q26": "Do I need to log in to book?",
-      "a26": "Yes, you must be logged in or registered before submitting any booking request. This ensures secure communication and proper tracking of your jobs and payments."
+      "a26": "Yes, you must be logged in or registered before submitting any booking request. This ensures secure communication and proper tracking of your jobs and payments.",
+      "q27": "How does the real estate contact flow work?",
+      "a27": "After searching and selecting a property, you must log in first. Then choose a tier, pay the processing fee via PromptPay QR, and a PO is created with both your details and the lister's. After the lister confirms, you can chat anonymously, schedule a meeting, and rate the experience.",
+      "q28": "How does AI evaluate fixer registration?",
+      "a28": "CBLUE AI runs an 8-phase evaluation: KYC document verification, company validation, online credential search, experience analysis, fraud detection, portfolio review, price list evaluation, and tier computation. It scores 7 factors (100 points total) and assigns a tier from Economy to Expert.",
+      "q29": "Can fixers upgrade their tier?",
+      "a29": "Yes. If a fixer adds more portfolio evidence, updates their KYC, gains work experience through CBLUE jobs, or improves their profile, the AI will re-evaluate and may upgrade them to a higher tier automatically.",
+      "q30": "How are the top 8 matches selected?",
+      "a30": "AI selects: 2 cheapest in area, 2 highest-rated (stars + satisfaction %), 1 cheapest upper-tier partner, 1 highest-rated upper-tier partner, and 1 returning partner. You can nominate an 8th candidate by entering their partner ID."
     }
   },
   "subscription": {

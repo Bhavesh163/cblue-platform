@@ -574,8 +574,14 @@ export default function FixerResults({
     }
   };
 
-  const handleVariationDecision = () => {
-    setStep("complete");
+  const handleVariationDecision = (approved: boolean) => {
+    if (!approved) {
+      // Reject: skip variation, go straight to completion without addendum
+      setStep("complete");
+    } else {
+      // Approve: addendum accepted, proceed to completion
+      setStep("complete");
+    }
   };
 
   const handleSubmitReview = () => {
@@ -788,13 +794,13 @@ export default function FixerResults({
 
           <div className="flex gap-3">
             <button
-              onClick={handleVariationDecision}
+              onClick={() => handleVariationDecision(true)}
               className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl transition"
             >
               {t("approveVariation")}
             </button>
             <button
-              onClick={handleVariationDecision}
+              onClick={() => handleVariationDecision(false)}
               className="flex-1 py-3 bg-red-100 hover:bg-red-200 text-red-700 font-semibold rounded-xl transition"
             >
               {t("rejectVariation")}
@@ -1052,18 +1058,41 @@ export default function FixerResults({
   // Step: PO Created
   if (step === "po" && selectedFixer) {
     const today = new Date().toLocaleDateString(locale === "th" ? "th-TH" : locale === "zh" ? "zh-CN" : "en-US", { year: "numeric", month: "long", day: "numeric" });
+    // Get customer info from localStorage for formal PO address
+    let customerName = "";
+    let customerAddress = "";
+    try {
+      const sub = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("cblue_subscriber") || "{}") : {};
+      customerName = sub.name || sub.email || (locale === "th" ? "ลูกค้า" : locale === "zh" ? "客户" : "Customer");
+      customerAddress = sub.address || sub.province || "";
+    } catch { /* safe fallback */ }
     return (
-      <div className="mx-auto max-w-md px-4 py-12">
+      <div className="mx-auto max-w-lg px-4 py-12">
         <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8">
           <div className="text-center mb-6">
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-100 flex items-center justify-center">
               <span className="text-2xl">📄</span>
             </div>
             <h2 className="text-xl font-bold text-gray-800">{t("poTitle")}</h2>
+            <p className="text-xs text-gray-400 mt-1">{locale === "th" ? "CBLUE ออกให้เป็นฝ่ายที่สาม" : locale === "zh" ? "CBLUE 作为第三方签发" : "Issued by CBLUE as third party"}</p>
+          </div>
+
+          {/* Formal Parties */}
+          <div className="grid grid-cols-2 gap-3 mb-5">
+            <div className="bg-sky-50 border border-sky-200 rounded-xl p-3">
+              <p className="text-[10px] font-bold text-sky-600 uppercase tracking-wider mb-1">{locale === "th" ? "ผู้ว่าจ้าง" : locale === "zh" ? "客户方" : "Client / Hirer"}</p>
+              <p className="text-sm font-semibold text-gray-800 truncate">{customerName}</p>
+              {customerAddress && <p className="text-[11px] text-gray-500 truncate">{customerAddress}</p>}
+            </div>
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+              <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mb-1">{locale === "th" ? "ผู้ให้บริการ" : locale === "zh" ? "服务方" : "Service Provider"}</p>
+              <p className="text-sm font-semibold text-gray-800 truncate">{selectedFixer.alias}</p>
+              <p className="text-[11px] text-gray-500">{locale === "th" ? `ระดับ: ${tierLabel}` : locale === "zh" ? `等级: ${tierLabel}` : `Tier: ${tierLabel}`}</p>
+            </div>
           </div>
 
           {/* PO Details */}
-          <div className="bg-gray-50 rounded-xl p-5 space-y-3 text-sm mb-6">
+          <div className="bg-gray-50 rounded-xl p-5 space-y-3 text-sm mb-5">
             <div className="flex justify-between items-center">
               <span className="text-gray-500">{t("poNumber")}</span>
               <span className="font-mono font-bold text-lg text-gray-900">{poNumber}</span>
@@ -1096,9 +1125,23 @@ export default function FixerResults({
           </div>
 
           {/* Pricing Disclaimer */}
-          <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 mb-6">
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 mb-4">
             <p className="font-bold mb-1">⚠️ {t("pricingDisclaimer")}</p>
             <p>{t("poDisclaimer")}</p>
+          </div>
+
+          {/* Addendum / Variation Terms */}
+          <div className="p-3 bg-gray-100 border border-gray-200 rounded-lg text-[11px] text-gray-600 mb-5">
+            <p className="font-semibold text-gray-700 mb-1">
+              {locale === "th" ? "📎 เงื่อนไขเพิ่มเติม" : locale === "zh" ? "📎 补充条款" : "📎 Addendum Terms"}
+            </p>
+            <p>
+              {locale === "th"
+                ? "การเปลี่ยนแปลงขอบเขตงาน (Variation) จะต้องริเริ่มโดยผู้ให้บริการและได้รับการยืนยันจากลูกค้าก่อนดำเนินการ การเปลี่ยนแปลงที่ได้รับการอนุมัติจะถือเป็นส่วนเพิ่มเติมของ PO นี้ ข้อมูลราคา ข้อตกลงใหม่ หรือประเด็นสำคัญจะไม่ถูกเปิดเผยต่อบุคคลที่สามเพื่อป้องกันความเสี่ยง"
+                : locale === "zh"
+                ? "工作范围变更（变更）须由服务商发起并经客户确认后方可执行。已批准的变更将构成本采购订单的补充条款。价格差异、新协议或关键问题不会向第三方披露，以防范潜在风险。"
+                : "Variation orders must be initiated by the service provider and confirmed by the customer before proceeding. Approved variations constitute an addendum to this PO. Price differentials, new agreements, or crucial issues shall not be disclosed to third parties to prevent potential risks for both parties."}
+            </p>
           </div>
 
           <button

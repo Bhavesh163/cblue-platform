@@ -172,7 +172,6 @@ export default function FixerRegisterPage() {
         email: form.email,
         phone: form.phone,
         company: form.company,
-        password: form.password,
         bio: form.bio,
         yearsExperience: form.yearsExperience
           ? parseInt(form.yearsExperience)
@@ -205,7 +204,8 @@ export default function FixerRegisterPage() {
         kycImageCount: kycImages.length,
         portfolioImageCount: portfolioImages.length,
       };
-      console.log("Fixer registration submission:", payload);
+      // payload ready for API submission (password excluded from logs for security)
+      console.log("Fixer registration submission:", { ...payload, fieldsCount: Object.keys(payload).length });
       setSuccess(true);
     } catch {
       setError(t("consent"));
