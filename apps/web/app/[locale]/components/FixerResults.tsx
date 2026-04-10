@@ -288,16 +288,18 @@ function generateDemoFixers(service: string): Fixer[] {
   const byPrice = [...pool].sort((a, b) => a.price - b.price);
   const bySatisfaction = [...pool].sort((a, b) => {
     if (b.rating !== a.rating) return b.rating - a.rating; // highest stars first
+    if (b.satisfaction !== a.satisfaction) return b.satisfaction - a.satisfaction; // tiebreak: satisfaction %
     return b.totalJobs - a.totalJobs; // tiebreak: more jobs = more good reviews
   });
 
   // 1. TWO CHEAPEST in area
   for (const f of byPrice) { if (selected.length < 2) pick(f); else break; }
 
-  // 2. TWO HIGHEST SATISFACTION (stars, tiebreak by totalJobs as proxy for reviews)
-  for (const f of bySatisfaction) { if (selected.filter(s => !byPrice.slice(0, 2).some(c => c.id === s.id) || used.has(s.id)).length < 2 || selected.length < 4) { if (!used.has(f.id)) { pick(f); if (selected.length >= 4) break; } } }
-  // Ensure we have 4 so far
-  for (const f of bySatisfaction) { if (selected.length >= 4) break; pick(f); }
+  // 2. TWO HIGHEST SATISFACTION (stars, tiebreak by satisfaction %, then totalJobs)
+  for (const f of bySatisfaction) {
+    if (selected.length >= 4) break;
+    if (!used.has(f.id)) pick(f);
+  }
 
   // 3. ONE CHEAPEST OF UPPER TIER (corporate+specialist+expert)
   const upperTiers = byPrice.filter(f => tierRank[f.tier] >= 2 && !used.has(f.id));
@@ -443,6 +445,21 @@ export default function FixerResults({
 
   // Variation state
   const [showVariation, setShowVariation] = useState(false);
+
+  // Nomination state (must be at top level, not after early returns)
+  const [nominateId, setNominateId] = useState("");
+  const [nominatedFixer, setNominatedFixer] = useState<Fixer | null>(null);
+
+  // Variation amount (stored in state to avoid Math.random() on re-render)
+  const [variationAmount, setVariationAmount] = useState(0);
+
+  // Compute variation amount once when entering variation step
+  useEffect(() => {
+    if (step === "variation" && selectedFixer) {
+      const f = getProcessingFee(bookingType, selectedFixer.tier);
+      setVariationAmount(Math.floor(f * 0.3 + Math.random() * f * 0.5));
+    }
+  }, [step, selectedFixer, bookingType]);
 
   // AI Matching animation sequence
   useEffect(() => {
@@ -743,7 +760,6 @@ export default function FixerResults({
 
   // Step: Variation / Addendum
   if (step === "variation" && selectedFixer) {
-    const variationAmount = Math.floor(fee * 0.3 + Math.random() * fee * 0.5);
     return (
       <div className="mx-auto max-w-md px-4 py-12">
         <div className="bg-white rounded-2xl shadow-xl border border-orange-200 p-8">
@@ -1158,9 +1174,6 @@ export default function FixerResults({
   }
 
   // Step: Fixer List — AI Top 8 Selection
-  // Nomination state
-  const [nominateId, setNominateId] = useState("");
-  const [nominatedFixer, setNominatedFixer] = useState<Fixer | null>(null);
 
   const handleNominate = () => {
     if (!nominateId.trim()) return;

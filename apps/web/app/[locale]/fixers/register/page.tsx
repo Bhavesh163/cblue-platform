@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, type FormEvent, type ChangeEvent } from "react";
+import { useState, useCallback, useEffect, type FormEvent, type ChangeEvent } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { FIXER_ALL_SERVICES, THAI_PROVINCES } from "../../lib/constants";
 import { getDistrictsForProvince } from "../../lib/thai-address-data";
@@ -226,7 +226,9 @@ export default function FixerRegisterPage() {
     credentialStatus: "verified" | "partial" | "unverified";
   } | null>(null);
 
-  function runAiEvaluation() {
+  // AI Evaluation runs once when form submission succeeds
+  useEffect(() => {
+    if (!success || aiStep) return;
     setAiStep("evaluating");
     setAiProgress(0);
     setAiPhase(0);
@@ -368,10 +370,10 @@ export default function FixerRegisterPage() {
         setAiStep("verified");
       }
     }, 600);
-  }
+    return () => clearInterval(phaseInterval);
+  }, [success]);
 
   if (success) {
-    if (!aiStep) runAiEvaluation();
 
     const TIER_COLORS: Record<string, string> = {
       Economy: "from-green-400 to-green-600",
