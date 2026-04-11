@@ -405,7 +405,7 @@ const tierColors: Record<string, { bg: string; text: string; border: string }> =
 
 const getTierColor = (tier: string) => tierColors[tier] ?? tierColors["standard"]!;
 
-type Step = "matching" | "list" | "confirm" | "po" | "notify" | "payment" | "chat" | "meeting" | "variation" | "complete" | "partner-rate" | "done";
+type Step = "matching" | "list" | "confirm" | "po" | "notify" | "payment" | "chat" | "meeting" | "variation" | "complete" | "rate" | "done";
 
 export default function FixerResults({
   locale,
@@ -452,6 +452,7 @@ export default function FixerResults({
     return pool[Math.floor(Math.random() * pool.length)]!;
   });
   const [partnerRateReady, setPartnerRateReady] = useState(false);
+  const [customerRated, setCustomerRated] = useState(false);
 
   // Variation state
   const [showVariation, setShowVariation] = useState(false);
@@ -594,9 +595,13 @@ export default function FixerResults({
     }
   };
 
+  const handleCompleteConfirm = () => {
+    setStep("rate");
+  };
+
   const handleSubmitReview = () => {
+    setCustomerRated(true);
     setPartnerRateReady(false);
-    setStep("partner-rate");
     // Simulate partner submitting their rating after 3 seconds
     setTimeout(() => setPartnerRateReady(true), 3000);
   };
@@ -670,58 +675,6 @@ export default function FixerResults({
     );
   }
 
-  // Step: Partner Rating — waiting for partner to rate before done
-  if (step === "partner-rate" && selectedFixer) {
-    return (
-      <div className="mx-auto max-w-md px-4 py-12">
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 text-center">
-          <div className="text-5xl mb-4">📝</div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">
-            {locale === "th" ? "รอพาร์ทเนอร์ให้คะแนน" : locale === "zh" ? "等待合作伙伴评分" : "Waiting for Partner's Rating"}
-          </h2>
-          <p className="text-sm text-gray-500 mb-6">
-            {locale === "th"
-              ? `${selectedFixer.alias} กำลังให้คะแนนและแสดงความคิดเห็นเกี่ยวกับประสบการณ์`
-              : locale === "zh"
-              ? `${selectedFixer.alias} 正在评分和评论`
-              : `${selectedFixer.alias} is rating and commenting on the experience`}
-          </p>
-
-          {/* Customer's submitted rating */}
-          <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 mb-4">
-            <p className="text-xs font-bold text-sky-700 mb-1">{locale === "th" ? "คะแนนของคุณ" : locale === "zh" ? "您的评分" : "Your Rating"}</p>
-            <div className="flex justify-center"><Stars rating={customerRating} /></div>
-            {customerComment && <p className="text-xs text-gray-500 mt-1 italic">&ldquo;{customerComment}&rdquo;</p>}
-          </div>
-
-          {/* Partner rating — loading then reveal */}
-          {!partnerRateReady ? (
-            <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 mb-6">
-              <div className="flex items-center justify-center gap-3">
-                <span className="inline-block w-5 h-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
-                <span className="text-sm text-gray-500">{locale === "th" ? "กำลังรอพาร์ทเนอร์ให้คะแนน..." : locale === "zh" ? "等待伙伴评分中..." : "Waiting for partner to submit rating..."}</span>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-6 animate-fade-in">
-              <p className="text-xs font-bold text-emerald-700 mb-1">{locale === "th" ? "คะแนนจากพาร์ทเนอร์" : locale === "zh" ? "合作伙伴评分" : "Partner's Rating of You"}</p>
-              <div className="flex justify-center"><Stars rating={fixerRatingOfCustomer} /></div>
-              <p className="text-xs text-gray-500 mt-1 italic">&ldquo;{fixerCommentOfCustomer}&rdquo;</p>
-            </div>
-          )}
-
-          <button
-            onClick={() => setStep("done")}
-            disabled={!partnerRateReady}
-            className="w-full py-3 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-xl shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {locale === "th" ? "ดูสรุป" : locale === "zh" ? "查看摘要" : "View Summary"}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   // Step: Done — Final summary with both ratings
   if (step === "done") {
     return (
@@ -773,44 +726,29 @@ export default function FixerResults({
     );
   }
 
-  // Step: Work Completion & Review
+  // Step: Work Completion Confirmation (11th step)
   if (step === "complete" && selectedFixer) {
     return (
       <div className="mx-auto max-w-md px-4 py-12">
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8">
-          <div className="text-center mb-6">
-            <div className="text-5xl mb-3">⭐</div>
-            <h2 className="text-xl font-bold text-gray-800">{t("completeTitle")}</h2>
-            <p className="text-gray-500 text-sm mt-1">{t("completeDesc")}</p>
-          </div>
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 text-center">
+          <div className="text-5xl mb-4">✅</div>
+          <h2 className="text-xl font-bold text-gray-800">{t("completeTitle")}</h2>
+          <p className="text-gray-500 text-sm mt-2">{t("completeDesc")}</p>
 
           {/* Fixer info */}
-          <div className="bg-gray-50 rounded-xl p-4 mb-6 flex items-center gap-3">
+          <div className="bg-gray-50 rounded-xl p-4 my-6 flex items-center gap-3">
             <div className={`w-12 h-12 rounded-full ${getTierColor(selectedFixer.tier).bg} flex items-center justify-center`}>
               <span className={`font-bold ${getTierColor(selectedFixer.tier).text}`}>{selectedFixer.alias.split("-")[1]}</span>
             </div>
-            <div>
+            <div className="text-left">
               <p className="font-semibold text-gray-800">{selectedFixer.alias}</p>
               <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${getTierColor(selectedFixer.tier).bg} ${getTierColor(selectedFixer.tier).text}`}>{tierLabel}</span>
             </div>
           </div>
 
-          {/* Rating input */}
-          <div className="mb-5">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">{t("rateLabel")}</label>
-            <RatingInput value={customerRating} onChange={setCustomerRating} />
-          </div>
-
-          {/* Comment */}
-          <div className="mb-6">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">{t("commentLabel")}</label>
-            <textarea
-              value={customerComment}
-              onChange={(e) => setCustomerComment(e.target.value)}
-              placeholder={t("commentPlaceholder")}
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:border-sky-500"
-            />
+          <div className="bg-gray-50 rounded-xl p-4 mb-6 text-sm space-y-2">
+            <p className="text-gray-500">{locale === "th" ? "เลขที่ PO" : "PO Number"}: <span className="font-mono font-bold text-gray-800">{poNumber}</span></p>
+            <p className="text-gray-500">{locale === "th" ? "ค่าบริการ" : locale === "zh" ? "服务费" : "Processing Fee"}: <span className="font-bold text-gray-800">฿{fee.toLocaleString()}</span></p>
           </div>
 
           {/* Disclaimer */}
@@ -819,12 +757,90 @@ export default function FixerResults({
           </div>
 
           <button
-            onClick={handleSubmitReview}
-            disabled={customerRating === 0}
-            className="w-full py-3 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-xl shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={handleCompleteConfirm}
+            className="w-full py-3 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-xl shadow-lg transition"
           >
-            {t("submitReview")}
+            {locale === "th" ? "ยืนยันเสร็จสิ้น → ให้คะแนน" : locale === "zh" ? "确认完成 → 评分" : "Confirm Complete → Rate"}
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Step: Both-Party Star Rating & Comment (+1 step)
+  if (step === "rate" && selectedFixer) {
+    return (
+      <div className="mx-auto max-w-md px-4 py-12">
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8">
+          <div className="text-center mb-6">
+            <div className="text-5xl mb-3">⭐</div>
+            <h2 className="text-xl font-bold text-gray-800">
+              {locale === "th" ? "ให้คะแนนและรีวิว" : locale === "zh" ? "评分与评论" : "Rate & Review"}
+            </h2>
+            <p className="text-gray-500 text-sm mt-1">
+              {locale === "th" ? "ทั้งสองฝ่ายให้คะแนนก่อนปิดงาน" : locale === "zh" ? "双方评分后结束" : "Both parties rate before closing"}
+            </p>
+          </div>
+
+          {/* Customer rating form */}
+          {!customerRated ? (
+            <>
+              <div className="mb-5">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">{t("rateLabel")}</label>
+                <RatingInput value={customerRating} onChange={setCustomerRating} />
+              </div>
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">{t("commentLabel")}</label>
+                <textarea
+                  value={customerComment}
+                  onChange={(e) => setCustomerComment(e.target.value)}
+                  placeholder={t("commentPlaceholder")}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:border-sky-500"
+                />
+              </div>
+              <button
+                onClick={handleSubmitReview}
+                disabled={customerRating === 0}
+                className="w-full py-3 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-xl shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {t("submitReview")}
+              </button>
+            </>
+          ) : (
+            <>
+              {/* Customer's submitted rating */}
+              <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 mb-4">
+                <p className="text-xs font-bold text-sky-700 mb-1">{locale === "th" ? "คะแนนของคุณ" : locale === "zh" ? "您的评分" : "Your Rating"}</p>
+                <div className="flex justify-center"><Stars rating={customerRating} /></div>
+                {customerComment && <p className="text-xs text-gray-500 mt-1 italic">&ldquo;{customerComment}&rdquo;</p>}
+              </div>
+
+              {/* Partner rating — loading then reveal */}
+              {!partnerRateReady ? (
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 mb-6">
+                  <div className="flex items-center justify-center gap-3">
+                    <span className="inline-block w-5 h-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
+                    <span className="text-sm text-gray-500">{locale === "th" ? "กำลังรอพาร์ทเนอร์ให้คะแนน..." : locale === "zh" ? "等待伙伴评分中..." : "Waiting for partner to submit rating..."}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-6 animate-fade-in">
+                  <p className="text-xs font-bold text-emerald-700 mb-1">{locale === "th" ? "คะแนนจากพาร์ทเนอร์" : locale === "zh" ? "合作伙伴评分" : "Partner's Rating of You"}</p>
+                  <div className="flex justify-center"><Stars rating={fixerRatingOfCustomer} /></div>
+                  <p className="text-xs text-gray-500 mt-1 italic">&ldquo;{fixerCommentOfCustomer}&rdquo;</p>
+                </div>
+              )}
+
+              <button
+                onClick={() => setStep("done")}
+                disabled={!partnerRateReady}
+                className="w-full py-3 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-xl shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {locale === "th" ? "ดูสรุป" : locale === "zh" ? "查看摘要" : "View Summary"}
+              </button>
+            </>
+          )}
         </div>
       </div>
     );
@@ -1128,7 +1144,7 @@ export default function FixerResults({
     let customerName = "";
     let customerAddress = "";
     try {
-      const sub = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("cblue_subscriber") || "{}") : {};
+      const sub = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("subscriber") || "{}") : {};
       customerName = sub.name || sub.email || (locale === "th" ? "ลูกค้า" : locale === "zh" ? "客户" : "Customer");
       customerAddress = sub.address || sub.province || "";
     } catch { /* safe fallback */ }

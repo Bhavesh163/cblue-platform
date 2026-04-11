@@ -58,6 +58,15 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
       "renewable energy Thailand", "prefabricated modular construction",
       "climate resilient building", "urban green infrastructure", "geothermal energy",
       "smart window", "zero emission building", "modular housing",
+      // From cblue.co.th content — green building & future housing
+      "green roof Thailand", "urban forest", "community garden",
+      "rainwater harvesting system", "natural ventilation system",
+      "bamboo construction", "recycled steel construction",
+      "thermal insulation Thailand", "sustainable living Thailand",
+      "eco home Thailand", "smart city Thailand", "future housing Thailand",
+      "climate change resilience", "decarbonization building",
+      "mushroom composite material", "water filtration system",
+      "urban farming", "air purifying plants", "scalable housing",
       // Thai keywords
       "จองช่างซ่อมบ้าน", "ช่างประปา", "ช่างไฟฟ้า", "ช่างแอร์", "ซ่อมบ้าน",
       "ตกแต่งภายใน", "จัดสวน", "ทีมโครงการ", "จองมืออาชีพ",
@@ -69,6 +78,11 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
       "แพลตฟอร์มบริการ", "จองช่างออนไลน์", "AI จับคู่ช่าง",
       "บริการซ่อมบำรุง", "ช่างมืออาชีพ", "แพลตฟอร์ม AI", "จองออนไลน์",
       "อาคารประหยัดพลังงาน", "สถาปัตยกรรมสีเขียว", "บ้านอัจฉริยะ",
+      // Thai keywords from cblue.co.th
+      "หลังคาสีเขียว", "ป่าในเมือง", "สวนชุมชน", "ระบบเก็บน้ำฝน",
+      "ฉนวนกันความร้อน", "พลังงานทดแทน", "การลดคาร์บอน",
+      "บ้านสำเร็จรูป", "สวนแนวตั้ง", "ระบบอัตโนมัติในอาคาร",
+      "บ้านประหยัดพลังงาน", "เมืองอัจฉริยะ", "การก่อสร้างที่ยั่งยืน",
       // Chinese keywords
       "泰国家居维修", "泰国房地产", "预约维修技工", "智能家居",
       "太阳能安装", "电动汽车充电站", "绿色建筑", "AI智能匹配",

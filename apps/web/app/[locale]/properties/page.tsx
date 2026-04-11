@@ -40,7 +40,7 @@ export default function PropertiesPage() {
   const [subscriber, setSubscriber] = useState<{ name: string; email: string } | null>(null);
   const [showLoginGate, setShowLoginGate] = useState(false);
   const [showContactFlow, setShowContactFlow] = useState<Property | null>(null);
-  const [contactStep, setContactStep] = useState<"tier" | "payment" | "po" | "notify" | "chat" | "meeting" | "complete" | "lister-rate" | "done">("tier");
+  const [contactStep, setContactStep] = useState<"tier" | "payment" | "po" | "notify" | "chat" | "meeting" | "rate" | "done">("tier");
   const [selectedTier, setSelectedTier] = useState("");
   const [showPdpa, setShowPdpa] = useState(false);
   const [poNumber, setPoNumber] = useState("");
@@ -62,6 +62,12 @@ export default function PropertiesPage() {
     return pool[Math.floor(Math.random() * pool.length)]!;
   });
   const [listerRateReady, setListerRateReady] = useState(false);
+  const [customerRated, setCustomerRated] = useState(false);
+  const [authPassword, setAuthPassword] = useState("");
+  const [authConfirmPassword, setAuthConfirmPassword] = useState("");
+  const [authMode, setAuthMode] = useState<"login" | "register">("register");
+  const [authError, setAuthError] = useState("");
+  const [authEmail, setAuthEmail] = useState("");
   const [filters, setFilters] = useState({
     propertyType: "",
     listingType: "",
@@ -144,6 +150,7 @@ export default function PropertiesPage() {
     setMeetingTime("");
     setRating(0);
     setRatingComment("");
+    setCustomerRated(false);
   }
 
   function generatePO() {
@@ -199,25 +206,59 @@ export default function PropertiesPage() {
         />
       )}
 
-      {/* Login Gate Modal */}
+      {/* Inline Login Gate */}
       {showLoginGate && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-8 text-center shadow-2xl">
-            <div className="text-5xl mb-4">🔒</div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">
-              {locale === "th" ? "กรุณาเข้าสู่ระบบก่อน" : locale === "zh" ? "请先登录" : "Login Required"}
-            </h2>
-            <p className="text-sm text-gray-500 mb-6">
-              {locale === "th" ? "คุณต้องเข้าสู่ระบบก่อนติดต่อผู้ลงประกาศ" : locale === "zh" ? "您需要登录才能联系发布者" : "You need to log in before contacting a property lister"}
-            </p>
-            <div className="flex gap-3 justify-center">
-              <Link href={`${prefix}/subscription/login`} className="px-6 py-2.5 bg-green-700 text-white rounded-xl font-bold text-sm hover:bg-green-800 transition">
-                {locale === "th" ? "เข้าสู่ระบบ" : "Log In"}
-              </Link>
-              <button onClick={() => setShowLoginGate(false)} className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-xl font-semibold text-sm hover:bg-gray-50 transition">
-                {locale === "th" ? "ยกเลิก" : "Cancel"}
+          <div className="bg-white rounded-2xl max-w-md w-full p-8 shadow-2xl">
+            <div className="text-center mb-6">
+              <div className="text-5xl mb-4">🔒</div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">
+                {locale === "th" ? "กรุณาเข้าสู่ระบบก่อน" : locale === "zh" ? "请先登录" : "Login Required"}
+              </h2>
+              <p className="text-sm text-gray-500">
+                {locale === "th" ? "เข้าสู่ระบบหรือสมัครสมาชิกเพื่อติดต่อผู้ลงประกาศ" : locale === "zh" ? "登录或注册以联系发布者" : "Log in or register to contact the property lister"}
+              </p>
+            </div>
+            {/* Toggle */}
+            <div className="flex gap-2 mb-4">
+              <button onClick={() => setAuthMode("login")} className={`flex-1 py-2 text-sm font-semibold rounded-lg transition ${authMode === "login" ? "bg-green-700 text-white" : "bg-gray-100 text-gray-600"}`}>
+                {locale === "th" ? "เข้าสู่ระบบ" : locale === "zh" ? "登录" : "Login"}
+              </button>
+              <button onClick={() => setAuthMode("register")} className={`flex-1 py-2 text-sm font-semibold rounded-lg transition ${authMode === "register" ? "bg-green-700 text-white" : "bg-gray-100 text-gray-600"}`}>
+                {locale === "th" ? "สมัครสมาชิก" : locale === "zh" ? "注册" : "Register"}
               </button>
             </div>
+            <div className="space-y-3">
+              <input type="email" placeholder={locale === "th" ? "อีเมล" : "Email"} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
+                value={authEmail}
+                onChange={(e) => { setAuthEmail(e.target.value); setAuthError(""); }}
+              />
+              <input type="password" placeholder={locale === "th" ? "รหัสผ่าน (อย่างน้อย 6 ตัว)" : "Password (min 6 chars)"} value={authPassword}
+                onChange={(e) => { setAuthPassword(e.target.value); setAuthError(""); }}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
+              />
+              {authMode === "register" && (
+                <input type="password" placeholder={locale === "th" ? "ยืนยันรหัสผ่าน" : "Confirm Password"} value={authConfirmPassword}
+                  onChange={(e) => { setAuthConfirmPassword(e.target.value); setAuthError(""); }}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
+                />
+              )}
+              {authError && <p className="text-xs text-red-600">{authError}</p>}
+              <button onClick={() => {
+                if (!authEmail) { setAuthError(locale === "th" ? "กรุณากรอกอีเมล" : "Please enter email"); return; }
+                if (authPassword.length < 6) { setAuthError(locale === "th" ? "รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร" : "Password min 6 chars"); return; }
+                if (authMode === "register" && authPassword !== authConfirmPassword) { setAuthError(locale === "th" ? "รหัสผ่านไม่ตรงกัน" : "Passwords do not match"); return; }
+                const newSub = { name: authEmail.split("@")[0] || authEmail, email: authEmail, role: "customer" };
+                localStorage.setItem("subscriber", JSON.stringify(newSub));
+                setSubscriber(newSub as { name: string; email: string });
+                setShowLoginGate(false);
+              }} className="w-full py-3 bg-green-700 text-white font-bold rounded-xl hover:bg-green-800 transition">
+                {authMode === "login" ? (locale === "th" ? "เข้าสู่ระบบ" : "Log In") : (locale === "th" ? "สมัครและเข้าสู่ระบบ" : "Register & Log In")}
+              </button>
+            </div>
+            <button onClick={() => setShowLoginGate(false)} className="w-full mt-3 py-2 text-sm text-gray-500 hover:text-gray-700">
+              {locale === "th" ? "ยกเลิก" : "Cancel"}
+            </button>
           </div>
         </div>
       )}
@@ -235,7 +276,7 @@ export default function PropertiesPage() {
                  contactStep === "notify" ? (locale === "th" ? "แจ้งเตือนผู้ลงประกาศ" : "Notifying Lister") :
                  contactStep === "chat" ? (locale === "th" ? "แชทนิรนาม" : "Anonymous Chat") :
                  contactStep === "meeting" ? (locale === "th" ? "นัดหมายดูทรัพย์สิน" : "Schedule Viewing") :
-                 contactStep === "complete" ? (locale === "th" ? "ให้คะแนน" : "Rate Experience") :
+                 contactStep === "rate" ? (locale === "th" ? "ให้คะแนนและรีวิว" : "Rate & Review") :
                  (locale === "th" ? "สำเร็จ!" : "Complete!")}
               </h2>
               <button onClick={() => setShowContactFlow(null)} className="text-white/80 hover:text-white text-xl">&times;</button>
@@ -244,9 +285,9 @@ export default function PropertiesPage() {
             {/* Step Progress */}
             <div className="px-6 pt-4 flex-shrink-0">
               <div className="flex items-center gap-1 mb-4">
-                {(["tier", "payment", "po", "notify", "chat", "meeting", "complete", "lister-rate", "done"] as const).map((s, i) => (
+                {(["tier", "payment", "po", "notify", "chat", "meeting", "rate", "done"] as const).map((s, i) => (
                   <div key={s} className={`h-1.5 flex-1 rounded-full transition-colors ${
-                    (["tier", "payment", "po", "notify", "chat", "meeting", "complete", "lister-rate", "done"] as const).indexOf(contactStep) >= i
+                    (["tier", "payment", "po", "notify", "chat", "meeting", "rate", "done"] as const).indexOf(contactStep) >= i
                       ? "bg-emerald-500" : "bg-gray-200"
                   }`} />
                 ))}
@@ -344,7 +385,7 @@ export default function PropertiesPage() {
                 let custName = "";
                 let custAddr = "";
                 try {
-                  const sub = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("cblue_subscriber") || "{}") : {};
+                  const sub = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("subscriber") || "{}") : {};
                   custName = sub.name || sub.email || (locale === "th" ? "ลูกค้า" : locale === "zh" ? "客户" : "Customer");
                   custAddr = sub.address || sub.province || "";
                 } catch { /* safe fallback */ }
@@ -523,7 +564,7 @@ export default function PropertiesPage() {
                     <button onClick={() => setContactStep("chat")} className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl font-semibold text-sm">
                       ← {locale === "th" ? "กลับ" : "Back"}
                     </button>
-                    <button onClick={() => setContactStep("complete")} disabled={!meetingDate || !meetingTime}
+                    <button onClick={() => setContactStep("rate")} disabled={!meetingDate || !meetingTime}
                       className="flex-1 py-2.5 bg-green-700 text-white rounded-xl font-bold text-sm hover:bg-green-800 transition disabled:opacity-40">
                       {locale === "th" ? "ยืนยันนัดหมาย" : "Confirm Viewing"}
                     </button>
@@ -531,81 +572,72 @@ export default function PropertiesPage() {
                 </div>
               )}
 
-              {/* Step 7: Rate Experience */}
-              {contactStep === "complete" && (
+              {/* Step 7: Both-Party Star Rating & Comment (+1 step) */}
+              {contactStep === "rate" && (
                 <div className="text-center">
                   <div className="text-5xl mb-4">⭐</div>
                   <h3 className="text-lg font-bold text-gray-900 mb-2">
-                    {locale === "th" ? "ให้คะแนนประสบการณ์" : "Rate Your Experience"}
+                    {locale === "th" ? "ให้คะแนนและรีวิว" : locale === "zh" ? "评分与评论" : "Rate & Review"}
                   </h3>
                   <p className="text-sm text-gray-500 mb-4">
-                    {locale === "th" ? "ให้คะแนนบริการผู้ลงประกาศทรัพย์สิน" : "Rate the property lister's service"}
-                  </p>
-                  <div className="flex justify-center gap-2 mb-4">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button key={star} onClick={() => setRating(star)} className={`text-3xl transition ${rating >= star ? "text-yellow-400" : "text-gray-300"} hover:scale-110`}>
-                        ★
-                      </button>
-                    ))}
-                  </div>
-                  {rating > 0 && <p className="text-sm font-bold text-emerald-700 mb-4">{rating}/5</p>}
-                  <textarea
-                    value={ratingComment}
-                    onChange={(e) => setRatingComment(e.target.value)}
-                    placeholder={locale === "th" ? "ความคิดเห็นเพิ่มเติม (ไม่บังคับ)" : "Additional comments (optional)"}
-                    className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-emerald-500 h-20 resize-none mb-4"
-                  />
-                  <button onClick={() => { setListerRateReady(false); setContactStep("lister-rate"); setTimeout(() => setListerRateReady(true), 3000); }} disabled={rating === 0}
-                    className="w-full py-3 bg-green-700 text-white font-bold rounded-xl hover:bg-green-800 transition disabled:opacity-40">
-                    {locale === "th" ? "ส่งรีวิว" : "Submit Review"}
-                  </button>
-                </div>
-              )}
-
-              {/* Step 7b: Waiting for Lister's Rating */}
-              {contactStep === "lister-rate" && (
-                <div className="text-center">
-                  <div className="text-5xl mb-4">📝</div>
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">
-                    {locale === "th" ? "รอผู้ลงประกาศให้คะแนน" : locale === "zh" ? "等待房东评分" : "Waiting for Lister's Rating"}
-                  </h3>
-                  <p className="text-sm text-gray-500 mb-6">
-                    {locale === "th"
-                      ? "ผู้ลงประกาศกำลังให้คะแนนและแสดงความคิดเห็นเกี่ยวกับประสบการณ์"
-                      : locale === "zh"
-                      ? "房东正在评分和评论"
-                      : "The property lister is rating and commenting on the experience"}
+                    {locale === "th" ? "ทั้งสองฝ่ายให้คะแนนก่อนปิดงาน" : locale === "zh" ? "双方评分后结束" : "Both parties rate before closing"}
                   </p>
 
-                  {/* Customer's submitted rating */}
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-4 text-center">
-                    <p className="text-xs font-bold text-emerald-700 mb-1">{locale === "th" ? "คะแนนของคุณ" : locale === "zh" ? "您的评分" : "Your Rating"}</p>
-                    <div className="flex justify-center gap-0.5">{[1,2,3,4,5].map(s => <span key={s} className={`text-lg ${rating >= s ? "text-yellow-400" : "text-gray-300"}`}>★</span>)}</div>
-                    <p className="text-xs text-gray-500 mt-1">{rating}/5</p>
-                    {ratingComment && <p className="text-xs text-gray-500 mt-1 italic">&ldquo;{ratingComment}&rdquo;</p>}
-                  </div>
-
-                  {/* Lister rating — loading then reveal */}
-                  {!listerRateReady ? (
-                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 mb-6">
-                      <div className="flex items-center justify-center gap-3">
-                        <span className="inline-block w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-                        <span className="text-sm text-gray-500">{locale === "th" ? "กำลังรอผู้ลงประกาศให้คะแนน..." : locale === "zh" ? "等待房东评分中..." : "Waiting for lister to submit rating..."}</span>
+                  {/* Customer rating form — before submission */}
+                  {!customerRated ? (
+                    <>
+                      <div className="flex justify-center gap-2 mb-4">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <button key={star} onClick={() => setRating(star)} className={`text-3xl transition ${rating >= star ? "text-yellow-400" : "text-gray-300"} hover:scale-110`}>
+                            ★
+                          </button>
+                        ))}
                       </div>
-                    </div>
+                      {rating > 0 && <p className="text-sm font-bold text-emerald-700 mb-4">{rating}/5</p>}
+                      <textarea
+                        value={ratingComment}
+                        onChange={(e) => setRatingComment(e.target.value)}
+                        placeholder={locale === "th" ? "ความคิดเห็นเพิ่มเติม" : "Additional comments"}
+                        className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-emerald-500 h-20 resize-none mb-4"
+                      />
+                      <button onClick={() => { setCustomerRated(true); setListerRateReady(false); setTimeout(() => setListerRateReady(true), 3000); }} disabled={rating === 0}
+                        className="w-full py-3 bg-green-700 text-white font-bold rounded-xl hover:bg-green-800 transition disabled:opacity-40">
+                        {locale === "th" ? "ส่งรีวิว" : locale === "zh" ? "提交评价" : "Submit Review"}
+                      </button>
+                    </>
                   ) : (
-                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
-                      <p className="text-xs font-bold text-blue-700 mb-1">{locale === "th" ? "คะแนนจากผู้ลงประกาศ" : locale === "zh" ? "房东评分" : "Lister's Rating of You"}</p>
-                      <div className="flex justify-center gap-0.5">{[1,2,3,4,5].map(s => <span key={s} className={`text-lg ${listerRating >= s ? "text-yellow-400" : "text-gray-300"}`}>★</span>)}</div>
-                      <p className="text-xs text-gray-500 mt-1">{listerRating}/5</p>
-                      <p className="text-xs text-gray-500 mt-1 italic">&ldquo;{listerComment}&rdquo;</p>
-                    </div>
-                  )}
+                    <>
+                      {/* Customer's submitted rating */}
+                      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-4 text-center">
+                        <p className="text-xs font-bold text-emerald-700 mb-1">{locale === "th" ? "คะแนนของคุณ" : locale === "zh" ? "您的评分" : "Your Rating"}</p>
+                        <div className="flex justify-center gap-0.5">{[1,2,3,4,5].map(s => <span key={s} className={`text-lg ${rating >= s ? "text-yellow-400" : "text-gray-300"}`}>★</span>)}</div>
+                        <p className="text-xs text-gray-500 mt-1">{rating}/5</p>
+                        {ratingComment && <p className="text-xs text-gray-500 mt-1 italic">&ldquo;{ratingComment}&rdquo;</p>}
+                      </div>
 
-                  <button onClick={() => setContactStep("done")} disabled={!listerRateReady}
-                    className="w-full py-3 bg-green-700 text-white font-bold rounded-xl hover:bg-green-800 transition disabled:opacity-40">
-                    {locale === "th" ? "ดูสรุป" : locale === "zh" ? "查看摘要" : "View Summary"}
-                  </button>
+                      {/* Lister rating — loading then reveal */}
+                      {!listerRateReady ? (
+                        <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 mb-6">
+                          <div className="flex items-center justify-center gap-3">
+                            <span className="inline-block w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                            <span className="text-sm text-gray-500">{locale === "th" ? "กำลังรอผู้ลงประกาศให้คะแนน..." : locale === "zh" ? "等待房东评分中..." : "Waiting for lister to submit rating..."}</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+                          <p className="text-xs font-bold text-blue-700 mb-1">{locale === "th" ? "คะแนนจากผู้ลงประกาศ" : locale === "zh" ? "房东评分" : "Lister's Rating of You"}</p>
+                          <div className="flex justify-center gap-0.5">{[1,2,3,4,5].map(s => <span key={s} className={`text-lg ${listerRating >= s ? "text-yellow-400" : "text-gray-300"}`}>★</span>)}</div>
+                          <p className="text-xs text-gray-500 mt-1">{listerRating}/5</p>
+                          <p className="text-xs text-gray-500 mt-1 italic">&ldquo;{listerComment}&rdquo;</p>
+                        </div>
+                      )}
+
+                      <button onClick={() => setContactStep("done")} disabled={!listerRateReady}
+                        className="w-full py-3 bg-green-700 text-white font-bold rounded-xl hover:bg-green-800 transition disabled:opacity-40">
+                        {locale === "th" ? "ดูสรุป" : locale === "zh" ? "查看摘要" : "View Summary"}
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
 

@@ -40,10 +40,10 @@ export function Header() {
             <Image
               src="/images/logo.jpg"
               alt="CBLUE"
-              width={56}
-              height={22}
+              width={62}
+              height={24}
               loading="eager"
-              className="h-[1.6rem] w-auto object-contain"
+              className="h-[1.75rem] w-auto object-contain"
               style={{ height: "auto" }}
             />
           </Link>
