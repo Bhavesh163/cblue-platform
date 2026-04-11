@@ -116,7 +116,10 @@ function HouseholdBookingContent() {
   const [recaptchaToken, setRecaptchaToken] = useState("");
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [showLoginGate, setShowLoginGate] = useState(false);
-  const [subscriber, setSubscriber] = useState<{ name: string } | null>(null);
+  const [subscriber, setSubscriber] = useState<{ name: string; email?: string } | null>(null);
+  const [authPassword, setAuthPassword] = useState("");
+  const [authConfirmPassword, setAuthConfirmPassword] = useState("");
+  const [authMode, setAuthMode] = useState<"login" | "register">("register");
   const prefix = `/${locale}`;
 
   useEffect(() => {
@@ -188,10 +191,24 @@ function HouseholdBookingContent() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    // Login gate - require login before proceeding
+    // Inline auth — if not logged in, validate & create/login account
     if (!subscriber) {
-      setShowLoginGate(true);
-      return;
+      if (!form.email) {
+        setError(locale === "th" ? "กรุณากรอกอีเมล" : locale === "zh" ? "请输入电子邮件" : "Please enter your email");
+        return;
+      }
+      if (!authPassword || authPassword.length < 6) {
+        setError(locale === "th" ? "รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร" : locale === "zh" ? "密码至少6个字符" : "Password must be at least 6 characters");
+        return;
+      }
+      if (authMode === "register" && authPassword !== authConfirmPassword) {
+        setError(locale === "th" ? "รหัสผ่านไม่ตรงกัน" : locale === "zh" ? "密码不匹配" : "Passwords do not match");
+        return;
+      }
+      // Simulate account creation/login and auto-login
+      const newSub = { name: form.name || form.email, email: form.email, role: "customer" };
+      localStorage.setItem("subscriber", JSON.stringify(newSub));
+      setSubscriber(newSub);
     }
     if (!form.consent) {
       setError(t("consentError"));
@@ -263,32 +280,6 @@ function HouseholdBookingContent() {
 
   return (
     <div className="bg-gray-50 py-12">
-      {/* Login Gate Modal */}
-      {showLoginGate && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-8 text-center shadow-2xl">
-            <div className="text-5xl mb-4">🔒</div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">
-              {locale === "th" ? "กรุณาเข้าสู่ระบบก่อนดำเนินการ" : locale === "zh" ? "请先登录" : "Login Required to Proceed"}
-            </h2>
-            <p className="text-sm text-gray-500 mb-6">
-              {locale === "th" ? "คุณต้องเข้าสู่ระบบเพื่อส่งคำขอจองบริการและเริ่มกระบวนการจับคู่ AI" : locale === "zh" ? "您需要登录才能提交预约请求并开始AI匹配" : "You need to log in to submit a booking request and start the AI matching process"}
-            </p>
-            <div className="flex gap-3 justify-center">
-              <Link href={`${prefix}/subscription/login`} className="px-6 py-2.5 bg-sky-600 text-white rounded-xl font-bold text-sm hover:bg-sky-700 transition">
-                {locale === "th" ? "เข้าสู่ระบบ" : "Log In"}
-              </Link>
-              <Link href={`${prefix}/subscription/register`} className="px-6 py-2.5 border border-sky-300 text-sky-700 rounded-xl font-semibold text-sm hover:bg-sky-50 transition">
-                {locale === "th" ? "สมัครสมาชิก" : "Register"}
-              </Link>
-            </div>
-            <button onClick={() => setShowLoginGate(false)} className="mt-4 text-sm text-gray-400 hover:text-gray-600">
-              {locale === "th" ? "ยกเลิก" : "Cancel"}
-            </button>
-          </div>
-        </div>
-      )}
-
       <div className="mx-auto max-w-3xl px-4 sm:px-6">
         {/* Header */}
         <div className="text-center mb-10">
@@ -306,6 +297,55 @@ function HouseholdBookingContent() {
               {error}
             </div>
           )}
+
+          {/* Account Authentication — Mandatory */}
+          <fieldset className="bg-gradient-to-r from-sky-50 to-blue-50 rounded-xl border border-sky-200 p-6">
+            <legend className="text-lg font-semibold text-gray-900 px-2">
+              {locale === "th" ? "🔐 เข้าสู่ระบบ / สร้างบัญชี (จำเป็น)" : locale === "zh" ? "🔐 登录/创建账户（必填）" : "🔐 Login / Create Account (Required)"}
+            </legend>
+            {subscriber ? (
+              <div className="flex items-center gap-3 mt-2">
+                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600 text-lg font-bold">✓</div>
+                <div>
+                  <p className="font-semibold text-green-700">{locale === "th" ? "เข้าสู่ระบบแล้ว" : locale === "zh" ? "已登录" : "Logged In"}</p>
+                  <p className="text-sm text-gray-500">{subscriber.name}</p>
+                </div>
+                <button type="button" onClick={() => { localStorage.removeItem("subscriber"); setSubscriber(null); }} className="ml-auto text-xs text-gray-400 hover:text-red-500">
+                  {locale === "th" ? "ออกจากระบบ" : locale === "zh" ? "退出" : "Log Out"}
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3 mt-3">
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setAuthMode("login")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition ${authMode === "login" ? "bg-sky-600 text-white" : "bg-white border border-gray-300 text-gray-600 hover:bg-gray-50"}`}>
+                    {locale === "th" ? "เข้าสู่ระบบ" : locale === "zh" ? "登录" : "Login"}
+                  </button>
+                  <button type="button" onClick={() => setAuthMode("register")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition ${authMode === "register" ? "bg-sky-600 text-white" : "bg-white border border-gray-300 text-gray-600 hover:bg-gray-50"}`}>
+                    {locale === "th" ? "สมัครสมาชิกใหม่" : locale === "zh" ? "注册新账户" : "Register New Account"}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500">
+                  {locale === "th" ? "ใช้อีเมลจากข้อมูลติดต่อด้านล่าง รหัสผ่านอย่างน้อย 6 ตัวอักษร" : locale === "zh" ? "使用下方联系信息中的电子邮件，密码至少6个字符" : "Uses the email from Contact Info below. Password must be at least 6 characters."}
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {locale === "th" ? "รหัสผ่าน" : locale === "zh" ? "密码" : "Password"} <span className="text-red-500">*</span>
+                    </label>
+                    <input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} required minLength={6} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none" placeholder="••••••" />
+                  </div>
+                  {authMode === "register" && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {locale === "th" ? "ยืนยันรหัสผ่าน" : locale === "zh" ? "确认密码" : "Confirm Password"} <span className="text-red-500">*</span>
+                      </label>
+                      <input type="password" value={authConfirmPassword} onChange={(e) => setAuthConfirmPassword(e.target.value)} required minLength={6} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none" placeholder="••••••" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </fieldset>
 
           {/* Personal Info */}
           <fieldset>

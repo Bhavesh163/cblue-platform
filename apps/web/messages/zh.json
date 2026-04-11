@@ -6,10 +6,10 @@
     "household": "家庭维修",
     "project": "项目",
     "professional": "预约专业人士",
-    "forFixers": "合作伙伴",
+    "forFixers": "合作伙伴页面",
     "realEstate": "房地产",
-    "dashboard": "客户",
-    "supportUs": "支持我们",
+    "dashboard": "客户页面",
+    "supportUs": "联系我们",
     "proZone": "技工与专业人士会员",
     "bookNow": "立即预订",
     "language": "语言"
@@ -182,7 +182,7 @@
     }
   },
   "dashboard": {
-    "title": "会员",
+    "title": "客户页面",
     "overview": "概览",
     "orders": "总订单",
     "pending": "待处理",
@@ -376,7 +376,7 @@
     "backToLogin": "返回登录"
   },
   "supportUs": {
-    "title": "支持我们",
+    "title": "联系我们",
     "heroQuote": "我们在这里帮助您建设未来。",
     "formTitle": "我们能帮您什么？",
     "formSubtitle": "请选择以下选项开始。",

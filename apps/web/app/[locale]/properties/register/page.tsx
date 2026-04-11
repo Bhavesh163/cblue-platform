@@ -97,11 +97,11 @@ export default function PropertyRegisterPage() {
       return;
     }
 
-    if (form.password && form.password.length < 6) {
+    if (!form.password || form.password.length < 6) {
       setError(locale === "th" ? "รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร" : locale === "zh" ? "密码至少6个字符" : "Password must be at least 6 characters");
       return;
     }
-    if (form.password && form.password !== form.confirmPassword) {
+    if (form.password !== form.confirmPassword) {
       setError(locale === "th" ? "รหัสผ่านไม่ตรงกัน" : locale === "zh" ? "密码不匹配" : "Passwords do not match");
       return;
     }
@@ -132,7 +132,7 @@ export default function PropertyRegisterPage() {
         contactName: form.contactName,
         contactPhone: form.contactPhone,
         contactEmail: form.contactEmail,
-        ...(form.password ? { password: form.password } : {}),
+        password: form.password,
       };
 
       const res = await fetch(`${API_BASE}/properties`, {
@@ -142,6 +142,9 @@ export default function PropertyRegisterPage() {
       });
 
       if (res.ok) {
+        // Auto-login after successful property listing
+        const newSub = { name: form.contactName || form.contactEmail, email: form.contactEmail, role: "partner" };
+        localStorage.setItem("subscriber", JSON.stringify(newSub));
         setSubmitted(true);
       } else {
         setError(tb("submitError"));
@@ -591,24 +594,25 @@ export default function PropertyRegisterPage() {
               </div>
             </fieldset>
 
-            {/* Create Subscriber Account */}
-            <fieldset className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            {/* Create Subscriber Account — Mandatory */}
+            <fieldset className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200 p-6">
               <legend className="text-lg font-semibold text-gray-900 px-2">
-                {locale === "th" ? "สร้างบัญชีสมาชิก (ไม่บังคับ)" : locale === "zh" ? "创建订阅者账户（可选）" : "Create Subscriber Account (Optional)"}
+                {locale === "th" ? "🔐 สร้างบัญชีสมาชิก (จำเป็น)" : locale === "zh" ? "🔐 创建账户（必填）" : "🔐 Create Account (Required)"}
               </legend>
               <p className="text-xs text-gray-500 mt-2 mb-4">
-                {locale === "th" ? "สร้างบัญชีเพื่อจัดการประกาศและรับการแจ้งเตือน" : locale === "zh" ? "创建账户以管理房源和接收通知" : "Create an account to manage your listings and receive notifications"}
+                {locale === "th" ? "สร้างบัญชีเพื่อจัดการประกาศและรับการแจ้งเตือน ใช้อีเมลจากข้อมูลติดต่อข้างต้น" : locale === "zh" ? "创建账户以管理房源和接收通知，使用上方联系邮箱" : "Create an account to manage your listings and receive notifications. Uses your contact email above."}
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {locale === "th" ? "รหัสผ่าน" : locale === "zh" ? "密码" : "Password"}
+                    {locale === "th" ? "รหัสผ่าน" : locale === "zh" ? "密码" : "Password"} <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="password"
                     name="password"
                     value={form.password}
                     onChange={handleChange}
+                    required
                     minLength={6}
                     className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
                     placeholder="••••••"
@@ -616,13 +620,14 @@ export default function PropertyRegisterPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {locale === "th" ? "ยืนยันรหัสผ่าน" : locale === "zh" ? "确认密码" : "Confirm Password"}
+                    {locale === "th" ? "ยืนยันรหัสผ่าน" : locale === "zh" ? "确认密码" : "Confirm Password"} <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="password"
                     name="confirmPassword"
                     value={form.confirmPassword}
                     onChange={handleChange}
+                    required
                     minLength={6}
                     className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
                     placeholder="••••••"

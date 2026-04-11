@@ -6,10 +6,10 @@
     "household": "Household Maintenance",
     "project": "Projects",
     "professional": "Book Professionals",
-    "forFixers": "Partner",
+    "forFixers": "Partner Page",
     "realEstate": "Real Estate",
-    "dashboard": "Customer",
-    "supportUs": "Support Us",
+    "dashboard": "Customer Page",
+    "supportUs": "Contact Us",
     "proZone": "Fixer and Pro Member",
     "bookNow": "Book Now",
     "language": "Language"
@@ -182,7 +182,7 @@
     }
   },
   "dashboard": {
-    "title": "Member",
+    "title": "Customer Page",
     "overview": "Overview",
     "orders": "Total Orders",
     "pending": "Pending",
@@ -376,7 +376,7 @@
     "backToLogin": "Back to login"
   },
   "supportUs": {
-    "title": "Support Us",
+    "title": "Contact Us",
     "heroQuote": "We are here to help you build the future.",
     "formTitle": "How can we help?",
     "formSubtitle": "Select an option below to get started.",
