@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, useEffect, FormEvent } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useTranslations, useLocale } from "next-intl";
@@ -27,6 +27,24 @@ export default function PropertyRegisterPage() {
   const [consentChecked, setConsentChecked] = useState(false);
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locationType, setLocationType] = useState<"dropdown" | "address">("dropdown");
+  const [subscriber, setSubscriber] = useState<{ name: string; email?: string; role?: string } | null>(null);
+  const [authMode, setAuthMode] = useState<"login" | "register">("register");
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("subscriber");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setSubscriber(parsed);
+        // Auto-fill contact info from existing session
+        setForm((prev) => ({
+          ...prev,
+          contactName: parsed.name || prev.contactName,
+          contactEmail: parsed.email || prev.contactEmail,
+        }));
+      }
+    } catch { /* ignore */ }
+  }, []);
 
   const [form, setForm] = useState({
     propertyType: "",
@@ -97,13 +115,44 @@ export default function PropertyRegisterPage() {
       return;
     }
 
-    if (!form.password || form.password.length < 6) {
-      setError(locale === "th" ? "รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร" : locale === "zh" ? "密码至少6个字符" : "Password must be at least 6 characters");
-      return;
-    }
-    if (form.password !== form.confirmPassword) {
-      setError(locale === "th" ? "รหัสผ่านไม่ตรงกัน" : locale === "zh" ? "密码不匹配" : "Passwords do not match");
-      return;
+    // Inline auth — if not logged in, validate & create/login account via backend
+    if (!subscriber) {
+      if (!form.contactEmail || !/\S+@\S+\.\S+/.test(form.contactEmail)) {
+        setError(locale === "th" ? "กรุณากรอกอีเมลที่ถูกต้อง" : locale === "zh" ? "请输入有效的电子邮件" : "Please enter a valid email address");
+        return;
+      }
+      if (!form.password || form.password.length < 8) {
+        setError(locale === "th" ? "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร" : locale === "zh" ? "密码至少8个字符" : "Password must be at least 8 characters");
+        return;
+      }
+      if (authMode === "register" && form.password !== form.confirmPassword) {
+        setError(locale === "th" ? "รหัสผ่านไม่ตรงกัน" : locale === "zh" ? "密码不匹配" : "Passwords do not match");
+        return;
+      }
+      try {
+        const endpoint = authMode === "login" ? "/api/v1/subscription/login" : "/api/v1/subscription/register";
+        const body = authMode === "login"
+          ? { email: form.contactEmail.toLowerCase(), password: form.password }
+          : { name: form.contactName || form.contactEmail, email: form.contactEmail.toLowerCase(), phone: form.contactPhone, password: form.password };
+        const authRes = await fetch(`${API_BASE}${endpoint}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!authRes.ok) {
+          const errData = await authRes.json().catch(() => ({ message: "" }));
+          const msg = errData.message || (locale === "th" ? "เข้าสู่ระบบ/สมัครสมาชิกล้มเหลว" : locale === "zh" ? "登录/注册失败" : "Login/Register failed");
+          setError(msg);
+          return;
+        }
+        const authData = await authRes.json();
+        localStorage.setItem("subscriber_token", authData.accessToken);
+        localStorage.setItem("subscriber", JSON.stringify(authData.subscriber));
+        setSubscriber(authData.subscriber);
+      } catch {
+        setError(locale === "th" ? "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้" : locale === "zh" ? "无法连接服务器" : "Cannot connect to server");
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -132,7 +181,7 @@ export default function PropertyRegisterPage() {
         contactName: form.contactName,
         contactPhone: form.contactPhone,
         contactEmail: form.contactEmail,
-        password: form.password,
+        ...(form.password ? { password: form.password } : {}),
       };
 
       const res = await fetch(`${API_BASE}/properties`, {
@@ -142,9 +191,6 @@ export default function PropertyRegisterPage() {
       });
 
       if (res.ok) {
-        // Auto-login after successful property listing
-        const newSub = { name: form.contactName || form.contactEmail, email: form.contactEmail, role: "partner" };
-        localStorage.setItem("subscriber", JSON.stringify(newSub));
         setSubmitted(true);
       } else {
         setError(tb("submitError"));
@@ -214,6 +260,60 @@ export default function PropertyRegisterPage() {
       <section className="py-10">
         <div className="mx-auto max-w-3xl px-4 sm:px-6">
           <form onSubmit={handleSubmit} className="space-y-8">
+
+            {/* Account Authentication — Inline Login / Register */}
+            <fieldset className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200 p-6">
+              <legend className="text-lg font-semibold text-gray-900 px-2">
+                {locale === "th" ? "🔐 เข้าสู่ระบบ / สร้างบัญชี (จำเป็น)" : locale === "zh" ? "🔐 登录/创建账户（必填）" : "🔐 Login / Create Account (Required)"}
+              </legend>
+              {subscriber ? (
+                <div className="flex items-center gap-3 mt-2">
+                  <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600 text-lg font-bold">✓</div>
+                  <div>
+                    <p className="font-semibold text-green-700">{locale === "th" ? "เข้าสู่ระบบแล้ว" : locale === "zh" ? "已登录" : "Logged In"}</p>
+                    <p className="text-sm text-gray-500">{subscriber.name}{subscriber.email ? ` (${subscriber.email})` : ""}</p>
+                  </div>
+                  <button type="button" onClick={() => { localStorage.removeItem("subscriber"); localStorage.removeItem("subscriber_token"); setSubscriber(null); }} className="ml-auto text-xs text-gray-400 hover:text-red-500">
+                    {locale === "th" ? "ออกจากระบบ" : locale === "zh" ? "退出" : "Log Out"}
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3 mt-3">
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setAuthMode("login")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition ${authMode === "login" ? "bg-green-700 text-white" : "bg-white border border-gray-300 text-gray-600 hover:bg-gray-50"}`}>
+                      {locale === "th" ? "เข้าสู่ระบบ" : locale === "zh" ? "登录" : "Login"}
+                    </button>
+                    <button type="button" onClick={() => setAuthMode("register")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition ${authMode === "register" ? "bg-green-700 text-white" : "bg-white border border-gray-300 text-gray-600 hover:bg-gray-50"}`}>
+                      {locale === "th" ? "สมัครสมาชิกใหม่" : locale === "zh" ? "注册新账户" : "Register New Account"}
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    {locale === "th" ? "ใช้อีเมลจากข้อมูลติดต่อด้านล่าง รหัสผ่านอย่างน้อย 8 ตัวอักษร" : locale === "zh" ? "使用下方联系信息中的电子邮件，密码至少8个字符" : "Uses the email from Contact Info below. Password must be at least 8 characters."}
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {locale === "th" ? "รหัสผ่าน" : locale === "zh" ? "密码" : "Password"} <span className="text-red-500">*</span>
+                      </label>
+                      <input type="password" name="password" value={form.password} onChange={handleChange} required minLength={8} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500" placeholder="••••••••" />
+                    </div>
+                    {authMode === "register" && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          {locale === "th" ? "ยืนยันรหัสผ่าน" : locale === "zh" ? "确认密码" : "Confirm Password"} <span className="text-red-500">*</span>
+                        </label>
+                        <input type="password" name="confirmPassword" value={form.confirmPassword} onChange={handleChange} required minLength={8} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500" placeholder="••••••••" />
+                      </div>
+                    )}
+                  </div>
+                  {authMode === "login" && (
+                    <Link href={`${prefix}/subscription/forgot-password`} className="text-xs text-green-700 hover:underline">
+                      {locale === "th" ? "ลืมรหัสผ่าน?" : locale === "zh" ? "忘记密码？" : "Forgot password?"}
+                    </Link>
+                  )}
+                </div>
+              )}
+            </fieldset>
 
             {/* Property Details */}
             <fieldset className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -591,48 +691,6 @@ export default function PropertyRegisterPage() {
                   accept="image/*"
                   className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
                 />
-              </div>
-            </fieldset>
-
-            {/* Create Subscriber Account — Mandatory */}
-            <fieldset className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200 p-6">
-              <legend className="text-lg font-semibold text-gray-900 px-2">
-                {locale === "th" ? "🔐 สร้างบัญชีสมาชิก (จำเป็น)" : locale === "zh" ? "🔐 创建账户（必填）" : "🔐 Create Account (Required)"}
-              </legend>
-              <p className="text-xs text-gray-500 mt-2 mb-4">
-                {locale === "th" ? "สร้างบัญชีเพื่อจัดการประกาศและรับการแจ้งเตือน ใช้อีเมลจากข้อมูลติดต่อข้างต้น" : locale === "zh" ? "创建账户以管理房源和接收通知，使用上方联系邮箱" : "Create an account to manage your listings and receive notifications. Uses your contact email above."}
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {locale === "th" ? "รหัสผ่าน" : locale === "zh" ? "密码" : "Password"} <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="password"
-                    name="password"
-                    value={form.password}
-                    onChange={handleChange}
-                    required
-                    minLength={6}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
-                    placeholder="••••••"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {locale === "th" ? "ยืนยันรหัสผ่าน" : locale === "zh" ? "确认密码" : "Confirm Password"} <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="password"
-                    name="confirmPassword"
-                    value={form.confirmPassword}
-                    onChange={handleChange}
-                    required
-                    minLength={6}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
-                    placeholder="••••••"
-                  />
-                </div>
               </div>
             </fieldset>
 

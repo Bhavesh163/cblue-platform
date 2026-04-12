@@ -609,6 +609,40 @@ export default function FixerResults({
   const fee = selectedFixer ? getProcessingFee(bookingType, selectedFixer.tier) : 200;
   const tierLabel = selectedFixer ? t(selectedFixer.tier) : "";
 
+  // Step progress bar for the 12-step flow (visible after matching)
+  const flowSteps: Step[] = ["matching", "list", "confirm", "po", "notify", "payment", "chat", "meeting", "variation", "complete", "rate", "done"];
+  const flowLabels: Record<string, Record<Step, string>> = {
+    en: { matching: "Match", list: "Select", confirm: "Confirm", po: "PO", notify: "Notify", payment: "Pay", chat: "Chat", meeting: "Meet", variation: "Variation", complete: "Complete", rate: "Rate", done: "Done" },
+    th: { matching: "จับคู่", list: "เลือก", confirm: "ยืนยัน", po: "PO", notify: "แจ้ง", payment: "จ่าย", chat: "แชท", meeting: "นัดหมาย", variation: "เปลี่ยนแปลง", complete: "เสร็จ", rate: "คะแนน", done: "จบ" },
+    zh: { matching: "匹配", list: "选择", confirm: "确认", po: "PO", notify: "通知", payment: "支付", chat: "聊天", meeting: "会面", variation: "变更", complete: "完工", rate: "评分", done: "完成" },
+  };
+  const currentStepIndex = flowSteps.indexOf(step);
+  const hideVariation = !showVariation && step !== "variation";
+  const visibleSteps = hideVariation ? flowSteps.filter(s => s !== "variation") : flowSteps;
+  const visibleIndex = visibleSteps.indexOf(step);
+  const StepProgressBar = () => step === "matching" ? null : (
+    <div className="mx-auto max-w-2xl px-4 mb-4">
+      <div className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm">
+        <div className="flex items-center gap-0.5">
+          {visibleSteps.map((s) => {
+            const isCurrent = s === step;
+            const isDone = visibleSteps.indexOf(s) < visibleIndex;
+            const labels = flowLabels[locale] ?? flowLabels["en"]!;
+            return (
+              <div key={s} className="flex-1 text-center">
+                <div className={`h-1.5 rounded-full mb-1 transition-all ${isDone ? "bg-sky-500" : isCurrent ? "bg-sky-400 animate-pulse" : "bg-gray-200"}`} />
+                <span className={`text-[10px] font-medium ${isDone ? "text-sky-600" : isCurrent ? "text-sky-700 font-bold" : "text-gray-400"}`}>{labels[s]}</span>
+              </div>
+            );
+          })}
+        </div>
+        <p className="text-center text-[10px] text-gray-400 mt-1">
+          {locale === "th" ? `ขั้นตอนที่ ${visibleIndex + 1} จาก ${visibleSteps.length}` : locale === "zh" ? `第 ${visibleIndex + 1} 步，共 ${visibleSteps.length} 步` : `Step ${visibleIndex + 1} of ${visibleSteps.length}`}
+        </p>
+      </div>
+    </div>
+  );
+
   // Step: AI Matching Animation
   if (step === "matching") {
     const aiSteps = locale === "th"
@@ -678,6 +712,7 @@ export default function FixerResults({
   // Step: Done — Final summary with both ratings
   if (step === "done") {
     return (
+      <><StepProgressBar />
       <div className="mx-auto max-w-2xl px-4 py-16">
         <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 text-center">
           <div className="text-6xl mb-6">🎉</div>
@@ -723,12 +758,14 @@ export default function FixerResults({
           </div>
         </div>
       </div>
+      </>
     );
   }
 
   // Step: Work Completion Confirmation (11th step)
   if (step === "complete" && selectedFixer) {
     return (
+      <><StepProgressBar />
       <div className="mx-auto max-w-md px-4 py-12">
         <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 text-center">
           <div className="text-5xl mb-4">✅</div>
@@ -764,12 +801,14 @@ export default function FixerResults({
           </button>
         </div>
       </div>
+      </>
     );
   }
 
   // Step: Both-Party Star Rating & Comment (+1 step)
   if (step === "rate" && selectedFixer) {
     return (
+      <><StepProgressBar />
       <div className="mx-auto max-w-md px-4 py-12">
         <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8">
           <div className="text-center mb-6">
@@ -843,12 +882,14 @@ export default function FixerResults({
           )}
         </div>
       </div>
+      </>
     );
   }
 
   // Step: Variation / Addendum
   if (step === "variation" && selectedFixer) {
     return (
+      <><StepProgressBar />
       <div className="mx-auto max-w-md px-4 py-12">
         <div className="bg-white rounded-2xl shadow-xl border border-orange-200 p-8">
           <div className="text-center mb-6">
@@ -890,12 +931,14 @@ export default function FixerResults({
           </div>
         </div>
       </div>
+      </>
     );
   }
 
   // Step: Meeting Confirmation
   if (step === "meeting" && selectedFixer) {
     return (
+      <><StepProgressBar />
       <div className="mx-auto max-w-md px-4 py-12">
         <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8">
           <div className="text-center mb-6">
@@ -948,12 +991,14 @@ export default function FixerResults({
           </div>
         </div>
       </div>
+      </>
     );
   }
 
   // Step: Chat
   if (step === "chat" && selectedFixer) {
     return (
+      <><StepProgressBar />
       <div className="mx-auto max-w-2xl px-4 py-8">
         <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
           {/* Chat Header */}
@@ -1015,12 +1060,14 @@ export default function FixerResults({
           </div>
         </div>
       </div>
+      </>
     );
   }
 
   // Step: Partner Notification & Confirmation
   if (step === "notify" && selectedFixer) {
     return (
+      <><StepProgressBar />
       <div className="mx-auto max-w-md px-4 py-12">
         <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 text-center">
           {!partnerConfirmed ? (
@@ -1076,6 +1123,7 @@ export default function FixerResults({
           </div>
         </div>
       </div>
+      </>
     );
   }
 
@@ -1083,6 +1131,7 @@ export default function FixerResults({
   if (step === "payment" && selectedFixer) {
     const refCode = `CBLUE-${Date.now().toString(36).toUpperCase()}`;
     return (
+      <><StepProgressBar />
       <div className="mx-auto max-w-md px-4 py-12">
         <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 text-center">
           <h2 className="text-xl font-bold text-gray-800 mb-2">{t("paymentTitle")}</h2>
@@ -1134,6 +1183,7 @@ export default function FixerResults({
           </button>
         </div>
       </div>
+      </>
     );
   }
 
@@ -1149,6 +1199,7 @@ export default function FixerResults({
       customerAddress = sub.address || sub.province || "";
     } catch { /* safe fallback */ }
     return (
+      <><StepProgressBar />
       <div className="mx-auto max-w-lg px-4 py-12">
         <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8">
           <div className="text-center mb-6">
@@ -1240,12 +1291,14 @@ export default function FixerResults({
           </button>
         </div>
       </div>
+      </>
     );
   }
 
   // Step: Confirm
   if (step === "confirm" && selectedFixer) {
     return (
+      <><StepProgressBar />
       <div className="mx-auto max-w-md px-4 py-12">
         <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 text-center">
           <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-sky-100 flex items-center justify-center">
@@ -1295,6 +1348,7 @@ export default function FixerResults({
           </button>
         </div>
       </div>
+      </>
     );
   }
 
@@ -1331,6 +1385,7 @@ export default function FixerResults({
   const allDisplayFixers = nominatedFixer ? [...fixers, nominatedFixer] : fixers;
 
   return (
+    <><StepProgressBar />
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="text-center mb-8">
         <span className="inline-block px-4 py-1.5 bg-gradient-to-r from-sky-100 to-indigo-100 text-sky-700 rounded-full text-xs font-bold mb-3 border border-sky-200">🤖 {locale === "th" ? "AI Top 8 จับคู่อัจฉริยะ" : locale === "zh" ? "AI Top 8 智能匹配" : "AI-Powered Top 8 Match"}</span>
@@ -1483,5 +1538,6 @@ export default function FixerResults({
         </div>
       )}
     </div>
+    </>
   );
 }

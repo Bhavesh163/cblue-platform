@@ -89,6 +89,13 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
       "曼谷公寓", "泰国买房", "律师", "建筑师", "工程师",
       "零碳建筑", "可持续建筑", "AI聊天机器人",
       "泰国物业", "预约专业人士", "智能建筑管理", "节能建筑",
+      // Additional — property partner services
+      "partner registration", "property partner Thailand", "list property Thailand",
+      "property management Thailand", "rental management Bangkok",
+      "both-party rating", "enterprise booking platform", "service marketplace Thailand",
+      "anonymous chat real estate", "secure property viewing",
+      "ลงประกาศอสังหาริมทรัพย์", "จัดการทรัพย์สิน", "แพลตฟอร์มอสังหา",
+      "发布房产", "房产管理", "安全看房",
     ],
     openGraph: {
       locale: locale === "th" ? "th_TH" : locale === "zh" ? "zh_CN" : "en_US",

@@ -12,6 +12,8 @@ import ReCaptcha from "../../components/ReCaptcha";
 import GpsDetectButton from "../../components/GpsDetectButton";
 import FixerResults from "../../components/FixerResults";
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
+
 const BUDGET_RANGES = [
   { value: "UNDER_5000", th: "ต่ำกว่า 5,000 บาท", en: "Under ฿5,000", zh: "低于 ฿5,000" },
   { value: "5000_10000", th: "5,000 – 10,000 บาท", en: "฿5,000 – ฿10,000", zh: "฿5,000 – ฿10,000" },
@@ -115,7 +117,6 @@ function HouseholdBookingContent() {
   const [error, setError] = useState("");
   const [recaptchaToken, setRecaptchaToken] = useState("");
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [showLoginGate, setShowLoginGate] = useState(false);
   const [subscriber, setSubscriber] = useState<{ name: string; email?: string } | null>(null);
   const [authPassword, setAuthPassword] = useState("");
   const [authConfirmPassword, setAuthConfirmPassword] = useState("");
@@ -191,24 +192,44 @@ function HouseholdBookingContent() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    // Inline auth — if not logged in, validate & create/login account
+    // Inline auth — if not logged in, validate & create/login account via backend
     if (!subscriber) {
-      if (!form.email) {
-        setError(locale === "th" ? "กรุณากรอกอีเมล" : locale === "zh" ? "请输入电子邮件" : "Please enter your email");
+      if (!form.email || !/\S+@\S+\.\S+/.test(form.email)) {
+        setError(locale === "th" ? "กรุณากรอกอีเมลที่ถูกต้อง" : locale === "zh" ? "请输入有效的电子邮件" : "Please enter a valid email address");
         return;
       }
-      if (!authPassword || authPassword.length < 6) {
-        setError(locale === "th" ? "รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร" : locale === "zh" ? "密码至少6个字符" : "Password must be at least 6 characters");
+      if (!authPassword || authPassword.length < 8) {
+        setError(locale === "th" ? "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร" : locale === "zh" ? "密码至少8个字符" : "Password must be at least 8 characters");
         return;
       }
       if (authMode === "register" && authPassword !== authConfirmPassword) {
         setError(locale === "th" ? "รหัสผ่านไม่ตรงกัน" : locale === "zh" ? "密码不匹配" : "Passwords do not match");
         return;
       }
-      // Simulate account creation/login and auto-login
-      const newSub = { name: form.name || form.email, email: form.email, role: "customer" };
-      localStorage.setItem("subscriber", JSON.stringify(newSub));
-      setSubscriber(newSub);
+      try {
+        const endpoint = authMode === "login" ? "/api/v1/subscription/login" : "/api/v1/subscription/register";
+        const body = authMode === "login"
+          ? { email: form.email.toLowerCase(), password: authPassword }
+          : { name: form.name || form.email, email: form.email.toLowerCase(), phone: form.phone, company: form.company || undefined, password: authPassword };
+        const authRes = await fetch(`${API_BASE}${endpoint}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!authRes.ok) {
+          const errData = await authRes.json().catch(() => ({ message: "" }));
+          const msg = errData.message || (locale === "th" ? "เข้าสู่ระบบ/สมัครสมาชิกล้มเหลว" : locale === "zh" ? "登录/注册失败" : "Login/Register failed");
+          setError(msg);
+          return;
+        }
+        const authData = await authRes.json();
+        localStorage.setItem("subscriber_token", authData.accessToken);
+        localStorage.setItem("subscriber", JSON.stringify(authData.subscriber));
+        setSubscriber(authData.subscriber);
+      } catch {
+        setError(locale === "th" ? "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้" : locale === "zh" ? "无法连接服务器" : "Cannot connect to server");
+        return;
+      }
     }
     if (!form.consent) {
       setError(t("consentError"));
@@ -310,7 +331,7 @@ function HouseholdBookingContent() {
                   <p className="font-semibold text-green-700">{locale === "th" ? "เข้าสู่ระบบแล้ว" : locale === "zh" ? "已登录" : "Logged In"}</p>
                   <p className="text-sm text-gray-500">{subscriber.name}</p>
                 </div>
-                <button type="button" onClick={() => { localStorage.removeItem("subscriber"); setSubscriber(null); }} className="ml-auto text-xs text-gray-400 hover:text-red-500">
+                <button type="button" onClick={() => { localStorage.removeItem("subscriber"); localStorage.removeItem("subscriber_token"); setSubscriber(null); }} className="ml-auto text-xs text-gray-400 hover:text-red-500">
                   {locale === "th" ? "ออกจากระบบ" : locale === "zh" ? "退出" : "Log Out"}
                 </button>
               </div>
@@ -325,24 +346,29 @@ function HouseholdBookingContent() {
                   </button>
                 </div>
                 <p className="text-xs text-gray-500">
-                  {locale === "th" ? "ใช้อีเมลจากข้อมูลติดต่อด้านล่าง รหัสผ่านอย่างน้อย 6 ตัวอักษร" : locale === "zh" ? "使用下方联系信息中的电子邮件，密码至少6个字符" : "Uses the email from Contact Info below. Password must be at least 6 characters."}
+                  {locale === "th" ? "ใช้อีเมลจากข้อมูลติดต่อด้านล่าง รหัสผ่านอย่างน้อย 8 ตัวอักษร" : locale === "zh" ? "使用下方联系信息中的电子邮件，密码至少8个字符" : "Uses the email from Contact Info below. Password must be at least 8 characters."}
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       {locale === "th" ? "รหัสผ่าน" : locale === "zh" ? "密码" : "Password"} <span className="text-red-500">*</span>
                     </label>
-                    <input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} required minLength={6} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none" placeholder="••••••" />
+                    <input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} required minLength={8} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none" placeholder="••••••••" />
                   </div>
                   {authMode === "register" && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         {locale === "th" ? "ยืนยันรหัสผ่าน" : locale === "zh" ? "确认密码" : "Confirm Password"} <span className="text-red-500">*</span>
                       </label>
-                      <input type="password" value={authConfirmPassword} onChange={(e) => setAuthConfirmPassword(e.target.value)} required minLength={6} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none" placeholder="••••••" />
+                      <input type="password" value={authConfirmPassword} onChange={(e) => setAuthConfirmPassword(e.target.value)} required minLength={8} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none" placeholder="••••••••" />
                     </div>
                   )}
                 </div>
+                {authMode === "login" && (
+                  <Link href={`${prefix}/subscription/forgot-password`} className="text-xs text-sky-600 hover:underline">
+                    {locale === "th" ? "ลืมรหัสผ่าน?" : locale === "zh" ? "忘记密码？" : "Forgot password?"}
+                  </Link>
+                )}
               </div>
             )}
           </fieldset>

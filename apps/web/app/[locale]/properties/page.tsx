@@ -597,7 +597,7 @@ export default function PropertiesPage() {
                       <textarea
                         value={ratingComment}
                         onChange={(e) => setRatingComment(e.target.value)}
-                        placeholder={locale === "th" ? "ความคิดเห็นเพิ่มเติม" : "Additional comments"}
+                        placeholder={locale === "th" ? "ความคิดเห็นเพิ่มเติม" : locale === "zh" ? "其他评论" : "Additional comments"}
                         className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-emerald-500 h-20 resize-none mb-4"
                       />
                       <button onClick={() => { setCustomerRated(true); setListerRateReady(false); setTimeout(() => setListerRateReady(true), 3000); }} disabled={rating === 0}
@@ -651,11 +651,13 @@ export default function PropertiesPage() {
                   <p className="text-sm text-gray-500 mb-2">
                     {locale === "th"
                       ? "ขอบคุณที่ใช้บริการ CBLUE สำหรับการค้นหาทรัพย์สิน"
+                      : locale === "zh"
+                      ? "感谢您使用 CBLUE 搜索房产。"
                       : "Thank you for using CBLUE for your property search."}
                   </p>
                   <div className="bg-gray-50 rounded-xl p-3 mb-4 text-sm">
-                    <p className="text-gray-500">{locale === "th" ? "เลขที่ PO" : "PO Number"}: <span className="font-mono font-bold text-emerald-700">{poNumber}</span></p>
-                    <p className="text-gray-500">{locale === "th" ? "นัดหมาย" : "Viewing"}: <span className="font-semibold">{meetingDate} {meetingTime}</span></p>
+                    <p className="text-gray-500">{locale === "th" ? "เลขที่ PO" : locale === "zh" ? "PO 编号" : "PO Number"}: <span className="font-mono font-bold text-emerald-700">{poNumber}</span></p>
+                    <p className="text-gray-500">{locale === "th" ? "นัดหมาย" : locale === "zh" ? "看房" : "Viewing"}: <span className="font-semibold">{meetingDate} {meetingTime}</span></p>
                   </div>
                   {/* Ratings Display */}
                   <div className="grid grid-cols-2 gap-4 mb-4">
@@ -675,14 +677,16 @@ export default function PropertiesPage() {
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700 mb-4">
                     ⚠️ {locale === "th"
                       ? "ราคาทรัพย์สินและเงื่อนไขเป็นการเจรจาระหว่างคู่สัญญาโดยตรง CBLUE เป็นแพลตฟอร์มจับคู่เท่านั้น"
+                      : locale === "zh"
+                      ? "房产价格和条款由双方直接协商。CBLUE 仅为匹配平台。"
                       : "Property pricing and terms are negotiated directly between parties. CBLUE is a matching platform only."}
                   </div>
                   <div className="flex gap-3 justify-center">
                     <Link href={`${prefix}/dashboard`} className="px-6 py-2.5 bg-green-700 text-white rounded-xl font-bold text-sm hover:bg-green-800 transition">
-                      {locale === "th" ? "ไปที่แดชบอร์ด" : "Go to Dashboard"}
+                      {locale === "th" ? "ไปที่แดชบอร์ด" : locale === "zh" ? "前往控制台" : "Go to Dashboard"}
                     </Link>
                     <button onClick={() => setShowContactFlow(null)} className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-xl font-semibold text-sm">
-                      {locale === "th" ? "ค้นหาต่อ" : "Continue Browsing"}
+                      {locale === "th" ? "ค้นหาต่อ" : locale === "zh" ? "继续浏览" : "Continue Browsing"}
                     </button>
                   </div>
                 </div>
