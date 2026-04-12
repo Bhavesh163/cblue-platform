@@ -41,8 +41,9 @@ export class SubscriptionController {
     return this.subscriptionService.resetPassword(dto);
   }
 
-  @Get('subscribers')
-  listSubscribers() {
-    return this.subscriptionService.listSubscribers();
-  }
+  // Note: listSubscribers requires admin auth guard in production
+  // @Get('subscribers')
+  // listSubscribers() {
+  //   return this.subscriptionService.listSubscribers();
+  // }
 }

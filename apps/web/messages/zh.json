@@ -369,6 +369,7 @@
     "invalidTokenDesc": "此密码重置链接无效或已过期。",
     "requestNewReset": "请求新的重置链接",
     "passwordMismatch": "密码不匹配",
+    "passwordMin8": "密码至少8个字符",
     "noAccount": "还没有账户？",
     "registerHere": "在此注册",
     "hasAccount": "已有账户？",

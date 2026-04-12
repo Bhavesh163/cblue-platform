@@ -233,8 +233,9 @@ export default function PropertiesPage() {
                 value={authEmail}
                 onChange={(e) => { setAuthEmail(e.target.value); setAuthError(""); }}
               />
-              <input type="password" placeholder={locale === "th" ? "รหัสผ่าน (อย่างน้อย 6 ตัว)" : "Password (min 6 chars)"} value={authPassword}
+              <input type="password" placeholder={locale === "th" ? "รหัสผ่าน (อย่างน้อย 8 ตัว)" : locale === "zh" ? "密码（至少8个字符）" : "Password (min 8 chars)"} value={authPassword}
                 onChange={(e) => { setAuthPassword(e.target.value); setAuthError(""); }}
+                minLength={8}
                 className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
               />
               {authMode === "register" && (
@@ -244,20 +245,44 @@ export default function PropertiesPage() {
                 />
               )}
               {authError && <p className="text-xs text-red-600">{authError}</p>}
-              <button onClick={() => {
-                if (!authEmail) { setAuthError(locale === "th" ? "กรุณากรอกอีเมล" : "Please enter email"); return; }
-                if (authPassword.length < 6) { setAuthError(locale === "th" ? "รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร" : "Password min 6 chars"); return; }
-                if (authMode === "register" && authPassword !== authConfirmPassword) { setAuthError(locale === "th" ? "รหัสผ่านไม่ตรงกัน" : "Passwords do not match"); return; }
-                const newSub = { name: authEmail.split("@")[0] || authEmail, email: authEmail, role: "customer" };
-                localStorage.setItem("subscriber", JSON.stringify(newSub));
-                setSubscriber(newSub as { name: string; email: string });
-                setShowLoginGate(false);
+              <button onClick={async () => {
+                if (!authEmail) { setAuthError(locale === "th" ? "กรุณากรอกอีเมล" : locale === "zh" ? "请输入电子邮件" : "Please enter email"); return; }
+                if (authPassword.length < 8) { setAuthError(locale === "th" ? "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร" : locale === "zh" ? "密码至少8个字符" : "Password must be at least 8 characters"); return; }
+                if (authMode === "register" && authPassword !== authConfirmPassword) { setAuthError(locale === "th" ? "รหัสผ่านไม่ตรงกัน" : locale === "zh" ? "密码不匹配" : "Passwords do not match"); return; }
+                try {
+                  const endpoint = authMode === "login" ? "/api/v1/subscription/login" : "/api/v1/subscription/register";
+                  const body = authMode === "login"
+                    ? { email: authEmail.toLowerCase(), password: authPassword }
+                    : { name: authEmail.split("@")[0] || authEmail, email: authEmail.toLowerCase(), password: authPassword };
+                  const authRes = await fetch(`${API_BASE}${endpoint}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body),
+                  });
+                  if (!authRes.ok) {
+                    const errData = await authRes.json().catch(() => ({ message: "" }));
+                    setAuthError(errData.message || (locale === "th" ? "เข้าสู่ระบบ/สมัครสมาชิกล้มเหลว" : locale === "zh" ? "登录/注册失败" : "Login/Register failed"));
+                    return;
+                  }
+                  const authData = await authRes.json();
+                  localStorage.setItem("subscriber_token", authData.accessToken);
+                  localStorage.setItem("subscriber", JSON.stringify(authData.subscriber));
+                  setSubscriber(authData.subscriber);
+                  setShowLoginGate(false);
+                } catch {
+                  setAuthError(locale === "th" ? "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้" : locale === "zh" ? "无法连接服务器" : "Cannot connect to server");
+                }
               }} className="w-full py-3 bg-green-700 text-white font-bold rounded-xl hover:bg-green-800 transition">
-                {authMode === "login" ? (locale === "th" ? "เข้าสู่ระบบ" : "Log In") : (locale === "th" ? "สมัครและเข้าสู่ระบบ" : "Register & Log In")}
+                {authMode === "login" ? (locale === "th" ? "เข้าสู่ระบบ" : locale === "zh" ? "登录" : "Log In") : (locale === "th" ? "สมัครและเข้าสู่ระบบ" : locale === "zh" ? "注册并登录" : "Register & Log In")}
               </button>
+              {authMode === "login" && (
+                <Link href={`${prefix}/subscription/forgot-password`} className="block text-center text-xs text-green-700 hover:underline mt-2">
+                  {locale === "th" ? "ลืมรหัสผ่าน?" : locale === "zh" ? "忘记密码？" : "Forgot password?"}
+                </Link>
+              )}
             </div>
             <button onClick={() => setShowLoginGate(false)} className="w-full mt-3 py-2 text-sm text-gray-500 hover:text-gray-700">
-              {locale === "th" ? "ยกเลิก" : "Cancel"}
+              {locale === "th" ? "ยกเลิก" : locale === "zh" ? "取消" : "Cancel"}
             </button>
           </div>
         </div>

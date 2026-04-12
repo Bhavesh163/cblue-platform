@@ -22,6 +22,10 @@ function ResetPasswordForm() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (password.length < 8) {
+      setError(t("passwordMin8"));
+      return;
+    }
     if (password !== confirmPassword) {
       setError(t("passwordMismatch"));
       return;
@@ -30,7 +34,7 @@ function ResetPasswordForm() {
     setError("");
 
     try {
-      const res = await fetch(`${API_BASE}/subscription/reset-password`, {
+      const res = await fetch(`${API_BASE}/api/v1/subscription/reset-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, newPassword: password }),

@@ -18,6 +18,10 @@ export default function SubscriptionLoginPage() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (password.length < 8) {
+      setError(t("passwordMin8"));
+      return;
+    }
     setLoading(true);
     setError("");
 

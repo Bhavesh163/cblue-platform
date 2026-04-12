@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class CreateSubscriberDto {
   @IsString()
@@ -16,12 +16,15 @@ export class CreateSubscriberDto {
   @IsNotEmpty()
   phone: string;
 
+  @IsOptional()
   @IsString()
   company?: string;
 
+  @IsOptional()
   @IsString()
   serviceCategory?: string;
 
+  @IsOptional()
   @IsString()
   description?: string;
 }

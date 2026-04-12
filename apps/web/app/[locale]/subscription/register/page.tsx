@@ -28,6 +28,10 @@ export default function SubscriptionRegisterPage() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (form.password.length < 8) {
+      setError(t("passwordMin8"));
+      return;
+    }
     if (form.password !== form.confirmPassword) {
       setError(t("passwordMismatch"));
       return;
@@ -36,7 +40,7 @@ export default function SubscriptionRegisterPage() {
     setError("");
 
     try {
-      const res = await fetch(`${API_BASE}/subscription/register`, {
+      const res = await fetch(`${API_BASE}/api/v1/subscription/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

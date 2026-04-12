@@ -218,7 +218,7 @@ export class SubscriptionService {
 
     const frontendUrl =
       this.configService.get<string>('frontendUrl') || 'http://localhost:3000';
-    const resetUrl = `${frontendUrl}/th/subscription/reset-password?token=${resetToken}`;
+    const resetUrl = `${frontendUrl}/en/subscription/reset-password?token=${resetToken}`;
 
     const body = {
       Messages: [

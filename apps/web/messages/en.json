@@ -369,6 +369,7 @@
     "invalidTokenDesc": "This password reset link is invalid or has expired.",
     "requestNewReset": "Request a new reset link",
     "passwordMismatch": "Passwords do not match",
+    "passwordMin8": "Password must be at least 8 characters",
     "noAccount": "Don't have an account?",
     "registerHere": "Register here",
     "hasAccount": "Already have an account?",
