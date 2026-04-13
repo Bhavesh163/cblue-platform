@@ -1,0 +1,15 @@
+[Unit]
+Description=Cblue AI API Service
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/var/www/cblue-ai
+Environment="PATH=/var/www/cblue-ai/venv/bin"
+ExecStart=/var/www/cblue-ai/venv/bin/python -m uvicorn services.api.main:app --host 127.0.0.1 --port 8010
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

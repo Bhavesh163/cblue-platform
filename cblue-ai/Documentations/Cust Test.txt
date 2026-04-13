@@ -1,0 +1,170 @@
+I'm developping my customer service chatbot code to be in a web page on an rtx 3090 PyTorch 2.5.1+cu124 with CUDA 12.8 on ubuntu22.04. My model is openthaigpt1.514bisntuct downloaded locally in my hard disk at models/14b. Below is my customer support service architecture must strictly follow.
+
+As you are the top senior software arcitecht and top senior programmer, in order to be the best in class enterprise level coding architecture workable throughout the whole process with efficiency and no errors, Could you please edit my code to modify 1. chatbot integration to become mobile friendly as now the blue header tap, containing Cblue AI Assistant word, is not showing in mobile. 2. the responding language: if question in Thai, please answer wholely in Thai. If question in English, please answer wholely in English, and if question in Chinese, please answer wholely in Chinese.  Leave the rest untouched.
+
+As you are the best coder in the world, in order to be the best in class enterprise level coding architecture workable throughout the whole process with efficiency and no errors, Could you please create a best in class enterprise level architechture about my project. Also, please include my folder structure.
+
+Could you please 1. translate the questions below to be thai and Chinese and then 2. answer each question in Thai, Chinese or English, same language as it's question by your knowledge? Then, could you please edit my code to add each question from 1 and each of it's answers from 2 to the chatbot's knowledge base.
+
+Could you please translate the questions below to be thai and Chinese and then answer it in thai and Chinese by your knowledge? Then please could you please edit my code to add the questions and answers from your translations below to the chatbot's knowledge base
+
+
+As you are the best coder in the world, in order to be the best in class enterprise level coding architecture workable throughout the whole process with efficiency and no errors, Could you please edit my code to modify the  chatbot integration system to become mobile friendly as now the chatbot integration is too big on a small screen.
+
+As you are the best coder in the world, in order to be the best in class enterprise level coding architecture workable throughout the whole process with efficiency and no errors, Could you please edit my code to modify 1. chatbot integration to become mobile friendly as now the blue header tap, containing Cblue AI Assistant word, is not showing in mobile. 2. the responding language: if question in Thai, please answer wholely in Thai. If question in English, please answer wholely in English, and if question in Chinese, please answer wholely in Chinese.  Leave the rest untouched.
+
+Could you please 1. translate the questions below to be thai and Chinese and then 2. Add some more questions for each language that relate to the questions below 3. answer each question in Thai, Chinese or English, same language as it's question by your knowledge and from the contents of my website. Then, could you please edit my code to add each question from 1 and each of it's answers from 2 to the chatbot's knowledge base.
+
+As you are senior software architect, in order to be the best in class  enterprise level coding architecture workable throughout the whole process with efficiency and no errors, regarding latest Architechture.md, could you please:
+
+1) Apply the logic below:
+1.1) Inside of the knowledge base, I want to call all the questions, perhaps more that 150, and it's answers "FAQ". 
+1.2) If a user query is matched with a question in FAQs, respond its answer.
+1.3) If a user query is not matched with the question in FAQs, detect language.
+1.3.1) If Thai, respond Fallback A, "Sorry, I couldn't find information matching your question. Please try asking differently or contact us at: 
+Email: cblue.thailand@gmail.com
+Phone: +66 (0)81 854 4291"
+1.3.2) If English, respond Fallback B, "ขออภัย ฉันไม่พบข้อมูลที่ตรงกับคำถามของคุณ กรุณาลองถามใหม่หรือติดต่อเราที่: อีเมล: cblue.thailand@gmail.com โทร: +66 (0)81 854 4291
+1.3.3) If Chinese, respond Fallback C, "抱歉，我没有找到与您问题相关的信息。请重新提问或联系我们： 邮箱：cblue.thailand@gmail.com   电话：+66 (0)81 854 4291
+
+2) Could you please suggest that if I have other 3 websites, I want to have necessary code folders to be duplicated friendly and easily. Other website will have different FAQ. Regarding the folder structure now, is it easy to copy the folder or do you need to arange the folder structure to be able to be duplicated friendly and easily. How can I duplicate? What folder should I copy?
+
+
+
+
+
+
+As you are the top senior software arcitecht and top senior programmer, in order to be the best in class enterprise level coding architecture workable throughout the whole process with efficiency and no errors, could you please edit my code to add the FAQ below to my FAQ database inside of common/knowledge.py.
+
+
+
+📌📌📌Question: What are you doing? Who are we? Who are you? What are your services? What are your solutions? What are your offers?
+
+
+📌📌📌Answer:
+Cblue Thailand offers a comprehensive suite of services focused on AI/Digital Solutions, sustainable technology solutions, and construction, engineering.
+The services can be grouped into several key areas:
+
+
+• Digital Solutions: AI chatbot development, software development, and machine learning.
+• Smart Technology & Automation: Building Management Systems (BMS), smart building controls, automation, and energy-saving solutions.
+• Renewable Energy & EV Solutions: Solar power, wind turbines, and EV charging stations.
+• Design & Engineering: Full architectural, interior, landscape, and detailed engineering design.
+• Construction & Specialized Trades: General construction, fit-outs, HVAC, MEP systems, retrofitting, and green building (including vertical gardens).
+• Specialized Fabrication: Metal sheet, steel structure, aluminium, and glass work.
+. Consulting & Strategy: Market research, economic evaluations, feasibility studies, and project management.
+
+
+
+
+
+
+
+
+📌📌📌Question: คุณกำลังทำอะไรอยู่? เราคือใครกัน? คุณคือใใครครับ/คะ? บริการของคุณคืออะไร?  โซลูชันของคุณคืออะไร?  ข้อเสนอของคุณคืออะไร?
+
+Cblue Thailand นำเสนอบริการที่ครอบคลุมและหลากหลาย โดยเน้นโซลูชันด้าน AI/ดิจิทัล โซลูชันเทคโนโลยีที่ยั่งยืน และงานก่อสร้างและวิศวกรรม
+บริการสามารถจัดกลุ่มได้เป็นหลายด้านหลัก ดังนี้:
+
+โซลูชันดิจิทัล: การพัฒนาแชทบอท AI, การพัฒนาซอฟต์แวร์, และการเรียนรู้ของเครื่อง (Machine Learning)
+เทคโนโลยีอัจฉริยะและระบบอัตโนมัติ: ระบบบริหารจัดการอาคาร (BMS), ระบบควบคุมอาคารอัจฉริยะ, ระบบอัตโนมัติ, และโซลูชันประหยัดพลังงาน
+พลังงานหมุนเวียนและโซลูชัน EV: พลังงานแสงอาทิตย์, กังหันลม, และสถานีชาร์จรถยนต์ไฟฟ้า
+การออกแบบและวิศวกรรม: การออกแบบสถาปัตยกรรม, ออกแบบตกแต่งภายใน, ภูมิสถาปัตย์, และการออกแบบวิศวกรรมโดยละเอียดครบวงจร
+งานก่อสร้างและงานช่างเฉพาะทาง: งานก่อสร้างทั่วไป, งานตกแต่งภายใน, ระบบปรับอากาศ, ระบบ MEP (เครื่องกล-ไฟฟ้า-ประปา), งานปรับปรุงอาคาร, และอาคารเขียว (รวมถึงสวนแนวตั้ง)
+งานผลิตเฉพาะทาง: งานแผ่นโลหะ, โครงสร้างเหล็ก, อลูมิเนียม, และงานกระจก
+ที่ปรึกษาและกลยุทธ์: การวิจัยตลาด, การประเมินทางเศรษฐศาสตร์, การศึกษาความเป็นไปได้, และการบริหารโครงการ
+
+
+
+
+
+
+📌📌📌Question: 你在做什么? 我们是谁? 你是谁? 你们的服务是什么? 你们的解决方案是什么? 你们的产品/服务有哪些?
+
+Cblue Thailand 提供全面的服务套餐，专注于人工智能/数字化解决方案、可持续技术解决方案以及建筑工程。
+服务可分为以下几个关键领域:
+
+数字化解决方案: AI聊天机器人开发、软件开发和机器学习
+智能技术与自动化: 楼宇管理系统(BMS)、智能建筑控制、自动化和节能解决方案
+可再生能源与电动汽车解决方案: 太阳能、风力涡轮机和电动汽车充电站
+设计与工程: 全方位建筑设计、室内设计、景观设计和详细工程设计
+建筑与专业工程: 一般建筑施工、装修工程、暖通空调系统、机电管道系统(MEP)、改造工程和绿色建筑(包括垂直花园)
+专业制造: 金属板材、钢结构、铝材和玻璃工程
+咨询与策略: 市场研究、经济评估、可行性研究和项目管理
+
+
+
+
+
+
+
+
+
+
+
+
+As you are the best coder in the world, in order to be the best in class enterprise level coding architecture workable throughout the whole process with efficiency and no errors, Could you please edit my code to add the question and answer below to the chatbot's knowledge base.  Leave the rest untouched.
+
+
+Could you please 1. translate the questions below to be thai and Chinese and then 2. answer each question in Thai, Chinese or English, same language as it's question by your knowledge? Then, could you please edit my code to add each question from 1 and each of it's answers from 2 to the chatbot's knowledge base.
+
+
+📌📌📌Below question for you to translate to be thai and Chinese:
+what is AI?
+what is a chatbot?
+what is AI chatbot development?
+what is chatbot development?
+what is Software 
+what is Software development
+what is Machine Learning
+what is ML	
+what is a machine
+what is learning
+what is artificial intelligence
+what is computers?
+what is data?
+what is solar
+what is Solar Solutions
+what is technologies?
+what is EV?
+what is EV charger?
+what is Wi-Fi?
+what is Green Architecture?
+what is eco-friendly?
+what is HVAC?
+what is MEP?
+what is Retrofit?
+what is Controls?
+what is Automation?
+what is BAS?
+what is Smart Building?
+what is real-time monitoring?
+what is predictive maintenance?
+what is occupant comfort?
+what is Environmental services?
+what is Energy saving?
+what is environmental footprints?
+what is Security system?
+what is Access control?
+what is Green construction?
+what is Fit Out?
+what is renovation?
+what is reinstatement?
+what is Vertical Garden?
+what is Smart home?
+what is Smart farming?
+what is a Website?
+what is Website development?
+what is SEO?
+what is coding?
+what is your phone number?
+what is your email? 
+what is BMS?
+what is IOT? 
+what is Chatbot development?
+what is AI Chatbot development?
+what is Green architect? .... just answer same as green architecture?
+what is Website development?
+
+
+

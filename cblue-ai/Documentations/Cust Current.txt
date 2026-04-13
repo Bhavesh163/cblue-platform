@@ -1,0 +1,25 @@
+Could you please 1. translate the questions below to be thai and Chinese and then 2. answer each question in Thai, Chinese or English, same language as it's question by your knowledge and from the contents of my website. Then, could you please edit my code to add each question from 1 and each of it's answers from 2 to the chatbot's knowledge base.
+
+
+
+
+
+
+
+
+
+Below are the Questions:
+
+คุณมีบริการอะไรบ้าง
+คุณขายอะไรบ้าง 
+คุณขายบ้านด้วยเหรอ 
+คุณใครบ้าน ด้วยหรือเปล่า
+คุณให้ชาวบ้านด้วยเหรอ
+
+Have to add more questions about 
+Do you sell / rent houses 
+Where are your houses for sales/rent?
+what is the price?
+What kind of house do you sell/rent?
+etc
+Solar panels, solar farms?  Solar panels types? Solar panels equipment?
