@@ -167,7 +167,7 @@ export default function PropertyDetailPage() {
                   {property.floors != null && (
                     <div>
                       <div className="text-2xl font-bold text-gray-900">{property.floors}</div>
-                      <div className="text-sm text-gray-500">{locale === "th" ? "ชั้น" : "Floors"}</div>
+                      <div className="text-sm text-gray-500">{locale === "th" ? "ชั้น" : locale === "zh" ? "楼层" : "Floors"}</div>
                     </div>
                   )}
                 </div>
@@ -184,7 +184,7 @@ export default function PropertyDetailPage() {
               {/* Location */}
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <h2 className="font-semibold text-gray-900 mb-3">
-                  {locale === "th" ? "ที่ตั้ง" : "Location"}
+                  {locale === "th" ? "ที่ตั้ง" : locale === "zh" ? "位置" : "Location"}
                 </h2>
                 <div className="text-gray-700 space-y-1">
                   {property.addressLine && <p>{property.addressLine}</p>}
@@ -223,7 +223,7 @@ export default function PropertyDetailPage() {
                 )}
                 {property.yearBuilt && (
                   <p className="text-xs text-gray-400">
-                    {locale === "th" ? "ปีที่สร้าง" : "Year Built"}: {property.yearBuilt}
+                    {locale === "th" ? "ปีที่สร้าง" : locale === "zh" ? "建造年份" : "Year Built"}: {property.yearBuilt}
                   </p>
                 )}
                 <p className="text-xs text-gray-400">

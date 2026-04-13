@@ -41,16 +41,16 @@ export function Footer() {
   ];
 
   const professionalLinks = [
-    { label: locale === "th" ? "ทนายความ" : "Lawyer", href: `${prefix}/booking/professional?service=LAWYER` },
-    { label: locale === "th" ? "บัญชี" : "Accountant", href: `${prefix}/booking/professional?service=ACCOUNTANT` },
-    { label: locale === "th" ? "ผู้สอบบัญชี" : "CPA", href: `${prefix}/booking/professional?service=CPA` },
-    { label: locale === "th" ? "สถาปนิก" : "Architect", href: `${prefix}/booking/professional?service=ARCHITECT` },
-    { label: locale === "th" ? "มัณฑนากร" : "Interior Designer", href: `${prefix}/booking/professional?service=INTERIOR_DESIGNER` },
-    { label: locale === "th" ? "วิศวกร" : "Engineer", href: `${prefix}/booking/professional?service=DESIGN_CIVIL_ENGINEER` },
-    { label: locale === "th" ? "โปรแกรมเมอร์" : "Software Programmer", href: `${prefix}/booking/professional?service=SOFTWARE_PROGRAMMER` },
-    { label: locale === "th" ? "การตลาดดิจิทัล" : "Digital Marketing", href: `${prefix}/booking/professional?service=DIGITAL_MARKETING` },
-    { label: locale === "th" ? "เจ้าหน้าที่ความปลอดภัย" : "Safety Officer", href: `${prefix}/booking/professional?service=SAFETY_OFFICER` },
-    { label: locale === "th" ? "อื่น ๆ" : "Others", href: `${prefix}/booking/professional?service=OTHERS` },
+    { label: locale === "th" ? "ทนายความ" : locale === "zh" ? "律师" : "Lawyer", href: `${prefix}/booking/professional?service=LAWYER` },
+    { label: locale === "th" ? "บัญชี" : locale === "zh" ? "会计" : "Accountant", href: `${prefix}/booking/professional?service=ACCOUNTANT` },
+    { label: locale === "th" ? "ผู้สอบบัญชี" : locale === "zh" ? "注册会计师" : "CPA", href: `${prefix}/booking/professional?service=CPA` },
+    { label: locale === "th" ? "สถาปนิก" : locale === "zh" ? "建筑师" : "Architect", href: `${prefix}/booking/professional?service=ARCHITECT` },
+    { label: locale === "th" ? "มัณฑนากร" : locale === "zh" ? "室内设计师" : "Interior Designer", href: `${prefix}/booking/professional?service=INTERIOR_DESIGNER` },
+    { label: locale === "th" ? "วิศวกร" : locale === "zh" ? "工程师" : "Engineer", href: `${prefix}/booking/professional?service=DESIGN_CIVIL_ENGINEER` },
+    { label: locale === "th" ? "โปรแกรมเมอร์" : locale === "zh" ? "程序员" : "Software Programmer", href: `${prefix}/booking/professional?service=SOFTWARE_PROGRAMMER` },
+    { label: locale === "th" ? "การตลาดดิจิทัล" : locale === "zh" ? "数字营销" : "Digital Marketing", href: `${prefix}/booking/professional?service=DIGITAL_MARKETING` },
+    { label: locale === "th" ? "เจ้าหน้าที่ความปลอดภัย" : locale === "zh" ? "安全员" : "Safety Officer", href: `${prefix}/booking/professional?service=SAFETY_OFFICER` },
+    { label: locale === "th" ? "อื่น ๆ" : locale === "zh" ? "其他" : "Others", href: `${prefix}/booking/professional?service=OTHERS` },
   ];
 
   const companyLinks = [
@@ -144,7 +144,7 @@ export function Footer() {
               ))}
               <li>
                 <Link href={`${prefix}/services#project`} className="text-xs text-sky-400 hover:text-sky-300 transition-colors">
-                  {locale === "th" ? "ดูทั้งหมด →" : "View all →"}
+                  {locale === "th" ? "ดูทั้งหมด →" : locale === "zh" ? "查看全部 →" : "View all →"}
                 </Link>
               </li>
             </ul>
@@ -174,10 +174,10 @@ export function Footer() {
           </p>
           <div className="flex gap-4 text-xs text-gray-500">
             <Link href={`${prefix}/terms`} className="hover:text-white transition-colors">
-              {locale === "th" ? "เงื่อนไขการใช้บริการ" : "Term of Service"}
+              {locale === "th" ? "เงื่อนไขการใช้บริการ" : locale === "zh" ? "服务条款" : "Term of Service"}
             </Link>
             <Link href={`${prefix}/privacy`} className="hover:text-white transition-colors">
-              {locale === "th" ? "นโยบายความเป็นส่วนตัว" : "Privacy Policy"}
+              {locale === "th" ? "นโยบายความเป็นส่วนตัว" : locale === "zh" ? "隐私政策" : "Privacy Policy"}
             </Link>
           </div>
         </div>

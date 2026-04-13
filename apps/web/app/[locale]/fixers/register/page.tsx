@@ -7,6 +7,9 @@ import { getDistrictsForProvince } from "../../lib/thai-address-data";
 import { getSubdistrictsForDistrict, lookupByPostalCode } from "../../lib/thai-subdistrict-data";
 import ReCaptcha from "../../components/ReCaptcha";
 import GpsDetectButton from "../../components/GpsDetectButton";
+import Link from "next/link";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
 
 interface PriceRow {
   service: string;
@@ -89,9 +92,19 @@ export default function FixerRegisterPage() {
   const [error, setError] = useState("");
   const [recaptchaToken, setRecaptchaToken] = useState("");
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [subscriber, setSubscriber] = useState<{ name: string; email?: string } | null>(null);
+  const [authMode, setAuthMode] = useState<"login" | "register">("register");
+  const prefix = `/${locale}`;
 
   const handleRecaptcha = useCallback((token: string) => setRecaptchaToken(token), []);
   const handleRecaptchaExpire = useCallback(() => setRecaptchaToken(""), []);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("subscriber");
+      if (stored) setSubscriber(JSON.parse(stored));
+    } catch { /* ignore */ }
+  }, []);
 
   function handleChange(
     e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -139,6 +152,45 @@ export default function FixerRegisterPage() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    // Inline auth — if not logged in, validate & create/login account via backend
+    if (!subscriber) {
+      if (!form.email || !/\S+@\S+\.\S+/.test(form.email)) {
+        setError(locale === "th" ? "กรุณากรอกอีเมลที่ถูกต้อง" : locale === "zh" ? "请输入有效的电子邮件" : "Please enter a valid email address");
+        return;
+      }
+      if (!form.password || form.password.length < 8) {
+        setError(locale === "th" ? "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร" : locale === "zh" ? "密码至少8个字符" : "Password must be at least 8 characters");
+        return;
+      }
+      if (authMode === "register" && form.password !== form.confirmPassword) {
+        setError(locale === "th" ? "รหัสผ่านไม่ตรงกัน" : locale === "zh" ? "密码不匹配" : "Passwords do not match");
+        return;
+      }
+      try {
+        const endpoint = authMode === "login" ? "/api/v1/subscription/login" : "/api/v1/subscription/register";
+        const body = authMode === "login"
+          ? { email: form.email.toLowerCase(), password: form.password }
+          : { name: form.name || form.email, email: form.email.toLowerCase(), phone: form.phone, company: form.company || undefined, password: form.password };
+        const authRes = await fetch(`${API_BASE}${endpoint}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!authRes.ok) {
+          const errData = await authRes.json().catch(() => ({ message: "" }));
+          const msg = errData.message || (locale === "th" ? "เข้าสู่ระบบ/สมัครสมาชิกล้มเหลว" : locale === "zh" ? "登录/注册失败" : "Login/Register failed");
+          setError(msg);
+          return;
+        }
+        const authData = await authRes.json();
+        localStorage.setItem("subscriber_token", authData.accessToken);
+        localStorage.setItem("subscriber", JSON.stringify(authData.subscriber));
+        setSubscriber(authData.subscriber);
+      } catch {
+        setError(locale === "th" ? "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้" : locale === "zh" ? "无法连接服务器" : "Cannot connect to server");
+        return;
+      }
+    }
     if (!form.consent) {
       setError(t("consent"));
       return;
@@ -153,14 +205,6 @@ export default function FixerRegisterPage() {
     }
     if (kycImages.length === 0) {
       setError(t("kycError"));
-      return;
-    }
-    if (!form.password || form.password.length < 6) {
-      setError(locale === "th" ? "รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร" : locale === "zh" ? "密码至少6个字符" : "Password must be at least 6 characters");
-      return;
-    }
-    if (form.password !== form.confirmPassword) {
-      setError(locale === "th" ? "รหัสผ่านไม่ตรงกัน" : locale === "zh" ? "密码不匹配" : "Passwords do not match");
       return;
     }
     setSubmitting(true);
@@ -459,7 +503,7 @@ export default function FixerRegisterPage() {
               <div className={`bg-gradient-to-r ${TIER_COLORS[aiTier.tier] || "from-gray-400 to-gray-600"} p-6 text-white`}>
                 <p className="text-sm font-semibold opacity-90">🤖 {locale === "th" ? "CBLUE AI ประเมินระดับของคุณ" : locale === "zh" ? "CBLUE AI 评估您的等级" : "CBLUE AI Tier Assessment"}</p>
                 <p className="text-4xl font-black mt-2">{aiTier.tier}</p>
-                <p className="text-sm mt-1 opacity-80">{locale === "th" ? `คะแนนรวม: ${aiTier.score}/100` : `Overall Score: ${aiTier.score}/100`}</p>
+                <p className="text-sm mt-1 opacity-80">{locale === "th" ? `คะแนนรวม: ${aiTier.score}/100` : locale === "zh" ? `总分: ${aiTier.score}/100` : `Overall Score: ${aiTier.score}/100`}</p>
               </div>
 
               {/* Credential Verification Status */}
@@ -696,46 +740,78 @@ export default function FixerRegisterPage() {
             </div>
           </fieldset>
 
-          {/* Create Subscriber Account */}
+          {/* Login / Create Account */}
           <fieldset className="bg-sky-50 rounded-xl p-5 border border-sky-200">
             <legend className="text-lg font-semibold text-gray-900 mb-1">
-              {locale === "th" ? "สร้างบัญชีสมาชิก" : locale === "zh" ? "创建订阅账户" : "Create Subscriber Account"}
+              {locale === "th" ? "🔐 เข้าสู่ระบบ / สร้างบัญชี (จำเป็น)" : locale === "zh" ? "🔐 登录/创建账户（必填）" : "🔐 Login / Create Account (Required)"}
             </legend>
-            <p className="text-xs text-gray-500 mb-4">
-              {locale === "th" ? "สมัครเพื่อเข้าถึงบริการมืออาชีพและจัดการคำขอของคุณ" : locale === "zh" ? "注册以访问专业服务并管理您的请求" : "Sign up to access professional services and manage your requests"}
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                  {locale === "th" ? "รหัสผ่าน" : locale === "zh" ? "密码" : "Password"} <span className="text-red-500">*</span>
-                </label>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  required
-                  minLength={6}
-                  value={form.password}
-                  onChange={handleChange}
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                />
+            {subscriber ? (
+              <div className="flex items-center gap-3 mt-2">
+                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600 text-lg font-bold">✓</div>
+                <div>
+                  <p className="font-semibold text-green-700">{locale === "th" ? "เข้าสู่ระบบแล้ว" : locale === "zh" ? "已登录" : "Logged In"}</p>
+                  <p className="text-sm text-gray-500">{subscriber.name}</p>
+                </div>
+                <button type="button" onClick={() => { localStorage.removeItem("subscriber"); localStorage.removeItem("subscriber_token"); setSubscriber(null); }} className="ml-auto text-xs text-gray-400 hover:text-red-500">
+                  {locale === "th" ? "ออกจากระบบ" : locale === "zh" ? "退出" : "Log Out"}
+                </button>
               </div>
-              <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                  {locale === "th" ? "ยืนยันรหัสผ่าน" : locale === "zh" ? "确认密码" : "Confirm Password"} <span className="text-red-500">*</span>
-                </label>
-                <input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type="password"
-                  required
-                  minLength={6}
-                  value={form.confirmPassword}
-                  onChange={handleChange}
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                />
+            ) : (
+              <div className="space-y-3 mt-3">
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setAuthMode("login")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition ${authMode === "login" ? "bg-sky-600 text-white" : "bg-white border border-gray-300 text-gray-600 hover:bg-gray-50"}`}>
+                    {locale === "th" ? "เข้าสู่ระบบ" : locale === "zh" ? "登录" : "Login"}
+                  </button>
+                  <button type="button" onClick={() => setAuthMode("register")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition ${authMode === "register" ? "bg-sky-600 text-white" : "bg-white border border-gray-300 text-gray-600 hover:bg-gray-50"}`}>
+                    {locale === "th" ? "สมัครสมาชิกใหม่" : locale === "zh" ? "注册新账户" : "Register New Account"}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500">
+                  {locale === "th" ? "ใช้อีเมลจากข้อมูลติดต่อด้านบน รหัสผ่านอย่างน้อย 8 ตัวอักษร" : locale === "zh" ? "使用上方联系信息中的电子邮件，密码至少8个字符" : "Uses the email from Contact Info above. Password must be at least 8 characters."}
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                      {locale === "th" ? "รหัสผ่าน" : locale === "zh" ? "密码" : "Password"} <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="password"
+                      name="password"
+                      type="password"
+                      required
+                      minLength={8}
+                      value={form.password}
+                      onChange={handleChange}
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none"
+                      placeholder="••••••••"
+                    />
+                  </div>
+                  {authMode === "register" && (
+                    <div>
+                      <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                        {locale === "th" ? "ยืนยันรหัสผ่าน" : locale === "zh" ? "确认密码" : "Confirm Password"} <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        id="confirmPassword"
+                        name="confirmPassword"
+                        type="password"
+                        required
+                        minLength={8}
+                        value={form.confirmPassword}
+                        onChange={handleChange}
+                        className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none"
+                        placeholder="••••••••"
+                      />
+                    </div>
+                  )}
+                </div>
+                {authMode === "login" && (
+                  <Link href={`${prefix}/subscription/forgot-password`} className="text-xs text-sky-600 hover:underline">
+                    {locale === "th" ? "ลืมรหัสผ่าน?" : locale === "zh" ? "忘记密码？" : "Forgot password?"}
+                  </Link>
+                )}
               </div>
-            </div>
+            )}
           </fieldset>
 
           {/* KYC */}

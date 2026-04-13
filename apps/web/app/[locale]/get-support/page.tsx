@@ -217,7 +217,7 @@ export default function GetSupportPage() {
         <Image src="/images/scenic-building.jpg" alt="" fill sizes="100vw" className="object-cover" priority />
         <div className="absolute inset-0 bg-gradient-to-r from-sky-900/90 to-blue-800/75" />
         <div className="relative max-w-3xl mx-auto px-4 sm:px-6 py-16 text-center">
-          <span className="inline-block px-4 py-1.5 bg-white/10 backdrop-blur text-sky-200 rounded-full text-sm font-bold mb-4 border border-white/20">🛟 {locale === "th" ? "ศูนย์ช่วยเหลือ" : "Help Center"}</span>
+          <span className="inline-block px-4 py-1.5 bg-white/10 backdrop-blur text-sky-200 rounded-full text-sm font-bold mb-4 border border-white/20">🛟 {locale === "th" ? "ศูนย์ช่วยเหลือ" : locale === "zh" ? "帮助中心" : "Help Center"}</span>
           <h1 className="text-3xl sm:text-4xl font-bold text-white mb-3">{t("title")}</h1>
           <p className="text-sky-100 text-lg">{t("subtitle")}</p>
           <div className="w-20 h-1 bg-white/50 mx-auto rounded-full mt-5" />

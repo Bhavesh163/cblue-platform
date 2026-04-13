@@ -168,6 +168,8 @@ export default function PropertiesPage() {
     setTimeout(() => {
       const replies = locale === "th"
         ? ["ได้ครับ/ค่ะ ยินดีให้ข้อมูลเพิ่มเติม", "ทรัพย์สินนี้ยังว่างอยู่ครับ/ค่ะ", "สามารถนัดดูได้ครับ/ค่ะ"]
+        : locale === "zh"
+        ? ["当然，很乐意提供更多详情！", "该房产仍然可用。", "我们可以随时安排看房。"]
         : ["Sure, happy to provide more details!", "The property is still available.", "We can schedule a viewing anytime."];
       const reply = replies[Math.floor(Math.random() * replies.length)] ?? replies[0] ?? "";
       setChatMessages((prev) => [...prev, { sender: "lister", text: reply }]);
@@ -175,11 +177,11 @@ export default function PropertiesPage() {
   }
 
   const PROPERTY_TIERS = [
-    { name: "Economy", fee: 300, desc: locale === "th" ? "ห้องเช่า" : "Room" },
-    { name: "Standard", fee: 500, desc: locale === "th" ? "คอนโด" : "Condo" },
-    { name: "Upper", fee: 800, desc: locale === "th" ? "บ้าน" : "House" },
-    { name: "Luxury", fee: 1200, desc: locale === "th" ? "หรูหรา" : "Luxury" },
-    { name: "Grandeur", fee: 2000, desc: locale === "th" ? "พรีเมียม" : "Premium" },
+    { name: "Economy", fee: 300, desc: locale === "th" ? "ห้องเช่า" : locale === "zh" ? "房间" : "Room" },
+    { name: "Standard", fee: 500, desc: locale === "th" ? "คอนโด" : locale === "zh" ? "公寓" : "Condo" },
+    { name: "Upper", fee: 800, desc: locale === "th" ? "บ้าน" : locale === "zh" ? "别墅" : "House" },
+    { name: "Luxury", fee: 1200, desc: locale === "th" ? "หรูหรา" : locale === "zh" ? "豪华" : "Luxury" },
+    { name: "Grandeur", fee: 2000, desc: locale === "th" ? "พรีเมียม" : locale === "zh" ? "顶级" : "Premium" },
   ];
 
   const typeKeys: Record<string, string> = {
@@ -229,7 +231,7 @@ export default function PropertiesPage() {
               </button>
             </div>
             <div className="space-y-3">
-              <input type="email" placeholder={locale === "th" ? "อีเมล" : "Email"} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
+              <input type="email" placeholder={locale === "th" ? "อีเมล" : locale === "zh" ? "电子邮件" : "Email"} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
                 value={authEmail}
                 onChange={(e) => { setAuthEmail(e.target.value); setAuthError(""); }}
               />
@@ -239,7 +241,7 @@ export default function PropertiesPage() {
                 className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
               />
               {authMode === "register" && (
-                <input type="password" placeholder={locale === "th" ? "ยืนยันรหัสผ่าน" : "Confirm Password"} value={authConfirmPassword}
+                <input type="password" placeholder={locale === "th" ? "ยืนยันรหัสผ่าน" : locale === "zh" ? "确认密码" : "Confirm Password"} value={authConfirmPassword}
                   onChange={(e) => { setAuthConfirmPassword(e.target.value); setAuthError(""); }}
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
                 />
@@ -295,14 +297,14 @@ export default function PropertiesPage() {
             {/* Header */}
             <div className="bg-gradient-to-r from-emerald-600 to-green-700 px-6 py-4 flex items-center justify-between flex-shrink-0">
               <h2 className="text-white font-bold">
-                {contactStep === "tier" ? (locale === "th" ? "เลือกระดับบริการ" : "Select Service Tier") :
-                 contactStep === "payment" ? (locale === "th" ? "ชำระค่าธรรมเนียม" : "Pay Processing Fee") :
-                 contactStep === "po" ? (locale === "th" ? "ใบสั่งซื้อ (PO)" : "Purchase Order") :
-                 contactStep === "notify" ? (locale === "th" ? "แจ้งเตือนผู้ลงประกาศ" : "Notifying Lister") :
-                 contactStep === "chat" ? (locale === "th" ? "แชทนิรนาม" : "Anonymous Chat") :
-                 contactStep === "meeting" ? (locale === "th" ? "นัดหมายดูทรัพย์สิน" : "Schedule Viewing") :
-                 contactStep === "rate" ? (locale === "th" ? "ให้คะแนนและรีวิว" : "Rate & Review") :
-                 (locale === "th" ? "สำเร็จ!" : "Complete!")}
+                {contactStep === "tier" ? (locale === "th" ? "เลือกระดับบริการ" : locale === "zh" ? "选择服务等级" : "Select Service Tier") :
+                 contactStep === "payment" ? (locale === "th" ? "ชำระค่าธรรมเนียม" : locale === "zh" ? "支付处理费" : "Pay Processing Fee") :
+                 contactStep === "po" ? (locale === "th" ? "ใบสั่งซื้อ (PO)" : locale === "zh" ? "采购订单" : "Purchase Order") :
+                 contactStep === "notify" ? (locale === "th" ? "แจ้งเตือนผู้ลงประกาศ" : locale === "zh" ? "通知房源方" : "Notifying Lister") :
+                 contactStep === "chat" ? (locale === "th" ? "แชทนิรนาม" : locale === "zh" ? "匿名聊天" : "Anonymous Chat") :
+                 contactStep === "meeting" ? (locale === "th" ? "นัดหมายดูทรัพย์สิน" : locale === "zh" ? "预约看房" : "Schedule Viewing") :
+                 contactStep === "rate" ? (locale === "th" ? "ให้คะแนนและรีวิว" : locale === "zh" ? "评分与评论" : "Rate & Review") :
+                 (locale === "th" ? "สำเร็จ!" : locale === "zh" ? "完成！" : "Complete!")}
               </h2>
               <button onClick={() => setShowContactFlow(null)} className="text-white/80 hover:text-white text-xl">&times;</button>
             </div>
@@ -333,7 +335,7 @@ export default function PropertiesPage() {
               {contactStep === "tier" && (
                 <>
                   <p className="text-sm text-gray-600 mb-4">
-                    {locale === "th" ? "เลือกระดับบริการเพื่อติดต่อผู้ลงประกาศ:" : "Choose a service tier to contact the lister:"}
+                    {locale === "th" ? "เลือกระดับบริการเพื่อติดต่อผู้ลงประกาศ:" : locale === "zh" ? "选择服务等级以联系发布者：" : "Choose a service tier to contact the lister:"}
                   </p>
                   <div className="grid grid-cols-1 gap-2">
                     {PROPERTY_TIERS.map((tier) => (
@@ -355,6 +357,8 @@ export default function PropertiesPage() {
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700 mt-4">
                     ⚠️ {locale === "th"
                       ? "CBLUE เป็นแพลตฟอร์มจับคู่เท่านั้น ราคาทรัพย์สินตกลงโดยตรงระหว่างผู้ซื้อ/ผู้เช่าและผู้ลงประกาศ ค่าธรรมเนียมนี้เป็นค่าดำเนินการเท่านั้น"
+                      : locale === "zh"
+                      ? "CBLUE仅为匹配平台。房产价格由买家/租客和发布者直接协商。此费用仅用于处理。"
                       : "CBLUE is a matching platform only. Property price is agreed directly between buyer/renter and lister. This fee covers processing only."}
                   </div>
                   <button
@@ -362,7 +366,7 @@ export default function PropertiesPage() {
                     disabled={!selectedTier}
                     className="mt-4 w-full py-3 bg-green-700 text-white font-bold rounded-xl disabled:opacity-40 hover:bg-green-800 transition"
                   >
-                    {locale === "th" ? "ดำเนินการต่อ" : "Continue"}
+                    {locale === "th" ? "ดำเนินการต่อ" : locale === "zh" ? "继续" : "Continue"}
                   </button>
                 </>
               )}
@@ -372,7 +376,7 @@ export default function PropertiesPage() {
                 <>
                   <div className="text-center">
                     <p className="text-sm text-gray-600 mb-4">
-                      {locale === "th" ? "สแกน QR Code เพื่อชำระค่าธรรมเนียมดำเนินการ" : "Scan QR Code to pay the processing fee"}
+                      {locale === "th" ? "สแกน QR Code เพื่อชำระค่าธรรมเนียมดำเนินการ" : locale === "zh" ? "扫描QR码支付处理费" : "Scan QR Code to pay the processing fee"}
                     </p>
                     <div className="inline-block bg-white border-2 border-gray-200 rounded-2xl p-6 mb-4">
                       <div className="w-48 h-48 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400">
@@ -388,18 +392,20 @@ export default function PropertiesPage() {
                     <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700 mb-4">
                       ⚠️ {locale === "th"
                         ? "ค่าธรรมเนียมดำเนินการเท่านั้น ราคาทรัพย์สินตกลงโดยตรงระหว่างผู้ซื้อและผู้ลงประกาศ"
+                        : locale === "zh"
+                        ? "仅为处理费。房产价格由买家和发布者直接协商。"
                         : "Processing fee only. Property price is agreed directly between buyer and lister."}
                     </div>
                   </div>
                   <div className="flex gap-3">
                     <button onClick={() => setContactStep("tier")} className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl font-semibold text-sm">
-                      ← {locale === "th" ? "กลับ" : "Back"}
+                      ← {locale === "th" ? "กลับ" : locale === "zh" ? "返回" : "Back"}
                     </button>
                     <button onClick={() => {
                       setPoNumber(generatePO());
                       setContactStep("po");
                     }} className="flex-1 py-2.5 bg-green-700 text-white rounded-xl font-bold text-sm hover:bg-green-800 transition">
-                      {locale === "th" ? "ยืนยันการชำระ" : "Confirm Payment"}
+                      {locale === "th" ? "ยืนยันการชำระ" : locale === "zh" ? "确认付款" : "Confirm Payment"}
                     </button>
                   </div>
                 </>
@@ -483,10 +489,10 @@ export default function PropertiesPage() {
                     <>
                       <div className="text-5xl mb-4 animate-bounce">📡</div>
                       <h3 className="text-lg font-bold text-gray-900 mb-2">
-                        {locale === "th" ? "กำลังส่งแจ้งเตือน..." : "Notifying Lister..."}
+                        {locale === "th" ? "กำลังส่งแจ้งเตือน..." : locale === "zh" ? "正在通知..." : "Notifying Lister..."}
                       </h3>
                       <p className="text-sm text-gray-500 mb-4">
-                        {locale === "th" ? "กำลังแจ้งเตือนผู้ลงประกาศทรัพย์สินให้ยืนยัน" : "Sending notification to property lister for confirmation"}
+                        {locale === "th" ? "กำลังแจ้งเตือนผู้ลงประกาศทรัพย์สินให้ยืนยัน" : locale === "zh" ? "正在发送通知给房源方确认" : "Sending notification to property lister for confirmation"}
                       </p>
                       <div className="flex items-center justify-center gap-2">
                         <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
@@ -499,13 +505,13 @@ export default function PropertiesPage() {
                     <>
                       <div className="text-5xl mb-4">✅</div>
                       <h3 className="text-lg font-bold text-gray-900 mb-2">
-                        {locale === "th" ? "ผู้ลงประกาศยืนยันแล้ว!" : "Lister Confirmed!"}
+                        {locale === "th" ? "ผู้ลงประกาศยืนยันแล้ว!" : locale === "zh" ? "房源方已确认！" : "Lister Confirmed!"}
                       </h3>
                       <p className="text-sm text-gray-500 mb-6">
-                        {locale === "th" ? "คุณสามารถเริ่มแชทนิรนามกับผู้ลงประกาศได้แล้ว" : "You can now start an anonymous chat with the lister"}
+                        {locale === "th" ? "คุณสามารถเริ่มแชทนิรนามกับผู้ลงประกาศได้แล้ว" : locale === "zh" ? "您现在可以与发布者开始匿名聊天" : "You can now start an anonymous chat with the lister"}
                       </p>
                       <button onClick={() => setContactStep("chat")} className="w-full py-3 bg-green-700 text-white font-bold rounded-xl hover:bg-green-800 transition">
-                        {locale === "th" ? "เริ่มแชท" : "Start Chat"} 💬
+                        {locale === "th" ? "เริ่มแชท" : locale === "zh" ? "开始聊天" : "Start Chat"} 💬
                       </button>
                     </>
                   )}
@@ -516,12 +522,12 @@ export default function PropertiesPage() {
               {contactStep === "chat" && (
                 <>
                   <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-700 mb-4">
-                    🔒 {locale === "th" ? "แชทนิรนาม — ชื่อจริงไม่ถูกเปิดเผยเพื่อความปลอดภัย" : "Anonymous chat — real names are hidden for privacy and safety"}
+                    🔒 {locale === "th" ? "แชทนิรนาม — ชื่อจริงไม่ถูกเปิดเผยเพื่อความปลอดภัย" : locale === "zh" ? "匿名聊天 — 真实姓名已隐藏以保护隐私和安全" : "Anonymous chat — real names are hidden for privacy and safety"}
                   </div>
                   <div className="bg-gray-50 rounded-xl p-4 h-60 overflow-y-auto mb-4 space-y-3">
                     {chatMessages.length === 0 && (
                       <p className="text-center text-gray-400 text-sm mt-8">
-                        {locale === "th" ? "เริ่มสนทนาเกี่ยวกับทรัพย์สิน" : "Start a conversation about the property"}
+                        {locale === "th" ? "เริ่มสนทนาเกี่ยวกับทรัพย์สิน" : locale === "zh" ? "开始关于房产的对话" : "Start a conversation about the property"}
                       </p>
                     )}
                     {chatMessages.map((msg, i) => (
@@ -529,7 +535,7 @@ export default function PropertiesPage() {
                         <div className={`max-w-[75%] rounded-2xl px-4 py-2 text-sm ${
                           msg.sender === "you" ? "bg-emerald-600 text-white rounded-br-md" : "bg-white border border-gray-200 text-gray-800 rounded-bl-md"
                         }`}>
-                          <p className="text-xs font-bold mb-0.5">{msg.sender === "you" ? (locale === "th" ? "คุณ" : "You") : (locale === "th" ? "ผู้ลงประกาศ" : "Lister")}</p>
+                          <p className="text-xs font-bold mb-0.5">{msg.sender === "you" ? (locale === "th" ? "คุณ" : locale === "zh" ? "您" : "You") : (locale === "th" ? "ผู้ลงประกาศ" : locale === "zh" ? "发布者" : "Lister")}</p>
                           {msg.text}
                         </div>
                       </div>
@@ -540,15 +546,15 @@ export default function PropertiesPage() {
                       value={chatInput}
                       onChange={(e) => setChatInput(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && sendChatMessage()}
-                      placeholder={locale === "th" ? "พิมพ์ข้อความ..." : "Type a message..."}
+                      placeholder={locale === "th" ? "พิมพ์ข้อความ..." : locale === "zh" ? "输入消息..." : "Type a message..."}
                       className="flex-1 rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-emerald-500"
                     />
                     <button onClick={sendChatMessage} disabled={!chatInput.trim()} className="px-5 py-2.5 bg-emerald-600 text-white rounded-xl font-semibold text-sm disabled:opacity-40 hover:bg-emerald-700 transition">
-                      {locale === "th" ? "ส่ง" : "Send"}
+                      {locale === "th" ? "ส่ง" : locale === "zh" ? "发送" : "Send"}
                     </button>
                   </div>
                   <button onClick={() => setContactStep("meeting")} className="w-full py-3 bg-green-700 text-white font-bold rounded-xl hover:bg-green-800 transition">
-                    {locale === "th" ? "นัดหมายดูทรัพย์สิน" : "Schedule Property Viewing"} 📅
+                    {locale === "th" ? "นัดหมายดูทรัพย์สิน" : locale === "zh" ? "预约看房" : "Schedule Property Viewing"} 📅
                   </button>
                 </>
               )}
@@ -559,18 +565,18 @@ export default function PropertiesPage() {
                   <div className="text-center mb-6">
                     <div className="text-4xl mb-2">📅</div>
                     <p className="text-sm text-gray-600">
-                      {locale === "th" ? "เลือกวันและเวลาที่สะดวกดูทรัพย์สิน" : "Choose a convenient date and time for property viewing"}
+                      {locale === "th" ? "เลือกวันและเวลาที่สะดวกดูทรัพย์สิน" : locale === "zh" ? "选择方便的日期和时间看房" : "Choose a convenient date and time for property viewing"}
                     </p>
                   </div>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "วันที่" : "Date"}</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "วันที่" : locale === "zh" ? "日期" : "Date"}</label>
                       <input type="date" value={meetingDate} onChange={(e) => setMeetingDate(e.target.value)}
                         min={new Date().toISOString().split("T")[0]}
                         className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-emerald-500" />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "เวลา" : "Time"}</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "เวลา" : locale === "zh" ? "时间" : "Time"}</label>
                       <select value={meetingTime} onChange={(e) => setMeetingTime(e.target.value)}
                         className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-emerald-500 bg-white">
                         <option value="">--</option>
@@ -583,15 +589,16 @@ export default function PropertiesPage() {
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700 mt-4">
                     ⚠️ {locale === "th"
                       ? "การนัดหมายเป็นไปตามความสะดวกของทั้งสองฝ่าย ผู้ลงประกาศจะยืนยันอีกครั้ง"
+                      : locale === "zh" ? "看房安排取决于双方的方便程度，发布者将再次确认"
                       : "Viewing is subject to both parties' availability. Lister will confirm."}
                   </div>
                   <div className="flex gap-3 mt-4">
                     <button onClick={() => setContactStep("chat")} className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl font-semibold text-sm">
-                      ← {locale === "th" ? "กลับ" : "Back"}
+                      ← {locale === "th" ? "กลับ" : locale === "zh" ? "返回" : "Back"}
                     </button>
                     <button onClick={() => setContactStep("rate")} disabled={!meetingDate || !meetingTime}
                       className="flex-1 py-2.5 bg-green-700 text-white rounded-xl font-bold text-sm hover:bg-green-800 transition disabled:opacity-40">
-                      {locale === "th" ? "ยืนยันนัดหมาย" : "Confirm Viewing"}
+                      {locale === "th" ? "ยืนยันนัดหมาย" : locale === "zh" ? "确认看房" : "Confirm Viewing"}
                     </button>
                   </div>
                 </div>
@@ -726,7 +733,7 @@ export default function PropertiesPage() {
         <div className="absolute inset-0 bg-gradient-to-r from-emerald-900/90 to-green-800/70" />
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center py-16">
           <span className="inline-block px-4 py-1.5 bg-white/10 backdrop-blur text-emerald-200 rounded-full text-sm font-bold mb-4 border border-white/20">
-            🏢 {locale === "th" ? "อสังหาริมทรัพย์" : "Real Estate"}
+            🏢 {locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房地产" : "Real Estate"}
           </span>
           <h1 className="text-4xl font-bold">{t("title")}</h1>
           <p className="mt-4 text-lg text-emerald-100 max-w-2xl mx-auto">{t("desc")}</p>
@@ -783,7 +790,7 @@ export default function PropertiesPage() {
               {/* Province */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {locale === "th" ? "จังหวัด" : "Province"}
+                  {locale === "th" ? "จังหวัด" : locale === "zh" ? "省份" : "Province"}
                 </label>
                 <select
                   value={filters.province}

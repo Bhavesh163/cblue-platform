@@ -149,6 +149,22 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
       "anonymous chat real estate", "secure property viewing",
       "ลงประกาศอสังหาริมทรัพย์", "จัดการทรัพย์สิน", "แพลตฟอร์มอสังหา",
       "发布房产", "房产管理", "安全看房",
+      // EN — for-rent & second-hand & townhouse variants
+      "house for rent", "condo for rent", "warehouse for rent", "land for rent", "factory for rent", "building for rent",
+      "second-hand house", "second-hand condo", "second-hand warehouse", "second-hand land", "second-hand factory", "second-hand building",
+      "find townhouse", "townhouse for rent", "second-hand townhouse", "buy townhouse", "sell townhouse",
+      // Thai — ให้เช่า (for rent) variants
+      "บ้านให้เช่า", "คอนโดให้เช่า", "โกดังให้เช่า", "ที่ดินให้เช่า", "โรงงานให้เช่า", "อาคารให้เช่า",
+      // Thai — มือสอง (second-hand) variants
+      "บ้านมือสอง", "คอนโดมือสอง", "โกดังมือสอง", "ที่ดินมือสอง", "โรงงานมือสอง", "อาคารมือสอง",
+      // Thai — ทาวน์เฮ้าส์ (townhouse) variants
+      "หาทาวน์เฮ้าส์", "ทาวน์เฮ้าส์ให้เช่า", "ทาวน์เฮ้าส์มือสอง", "ซื้อทาวน์เฮ้าส์", "ขายทาวน์เฮ้าส์",
+      // Chinese — 出租 (for rent) variants
+      "房屋出租", "公寓出租", "仓库出租", "土地出租", "工厂出租", "建筑出租",
+      // Chinese — 二手 (second-hand) variants
+      "二手房", "二手公寓", "二手仓库", "二手土地", "二手工厂", "二手建筑",
+      // Chinese — 联排别墅 (townhouse) variants
+      "找联排别墅", "联排别墅出租", "二手联排别墅", "买联排别墅", "卖联排别墅",
     ],
     openGraph: {
       locale: locale === "th" ? "th_TH" : locale === "zh" ? "zh_CN" : "en_US",

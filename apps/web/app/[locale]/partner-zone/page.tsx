@@ -569,7 +569,7 @@ function PropertiesTab({ t, locale, prefix, properties }: {
                     <label className="block text-sm font-medium text-gray-700 mb-1">{t.editDescription}</label>
                     <textarea rows={3} value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                       className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 resize-none"
-                      placeholder={locale === "th" ? "รายละเอียดอสังหาริมทรัพย์..." : "Property description..."} />
+                      placeholder={locale === "th" ? "รายละเอียดอสังหาริมทรัพย์..." : locale === "zh" ? "房产描述..." : "Property description..."} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">{t.editPrice}</label>

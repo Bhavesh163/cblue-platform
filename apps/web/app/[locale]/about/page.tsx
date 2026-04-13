@@ -220,10 +220,10 @@ export default function AboutPage() {
             <h2 className="text-2xl font-bold mb-3">{locale === "th" ? "พร้อมเริ่มต้นแล้วหรือยัง?" : locale === "zh" ? "准备好开始了吗？" : "Ready to Get Started?"}</h2>
             <p className="text-sky-100 mb-6">{locale === "th" ? "ค้นหาช่าง มืออาชีพ และอสังหาริมทรัพย์ทั่วประเทศไทย" : locale === "zh" ? "在全泰国找到技工、专业人士和房地产" : "Find fixers, professionals, and properties across Thailand"}</p>
             <div className="flex flex-wrap gap-3 justify-center">
-              <a href={`/${locale}/booking/household`} className="px-6 py-2.5 bg-white text-sky-700 rounded-xl font-bold text-sm hover:bg-sky-50 transition shadow-lg">🏠 {locale === "th" ? "จองช่าง" : "Book Fixer"}</a>
-              <a href={`/${locale}/booking/project`} className="px-6 py-2.5 border-2 border-white/40 text-white rounded-xl font-bold text-sm hover:bg-white/10 transition">💼 {locale === "th" ? "จองทีม" : "Book Project"}</a>
-              <a href={`/${locale}/booking/professional`} className="px-6 py-2.5 border-2 border-white/40 text-white rounded-xl font-bold text-sm hover:bg-white/10 transition">👔 {locale === "th" ? "จองมืออาชีพ" : "Book Pro"}</a>
-              <a href={`/${locale}/properties`} className="px-6 py-2.5 border-2 border-white/40 text-white rounded-xl font-bold text-sm hover:bg-white/10 transition">🏢 {locale === "th" ? "อสังหาฯ" : "Property"}</a>
+              <a href={`/${locale}/booking/household`} className="px-6 py-2.5 bg-white text-sky-700 rounded-xl font-bold text-sm hover:bg-sky-50 transition shadow-lg">🏠 {locale === "th" ? "จองช่าง" : locale === "zh" ? "预约维修" : "Book Fixer"}</a>
+              <a href={`/${locale}/booking/project`} className="px-6 py-2.5 border-2 border-white/40 text-white rounded-xl font-bold text-sm hover:bg-white/10 transition">💼 {locale === "th" ? "จองทีม" : locale === "zh" ? "预约团队" : "Book Project"}</a>
+              <a href={`/${locale}/booking/professional`} className="px-6 py-2.5 border-2 border-white/40 text-white rounded-xl font-bold text-sm hover:bg-white/10 transition">👔 {locale === "th" ? "จองมืออาชีพ" : locale === "zh" ? "预约专业" : "Book Pro"}</a>
+              <a href={`/${locale}/properties`} className="px-6 py-2.5 border-2 border-white/40 text-white rounded-xl font-bold text-sm hover:bg-white/10 transition">🏢 {locale === "th" ? "อสังหาฯ" : locale === "zh" ? "房产" : "Property"}</a>
             </div>
           </div>
         </section>

@@ -784,7 +784,7 @@ export default function FixerResults({
           </div>
 
           <div className="bg-gray-50 rounded-xl p-4 mb-6 text-sm space-y-2">
-            <p className="text-gray-500">{locale === "th" ? "เลขที่ PO" : "PO Number"}: <span className="font-mono font-bold text-gray-800">{poNumber}</span></p>
+            <p className="text-gray-500">{locale === "th" ? "เลขที่ PO" : locale === "zh" ? "PO 编号" : "PO Number"}: <span className="font-mono font-bold text-gray-800">{poNumber}</span></p>
             <p className="text-gray-500">{locale === "th" ? "ค่าบริการ" : locale === "zh" ? "服务费" : "Processing Fee"}: <span className="font-bold text-gray-800">฿{fee.toLocaleString()}</span></p>
           </div>
 
@@ -1434,7 +1434,7 @@ export default function FixerResults({
                     <tr key={row.key} className={`border-b border-gray-100 ${isSelected ? "bg-sky-50 ring-1 ring-sky-300" : "hover:bg-gray-50"} transition`}>
                       <td className="py-2 px-3">
                         <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold ${colors.bg} ${colors.text}`}>{row.name}</span>
-                        {isSelected && <span className="ml-2 text-xs text-sky-600 font-semibold">{locale === "th" ? "\u2190 \u0E17\u0E35\u0E48\u0E04\u0E38\u0E13\u0E40\u0E25\u0E37\u0E2D\u0E01" : "\u2190 Selected"}</span>}
+                        {isSelected && <span className="ml-2 text-xs text-sky-600 font-semibold">{locale === "th" ? "← ที่คุณเลือก" : locale === "zh" ? "← 已选" : "← Selected"}</span>}
                       </td>
                       <td className="py-2 px-3 text-center font-bold text-gray-900">{row.fee}</td>
                       <td className="py-2 px-3 text-center">{row.stars}</td>
