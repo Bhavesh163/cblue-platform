@@ -78,6 +78,14 @@ const TIER_STYLE: Record<string, string> = {
   Expert: "bg-red-50 text-red-700",
 };
 
+const STATUS_LABEL: Record<string, Record<string, string>> = {
+  IN_PROGRESS: { en: "In Progress", th: "กำลังดำเนินการ", zh: "进行中" },
+  CONFIRMED: { en: "Confirmed", th: "ยืนยันแล้ว", zh: "已确认" },
+  PENDING: { en: "Pending", th: "รอดำเนินการ", zh: "待处理" },
+  COMPLETED: { en: "Completed", th: "เสร็จสิ้น", zh: "已完成" },
+};
+const getStatusLabel = (status: string, locale: string) => STATUS_LABEL[status]?.[locale] || status.replace(/_/g, " ");
+
 type TabKey = "overview" | "jobs" | "requests" | "properties" | "history" | "chat" | "notifications" | "profile";
 
 export default function FixerProPage() {
@@ -458,7 +466,7 @@ function PartnerOverview({ locale, partner }: { locale: string; partner: Partner
               </div>
               <div className="flex items-center gap-2">
                 <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[job.tier] || ""}`}>{job.tier}</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_STYLE[job.status] || ""}`}>{job.status.replace("_", " ")}</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_STYLE[job.status] || ""}`}>{getStatusLabel(job.status, locale)}</span>
                 <span className="text-xs font-bold text-gray-700">{job.earnings}</span>
               </div>
             </div>
@@ -549,7 +557,7 @@ function PartnerJobs({ locale }: { locale: string }) {
               </div>
               <div className="flex items-center gap-2">
                 <span className={`text-xs px-3 py-1 rounded-full font-bold ${TIER_STYLE[job.tier] || ""}`}>{job.tier}</span>
-                <span className={`text-xs px-3 py-1 rounded-full font-bold ${STATUS_STYLE[job.status] || ""}`}>{job.status.replace("_", " ")}</span>
+                <span className={`text-xs px-3 py-1 rounded-full font-bold ${STATUS_STYLE[job.status] || ""}`}>{getStatusLabel(job.status, locale)}</span>
               </div>
             </div>
             <div className="flex items-center gap-4">
@@ -588,7 +596,7 @@ function PartnerRequests({ locale }: { locale: string }) {
               <div className="flex flex-col items-end gap-2">
                 <div className="flex items-center gap-2">
                   <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${TIER_STYLE[req.tier] || ""}`}>{req.tier}</span>
-                  {req.urgency === "urgent" && <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-red-100 text-red-700 animate-pulse">🔴 Urgent</span>}
+                  {req.urgency === "urgent" && <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-red-100 text-red-700 animate-pulse">🔴 {locale === "th" ? "เร่งด่วน" : locale === "zh" ? "紧急" : "Urgent"}</span>}
                 </div>
                 <div className="flex gap-2">
                   <button className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition">{locale === "th" ? "รับงาน" : locale === "zh" ? "接受" : "Accept"}</button>
@@ -727,9 +735,9 @@ function PartnerProfile({ locale, prefix, partner }: { locale: string; prefix: s
             <p className="text-sm text-gray-400">{partner.phone}</p>
           </div>
           <div className="ml-auto flex flex-col gap-1.5 items-end">
-            <span className="px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">Active</span>
-            <span className="px-3 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-700">Corporate Tier</span>
-            <span className="px-3 py-1 rounded-full text-xs font-bold bg-sky-100 text-sky-700">KYC ✓</span>
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">{locale === "th" ? "ใช้งานอยู่" : locale === "zh" ? "活跃" : "Active"}</span>
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-700">{locale === "th" ? "ระดับ Corporate" : locale === "zh" ? "企业级" : "Corporate Tier"}</span>
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-sky-100 text-sky-700">{locale === "th" ? "KYC ✓ ยืนยันแล้ว" : locale === "zh" ? "KYC ✓ 已验证" : "KYC ✓ Verified"}</span>
           </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

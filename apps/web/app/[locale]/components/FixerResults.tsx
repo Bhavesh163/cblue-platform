@@ -456,6 +456,7 @@ export default function FixerResults({
 
   // Variation state
   const [showVariation, setShowVariation] = useState(false);
+  const [variationApproved, setVariationApproved] = useState<boolean | null>(null);
 
   // Nomination state (must be at top level, not after early returns)
   const [nominateId, setNominateId] = useState("");
@@ -471,6 +472,18 @@ export default function FixerResults({
       setVariationAmount(Math.floor(f * 0.3 + Math.random() * f * 0.5));
     }
   }, [step, selectedFixer, bookingType]);
+
+  // Persist workflow state to localStorage
+  useEffect(() => {
+    if (step !== "matching" && selectedFixer) {
+      try {
+        localStorage.setItem("cblue_workflow", JSON.stringify({
+          step, fixerAlias: selectedFixer.alias, poNumber, customerRating, customerComment, variationApproved,
+          meetingDate, meetingTime, meetingNotes,
+        }));
+      } catch { /* ignore */ }
+    }
+  }, [step, selectedFixer, poNumber, customerRating, customerComment, variationApproved, meetingDate, meetingTime, meetingNotes]);
 
   // AI Matching animation sequence
   useEffect(() => {
@@ -586,13 +599,9 @@ export default function FixerResults({
   };
 
   const handleVariationDecision = (approved: boolean) => {
-    if (!approved) {
-      // Reject: skip variation, go straight to completion without addendum
-      setStep("complete");
-    } else {
-      // Approve: addendum accepted, proceed to completion
-      setStep("complete");
-    }
+    setVariationApproved(approved);
+    // Both cases proceed to complete — approved = addendum accepted, rejected = original scope only
+    setStep("complete");
   };
 
   const handleCompleteConfirm = () => {
@@ -786,6 +795,12 @@ export default function FixerResults({
           <div className="bg-gray-50 rounded-xl p-4 mb-6 text-sm space-y-2">
             <p className="text-gray-500">{locale === "th" ? "เลขที่ PO" : locale === "zh" ? "PO 编号" : "PO Number"}: <span className="font-mono font-bold text-gray-800">{poNumber}</span></p>
             <p className="text-gray-500">{locale === "th" ? "ค่าบริการ" : locale === "zh" ? "服务费" : "Processing Fee"}: <span className="font-bold text-gray-800">฿{fee.toLocaleString()}</span></p>
+            {variationApproved === true && (
+              <p className="text-green-700 font-semibold">✅ {locale === "th" ? "อนุมัติงานเพิ่มเติม (฿" + variationAmount.toLocaleString() + ")" : locale === "zh" ? "已批准附加工作 (฿" + variationAmount.toLocaleString() + ")" : "Addendum Approved (฿" + variationAmount.toLocaleString() + ")"}</p>
+            )}
+            {variationApproved === false && (
+              <p className="text-red-700 font-semibold">❌ {locale === "th" ? "ปฏิเสธงานเพิ่มเติม — ขอบเขตงานเดิม" : locale === "zh" ? "已拒绝附加工作 — 按原始范围" : "Addendum Declined — Original scope only"}</p>
+            )}
           </div>
 
           {/* Disclaimer */}

@@ -75,7 +75,26 @@ const TIER_STYLE: Record<string, string> = {
   Grandeur: "bg-purple-50 text-purple-700",
 };
 
-type TabKey = "overview" | "bookings" | "property" | "history" | "chat" | "notifications" | "profile";
+const DEMO_REQUESTS = [
+  { id: "r-1", type: "household" as ServiceType, service: "AC Cleaning", serviceTh: "ล้างแอร์", serviceZh: "空调清洗", status: "MATCHING", date: "2026-04-13", tier: "Standard", area: "Bangkok" },
+  { id: "r-2", type: "professional" as ServiceType, service: "Architect Consult", serviceTh: "ปรึกษาสถาปนิก", serviceZh: "建筑师咨询", status: "MATCHING", date: "2026-04-12", tier: "Corporate", area: "Nonthaburi" },
+  { id: "r-3", type: "project" as ServiceType, service: "Solar Panel Install", serviceTh: "ติดตั้งแผงโซลาร์", serviceZh: "太阳能板安装", status: "PENDING", date: "2026-04-11", tier: "Specialist", area: "Phuket" },
+];
+
+const STATUS_LABEL: Record<string, Record<string, string>> = {
+  IN_PROGRESS: { en: "In Progress", th: "กำลังดำเนินการ", zh: "进行中" },
+  CONFIRMED: { en: "Confirmed", th: "ยืนยันแล้ว", zh: "已确认" },
+  DEPOSIT_PENDING: { en: "Deposit Pending", th: "รอชำระเงิน", zh: "待付款" },
+  COMPLETED: { en: "Completed", th: "เสร็จสิ้น", zh: "已完成" },
+  MATCHING: { en: "Matching", th: "กำลังจับคู่", zh: "匹配中" },
+  PENDING: { en: "Pending", th: "รอดำเนินการ", zh: "待处理" },
+  VIEWING_SCHEDULED: { en: "Viewing Scheduled", th: "นัดดูแล้ว", zh: "已安排看房" },
+  CONTACTED: { en: "Contacted", th: "ติดต่อแล้ว", zh: "已联系" },
+  DEPOSIT_PAID: { en: "Deposit Paid", th: "ชำระแล้ว", zh: "已付款" },
+};
+const getStatusLabel = (status: string, locale: string) => STATUS_LABEL[status]?.[locale] || status.replace(/_/g, " ");
+
+type TabKey = "overview" | "bookings" | "requests" | "property" | "history" | "chat" | "notifications" | "profile";
 
 export default function DashboardPage() {
   const t = useTranslations("dashboard");
@@ -102,8 +121,9 @@ export default function DashboardPage() {
 
   const tabs: { key: TabKey; label: string; icon: string; badge?: number }[] = [
     { key: "overview", label: locale === "th" ? "ภาพรวม" : locale === "zh" ? "概览" : "Overview", icon: "📊" },
-    { key: "bookings", label: locale === "th" ? "บริการปัจจุบัน" : locale === "zh" ? "进行中" : "Active", icon: "⚡", badge: DEMO_ACTIVE.length },
-    { key: "property", label: locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房产" : "Property", icon: "🏢", badge: DEMO_PROPERTY_INQUIRIES.length },
+    { key: "bookings", label: locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "当前工作" : "Active Jobs", icon: "🔧", badge: DEMO_ACTIVE.length },
+    { key: "requests", label: locale === "th" ? "คำขอ" : locale === "zh" ? "请求" : "Requests", icon: "📋", badge: DEMO_REQUESTS.length },
+    { key: "property", label: locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房产" : "Properties", icon: "🏢", badge: DEMO_PROPERTY_INQUIRIES.length },
     { key: "history", label: locale === "th" ? "ประวัติ" : locale === "zh" ? "历史" : "History", icon: "📜" },
     { key: "chat", label: locale === "th" ? "แชท" : locale === "zh" ? "聊天" : "Chat", icon: "💬", badge: DEMO_CHATS.reduce((a, c) => a + c.unread, 0) },
     { key: "notifications", label: locale === "th" ? "แจ้งเตือน" : locale === "zh" ? "通知" : "Alerts", icon: "🔔", badge: DEMO_NOTIFICATIONS.filter(n => n.unread).length },
@@ -220,6 +240,7 @@ export default function DashboardPage() {
         {/* Tab Content */}
         {activeTab === "overview" && <OverviewTab locale={locale} prefix={prefix} subscriber={subscriber} />}
         {activeTab === "bookings" && <BookingsTab locale={locale} />}
+        {activeTab === "requests" && <RequestsTab locale={locale} />}
         {activeTab === "property" && <PropertyTab locale={locale} prefix={prefix} />}
         {activeTab === "history" && <HistoryTab locale={locale} />}
         {activeTab === "chat" && <ChatTab locale={locale} />}
@@ -303,11 +324,11 @@ export default function DashboardPage() {
           <h3 className="text-sm font-semibold text-gray-700 mb-3">🏢 {locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房产" : "Property"}</h3>
           <div className="grid grid-cols-5 gap-3">
             {[
-              { name: "Economy", fee: "฿300", color: "border-green-200 bg-green-50", textColor: "text-green-700", desc: locale === "th" ? "ห้องเช่า" : locale === "zh" ? "房间" : "Room" },
-              { name: "Standard", fee: "฿500", color: "border-blue-200 bg-blue-50", textColor: "text-blue-700", desc: locale === "th" ? "คอนโด" : locale === "zh" ? "公寓" : "Condo" },
-              { name: "Upper", fee: "฿800", color: "border-teal-200 bg-teal-50", textColor: "text-teal-700", desc: locale === "th" ? "บ้าน" : locale === "zh" ? "别墅" : "House" },
-              { name: "Luxury", fee: "฿1,200", color: "border-amber-200 bg-amber-50", textColor: "text-amber-700", desc: locale === "th" ? "หรูหรา" : locale === "zh" ? "豪华" : "Luxury" },
-              { name: "Grandeur", fee: "฿2,000", color: "border-purple-200 bg-purple-50", textColor: "text-purple-700", desc: locale === "th" ? "พรีเมียม" : locale === "zh" ? "顶级" : "Premium" },
+              { name: "Economy", fee: "฿200", color: "border-green-200 bg-green-50", textColor: "text-green-700", desc: locale === "th" ? "ห้องเช่า" : locale === "zh" ? "房间" : "Room" },
+              { name: "Standard", fee: "฿400", color: "border-blue-200 bg-blue-50", textColor: "text-blue-700", desc: locale === "th" ? "คอนโด" : locale === "zh" ? "公寓" : "Condo" },
+              { name: "Upper", fee: "฿600", color: "border-teal-200 bg-teal-50", textColor: "text-teal-700", desc: locale === "th" ? "บ้าน" : locale === "zh" ? "别墅" : "House" },
+              { name: "Luxury", fee: "฿800", color: "border-amber-200 bg-amber-50", textColor: "text-amber-700", desc: locale === "th" ? "หรูหรา" : locale === "zh" ? "豪华" : "Luxury" },
+              { name: "Grandeur", fee: "฿1,000", color: "border-purple-200 bg-purple-50", textColor: "text-purple-700", desc: locale === "th" ? "พรีเมียม" : locale === "zh" ? "顶级" : "Premium" },
             ].map((item) => (
               <div key={item.name} className={`rounded-xl border-2 p-4 text-center ${item.color}`}>
                 <h3 className={`font-bold text-sm ${item.textColor}`}>{item.name}</h3>
@@ -407,7 +428,7 @@ function OverviewTab({ locale, prefix, subscriber }: { locale: string; prefix: s
               </div>
               <div className="flex items-center gap-2">
                 <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[s.tier] || ""}`}>{s.tier}</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_STYLE[s.status] || ""}`}>{s.status.replace("_", " ")}</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_STYLE[s.status] || ""}`}>{getStatusLabel(s.status, locale)}</span>
                 <button className="p-1.5 text-sky-600 hover:bg-sky-50 rounded-lg transition">💬</button>
               </div>
             </div>
@@ -504,7 +525,7 @@ function BookingsTab({ locale }: { locale: string }) {
               </div>
               <div className="flex items-center gap-2">
                 <span className={`text-xs px-3 py-1 rounded-full font-bold ${TIER_STYLE[s.tier] || ""}`}>{s.tier}</span>
-                <span className={`text-xs px-3 py-1 rounded-full font-bold ${STATUS_STYLE[s.status] || ""}`}>{s.status.replace("_", " ")}</span>
+                <span className={`text-xs px-3 py-1 rounded-full font-bold ${STATUS_STYLE[s.status] || ""}`}>{getStatusLabel(s.status, locale)}</span>
               </div>
             </div>
             {/* Progress */}
@@ -516,6 +537,38 @@ function BookingsTab({ locale }: { locale: string }) {
                 <p className="text-xs text-gray-400 mt-1">{s.progress}% {locale === "th" ? "ดำเนินการแล้ว" : locale === "zh" ? "已完成" : "completed"}</p>
               </div>
               <button className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold rounded-lg transition">💬 {locale === "th" ? "แชท" : locale === "zh" ? "聊天" : "Chat"}</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ===== REQUESTS TAB ===== */
+function RequestsTab({ locale }: { locale: string }) {
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-100">
+        <h2 className="font-bold text-gray-900 flex items-center gap-2">📋 {locale === "th" ? "คำขอบริการทั้งหมด" : locale === "zh" ? "所有服务请求" : "All Service Requests"}</h2>
+      </div>
+      <div className="divide-y divide-gray-50">
+        {DEMO_REQUESTS.map((r) => (
+          <div key={r.id} className="p-6 hover:bg-gray-50/50 transition">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center text-2xl">{ICON_MAP[r.type]}</div>
+              <div className="flex-1">
+                <h3 className="font-bold text-gray-900">{locale === "th" ? r.serviceTh : locale === "zh" ? r.serviceZh : r.service}</h3>
+                <p className="text-sm text-gray-500">{r.area} &middot; {r.date}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`text-xs px-3 py-1 rounded-full font-bold ${TIER_STYLE[r.tier] || ""}`}>{r.tier}</span>
+                <span className={`text-xs px-3 py-1 rounded-full font-bold ${STATUS_STYLE[r.status] || ""}`}>{getStatusLabel(r.status, locale)}</span>
+              </div>
+            </div>
+            <div className="mt-3 flex gap-2">
+              <button className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold rounded-lg transition">👀 {locale === "th" ? "ดูรายละเอียด" : locale === "zh" ? "查看详情" : "View Details"}</button>
+              <button className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-bold rounded-lg transition">✕ {locale === "th" ? "ยกเลิก" : locale === "zh" ? "取消" : "Cancel"}</button>
             </div>
           </div>
         ))}
@@ -552,7 +605,7 @@ function PropertyTab({ locale, prefix }: { locale: string; prefix: string }) {
                   <span className={`text-xs px-3 py-1 rounded-full font-bold ${p.type === "SALE" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>
                     {p.type === "SALE" ? (locale === "th" ? "ขาย" : locale === "zh" ? "出售" : "Sale") : (locale === "th" ? "เช่า" : locale === "zh" ? "出租" : "Rent")}
                   </span>
-                  <span className={`text-xs px-3 py-1 rounded-full font-bold ${STATUS_STYLE[p.status] || "bg-gray-100 text-gray-700"}`}>{p.status.replace(/_/g, " ")}</span>
+                  <span className={`text-xs px-3 py-1 rounded-full font-bold ${STATUS_STYLE[p.status] || "bg-gray-100 text-gray-700"}`}>{getStatusLabel(p.status, locale)}</span>
                 </div>
               </div>
               <div className="flex gap-2">
@@ -569,11 +622,11 @@ function PropertyTab({ locale, prefix }: { locale: string; prefix: string }) {
         <h3 className="font-bold text-sky-900 mb-3">🏢 {locale === "th" ? "ระดับอสังหาริมทรัพย์" : locale === "zh" ? "房产等级" : "Property Tiers"}</h3>
         <div className="grid grid-cols-5 gap-2">
           {[
-            { tier: "Economy", fee: "฿300", icon: "🏠" },
-            { tier: "Standard", fee: "฿500", icon: "🏢" },
-            { tier: "Upper", fee: "฿800", icon: "🏘️" },
-            { tier: "Luxury", fee: "฿1,200", icon: "🏰" },
-            { tier: "Grandeur", fee: "฿2,000", icon: "🏛️" },
+            { tier: "Economy", fee: "฿200", icon: "🏠" },
+            { tier: "Standard", fee: "฿400", icon: "🏢" },
+            { tier: "Upper", fee: "฿600", icon: "🏘️" },
+            { tier: "Luxury", fee: "฿800", icon: "🏰" },
+            { tier: "Grandeur", fee: "฿1,000", icon: "🏛️" },
           ].map((t) => (
             <div key={t.tier} className="bg-white rounded-lg p-3 text-center border border-sky-100">
               <span className="text-xl block">{t.icon}</span>

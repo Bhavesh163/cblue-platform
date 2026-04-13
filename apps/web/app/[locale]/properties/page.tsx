@@ -177,11 +177,11 @@ export default function PropertiesPage() {
   }
 
   const PROPERTY_TIERS = [
-    { name: "Economy", fee: 300, desc: locale === "th" ? "ห้องเช่า" : locale === "zh" ? "房间" : "Room" },
-    { name: "Standard", fee: 500, desc: locale === "th" ? "คอนโด" : locale === "zh" ? "公寓" : "Condo" },
-    { name: "Upper", fee: 800, desc: locale === "th" ? "บ้าน" : locale === "zh" ? "别墅" : "House" },
-    { name: "Luxury", fee: 1200, desc: locale === "th" ? "หรูหรา" : locale === "zh" ? "豪华" : "Luxury" },
-    { name: "Grandeur", fee: 2000, desc: locale === "th" ? "พรีเมียม" : locale === "zh" ? "顶级" : "Premium" },
+    { name: "Economy", fee: 200, desc: locale === "th" ? "ห้องเช่า" : locale === "zh" ? "房间" : "Room" },
+    { name: "Standard", fee: 400, desc: locale === "th" ? "คอนโด" : locale === "zh" ? "公寓" : "Condo" },
+    { name: "Upper", fee: 600, desc: locale === "th" ? "บ้าน" : locale === "zh" ? "别墅" : "House" },
+    { name: "Luxury", fee: 800, desc: locale === "th" ? "หรูหรา" : locale === "zh" ? "豪华" : "Luxury" },
+    { name: "Grandeur", fee: 1000, desc: locale === "th" ? "พรีเมียม" : locale === "zh" ? "顶级" : "Premium" },
   ];
 
   const typeKeys: Record<string, string> = {
