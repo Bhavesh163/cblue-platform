@@ -295,6 +295,8 @@ function ProfessionalBookingContent() {
         bookingType="professional"
         service={form.serviceCategory}
         tier={form.tier}
+        description={form.description}
+        issueImages={images}
         onNewBooking={() => {
           setSuccess(false);
           setForm(initialForm);

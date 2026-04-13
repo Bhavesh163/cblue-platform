@@ -412,12 +412,16 @@ export default function FixerResults({
   bookingType,
   service,
   tier,
+  description,
+  issueImages,
   onNewBooking,
 }: {
   locale: string;
   bookingType: BookingType;
   service: string;
   tier?: string;
+  description?: string;
+  issueImages?: File[];
   onNewBooking: () => void;
 }) {
   const t = (key: string) => T[locale]?.[key] || T["en"]![key] || key;
@@ -428,6 +432,11 @@ export default function FixerResults({
   const [chatInput, setChatInput] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [aiStep, setAiStep] = useState(0);
+
+  // Issue image preview URLs (created once from File[])
+  const [issueImageUrls] = useState<string[]>(() =>
+    (issueImages || []).map(f => URL.createObjectURL(f))
+  );
 
   // PO state
   const [poNumber] = useState(() => generatePONumber());
@@ -1027,6 +1036,24 @@ export default function FixerResults({
             </span>
           </div>
 
+          {/* Service Details (visible after payment) */}
+          {(description || issueImageUrls.length > 0) && (
+            <div className="px-4 py-3 bg-indigo-50 border-b border-indigo-100">
+              <p className="text-xs font-bold text-indigo-700 mb-1">
+                📋 {locale === "th" ? "รายละเอียดบริการ" : locale === "zh" ? "服务详情" : "Service Details"}
+              </p>
+              <p className="text-xs text-indigo-600 mb-1">{service || bookingType}</p>
+              {description && <p className="text-xs text-gray-700">{description}</p>}
+              {issueImageUrls.length > 0 && (
+                <div className="flex gap-2 mt-2 overflow-x-auto">
+                  {issueImageUrls.map((url, i) => (
+                    <img key={i} src={url} alt={`Issue ${i + 1}`} className="w-16 h-16 object-cover rounded-lg border border-indigo-200 flex-shrink-0" />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Messages */}
           <div className="h-80 overflow-y-auto p-4 space-y-3 bg-gray-50">
             {chatMessages.map((msg) => (
@@ -1253,6 +1280,16 @@ export default function FixerResults({
             <div className="flex justify-between">
               <span className="text-gray-500">{t("poService")}</span>
               <span className="text-gray-800">{service || bookingType}</span>
+            </div>
+            {description && (
+              <div>
+                <span className="text-gray-500 text-xs">{locale === "th" ? "รายละเอียดบริการ" : locale === "zh" ? "服务描述" : "Service Description"}</span>
+                <p className="text-gray-700 text-xs mt-0.5 line-clamp-3">{description}</p>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="text-gray-500">{locale === "th" ? "ราคาเริ่มต้นของผู้ให้บริการ" : locale === "zh" ? "服务商起始价" : "Provider Est. Price"}</span>
+              <span className="text-gray-800">฿{selectedFixer.price}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-gray-500">{t("poTier")}</span>

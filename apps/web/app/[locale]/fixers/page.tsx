@@ -827,12 +827,8 @@ function PartnerProperties({ locale, prefix }: { locale: string; prefix: string 
   const saveEdit = () => {
     setListings(listings.map(l => l.id === editingId ? {
       ...l,
-      title: editForm.title,
-      titleTh: editForm.title,
-      titleZh: editForm.title,
-      description: editForm.description,
-      descriptionTh: editForm.description,
-      descriptionZh: editForm.description,
+      ...(locale === "th" ? { titleTh: editForm.title } : locale === "zh" ? { titleZh: editForm.title } : { title: editForm.title }),
+      ...(locale === "th" ? { descriptionTh: editForm.description } : locale === "zh" ? { descriptionZh: editForm.description } : { description: editForm.description }),
       price: editForm.price,
       status: editForm.status as "active" | "pending" | "sold",
       images: editForm.images,

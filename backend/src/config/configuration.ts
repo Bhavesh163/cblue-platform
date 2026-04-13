@@ -35,4 +35,7 @@ export default () => ({
     fromEmail: process.env.MAILJET_FROM_EMAIL || 'noreply@cblue.co.th',
   },
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
+  visionService: {
+    url: process.env.VISION_SERVICE_URL || 'http://localhost:8010',
+  },
 });

@@ -99,6 +99,35 @@ export default function FixerRegisterPage() {
   const [authMode, setAuthMode] = useState<"login" | "register">("register");
   const prefix = `/${locale}`;
 
+  // AI Portfolio Digest state
+  const [digestResult, setDigestResult] = useState<{
+    results: { file_id: string; filename: string; raw_text: string; text_length: number; has_content: boolean; verification_hints: string[]; extraction_method: string }[];
+    total_files: number; total_text_length: number; content_score: number; fallback?: boolean;
+  } | null>(null);
+  const [digesting, setDigesting] = useState(false);
+
+  // Send portfolio files to AI vision service for OCR/text extraction
+  const digestPortfolioFiles = useCallback(async (files: File[]) => {
+    if (files.length === 0) return;
+    setDigesting(true);
+    try {
+      const fd = new globalThis.FormData();
+      for (const f of files) fd.append("files", f);
+      const res = await fetch(`${API_BASE}/api/v1/fixers/portfolio-digest`, {
+        method: "POST",
+        body: fd,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setDigestResult(data);
+      }
+    } catch {
+      // Vision service unavailable — non-blocking
+    } finally {
+      setDigesting(false);
+    }
+  }, []);
+
   /* Camera helpers for KYC */
   const startCamera = async () => {
     try {
@@ -316,7 +345,7 @@ export default function FixerRegisterPage() {
     setAiPhase(0);
 
     // Phase progression: each phase takes ~600ms 
-    const phases = 8;
+    const phases = 9;
     let currentPhase = 0;
     const phaseInterval = setInterval(() => {
       currentPhase++;
@@ -357,7 +386,14 @@ export default function FixerRegisterPage() {
         const kycScore = kycMultiple ? 15 : hasKyc ? 10 : 0;
 
         // ── 4. Portfolio & Evidence (max 15) ──
-        const portfolioScore = portfolioCount >= 5 ? 15 : portfolioCount >= 3 ? 12 : hasPortfolio ? 8 : 0;
+        // Base score from image count + bonus from AI document analysis
+        let portfolioScore = portfolioCount >= 5 ? 12 : portfolioCount >= 3 ? 9 : hasPortfolio ? 6 : 0;
+        if (digestResult && !digestResult.fallback) {
+          // Bonus up to 3 pts from OCR content quality
+          if (digestResult.content_score >= 70) portfolioScore = Math.min(portfolioScore + 3, 15);
+          else if (digestResult.content_score >= 40) portfolioScore = Math.min(portfolioScore + 2, 15);
+          else if (digestResult.total_text_length > 50) portfolioScore = Math.min(portfolioScore + 1, 15);
+        }
 
         // ── 5. Profile Completeness (max 10) ──
         const profileScore = (hasBio ? 3 : 0) + (hasFullName ? 2 : 0) + (hasCompanyAddress ? 3 : 0) + (hasServiceArea ? 2 : 0);
@@ -413,6 +449,20 @@ export default function FixerRegisterPage() {
           flags.push({ type: "pass", message: locale === "th" ? "เอกสาร KYC ครบถ้วน (หน้า-หลัง)" : locale === "zh" ? "KYC文件完整（正反面）" : "KYC documents complete (front & back)" });
         } else if (hasKyc) {
           flags.push({ type: "warn", message: locale === "th" ? "แนะนำอัปโหลด KYC ทั้งด้านหน้าและด้านหลัง" : locale === "zh" ? "建议上传KYC正反面" : "Recommend uploading both front & back KYC" });
+        }
+
+        // Portfolio document AI analysis (OCR results from vision service)
+        if (digestResult && !digestResult.fallback) {
+          const allHints = digestResult.results.flatMap(r => r.verification_hints);
+          const hasLicense = allHints.some(h => /license|ใบอนุญาต|许可/i.test(h));
+          const hasCert = allHints.some(h => /certificate|ใบรับรอง|证书/i.test(h));
+          if (hasLicense || hasCert) {
+            credentialScore = Math.min(credentialScore + 2, 10);
+            flags.push({ type: "pass", message: locale === "th" ? "📄 AI ตรวจพบใบรับรอง/ใบอนุญาตในเอกสาร" : locale === "zh" ? "📄 AI在文档中检测到证书/许可证" : "📄 AI detected license/certificate in documents" });
+          } else if (allHints.length > 0) {
+            credentialScore = Math.min(credentialScore + 1, 10);
+            flags.push({ type: "pass", message: locale === "th" ? "📄 AI วิเคราะห์เอกสารผลงานแล้ว" : locale === "zh" ? "📄 AI已分析作品文档" : "📄 AI analyzed portfolio documents" });
+          }
         }
 
         // Fraud detection signals
@@ -475,6 +525,7 @@ export default function FixerRegisterPage() {
                 { icon: "🌐", label: "ค้นหาข้อมูลรับรองออนไลน์" },
                 { icon: "📋", label: "วิเคราะห์ประสบการณ์" },
                 { icon: "🔍", label: "ตรวจจับการฉ้อโกง" },
+                { icon: "�", label: "AI OCR วิเคราะห์เอกสารผลงาน" },
                 { icon: "📸", label: "ตรวจสอบผลงาน/Portfolio" },
                 { icon: "💰", label: "ประเมินตารางราคา" },
                 { icon: "🏆", label: "คำนวณระดับและจัดอันดับ" },
@@ -486,6 +537,7 @@ export default function FixerRegisterPage() {
                 { icon: "🌐", label: "在线资质搜索" },
                 { icon: "📋", label: "分析经验" },
                 { icon: "🔍", label: "欺诈检测扫描" },
+                { icon: "📄", label: "AI OCR 文档分析" },
                 { icon: "📸", label: "审核作品集" },
                 { icon: "💰", label: "评估价格表" },
                 { icon: "🏆", label: "计算等级排名" },
@@ -496,6 +548,7 @@ export default function FixerRegisterPage() {
                 { icon: "🌐", label: "Online credential search" },
                 { icon: "📋", label: "Analyzing experience claims" },
                 { icon: "🔍", label: "Fraud detection scan" },
+                { icon: "📄", label: "AI OCR document analysis" },
                 { icon: "📸", label: "Reviewing portfolio evidence" },
                 { icon: "💰", label: "Evaluating price list" },
                 { icon: "🏆", label: "Computing tier & ranking" },
@@ -591,6 +644,20 @@ export default function FixerRegisterPage() {
                 </div>
               )}
 
+              {/* AI Document OCR Analysis Summary */}
+              {digestResult && !digestResult.fallback && (
+                <div className="px-6 pb-4">
+                  <p className="text-xs font-bold text-gray-600 mb-2">{locale === "th" ? "📄 ผลการวิเคราะห์เอกสาร AI OCR" : locale === "zh" ? "📄 AI OCR文档分析结果" : "📄 AI OCR Document Analysis"}</p>
+                  <div className="bg-indigo-50 rounded-lg p-3 text-xs text-indigo-800 space-y-1">
+                    <p>{locale === "th" ? `วิเคราะห์ ${digestResult.total_files} ไฟล์ — ข้อความทั้งหมด ${digestResult.total_text_length.toLocaleString()} ตัวอักษร` : locale === "zh" ? `已分析 ${digestResult.total_files} 个文件 — 共 ${digestResult.total_text_length.toLocaleString()} 个字符` : `Analyzed ${digestResult.total_files} file(s) — ${digestResult.total_text_length.toLocaleString()} characters extracted`}</p>
+                    <p className="font-semibold">{locale === "th" ? `คะแนนเนื้อหา: ${digestResult.content_score}/100` : locale === "zh" ? `内容评分: ${digestResult.content_score}/100` : `Content Score: ${digestResult.content_score}/100`}</p>
+                    {digestResult.results.filter(r => r.verification_hints.length > 0).map((r, i) => (
+                      <p key={i} className="text-indigo-600">• {r.filename}: {r.verification_hints.join(", ")}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Upgrade notice */}
               <div className="bg-amber-50 border-t border-amber-100 p-4 text-xs text-amber-800">
                 <strong>💡 {locale === "th" ? "วิธีอัปเกรดระดับ:" : locale === "zh" ? "如何升级：" : "How to upgrade:"}</strong>{" "}
@@ -621,6 +688,7 @@ export default function FixerRegisterPage() {
                 setForm(initialForm);
                 setKycImages([]);
                 setPortfolioImages([]);
+                setDigestResult(null);
                 setPriceRows([{ service: "", finalPrice: "" }]);
               }}
               className="mt-8 px-6 py-2.5 text-sm font-semibold text-blue-700 border border-blue-700 rounded-lg hover:bg-blue-50"
@@ -947,22 +1015,37 @@ export default function FixerRegisterPage() {
                 {locale === "th" ? "อัพโหลดรูปภาพผลงาน" : locale === "zh" ? "上传作品图片" : "Upload Portfolio Images"} <span className="text-red-500">*</span>
               </label>
               <p className="text-xs text-gray-500 mb-2">
-                {locale === "th" ? "แสดงตัวอย่างผลงานที่ผ่านมา สูงสุด 10 รูป" : locale === "zh" ? "展示过往作品，最多10张" : "Show your past work, up to 10 images"}
+                {locale === "th" ? "แสดงตัวอย่างผลงาน รูปภาพ PDF หรือเอกสาร สูงสุด 10 ไฟล์" : locale === "zh" ? "展示过往作品，图片、PDF或文档，最多10个文件" : "Show your past work — images, PDFs or documents, up to 10 files"}
               </p>
               <input
                 id="portfolioImages"
                 name="portfolioImages"
                 type="file"
-                accept="image/*"
+                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
                 multiple
                 onChange={(e) => {
-                  if (e.target.files) setPortfolioImages(Array.from(e.target.files).slice(0, 10));
+                  if (e.target.files) {
+                    const files = Array.from(e.target.files).slice(0, 10);
+                    setPortfolioImages(files);
+                    digestPortfolioFiles(files);
+                  }
                 }}
                 className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
               />
               {portfolioImages.length > 0 && (
                 <p className="mt-2 text-xs text-green-600">
                   {portfolioImages.length} {locale === "th" ? "ไฟล์ที่เลือก" : locale === "zh" ? "个文件已选择" : "file(s) selected"}
+                </p>
+              )}
+              {digesting && (
+                <p className="mt-1 text-xs text-sky-600 flex items-center gap-1">
+                  <span className="inline-block w-3 h-3 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
+                  {locale === "th" ? "AI กำลังวิเคราะห์เอกสาร..." : locale === "zh" ? "AI正在分析文档..." : "AI analyzing documents..."}
+                </p>
+              )}
+              {digestResult && !digesting && (
+                <p className="mt-1 text-xs text-indigo-600">
+                  {locale === "th" ? `AI วิเคราะห์เอกสารเสร็จสิ้น — คะแนนเนื้อหา: ${digestResult.content_score}/100` : locale === "zh" ? `AI文档分析完成 — 内容评分: ${digestResult.content_score}/100` : `AI document analysis complete — content score: ${digestResult.content_score}/100`}
                 </p>
               )}
             </div>

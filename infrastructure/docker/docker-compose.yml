@@ -74,7 +74,25 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  vision-service:
+    build:
+      context: ../../ai_services/vision-service
+      dockerfile: Dockerfile
+    ports:
+      - "8010:8010"
+    volumes:
+      - vision_data:/tmp/cblue-vision
+    environment:
+      VISION_STORAGE_DIR: /tmp/cblue-vision
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8010/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 volumes:
   postgres_data:
   redis_data:
   rabbitmq_data:
+  vision_data:

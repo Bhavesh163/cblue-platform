@@ -6,7 +6,10 @@ import {
   Body,
   Param,
   UseGuards,
+  UseInterceptors,
+  UploadedFiles,
 } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { FixerService } from './fixer.service';
 import { RegisterFixerDto } from './dto/register-fixer.dto';
 import { AddSkillDto } from './dto/add-skill.dto';
@@ -91,5 +94,15 @@ export class FixerController {
   @UseGuards(JwtAuthGuard)
   getAvailability(@CurrentUser('id') userId: string) {
     return this.fixerService.getAvailability(userId);
+  }
+
+  // ── Portfolio AI Digest ──
+
+  @Post('portfolio-digest')
+  @UseInterceptors(FilesInterceptor('files', 10))
+  async digestPortfolio(
+    @UploadedFiles() files: Express.Multer.File[],
+  ) {
+    return this.fixerService.digestPortfolio(files);
   }
 }
