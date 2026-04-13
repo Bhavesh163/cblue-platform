@@ -39,18 +39,18 @@ const DEMO_PROPERTY_INQUIRIES = [
 ];
 
 const DEMO_NOTIFICATIONS = [
-  { id: "n1", msg: "Fixer-1042 is on the way to your location", msgTh: "Fixer-1042 กำลังเดินทางมาที่ตำแหน่งของคุณ", msgZh: "Fixer-1042 正在前往您的位置", time: "5m ago", dot: "bg-sky-500", unread: true },
-  { id: "n2", msg: "Payment for Architect Consult confirmed", msgTh: "ยืนยันการชำระเงินปรึกษาสถาปนิก", msgZh: "建筑师咨询付款已确认", time: "1h ago", dot: "bg-green-500", unread: true },
-  { id: "n3", msg: "Property viewing confirmed for Apr 14", msgTh: "นัดดูทรัพย์สิน 14 เม.ย. ยืนยันแล้ว", msgZh: "4月14日看房已确认", time: "3h ago", dot: "bg-emerald-500", unread: true },
-  { id: "n4", msg: "Rate your Electrical service with Fixer-0921", msgTh: "ให้คะแนนบริการไฟฟ้ากับ Fixer-0921", msgZh: "为Fixer-0921的电气服务评分", time: "2d ago", dot: "bg-amber-500", unread: false },
-  { id: "n5", msg: "Meeting with Fixer-1042 in 2 hours", msgTh: "การนัดพบกับ Fixer-1042 ในอีก 2 ชั่วโมง", msgZh: "与Fixer-1042的会面在2小时后", time: "2h ago", dot: "bg-red-500", unread: true },
+  { id: "n1", msg: "Fixer-1042 is on the way to your location", msgTh: "Fixer-1042 กำลังเดินทางมาที่ตำแหน่งของคุณ", msgZh: "Fixer-1042 正在前往您的位置", time: "5m ago", timeTh: "5 นาทีที่ผ่านมา", timeZh: "5分钟前", dot: "bg-sky-500", unread: true },
+  { id: "n2", msg: "Payment for Architect Consult confirmed", msgTh: "ยืนยันการชำระเงินปรึกษาสถาปนิก", msgZh: "建筑师咨询付款已确认", time: "1h ago", timeTh: "1 ชั่วโมงที่ผ่านมา", timeZh: "1小时前", dot: "bg-green-500", unread: true },
+  { id: "n3", msg: "Property viewing confirmed for Apr 14", msgTh: "นัดดูทรัพย์สิน 14 เม.ย. ยืนยันแล้ว", msgZh: "4月14日看房已确认", time: "3h ago", timeTh: "3 ชั่วโมงที่ผ่านมา", timeZh: "3小时前", dot: "bg-emerald-500", unread: true },
+  { id: "n4", msg: "Rate your Electrical service with Fixer-0921", msgTh: "ให้คะแนนบริการไฟฟ้ากับ Fixer-0921", msgZh: "为Fixer-0921的电气服务评分", time: "2d ago", timeTh: "2 วันที่ผ่านมา", timeZh: "2天前", dot: "bg-amber-500", unread: false },
+  { id: "n5", msg: "Meeting with Fixer-1042 in 2 hours", msgTh: "การนัดพบกับ Fixer-1042 ในอีก 2 ชั่วโมง", msgZh: "与Fixer-1042的会面在2小时后", time: "2h ago", timeTh: "2 ชั่วโมงที่ผ่านมา", timeZh: "2小时前", dot: "bg-red-500", unread: true },
 ];
 
 const DEMO_CHATS = [
-  { id: "c1", name: "Fixer-1042", service: "Plumbing", lastMsg: "On my way, ETA 15 min", lastMsgTh: "กำลังเดินทาง ถึงใน 15 นาที", lastMsgZh: "正在路上，预计15分钟到达", time: "5m ago", unread: 2, online: true },
-  { id: "c2", name: "Pro-3087", service: "Architect", lastMsg: "I've prepared the design draft", lastMsgTh: "เตรียมแบบร่างเรียบร้อยแล้ว", lastMsgZh: "设计草图已准备好", time: "2h ago", unread: 0, online: true },
-  { id: "c3", name: "Team-5512", service: "Smart Home", lastMsg: "Waiting for your confirmation", lastMsgTh: "รอการยืนยันจากคุณ", lastMsgZh: "等待您的确认", time: "1d ago", unread: 1, online: false },
-  { id: "c4", name: "Lister-7890", service: "Property", lastMsg: "Condo available for viewing Saturday", lastMsgTh: "คอนโดเปิดให้ชมวันเสาร์", lastMsgZh: "公寓周六可看房", time: "3h ago", unread: 1, online: true },
+  { id: "c1", name: "Fixer-1042", service: "Plumbing", lastMsg: "On my way, ETA 15 min", lastMsgTh: "กำลังเดินทาง ถึงใน 15 นาที", lastMsgZh: "正在路上，预计15分钟到达", time: "5m ago", timeTh: "5 นาทีที่ผ่านมา", timeZh: "5分钟前", unread: 2, online: true },
+  { id: "c2", name: "Pro-3087", service: "Architect", lastMsg: "I've prepared the design draft", lastMsgTh: "เตรียมแบบร่างเรียบร้อยแล้ว", lastMsgZh: "设计草图已准备好", time: "2h ago", timeTh: "2 ชั่วโมงที่ผ่านมา", timeZh: "2小时前", unread: 0, online: true },
+  { id: "c3", name: "Team-5512", service: "Smart Home", lastMsg: "Waiting for your confirmation", lastMsgTh: "รอการยืนยันจากคุณ", lastMsgZh: "等待您的确认", time: "1d ago", timeTh: "1 วันที่ผ่านมา", timeZh: "1天前", unread: 1, online: false },
+  { id: "c4", name: "Lister-7890", service: "Property", lastMsg: "Condo available for viewing Saturday", lastMsgTh: "คอนโดเปิดให้ชมวันเสาร์", lastMsgZh: "公寓周六可看房", time: "3h ago", timeTh: "3 ชั่วโมงที่ผ่านมา", timeZh: "3小时前", unread: 1, online: true },
 ];
 
 const ICON_MAP = { household: "🏠", project: "💼", professional: "👔", property: "🏢" };
@@ -445,7 +445,7 @@ function OverviewTab({ locale, prefix, subscriber }: { locale: string; prefix: s
               <div key={n.id} className={`flex items-center gap-3 p-3 rounded-lg ${n.unread ? "bg-sky-50 border border-sky-100" : "bg-gray-50"}`}>
                 <span className={`w-2 h-2 rounded-full ${n.dot} flex-shrink-0`} />
                 <p className="text-sm text-gray-700 flex-1">{locale === "th" ? n.msgTh : locale === "zh" ? n.msgZh : n.msg}</p>
-                <span className="text-xs text-gray-400 whitespace-nowrap">{n.time}</span>
+                <span className="text-xs text-gray-400 whitespace-nowrap">{locale === "th" ? n.timeTh : locale === "zh" ? n.timeZh : n.time}</span>
               </div>
             ))}
           </div>
@@ -464,7 +464,7 @@ function OverviewTab({ locale, prefix, subscriber }: { locale: string; prefix: s
                   <p className="text-xs text-gray-500 truncate">{locale === "th" ? c.lastMsgTh : locale === "zh" ? c.lastMsgZh : c.lastMsg}</p>
                 </div>
                 <div className="text-right">
-                  <span className="text-xs text-gray-400">{c.time}</span>
+                  <span className="text-xs text-gray-400">{locale === "th" ? c.timeTh : locale === "zh" ? c.timeZh : c.time}</span>
                   {c.unread > 0 && <span className="block mt-0.5 ml-auto w-5 h-5 bg-sky-600 text-white text-[10px] rounded-full flex items-center justify-center font-bold">{c.unread}</span>}
                 </div>
               </div>
@@ -705,7 +705,7 @@ function ChatTab({ locale }: { locale: string }) {
               <p className="text-sm text-gray-500 truncate mt-0.5">{locale === "th" ? c.lastMsgTh : locale === "zh" ? c.lastMsgZh : c.lastMsg}</p>
             </div>
             <div className="text-right flex-shrink-0">
-              <p className="text-xs text-gray-400">{c.time}</p>
+              <p className="text-xs text-gray-400">{locale === "th" ? c.timeTh : locale === "zh" ? c.timeZh : c.time}</p>
               {c.unread > 0 && (
                 <span className="inline-flex items-center justify-center mt-1 w-5 h-5 bg-sky-600 text-white text-[10px] font-bold rounded-full">{c.unread}</span>
               )}
@@ -729,7 +729,7 @@ function NotificationsTab({ locale }: { locale: string }) {
           <div key={n.id} className={`flex items-center gap-4 px-6 py-4 transition ${n.unread ? "bg-sky-50/50" : "hover:bg-gray-50"}`}>
             <span className={`w-3 h-3 rounded-full ${n.dot} flex-shrink-0`} />
             <p className="text-sm text-gray-800 flex-1">{locale === "th" ? n.msgTh : locale === "zh" ? n.msgZh : n.msg}</p>
-            <span className="text-xs text-gray-400 whitespace-nowrap">{n.time}</span>
+            <span className="text-xs text-gray-400 whitespace-nowrap">{locale === "th" ? n.timeTh : locale === "zh" ? n.timeZh : n.time}</span>
             {n.unread && <span className="w-2 h-2 bg-sky-500 rounded-full" />}
           </div>
         ))}

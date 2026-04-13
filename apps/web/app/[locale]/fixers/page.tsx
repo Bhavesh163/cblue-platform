@@ -37,10 +37,10 @@ const DEMO_INCOMING = [
 ];
 
 const DEMO_EARNINGS = [
-  { month: "Jan", amount: 12500 },
-  { month: "Feb", amount: 15200 },
-  { month: "Mar", amount: 18800 },
-  { month: "Apr", amount: 18500 },
+  { month: "Jan", monthTh: "ม.ค.", monthZh: "1月", amount: 12500 },
+  { month: "Feb", monthTh: "ก.พ.", monthZh: "2月", amount: 15200 },
+  { month: "Mar", monthTh: "มี.ค.", monthZh: "3月", amount: 18800 },
+  { month: "Apr", monthTh: "เม.ย.", monthZh: "4月", amount: 18500 },
 ];
 
 const DEMO_COMPLETED = [
@@ -51,9 +51,9 @@ const DEMO_COMPLETED = [
 ];
 
 const DEMO_CHATS = [
-  { id: "ch1", name: "Customer #A2X", service: "Plumbing", lastMsg: "Thank you, waiting for you", lastMsgTh: "ขอบคุณครับ รอช่างอยู่", lastMsgZh: "谢谢，等您来", time: "2m ago", unread: 2, online: true },
-  { id: "ch2", name: "Customer #B7K", service: "AC", lastMsg: "Which day works for you?", lastMsgTh: "วันไหนสะดวกคะ?", lastMsgZh: "哪天方便？", time: "30m ago", unread: 1, online: true },
-  { id: "ch3", name: "Customer #C4M", service: "Electrical", lastMsg: "Job is done, thanks!", lastMsgTh: "งานเสร็จแล้วครับ ขอบคุณ", lastMsgZh: "工作完成，谢谢！", time: "2h ago", unread: 0, online: false },
+  { id: "ch1", name: "Customer #A2X", service: "Plumbing", lastMsg: "Thank you, waiting for you", lastMsgTh: "ขอบคุณครับ รอช่างอยู่", lastMsgZh: "谢谢，等您来", time: "2m ago", timeTh: "2 นาทีที่ผ่านมา", timeZh: "2分钟前", unread: 2, online: true },
+  { id: "ch2", name: "Customer #B7K", service: "AC", lastMsg: "Which day works for you?", lastMsgTh: "วันไหนสะดวกคะ?", lastMsgZh: "哪天方便？", time: "30m ago", timeTh: "30 นาทีที่ผ่านมา", timeZh: "30分钟前", unread: 1, online: true },
+  { id: "ch3", name: "Customer #C4M", service: "Electrical", lastMsg: "Job is done, thanks!", lastMsgTh: "งานเสร็จแล้วครับ ขอบคุณ", lastMsgZh: "工作完成，谢谢！", time: "2h ago", timeTh: "2 ชั่วโมงที่ผ่านมา", timeZh: "2小时前", unread: 0, online: false },
 ];
 
 const DEMO_NOTIFICATIONS = [
@@ -440,7 +440,7 @@ function PartnerOverview({ locale, partner }: { locale: string; partner: Partner
                 <div className="w-full bg-purple-100 rounded-t-lg relative" style={{ height: `${(e.amount / maxEarning) * 100}%` }}>
                   <div className="absolute inset-0 bg-gradient-to-t from-purple-500 to-indigo-500 rounded-t-lg" />
                 </div>
-                <span className="text-xs text-gray-500 mt-1">{e.month}</span>
+                <span className="text-xs text-gray-500 mt-1">{locale === "th" ? e.monthTh : locale === "zh" ? e.monthZh : e.month}</span>
               </div>
             ))}
           </div>
@@ -527,7 +527,7 @@ function PartnerOverview({ locale, partner }: { locale: string; partner: Partner
                   <p className="text-xs text-gray-500 truncate">{locale === "th" ? c.lastMsgTh : locale === "zh" ? c.lastMsgZh : c.lastMsg}</p>
                 </div>
                 <div className="text-right">
-                  <span className="text-xs text-gray-400">{c.time}</span>
+                  <span className="text-xs text-gray-400">{locale === "th" ? c.timeTh : locale === "zh" ? c.timeZh : c.time}</span>
                   {c.unread > 0 && <span className="block mt-0.5 ml-auto w-5 h-5 bg-purple-600 text-white text-[10px] rounded-full flex items-center justify-center font-bold">{c.unread}</span>}
                 </div>
               </div>
@@ -669,7 +669,7 @@ function PartnerChat({ locale }: { locale: string }) {
               <p className="text-sm text-gray-500 truncate mt-0.5">{locale === "th" ? c.lastMsgTh : locale === "zh" ? c.lastMsgZh : c.lastMsg}</p>
             </div>
             <div className="text-right flex-shrink-0">
-              <p className="text-xs text-gray-400">{c.time}</p>
+              <p className="text-xs text-gray-400">{locale === "th" ? c.timeTh : locale === "zh" ? c.timeZh : c.time}</p>
               {c.unread > 0 && <span className="inline-flex items-center justify-center mt-1 w-5 h-5 bg-purple-600 text-white text-[10px] font-bold rounded-full">{c.unread}</span>}
             </div>
           </div>
@@ -827,12 +827,12 @@ function PartnerProperties({ locale, prefix }: { locale: string; prefix: string 
   const saveEdit = () => {
     setListings(listings.map(l => l.id === editingId ? {
       ...l,
-      title: locale === "th" ? l.title : locale === "zh" ? l.title : editForm.title,
-      titleTh: locale === "th" ? editForm.title : l.titleTh,
-      titleZh: locale === "zh" ? editForm.title : l.titleZh,
-      description: locale === "th" ? l.description : locale === "zh" ? l.description : editForm.description,
-      descriptionTh: locale === "th" ? editForm.description : l.descriptionTh,
-      descriptionZh: locale === "zh" ? editForm.description : l.descriptionZh,
+      title: editForm.title,
+      titleTh: editForm.title,
+      titleZh: editForm.title,
+      description: editForm.description,
+      descriptionTh: editForm.description,
+      descriptionZh: editForm.description,
       price: editForm.price,
       status: editForm.status as "active" | "pending" | "sold",
       images: editForm.images,
