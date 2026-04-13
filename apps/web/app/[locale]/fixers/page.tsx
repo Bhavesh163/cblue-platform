@@ -420,12 +420,12 @@ function PartnerOverview({ locale, partner }: { locale: string; partner: Partner
                 <p className="text-sm text-gray-500">{partner.email}</p>
                 <p className="text-xs text-gray-400">{partner.phone}</p>
               </div>
-              <span className="ml-auto px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">Active</span>
+              <span className="ml-auto px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">{locale === "th" ? "ใช้งานอยู่" : locale === "zh" ? "活跃" : "Active"}</span>
             </div>
             <div className="flex gap-2 mt-2">
-              <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold">Corporate Tier</span>
-              <span className="px-3 py-1 bg-sky-100 text-sky-700 rounded-full text-xs font-bold">Verified</span>
-              <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-bold">KYC ✓</span>
+              <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold">{locale === "th" ? "ระดับ Corporate" : locale === "zh" ? "企业级" : "Corporate Tier"}</span>
+              <span className="px-3 py-1 bg-sky-100 text-sky-700 rounded-full text-xs font-bold">{locale === "th" ? "ยืนยันแล้ว" : locale === "zh" ? "已验证" : "Verified"}</span>
+              <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-bold">{locale === "th" ? "KYC ✓ ยืนยันแล้ว" : locale === "zh" ? "KYC ✓ 已验证" : "KYC ✓"}</span>
             </div>
           </div>
         )}
@@ -490,7 +490,7 @@ function PartnerOverview({ locale, partner }: { locale: string; partner: Partner
               </div>
               <div className="flex items-center gap-2">
                 <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[req.tier] || ""}`}>{req.tier}</span>
-                {req.urgency === "urgent" && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-700">Urgent</span>}
+                {req.urgency === "urgent" && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-700">{locale === "th" ? "เร่งด่วน" : locale === "zh" ? "紧急" : "Urgent"}</span>}
                 <button className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition">{locale === "th" ? "รับ" : locale === "zh" ? "接受" : "Accept"}</button>
                 <button className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">{locale === "th" ? "ปฏิเสธ" : locale === "zh" ? "拒绝" : "Decline"}</button>
               </div>

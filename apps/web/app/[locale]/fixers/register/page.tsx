@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, type FormEvent, type ChangeEvent } from "react";
+import { useState, useCallback, useEffect, useRef, type FormEvent, type ChangeEvent } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { FIXER_ALL_SERVICES, THAI_PROVINCES } from "../../lib/constants";
 import { getDistrictsForProvince } from "../../lib/thai-address-data";
@@ -86,6 +86,9 @@ export default function FixerRegisterPage() {
   const [form, setForm] = useState<FormData>(initialForm);
   const [kycImages, setKycImages] = useState<File[]>([]);
   const [portfolioImages, setPortfolioImages] = useState<File[]>([]);
+  const [showCamera, setShowCamera] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [priceRows, setPriceRows] = useState<PriceRow[]>([{ service: "", finalPrice: "" }]);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -95,6 +98,41 @@ export default function FixerRegisterPage() {
   const [subscriber, setSubscriber] = useState<{ name: string; email?: string } | null>(null);
   const [authMode, setAuthMode] = useState<"login" | "register">("register");
   const prefix = `/${locale}`;
+
+  /* Camera helpers for KYC */
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+      setShowCamera(true);
+    } catch {
+      setError(locale === "th" ? "ไม่สามารถเปิดกล้องได้ กรุณาอนุญาตการเข้าถึงกล้อง" : locale === "zh" ? "无法打开摄像头，请允许摄像头访问" : "Could not access camera. Please allow camera permissions.");
+    }
+  };
+  const capturePhoto = () => {
+    if (!videoRef.current) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = videoRef.current.videoWidth;
+    canvas.height = videoRef.current.videoHeight;
+    canvas.getContext("2d")?.drawImage(videoRef.current, 0, 0);
+    canvas.toBlob((blob) => {
+      if (blob) {
+        const file = new File([blob], `kyc-capture-${Date.now()}.jpg`, { type: "image/jpeg" });
+        setKycImages((prev) => [...prev, file].slice(0, 3));
+      }
+    }, "image/jpeg", 0.9);
+  };
+  const stopCamera = () => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    setShowCamera(false);
+  };
 
   const handleRecaptcha = useCallback((token: string) => setRecaptchaToken(token), []);
   const handleRecaptchaExpire = useCallback(() => setRecaptchaToken(""), []);
@@ -821,27 +859,79 @@ export default function FixerRegisterPage() {
             </legend>
             <div className="space-y-4">
               <div>
-                <label htmlFor="kycImages" className="block text-sm font-medium text-gray-700 mb-1">
-                  {locale === "th" ? "อัพโหลดรูปบัตรประชาชน" : locale === "zh" ? "上传身份证照片" : "Upload ID Card Photos"} <span className="text-red-500">*</span>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {locale === "th" ? "ถ่ายรูป / อัพโหลดรูปบัตรประชาชน" : locale === "zh" ? "拍照或上传身份证照片" : "Capture / Upload ID Card Photos"} <span className="text-red-500">*</span>
                 </label>
                 <p className="text-xs text-gray-500 mb-2">
-                  {locale === "th" ? "ถ่ายรูปบัตรประชาชนหน้า-หลัง และภาพถ่ายคู่กับบัตร (selfie)" : locale === "zh" ? "拍摄身份证正反面及手持身份证自拍照" : "Take photos of ID card front/back and a selfie with your ID"}
+                  {locale === "th" ? "ถ่ายรูปบัตรประชาชนหน้า-หลัง และภาพถ่ายคู่กับบัตร (selfie) สูงสุด 3 รูป" : locale === "zh" ? "拍摄身份证正反面及手持身份证自拍照，最多3张" : "Take photos of ID card front/back and a selfie with your ID (max 3)"}
                 </p>
-                <input
-                  id="kycImages"
-                  name="kycImages"
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={(e) => {
-                    if (e.target.files) setKycImages(Array.from(e.target.files).slice(0, 3));
-                  }}
-                  className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100"
-                />
+
+                {/* Camera view */}
+                {showCamera && (
+                  <div className="mb-3 rounded-lg overflow-hidden bg-black relative">
+                    <video ref={videoRef} autoPlay playsInline muted className="w-full max-h-64 object-contain" />
+                    <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-3">
+                      <button type="button" onClick={capturePhoto} className="px-4 py-2 bg-white text-gray-900 rounded-full text-sm font-bold shadow-lg hover:bg-gray-100 transition">
+                        📸 {locale === "th" ? "ถ่ายรูป" : locale === "zh" ? "拍照" : "Capture"}
+                      </button>
+                      <button type="button" onClick={stopCamera} className="px-4 py-2 bg-red-600 text-white rounded-full text-sm font-bold shadow-lg hover:bg-red-700 transition">
+                        ✕ {locale === "th" ? "ปิดกล้อง" : locale === "zh" ? "关闭" : "Close"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Action buttons */}
+                <div className="flex gap-3 mb-3">
+                  {!showCamera && (
+                    <button type="button" onClick={startCamera} className="flex items-center gap-2 px-4 py-2.5 bg-sky-600 text-white rounded-lg text-sm font-semibold hover:bg-sky-700 transition shadow">
+                      📷 {locale === "th" ? "เปิดกล้อง" : locale === "zh" ? "打开摄像头" : "Open Camera"}
+                    </button>
+                  )}
+                  <label className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 text-amber-700 rounded-lg text-sm font-semibold hover:bg-amber-100 transition shadow cursor-pointer border border-amber-200">
+                    📁 {locale === "th" ? "อัพโหลดไฟล์" : locale === "zh" ? "上传文件" : "Upload File"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files) setKycImages((prev) => [...prev, ...Array.from(e.target.files!)].slice(0, 3));
+                      }}
+                    />
+                  </label>
+                  {/* Mobile-specific capture button */}
+                  <label className="flex items-center gap-2 px-4 py-2.5 bg-green-50 text-green-700 rounded-lg text-sm font-semibold hover:bg-green-100 transition shadow cursor-pointer border border-green-200 sm:hidden">
+                    🤳 {locale === "th" ? "ถ่ายรูป" : locale === "zh" ? "拍照" : "Take Photo"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files) setKycImages((prev) => [...prev, ...Array.from(e.target.files!)].slice(0, 3));
+                      }}
+                    />
+                  </label>
+                </div>
+
+                {/* Preview captured/uploaded images */}
                 {kycImages.length > 0 && (
-                  <p className="mt-2 text-xs text-green-600">
-                    {kycImages.length} {locale === "th" ? "ไฟล์ที่เลือก" : locale === "zh" ? "个文件已选择" : "file(s) selected"}
-                  </p>
+                  <div className="flex gap-2 flex-wrap">
+                    {kycImages.map((img, i) => (
+                      <div key={i} className="relative group">
+                        <img src={URL.createObjectURL(img)} alt={`KYC ${i + 1}`} className="w-20 h-20 object-cover rounded-lg border border-gray-200" />
+                        <button
+                          type="button"
+                          onClick={() => setKycImages((prev) => prev.filter((_, idx) => idx !== i))}
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                        >✕</button>
+                      </div>
+                    ))}
+                    <p className="text-xs text-green-600 self-end">
+                      {kycImages.length}/3 {locale === "th" ? "รูป" : locale === "zh" ? "张照片" : "photo(s)"}
+                    </p>
+                  </div>
                 )}
               </div>
             </div>

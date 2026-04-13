@@ -35,48 +35,48 @@ const householdServices = [
 ];
 
 const projectServices = [
-  { id: "website", value: "WEBSITE_DEVELOPMENT", image: "/images/website-development.jpg", name: "Website Development", nameTh: "พัฒนาเว็บไซต์" },
-  { id: "mobile-app", value: "MOBILE_APP_DEVELOPMENT", image: "/images/software.jpg", name: "Mobile App Development", nameTh: "พัฒนาแอปมือถือ" },
-  { id: "ai-integration", value: "AI_INTEGRATION", image: "/images/ai-chatbot.jpg", name: "AI Integration", nameTh: "AI Integration" },
-  { id: "ai-chatbot", value: "AI_CHATBOT", image: "/images/ai-chatbot.jpg", name: "AI Chatbot", nameTh: "แชทบอท AI" },
-  { id: "software-dev", value: "SOFTWARE_DEV", image: "/images/software.jpg", name: "Software Development", nameTh: "พัฒนาซอฟต์แวร์" },
-  { id: "ml-ai", value: "ML_AI", image: "/images/ai-chatbot.jpg", name: "Machine Learning", nameTh: "แมชชีนเลิร์นนิง" },
-  { id: "consulting", value: "CONSULTING", image: "/images/website-development.jpg", name: "Consulting", nameTh: "ที่ปรึกษา" },
-  { id: "solar-panels", value: "SOLAR_PANELS", image: "/images/solar-panel.jpg", name: "Solar Panels", nameTh: "แผงโซลาร์" },
-  { id: "ev-charging", value: "EV_CHARGING", image: "/images/ev-charger.jpg", name: "EV Charging", nameTh: "สถานีชาร์จ EV" },
-  { id: "green-building", value: "GREEN_BUILDING_DESIGN", image: "/images/green-construction.jpg", name: "Green Building Design", nameTh: "ออกแบบอาคารสีเขียว" },
-  { id: "kitchen", value: "KITCHEN", image: "/images/green-construction.jpg", name: "Kitchen", nameTh: "ครัว" },
-  { id: "hvac-mep", value: "MEP_RETROFIT", image: "/images/hvac.png", name: "HVAC MEP & Retrofit", nameTh: "HVAC MEP" },
-  { id: "reinstatement", value: "REINSTATEMENT", image: "/images/green-construction.jpg", name: "Reinstatement & Fit-out", nameTh: "คืนสภาพและตกแต่ง" },
-  { id: "automation", value: "SMART_BUILDING_AUTOMATION", image: "/images/smart-home.jpg", name: "Automation", nameTh: "ระบบอัตโนมัติ" },
-  { id: "environmental", value: "ENVIRONMENTAL_SERVICES", image: "/images/green-theme.jpg", name: "Environmental Services", nameTh: "บริการสิ่งแวดล้อม" },
-  { id: "security-cctv", value: "SECURITY_CCTV", image: "/images/security-system.jpg", name: "Security & CCTV", nameTh: "ระบบ CCTV" },
-  { id: "door-access", value: "DOOR_ACCESS_CONTROL", image: "/images/security-system.jpg", name: "Door & Access Control", nameTh: "ระบบควบคุมประตู" },
-  { id: "green-construction", value: "GREEN_CONSTRUCTION", image: "/images/green-construction.jpg", name: "Green Construction", nameTh: "ก่อสร้างสีเขียว" },
-  { id: "smart-home", value: "SMART_HOME", image: "/images/smart-home.jpg", name: "Smart Home/Building & BMS", nameTh: "สมาร์ทโฮม & BMS" },
-  { id: "smart-farming", value: "SMART_FARMING", image: "/images/smart-farming.jpg", name: "Smart Farming", nameTh: "สมาร์ทฟาร์มมิ่ง" },
+  { id: "website", value: "WEBSITE_DEVELOPMENT", image: "/images/website-development.jpg", name: "Website Development", nameTh: "พัฒนาเว็บไซต์", nameZh: "网站开发" },
+  { id: "mobile-app", value: "MOBILE_APP_DEVELOPMENT", image: "/images/software.jpg", name: "Mobile App Development", nameTh: "พัฒนาแอปมือถือ", nameZh: "移动应用开发" },
+  { id: "ai-integration", value: "AI_INTEGRATION", image: "/images/ai-chatbot.jpg", name: "AI Integration", nameTh: "AI Integration", nameZh: "人工智能集成" },
+  { id: "ai-chatbot", value: "AI_CHATBOT", image: "/images/ai-chatbot.jpg", name: "AI Chatbot", nameTh: "แชทบอท AI", nameZh: "AI聊天机器人" },
+  { id: "software-dev", value: "SOFTWARE_DEV", image: "/images/software.jpg", name: "Software Development", nameTh: "พัฒนาซอฟต์แวร์", nameZh: "软件开发" },
+  { id: "ml-ai", value: "ML_AI", image: "/images/ai-chatbot.jpg", name: "Machine Learning", nameTh: "แมชชีนเลิร์นนิง", nameZh: "机器学习" },
+  { id: "consulting", value: "CONSULTING", image: "/images/website-development.jpg", name: "Consulting", nameTh: "ที่ปรึกษา", nameZh: "咨询" },
+  { id: "solar-panels", value: "SOLAR_PANELS", image: "/images/solar-panel.jpg", name: "Solar Panels", nameTh: "แผงโซลาร์", nameZh: "太阳能板" },
+  { id: "ev-charging", value: "EV_CHARGING", image: "/images/ev-charger.jpg", name: "EV Charging", nameTh: "สถานีชาร์จ EV", nameZh: "电动车充电" },
+  { id: "green-building", value: "GREEN_BUILDING_DESIGN", image: "/images/green-construction.jpg", name: "Green Building Design", nameTh: "ออกแบบอาคารสีเขียว", nameZh: "绿色建筑设计" },
+  { id: "kitchen", value: "KITCHEN", image: "/images/green-construction.jpg", name: "Kitchen", nameTh: "ครัว", nameZh: "厨房" },
+  { id: "hvac-mep", value: "MEP_RETROFIT", image: "/images/hvac.png", name: "HVAC MEP & Retrofit", nameTh: "HVAC MEP", nameZh: "暖通机电翻新" },
+  { id: "reinstatement", value: "REINSTATEMENT", image: "/images/green-construction.jpg", name: "Reinstatement & Fit-out", nameTh: "คืนสภาพและตกแต่ง", nameZh: "恢复和装修" },
+  { id: "automation", value: "SMART_BUILDING_AUTOMATION", image: "/images/smart-home.jpg", name: "Automation", nameTh: "ระบบอัตโนมัติ", nameZh: "自动化" },
+  { id: "environmental", value: "ENVIRONMENTAL_SERVICES", image: "/images/green-theme.jpg", name: "Environmental Services", nameTh: "บริการสิ่งแวดล้อม", nameZh: "环保服务" },
+  { id: "security-cctv", value: "SECURITY_CCTV", image: "/images/security-system.jpg", name: "Security & CCTV", nameTh: "ระบบ CCTV", nameZh: "安防监控" },
+  { id: "door-access", value: "DOOR_ACCESS_CONTROL", image: "/images/security-system.jpg", name: "Door & Access Control", nameTh: "ระบบควบคุมประตู", nameZh: "门禁系统" },
+  { id: "green-construction", value: "GREEN_CONSTRUCTION", image: "/images/green-construction.jpg", name: "Green Construction", nameTh: "ก่อสร้างสีเขียว", nameZh: "绿色建筑" },
+  { id: "smart-home", value: "SMART_HOME", image: "/images/smart-home.jpg", name: "Smart Home/Building & BMS", nameTh: "สมาร์ทโฮม & BMS", nameZh: "智能家居/楼宇管理" },
+  { id: "smart-farming", value: "SMART_FARMING", image: "/images/smart-farming.jpg", name: "Smart Farming", nameTh: "สมาร์ทฟาร์มมิ่ง", nameZh: "智能农业" },
 ];
 
 const professionalServices = [
-  { id: "lawyer", value: "LAWYER", emoji: "⚖️", name: "Lawyer", nameTh: "ทนายความ" },
-  { id: "architect", value: "ARCHITECT", emoji: "📐", name: "Architect", nameTh: "สถาปนิก" },
-  { id: "interior-designer", value: "INTERIOR_DESIGNER", emoji: "🎨", name: "Interior Designer", nameTh: "มัณฑนากร" },
-  { id: "cpa", value: "CPA", emoji: "📊", name: "CPA", nameTh: "ผู้สอบบัญชี" },
-  { id: "engineer", value: "ENGINEER", emoji: "🏗️", name: "Engineer", nameTh: "วิศวกร" },
-  { id: "software-programmer", value: "SOFTWARE_PROGRAMMER", emoji: "💻", name: "Software Programmer", nameTh: "โปรแกรมเมอร์" },
-  { id: "digital-marketing", value: "DIGITAL_MARKETING", emoji: "📣", name: "Digital Marketing", nameTh: "การตลาดดิจิทัล" },
-  { id: "safety-officer", value: "SAFETY_OFFICER", emoji: "🛡️", name: "Safety Officer", nameTh: "เจ้าหน้าที่ความปลอดภัย" },
-  { id: "accountant", value: "ACCOUNTANT", emoji: "🧮", name: "Accountant", nameTh: "นักบัญชี" },
-  { id: "others", value: "OTHERS", emoji: "➕", name: "Others", nameTh: "อื่น ๆ" },
+  { id: "lawyer", value: "LAWYER", emoji: "⚖️", name: "Lawyer", nameTh: "ทนายความ", nameZh: "律师" },
+  { id: "architect", value: "ARCHITECT", emoji: "📐", name: "Architect", nameTh: "สถาปนิก", nameZh: "建筑师" },
+  { id: "interior-designer", value: "INTERIOR_DESIGNER", emoji: "🎨", name: "Interior Designer", nameTh: "มัณฑนากร", nameZh: "室内设计师" },
+  { id: "cpa", value: "CPA", emoji: "📊", name: "CPA", nameTh: "ผู้สอบบัญชี", nameZh: "注册会计师" },
+  { id: "engineer", value: "ENGINEER", emoji: "🏗️", name: "Engineer", nameTh: "วิศวกร", nameZh: "工程师" },
+  { id: "software-programmer", value: "SOFTWARE_PROGRAMMER", emoji: "💻", name: "Software Programmer", nameTh: "โปรแกรมเมอร์", nameZh: "程序员" },
+  { id: "digital-marketing", value: "DIGITAL_MARKETING", emoji: "📣", name: "Digital Marketing", nameTh: "การตลาดดิจิทัล", nameZh: "数字营销" },
+  { id: "safety-officer", value: "SAFETY_OFFICER", emoji: "🛡️", name: "Safety Officer", nameTh: "เจ้าหน้าที่ความปลอดภัย", nameZh: "安全员" },
+  { id: "accountant", value: "ACCOUNTANT", emoji: "🧮", name: "Accountant", nameTh: "นักบัญชี", nameZh: "会计" },
+  { id: "others", value: "OTHERS", emoji: "➕", name: "Others", nameTh: "อื่น ๆ", nameZh: "其他" },
 ];
 
 const realEstateServices = [
-  { id: "condo", value: "CONDO", image: "/images/scenic-building.jpg", name: "Condominium", nameTh: "คอนโดมิเนียม", nameZh: "公寓", desc: "Buy, sell, or rent condos", descTh: "ซื้อ ขาย หรือเช่าคอนโด" },
-  { id: "house", value: "HOUSE", image: "/images/scenic-house.jpg", name: "House & Villa", nameTh: "บ้านและวิลล่า", nameZh: "别墅", desc: "Single houses, townhouses & villas", descTh: "บ้านเดี่ยว ทาวน์เฮาส์ และวิลล่า" },
-  { id: "apartment", value: "APARTMENT", image: "/images/loft-interior.jpg", name: "Apartment", nameTh: "อพาร์ทเมนท์", nameZh: "公寓楼", desc: "Apartment units for rent or sale", descTh: "อพาร์ทเมนท์เช่าหรือขาย" },
-  { id: "land", value: "LAND", image: "/images/smart-farming.jpg", name: "Land", nameTh: "ที่ดิน", nameZh: "土地", desc: "Land plots for development or investment", descTh: "ที่ดินเพื่อพัฒนาหรือลงทุน" },
-  { id: "commercial", value: "COMMERCIAL", image: "/images/green-construction.jpg", name: "Commercial", nameTh: "อาคารพาณิชย์", nameZh: "商业地产", desc: "Office, retail & commercial spaces", descTh: "ออฟฟิศ ร้านค้า พื้นที่พาณิชย์" },
-  { id: "warehouse", value: "WAREHOUSE", image: "/images/hvac.png", name: "Warehouse & Factory", nameTh: "โกดังและโรงงาน", nameZh: "仓库工厂", desc: "Warehouses, factories & industrial space", descTh: "โกดัง โรงงาน พื้นที่อุตสาหกรรม" },
+  { id: "condo", value: "CONDO", image: "/images/scenic-building.jpg", name: "Condominium", nameTh: "คอนโดมิเนียม", nameZh: "公寓", desc: "Buy, sell, or rent condos", descTh: "ซื้อ ขาย หรือเช่าคอนโด", descZh: "买卖或租赁公寓" },
+  { id: "house", value: "HOUSE", image: "/images/scenic-house.jpg", name: "House & Villa", nameTh: "บ้านและวิลล่า", nameZh: "别墅", desc: "Single houses, townhouses & villas", descTh: "บ้านเดี่ยว ทาวน์เฮาส์ และวิลล่า", descZh: "独栋别墅、联排别墅" },
+  { id: "apartment", value: "APARTMENT", image: "/images/loft-interior.jpg", name: "Apartment", nameTh: "อพาร์ทเมนท์", nameZh: "公寓楼", desc: "Apartment units for rent or sale", descTh: "อพาร์ทเมนท์เช่าหรือขาย", descZh: "出租或出售的公寓" },
+  { id: "land", value: "LAND", image: "/images/smart-farming.jpg", name: "Land", nameTh: "ที่ดิน", nameZh: "土地", desc: "Land plots for development or investment", descTh: "ที่ดินเพื่อพัฒนาหรือลงทุน", descZh: "开发或投资用地" },
+  { id: "commercial", value: "COMMERCIAL", image: "/images/green-construction.jpg", name: "Commercial", nameTh: "อาคารพาณิชย์", nameZh: "商业地产", desc: "Office, retail & commercial spaces", descTh: "ออฟฟิศ ร้านค้า พื้นที่พาณิชย์", descZh: "办公室、零售和商业空间" },
+  { id: "warehouse", value: "WAREHOUSE", image: "/images/hvac.png", name: "Warehouse & Factory", nameTh: "โกดังและโรงงาน", nameZh: "仓库工厂", desc: "Warehouses, factories & industrial space", descTh: "โกดัง โรงงาน พื้นที่อุตสาหกรรม", descZh: "仓库、工厂和工业空间" },
 ];
 
 export default function ServicesPage() {
@@ -195,8 +195,8 @@ export default function ServicesPage() {
                   />
                 </div>
                 <div className="p-4 text-center">
-                  <h3 className="text-sm font-bold text-gray-900">{svc.name}</h3>
-                  <p className="text-xs text-gray-500 mt-1">{svc.nameTh}</p>
+                  <h3 className="text-sm font-bold text-gray-900">{locale === "th" ? svc.nameTh : locale === "zh" ? svc.nameZh : svc.name}</h3>
+                  <p className="text-xs text-gray-500 mt-1">{locale === "th" ? svc.name : svc.nameTh}</p>
                 </div>
               </Link>
             ))}
@@ -225,8 +225,8 @@ export default function ServicesPage() {
                 className="group bg-white rounded-xl shadow-lg p-6 text-center hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 border border-gray-100"
               >
                 <span className="text-4xl block mb-3">{svc.emoji}</span>
-                <h3 className="text-sm font-bold text-gray-900">{svc.name}</h3>
-                <p className="text-xs text-gray-500 mt-1">{svc.nameTh}</p>
+                <h3 className="text-sm font-bold text-gray-900">{locale === "th" ? svc.nameTh : locale === "zh" ? svc.nameZh : svc.name}</h3>
+                <p className="text-xs text-gray-500 mt-1">{locale === "th" ? svc.name : svc.nameTh}</p>
               </Link>
             ))}
           </div>
@@ -275,7 +275,7 @@ export default function ServicesPage() {
                     {locale === "th" ? svc.nameTh : locale === "zh" ? svc.nameZh : svc.name}
                   </h3>
                   <p className="mt-2 text-sm text-gray-600 leading-relaxed">
-                    {locale === "th" ? svc.descTh : svc.desc}
+                    {locale === "th" ? svc.descTh : locale === "zh" ? svc.descZh : svc.desc}
                   </p>
                   <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-amber-600 hover:text-amber-700 transition-colors">
                     {locale === "th" ? "ค้นหา" : locale === "zh" ? "搜索" : "Search"}

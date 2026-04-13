@@ -92,6 +92,11 @@ const OTHER_SUBDISTRICTS: Record<string, Record<string, string[]>> = {
   },
 };
 
+/* Postal codes that map to multiple districts — only province is auto-filled */
+const MULTI_DISTRICT_POSTAL: Record<string, { province: string; districts: string[] }> = {
+  "10310": { province: "กรุงเทพมหานคร", districts: ["สวนหลวง", "วังทองหลาง"] },
+};
+
 /* Postal code → province/district mapping */
 const POSTAL_CODE_MAP: Record<string, { province: string; district: string; subdistrict?: string }> = {
   // Bangkok
@@ -105,7 +110,6 @@ const POSTAL_CODE_MAP: Record<string, { province: string; district: string; subd
   "10260": { province: "กรุงเทพมหานคร", district: "บางนา" },
   "10270": { province: "กรุงเทพมหานคร", district: "บางบอน" },
   "10300": { province: "กรุงเทพมหานคร", district: "ดุสิต" },
-  "10310": { province: "กรุงเทพมหานคร", district: "สวนหลวง" },
   "10320": { province: "กรุงเทพมหานคร", district: "ราษฎร์บูรณะ" },
   "10330": { province: "กรุงเทพมหานคร", district: "ปทุมวัน" },
   "10400": { province: "กรุงเทพมหานคร", district: "พญาไท" },
@@ -214,9 +218,13 @@ export function getSubdistrictsForDistrict(province: string, district: string): 
 }
 
 /**
- * Lookup province and district from postal code
+ * Lookup province and district from postal code.
+ * For postal codes spanning multiple districts, returns province only (district = "")
+ * so the user can choose from the district dropdown.
  */
 export function lookupByPostalCode(postalCode: string): { province: string; district: string } | null {
+  const multi = MULTI_DISTRICT_POSTAL[postalCode];
+  if (multi) return { province: multi.province, district: "" };
   const result = POSTAL_CODE_MAP[postalCode];
   return result ? { province: result.province, district: result.district } : null;
 }
