@@ -122,7 +122,7 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
       context: context,
       builder: (_) => AlertDialog(
         title: Text(t('delete')),
-        content: Text('Delete "${_filtered[index]['title']}"?'),
+        content: Text(t('confirm_delete_msg')),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: Text(t('cancel'))),
           ElevatedButton(

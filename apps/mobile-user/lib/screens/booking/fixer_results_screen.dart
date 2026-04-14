@@ -276,12 +276,12 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                locale.locale == 'th' ? 'เกณฑ์การคัดเลือก:' : locale.locale == 'zh' ? '选择标准:' : 'Selection Criteria:',
+                locale.t('selection_criteria'),
                 style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
               ),
               const SizedBox(height: 4),
-              const Text('💰 2 cheapest  ⭐ 2 highest rated  🏆 Upper tier  🔄 Returning  👤 Your nomination',
-                  style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+              Text(locale.t('criteria_legend'),
+                  style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
             ],
           ),
         ),
@@ -332,7 +332,7 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
                             const Icon(Icons.star, size: 14, color: AppTheme.star),
                             Text(' ${p['stars']}', style: const TextStyle(fontSize: 13)),
                             const SizedBox(width: 12),
-                            Text('${p['jobs']} jobs', style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                            Text('${p['jobs']} ${locale.t('jobs_count')}', style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
                             const SizedBox(width: 12),
                             Text('฿${p['price']}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.primaryBlue)),
                           ],
@@ -376,7 +376,7 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
                         'stars': '4.0',
                         'jobs': 25,
                         'price': 350,
-                        'criteria': '👤 Your Nomination',
+                        'criteria': locale.t('your_nomination'),
                         'returning': false,
                       });
                       _nominationCtrl.clear();
@@ -686,7 +686,7 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _InfoRow(label: locale.t('poNumber'), value: _poNumber),
-              _InfoRow(label: 'Partner', value: _partners[_selectedPartner!]['id']),
+              _InfoRow(label: locale.t('partner_label'), value: _partners[_selectedPartner!]['id']),
               _InfoRow(label: locale.t('startDate'),
                   value: '${widget.date.year}-${widget.date.month.toString().padLeft(2, '0')}-${widget.date.day.toString().padLeft(2, '0')}'),
               const SizedBox(height: 12),
@@ -887,11 +887,11 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _InfoRow(label: locale.t('poNumber'), value: _poNumber),
-                _InfoRow(label: 'Partner', value: _partners[_selectedPartner!]['id']),
-                _InfoRow(label: locale.locale == 'th' ? 'คะแนนของคุณ' : 'Your Rating', value: '$_customerRating ⭐'),
-                _InfoRow(label: locale.locale == 'th' ? 'คะแนนพาร์ทเนอร์' : 'Partner Rating', value: '$_partnerRating ⭐'),
+                _InfoRow(label: locale.t('partner_label'), value: _partners[_selectedPartner!]['id']),
+                _InfoRow(label: locale.t('your_rating_label'), value: '$_customerRating ⭐'),
+                _InfoRow(label: locale.t('partner_rating_label'), value: '$_partnerRating ⭐'),
                 if (_hasVariation)
-                  _InfoRow(label: locale.t('variation'), value: _variationApproved ? '✅ Approved' : '❌ Declined'),
+                  _InfoRow(label: locale.t('variation'), value: _variationApproved ? '✅ ${locale.t('variation_approved')}' : '❌ ${locale.t('variation_declined')}'),
               ],
             ),
           ),

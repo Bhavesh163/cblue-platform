@@ -147,7 +147,7 @@ class _PropertiesWorkflowScreenState extends State<PropertiesWorkflowScreen> {
     return Column(children: [
       const Icon(Icons.qr_code_2, size: 64, color: AppTheme.primaryBlue),
       const SizedBox(height: 16),
-      Text('PromptPay QR', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+      Text(t('promptPayQR'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
       const SizedBox(height: 12),
       Container(
         width: 180, height: 180,
@@ -160,7 +160,7 @@ class _PropertiesWorkflowScreenState extends State<PropertiesWorkflowScreen> {
       const SizedBox(height: 16),
       Text('${t('processing_fee')}: ฿$fee', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppTheme.primaryGreen)),
       const SizedBox(height: 8),
-      Text('Tier: $_selectedTier', style: const TextStyle(color: AppTheme.textSecondary)),
+      Text('${t('tier')}: $_selectedTier', style: const TextStyle(color: AppTheme.textSecondary)),
       const SizedBox(height: 8),
       Container(
         padding: const EdgeInsets.all(12),
@@ -168,7 +168,7 @@ class _PropertiesWorkflowScreenState extends State<PropertiesWorkflowScreen> {
         child: Row(children: [
           const Icon(Icons.warning_amber, color: AppTheme.warning, size: 18),
           const SizedBox(width: 8),
-          Expanded(child: Text('Non-refundable processing fee', style: TextStyle(fontSize: 12, color: AppTheme.warning))),
+          Expanded(child: Text(t('non_refundable_fee'), style: TextStyle(fontSize: 12, color: AppTheme.warning))),
         ]),
       ),
       const SizedBox(height: 20),
@@ -182,7 +182,7 @@ class _PropertiesWorkflowScreenState extends State<PropertiesWorkflowScreen> {
     return Column(children: [
       const Icon(Icons.description, size: 48, color: AppTheme.primaryGreen),
       const SizedBox(height: 12),
-      Text('Purchase Order', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+      Text(t('purchaseOrder'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
       const SizedBox(height: 8),
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -192,7 +192,7 @@ class _PropertiesWorkflowScreenState extends State<PropertiesWorkflowScreen> {
       const SizedBox(height: 20),
       _infoCard([
         _infoRow(t('full_name'), auth.displayName),
-        _infoRow('Property', p['title'] as String? ?? ''),
+        _infoRow(t('property_label'), p['title'] as String? ?? ''),
         _infoRow(t('property_type'), p['type'] as String? ?? ''),
         _infoRow(t('listing_type'), p['listing'] as String? ?? ''),
         _infoRow(t('price'), p['price'] as String? ?? ''),
@@ -213,14 +213,14 @@ class _PropertiesWorkflowScreenState extends State<PropertiesWorkflowScreen> {
         const SizedBox(height: 40),
         const CircularProgressIndicator(),
         const SizedBox(height: 20),
-        Text('Notifying property lister...', style: const TextStyle(fontSize: 16)),
+        Text(t('notifying_lister'), style: const TextStyle(fontSize: 16)),
         const SizedBox(height: 8),
-        Text('Waiting for confirmation', style: const TextStyle(color: AppTheme.textSecondary)),
+        Text(t('waiting_confirmation'), style: const TextStyle(color: AppTheme.textSecondary)),
       ] else ...[
         const SizedBox(height: 20),
         const Icon(Icons.check_circle, size: 64, color: AppTheme.primaryGreen),
         const SizedBox(height: 16),
-        Text('Lister Confirmed!', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.primaryGreen)),
+        Text(t('lister_confirmed'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.primaryGreen)),
         const SizedBox(height: 8),
         Text(_poNumber, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
         const SizedBox(height: 24),
@@ -316,7 +316,7 @@ class _PropertiesWorkflowScreenState extends State<PropertiesWorkflowScreen> {
       Text(t('schedule_meeting'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
       const SizedBox(height: 20),
       _infoCard([
-        _infoRow('PO Number', _poNumber),
+        _infoRow(t('poNumber'), _poNumber),
         _infoRow(t('tier'), _selectedTier),
         _infoRow(t('processing_fee'), '฿${AppConstants.tierFees[_selectedTier] ?? 200}'),
       ]),
@@ -388,8 +388,8 @@ class _PropertiesWorkflowScreenState extends State<PropertiesWorkflowScreen> {
       Text(t('workflow_complete'), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppTheme.primaryGreen)),
       const SizedBox(height: 20),
       _infoCard([
-        _infoRow('PO Number', _poNumber),
-        _infoRow('Property', p['title'] as String? ?? ''),
+        _infoRow(t('poNumber'), _poNumber),
+        _infoRow(t('property_label'), p['title'] as String? ?? ''),
         _infoRow(t('tier'), _selectedTier),
         _infoRow(t('processing_fee'), '฿${AppConstants.tierFees[_selectedTier] ?? 200}'),
         _infoRow(t('your_rating'), '⭐ $_customerRating/5'),

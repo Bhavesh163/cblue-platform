@@ -143,6 +143,17 @@ class Translations {
     'ok': {'en': 'OK', 'th': 'ตกลง', 'zh': '好的'},
     'all': {'en': 'All', 'th': 'ทั้งหมด', 'zh': '全部'},
     'images_count': {'en': 'images', 'th': 'รูป', 'zh': '张图片'},
+    // AI evaluation phases
+    'kyc_check': {'en': 'KYC Verification', 'th': 'ยืนยันตัวตน KYC', 'zh': 'KYC身份验证'},
+    'company_check': {'en': 'Company Validation', 'th': 'ตรวจสอบบริษัท', 'zh': '公司验证'},
+    'credentials': {'en': 'Credentials Analysis', 'th': 'วิเคราะห์คุณสมบัติ', 'zh': '资质分析'},
+    'experience': {'en': 'Experience Assessment', 'th': 'ประเมินประสบการณ์', 'zh': '经验评估'},
+    'fraud_scan': {'en': 'Fraud Detection Scan', 'th': 'สแกนตรวจจับการฉ้อโกง', 'zh': '欺诈检测扫描'},
+    'portfolio_ocr': {'en': 'Portfolio OCR & Analysis', 'th': 'วิเคราะห์ OCR ผลงาน', 'zh': '作品集OCR和分析'},
+    'price_list_eval': {'en': 'Price List Evaluation', 'th': 'ประเมินรายการราคา', 'zh': '价格表评估'},
+    'tier_assign': {'en': 'Tier Assignment', 'th': 'กำหนดระดับ', 'zh': '等级分配'},
+    'confirm_delete_msg': {'en': 'Are you sure you want to delete this?', 'th': 'คุณแน่ใจหรือไม่ว่าต้องการลบ?', 'zh': '您确定要删除吗？'},
+    'views': {'en': 'views', 'th': 'ครั้งดู', 'zh': '次查看'},
   };
 
   static String get(String key, String locale) {

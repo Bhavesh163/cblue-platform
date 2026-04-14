@@ -237,7 +237,7 @@ class _ChatTabState extends State<ChatTab> {
             children: [
               IconButton(icon: const Icon(Icons.attach_file), onPressed: () {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('File sharing coming soon'), duration: Duration(seconds: 2)),
+                  SnackBar(content: Text(locale.t('file_sharing_soon')), duration: const Duration(seconds: 2)),
                 );
               }),
               Expanded(

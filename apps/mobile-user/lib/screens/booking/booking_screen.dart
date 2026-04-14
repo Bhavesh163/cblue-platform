@@ -44,9 +44,9 @@ class _BookingScreenState extends State<BookingScreen> with SingleTickerProvider
             unselectedLabelColor: AppTheme.textSecondary,
             indicatorColor: AppTheme.primaryBlue,
             tabs: [
-              Tab(text: '🏠 ${locale.locale == 'th' ? 'บ้าน' : locale.locale == 'zh' ? '家庭' : 'Household'}'),
-              Tab(text: '🏗️ ${locale.locale == 'th' ? 'โปรเจกต์' : locale.locale == 'zh' ? '项目' : 'Project'}'),
-              Tab(text: '👔 ${locale.locale == 'th' ? 'มืออาชีพ' : locale.locale == 'zh' ? '专业' : 'Professional'}'),
+              Tab(text: '🏠 ${locale.t('household_tab')}'),
+              Tab(text: '🏗️ ${locale.t('project_tab')}'),
+              Tab(text: '👔 ${locale.t('professional_tab')}'),
             ],
           ),
         ),

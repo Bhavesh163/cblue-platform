@@ -15,14 +15,14 @@ class AiEvaluationScreen extends StatefulWidget {
 
 class _AiEvaluationScreenState extends State<AiEvaluationScreen> {
   static const _phases = [
-    {'key': 'kyc_check', 'icon': Icons.verified_user, 'label': 'KYC Verification'},
-    {'key': 'company_check', 'icon': Icons.business, 'label': 'Company Validation'},
-    {'key': 'credentials', 'icon': Icons.school, 'label': 'Credentials Analysis'},
-    {'key': 'experience', 'icon': Icons.work_history, 'label': 'Experience Assessment'},
-    {'key': 'fraud_scan', 'icon': Icons.security, 'label': 'Fraud Detection Scan'},
-    {'key': 'portfolio', 'icon': Icons.photo_library, 'label': 'Portfolio OCR & Analysis'},
-    {'key': 'price_list', 'icon': Icons.attach_money, 'label': 'Price List Evaluation'},
-    {'key': 'tier_assign', 'icon': Icons.emoji_events, 'label': 'Tier Assignment'},
+    {'key': 'kyc_check', 'icon': Icons.verified_user},
+    {'key': 'company_check', 'icon': Icons.business},
+    {'key': 'credentials', 'icon': Icons.school},
+    {'key': 'experience', 'icon': Icons.work_history},
+    {'key': 'fraud_scan', 'icon': Icons.security},
+    {'key': 'portfolio_ocr', 'icon': Icons.photo_library},
+    {'key': 'price_list_eval', 'icon': Icons.attach_money},
+    {'key': 'tier_assign', 'icon': Icons.emoji_events},
   ];
 
   int _currentPhase = -1;
@@ -104,7 +104,7 @@ class _AiEvaluationScreenState extends State<AiEvaluationScreen> {
                 ),
                 const SizedBox(width: 12),
                 Expanded(child: Text(
-                  phase['label'] as String,
+                  t(phase['key'] as String),
                   style: TextStyle(
                     fontWeight: active ? FontWeight.bold : FontWeight.normal,
                     color: done ? AppTheme.textPrimary : AppTheme.textSecondary,

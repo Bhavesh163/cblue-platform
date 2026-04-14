@@ -61,7 +61,7 @@ class PropertiesTab extends StatelessWidget {
               Row(children: [
                 Text(p['price'] as String, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.primaryBlue)),
                 const Spacer(),
-                Text('👁 ${p['views']} views', style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                Text('👁 ${p['views']} ${t('views')}', style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
               ]),
               const SizedBox(height: 8),
               Row(children: [

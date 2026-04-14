@@ -142,7 +142,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(locale.locale == 'th' ? 'ยังไม่มีบัญชี? ' : locale.locale == 'zh' ? '没有帐户？' : "Don't have an account? "),
+                    Text(locale.t('no_account')),
                     TextButton(
                       onPressed: () => Navigator.push(
                         context,

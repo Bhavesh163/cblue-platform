@@ -130,6 +130,29 @@ class Translations {
     'date_label': {'en': 'Date', 'th': 'วันที่', 'zh': '日期'},
     'avg_rating': {'en': 'Avg Rating', 'th': 'คะแนนเฉลี่ย', 'zh': '平均评分'},
     'recent_activity': {'en': 'Recent Activity', 'th': 'กิจกรรมล่าสุด', 'zh': '最近活动'},
+    // Properties workflow
+    'notifying_lister': {'en': 'Notifying property lister...', 'th': 'กำลังแจ้งผู้ลงประกาศ...', 'zh': '正在通知房产发布者...'},
+    'waiting_confirmation': {'en': 'Waiting for confirmation', 'th': 'รอการยืนยัน', 'zh': '等待确认'},
+    'lister_confirmed': {'en': 'Lister Confirmed!', 'th': 'ผู้ลงประกาศยืนยันแล้ว!', 'zh': '发布者已确认！'},
+    'non_refundable_fee': {'en': 'Non-refundable processing fee', 'th': 'ค่าดำเนินการไม่สามารถขอคืนได้', 'zh': '手续费不可退还'},
+    'property_label': {'en': 'Property', 'th': 'ทรัพย์สิน', 'zh': '房产'},
+    'message_hint': {'en': 'Message...', 'th': 'ข้อความ...', 'zh': '消息...'},
+    // Fixer results
+    'selection_criteria': {'en': 'Selection Criteria:', 'th': 'เกณฑ์การคัดเลือก:', 'zh': '选择标准:'},
+    'criteria_legend': {'en': '💰 2 cheapest  ⭐ 2 highest rated  🏆 Upper tier  🔄 Returning  👤 Your nomination', 'th': '💰 2 ถูกที่สุด  ⭐ 2 คะแนนสูงสุด  🏆 ระดับบน  🔄 เคยใช้  👤 เสนอเอง', 'zh': '💰 2最便宜  ⭐ 2最高评分  🏆 高级  🔄 回头客  👤 您的提名'},
+    'jobs_count': {'en': 'jobs', 'th': 'งาน', 'zh': '个工作'},
+    'your_nomination': {'en': '👤 Your Nomination', 'th': '👤 คุณเสนอ', 'zh': '👤 您的提名'},
+    'partner_label': {'en': 'Partner', 'th': 'พาร์ทเนอร์', 'zh': '合作伙伴'},
+    'your_rating_label': {'en': 'Your Rating', 'th': 'คะแนนของคุณ', 'zh': '您的评分'},
+    'partner_rating_label': {'en': 'Partner Rating', 'th': 'คะแนนพาร์ทเนอร์', 'zh': '合作伙伴评分'},
+    'file_sharing_soon': {'en': 'File sharing coming soon', 'th': 'แชร์ไฟล์เร็วๆ นี้', 'zh': '文件分享即将推出'},
+    'no_account': {'en': "Don't have an account?", 'th': 'ยังไม่มีบัญชี?', 'zh': '没有帐户？'},
+    'household_tab': {'en': 'Household', 'th': 'บ้าน', 'zh': '家庭'},
+    'project_tab': {'en': 'Project', 'th': 'โปรเจกต์', 'zh': '项目'},
+    'professional_tab': {'en': 'Professional', 'th': 'มืออาชีพ', 'zh': '专业'},
+    'confirm_delete_msg': {'en': 'Are you sure you want to delete this?', 'th': 'คุณแน่ใจหรือไม่ว่าต้องการลบ?', 'zh': '您确定要删除吗？'},
+    'variation_approved': {'en': 'Approved', 'th': 'อนุมัติแล้ว', 'zh': '已批准'},
+    'variation_declined': {'en': 'Declined', 'th': 'ปฏิเสธ', 'zh': '已拒绝'},
   };
 
   static String get(String key, String locale) {
