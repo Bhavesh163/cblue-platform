@@ -90,6 +90,16 @@ class Translations {
     'approved': {'en': 'Approved', 'th': 'อนุมัติแล้ว', 'zh': '已批准'},
     'rejected': {'en': 'Rejected', 'th': 'ถูกปฏิเสธ', 'zh': '已拒绝'},
     'go_to_dashboard': {'en': 'Go to Dashboard', 'th': 'ไปที่แดชบอร์ด', 'zh': '前往仪表板'},
+    'edit_profile': {'en': 'Edit Profile', 'th': 'แก้ไขโปรไฟล์', 'zh': '编辑个人资料'},
+    'change_password': {'en': 'Change Password', 'th': 'เปลี่ยนรหัสผ่าน', 'zh': '更改密码'},
+    'rate_customer': {'en': 'Rate Customer', 'th': 'ให้คะแนนลูกค้า', 'zh': '评价客户'},
+    'submit_rating': {'en': 'Submit Rating', 'th': 'ส่งคะแนน', 'zh': '提交评分'},
+    'rating_submitted': {'en': 'Rating submitted', 'th': 'ส่งคะแนนแล้ว', 'zh': '评分已提交'},
+    'job_completed': {'en': 'Job completed', 'th': 'งานเสร็จสิ้น', 'zh': '工作已完成'},
+    'job_accepted': {'en': 'Job accepted', 'th': 'รับงานแล้ว', 'zh': '工作已接受'},
+    'job_declined': {'en': 'Job declined', 'th': 'ปฏิเสธงานแล้ว', 'zh': '工作已拒绝'},
+    'kyc_upload_failed': {'en': 'KYC upload failed. You can update later from Profile.', 'th': 'อัปโหลด KYC ล้มเหลว สามารถอัปเดตได้ภายหลังจากโปรไฟล์', 'zh': 'KYC上传失败，您可以稍后在个人资料中更新。'},
+    'portfolio_upload_failed': {'en': 'Portfolio upload failed. You can update later from Profile.', 'th': 'อัปโหลดผลงานล้มเหลว สามารถอัปเดตได้ภายหลังจากโปรไฟล์', 'zh': '作品上传失败，您可以稍后在个人资料中更新。'},
   };
 
   static String get(String key, String locale) {

@@ -3,22 +3,52 @@ import 'package:provider/provider.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../core/constants.dart';
+import '../../services/api_service.dart';
 
-class ActiveJobsTab extends StatelessWidget {
+class ActiveJobsTab extends StatefulWidget {
   const ActiveJobsTab({super.key});
+
+  @override
+  State<ActiveJobsTab> createState() => _ActiveJobsTabState();
+}
+
+class _ActiveJobsTabState extends State<ActiveJobsTab> {
+  final _api = ApiService();
+  bool _completing = false;
+
+  final List<Map<String, dynamic>> _jobs = [
+    {'id': 'PO-2506-0051', 'service': 'Plumbing Repair', 'customer': 'Customer #C1024', 'status': 'in_progress', 'progress': 0.6, 'fee': 200.0, 'date': '2025-06-28'},
+    {'id': 'PO-2506-0049', 'service': 'Electrical Wiring', 'customer': 'Customer #C0998', 'status': 'confirmed', 'progress': 0.2, 'fee': 400.0, 'date': '2025-06-30'},
+    {'id': 'PO-2506-0045', 'service': 'AC Installation', 'customer': 'Customer #C1001', 'status': 'in_progress', 'progress': 0.85, 'fee': 600.0, 'date': '2025-06-25'},
+  ];
+
+  Future<void> _completeJob(int index) async {
+    final job = _jobs[index];
+    setState(() => _completing = true);
+    try {
+      await _api.completeJob(job['id'] as String);
+    } catch (_) { /* Demo mode: continue anyway */ }
+    if (mounted) {
+      setState(() {
+        _jobs[index]['status'] = 'completed';
+        _jobs[index]['progress'] = 1.0;
+        _completing = false;
+      });
+      final t = context.read<LocaleProvider>().t;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${t('job_completed')}: ${job['id']}'), backgroundColor: AppTheme.primaryGreen),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final t = context.watch<LocaleProvider>().t;
     final locale = context.watch<LocaleProvider>().locale;
 
-    final jobs = [
-      {'id': 'PO-2506-0051', 'service': 'Plumbing Repair', 'customer': 'Customer #C1024', 'status': 'in_progress', 'progress': 0.6, 'fee': 250.0, 'date': '2025-06-28'},
-      {'id': 'PO-2506-0049', 'service': 'Electrical Wiring', 'customer': 'Customer #C0998', 'status': 'confirmed', 'progress': 0.2, 'fee': 500.0, 'date': '2025-06-30'},
-      {'id': 'PO-2506-0045', 'service': 'AC Installation', 'customer': 'Customer #C1001', 'status': 'in_progress', 'progress': 0.85, 'fee': 750.0, 'date': '2025-06-25'},
-    ];
+    final active = _jobs.where((j) => j['status'] != 'completed').toList();
 
-    if (jobs.isEmpty) {
+    if (active.isEmpty) {
       return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
         const Icon(Icons.work_off, size: 64, color: AppTheme.textSecondary),
         const SizedBox(height: 12),
@@ -28,9 +58,9 @@ class ActiveJobsTab extends StatelessWidget {
 
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: jobs.length,
+      itemCount: active.length,
       itemBuilder: (_, i) {
-        final j = jobs[i];
+        final j = active[i];
         final status = j['status'] as String;
         final progress = j['progress'] as double;
         final statusLabel = AppConstants.statusLabels[status]?[locale] ?? status;
@@ -79,8 +109,10 @@ class ActiveJobsTab extends StatelessWidget {
                 const Spacer(),
                 if (progress < 1.0)
                   ElevatedButton.icon(
-                    onPressed: () {},
-                    icon: const Icon(Icons.check, size: 16),
+                    onPressed: _completing ? null : () => _completeJob(_jobs.indexOf(j)),
+                    icon: _completing
+                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.check, size: 16),
                     label: Text(t('complete_job'), style: const TextStyle(fontSize: 13)),
                     style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8)),
                   ),

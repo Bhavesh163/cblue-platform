@@ -12,6 +12,8 @@ class ChatTab extends StatefulWidget {
 
 class _ChatTabState extends State<ChatTab> {
   int? _openChat;
+  final _msgController = TextEditingController();
+  final List<List<Map<String, String>>> _chatMessages = [];
 
   final _conversations = [
     {'name': 'Customer #C1032', 'lastMsg': 'When can you start the plumbing work?', 'time': '10:32 AM', 'unread': 2, 'online': true},
@@ -19,6 +21,41 @@ class _ChatTabState extends State<ChatTab> {
     {'name': 'Customer #C1001', 'lastMsg': 'Thanks for the great work! 👍', 'time': '2 days ago', 'unread': 0, 'online': true},
     {'name': 'CBLUE Support', 'lastMsg': 'Your tier upgrade is approved.', 'time': '3 days ago', 'unread': 1, 'online': true},
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize message history for each conversation
+    _chatMessages.addAll([
+      [
+        {'from': 'customer', 'text': 'When can you start the plumbing work?', 'time': '10:32 AM'},
+        {'from': 'me', 'text': 'I can come tomorrow morning at 9 AM. Will that work?', 'time': '10:35 AM'},
+        {'from': 'customer', 'text': 'Perfect! See you then.', 'time': '10:36 AM'},
+      ],
+      [
+        {'from': 'customer', 'text': 'I confirmed the schedule. See you then!', 'time': 'Yesterday'},
+      ],
+      [
+        {'from': 'customer', 'text': 'Thanks for the great work! 👍', 'time': '2 days ago'},
+      ],
+      [
+        {'from': 'system', 'text': 'Your tier upgrade is approved.', 'time': '3 days ago'},
+      ],
+    ]);
+  }
+
+  void _sendMessage() {
+    final text = _msgController.text.trim();
+    if (text.isEmpty || _openChat == null) return;
+    final now = TimeOfDay.now();
+    final timeStr = '${now.hour}:${now.minute.toString().padLeft(2, '0')}';
+    setState(() {
+      _chatMessages[_openChat!].add({'from': 'me', 'text': text, 'time': timeStr});
+      _conversations[_openChat!]['lastMsg'] = text;
+      _conversations[_openChat!]['time'] = timeStr;
+    });
+    _msgController.clear();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -75,11 +112,7 @@ class _ChatTabState extends State<ChatTab> {
 
   Widget _chatView(String Function(String) t) {
     final conv = _conversations[_openChat!];
-    final messages = [
-      {'from': 'customer', 'text': conv['lastMsg'] as String, 'time': '10:32 AM'},
-      {'from': 'me', 'text': 'I can come tomorrow morning at 9 AM. Will that work?', 'time': '10:35 AM'},
-      {'from': 'customer', 'text': 'Perfect! See you then.', 'time': '10:36 AM'},
-    ];
+    final messages = _chatMessages[_openChat!];
 
     return Column(children: [
       // Header
@@ -129,13 +162,15 @@ class _ChatTabState extends State<ChatTab> {
           IconButton(icon: const Icon(Icons.attach_file), onPressed: () {}),
           Expanded(
             child: TextField(
+              controller: _msgController,
               decoration: InputDecoration(hintText: '${t('chat')}...', isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10)),
+              onSubmitted: (_) => _sendMessage(),
             ),
           ),
           const SizedBox(width: 8),
           CircleAvatar(
             backgroundColor: AppTheme.primaryGreen,
-            child: IconButton(icon: const Icon(Icons.send, color: Colors.white, size: 18), onPressed: () {}),
+            child: IconButton(icon: const Icon(Icons.send, color: Colors.white, size: 18), onPressed: _sendMessage),
           ),
         ]),
       ),

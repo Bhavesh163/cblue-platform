@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:dio/dio.dart';
 import 'dart:io';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
@@ -37,9 +38,9 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
     } catch (e) {
       // Fallback to demo data if API unavailable
       _properties = [
-        {'id': '1', 'title': 'Modern Condo Sukhumvit 39', 'type': 'Condo', 'listing': 'RENT', 'price': 25000, 'area': 45, 'beds': 1, 'baths': 1, 'tier': 'Featured', 'active': true, 'location': 'Sukhumvit, Bangkok', 'postal': '10110', 'desc': 'Fully furnished modern condo near BTS Phrom Phong.', 'images': 3, 'views': 124},
-        {'id': '2', 'title': 'Townhouse Bangna 3BR', 'type': 'Townhouse', 'listing': 'SALE', 'price': 3500000, 'area': 150, 'beds': 3, 'baths': 2, 'tier': 'Premium', 'active': true, 'location': 'Bangna, Bangkok', 'postal': '10260', 'desc': 'Spacious townhouse with garden.', 'images': 5, 'views': 89},
-        {'id': '3', 'title': 'Land Plot Chiang Mai 1 Rai', 'type': 'Land', 'listing': 'SALE', 'price': 1200000, 'area': 400, 'beds': 0, 'baths': 0, 'tier': 'Basic', 'active': false, 'location': 'Hang Dong, Chiang Mai', 'postal': '50230', 'desc': 'Flat land near main road.', 'images': 2, 'views': 32},
+        {'id': '1', 'title': 'Modern Condo Sukhumvit 39', 'type': 'Condo', 'listing': 'RENT', 'price': 25000, 'area': 45, 'beds': 1, 'baths': 1, 'tier': 'Standard', 'active': true, 'location': 'Sukhumvit, Bangkok', 'postal': '10110', 'desc': 'Fully furnished modern condo near BTS Phrom Phong.', 'images': 3, 'views': 124},
+        {'id': '2', 'title': 'Townhouse Bangna 3BR', 'type': 'Townhouse', 'listing': 'SALE', 'price': 3500000, 'area': 150, 'beds': 3, 'baths': 2, 'tier': 'Upper', 'active': true, 'location': 'Bangna, Bangkok', 'postal': '10260', 'desc': 'Spacious townhouse with garden.', 'images': 5, 'views': 89},
+        {'id': '3', 'title': 'Land Plot Chiang Mai 1 Rai', 'type': 'Land', 'listing': 'SALE', 'price': 1200000, 'area': 400, 'beds': 0, 'baths': 0, 'tier': 'Economy', 'active': false, 'location': 'Hang Dong, Chiang Mai', 'postal': '50230', 'desc': 'Flat land near main road.', 'images': 2, 'views': 32},
       ];
     }
     if (mounted) setState(() => _loading = false);
@@ -149,12 +150,20 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
       builder: (_) => _AddEditPropertySheet(
         t: t,
         existing: existing,
-        onSave: (data) async {
+        onSave: (data, {List<File>? images}) async {
           if (existing != null) {
             final idx = _properties.indexOf(existing);
             setState(() => _properties[idx] = {...existing, ...data});
             try {
               await _api.updateProperty(existing['id'].toString(), data);
+              // Upload images if any were selected
+              if (images != null && images.isNotEmpty) {
+                final formData = FormData();
+                for (int i = 0; i < images.length; i++) {
+                  formData.files.add(MapEntry('images', await MultipartFile.fromFile(images[i].path, filename: 'img_$i.jpg')));
+                }
+                await _api.uploadPropertyImages(existing['id'].toString(), formData);
+              }
             } catch (_) { /* Optimistic update */ }
           } else {
             final tempId = DateTime.now().millisecondsSinceEpoch.toString();
@@ -162,8 +171,8 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
               'id': tempId,
               ...data,
               'active': true,
-              'tier': 'Basic',
-              'images': 0,
+              'tier': 'Economy',
+              'images': images?.length ?? 0,
               'views': 0,
             };
             setState(() => _properties.add(newProp));
@@ -171,8 +180,17 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
               final res = await _api.createProperty(data);
               final created = res.data;
               if (created != null && created['id'] != null) {
+                final createdId = created['id'].toString();
                 final idx = _properties.indexWhere((p) => p['id'] == tempId);
-                if (idx >= 0) setState(() => _properties[idx]['id'] = created['id'].toString());
+                if (idx >= 0) setState(() => _properties[idx]['id'] = createdId);
+                // Upload images if any were selected
+                if (images != null && images.isNotEmpty) {
+                  final formData = FormData();
+                  for (int i = 0; i < images.length; i++) {
+                    formData.files.add(MapEntry('images', await MultipartFile.fromFile(images[i].path, filename: 'img_$i.jpg')));
+                  }
+                  await _api.uploadPropertyImages(createdId, formData);
+                }
               }
             } catch (_) { /* Optimistic create */ }
           }
@@ -303,7 +321,7 @@ class _Detail extends StatelessWidget {
 class _AddEditPropertySheet extends StatefulWidget {
   final String Function(String) t;
   final Map<String, dynamic>? existing;
-  final ValueChanged<Map<String, dynamic>> onSave;
+  final void Function(Map<String, dynamic> data, {List<File>? images}) onSave;
 
   const _AddEditPropertySheet({required this.t, this.existing, required this.onSave});
 
@@ -357,7 +375,7 @@ class _AddEditPropertySheetState extends State<_AddEditPropertySheet> {
       'location': _location.text.trim(),
       'postal': _postal.text.trim(),
       'desc': _desc.text.trim(),
-    });
+    }, images: _images.isNotEmpty ? _images : null);
     Navigator.pop(context);
   }
 

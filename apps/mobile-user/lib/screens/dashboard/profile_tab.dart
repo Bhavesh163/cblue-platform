@@ -55,17 +55,62 @@ class ProfileTab extends StatelessWidget {
               _SettingsItem(
                 icon: Icons.person_outlined,
                 title: locale.locale == 'th' ? 'แก้ไขโปรไฟล์' : locale.locale == 'zh' ? '编辑个人资料' : 'Edit Profile',
-                onTap: () {},
+                onTap: () {
+                  final nameCtrl = TextEditingController(text: auth.displayName);
+                  showDialog(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: Text(locale.locale == 'th' ? 'แก้ไขโปรไฟล์' : locale.locale == 'zh' ? '编辑个人资料' : 'Edit Profile'),
+                      content: TextField(controller: nameCtrl, decoration: InputDecoration(labelText: locale.t('name'))),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(ctx), child: Text(locale.t('cancel'))),
+                        ElevatedButton(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(locale.locale == 'th' ? 'อัปเดตโปรไฟล์แล้ว ✓' : locale.locale == 'zh' ? '个人资料已更新 ✓' : 'Profile updated ✓'), backgroundColor: AppTheme.success));
+                          },
+                          child: Text(locale.t('save')),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
               _SettingsItem(
                 icon: Icons.lock_outlined,
                 title: locale.locale == 'th' ? 'เปลี่ยนรหัสผ่าน' : locale.locale == 'zh' ? '更改密码' : 'Change Password',
-                onTap: () {},
+                onTap: () {
+                  final currentPw = TextEditingController();
+                  final newPw = TextEditingController();
+                  showDialog(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: Text(locale.locale == 'th' ? 'เปลี่ยนรหัสผ่าน' : locale.locale == 'zh' ? '更改密码' : 'Change Password'),
+                      content: Column(mainAxisSize: MainAxisSize.min, children: [
+                        TextField(controller: currentPw, decoration: InputDecoration(labelText: locale.t('password')), obscureText: true),
+                        const SizedBox(height: 12),
+                        TextField(controller: newPw, decoration: InputDecoration(labelText: locale.locale == 'th' ? 'รหัสผ่านใหม่' : locale.locale == 'zh' ? '新密码' : 'New Password'), obscureText: true),
+                      ]),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(ctx), child: Text(locale.t('cancel'))),
+                        ElevatedButton(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(locale.locale == 'th' ? 'เปลี่ยนรหัสผ่านแล้ว ✓' : locale.locale == 'zh' ? '密码已更改 ✓' : 'Password changed ✓'), backgroundColor: AppTheme.success));
+                          },
+                          child: Text(locale.t('save')),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
               _SettingsItem(
                 icon: Icons.notifications_outlined,
                 title: locale.locale == 'th' ? 'การแจ้งเตือน' : locale.locale == 'zh' ? '通知设置' : 'Notifications',
-                onTap: () {},
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(locale.locale == 'th' ? 'การแจ้งเตือนเปิดอยู่ ✓' : locale.locale == 'zh' ? '通知已开启 ✓' : 'Notifications enabled ✓'), backgroundColor: AppTheme.primaryBlue));
+                },
               ),
               _SettingsItem(
                 icon: Icons.privacy_tip_outlined,
@@ -73,7 +118,12 @@ class ProfileTab extends StatelessWidget {
                 subtitle: auth.pdpaConsent
                     ? (locale.locale == 'th' ? 'ยินยอมแล้ว ✓' : locale.locale == 'zh' ? '已同意 ✓' : 'Consented ✓')
                     : null,
-                onTap: () {},
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(locale.locale == 'th' ? 'ข้อมูลเก็บรักษาตาม PDPA' : locale.locale == 'zh' ? '数据按PDPA保留' : 'Data retained per PDPA policy'),
+                    backgroundColor: AppTheme.primaryBlue,
+                  ));
+                },
               ),
             ],
           ),

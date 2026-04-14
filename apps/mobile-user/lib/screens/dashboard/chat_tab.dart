@@ -13,6 +13,18 @@ class ChatTab extends StatefulWidget {
 
 class _ChatTabState extends State<ChatTab> {
   int? _selectedChat;
+  final _msgController = TextEditingController();
+  final List<Map<String, dynamic>> _extraMessages = [];
+
+  void _sendMessage() {
+    final text = _msgController.text.trim();
+    if (text.isEmpty || _selectedChat == null) return;
+    final now = TimeOfDay.now();
+    setState(() {
+      _extraMessages.add({'chatIdx': _selectedChat, 'text': text, 'time': '${now.hour}:${now.minute.toString().padLeft(2, '0')}'});
+    });
+    _msgController.clear();
+  }
 
   static final List<Map<String, dynamic>> _demoChats = [
     {
@@ -211,6 +223,9 @@ class _ChatTabState extends State<ChatTab> {
                 isMine: false,
                 time: '10:02',
               ),
+              ..._extraMessages
+                  .where((m) => m['chatIdx'] == _selectedChat)
+                  .map((m) => _ChatBubble(text: m['text'] as String, isMine: true, time: m['time'] as String)),
             ],
           ),
         ),
@@ -223,17 +238,19 @@ class _ChatTabState extends State<ChatTab> {
               IconButton(icon: const Icon(Icons.attach_file), onPressed: () {}),
               Expanded(
                 child: TextField(
+                  controller: _msgController,
                   decoration: InputDecoration(
                     hintText: locale.locale == 'th' ? 'พิมพ์ข้อความ...' : locale.locale == 'zh' ? '输入消息...' : 'Type a message...',
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(24)),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   ),
+                  onSubmitted: (_) => _sendMessage(),
                 ),
               ),
               const SizedBox(width: 8),
               IconButton(
                 icon: const Icon(Icons.send, color: AppTheme.primaryBlue),
-                onPressed: () {},
+                onPressed: _sendMessage,
               ),
             ],
           ),

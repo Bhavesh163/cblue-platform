@@ -79,21 +79,37 @@ class _RegisterScreenState extends State<RegisterScreen> {
       await context.read<AuthProvider>().acceptPdpa();
 
       // 2. Upload KYC files (selfie + ID card)
+      bool kycFailed = false;
       try {
         if (_selfie != null || _idCard != null) {
           await api.uploadKyc(selfie: _selfie, idCard: _idCard);
         }
-      } catch (_) { /* KYC upload failure non-blocking */ }
+      } catch (_) {
+        kycFailed = true;
+      }
 
       // 3. Upload portfolio images
+      bool portfolioFailed = false;
       try {
         if (_portfolio.isNotEmpty) {
           await api.uploadPortfolio(_portfolio);
         }
-      } catch (_) { /* Portfolio upload failure non-blocking */ }
+      } catch (_) {
+        portfolioFailed = true;
+      }
 
       // 4. Navigate to AI evaluation screen
       if (mounted) {
+        if (kycFailed) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(context.read<LocaleProvider>().t('kyc_upload_failed')), backgroundColor: Colors.orange, duration: const Duration(seconds: 4)),
+          );
+        }
+        if (portfolioFailed) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(context.read<LocaleProvider>().t('portfolio_upload_failed')), backgroundColor: Colors.orange, duration: const Duration(seconds: 4)),
+          );
+        }
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const AiEvaluationScreen()),

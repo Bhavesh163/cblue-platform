@@ -3,21 +3,22 @@ class AppConstants {
   static const String appName = 'CBLUE Partner';
 
   // Fixer tiers
-  static const List<String> fixerTiers = ['Standard', 'Premium', 'Master'];
-  static const List<String> proTiers = ['Certified', 'Senior', 'Expert'];
-  static const List<String> propertyTiers = ['Basic', 'Featured', 'Premium'];
+  static const List<String> fixerTiers = ['Economy', 'Standard', 'Corporate', 'Specialist', 'Expert'];
+  static const List<String> proTiers = ['Economy', 'Standard', 'Corporate', 'Manager', 'Director'];
+  static const List<String> propertyTiers = ['Economy', 'Standard', 'Upper', 'Luxury', 'Grandeur'];
 
-  // Tier processing fees
+  // Tier processing fees (Baht)
   static const Map<String, double> tierFees = {
-    'Standard': 250.0,
-    'Premium': 500.0,
-    'Master': 750.0,
-    'Certified': 500.0,
-    'Senior': 750.0,
+    'Economy': 200.0,
+    'Standard': 400.0,
+    'Corporate': 600.0,
+    'Specialist': 800.0,
+    'Manager': 800.0,
+    'Upper': 600.0,
+    'Luxury': 800.0,
     'Expert': 1000.0,
-    'Basic': 1000.0,
-    'Featured': 2000.0,
-    'Premium Property': 3000.0,
+    'Director': 1000.0,
+    'Grandeur': 1000.0,
   };
 
   // Household services

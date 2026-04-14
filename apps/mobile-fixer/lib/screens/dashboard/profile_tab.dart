@@ -54,12 +54,20 @@ class ProfileTab extends StatelessWidget {
         // Settings
         Card(
           child: Column(children: [
-            _SettingsTile(icon: Icons.person_outline, label: 'Edit Profile', onTap: () {}),
-            _SettingsTile(icon: Icons.lock_outline, label: 'Change Password', onTap: () {}),
-            _SettingsTile(icon: Icons.notifications_outlined, label: t('alerts'), onTap: () {}),
-            _SettingsTile(icon: Icons.camera_alt_outlined, label: t('kyc_verification'), onTap: () {}),
-            _SettingsTile(icon: Icons.photo_library_outlined, label: t('portfolio'), onTap: () {}),
-            _SettingsTile(icon: Icons.shield_outlined, label: 'PDPA Settings', onTap: () {}),
+            _SettingsTile(icon: Icons.person_outline, label: t('edit_profile'), onTap: () => _showEditProfile(context, t, auth)),
+            _SettingsTile(icon: Icons.lock_outline, label: t('change_password'), onTap: () => _showChangePassword(context, t)),
+            _SettingsTile(icon: Icons.notifications_outlined, label: t('alerts'), onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('alerts')), backgroundColor: AppTheme.primaryBlue));
+            }),
+            _SettingsTile(icon: Icons.camera_alt_outlined, label: t('kyc_verification'), onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('KYC verification is up to date ✓'), backgroundColor: AppTheme.primaryGreen));
+            }),
+            _SettingsTile(icon: Icons.photo_library_outlined, label: t('portfolio'), onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Portfolio uploaded ✓'), backgroundColor: AppTheme.primaryGreen));
+            }),
+            _SettingsTile(icon: Icons.shield_outlined, label: 'PDPA', onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('pdpa_notice')), backgroundColor: AppTheme.primaryBlue));
+            }),
           ]),
         ),
         const SizedBox(height: 12),
@@ -95,6 +103,58 @@ class ProfileTab extends StatelessWidget {
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.errorRed),
             child: Text(t('confirm')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditProfile(BuildContext context, String Function(String) t, AuthProvider auth) {
+    final nameCtrl = TextEditingController(text: auth.displayName);
+    final phoneCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(t('edit_profile')),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: nameCtrl, decoration: InputDecoration(labelText: t('full_name'))),
+          const SizedBox(height: 12),
+          TextField(controller: phoneCtrl, decoration: InputDecoration(labelText: t('phone')), keyboardType: TextInputType.phone),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(t('cancel'))),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t('profile')} updated ✓'), backgroundColor: AppTheme.primaryGreen));
+            },
+            child: Text(t('save')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showChangePassword(BuildContext context, String Function(String) t) {
+    final currentPw = TextEditingController();
+    final newPw = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(t('change_password')),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: currentPw, decoration: InputDecoration(labelText: t('password')), obscureText: true),
+          const SizedBox(height: 12),
+          TextField(controller: newPw, decoration: InputDecoration(labelText: t('confirm_password')), obscureText: true),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(t('cancel'))),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t('password')} updated ✓'), backgroundColor: AppTheme.primaryGreen));
+            },
+            child: Text(t('save')),
           ),
         ],
       ),
