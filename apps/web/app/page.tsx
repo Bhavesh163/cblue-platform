@@ -1,20 +1,11 @@
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 /**
- * Root page redirect — ensures `/` always resolves to a locale.
- * next-intl middleware handles this in most cases, but Cloudflare Pages
- * may serve static assets before middleware fires for the root path.
- * This is the enterprise-standard belt-and-suspenders approach.
+ * Root page fallback — redirects `/` to default locale `/th`.
+ * Primary redirect is handled by next.config.js redirects (framework-level)
+ * and next-intl middleware. This page is a static safety net for edge cases
+ * where neither fires (e.g., Cloudflare Pages static asset layer).
  */
-export default async function RootPage() {
-  const headersList = await headers();
-  const acceptLang = headersList.get("accept-language") || "";
-
-  // Detect browser language preference
-  if (acceptLang.includes("zh")) redirect("/zh");
-  if (acceptLang.includes("en")) redirect("/en");
-
-  // Default: Thai (primary market)
+export default function RootPage() {
   redirect("/th");
 }
