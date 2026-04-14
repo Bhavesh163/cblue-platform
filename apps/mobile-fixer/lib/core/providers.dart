@@ -1,0 +1,183 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'dart:convert';
+
+// ---------------------------------------------------------------------------
+// Translations
+// ---------------------------------------------------------------------------
+class Translations {
+  static const Map<String, Map<String, String>> _t = {
+    'app_title': {'en': 'CBLUE Partner', 'th': 'CBLUE พาร์ทเนอร์', 'zh': 'CBLUE 合作伙伴'},
+    'dashboard': {'en': 'Dashboard', 'th': 'แดชบอร์ด', 'zh': '仪表板'},
+    'overview': {'en': 'Overview', 'th': 'ภาพรวม', 'zh': '概览'},
+    'active_jobs': {'en': 'Active Jobs', 'th': 'งานปัจจุบัน', 'zh': '活跃工作'},
+    'incoming': {'en': 'Incoming', 'th': 'งานเข้า', 'zh': '待接收'},
+    'properties': {'en': 'Properties', 'th': 'อสังหาริมทรัพย์', 'zh': '房产'},
+    'history': {'en': 'History', 'th': 'ประวัติ', 'zh': '历史'},
+    'chat': {'en': 'Chat', 'th': 'แชท', 'zh': '聊天'},
+    'alerts': {'en': 'Alerts', 'th': 'การแจ้งเตือน', 'zh': '通知'},
+    'profile': {'en': 'Profile', 'th': 'โปรไฟล์', 'zh': '个人资料'},
+    'jobs': {'en': 'Jobs', 'th': 'งาน', 'zh': '工作'},
+    'my_properties': {'en': 'My Properties', 'th': 'ทรัพย์สินของฉัน', 'zh': '我的房产'},
+    'login': {'en': 'Login', 'th': 'เข้าสู่ระบบ', 'zh': '登录'},
+    'register': {'en': 'Register', 'th': 'สมัครสมาชิก', 'zh': '注册'},
+    'email': {'en': 'Email', 'th': 'อีเมล', 'zh': '电子邮箱'},
+    'password': {'en': 'Password', 'th': 'รหัสผ่าน', 'zh': '密码'},
+    'confirm_password': {'en': 'Confirm Password', 'th': 'ยืนยันรหัสผ่าน', 'zh': '确认密码'},
+    'forgot_password': {'en': 'Forgot Password?', 'th': 'ลืมรหัสผ่าน?', 'zh': '忘记密码?'},
+    'full_name': {'en': 'Full Name', 'th': 'ชื่อเต็ม', 'zh': '全名'},
+    'phone': {'en': 'Phone', 'th': 'โทรศัพท์', 'zh': '电话'},
+    'company': {'en': 'Company', 'th': 'บริษัท', 'zh': '公司'},
+    'logout': {'en': 'Logout', 'th': 'ออกจากระบบ', 'zh': '退出'},
+    'logout_confirm': {'en': 'Are you sure you want to logout?', 'th': 'คุณแน่ใจหรือไม่ว่าต้องการออกจากระบบ?', 'zh': '您确定要退出吗?'},
+    'cancel': {'en': 'Cancel', 'th': 'ยกเลิก', 'zh': '取消'},
+    'confirm': {'en': 'Confirm', 'th': 'ยืนยัน', 'zh': '确认'},
+    'submit': {'en': 'Submit', 'th': 'ส่ง', 'zh': '提交'},
+    'save': {'en': 'Save', 'th': 'บันทึก', 'zh': '保存'},
+    'delete': {'en': 'Delete', 'th': 'ลบ', 'zh': '删除'},
+    'edit': {'en': 'Edit', 'th': 'แก้ไข', 'zh': '编辑'},
+    'welcome_back': {'en': 'Welcome back', 'th': 'ยินดีต้อนรับกลับ', 'zh': '欢迎回来'},
+    'total_earnings': {'en': 'Total Earnings', 'th': 'รายได้ทั้งหมด', 'zh': '总收入'},
+    'completed_jobs': {'en': 'Completed Jobs', 'th': 'งานเสร็จสิ้น', 'zh': '已完成工作'},
+    'rating': {'en': 'Rating', 'th': 'คะแนน', 'zh': '评分'},
+    'tier': {'en': 'Tier', 'th': 'ระดับ', 'zh': '等级'},
+    'accept': {'en': 'Accept', 'th': 'รับงาน', 'zh': '接受'},
+    'decline': {'en': 'Decline', 'th': 'ปฏิเสธ', 'zh': '拒绝'},
+    'complete_job': {'en': 'Complete Job', 'th': 'เสร็จสิ้นงาน', 'zh': '完成工作'},
+    'view_details': {'en': 'View Details', 'th': 'ดูรายละเอียด', 'zh': '查看详情'},
+    'no_jobs': {'en': 'No jobs yet', 'th': 'ยังไม่มีงาน', 'zh': '暂无工作'},
+    'processing_fee': {'en': 'Processing Fee', 'th': 'ค่าธรรมเนียม', 'zh': '处理费'},
+    'add_property': {'en': 'Add Property', 'th': 'เพิ่มทรัพย์สิน', 'zh': '添加房产'},
+    'property_type': {'en': 'Property Type', 'th': 'ประเภทอสังหาฯ', 'zh': '房产类型'},
+    'listing_type': {'en': 'Listing Type', 'th': 'ประเภทรายการ', 'zh': '房源类型'},
+    'price': {'en': 'Price', 'th': 'ราคา', 'zh': '价格'},
+    'area_sqm': {'en': 'Area (sqm)', 'th': 'พื้นที่ (ตร.ม.)', 'zh': '面积 (平方米)'},
+    'bedrooms': {'en': 'Bedrooms', 'th': 'ห้องนอน', 'zh': '卧室'},
+    'bathrooms': {'en': 'Bathrooms', 'th': 'ห้องน้ำ', 'zh': '浴室'},
+    'location': {'en': 'Location', 'th': 'ที่ตั้ง', 'zh': '位置'},
+    'postal_code': {'en': 'Postal Code', 'th': 'รหัสไปรษณีย์', 'zh': '邮政编码'},
+    'description': {'en': 'Description', 'th': 'รายละเอียด', 'zh': '描述'},
+    'upload_images': {'en': 'Upload Images', 'th': 'อัปโหลดรูปภาพ', 'zh': '上传图片'},
+    'for_sale': {'en': 'FOR SALE', 'th': 'ขาย', 'zh': '出售'},
+    'for_rent': {'en': 'FOR RENT', 'th': 'ให้เช่า', 'zh': '出租'},
+    'per_month': {'en': '/month', 'th': '/เดือน', 'zh': '/月'},
+    'activate': {'en': 'Activate', 'th': 'เปิดใช้งาน', 'zh': '激活'},
+    'deactivate': {'en': 'Deactivate', 'th': 'ปิดใช้งาน', 'zh': '停用'},
+    'active': {'en': 'Active', 'th': 'ใช้งาน', 'zh': '活跃'},
+    'inactive': {'en': 'Inactive', 'th': 'ไม่ใช้งาน', 'zh': '未活跃'},
+    'skills': {'en': 'Skills', 'th': 'ทักษะ', 'zh': '技能'},
+    'kyc_verification': {'en': 'KYC Verification', 'th': 'ยืนยันตัวตน KYC', 'zh': 'KYC 身份验证'},
+    'take_selfie': {'en': 'Take Selfie', 'th': 'ถ่ายเซลฟี่', 'zh': '自拍'},
+    'upload_id': {'en': 'Upload ID Card', 'th': 'อัปโหลดบัตรประชาชน', 'zh': '上传身份证'},
+    'portfolio': {'en': 'Portfolio', 'th': 'ผลงาน', 'zh': '作品集'},
+    'upload_portfolio': {'en': 'Upload Portfolio', 'th': 'อัปโหลดผลงาน', 'zh': '上传作品集'},
+    'pdpa_consent': {'en': 'I agree to the PDPA data consent policy', 'th': 'ฉันยินยอมตามนโยบาย PDPA', 'zh': '我同意 PDPA 数据同意政策'},
+    'pdpa_notice': {'en': 'Your data is retained for 90 days per PDPA policy.', 'th': 'ข้อมูลของคุณจะถูกเก็บรักษา 90 วันตามนโยบาย PDPA', 'zh': '您的数据将根据 PDPA 政策保留 90 天。'},
+    'anonymous_chat_notice': {'en': 'Chat is anonymous until payment is confirmed for your safety.', 'th': 'แชทเป็นนิรนามจนกว่าจะยืนยันการชำระเงินเพื่อความปลอดภัยของคุณ', 'zh': '为了您的安全，聊天在确认付款前是匿名的。'},
+    'send_reset_link': {'en': 'Send Reset Link', 'th': 'ส่งลิงก์รีเซ็ต', 'zh': '发送重置链接'},
+    'reset_sent': {'en': 'Reset link sent to your email', 'th': 'ส่งลิงก์รีเซ็ตไปยังอีเมลของคุณแล้ว', 'zh': '重置链接已发送到您的邮箱'},
+    'no_account': {'en': "Don't have an account?", 'th': 'ยังไม่มีบัญชี?', 'zh': '没有账号?'},
+    'have_account': {'en': 'Already have an account?', 'th': 'มีบัญชีอยู่แล้ว?', 'zh': '已有账号?'},
+    'register_as_partner': {'en': 'Register as Partner', 'th': 'สมัครเป็นพาร์ทเนอร์', 'zh': '注册为合作伙伴'},
+    'service_category': {'en': 'Service Category', 'th': 'หมวดหมู่บริการ', 'zh': '服务类别'},
+    'household': {'en': 'Household', 'th': 'งานบ้าน', 'zh': '家庭服务'},
+    'project': {'en': 'Project', 'th': 'โปรเจค', 'zh': '项目'},
+    'professional': {'en': 'Professional', 'th': 'มืออาชีพ', 'zh': '专业'},
+    'property_lister': {'en': 'Property Lister', 'th': 'ผู้ลงประกาศอสังหาฯ', 'zh': '房产刊登者'},
+    'select_services': {'en': 'Select Services', 'th': 'เลือกบริการ', 'zh': '选择服务'},
+    'ai_evaluation': {'en': 'AI Evaluation', 'th': 'การประเมินด้วย AI', 'zh': 'AI 评估'},
+    'pending_review': {'en': 'Pending Review', 'th': 'รอตรวจสอบ', 'zh': '待审核'},
+    'approved': {'en': 'Approved', 'th': 'อนุมัติแล้ว', 'zh': '已批准'},
+    'rejected': {'en': 'Rejected', 'th': 'ถูกปฏิเสธ', 'zh': '已拒绝'},
+  };
+
+  static String get(String key, String locale) {
+    return _t[key]?[locale] ?? _t[key]?['en'] ?? key;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Locale Provider
+// ---------------------------------------------------------------------------
+class LocaleProvider extends ChangeNotifier {
+  String _locale = 'en';
+  final _storage = const FlutterSecureStorage();
+
+  String get locale => _locale;
+
+  LocaleProvider() {
+    _load();
+  }
+
+  Future<void> _load() async {
+    final saved = await _storage.read(key: 'partner_locale');
+    if (saved != null) {
+      _locale = saved;
+      notifyListeners();
+    }
+  }
+
+  String t(String key) => Translations.get(key, _locale);
+
+  Future<void> setLocale(String l) async {
+    _locale = l;
+    await _storage.write(key: 'partner_locale', value: l);
+    notifyListeners();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Auth Provider
+// ---------------------------------------------------------------------------
+class AuthProvider extends ChangeNotifier {
+  final _storage = const FlutterSecureStorage();
+  Map<String, dynamic>? _user;
+  bool _isLoggedIn = false;
+  bool _pdpaConsent = false;
+
+  Map<String, dynamic>? get user => _user;
+  bool get isLoggedIn => _isLoggedIn;
+  bool get pdpaConsent => _pdpaConsent;
+  String get displayName => _user?['name'] ?? 'Partner';
+  String get email => _user?['email'] ?? '';
+  String get tier => _user?['tier'] ?? 'Standard';
+  String get category => _user?['category'] ?? 'household';
+
+  AuthProvider() {
+    _load();
+  }
+
+  Future<void> _load() async {
+    final raw = await _storage.read(key: 'partner_user');
+    final token = await _storage.read(key: 'partner_token');
+    final pdpa = await _storage.read(key: 'partner_pdpa_consent');
+    if (raw != null && token != null) {
+      _user = jsonDecode(raw);
+      _isLoggedIn = true;
+      _pdpaConsent = pdpa == 'true';
+      notifyListeners();
+    }
+  }
+
+  Future<void> login(Map<String, dynamic> userData, String token) async {
+    _user = userData;
+    _isLoggedIn = true;
+    await _storage.write(key: 'partner_user', value: jsonEncode(userData));
+    await _storage.write(key: 'partner_token', value: token);
+    notifyListeners();
+  }
+
+  Future<void> acceptPdpa() async {
+    _pdpaConsent = true;
+    await _storage.write(key: 'partner_pdpa_consent', value: 'true');
+    notifyListeners();
+  }
+
+  Future<void> logout() async {
+    _user = null;
+    _isLoggedIn = false;
+    _pdpaConsent = false;
+    await _storage.deleteAll();
+    notifyListeners();
+  }
+}

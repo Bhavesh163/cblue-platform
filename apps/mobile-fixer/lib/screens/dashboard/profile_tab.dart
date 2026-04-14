@@ -1,0 +1,133 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../core/providers.dart';
+import '../../core/theme.dart';
+
+class ProfileTab extends StatelessWidget {
+  const ProfileTab({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.watch<LocaleProvider>().t;
+    final auth = context.watch<AuthProvider>();
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(children: [
+        // Avatar & name
+        CircleAvatar(radius: 44, backgroundColor: AppTheme.primaryGreen.withValues(alpha: 0.2),
+            child: Text(auth.displayName.isNotEmpty ? auth.displayName[0].toUpperCase() : 'P', style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: AppTheme.primaryGreen))),
+        const SizedBox(height: 12),
+        Text(auth.displayName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+        Text(auth.email, style: const TextStyle(color: AppTheme.textSecondary)),
+        const SizedBox(height: 4),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(color: AppTheme.warningOrange.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+          child: Text('${t('tier')}: ${auth.tier}', style: const TextStyle(color: AppTheme.warningOrange, fontWeight: FontWeight.w600, fontSize: 13)),
+        ),
+        const SizedBox(height: 20),
+
+        // Stats row
+        Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+          _Stat(label: t('completed_jobs'), value: '28'),
+          _Stat(label: t('rating'), value: '4.8'),
+          _Stat(label: t('total_earnings'), value: '฿45K'),
+        ]),
+        const SizedBox(height: 24),
+
+        // Skills section
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(t('skills'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const SizedBox(height: 8),
+              Wrap(spacing: 8, runSpacing: 6, children: [
+                'Plumbing', 'Electrical', 'AC Installation', 'General Maintenance',
+              ].map((s) => Chip(label: Text(s, style: const TextStyle(fontSize: 12)), backgroundColor: AppTheme.primaryBlue.withValues(alpha: 0.1))).toList()),
+            ]),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Settings
+        Card(
+          child: Column(children: [
+            _SettingsTile(icon: Icons.person_outline, label: 'Edit Profile', onTap: () {}),
+            _SettingsTile(icon: Icons.lock_outline, label: 'Change Password', onTap: () {}),
+            _SettingsTile(icon: Icons.notifications_outlined, label: t('alerts'), onTap: () {}),
+            _SettingsTile(icon: Icons.camera_alt_outlined, label: t('kyc_verification'), onTap: () {}),
+            _SettingsTile(icon: Icons.photo_library_outlined, label: t('portfolio'), onTap: () {}),
+            _SettingsTile(icon: Icons.shield_outlined, label: 'PDPA Settings', onTap: () {}),
+          ]),
+        ),
+        const SizedBox(height: 12),
+
+        // Logout
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () => _confirmLogout(context, t),
+            icon: const Icon(Icons.logout, color: AppTheme.errorRed),
+            label: Text(t('logout'), style: const TextStyle(color: AppTheme.errorRed)),
+            style: OutlinedButton.styleFrom(side: const BorderSide(color: AppTheme.errorRed)),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(t('pdpa_notice'), style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary), textAlign: TextAlign.center),
+      ]),
+    );
+  }
+
+  void _confirmLogout(BuildContext context, String Function(String) t) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(t('logout')),
+        content: Text(t('logout_confirm')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(t('cancel'))),
+          ElevatedButton(
+            onPressed: () {
+              context.read<AuthProvider>().logout();
+              Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.errorRed),
+            child: Text(t('confirm')),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Stat extends StatelessWidget {
+  final String label, value;
+  const _Stat({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(children: [
+      Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppTheme.primaryBlue)),
+      Text(label, style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+    ]);
+  }
+}
+
+class _SettingsTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _SettingsTile({required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(icon, color: AppTheme.primaryBlue),
+      title: Text(label, style: const TextStyle(fontSize: 15)),
+      trailing: const Icon(Icons.chevron_right, color: AppTheme.textSecondary),
+      onTap: onTap,
+    );
+  }
+}
