@@ -214,7 +214,7 @@ class _ChatTabState extends State<ChatTab> {
             padding: const EdgeInsets.all(16),
             children: [
               _ChatBubble(
-                text: locale.locale == 'th' ? 'สวัสดีครับ ขอสอบถามเรื่องงาน' : locale.locale == 'zh' ? '你好，想咨询工作事宜' : 'Hello, I want to ask about the job',
+                text: locale.t('chat_greeting'),
                 isMine: true,
                 time: '10:00',
               ),
@@ -244,7 +244,7 @@ class _ChatTabState extends State<ChatTab> {
                 child: TextField(
                   controller: _msgController,
                   decoration: InputDecoration(
-                    hintText: locale.locale == 'th' ? 'พิมพ์ข้อความ...' : locale.locale == 'zh' ? '输入消息...' : 'Type a message...',
+                    hintText: locale.t('message_hint'),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(24)),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   ),

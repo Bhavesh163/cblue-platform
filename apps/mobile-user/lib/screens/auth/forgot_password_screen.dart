@@ -49,18 +49,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   const Icon(Icons.mark_email_read, size: 64, color: AppTheme.success),
                   const SizedBox(height: 16),
                   Text(
-                    locale.locale == 'th'
-                        ? 'ส่งลิงก์รีเซ็ตรหัสผ่านไปที่อีเมลแล้ว'
-                        : locale.locale == 'zh'
-                            ? '重置密码链接已发送到您的邮箱'
-                            : 'Password reset link sent to your email',
+                    locale.t('reset_link_sent'),
                     textAlign: TextAlign.center,
                     style: const TextStyle(fontSize: 16),
                   ),
                   const SizedBox(height: 24),
                   ElevatedButton(
                     onPressed: () => Navigator.pop(context),
-                    child: Text(locale.locale == 'th' ? 'กลับไปเข้าสู่ระบบ' : locale.locale == 'zh' ? '返回登录' : 'Back to Login'),
+                    child: Text(locale.t('back_to_login')),
                   ),
                 ],
               )
@@ -92,7 +88,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       onPressed: _loading ? null : _submit,
                       child: _loading
                           ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : Text(locale.locale == 'th' ? 'ส่งลิงก์รีเซ็ต' : locale.locale == 'zh' ? '发送重置链接' : 'Send Reset Link'),
+                          : Text(locale.t('send_reset_link')),
                     ),
                   ),
                 ],

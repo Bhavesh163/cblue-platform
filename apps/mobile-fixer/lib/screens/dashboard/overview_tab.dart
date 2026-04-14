@@ -48,10 +48,10 @@ class OverviewTab extends StatelessWidget {
         // Recent activity
         Text(t('recent_activity'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
-        _ActivityTile(title: '${t('new_job_request')}: Plumbing repair', time: '10 min ago', icon: Icons.notifications_active, color: AppTheme.primaryBlue),
-        _ActivityTile(title: '${t('payment_received')}: ฿1,500', time: '2 hours ago', icon: Icons.payment, color: AppTheme.primaryGreen),
-        _ActivityTile(title: '${t('review_received')} ⭐⭐⭐⭐⭐', time: '1 day ago', icon: Icons.star, color: AppTheme.warningOrange),
-        _ActivityTile(title: '${t('job_completed')}: PO-2506-0042', time: '2 days ago', icon: Icons.check_circle, color: AppTheme.primaryGreen),
+        _ActivityTile(title: '${t('new_job_request')}: ${t('plumbing_repair')}', time: t('time_10m'), icon: Icons.notifications_active, color: AppTheme.primaryBlue),
+        _ActivityTile(title: '${t('payment_received')}: ฿1,500', time: t('time_2h'), icon: Icons.payment, color: AppTheme.primaryGreen),
+        _ActivityTile(title: '${t('review_received')} ⭐⭐⭐⭐⭐', time: t('time_1d'), icon: Icons.star, color: AppTheme.warningOrange),
+        _ActivityTile(title: '${t('job_completed')}: PO-2506-0042', time: t('time_2d'), icon: Icons.check_circle, color: AppTheme.primaryGreen),
       ]),
     );
   }

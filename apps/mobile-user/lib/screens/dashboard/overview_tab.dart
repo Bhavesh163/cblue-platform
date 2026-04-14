@@ -30,16 +30,12 @@ class OverviewTab extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${locale.locale == 'th' ? 'สวัสดี' : locale.locale == 'zh' ? '你好' : 'Hello'}, ${auth.displayName}',
+                  '${locale.t('hello')}, ${auth.displayName}',
                   style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  locale.locale == 'th'
-                      ? 'ยินดีต้อนรับสู่ CBLUE แพลตฟอร์ม'
-                      : locale.locale == 'zh'
-                          ? '欢迎来到CBLUE平台'
-                          : 'Welcome to CBLUE Platform',
+                  locale.t('welcome_platform'),
                   style: const TextStyle(color: Colors.white70, fontSize: 14),
                 ),
               ],
@@ -94,28 +90,28 @@ class OverviewTab extends StatelessWidget {
           _QuickBookCard(
             icon: Icons.home_repair_service,
             title: locale.t('bookHousehold'),
-            subtitle: locale.locale == 'th' ? 'ประปา, ไฟฟ้า, แอร์, ตกแต่ง' : locale.locale == 'zh' ? '水管, 电气, 空调, 装修' : 'Plumbing, Electrical, AC, Interior',
+            subtitle: locale.t('household_desc'),
             color: AppTheme.primaryBlue,
           ),
           const SizedBox(height: 8),
           _QuickBookCard(
             icon: Icons.engineering,
             title: locale.t('bookProject'),
-            subtitle: locale.locale == 'th' ? 'เว็บ, แอป, AI, โซลาร์, EV' : locale.locale == 'zh' ? '网站, 应用, AI, 太阳能, EV' : 'Web, App, AI, Solar, EV',
+            subtitle: locale.t('project_desc'),
             color: AppTheme.primaryGreen,
           ),
           const SizedBox(height: 8),
           _QuickBookCard(
             icon: Icons.person_search,
             title: locale.t('bookProfessional'),
-            subtitle: locale.locale == 'th' ? 'ทนายความ, สถาปนิก, วิศวกร, CPA' : locale.locale == 'zh' ? '律师, 建筑师, 工程师, CPA' : 'Lawyer, Architect, Engineer, CPA',
+            subtitle: locale.t('professional_desc'),
             color: const Color(0xFF7C3AED),
           ),
           const SizedBox(height: 8),
           _QuickBookCard(
             icon: Icons.apartment,
             title: locale.t('browseProperties'),
-            subtitle: locale.locale == 'th' ? 'คอนโด, บ้าน, ที่ดิน, อาคาร' : locale.locale == 'zh' ? '公寓, 别墅, 土地, 商业' : 'Condo, House, Land, Commercial',
+            subtitle: locale.t('property_desc'),
             color: const Color(0xFFEA580C),
           ),
           const SizedBox(height: 24),
@@ -128,18 +124,18 @@ class OverviewTab extends StatelessWidget {
           const SizedBox(height: 12),
           _ActivityItem(
             icon: Icons.handyman,
-            title: locale.locale == 'th' ? 'ซ่อมแอร์ - กำลังดำเนินการ' : locale.locale == 'zh' ? '空调维修 - 进行中' : 'AC Repair - In Progress',
-            time: locale.locale == 'th' ? '2 ชั่วโมงที่ผ่านมา' : locale.locale == 'zh' ? '2小时前' : '2 hours ago',
+            title: locale.t('ac_repair_in_progress'),
+            time: locale.t('time_2h'),
           ),
           _ActivityItem(
             icon: Icons.apartment,
-            title: locale.locale == 'th' ? 'คอนโดสุขุมวิท - นัดชม' : locale.locale == 'zh' ? '素坤逸公寓 - 已预约' : 'Sukhumvit Condo - Viewing',
-            time: locale.locale == 'th' ? '1 วันที่ผ่านมา' : locale.locale == 'zh' ? '1天前' : '1 day ago',
+            title: locale.t('condo_viewing'),
+            time: locale.t('time_1d'),
           ),
           _ActivityItem(
             icon: Icons.check_circle,
-            title: locale.locale == 'th' ? 'ซ่อมท่อน้ำ - เสร็จสิ้น' : locale.locale == 'zh' ? '水管维修 - 已完成' : 'Plumbing Fix - Completed',
-            time: locale.locale == 'th' ? '3 วันที่ผ่านมา' : locale.locale == 'zh' ? '3天前' : '3 days ago',
+            title: locale.t('plumbing_completed'),
+            time: locale.t('time_3d'),
           ),
         ],
       ),

@@ -130,7 +130,7 @@ class RequestsTab extends StatelessWidget {
                       },
                       style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8)),
                       child: Text(
-                        locale.locale == 'th' ? 'ดูรายละเอียด' : locale.locale == 'zh' ? '查看详情' : 'View Details',
+                        locale.t('view_details'),
                         style: const TextStyle(fontSize: 13),
                       ),
                     ),

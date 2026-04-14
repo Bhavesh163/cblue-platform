@@ -426,11 +426,7 @@ class _BookingFormState extends State<_BookingForm> with AutomaticKeepAliveClien
             const SizedBox(height: 12),
             // PDPA notice
             Text(
-              locale.locale == 'th'
-                  ? 'การส่งแบบฟอร์มนี้ถือว่าท่านยินยอม PDPA ข้อมูลเก็บ 3 ปี'
-                  : locale.locale == 'zh'
-                      ? '提交此表格即表示您同意PDPA，数据保留3年'
-                      : 'By submitting you agree to PDPA data protection. Data retained 3 years.',
+              locale.t('pdpa_submit_notice'),
               style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
               textAlign: TextAlign.center,
             ),

@@ -158,7 +158,7 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
     Future.delayed(const Duration(milliseconds: 1500), () {
       if (mounted) {
         setState(() {
-          _chatMessages.add({'sender': 'partner', 'text': 'Thank you, I will review and get back to you shortly.'});
+          _chatMessages.add({'sender': 'partner', 'text': context.read<LocaleProvider>().t('auto_reply')});
         });
       }
     });
@@ -171,7 +171,7 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(locale.locale == 'th' ? 'ผลการจับคู่ AI' : locale.locale == 'zh' ? 'AI匹配结果' : 'AI Matching Results'),
+        title: Text(locale.t('ai_matching_title')),
       ),
       body: Column(
         children: [
@@ -180,7 +180,7 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: Text(
-              '${locale.locale == 'th' ? 'ขั้นตอน' : locale.locale == 'zh' ? '步骤' : 'Step'} ${_currentStep + 1}/${_steps.length}: ${locale.t(step)}',
+              '${locale.t('step')} ${_currentStep + 1}/${_steps.length}: ${locale.t(step)}',
               style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
             ),
           ),
@@ -246,11 +246,7 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            locale.locale == 'th'
-                ? 'กำลังค้นหาช่างและมืออาชีพที่ดีที่สุดสำหรับคุณ...'
-                : locale.locale == 'zh'
-                    ? '正在为您寻找最佳的维修师和专业人士...'
-                    : 'Finding the best fixers and professionals for you...',
+            locale.t('finding_best'),
             textAlign: TextAlign.center,
             style: const TextStyle(color: AppTheme.textSecondary),
           ),
@@ -360,7 +356,7 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
                 child: TextFormField(
                   controller: _nominationCtrl,
                   decoration: InputDecoration(
-                    hintText: locale.locale == 'th' ? '👤 เสนอ ID พาร์ทเนอร์' : locale.locale == 'zh' ? '👤 提名合作伙伴ID' : '👤 Nominate partner ID',
+                    hintText: locale.t('nominate_hint'),
                     isDense: true,
                   ),
                 ),
@@ -384,7 +380,7 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
                   }
                 },
                 style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12)),
-                child: Text(locale.locale == 'th' ? 'เพิ่ม' : locale.locale == 'zh' ? '添加' : 'Add'),
+                child: Text(locale.t('add')),
               ),
             ],
           ),
@@ -407,20 +403,16 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(locale.locale == 'th' ? 'ยืนยันการเลือก' : locale.locale == 'zh' ? '确认选择' : 'Confirm Selection',
+        Text(locale.t('confirm_selection'),
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 16),
-        _InfoRow(label: locale.locale == 'th' ? 'พาร์ทเนอร์' : 'Partner', value: p['id']),
+        _InfoRow(label: locale.t('partner_label'), value: p['id']),
         _InfoRow(label: locale.t('tier'), value: p['tier']),
-        _InfoRow(label: locale.locale == 'th' ? 'ราคา' : locale.locale == 'zh' ? '价格' : 'Price', value: '฿${p['price']}'),
+        _InfoRow(label: locale.t('price'), value: '฿${p['price']}'),
         _InfoRow(label: locale.t('processingFee'), value: '฿${AppConstants.tierFees[p['tier']] ?? 200}'),
         const SizedBox(height: 8),
         Text(
-          locale.locale == 'th'
-              ? '⚠️ ค่าดำเนินการไม่สามารถคืนเงินได้'
-              : locale.locale == 'zh'
-                  ? '⚠️ 手续费不可退还'
-                  : '⚠️ Processing fee is non-refundable',
+          locale.t('fee_non_refundable'),
           style: const TextStyle(fontSize: 12, color: AppTheme.warning),
         ),
         const SizedBox(height: 24),
@@ -460,16 +452,16 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
           ),
         ),
         const SizedBox(height: 16),
-        _InfoRow(label: locale.locale == 'th' ? 'ลูกค้า' : 'Customer', value: auth.displayName),
-        _InfoRow(label: locale.locale == 'th' ? 'บริการ' : 'Service', value: widget.service),
+        _InfoRow(label: locale.t('customer_label'), value: auth.displayName),
+        _InfoRow(label: locale.t('service_label'), value: widget.service),
         _InfoRow(label: locale.t('description'), value: widget.description),
-        _InfoRow(label: locale.locale == 'th' ? 'พาร์ทเนอร์' : 'Partner', value: _partners[_selectedPartner!]['id']),
+        _InfoRow(label: locale.t('partner_label'), value: _partners[_selectedPartner!]['id']),
         _InfoRow(label: locale.t('tier'), value: _partners[_selectedPartner!]['tier']),
-        _InfoRow(label: locale.locale == 'th' ? 'ราคาประมาณ' : 'Est. Price', value: '฿${_partners[_selectedPartner!]['price']}'),
+        _InfoRow(label: locale.t('est_price'), value: '฿${_partners[_selectedPartner!]['price']}'),
         const SizedBox(height: 16),
         SizedBox(
           width: double.infinity,
-          child: ElevatedButton(onPressed: _nextStep, child: Text(locale.locale == 'th' ? 'ดำเนินการต่อ' : locale.locale == 'zh' ? '继续' : 'Proceed')),
+          child: ElevatedButton(onPressed: _nextStep, child: Text(locale.t('proceed'))),
         ),
       ],
     );
@@ -485,18 +477,18 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
             const SizedBox(width: 50, height: 50, child: CircularProgressIndicator(strokeWidth: 3)),
             const SizedBox(height: 16),
             Text(
-              locale.locale == 'th' ? 'กำลังรอพาร์ทเนอร์ยืนยัน...' : locale.locale == 'zh' ? '等待合作伙伴确认...' : 'Waiting for partner confirmation...',
+              locale.t('waiting_partner'),
               style: const TextStyle(fontSize: 16),
             ),
           ] else ...[
             const Icon(Icons.check_circle, size: 60, color: AppTheme.success),
             const SizedBox(height: 16),
             Text(
-              locale.locale == 'th' ? 'พาร์ทเนอร์ยืนยันแล้ว!' : locale.locale == 'zh' ? '合作伙伴已确认！' : 'Partner Confirmed!',
+              locale.t('partner_confirmed'),
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.success),
             ),
             const SizedBox(height: 24),
-            ElevatedButton(onPressed: _nextStep, child: Text(locale.locale == 'th' ? 'ชำระเงิน' : locale.locale == 'zh' ? '去付款' : 'Proceed to Payment')),
+            ElevatedButton(onPressed: _nextStep, child: Text(locale.t('proceed_payment'))),
           ],
         ],
       ),
@@ -546,7 +538,7 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
               setState(() => _paymentDone = true);
               _nextStep();
             },
-            child: Text(locale.locale == 'th' ? 'ชำระเงินแล้ว' : locale.locale == 'zh' ? '已付款' : 'Payment Done'),
+            child: Text(locale.t('payment_done')),
           ),
         ),
       ],
@@ -567,7 +559,7 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(locale.locale == 'th' ? 'รายละเอียดบริการ' : locale.locale == 'zh' ? '服务详情' : 'Service Details',
+              Text(locale.t('service_details'),
                   style: const TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: 4),
               Text('${widget.service}: ${widget.description}', style: const TextStyle(fontSize: 13)),
@@ -605,9 +597,7 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
                 child: _chatMessages.isEmpty
                     ? Center(
                         child: Text(
-                          locale.locale == 'th' ? 'เริ่มแชทกับพาร์ทเนอร์ ${_partners[_selectedPartner!]['id']}'
-                              : locale.locale == 'zh' ? '开始与合作伙伴${_partners[_selectedPartner!]['id']}聊天'
-                              : 'Start chatting with Partner ${_partners[_selectedPartner!]['id']}',
+                          '${locale.t('start_chat_with')} ${_partners[_selectedPartner!]['id']}',
                           style: const TextStyle(color: AppTheme.textSecondary),
                         ),
                       )
@@ -639,7 +629,7 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
                     child: TextField(
                       controller: _chatController,
                       decoration: InputDecoration(
-                        hintText: locale.locale == 'th' ? 'พิมพ์ข้อความ...' : locale.locale == 'zh' ? '输入消息...' : 'Type a message...',
+                        hintText: locale.t('message_hint'),
                         isDense: true,
                         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
@@ -662,7 +652,7 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
           width: double.infinity,
           child: ElevatedButton(
             onPressed: _nextStep,
-            child: Text(locale.locale == 'th' ? 'นัดพบ' : locale.locale == 'zh' ? '预约会面' : 'Schedule Meeting'),
+            child: Text(locale.t('schedule_meeting_btn')),
           ),
         ),
       ],
@@ -691,7 +681,7 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
                   value: '${widget.date.year}-${widget.date.month.toString().padLeft(2, '0')}-${widget.date.day.toString().padLeft(2, '0')}'),
               const SizedBox(height: 12),
               Text(
-                locale.locale == 'th' ? '⚠️ ค่าดำเนินการไม่รวมอยู่ในค่างานจริง' : locale.locale == 'zh' ? '⚠️ 手续费不包含在实际工作费中' : '⚠️ Processing fee is separate from work payment',
+                locale.t('fee_separate'),
                 style: const TextStyle(fontSize: 12, color: AppTheme.warning),
               ),
             ],
@@ -702,7 +692,7 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
           width: double.infinity,
           child: ElevatedButton(
             onPressed: _nextStep,
-            child: Text(locale.locale == 'th' ? 'ยืนยันการนัดพบ' : locale.locale == 'zh' ? '确认会面' : 'Confirm Meeting'),
+            child: Text(locale.t('confirm_meeting_btn')),
           ),
         ),
       ],
@@ -727,16 +717,12 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                locale.locale == 'th' ? '📋 งานเพิ่มเติม (Addendum)' : locale.locale == 'zh' ? '📋 附加工作' : '📋 Variation / Addendum',
+                locale.t('variation_title'),
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
               Text(
-                locale.locale == 'th'
-                    ? 'พาร์ทเนอร์เสนองานเพิ่มเติม กรุณาตรวจสอบและอนุมัติ'
-                    : locale.locale == 'zh'
-                        ? '合作伙伴提出了额外工作，请审核并批准'
-                        : 'Partner has proposed additional work. Please review and approve.',
+                locale.t('variation_desc'),
                 style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
               ),
             ],
@@ -752,7 +738,7 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
                   _nextStep();
                 },
                 style: OutlinedButton.styleFrom(side: const BorderSide(color: AppTheme.error)),
-                child: Text(locale.locale == 'th' ? 'ปฏิเสธ' : locale.locale == 'zh' ? '拒绝' : 'Decline',
+                child: Text(locale.t('decline_btn'),
                     style: const TextStyle(color: AppTheme.error)),
               ),
             ),
@@ -763,7 +749,7 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
                   setState(() => _variationApproved = true);
                   _nextStep();
                 },
-                child: Text(locale.locale == 'th' ? 'อนุมัติ' : locale.locale == 'zh' ? '批准' : 'Approve'),
+                child: Text(locale.t('approve')),
               ),
             ),
           ],
@@ -778,7 +764,7 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
         const Icon(Icons.task_alt, size: 60, color: AppTheme.success),
         const SizedBox(height: 16),
         Text(
-          locale.locale == 'th' ? 'งานเสร็จสิ้น!' : locale.locale == 'zh' ? '工作完成！' : 'Job Complete!',
+          locale.t('job_complete'),
           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
@@ -803,7 +789,7 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
         Text(locale.t('rateExperience'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 16),
         // Customer rating
-        Text(locale.locale == 'th' ? 'คะแนนของคุณ:' : locale.locale == 'zh' ? '您的评分:' : 'Your Rating:'),
+        Text(locale.t('your_rating_colon')),
         const SizedBox(height: 8),
         Row(
           children: List.generate(5, (i) => GestureDetector(
@@ -823,7 +809,7 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
           onChanged: (v) => _customerComment = v,
           maxLines: 3,
           decoration: InputDecoration(
-            hintText: locale.locale == 'th' ? 'ความคิดเห็น...' : locale.locale == 'zh' ? '评论...' : 'Comment...',
+            hintText: locale.t('comment_hint'),
           ),
         ),
         if (_customerRating > 0 && _partnerRating == 0) ...[
@@ -845,7 +831,7 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
           const SizedBox(height: 24),
           const Divider(),
           const SizedBox(height: 12),
-          Text(locale.locale == 'th' ? 'คะแนนจากพาร์ทเนอร์:' : locale.locale == 'zh' ? '合作伙伴评分:' : 'Partner Rating:'),
+          Text(locale.t('partner_rating_colon')),
           const SizedBox(height: 8),
           Row(
             children: List.generate(5, (i) => Padding(
@@ -900,7 +886,7 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
-              child: Text(locale.locale == 'th' ? 'กลับหน้าหลัก' : locale.locale == 'zh' ? '返回首页' : 'Back to Home'),
+              child: Text(locale.t('back_to_home')),
             ),
           ),
         ],

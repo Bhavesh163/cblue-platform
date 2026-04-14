@@ -46,14 +46,11 @@ class ProfileTab extends StatelessWidget {
               Wrap(spacing: 8, runSpacing: 6, children: [
                 'Plumbing', 'Electrical', 'AC Installation', 'General Maintenance',
               ].map((s) {
-                final locale = context.watch<LocaleProvider>().locale;
-                final Map<String, String> skillNames = {
-                  'Plumbing': locale == 'th' ? 'ประปา' : locale == 'zh' ? '水管' : 'Plumbing',
-                  'Electrical': locale == 'th' ? 'ไฟฟ้า' : locale == 'zh' ? '电气' : 'Electrical',
-                  'AC Installation': locale == 'th' ? 'ติดตั้งแอร์' : locale == 'zh' ? '空调安装' : 'AC Installation',
-                  'General Maintenance': locale == 'th' ? 'ซ่อมบำรุงทั่วไป' : locale == 'zh' ? '一般维修' : 'General Maintenance',
-                };
-                return Chip(label: Text(skillNames[s] ?? s, style: const TextStyle(fontSize: 12)), backgroundColor: AppTheme.primaryBlue.withValues(alpha: 0.1));
+                final skillKey = {
+                  'Plumbing': 'plumbing', 'Electrical': 'electrical',
+                  'AC Installation': 'ac_install', 'General Maintenance': 'general_maint',
+                }[s] ?? s;
+                return Chip(label: Text(t(skillKey), style: const TextStyle(fontSize: 12)), backgroundColor: AppTheme.primaryBlue.withValues(alpha: 0.1));
               }).toList()),
             ]),
           ),
@@ -135,7 +132,7 @@ class ProfileTab extends StatelessWidget {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t('profile')} updated ✓'), backgroundColor: AppTheme.primaryGreen));
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('profile_updated')), backgroundColor: AppTheme.primaryGreen));
             },
             child: Text(t('save')),
           ),
@@ -161,7 +158,7 @@ class ProfileTab extends StatelessWidget {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${t('password')} updated ✓'), backgroundColor: AppTheme.primaryGreen));
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('profile_updated')), backgroundColor: AppTheme.primaryGreen));
             },
             child: Text(t('save')),
           ),

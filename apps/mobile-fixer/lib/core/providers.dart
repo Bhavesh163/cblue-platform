@@ -154,6 +154,17 @@ class Translations {
     'tier_assign': {'en': 'Tier Assignment', 'th': 'กำหนดระดับ', 'zh': '等级分配'},
     'confirm_delete_msg': {'en': 'Are you sure you want to delete this?', 'th': 'คุณแน่ใจหรือไม่ว่าต้องการลบ?', 'zh': '您确定要删除吗？'},
     'views': {'en': 'views', 'th': 'ครั้งดู', 'zh': '次查看'},
+    'profile_updated': {'en': 'Profile updated ✓', 'th': 'อัปเดตโปรไฟล์แล้ว ✓', 'zh': '个人资料已更新 ✓'},
+    'plumbing_repair': {'en': 'Plumbing repair', 'th': 'ซ่อมประปา', 'zh': '水管维修'},
+    'time_10m': {'en': '10 min ago', 'th': '10 นาทีที่ผ่านมา', 'zh': '10分钟前'},
+    'time_2h': {'en': '2 hours ago', 'th': '2 ชั่วโมงที่ผ่านมา', 'zh': '2小时前'},
+    'time_1d': {'en': '1 day ago', 'th': '1 วันที่ผ่านมา', 'zh': '1天前'},
+    'time_2d': {'en': '2 days ago', 'th': '2 วันที่ผ่านมา', 'zh': '2天前'},
+    // Skill names
+    'plumbing': {'en': 'Plumbing', 'th': 'ประปา', 'zh': '水管'},
+    'electrical': {'en': 'Electrical', 'th': 'ไฟฟ้า', 'zh': '电气'},
+    'ac_install': {'en': 'AC Installation', 'th': 'ติดตั้งแอร์', 'zh': '空调安装'},
+    'general_maint': {'en': 'General Maintenance', 'th': 'ซ่อมบำรุงทั่วไป', 'zh': '一般维修'},
   };
 
   static String get(String key, String locale) {

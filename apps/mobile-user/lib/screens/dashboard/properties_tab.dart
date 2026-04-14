@@ -164,7 +164,7 @@ class PropertiesTab extends StatelessWidget {
             icon: const Icon(Icons.tune),
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(locale.locale == 'th' ? 'ตัวกรองขั้นสูง เร็วๆ นี้' : locale.locale == 'zh' ? '高级筛选即将推出' : 'Advanced filters coming soon'), duration: const Duration(seconds: 2)),
+                SnackBar(content: Text(locale.t('advanced_filters_soon')), duration: const Duration(seconds: 2)),
               );
             },
           ),
