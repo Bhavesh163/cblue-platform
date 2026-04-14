@@ -11,10 +11,12 @@ class PropertiesTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = context.watch<LocaleProvider>().t;
 
+    final locale = context.watch<LocaleProvider>();
+    final lang = locale.locale;
     final props = [
-      {'title': 'Modern Condo Sukhumvit', 'type': 'Condo', 'listing': 'RENT', 'price': '฿25,000/mo', 'area': '45 sqm', 'beds': 1, 'baths': 1, 'tier': 'Featured', 'status': 'active', 'views': 124},
-      {'title': 'Townhouse Bangna', 'type': 'Townhouse', 'listing': 'SALE', 'price': '฿3.5M', 'area': '150 sqm', 'beds': 3, 'baths': 2, 'tier': 'Premium', 'status': 'active', 'views': 89},
-      {'title': 'Land Plot Chiang Mai', 'type': 'Land', 'listing': 'SALE', 'price': '฿1.2M', 'area': '400 sqm', 'beds': 0, 'baths': 0, 'tier': 'Basic', 'status': 'inactive', 'views': 32},
+      {'title': {'en': 'Modern Condo Sukhumvit', 'th': 'คอนโดสุขุมวิท', 'zh': '素坤逸公寓'}, 'type': 'Condo', 'listing': 'RENT', 'price': '฿25,000/mo', 'area': '45 sqm', 'beds': 1, 'baths': 1, 'tier': 'Standard', 'status': 'active', 'views': 124},
+      {'title': {'en': 'Townhouse Bangna', 'th': 'ทาวน์เฮ้าส์บางนา', 'zh': '邦纳联排别墅'}, 'type': 'Townhouse', 'listing': 'SALE', 'price': '฿3.5M', 'area': '150 sqm', 'beds': 3, 'baths': 2, 'tier': 'Upper', 'status': 'active', 'views': 89},
+      {'title': {'en': 'Land Plot Chiang Mai', 'th': 'ที่ดินเชียงใหม่', 'zh': '清迈地块'}, 'type': 'Land', 'listing': 'SALE', 'price': '฿1.2M', 'area': '400 sqm', 'beds': 0, 'baths': 0, 'tier': 'Economy', 'status': 'inactive', 'views': 32},
     ];
 
     return ListView.builder(
@@ -54,7 +56,7 @@ class PropertiesTab extends StatelessWidget {
                 Text('${p['tier']}', style: TextStyle(color: AppTheme.warningOrange, fontSize: 12, fontWeight: FontWeight.w600)),
               ]),
               const SizedBox(height: 10),
-              Text(p['title'] as String, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              Text((p['title'] as Map)[lang] ?? (p['title'] as Map)['en'], style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
               Text(p['type'] as String, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
               const SizedBox(height: 8),
@@ -78,7 +80,7 @@ class PropertiesTab extends StatelessWidget {
                 OutlinedButton.icon(
                   onPressed: () {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('${p['title']} ${isActive ? t('deactivate') : t('activate')}d'), duration: const Duration(seconds: 2)),
+                      SnackBar(content: Text('${(p['title'] as Map)[lang] ?? (p['title'] as Map)['en']} ${isActive ? t('deactivate') : t('activate')}d'), duration: const Duration(seconds: 2)),
                     );
                   },
                   icon: Icon(isActive ? Icons.visibility_off : Icons.visibility, size: 16),

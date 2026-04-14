@@ -16,9 +16,9 @@ class _IncomingTabState extends State<IncomingTab> {
   int _processingIdx = -1;
 
   final List<Map<String, dynamic>> _requests = [
-    {'id': 'REQ-2506-0088', 'service': 'Water Heater Installation', 'customer': 'Customer #C1032', 'urgency': 'high', 'budget': '฿2,500', 'location': 'Bangkok 10110', 'date': '2025-07-01', 'desc': 'Need hot water heater installed in master bathroom. Existing plumbing available.'},
-    {'id': 'REQ-2506-0085', 'service': 'Painting (2 rooms)', 'customer': 'Customer #C1028', 'urgency': 'medium', 'budget': '฿4,000', 'location': 'Bangkok 10120', 'date': '2025-07-03', 'desc': 'Two bedrooms need repainting. Approximately 40 sqm total. Prefer light blue color.'},
-    {'id': 'REQ-2506-0082', 'service': 'AC Maintenance', 'customer': 'Customer #C1020', 'urgency': 'low', 'budget': '฿800', 'location': 'Bangkok 10150', 'date': '2025-07-05', 'desc': 'Annual AC servicing for 3 wall-mounted units. No specific issues, routine maintenance.'},
+    {'id': 'REQ-2506-0088', 'service': {'en': 'Water Heater Installation', 'th': 'ติดตั้งเครื่องทำน้ำร้อน', 'zh': '热水器安装'}, 'customer': 'Customer #C1032', 'urgency': 'high', 'budget': '฿2,500', 'location': 'Bangkok 10110', 'date': '2025-07-01', 'desc': {'en': 'Need hot water heater installed in master bathroom.', 'th': 'ต้องการติดตั้งเครื่องทำน้ำร้อนในห้องน้ำหลัก', 'zh': '需要在主浴室安装热水器'}},
+    {'id': 'REQ-2506-0085', 'service': {'en': 'Painting (2 rooms)', 'th': 'ทาสี (2 ห้อง)', 'zh': '刷漆（2间）'}, 'customer': 'Customer #C1028', 'urgency': 'medium', 'budget': '฿4,000', 'location': 'Bangkok 10120', 'date': '2025-07-03', 'desc': {'en': 'Two bedrooms need repainting. Approximately 40 sqm total.', 'th': 'ห้องนอน 2 ห้องต้องทาสีใหม่ รวมประมาณ 40 ตร.ม.', 'zh': '两间卧室需重新粉刷，总计约40平方米'}},
+    {'id': 'REQ-2506-0082', 'service': {'en': 'AC Maintenance', 'th': 'บำรุงรักษาแอร์', 'zh': '空调维保'}, 'customer': 'Customer #C1020', 'urgency': 'low', 'budget': '฿800', 'location': 'Bangkok 10150', 'date': '2025-07-05', 'desc': {'en': 'Annual AC servicing for 3 wall-mounted units.', 'th': 'บริการแอร์ประจำปี 3 เครื่อง', 'zh': '三台壁挂式空调年度保养'}},
   ];
 
   Future<void> _acceptJob(int index) async {
@@ -54,6 +54,7 @@ class _IncomingTabState extends State<IncomingTab> {
   @override
   Widget build(BuildContext context) {
     final t = context.watch<LocaleProvider>().t;
+    final locale = context.watch<LocaleProvider>().locale;
 
     if (_requests.isEmpty) {
       return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -85,9 +86,9 @@ class _IncomingTabState extends State<IncomingTab> {
                 ),
               ]),
               const SizedBox(height: 8),
-              Text(r['service'] as String, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              Text((r['service'] as Map)[locale] ?? (r['service'] as Map)['en'], style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
               const SizedBox(height: 4),
-              Text(r['desc'] as String, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
+              Text((r['desc'] as Map)[locale] ?? (r['desc'] as Map)['en'], style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
               const SizedBox(height: 8),
               Wrap(spacing: 16, children: [
                 _InfoChip(icon: Icons.person, text: r['customer'] as String),

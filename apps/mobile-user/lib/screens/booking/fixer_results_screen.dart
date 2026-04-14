@@ -897,6 +897,7 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
   @override
   void dispose() {
     _nominationCtrl.dispose();
+    _chatController.dispose();
     super.dispose();
   }
 }

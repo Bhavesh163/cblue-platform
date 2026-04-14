@@ -12,11 +12,11 @@ class HistoryTab extends StatefulWidget {
 
 class _HistoryTabState extends State<HistoryTab> {
   final List<Map<String, dynamic>> _history = [
-    {'id': 'PO-2506-0040', 'service': 'General Maintenance', 'customer': 'Customer #C0990', 'rating': 5.0, 'earned': '฿1,200', 'fee': '฿200', 'date': '2025-06-20', 'myRating': null},
-    {'id': 'PO-2506-0035', 'service': 'Plumbing Emergency', 'customer': 'Customer #C0985', 'rating': 4.5, 'earned': '฿2,800', 'fee': '฿400', 'date': '2025-06-18', 'myRating': 4},
-    {'id': 'PO-2505-0028', 'service': 'Electrical Inspection', 'customer': 'Customer #C0972', 'rating': 5.0, 'earned': '฿1,500', 'fee': '฿200', 'date': '2025-06-10', 'myRating': 5},
-    {'id': 'PO-2505-0022', 'service': 'AC Repair', 'customer': 'Customer #C0960', 'rating': 4.0, 'earned': '฿900', 'fee': '฿200', 'date': '2025-06-05', 'myRating': null},
-    {'id': 'PO-2505-0015', 'service': 'Painting (3 rooms)', 'customer': 'Customer #C0945', 'rating': 5.0, 'earned': '฿6,500', 'fee': '฿600', 'date': '2025-05-28', 'myRating': 5},
+    {'id': 'PO-2506-0040', 'service': {'en': 'General Maintenance', 'th': 'ซ่อมบำรุงทั่วไป', 'zh': '一般维护'}, 'customer': 'Customer #C0990', 'rating': 5.0, 'earned': '฿1,200', 'fee': '฿200', 'date': '2025-06-20', 'myRating': null},
+    {'id': 'PO-2506-0035', 'service': {'en': 'Plumbing Emergency', 'th': 'ซ่อมท่อน้ำฉุกเฉิน', 'zh': '紧急水管维修'}, 'customer': 'Customer #C0985', 'rating': 4.5, 'earned': '฿2,800', 'fee': '฿400', 'date': '2025-06-18', 'myRating': 4},
+    {'id': 'PO-2505-0028', 'service': {'en': 'Electrical Inspection', 'th': 'ตรวจสอบระบบไฟฟ้า', 'zh': '电气检查'}, 'customer': 'Customer #C0972', 'rating': 5.0, 'earned': '฿1,500', 'fee': '฿200', 'date': '2025-06-10', 'myRating': 5},
+    {'id': 'PO-2505-0022', 'service': {'en': 'AC Repair', 'th': 'ซ่อมแอร์', 'zh': '空调维修'}, 'customer': 'Customer #C0960', 'rating': 4.0, 'earned': '฿900', 'fee': '฿200', 'date': '2025-06-05', 'myRating': null},
+    {'id': 'PO-2505-0015', 'service': {'en': 'Painting (3 rooms)', 'th': 'ทาสี (3 ห้อง)', 'zh': '刷漆（3间）'}, 'customer': 'Customer #C0945', 'rating': 5.0, 'earned': '฿6,500', 'fee': '฿600', 'date': '2025-05-28', 'myRating': 5},
   ];
 
   void _showRateCustomerDialog(BuildContext context, String Function(String) t, int index) {
@@ -66,6 +66,7 @@ class _HistoryTabState extends State<HistoryTab> {
   @override
   Widget build(BuildContext context) {
     final t = context.watch<LocaleProvider>().t;
+    final locale = context.watch<LocaleProvider>().locale;
 
     return ListView.builder(
       padding: const EdgeInsets.all(16),
@@ -86,7 +87,7 @@ class _HistoryTabState extends State<HistoryTab> {
             ]),
             subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               const SizedBox(height: 6),
-              Text(h['service'] as String, style: const TextStyle(fontSize: 14)),
+              Text((h['service'] as Map)[locale] ?? (h['service'] as Map)['en'], style: const TextStyle(fontSize: 14)),
               const SizedBox(height: 2),
               Text('${h['customer']}  •  ${h['date']}', style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
               const SizedBox(height: 8),

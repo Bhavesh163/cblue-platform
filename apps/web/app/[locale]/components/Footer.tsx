@@ -75,6 +75,38 @@ export function Footer() {
                 ? "CBLUE 连接您与认证技工，满足所有家庭维修需求。轻松预约，PromptPay 支付，起价仅 ฿200"
                 : "CBLUE connects you with certified fixers for all home repairs. Easy booking, pay via PromptPay, starting from just ฿200."}
             </p>
+            {/* Mobile App Download Links */}
+            <div className="mt-3 space-y-2">
+              <p className="text-xs font-semibold text-white">
+                {locale === "th" ? "ดาวน์โหลดแอป" : locale === "zh" ? "下载应用" : "Download Apps"}
+              </p>
+              <div className="space-y-1">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider">
+                  {locale === "th" ? "แอปลูกค้า" : locale === "zh" ? "客户应用" : "Customer App"}
+                </p>
+                <div className="flex gap-2">
+                  <Link href="#" className="text-xs text-sky-400 hover:text-sky-300 transition-colors flex items-center gap-1">
+                    <span>🍎</span> App Store
+                  </Link>
+                  <Link href="#" className="text-xs text-sky-400 hover:text-sky-300 transition-colors flex items-center gap-1">
+                    <span>▶️</span> Google Play
+                  </Link>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider">
+                  {locale === "th" ? "แอปพาร์ทเนอร์" : locale === "zh" ? "合作伙伴应用" : "Partner App"}
+                </p>
+                <div className="flex gap-2">
+                  <Link href="#" className="text-xs text-sky-400 hover:text-sky-300 transition-colors flex items-center gap-1">
+                    <span>🍎</span> App Store
+                  </Link>
+                  <Link href="#" className="text-xs text-sky-400 hover:text-sky-300 transition-colors flex items-center gap-1">
+                    <span>▶️</span> Google Play
+                  </Link>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Household Services */}

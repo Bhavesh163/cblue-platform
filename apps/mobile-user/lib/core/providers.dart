@@ -224,6 +224,12 @@ class Translations {
     'your_rating_colon': {'en': 'Your Rating:', 'th': 'คะแนนของคุณ:', 'zh': '您的评分:'},
     'comment_hint': {'en': 'Comment...', 'th': 'ความคิดเห็น...', 'zh': '评论...'},
     'partner_rating_colon': {'en': 'Partner Rating:', 'th': 'คะแนนจากพาร์ทเนอร์:', 'zh': '合作伙伴评分:'},
+    // Steps (FixerResults flow)
+    'matching': {'en': 'Matching', 'th': 'กำลังจับคู่', 'zh': '匹配中'},
+    'list': {'en': 'Select Partner', 'th': 'เลือกพาร์ทเนอร์', 'zh': '选择合作伙伴'},
+    'po': {'en': 'Purchase Order', 'th': 'ใบสั่งซื้อ', 'zh': '采购订单'},
+    'notify': {'en': 'Notify', 'th': 'แจ้งเตือน', 'zh': '通知'},
+    'complete': {'en': 'Complete', 'th': 'เสร็จสิ้น', 'zh': '完成'},
   };
 
   static String get(String key, String locale) {

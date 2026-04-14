@@ -30,6 +30,12 @@ class _PropertiesWorkflowScreenState extends State<PropertiesWorkflowScreen> {
   final _chatCtrl = TextEditingController();
   final List<Map<String, String>> _messages = [];
 
+  @override
+  void dispose() {
+    _chatCtrl.dispose();
+    super.dispose();
+  }
+
   void _next() {
     if (_currentStep < _steps.length - 1) {
       setState(() => _currentStep++);

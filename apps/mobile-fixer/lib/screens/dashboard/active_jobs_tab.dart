@@ -17,9 +17,9 @@ class _ActiveJobsTabState extends State<ActiveJobsTab> {
   int _completingIdx = -1;
 
   final List<Map<String, dynamic>> _jobs = [
-    {'id': 'PO-2506-0051', 'service': 'Plumbing Repair', 'customer': 'Customer #C1024', 'status': 'in_progress', 'progress': 0.6, 'fee': 200.0, 'date': '2025-06-28'},
-    {'id': 'PO-2506-0049', 'service': 'Electrical Wiring', 'customer': 'Customer #C0998', 'status': 'confirmed', 'progress': 0.2, 'fee': 400.0, 'date': '2025-06-30'},
-    {'id': 'PO-2506-0045', 'service': 'AC Installation', 'customer': 'Customer #C1001', 'status': 'in_progress', 'progress': 0.85, 'fee': 600.0, 'date': '2025-06-25'},
+    {'id': 'PO-2506-0051', 'service': {'en': 'Plumbing Repair', 'th': 'ซ่อมท่อน้ำ', 'zh': '水管维修'}, 'customer': 'Customer #C1024', 'status': 'in_progress', 'progress': 0.6, 'fee': 200.0, 'date': '2025-06-28'},
+    {'id': 'PO-2506-0049', 'service': {'en': 'Electrical Wiring', 'th': 'งานระบบไฟฟ้า', 'zh': '电气布线'}, 'customer': 'Customer #C0998', 'status': 'confirmed', 'progress': 0.2, 'fee': 400.0, 'date': '2025-06-30'},
+    {'id': 'PO-2506-0045', 'service': {'en': 'AC Installation', 'th': 'ติดตั้งแอร์', 'zh': '空调安装'}, 'customer': 'Customer #C1001', 'status': 'in_progress', 'progress': 0.85, 'fee': 600.0, 'date': '2025-06-25'},
   ];
 
   Future<void> _completeJob(int index) async {
@@ -85,7 +85,7 @@ class _ActiveJobsTabState extends State<ActiveJobsTab> {
                 ),
               ]),
               const SizedBox(height: 8),
-              Text(j['service'] as String, style: const TextStyle(fontSize: 15)),
+              Text((j['service'] as Map)[locale] ?? (j['service'] as Map)['en'], style: const TextStyle(fontSize: 15)),
               const SizedBox(height: 4),
               Text(j['customer'] as String, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
               const SizedBox(height: 4),

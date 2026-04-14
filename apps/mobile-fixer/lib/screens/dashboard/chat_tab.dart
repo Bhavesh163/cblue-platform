@@ -16,10 +16,10 @@ class _ChatTabState extends State<ChatTab> {
   final List<List<Map<String, String>>> _chatMessages = [];
 
   final _conversations = [
-    {'name': 'Customer #C1032', 'lastMsg': 'When can you start the plumbing work?', 'time': '10:32 AM', 'unread': 2, 'online': true},
-    {'name': 'Customer #C0998', 'lastMsg': 'I confirmed the schedule. See you then!', 'time': 'Yesterday', 'unread': 0, 'online': false},
-    {'name': 'Customer #C1001', 'lastMsg': 'Thanks for the great work! 👍', 'time': '2 days ago', 'unread': 0, 'online': true},
-    {'name': 'CBLUE Support', 'lastMsg': 'Your tier upgrade is approved.', 'time': '3 days ago', 'unread': 1, 'online': true},
+    {'name': 'Customer #C1032', 'lastMsg': {'en': 'When can you start the plumbing work?', 'th': 'เริ่มงานท่อน้ำได้เมื่อไหร่คะ?', 'zh': '什么时候可以开始水管工作？'}, 'time': {'en': '10:32 AM', 'th': '10:32', 'zh': '10:32'}, 'unread': 2, 'online': true},
+    {'name': 'Customer #C0998', 'lastMsg': {'en': 'I confirmed the schedule. See you then!', 'th': 'ยืนยันนัดหมายแล้วค่ะ แล้วพบกัน!', 'zh': '已确认日程，到时见！'}, 'time': {'en': 'Yesterday', 'th': 'เมื่อวาน', 'zh': '昨天'}, 'unread': 0, 'online': false},
+    {'name': 'Customer #C1001', 'lastMsg': {'en': 'Thanks for the great work! 👍', 'th': 'ขอบคุณสำหรับงานที่ดีครับ 👍', 'zh': '感谢出色的工作！👍'}, 'time': {'en': '2 days ago', 'th': '2 วันที่แล้ว', 'zh': '2天前'}, 'unread': 0, 'online': true},
+    {'name': 'CBLUE Support', 'lastMsg': {'en': 'Your tier upgrade is approved.', 'th': 'อนุมัติอัพเกรดระดับแล้ว', 'zh': '您的等级升级已批准'}, 'time': {'en': '3 days ago', 'th': '3 วันที่แล้ว', 'zh': '3天前'}, 'unread': 1, 'online': true},
   ];
 
   @override
@@ -60,8 +60,7 @@ class _ChatTabState extends State<ChatTab> {
   @override
   Widget build(BuildContext context) {
     final t = context.watch<LocaleProvider>().t;
-
-    if (_openChat != null) return _chatView(t);
+    final locale = context.watch<LocaleProvider>().locale;
 
     return Column(children: [
       Container(
@@ -90,9 +89,9 @@ class _ChatTabState extends State<ChatTab> {
                   Positioned(bottom: 0, right: 0, child: Container(width: 12, height: 12, decoration: BoxDecoration(color: AppTheme.primaryGreen, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)))),
               ]),
               title: Text(c['name'] as String, style: TextStyle(fontWeight: unread > 0 ? FontWeight.bold : FontWeight.normal)),
-              subtitle: Text(c['lastMsg'] as String, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, color: unread > 0 ? AppTheme.textPrimary : AppTheme.textSecondary)),
+              subtitle: Text(c['lastMsg'] is Map ? ((c['lastMsg'] as Map)[locale] ?? (c['lastMsg'] as Map)['en']) : c['lastMsg'] as String, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, color: unread > 0 ? AppTheme.textPrimary : AppTheme.textSecondary)),
               trailing: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Text(c['time'] as String, style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
+                Text(c['time'] is Map ? ((c['time'] as Map)[locale] ?? (c['time'] as Map)['en']) : c['time'] as String, style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
                 if (unread > 0) ...[
                   const SizedBox(height: 4),
                   Container(
