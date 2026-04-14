@@ -37,10 +37,10 @@ const DEMO_INCOMING = [
 ];
 
 const DEMO_EARNINGS = [
-  { month: "Jan", amount: 12500 },
-  { month: "Feb", amount: 15200 },
-  { month: "Mar", amount: 18800 },
-  { month: "Apr", amount: 18500 },
+  { month: "Jan", monthTh: "ม.ค.", monthZh: "1月", amount: 12500 },
+  { month: "Feb", monthTh: "ก.พ.", monthZh: "2月", amount: 15200 },
+  { month: "Mar", monthTh: "มี.ค.", monthZh: "3月", amount: 18800 },
+  { month: "Apr", monthTh: "เม.ย.", monthZh: "4月", amount: 18500 },
 ];
 
 const DEMO_COMPLETED = [
@@ -51,9 +51,9 @@ const DEMO_COMPLETED = [
 ];
 
 const DEMO_CHATS = [
-  { id: "ch1", name: "Customer #A2X", service: "Plumbing", lastMsg: "Thank you, waiting for you", lastMsgTh: "ขอบคุณครับ รอช่างอยู่", lastMsgZh: "谢谢，等您来", time: "2m ago", unread: 2, online: true },
-  { id: "ch2", name: "Customer #B7K", service: "AC", lastMsg: "Which day works for you?", lastMsgTh: "วันไหนสะดวกคะ?", lastMsgZh: "哪天方便？", time: "30m ago", unread: 1, online: true },
-  { id: "ch3", name: "Customer #C4M", service: "Electrical", lastMsg: "Job is done, thanks!", lastMsgTh: "งานเสร็จแล้วครับ ขอบคุณ", lastMsgZh: "工作完成，谢谢！", time: "2h ago", unread: 0, online: false },
+  { id: "ch1", name: "Customer #A2X", service: "Plumbing", lastMsg: "Thank you, waiting for you", lastMsgTh: "ขอบคุณครับ รอช่างอยู่", lastMsgZh: "谢谢，等您来", time: "2m ago", timeTh: "2 นาทีที่ผ่านมา", timeZh: "2分钟前", unread: 2, online: true },
+  { id: "ch2", name: "Customer #B7K", service: "AC", lastMsg: "Which day works for you?", lastMsgTh: "วันไหนสะดวกคะ?", lastMsgZh: "哪天方便？", time: "30m ago", timeTh: "30 นาทีที่ผ่านมา", timeZh: "30分钟前", unread: 1, online: true },
+  { id: "ch3", name: "Customer #C4M", service: "Electrical", lastMsg: "Job is done, thanks!", lastMsgTh: "งานเสร็จแล้วครับ ขอบคุณ", lastMsgZh: "工作完成，谢谢！", time: "2h ago", timeTh: "2 ชั่วโมงที่ผ่านมา", timeZh: "2小时前", unread: 0, online: false },
 ];
 
 const DEMO_NOTIFICATIONS = [
@@ -77,6 +77,14 @@ const TIER_STYLE: Record<string, string> = {
   Specialist: "bg-amber-50 text-amber-700",
   Expert: "bg-red-50 text-red-700",
 };
+
+const STATUS_LABEL: Record<string, Record<string, string>> = {
+  IN_PROGRESS: { en: "In Progress", th: "กำลังดำเนินการ", zh: "进行中" },
+  CONFIRMED: { en: "Confirmed", th: "ยืนยันแล้ว", zh: "已确认" },
+  PENDING: { en: "Pending", th: "รอดำเนินการ", zh: "待处理" },
+  COMPLETED: { en: "Completed", th: "เสร็จสิ้น", zh: "已完成" },
+};
+const getStatusLabel = (status: string, locale: string) => STATUS_LABEL[status]?.[locale] || status.replace(/_/g, " ");
 
 type TabKey = "overview" | "jobs" | "requests" | "properties" | "history" | "chat" | "notifications" | "profile";
 
@@ -412,12 +420,12 @@ function PartnerOverview({ locale, partner }: { locale: string; partner: Partner
                 <p className="text-sm text-gray-500">{partner.email}</p>
                 <p className="text-xs text-gray-400">{partner.phone}</p>
               </div>
-              <span className="ml-auto px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">Active</span>
+              <span className="ml-auto px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">{locale === "th" ? "ใช้งานอยู่" : locale === "zh" ? "活跃" : "Active"}</span>
             </div>
             <div className="flex gap-2 mt-2">
-              <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold">Corporate Tier</span>
-              <span className="px-3 py-1 bg-sky-100 text-sky-700 rounded-full text-xs font-bold">Verified</span>
-              <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-bold">KYC ✓</span>
+              <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold">{locale === "th" ? "ระดับ Corporate" : locale === "zh" ? "企业级" : "Corporate Tier"}</span>
+              <span className="px-3 py-1 bg-sky-100 text-sky-700 rounded-full text-xs font-bold">{locale === "th" ? "ยืนยันแล้ว" : locale === "zh" ? "已验证" : "Verified"}</span>
+              <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-bold">{locale === "th" ? "KYC ✓ ยืนยันแล้ว" : locale === "zh" ? "KYC ✓ 已验证" : "KYC ✓"}</span>
             </div>
           </div>
         )}
@@ -432,7 +440,7 @@ function PartnerOverview({ locale, partner }: { locale: string; partner: Partner
                 <div className="w-full bg-purple-100 rounded-t-lg relative" style={{ height: `${(e.amount / maxEarning) * 100}%` }}>
                   <div className="absolute inset-0 bg-gradient-to-t from-purple-500 to-indigo-500 rounded-t-lg" />
                 </div>
-                <span className="text-xs text-gray-500 mt-1">{e.month}</span>
+                <span className="text-xs text-gray-500 mt-1">{locale === "th" ? e.monthTh : locale === "zh" ? e.monthZh : e.month}</span>
               </div>
             ))}
           </div>
@@ -458,7 +466,7 @@ function PartnerOverview({ locale, partner }: { locale: string; partner: Partner
               </div>
               <div className="flex items-center gap-2">
                 <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[job.tier] || ""}`}>{job.tier}</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_STYLE[job.status] || ""}`}>{job.status.replace("_", " ")}</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_STYLE[job.status] || ""}`}>{getStatusLabel(job.status, locale)}</span>
                 <span className="text-xs font-bold text-gray-700">{job.earnings}</span>
               </div>
             </div>
@@ -482,7 +490,7 @@ function PartnerOverview({ locale, partner }: { locale: string; partner: Partner
               </div>
               <div className="flex items-center gap-2">
                 <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[req.tier] || ""}`}>{req.tier}</span>
-                {req.urgency === "urgent" && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-700">Urgent</span>}
+                {req.urgency === "urgent" && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-700">{locale === "th" ? "เร่งด่วน" : locale === "zh" ? "紧急" : "Urgent"}</span>}
                 <button className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition">{locale === "th" ? "รับ" : locale === "zh" ? "接受" : "Accept"}</button>
                 <button className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">{locale === "th" ? "ปฏิเสธ" : locale === "zh" ? "拒绝" : "Decline"}</button>
               </div>
@@ -519,7 +527,7 @@ function PartnerOverview({ locale, partner }: { locale: string; partner: Partner
                   <p className="text-xs text-gray-500 truncate">{locale === "th" ? c.lastMsgTh : locale === "zh" ? c.lastMsgZh : c.lastMsg}</p>
                 </div>
                 <div className="text-right">
-                  <span className="text-xs text-gray-400">{c.time}</span>
+                  <span className="text-xs text-gray-400">{locale === "th" ? c.timeTh : locale === "zh" ? c.timeZh : c.time}</span>
                   {c.unread > 0 && <span className="block mt-0.5 ml-auto w-5 h-5 bg-purple-600 text-white text-[10px] rounded-full flex items-center justify-center font-bold">{c.unread}</span>}
                 </div>
               </div>
@@ -549,7 +557,7 @@ function PartnerJobs({ locale }: { locale: string }) {
               </div>
               <div className="flex items-center gap-2">
                 <span className={`text-xs px-3 py-1 rounded-full font-bold ${TIER_STYLE[job.tier] || ""}`}>{job.tier}</span>
-                <span className={`text-xs px-3 py-1 rounded-full font-bold ${STATUS_STYLE[job.status] || ""}`}>{job.status.replace("_", " ")}</span>
+                <span className={`text-xs px-3 py-1 rounded-full font-bold ${STATUS_STYLE[job.status] || ""}`}>{getStatusLabel(job.status, locale)}</span>
               </div>
             </div>
             <div className="flex items-center gap-4">
@@ -588,7 +596,7 @@ function PartnerRequests({ locale }: { locale: string }) {
               <div className="flex flex-col items-end gap-2">
                 <div className="flex items-center gap-2">
                   <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${TIER_STYLE[req.tier] || ""}`}>{req.tier}</span>
-                  {req.urgency === "urgent" && <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-red-100 text-red-700 animate-pulse">🔴 Urgent</span>}
+                  {req.urgency === "urgent" && <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-red-100 text-red-700 animate-pulse">🔴 {locale === "th" ? "เร่งด่วน" : locale === "zh" ? "紧急" : "Urgent"}</span>}
                 </div>
                 <div className="flex gap-2">
                   <button className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition">{locale === "th" ? "รับงาน" : locale === "zh" ? "接受" : "Accept"}</button>
@@ -661,7 +669,7 @@ function PartnerChat({ locale }: { locale: string }) {
               <p className="text-sm text-gray-500 truncate mt-0.5">{locale === "th" ? c.lastMsgTh : locale === "zh" ? c.lastMsgZh : c.lastMsg}</p>
             </div>
             <div className="text-right flex-shrink-0">
-              <p className="text-xs text-gray-400">{c.time}</p>
+              <p className="text-xs text-gray-400">{locale === "th" ? c.timeTh : locale === "zh" ? c.timeZh : c.time}</p>
               {c.unread > 0 && <span className="inline-flex items-center justify-center mt-1 w-5 h-5 bg-purple-600 text-white text-[10px] font-bold rounded-full">{c.unread}</span>}
             </div>
           </div>
@@ -727,9 +735,9 @@ function PartnerProfile({ locale, prefix, partner }: { locale: string; prefix: s
             <p className="text-sm text-gray-400">{partner.phone}</p>
           </div>
           <div className="ml-auto flex flex-col gap-1.5 items-end">
-            <span className="px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">Active</span>
-            <span className="px-3 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-700">Corporate Tier</span>
-            <span className="px-3 py-1 rounded-full text-xs font-bold bg-sky-100 text-sky-700">KYC ✓</span>
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">{locale === "th" ? "ใช้งานอยู่" : locale === "zh" ? "活跃" : "Active"}</span>
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-700">{locale === "th" ? "ระดับ Corporate" : locale === "zh" ? "企业级" : "Corporate Tier"}</span>
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-sky-100 text-sky-700">{locale === "th" ? "KYC ✓ ยืนยันแล้ว" : locale === "zh" ? "KYC ✓ 已验证" : "KYC ✓ Verified"}</span>
           </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -819,12 +827,8 @@ function PartnerProperties({ locale, prefix }: { locale: string; prefix: string 
   const saveEdit = () => {
     setListings(listings.map(l => l.id === editingId ? {
       ...l,
-      title: locale === "th" ? l.title : locale === "zh" ? l.title : editForm.title,
-      titleTh: locale === "th" ? editForm.title : l.titleTh,
-      titleZh: locale === "zh" ? editForm.title : l.titleZh,
-      description: locale === "th" ? l.description : locale === "zh" ? l.description : editForm.description,
-      descriptionTh: locale === "th" ? editForm.description : l.descriptionTh,
-      descriptionZh: locale === "zh" ? editForm.description : l.descriptionZh,
+      ...(locale === "th" ? { titleTh: editForm.title } : locale === "zh" ? { titleZh: editForm.title } : { title: editForm.title }),
+      ...(locale === "th" ? { descriptionTh: editForm.description } : locale === "zh" ? { descriptionZh: editForm.description } : { description: editForm.description }),
       price: editForm.price,
       status: editForm.status as "active" | "pending" | "sold",
       images: editForm.images,

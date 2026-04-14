@@ -3,19 +3,28 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { HttpService } from '@nestjs/axios';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RegisterFixerDto } from './dto/register-fixer.dto';
 import { AddSkillDto } from './dto/add-skill.dto';
 import { SetAvailabilityDto } from './dto/set-availability.dto';
 import { UploadKycDto } from './dto/upload-kyc.dto';
+import { firstValueFrom } from 'rxjs';
+import FormData from 'form-data';
 
 @Injectable()
 export class FixerService {
+  private readonly logger = new Logger(FixerService.name);
+
   constructor(
     private prisma: PrismaService,
     private eventEmitter: EventEmitter2,
+    private configService: ConfigService,
+    private httpService: HttpService,
   ) {}
 
   async register(userId: string, dto: RegisterFixerDto) {
@@ -174,5 +183,66 @@ export class FixerService {
     });
     if (!fixer) throw new NotFoundException('Fixer profile not found');
     return fixer;
+  }
+
+  // ── Portfolio AI Digest ──
+
+  async digestPortfolio(files: Express.Multer.File[]) {
+    if (!files || files.length === 0) {
+      throw new BadRequestException('No files provided');
+    }
+    if (files.length > 10) {
+      throw new BadRequestException('Maximum 10 files allowed');
+    }
+
+    const visionUrl =
+      this.configService.get<string>('visionService.url') ||
+      'http://localhost:8010';
+
+    try {
+      const formData = new FormData();
+      for (const file of files) {
+        formData.append('files', file.buffer, {
+          filename: file.originalname,
+          contentType: file.mimetype,
+        });
+      }
+
+      const response = await firstValueFrom(
+        this.httpService.post(`${visionUrl}/extract-batch`, formData, {
+          headers: formData.getHeaders(),
+          timeout: 60000,
+        }),
+      );
+
+      return response.data;
+    } catch (error: unknown) {
+      this.logger.warn(
+        `Vision service unavailable at ${visionUrl}, using fallback`,
+      );
+
+      // Fallback: return basic file info without OCR
+      const results = files.map((file) => ({
+        file_id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        filename: file.originalname,
+        file_type: file.mimetype,
+        raw_text: '',
+        text_length: 0,
+        extraction_method: 'none_vision_service_unavailable',
+        has_content: false,
+        verification_hints: [
+          'Vision service unavailable — document analysis deferred',
+        ],
+        timestamp: new Date().toISOString(),
+      }));
+
+      return {
+        results,
+        total_files: files.length,
+        total_text_length: 0,
+        content_score: 0,
+        fallback: true,
+      };
+    }
   }
 }

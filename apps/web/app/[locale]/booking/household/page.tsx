@@ -290,6 +290,8 @@ function HouseholdBookingContent() {
         bookingType="household"
         service={form.serviceCategory}
         tier={form.tier}
+        description={form.description}
+        issueImages={images}
         onNewBooking={() => {
           setSuccess(false);
           setForm(initialForm);

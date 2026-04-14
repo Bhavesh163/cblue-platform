@@ -412,12 +412,16 @@ export default function FixerResults({
   bookingType,
   service,
   tier,
+  description,
+  issueImages,
   onNewBooking,
 }: {
   locale: string;
   bookingType: BookingType;
   service: string;
   tier?: string;
+  description?: string;
+  issueImages?: File[];
   onNewBooking: () => void;
 }) {
   const t = (key: string) => T[locale]?.[key] || T["en"]![key] || key;
@@ -428,6 +432,11 @@ export default function FixerResults({
   const [chatInput, setChatInput] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [aiStep, setAiStep] = useState(0);
+
+  // Issue image preview URLs (created once from File[])
+  const [issueImageUrls] = useState<string[]>(() =>
+    (issueImages || []).map(f => URL.createObjectURL(f))
+  );
 
   // PO state
   const [poNumber] = useState(() => generatePONumber());
@@ -456,6 +465,7 @@ export default function FixerResults({
 
   // Variation state
   const [showVariation, setShowVariation] = useState(false);
+  const [variationApproved, setVariationApproved] = useState<boolean | null>(null);
 
   // Nomination state (must be at top level, not after early returns)
   const [nominateId, setNominateId] = useState("");
@@ -471,6 +481,18 @@ export default function FixerResults({
       setVariationAmount(Math.floor(f * 0.3 + Math.random() * f * 0.5));
     }
   }, [step, selectedFixer, bookingType]);
+
+  // Persist workflow state to localStorage
+  useEffect(() => {
+    if (step !== "matching" && selectedFixer) {
+      try {
+        localStorage.setItem("cblue_workflow", JSON.stringify({
+          step, fixerAlias: selectedFixer.alias, poNumber, customerRating, customerComment, variationApproved,
+          meetingDate, meetingTime, meetingNotes,
+        }));
+      } catch { /* ignore */ }
+    }
+  }, [step, selectedFixer, poNumber, customerRating, customerComment, variationApproved, meetingDate, meetingTime, meetingNotes]);
 
   // AI Matching animation sequence
   useEffect(() => {
@@ -586,13 +608,9 @@ export default function FixerResults({
   };
 
   const handleVariationDecision = (approved: boolean) => {
-    if (!approved) {
-      // Reject: skip variation, go straight to completion without addendum
-      setStep("complete");
-    } else {
-      // Approve: addendum accepted, proceed to completion
-      setStep("complete");
-    }
+    setVariationApproved(approved);
+    // Both cases proceed to complete — approved = addendum accepted, rejected = original scope only
+    setStep("complete");
   };
 
   const handleCompleteConfirm = () => {
@@ -786,6 +804,12 @@ export default function FixerResults({
           <div className="bg-gray-50 rounded-xl p-4 mb-6 text-sm space-y-2">
             <p className="text-gray-500">{locale === "th" ? "เลขที่ PO" : locale === "zh" ? "PO 编号" : "PO Number"}: <span className="font-mono font-bold text-gray-800">{poNumber}</span></p>
             <p className="text-gray-500">{locale === "th" ? "ค่าบริการ" : locale === "zh" ? "服务费" : "Processing Fee"}: <span className="font-bold text-gray-800">฿{fee.toLocaleString()}</span></p>
+            {variationApproved === true && (
+              <p className="text-green-700 font-semibold">✅ {locale === "th" ? "อนุมัติงานเพิ่มเติม (฿" + variationAmount.toLocaleString() + ")" : locale === "zh" ? "已批准附加工作 (฿" + variationAmount.toLocaleString() + ")" : "Addendum Approved (฿" + variationAmount.toLocaleString() + ")"}</p>
+            )}
+            {variationApproved === false && (
+              <p className="text-red-700 font-semibold">❌ {locale === "th" ? "ปฏิเสธงานเพิ่มเติม — ขอบเขตงานเดิม" : locale === "zh" ? "已拒绝附加工作 — 按原始范围" : "Addendum Declined — Original scope only"}</p>
+            )}
           </div>
 
           {/* Disclaimer */}
@@ -1011,6 +1035,24 @@ export default function FixerResults({
               {tierLabel}
             </span>
           </div>
+
+          {/* Service Details (visible after payment) */}
+          {(description || issueImageUrls.length > 0) && (
+            <div className="px-4 py-3 bg-indigo-50 border-b border-indigo-100">
+              <p className="text-xs font-bold text-indigo-700 mb-1">
+                📋 {locale === "th" ? "รายละเอียดบริการ" : locale === "zh" ? "服务详情" : "Service Details"}
+              </p>
+              <p className="text-xs text-indigo-600 mb-1">{service || bookingType}</p>
+              {description && <p className="text-xs text-gray-700">{description}</p>}
+              {issueImageUrls.length > 0 && (
+                <div className="flex gap-2 mt-2 overflow-x-auto">
+                  {issueImageUrls.map((url, i) => (
+                    <img key={i} src={url} alt={`Issue ${i + 1}`} className="w-16 h-16 object-cover rounded-lg border border-indigo-200 flex-shrink-0" />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Messages */}
           <div className="h-80 overflow-y-auto p-4 space-y-3 bg-gray-50">
@@ -1238,6 +1280,16 @@ export default function FixerResults({
             <div className="flex justify-between">
               <span className="text-gray-500">{t("poService")}</span>
               <span className="text-gray-800">{service || bookingType}</span>
+            </div>
+            {description && (
+              <div>
+                <span className="text-gray-500 text-xs">{locale === "th" ? "รายละเอียดบริการ" : locale === "zh" ? "服务描述" : "Service Description"}</span>
+                <p className="text-gray-700 text-xs mt-0.5 line-clamp-3">{description}</p>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="text-gray-500">{locale === "th" ? "ราคาเริ่มต้นของผู้ให้บริการ" : locale === "zh" ? "服务商起始价" : "Provider Est. Price"}</span>
+              <span className="text-gray-800">฿{selectedFixer.price}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-gray-500">{t("poTier")}</span>
