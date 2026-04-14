@@ -71,7 +71,7 @@ class _AiEvaluationScreenState extends State<AiEvaluationScreen> {
           Text(t('ai_evaluation'), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
           Text(
-            _complete ? 'Evaluation complete' : 'Analyzing your profile...',
+            _complete ? t('evaluation_complete') : t('analyzing_profile'),
             style: const TextStyle(color: AppTheme.textSecondary),
           ),
           const SizedBox(height: 8),
@@ -128,10 +128,10 @@ class _AiEvaluationScreenState extends State<AiEvaluationScreen> {
                 child: Column(children: [
                   const Icon(Icons.emoji_events, size: 48, color: AppTheme.warningOrange),
                   const SizedBox(height: 12),
-                  Text('Assigned Tier', style: const TextStyle(color: AppTheme.textSecondary)),
+                  Text(t('assigned_tier'), style: const TextStyle(color: AppTheme.textSecondary)),
                   Text(_assignedTier!, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppTheme.primaryBlue)),
                   const SizedBox(height: 8),
-                  Text('AI Score: $_score/100', style: const TextStyle(fontSize: 16, color: AppTheme.primaryGreen, fontWeight: FontWeight.w600)),
+                  Text('${t('ai_score')}: $_score/100', style: const TextStyle(fontSize: 16, color: AppTheme.primaryGreen, fontWeight: FontWeight.w600)),
                 ]),
               ),
             ),

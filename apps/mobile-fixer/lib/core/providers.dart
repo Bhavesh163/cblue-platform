@@ -117,6 +117,11 @@ class Translations {
     'urgency': {'en': 'Urgency', 'th': 'ความเร่งด่วน', 'zh': '紧急程度'},
     'earned': {'en': 'Earned', 'th': 'รายได้', 'zh': '收入'},
     'fee': {'en': 'Fee', 'th': 'ค่าธรรมเนียม', 'zh': '手续费'},
+    'evaluation_complete': {'en': 'Evaluation complete', 'th': 'การประเมินเสร็จสิ้น', 'zh': '评估完成'},
+    'analyzing_profile': {'en': 'Analyzing your profile...', 'th': 'กำลังวิเคราะห์โปรไฟล์ของคุณ...', 'zh': '正在分析您的资料...'},
+    'assigned_tier': {'en': 'Assigned Tier', 'th': 'ระดับที่ได้รับ', 'zh': '分配等级'},
+    'ai_score': {'en': 'AI Score', 'th': 'คะแนน AI', 'zh': 'AI 分数'},
+    'no_properties': {'en': 'No properties', 'th': 'ยังไม่มีทรัพย์สิน', 'zh': '暂无房产'},
   };
 
   static String get(String key, String locale) {

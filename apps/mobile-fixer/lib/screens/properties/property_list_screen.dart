@@ -85,7 +85,7 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
             ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
                 const Icon(Icons.apartment, size: 64, color: AppTheme.textSecondary),
                 const SizedBox(height: 12),
-                Text('No properties', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 16)),
+                Text(t('no_properties'), style: const TextStyle(color: AppTheme.textSecondary, fontSize: 16)),
                 const SizedBox(height: 12),
                 ElevatedButton.icon(icon: const Icon(Icons.add), label: Text(t('add_property')), onPressed: () => _showAddEditSheet(context, t)),
               ]))

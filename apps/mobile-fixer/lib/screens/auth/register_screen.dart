@@ -193,14 +193,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 if (_category != 'property_lister') ...[
                   Text(t('select_services'), style: const TextStyle(fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8, runSpacing: 4,
-                    children: _servicesForCategory().map((s) => FilterChip(
-                      label: Text(s, style: const TextStyle(fontSize: 12)),
-                      selected: _selectedServices.contains(s),
-                      onSelected: (sel) => setState(() => sel ? _selectedServices.add(s) : _selectedServices.remove(s)),
-                    )).toList(),
-                  ),
+                  Builder(builder: (ctx) {
+                    final locale = ctx.watch<LocaleProvider>().locale;
+                    return Wrap(
+                      spacing: 8, runSpacing: 4,
+                      children: _servicesForCategory().map((s) => FilterChip(
+                        label: Text(_localizedService(s, locale), style: const TextStyle(fontSize: 12)),
+                        selected: _selectedServices.contains(s),
+                        onSelected: (sel) => setState(() => sel ? _selectedServices.add(s) : _selectedServices.remove(s)),
+                      )).toList(),
+                    );
+                  }),
                   const SizedBox(height: 12),
                 ],
                 TextFormField(controller: _password, decoration: InputDecoration(labelText: t('password')), obscureText: true, validator: (v) => v != null && v.length >= 6 ? null : 'Min 6 chars'),
@@ -294,12 +297,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  List<String> _servicesForCategory() {
+  Map<String, List<String>> _servicesMapForCategory() {
     switch (_category) {
       case 'household': return AppConstants.householdServices;
       case 'project': return AppConstants.projectServices;
       case 'professional': return AppConstants.professionalServices;
-      default: return [];
+      default: return {'en': [], 'th': [], 'zh': []};
     }
+  }
+
+  List<String> _servicesForCategory() => _servicesMapForCategory()['en'] ?? [];
+
+  String _localizedService(String enName, String locale) {
+    final map = _servicesMapForCategory();
+    final enList = map['en'] ?? [];
+    final idx = enList.indexOf(enName);
+    if (idx < 0) return enName;
+    final locList = map[locale] ?? enList;
+    return idx < locList.length ? locList[idx] : enName;
   }
 }
