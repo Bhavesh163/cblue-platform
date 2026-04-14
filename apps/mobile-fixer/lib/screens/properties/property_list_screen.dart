@@ -64,7 +64,7 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
       Padding(
         padding: const EdgeInsets.all(12),
         child: Row(children: [
-          ChoiceChip(label: const Text('All'), selected: _filter == 'all', onSelected: (_) => setState(() => _filter = 'all')),
+          ChoiceChip(label: Text(t('all')), selected: _filter == 'all', onSelected: (_) => setState(() => _filter = 'all')),
           const SizedBox(width: 8),
           ChoiceChip(label: Text(t('for_sale')), selected: _filter == 'SALE', onSelected: (_) => setState(() => _filter = 'SALE')),
           const SizedBox(width: 8),

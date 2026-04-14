@@ -122,6 +122,27 @@ class Translations {
     'assigned_tier': {'en': 'Assigned Tier', 'th': 'ระดับที่ได้รับ', 'zh': '分配等级'},
     'ai_score': {'en': 'AI Score', 'th': 'คะแนน AI', 'zh': 'AI 分数'},
     'no_properties': {'en': 'No properties', 'th': 'ยังไม่มีทรัพย์สิน', 'zh': '暂无房产'},
+    // Error & validation messages
+    'invalid_credentials': {'en': 'Invalid email or password', 'th': 'อีเมลหรือรหัสผ่านไม่ถูกต้อง', 'zh': '电子邮件或密码无效'},
+    'connection_error': {'en': 'Connection error. Please try again.', 'th': 'เชื่อมต่อผิดพลาด กรุณาลองใหม่', 'zh': '连接错误，请重试'},
+    'registration_error': {'en': 'Registration failed. Please try again.', 'th': 'ลงทะเบียนล้มเหลว กรุณาลองใหม่', 'zh': '注册失败，请重试'},
+    'required_field': {'en': 'Required', 'th': 'จำเป็น', 'zh': '必填'},
+    'invalid_email': {'en': 'Invalid email', 'th': 'อีเมลไม่ถูกต้อง', 'zh': '邮箱格式无效'},
+    'invalid_phone': {'en': 'Invalid phone number', 'th': 'เบอร์โทรศัพท์ไม่ถูกต้อง', 'zh': '电话号码无效'},
+    'min_6_chars': {'en': 'Min 6 characters', 'th': 'อย่างน้อย 6 ตัวอักษร', 'zh': '最少6个字符'},
+    'passwords_mismatch': {'en': 'Passwords do not match', 'th': 'รหัสผ่านไม่ตรงกัน', 'zh': '密码不匹配'},
+    'next': {'en': 'Next', 'th': 'ถัดไป', 'zh': '下一步'},
+    'back': {'en': 'Back', 'th': 'ย้อนกลับ', 'zh': '返回'},
+    'captured': {'en': 'Captured ✓', 'th': 'ถ่ายแล้ว ✓', 'zh': '已拍摄 ✓'},
+    'uploaded': {'en': 'Uploaded ✓', 'th': 'อัปโหลดแล้ว ✓', 'zh': '已上传 ✓'},
+    'camera': {'en': 'Camera', 'th': 'กล้อง', 'zh': '相机'},
+    'gallery': {'en': 'Gallery', 'th': 'คลังรูป', 'zh': '相册'},
+    'kyc_up_to_date': {'en': 'KYC verification is up to date ✓', 'th': 'KYC เป็นปัจจุบัน ✓', 'zh': 'KYC已更新 ✓'},
+    'portfolio_ok': {'en': 'Portfolio uploaded ✓', 'th': 'ผลงานอัปโหลดแล้ว ✓', 'zh': '作品已上传 ✓'},
+    'date_label': {'en': 'Date', 'th': 'วันที่', 'zh': '日期'},
+    'ok': {'en': 'OK', 'th': 'ตกลง', 'zh': '好的'},
+    'all': {'en': 'All', 'th': 'ทั้งหมด', 'zh': '全部'},
+    'images_count': {'en': 'images', 'th': 'รูป', 'zh': '张图片'},
   };
 
   static String get(String key, String locale) {

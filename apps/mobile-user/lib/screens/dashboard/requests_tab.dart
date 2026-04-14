@@ -118,12 +118,12 @@ class RequestsTab extends StatelessWidget {
                               children: [
                                 Text(desc[locale.locale] ?? desc['en']!),
                                 const SizedBox(height: 12),
-                                Text('Status: $status', style: const TextStyle(fontWeight: FontWeight.w600)),
-                                Text('Date: ${req['date']}', style: const TextStyle(color: AppTheme.textSecondary)),
+                                Text('${locale.t('status_label')}: $status', style: const TextStyle(fontWeight: FontWeight.w600)),
+                                Text('${locale.t('date_label')}: ${req['date']}', style: const TextStyle(color: AppTheme.textSecondary)),
                               ],
                             ),
                             actions: [
-                              TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),
+                              TextButton(onPressed: () => Navigator.pop(context), child: Text(locale.t('ok'))),
                             ],
                           ),
                         );

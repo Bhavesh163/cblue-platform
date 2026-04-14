@@ -259,7 +259,7 @@ class _BookingFormState extends State<_BookingForm> with AutomaticKeepAliveClien
                 labelText: '${locale.t('name')} *',
                 prefixIcon: const Icon(Icons.person_outlined),
               ),
-              validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+              validator: (v) => v == null || v.isEmpty ? locale.t('required_field') : null,
             ),
             const SizedBox(height: 12),
             // Email
@@ -271,8 +271,8 @@ class _BookingFormState extends State<_BookingForm> with AutomaticKeepAliveClien
                 prefixIcon: const Icon(Icons.email_outlined),
               ),
               validator: (v) {
-                if (v == null || v.isEmpty) return 'Required';
-                if (!RegExp(r'\S+@\S+\.\S+').hasMatch(v)) return 'Invalid email';
+                if (v == null || v.isEmpty) return locale.t('required_field');
+                if (!RegExp(r'\S+@\S+\.\S+').hasMatch(v)) return locale.t('invalid_email');
                 return null;
               },
             ),
@@ -285,7 +285,7 @@ class _BookingFormState extends State<_BookingForm> with AutomaticKeepAliveClien
                 labelText: '${locale.t('phone')} *',
                 prefixIcon: const Icon(Icons.phone_outlined),
               ),
-              validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+              validator: (v) => v == null || v.isEmpty ? locale.t('required_field') : null,
             ),
             const SizedBox(height: 12),
             // Company
@@ -309,7 +309,7 @@ class _BookingFormState extends State<_BookingForm> with AutomaticKeepAliveClien
                 child: Text(s[locale.locale] ?? s['en']!),
               )).toList(),
               onChanged: (v) => setState(() => _selectedService = v),
-              validator: (v) => v == null ? 'Required' : null,
+              validator: (v) => v == null ? locale.t('required_field') : null,
             ),
             const SizedBox(height: 12),
             // Date picker
@@ -368,7 +368,7 @@ class _BookingFormState extends State<_BookingForm> with AutomaticKeepAliveClien
                 labelText: '${locale.t('description')} *',
                 alignLabelWithHint: true,
               ),
-              validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+              validator: (v) => v == null || v.isEmpty ? locale.t('required_field') : null,
             ),
             const SizedBox(height: 12),
             // Image upload
