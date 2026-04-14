@@ -13,7 +13,7 @@ class IncomingTab extends StatefulWidget {
 
 class _IncomingTabState extends State<IncomingTab> {
   final _api = ApiService();
-  bool _processing = false;
+  int _processingIdx = -1;
 
   final List<Map<String, dynamic>> _requests = [
     {'id': 'REQ-2506-0088', 'service': 'Water Heater Installation', 'customer': 'Customer #C1032', 'urgency': 'high', 'budget': '฿2,500', 'location': 'Bangkok 10110', 'date': '2025-07-01', 'desc': 'Need hot water heater installed in master bathroom. Existing plumbing available.'},
@@ -23,7 +23,7 @@ class _IncomingTabState extends State<IncomingTab> {
 
   Future<void> _acceptJob(int index) async {
     final r = _requests[index];
-    setState(() => _processing = true);
+    setState(() => _processingIdx = index);
     try {
       await _api.acceptJob(r['id'] as String);
     } catch (_) { /* Demo mode */ }
@@ -32,13 +32,13 @@ class _IncomingTabState extends State<IncomingTab> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${t('job_accepted')}: ${r['id']}'), backgroundColor: AppTheme.primaryGreen),
       );
-      setState(() { _requests.removeAt(index); _processing = false; });
+      setState(() { _requests.removeAt(index); _processingIdx = -1; });
     }
   }
 
   Future<void> _declineJob(int index) async {
     final r = _requests[index];
-    setState(() => _processing = true);
+    setState(() => _processingIdx = index);
     try {
       await _api.declineJob(r['id'] as String);
     } catch (_) { /* Demo mode */ }
@@ -47,7 +47,7 @@ class _IncomingTabState extends State<IncomingTab> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${t('job_declined')}: ${r['id']}'), backgroundColor: AppTheme.warningOrange),
       );
-      setState(() { _requests.removeAt(index); _processing = false; });
+      setState(() { _requests.removeAt(index); _processingIdx = -1; });
     }
   }
 
@@ -81,7 +81,7 @@ class _IncomingTabState extends State<IncomingTab> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(color: urgencyColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
-                  child: Text(urgency.toUpperCase(), style: TextStyle(color: urgencyColor, fontSize: 11, fontWeight: FontWeight.bold)),
+                  child: Text(t('urgency_$urgency'), style: TextStyle(color: urgencyColor, fontSize: 11, fontWeight: FontWeight.bold)),
                 ),
               ]),
               const SizedBox(height: 8),
@@ -99,7 +99,7 @@ class _IncomingTabState extends State<IncomingTab> {
               Row(children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: _processing ? null : () => _declineJob(i),
+                    onPressed: _processingIdx >= 0 ? null : () => _declineJob(i),
                     icon: const Icon(Icons.close, size: 16),
                     label: Text(t('decline')),
                     style: OutlinedButton.styleFrom(foregroundColor: AppTheme.errorRed),
@@ -108,8 +108,8 @@ class _IncomingTabState extends State<IncomingTab> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: _processing ? null : () => _acceptJob(i),
-                    icon: _processing
+                    onPressed: _processingIdx >= 0 ? null : () => _acceptJob(i),
+                    icon: _processingIdx == i
                         ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                         : const Icon(Icons.check, size: 16),
                     label: Text(t('accept')),
