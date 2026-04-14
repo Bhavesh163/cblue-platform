@@ -285,7 +285,7 @@ class _PropertiesWorkflowScreenState extends State<PropertiesWorkflowScreen> {
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.grey.shade300))),
             child: Row(children: [
-              Expanded(child: TextField(controller: _chatCtrl, decoration: const InputDecoration(hintText: 'Message...', isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)))),
+              Expanded(child: TextField(controller: _chatCtrl, decoration: InputDecoration(hintText: t('message_hint'), isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8)))),
               IconButton(
                 icon: const Icon(Icons.send, color: AppTheme.primaryBlue),
                 onPressed: () {
@@ -295,7 +295,7 @@ class _PropertiesWorkflowScreenState extends State<PropertiesWorkflowScreen> {
                     _chatCtrl.clear();
                   });
                   Future.delayed(const Duration(seconds: 1), () {
-                    if (mounted) setState(() => _messages.add({'from': 'lister', 'text': 'Thank you, noted. 👍'}));
+                    if (mounted) setState(() => _messages.add({'from': 'lister', 'text': t('auto_reply')}));
                   });
                 },
               ),
