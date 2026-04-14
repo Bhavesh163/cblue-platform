@@ -14,7 +14,7 @@ class ActiveJobsTab extends StatefulWidget {
 
 class _ActiveJobsTabState extends State<ActiveJobsTab> {
   final _api = ApiService();
-  bool _completing = false;
+  int _completingIdx = -1;
 
   final List<Map<String, dynamic>> _jobs = [
     {'id': 'PO-2506-0051', 'service': 'Plumbing Repair', 'customer': 'Customer #C1024', 'status': 'in_progress', 'progress': 0.6, 'fee': 200.0, 'date': '2025-06-28'},
@@ -24,7 +24,7 @@ class _ActiveJobsTabState extends State<ActiveJobsTab> {
 
   Future<void> _completeJob(int index) async {
     final job = _jobs[index];
-    setState(() => _completing = true);
+    setState(() => _completingIdx = index);
     try {
       await _api.completeJob(job['id'] as String);
     } catch (_) { /* Demo mode: continue anyway */ }
@@ -32,7 +32,7 @@ class _ActiveJobsTabState extends State<ActiveJobsTab> {
       setState(() {
         _jobs[index]['status'] = 'completed';
         _jobs[index]['progress'] = 1.0;
-        _completing = false;
+        _completingIdx = -1;
       });
       final t = context.read<LocaleProvider>().t;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -109,8 +109,8 @@ class _ActiveJobsTabState extends State<ActiveJobsTab> {
                 const Spacer(),
                 if (progress < 1.0)
                   ElevatedButton.icon(
-                    onPressed: _completing ? null : () => _completeJob(_jobs.indexOf(j)),
-                    icon: _completing
+                    onPressed: _completingIdx >= 0 ? null : () => _completeJob(_jobs.indexOf(j)),
+                    icon: _completingIdx == _jobs.indexOf(j)
                         ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                         : const Icon(Icons.check, size: 16),
                     label: Text(t('complete_job'), style: const TextStyle(fontSize: 13)),

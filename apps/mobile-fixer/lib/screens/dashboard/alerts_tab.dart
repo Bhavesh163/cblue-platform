@@ -15,12 +15,12 @@ class _AlertsTabState extends State<AlertsTab> {
 
   List<Map<String, dynamic>> _buildAlerts(String Function(String) t) {
     return [
-      {'title': '${t('new_job_request')}: Customer #C1032', 'type': 'job', 'time': '10 min ago', 'read': false},
-      {'title': '${t('payment_received')}: ฿1,500', 'type': 'payment', 'time': '2 hours ago', 'read': false},
-      {'title': '${t('system_update')}: Tier upgraded!', 'type': 'tier', 'time': '1 day ago', 'read': true},
-      {'title': '${t('review_received')}: ⭐⭐⭐⭐⭐', 'type': 'review', 'time': '2 days ago', 'read': true},
-      {'title': '${t('job_reminder')}: PO-2506-0049', 'type': 'reminder', 'time': '3 days ago', 'read': true},
-      {'title': '${t('properties')}: Modern Condo ${t('approved')}', 'type': 'property', 'time': '4 days ago', 'read': true},
+      {'title': '${t('new_job_request')}: Customer #C1032', 'type': 'job', 'time': t('time_10m'), 'read': false},
+      {'title': '${t('payment_received')}: ฿1,500', 'type': 'payment', 'time': t('time_2h'), 'read': false},
+      {'title': '${t('system_update')}: ${t('tier_upgraded')}', 'type': 'tier', 'time': t('time_1d'), 'read': true},
+      {'title': '${t('review_received')}: ⭐⭐⭐⭐⭐', 'type': 'review', 'time': t('time_2d'), 'read': true},
+      {'title': '${t('job_reminder')}: PO-2506-0049', 'type': 'reminder', 'time': t('time_3d'), 'read': true},
+      {'title': '${t('properties')}: ${t('modern_condo')} ${t('approved')}', 'type': 'property', 'time': t('time_4d'), 'read': true},
     ];
   }
 

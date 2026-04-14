@@ -22,7 +22,7 @@ class CblueCustomerApp extends StatelessWidget {
       ],
       child: Consumer<LocaleProvider>(
         builder: (context, localeProv, _) => MaterialApp(
-          title: 'CBLUE Customer',
+          title: localeProv.t('app_title'),
           debugShowCheckedModeBanner: false,
           theme: AppTheme.lightTheme,
           home: Consumer<AuthProvider>(

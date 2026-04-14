@@ -165,6 +165,10 @@ class Translations {
     'time_2h': {'en': '2 hours ago', 'th': '2 ชั่วโมงที่ผ่านมา', 'zh': '2小时前'},
     'time_1d': {'en': '1 day ago', 'th': '1 วันที่ผ่านมา', 'zh': '1天前'},
     'time_2d': {'en': '2 days ago', 'th': '2 วันที่ผ่านมา', 'zh': '2天前'},
+    'time_3d': {'en': '3 days ago', 'th': '3 วันที่ผ่านมา', 'zh': '3天前'},
+    'time_4d': {'en': '4 days ago', 'th': '4 วันที่ผ่านมา', 'zh': '4天前'},
+    'tier_upgraded': {'en': 'Tier upgraded!', 'th': 'อัปเกรดระดับแล้ว!', 'zh': '等级已升级！'},
+    'modern_condo': {'en': 'Modern Condo', 'th': 'คอนโดทันสมัย', 'zh': '现代公寓'},
     // Skill names
     'plumbing': {'en': 'Plumbing', 'th': 'ประปา', 'zh': '水管'},
     'electrical': {'en': 'Electrical', 'th': 'ไฟฟ้า', 'zh': '电气'},

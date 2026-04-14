@@ -4,6 +4,8 @@ import 'dart:convert';
 
 class Translations {
   static const Map<String, Map<String, String>> _strings = {
+    // App
+    'app_title': {'en': 'CBLUE Customer', 'th': 'CBLUE ลูกค้า', 'zh': 'CBLUE 客户'},
     // Nav
     'home': {'en': 'Home', 'th': 'หน้าแรก', 'zh': '首页'},
     'services': {'en': 'Services', 'th': 'บริการ', 'zh': '服务'},
