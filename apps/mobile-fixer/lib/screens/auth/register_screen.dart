@@ -318,6 +318,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
+  @override
+  void dispose() {
+    _name.dispose();
+    _email.dispose();
+    _phone.dispose();
+    _company.dispose();
+    _password.dispose();
+    _confirmPw.dispose();
+    super.dispose();
+  }
+
   Map<String, List<String>> _servicesMapForCategory() {
     switch (_category) {
       case 'household': return AppConstants.householdServices;

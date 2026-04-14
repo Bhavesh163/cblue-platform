@@ -85,12 +85,12 @@ export function Footer() {
                   {locale === "th" ? "แอปลูกค้า" : locale === "zh" ? "客户应用" : "Customer App"}
                 </p>
                 <div className="flex gap-2">
-                  <Link href="#" className="text-xs text-sky-400 hover:text-sky-300 transition-colors flex items-center gap-1">
+                  <a href="https://apps.apple.com/app/cblue-customer/id6504100001" target="_blank" rel="noopener noreferrer" className="text-xs text-sky-400 hover:text-sky-300 transition-colors flex items-center gap-1">
                     <span>🍎</span> App Store
-                  </Link>
-                  <Link href="#" className="text-xs text-sky-400 hover:text-sky-300 transition-colors flex items-center gap-1">
+                  </a>
+                  <a href="https://play.google.com/store/apps/details?id=com.cblue.customer" target="_blank" rel="noopener noreferrer" className="text-xs text-sky-400 hover:text-sky-300 transition-colors flex items-center gap-1">
                     <span>▶️</span> Google Play
-                  </Link>
+                  </a>
                 </div>
               </div>
               <div className="space-y-1">
@@ -98,12 +98,12 @@ export function Footer() {
                   {locale === "th" ? "แอปพาร์ทเนอร์" : locale === "zh" ? "合作伙伴应用" : "Partner App"}
                 </p>
                 <div className="flex gap-2">
-                  <Link href="#" className="text-xs text-sky-400 hover:text-sky-300 transition-colors flex items-center gap-1">
+                  <a href="https://apps.apple.com/app/cblue-partner/id6504100002" target="_blank" rel="noopener noreferrer" className="text-xs text-sky-400 hover:text-sky-300 transition-colors flex items-center gap-1">
                     <span>🍎</span> App Store
-                  </Link>
-                  <Link href="#" className="text-xs text-sky-400 hover:text-sky-300 transition-colors flex items-center gap-1">
+                  </a>
+                  <a href="https://play.google.com/store/apps/details?id=com.cblue.partner" target="_blank" rel="noopener noreferrer" className="text-xs text-sky-400 hover:text-sky-300 transition-colors flex items-center gap-1">
                     <span>▶️</span> Google Play
-                  </Link>
+                  </a>
                 </div>
               </div>
             </div>
