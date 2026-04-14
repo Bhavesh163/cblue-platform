@@ -146,6 +146,7 @@ class Translations {
     'ok': {'en': 'OK', 'th': 'ตกลง', 'zh': '好的'},
     'all': {'en': 'All', 'th': 'ทั้งหมด', 'zh': '全部'},
     'images_count': {'en': 'images', 'th': 'รูป', 'zh': '张图片'},
+    'files_count': {'en': 'files (images, PDF, DOCX, XLSX)', 'th': 'ไฟล์ (รูป, PDF, DOCX, XLSX)', 'zh': '文件（图片、PDF、DOCX、XLSX）'},
     // AI evaluation phases
     'kyc_check': {'en': 'KYC Verification', 'th': 'ยืนยันตัวตน KYC', 'zh': 'KYC身份验证'},
     'company_check': {'en': 'Company Validation', 'th': 'ตรวจสอบบริษัท', 'zh': '公司验证'},

@@ -54,7 +54,8 @@ class ApiService {
   Future<Response> uploadPortfolio(List<File> files) async {
     final formData = FormData();
     for (int i = 0; i < files.length; i++) {
-      formData.files.add(MapEntry('portfolio', await MultipartFile.fromFile(files[i].path, filename: 'portfolio_$i.jpg')));
+      final name = files[i].path.split('/').last;
+      formData.files.add(MapEntry('portfolio', await MultipartFile.fromFile(files[i].path, filename: name)));
     }
     return _dio.post('/fixer/portfolio', data: formData);
   }

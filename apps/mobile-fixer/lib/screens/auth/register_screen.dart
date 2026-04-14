@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
@@ -45,15 +46,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
+  static const _imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
+  bool _isImage(File f) => _imageExts.any((ext) => f.path.toLowerCase().endsWith('.$ext'));
+
   Future<void> _pickPortfolio() async {
     if (_portfolio.length >= 10) return;
-    final picker = ImagePicker();
-    final picked = await picker.pickMultiImage(maxWidth: 1200, imageQuality: 85);
-    setState(() {
-      for (final p in picked) {
-        if (_portfolio.length < 10) _portfolio.add(File(p.path));
-      }
-    });
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: true,
+      type: FileType.custom,
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'doc', 'docx', 'xls', 'xlsx'],
+    );
+    if (result != null) {
+      setState(() {
+        for (final file in result.files) {
+          if (_portfolio.length < 10 && file.path != null) {
+            _portfolio.add(File(file.path!));
+          }
+        }
+      });
+    }
   }
 
   Future<void> _register() async {
@@ -266,7 +277,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       child: Stack(children: [
                         ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: Image.file(_portfolio[i], width: 100, height: 100, fit: BoxFit.cover),
+                          child: _isImage(_portfolio[i])
+                              ? Image.file(_portfolio[i], width: 100, height: 100, fit: BoxFit.cover)
+                              : Container(
+                                  width: 100, height: 100,
+                                  decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(8)),
+                                  child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                                    Icon(_portfolio[i].path.endsWith('.pdf') ? Icons.picture_as_pdf : Icons.description, size: 36, color: AppTheme.primaryBlue),
+                                    const SizedBox(height: 4),
+                                    Text(_portfolio[i].path.split('/').last, style: const TextStyle(fontSize: 9), maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
+                                  ]),
+                                ),
                         ),
                         Positioned(
                           top: 2, right: 2,
@@ -286,7 +307,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               OutlinedButton.icon(
                 onPressed: _portfolio.length < 10 ? _pickPortfolio : null,
                 icon: const Icon(Icons.add_photo_alternate),
-                label: Text('${_portfolio.length}/10 ${t('images_count')}'),
+                label: Text('${_portfolio.length}/10 ${t('files_count')}'),
               ),
               const SizedBox(height: 8),
               Text(t('pdpa_notice'), style: TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
