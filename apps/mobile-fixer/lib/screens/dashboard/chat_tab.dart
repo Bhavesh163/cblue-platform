@@ -102,7 +102,10 @@ class _ChatTabState extends State<ChatTab> {
                   ),
                 ],
               ]),
-              onTap: () => setState(() => _openChat = i),
+              onTap: () => setState(() {
+                _openChat = i;
+                _conversations[i]['unread'] = 0;
+              }),
             );
           },
         ),

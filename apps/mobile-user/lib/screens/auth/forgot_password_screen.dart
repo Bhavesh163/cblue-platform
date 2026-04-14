@@ -19,8 +19,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   Future<void> _submit() async {
     final email = _emailCtrl.text.trim();
+    final locale = context.read<LocaleProvider>();
     if (email.isEmpty || !RegExp(r'\S+@\S+\.\S+').hasMatch(email)) {
-      setState(() => _error = 'Please enter a valid email');
+      setState(() => _error = locale.t('invalid_email'));
       return;
     }
     setState(() { _loading = true; _error = null; });

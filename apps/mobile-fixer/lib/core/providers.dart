@@ -153,6 +153,8 @@ class Translations {
     'price_list_eval': {'en': 'Price List Evaluation', 'th': 'ประเมินรายการราคา', 'zh': '价格表评估'},
     'tier_assign': {'en': 'Tier Assignment', 'th': 'กำหนดระดับ', 'zh': '等级分配'},
     'confirm_delete_msg': {'en': 'Are you sure you want to delete this?', 'th': 'คุณแน่ใจหรือไม่ว่าต้องการลบ?', 'zh': '您确定要删除吗？'},
+    'title': {'en': 'Title', 'th': 'ชื่อ', 'zh': '标题'},
+    'edit_property': {'en': 'Edit Property', 'th': 'แก้ไขอสังหาฯ', 'zh': '编辑房产'},
     'views': {'en': 'views', 'th': 'ครั้งดู', 'zh': '次查看'},
     'profile_updated': {'en': 'Profile updated ✓', 'th': 'อัปเดตโปรไฟล์แล้ว ✓', 'zh': '个人资料已更新 ✓'},
     'plumbing_repair': {'en': 'Plumbing repair', 'th': 'ซ่อมประปา', 'zh': '水管维修'},

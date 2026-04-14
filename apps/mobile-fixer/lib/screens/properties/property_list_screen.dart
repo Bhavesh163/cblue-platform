@@ -396,7 +396,7 @@ class _AddEditPropertySheetState extends State<_AddEditPropertySheet> {
           child: ListView(controller: controller, children: [
             // Header
             Row(children: [
-              Text(isEdit ? '${t('edit')} Property' : t('add_property'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              Text(isEdit ? t('edit_property') : t('add_property'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               const Spacer(),
               IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
             ]),
@@ -435,7 +435,7 @@ class _AddEditPropertySheetState extends State<_AddEditPropertySheet> {
             const SizedBox(height: 16),
 
             // Title
-            TextFormField(controller: _title, decoration: InputDecoration(labelText: 'Title'), validator: (v) => v != null && v.isNotEmpty ? null : 'Required'),
+            TextFormField(controller: _title, decoration: InputDecoration(labelText: t('title')), validator: (v) => v != null && v.isNotEmpty ? null : t('required_field')),
             const SizedBox(height: 12),
 
             // Property type dropdown
@@ -452,12 +452,12 @@ class _AddEditPropertySheetState extends State<_AddEditPropertySheet> {
               controller: _price,
               decoration: InputDecoration(labelText: t('price'), prefixText: '฿ ', suffixText: _listing == 'RENT' ? t('per_month') : null),
               keyboardType: TextInputType.number,
-              validator: (v) => v != null && v.isNotEmpty && (int.tryParse(v) ?? 0) > 0 ? null : 'Required',
+              validator: (v) => v != null && v.isNotEmpty && (int.tryParse(v) ?? 0) > 0 ? null : t('required_field'),
             ),
             const SizedBox(height: 12),
 
             // Area
-            TextFormField(controller: _area, decoration: InputDecoration(labelText: t('area_sqm')), keyboardType: TextInputType.number, validator: (v) => v != null && v.isNotEmpty ? null : 'Required'),
+            TextFormField(controller: _area, decoration: InputDecoration(labelText: t('area_sqm')), keyboardType: TextInputType.number, validator: (v) => v != null && v.isNotEmpty ? null : t('required_field')),
             const SizedBox(height: 12),
 
             // Beds & Baths
@@ -469,13 +469,13 @@ class _AddEditPropertySheetState extends State<_AddEditPropertySheet> {
             const SizedBox(height: 12),
 
             // Location & postal
-            TextFormField(controller: _location, decoration: InputDecoration(labelText: t('location')), validator: (v) => v != null && v.isNotEmpty ? null : 'Required'),
+            TextFormField(controller: _location, decoration: InputDecoration(labelText: t('location')), validator: (v) => v != null && v.isNotEmpty ? null : t('required_field')),
             const SizedBox(height: 12),
             TextFormField(controller: _postal, decoration: InputDecoration(labelText: t('postal_code')), keyboardType: TextInputType.number),
             const SizedBox(height: 12),
 
             // Description
-            TextFormField(controller: _desc, decoration: InputDecoration(labelText: t('description')), maxLines: 3, validator: (v) => v != null && v.isNotEmpty ? null : 'Required'),
+            TextFormField(controller: _desc, decoration: InputDecoration(labelText: t('description')), maxLines: 3, validator: (v) => v != null && v.isNotEmpty ? null : t('required_field')),
             const SizedBox(height: 16),
 
             // Image upload
