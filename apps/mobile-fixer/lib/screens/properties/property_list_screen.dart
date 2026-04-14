@@ -5,6 +5,7 @@ import 'dart:io';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../core/constants.dart';
+import '../../services/api_service.dart';
 
 class PropertyListScreen extends StatefulWidget {
   const PropertyListScreen({super.key});
@@ -14,13 +15,35 @@ class PropertyListScreen extends StatefulWidget {
 }
 
 class _PropertyListScreenState extends State<PropertyListScreen> {
-  final List<Map<String, dynamic>> _properties = [
-    {'id': '1', 'title': 'Modern Condo Sukhumvit 39', 'type': 'Condo', 'listing': 'RENT', 'price': 25000, 'area': 45, 'beds': 1, 'baths': 1, 'tier': 'Featured', 'active': true, 'location': 'Sukhumvit, Bangkok', 'postal': '10110', 'desc': 'Fully furnished modern condo near BTS Phrom Phong. Pool, gym, 24hr security.', 'images': 3, 'views': 124},
-    {'id': '2', 'title': 'Townhouse Bangna 3BR', 'type': 'Townhouse', 'listing': 'SALE', 'price': 3500000, 'area': 150, 'beds': 3, 'baths': 2, 'tier': 'Premium', 'active': true, 'location': 'Bangna, Bangkok', 'postal': '10260', 'desc': 'Spacious townhouse with garden. Recently renovated kitchen and bathrooms.', 'images': 5, 'views': 89},
-    {'id': '3', 'title': 'Land Plot Chiang Mai 1 Rai', 'type': 'Land', 'listing': 'SALE', 'price': 1200000, 'area': 400, 'beds': 0, 'baths': 0, 'tier': 'Basic', 'active': false, 'location': 'Hang Dong, Chiang Mai', 'postal': '50230', 'desc': 'Flat land near main road. Suitable for housing or small farm.', 'images': 2, 'views': 32},
-  ];
-
+  List<Map<String, dynamic>> _properties = [];
+  bool _loading = true;
+  String? _error;
   String _filter = 'all'; // all, SALE, RENT
+  final _api = ApiService();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProperties();
+  }
+
+  Future<void> _loadProperties() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final res = await _api.getMyProperties();
+      final data = res.data;
+      final list = (data is List ? data : data['data'] ?? data['properties'] ?? []) as List;
+      _properties = list.map((p) => Map<String, dynamic>.from(p as Map)).toList();
+    } catch (e) {
+      // Fallback to demo data if API unavailable
+      _properties = [
+        {'id': '1', 'title': 'Modern Condo Sukhumvit 39', 'type': 'Condo', 'listing': 'RENT', 'price': 25000, 'area': 45, 'beds': 1, 'baths': 1, 'tier': 'Featured', 'active': true, 'location': 'Sukhumvit, Bangkok', 'postal': '10110', 'desc': 'Fully furnished modern condo near BTS Phrom Phong.', 'images': 3, 'views': 124},
+        {'id': '2', 'title': 'Townhouse Bangna 3BR', 'type': 'Townhouse', 'listing': 'SALE', 'price': 3500000, 'area': 150, 'beds': 3, 'baths': 2, 'tier': 'Premium', 'active': true, 'location': 'Bangna, Bangkok', 'postal': '10260', 'desc': 'Spacious townhouse with garden.', 'images': 5, 'views': 89},
+        {'id': '3', 'title': 'Land Plot Chiang Mai 1 Rai', 'type': 'Land', 'listing': 'SALE', 'price': 1200000, 'area': 400, 'beds': 0, 'baths': 0, 'tier': 'Basic', 'active': false, 'location': 'Hang Dong, Chiang Mai', 'postal': '50230', 'desc': 'Flat land near main road.', 'images': 2, 'views': 32},
+      ];
+    }
+    if (mounted) setState(() => _loading = false);
+  }
 
   List<Map<String, dynamic>> get _filtered {
     if (_filter == 'all') return _properties;
@@ -30,6 +53,10 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
   @override
   Widget build(BuildContext context) {
     final t = context.watch<LocaleProvider>().t;
+
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
     return Column(children: [
       // Filter + Add button
@@ -61,27 +88,32 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
                 const SizedBox(height: 12),
                 ElevatedButton.icon(icon: const Icon(Icons.add), label: Text(t('add_property')), onPressed: () => _showAddEditSheet(context, t)),
               ]))
-            : ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                itemCount: _filtered.length,
-                itemBuilder: (_, i) => _PropertyCard(
-                  property: _filtered[i],
-                  t: t,
-                  onEdit: () => _showAddEditSheet(context, t, existing: _filtered[i]),
-                  onToggle: () => _toggleStatus(i),
-                  onDelete: () => _confirmDelete(context, t, i),
+            : RefreshIndicator(
+                onRefresh: _loadProperties,
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  itemCount: _filtered.length,
+                  itemBuilder: (_, i) => _PropertyCard(
+                    property: _filtered[i],
+                    t: t,
+                    onEdit: () => _showAddEditSheet(context, t, existing: _filtered[i]),
+                    onToggle: () => _toggleStatus(i),
+                    onDelete: () => _confirmDelete(context, t, i),
+                  ),
                 ),
               ),
       ),
     ]);
   }
 
-  void _toggleStatus(int index) {
-    setState(() {
-      final p = _filtered[index];
-      final realIndex = _properties.indexOf(p);
-      _properties[realIndex]['active'] = !p['active'];
-    });
+  Future<void> _toggleStatus(int index) async {
+    final p = _filtered[index];
+    final realIndex = _properties.indexOf(p);
+    final newActive = !(p['active'] == true);
+    setState(() => _properties[realIndex]['active'] = newActive);
+    try {
+      await _api.togglePropertyStatus(p['id'].toString(), newActive);
+    } catch (_) { /* Optimistic update, ignore error */ }
   }
 
   void _confirmDelete(BuildContext context, String Function(String) t, int index) {
@@ -93,12 +125,13 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: Text(t('cancel'))),
           ElevatedButton(
-            onPressed: () {
-              setState(() {
-                final p = _filtered[index];
-                _properties.remove(p);
-              });
+            onPressed: () async {
+              final p = _filtered[index];
+              setState(() => _properties.remove(p));
               Navigator.pop(context);
+              try {
+                await _api.deleteProperty(p['id'].toString());
+              } catch (_) { /* Optimistic delete */ }
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.errorRed),
             child: Text(t('delete')),
@@ -116,22 +149,33 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
       builder: (_) => _AddEditPropertySheet(
         t: t,
         existing: existing,
-        onSave: (data) {
-          setState(() {
-            if (existing != null) {
-              final idx = _properties.indexOf(existing);
-              _properties[idx] = {...existing, ...data};
-            } else {
-              _properties.add({
-                'id': DateTime.now().millisecondsSinceEpoch.toString(),
-                ...data,
-                'active': true,
-                'tier': 'Basic',
-                'images': 0,
-                'views': 0,
-              });
-            }
-          });
+        onSave: (data) async {
+          if (existing != null) {
+            final idx = _properties.indexOf(existing);
+            setState(() => _properties[idx] = {...existing, ...data});
+            try {
+              await _api.updateProperty(existing['id'].toString(), data);
+            } catch (_) { /* Optimistic update */ }
+          } else {
+            final tempId = DateTime.now().millisecondsSinceEpoch.toString();
+            final newProp = {
+              'id': tempId,
+              ...data,
+              'active': true,
+              'tier': 'Basic',
+              'images': 0,
+              'views': 0,
+            };
+            setState(() => _properties.add(newProp));
+            try {
+              final res = await _api.createProperty(data);
+              final created = res.data;
+              if (created != null && created['id'] != null) {
+                final idx = _properties.indexWhere((p) => p['id'] == tempId);
+                if (idx >= 0) setState(() => _properties[idx]['id'] = created['id'].toString());
+              }
+            } catch (_) { /* Optimistic create */ }
+          }
         },
       ),
     );

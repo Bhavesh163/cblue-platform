@@ -6,6 +6,7 @@ import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../core/constants.dart';
 import '../../services/api_service.dart';
+import 'ai_evaluation_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -59,7 +60,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!_formKey.currentState!.validate() || !_pdpa) return;
     setState(() { _step = 3; _loading = true; _error = null; });
     try {
-      final res = await ApiService().register({
+      final api = ApiService();
+
+      // 1. Register user
+      final res = await api.register({
         'name': _name.text.trim(),
         'email': _email.text.trim(),
         'phone': _phone.text.trim(),
@@ -73,7 +77,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
       final data = res.data;
       await context.read<AuthProvider>().login(data['user'], data['token']);
       await context.read<AuthProvider>().acceptPdpa();
-      if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
+
+      // 2. Upload KYC files (selfie + ID card)
+      try {
+        if (_selfie != null || _idCard != null) {
+          await api.uploadKyc(selfie: _selfie, idCard: _idCard);
+        }
+      } catch (_) { /* KYC upload failure non-blocking */ }
+
+      // 3. Upload portfolio images
+      try {
+        if (_portfolio.isNotEmpty) {
+          await api.uploadPortfolio(_portfolio);
+        }
+      } catch (_) { /* Portfolio upload failure non-blocking */ }
+
+      // 4. Navigate to AI evaluation screen
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AiEvaluationScreen()),
+        );
+      }
     } catch (e) {
       setState(() { _error = 'Registration failed. Please try again.'; _step = 0; });
     } finally {

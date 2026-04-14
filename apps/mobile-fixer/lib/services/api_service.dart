@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'dart:io';
 import '../core/constants.dart';
 
 class ApiService {
@@ -38,12 +39,25 @@ class ApiService {
       _dio.post('/auth/forgot-password', data: {'email': email, 'role': 'fixer'});
 
   // KYC ----------------------------------------------------------------
-  Future<Response> uploadKyc(FormData formData) =>
-      _dio.post('/fixer/kyc', data: formData);
+  Future<Response> uploadKyc({File? selfie, File? idCard}) async {
+    final formData = FormData();
+    if (selfie != null) {
+      formData.files.add(MapEntry('selfie', await MultipartFile.fromFile(selfie.path, filename: 'selfie.jpg')));
+    }
+    if (idCard != null) {
+      formData.files.add(MapEntry('idCard', await MultipartFile.fromFile(idCard.path, filename: 'id_card.jpg')));
+    }
+    return _dio.post('/fixer/kyc', data: formData);
+  }
 
   // Portfolio ----------------------------------------------------------
-  Future<Response> uploadPortfolio(FormData formData) =>
-      _dio.post('/fixer/portfolio', data: formData);
+  Future<Response> uploadPortfolio(List<File> files) async {
+    final formData = FormData();
+    for (int i = 0; i < files.length; i++) {
+      formData.files.add(MapEntry('portfolio', await MultipartFile.fromFile(files[i].path, filename: 'portfolio_$i.jpg')));
+    }
+    return _dio.post('/fixer/portfolio', data: formData);
+  }
 
   Future<Response> getAiEvaluation() => _dio.get('/fixer/ai-evaluation');
 

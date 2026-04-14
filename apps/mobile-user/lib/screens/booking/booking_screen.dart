@@ -83,6 +83,61 @@ class _BookingFormState extends State<_BookingForm> with AutomaticKeepAliveClien
   DateTime? _startDate;
   List<XFile> _images = [];
   bool _loading = false;
+  String? _autoProvince;
+  String? _autoDistrict;
+
+  // Thailand postal code → province/district lookup (major postcodes)
+  static const Map<String, Map<String, String>> _postalLookup = {
+    '10100': {'province': 'Bangkok', 'district': 'Pom Prap Sattru Phai'},
+    '10110': {'province': 'Bangkok', 'district': 'Pathum Wan'},
+    '10120': {'province': 'Bangkok', 'district': 'Bang Rak'},
+    '10200': {'province': 'Bangkok', 'district': 'Phra Nakhon'},
+    '10210': {'province': 'Bangkok', 'district': 'Chatuchak'},
+    '10220': {'province': 'Bangkok', 'district': 'Don Mueang'},
+    '10230': {'province': 'Bangkok', 'district': 'Lat Krabang'},
+    '10240': {'province': 'Bangkok', 'district': 'Prawet'},
+    '10250': {'province': 'Bangkok', 'district': 'Khlong Toei'},
+    '10260': {'province': 'Bangkok', 'district': 'Khlong Sam Wa'},
+    '10300': {'province': 'Bangkok', 'district': 'Dusit'},
+    '10310': {'province': 'Bangkok', 'district': 'Huai Khwang'},
+    '10330': {'province': 'Bangkok', 'district': 'Din Daeng'},
+    '10400': {'province': 'Bangkok', 'district': 'Ratchathewi'},
+    '10500': {'province': 'Bangkok', 'district': 'Bang Khen'},
+    '10600': {'province': 'Bangkok', 'district': 'Phaya Thai'},
+    '10700': {'province': 'Bangkok', 'district': 'Thon Buri'},
+    '10900': {'province': 'Bangkok', 'district': 'Sathon'},
+    '11000': {'province': 'Samut Prakan', 'district': 'Mueang'},
+    '11120': {'province': 'Samut Prakan', 'district': 'Bang Phli'},
+    '11130': {'province': 'Samut Prakan', 'district': 'Bang Bo'},
+    '12000': {'province': 'Nonthaburi', 'district': 'Mueang'},
+    '12120': {'province': 'Nonthaburi', 'district': 'Pak Kret'},
+    '12130': {'province': 'Nonthaburi', 'district': 'Bang Yai'},
+    '13000': {'province': 'Pathum Thani', 'district': 'Mueang'},
+    '20000': {'province': 'Chon Buri', 'district': 'Mueang'},
+    '20150': {'province': 'Chon Buri', 'district': 'Bang Lamung (Pattaya)'},
+    '20260': {'province': 'Chon Buri', 'district': 'Si Racha'},
+    '30000': {'province': 'Nakhon Ratchasima', 'district': 'Mueang'},
+    '40000': {'province': 'Khon Kaen', 'district': 'Mueang'},
+    '50000': {'province': 'Chiang Mai', 'district': 'Mueang'},
+    '50200': {'province': 'Chiang Mai', 'district': 'Hang Dong'},
+    '50300': {'province': 'Chiang Mai', 'district': 'Chiang Dao'},
+    '60000': {'province': 'Nakhon Sawan', 'district': 'Mueang'},
+    '73000': {'province': 'Nakhon Pathom', 'district': 'Mueang'},
+    '74000': {'province': 'Samut Sakhon', 'district': 'Mueang'},
+    '80000': {'province': 'Nakhon Si Thammarat', 'district': 'Mueang'},
+    '83000': {'province': 'Phuket', 'district': 'Mueang'},
+    '83110': {'province': 'Phuket', 'district': 'Kathu'},
+    '90000': {'province': 'Songkhla', 'district': 'Mueang'},
+    '90110': {'province': 'Songkhla', 'district': 'Hat Yai'},
+  };
+
+  void _onPostalChanged(String value) {
+    final lookup = _postalLookup[value];
+    setState(() {
+      _autoProvince = lookup?['province'];
+      _autoDistrict = lookup?['district'];
+    });
+  }
 
   @override
   bool get wantKeepAlive => true;
@@ -256,7 +311,27 @@ class _BookingFormState extends State<_BookingForm> with AutomaticKeepAliveClien
                 prefixIcon: const Icon(Icons.location_on_outlined),
                 counterText: '',
               ),
+              onChanged: _onPostalChanged,
             ),
+            if (_autoProvince != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryGreen.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppTheme.primaryGreen.withValues(alpha: 0.3)),
+                ),
+                child: Row(children: [
+                  const Icon(Icons.check_circle, size: 16, color: AppTheme.primaryGreen),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(
+                    '${locale.t('province')}: $_autoProvince  •  ${locale.t('district')}: $_autoDistrict',
+                    style: const TextStyle(fontSize: 13, color: AppTheme.primaryGreen, fontWeight: FontWeight.w500),
+                  )),
+                ]),
+              ),
+            ],
             const SizedBox(height: 12),
             // Description
             TextFormField(

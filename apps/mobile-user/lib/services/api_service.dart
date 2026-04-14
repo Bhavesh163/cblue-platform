@@ -105,4 +105,53 @@ class ApiService {
       'comment': comment,
     });
   }
+
+  // Property workflow
+  static Future<Map<String, dynamic>> createPropertyOrder({
+    required String propertyId,
+    required String tier,
+    required int fee,
+  }) async {
+    final dio = await _authedDio;
+    final res = await dio.post('/properties/orders', data: {
+      'propertyId': propertyId,
+      'tier': tier,
+      'processingFee': fee,
+    });
+    return res.data;
+  }
+
+  static Future<Map<String, dynamic>> confirmPropertyPayment(String orderId) async {
+    final dio = await _authedDio;
+    final res = await dio.post('/properties/orders/$orderId/payment');
+    return res.data;
+  }
+
+  static Future<Map<String, dynamic>> getPropertyOrderDetails(String orderId) async {
+    final dio = await _authedDio;
+    final res = await dio.get('/properties/orders/$orderId');
+    return res.data;
+  }
+
+  static Future<void> submitPropertyReview({
+    required String orderId,
+    required int stars,
+    required String comment,
+  }) async {
+    final dio = await _authedDio;
+    await dio.post('/properties/orders/$orderId/review', data: {
+      'rating': stars,
+      'comment': comment,
+    });
+  }
+
+  // Postal code lookup
+  static Future<Map<String, dynamic>?> lookupPostalCode(String code) async {
+    try {
+      final res = await _dio.get('/geo/postal/$code');
+      return res.data;
+    } catch (_) {
+      return null;
+    }
+  }
 }

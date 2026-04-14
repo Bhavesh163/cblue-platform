@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme.dart';
 import '../../core/providers.dart';
+import '../properties/properties_workflow_screen.dart';
 
 class PropertiesTab extends StatelessWidget {
   final bool standalone;
@@ -130,10 +131,17 @@ class PropertiesTab extends StatelessWidget {
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton(
-                      onPressed: () {},
-                      child: Text(
-                        locale.locale == 'th' ? 'ติดต่อผู้ลงประกาศ' : locale.locale == 'zh' ? '联系卖家' : 'Contact Lister',
-                      ),
+                      onPressed: () {
+                        final titleMap = prop['title'] as Map<String, String>;
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => PropertiesWorkflowScreen(property: {
+                          'title': titleMap[locale.locale] ?? titleMap['en']!,
+                          'price': prop['price'],
+                          'type': prop['type'],
+                          'listing': prop['type'],
+                          'tier': prop['tier'],
+                        })));
+                      },
+                      child: Text(locale.t('contact_lister')),
                     ),
                   ),
                 ],

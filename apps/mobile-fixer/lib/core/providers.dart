@@ -89,6 +89,7 @@ class Translations {
     'pending_review': {'en': 'Pending Review', 'th': 'รอตรวจสอบ', 'zh': '待审核'},
     'approved': {'en': 'Approved', 'th': 'อนุมัติแล้ว', 'zh': '已批准'},
     'rejected': {'en': 'Rejected', 'th': 'ถูกปฏิเสธ', 'zh': '已拒绝'},
+    'go_to_dashboard': {'en': 'Go to Dashboard', 'th': 'ไปที่แดชบอร์ด', 'zh': '前往仪表板'},
   };
 
   static String get(String key, String locale) {
