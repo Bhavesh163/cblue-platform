@@ -1,0 +1,3 @@
+# Cloudflare Pages redirect: root path to default Thai locale
+# Fires at CDN level before OpenNext worker — most reliable for Cloudflare Pages
+/  /th  302
