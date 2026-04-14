@@ -46,12 +46,12 @@ class OverviewTab extends StatelessWidget {
         const SizedBox(height: 24),
 
         // Recent activity
-        Text('Recent Activity', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text(t('recent_activity'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
-        _ActivityTile(title: 'New job request: Plumbing repair', time: '10 min ago', icon: Icons.notifications_active, color: AppTheme.primaryBlue),
-        _ActivityTile(title: 'Payment received: ฿1,500', time: '2 hours ago', icon: Icons.payment, color: AppTheme.primaryGreen),
-        _ActivityTile(title: 'Customer rated you 5 stars', time: '1 day ago', icon: Icons.star, color: AppTheme.warningOrange),
-        _ActivityTile(title: 'Job PO-2506-0042 completed', time: '2 days ago', icon: Icons.check_circle, color: AppTheme.primaryGreen),
+        _ActivityTile(title: '${t('new_job_request')}: Plumbing repair', time: '10 min ago', icon: Icons.notifications_active, color: AppTheme.primaryBlue),
+        _ActivityTile(title: '${t('payment_received')}: ฿1,500', time: '2 hours ago', icon: Icons.payment, color: AppTheme.primaryGreen),
+        _ActivityTile(title: '${t('review_received')} ⭐⭐⭐⭐⭐', time: '1 day ago', icon: Icons.star, color: AppTheme.warningOrange),
+        _ActivityTile(title: '${t('job_completed')}: PO-2506-0042', time: '2 days ago', icon: Icons.check_circle, color: AppTheme.primaryGreen),
       ]),
     );
   }

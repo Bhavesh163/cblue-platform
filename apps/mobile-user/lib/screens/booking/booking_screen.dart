@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:dio/dio.dart';
 import '../../core/theme.dart';
 import '../../core/constants.dart';
 import '../../core/providers.dart';
+import '../../services/api_service.dart';
 import 'fixer_results_screen.dart';
 
 class BookingScreen extends StatefulWidget {
@@ -193,8 +195,34 @@ class _BookingFormState extends State<_BookingForm> with AutomaticKeepAliveClien
 
     setState(() => _loading = true);
 
-    // Simulate AI matching delay
-    await Future.delayed(const Duration(seconds: 1));
+    // Create order and upload images if any
+    try {
+      final order = await ApiService.createOrder({
+        'type': widget.type,
+        'service': _selectedService,
+        'name': _nameCtrl.text.trim(),
+        'email': _emailCtrl.text.trim(),
+        'phone': _phoneCtrl.text.trim(),
+        'company': _companyCtrl.text.trim(),
+        'description': _descCtrl.text.trim(),
+        'postalCode': _postalCtrl.text.trim(),
+        'startDate': _startDate!.toIso8601String(),
+      });
+
+      // Upload images if selected
+      if (_images.isNotEmpty) {
+        try {
+          final formData = FormData();
+          for (int i = 0; i < _images.length; i++) {
+            formData.files.add(MapEntry('images', await MultipartFile.fromFile(_images[i].path, filename: 'img_$i.jpg')));
+          }
+          final orderId = order['id']?.toString() ?? '';
+          if (orderId.isNotEmpty) {
+            await ApiService.uploadOrderImages(orderId, formData);
+          }
+        } catch (_) { /* Image upload is best-effort */ }
+      }
+    } catch (_) { /* Continue to results even if API fails */ }
 
     if (!mounted) return;
     setState(() => _loading = false);
@@ -231,7 +259,7 @@ class _BookingFormState extends State<_BookingForm> with AutomaticKeepAliveClien
                 labelText: '${locale.t('name')} *',
                 prefixIcon: const Icon(Icons.person_outlined),
               ),
-              validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+              validator: (v) => v == null || v.isEmpty ? locale.t('required_field') : null,
             ),
             const SizedBox(height: 12),
             // Email
@@ -243,8 +271,8 @@ class _BookingFormState extends State<_BookingForm> with AutomaticKeepAliveClien
                 prefixIcon: const Icon(Icons.email_outlined),
               ),
               validator: (v) {
-                if (v == null || v.isEmpty) return 'Required';
-                if (!RegExp(r'\S+@\S+\.\S+').hasMatch(v)) return 'Invalid email';
+                if (v == null || v.isEmpty) return locale.t('required_field');
+                if (!RegExp(r'\S+@\S+\.\S+').hasMatch(v)) return locale.t('invalid_email');
                 return null;
               },
             ),
@@ -257,17 +285,16 @@ class _BookingFormState extends State<_BookingForm> with AutomaticKeepAliveClien
                 labelText: '${locale.t('phone')} *',
                 prefixIcon: const Icon(Icons.phone_outlined),
               ),
-              validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+              validator: (v) => v == null || v.isEmpty ? locale.t('required_field') : null,
             ),
             const SizedBox(height: 12),
             // Company
             TextFormField(
               controller: _companyCtrl,
               decoration: InputDecoration(
-                labelText: '${locale.t('company')} *',
+                labelText: locale.t('company'),
                 prefixIcon: const Icon(Icons.business_outlined),
               ),
-              validator: (v) => v == null || v.isEmpty ? 'Required' : null,
             ),
             const SizedBox(height: 12),
             // Service dropdown
@@ -282,7 +309,7 @@ class _BookingFormState extends State<_BookingForm> with AutomaticKeepAliveClien
                 child: Text(s[locale.locale] ?? s['en']!),
               )).toList(),
               onChanged: (v) => setState(() => _selectedService = v),
-              validator: (v) => v == null ? 'Required' : null,
+              validator: (v) => v == null ? locale.t('required_field') : null,
             ),
             const SizedBox(height: 12),
             // Date picker
@@ -341,7 +368,7 @@ class _BookingFormState extends State<_BookingForm> with AutomaticKeepAliveClien
                 labelText: '${locale.t('description')} *',
                 alignLabelWithHint: true,
               ),
-              validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+              validator: (v) => v == null || v.isEmpty ? locale.t('required_field') : null,
             ),
             const SizedBox(height: 12),
             // Image upload

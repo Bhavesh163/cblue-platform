@@ -42,6 +42,8 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
   bool _variationApproved = false;
   bool _hasVariation = false;
   final _nominationCtrl = TextEditingController();
+  final _chatController = TextEditingController();
+  final List<Map<String, String>> _chatMessages = [];
 
   @override
   void initState() {
@@ -143,6 +145,23 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
         });
       }
     }
+  }
+
+  void _sendChatMessage() {
+    final text = _chatController.text.trim();
+    if (text.isEmpty) return;
+    setState(() {
+      _chatMessages.add({'sender': 'me', 'text': text});
+      _chatController.clear();
+    });
+    // Auto-reply from partner after 1.5s
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (mounted) {
+        setState(() {
+          _chatMessages.add({'sender': 'partner', 'text': 'Thank you, I will review and get back to you shortly.'});
+        });
+      }
+    });
   }
 
   @override
@@ -571,7 +590,7 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        // Mock chat messages
+        // Chat area with send capability
         Container(
           height: 300,
           decoration: BoxDecoration(
@@ -579,18 +598,61 @@ class _FixerResultsScreenState extends State<FixerResultsScreen> {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: AppTheme.borderLight),
           ),
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(12),
           child: Column(
             children: [
               Expanded(
-                child: Center(
-                  child: Text(
-                    locale.locale == 'th' ? 'แชทกับพาร์ทเนอร์ ${_partners[_selectedPartner!]['id']}'
-                        : locale.locale == 'zh' ? '与合作伙伴${_partners[_selectedPartner!]['id']}聊天'
-                        : 'Chat with Partner ${_partners[_selectedPartner!]['id']}',
-                    style: const TextStyle(color: AppTheme.textSecondary),
+                child: _chatMessages.isEmpty
+                    ? Center(
+                        child: Text(
+                          locale.locale == 'th' ? 'เริ่มแชทกับพาร์ทเนอร์ ${_partners[_selectedPartner!]['id']}'
+                              : locale.locale == 'zh' ? '开始与合作伙伴${_partners[_selectedPartner!]['id']}聊天'
+                              : 'Start chatting with Partner ${_partners[_selectedPartner!]['id']}',
+                          style: const TextStyle(color: AppTheme.textSecondary),
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: _chatMessages.length,
+                        itemBuilder: (_, i) {
+                          final msg = _chatMessages[i];
+                          final isMine = msg['sender'] == 'me';
+                          return Align(
+                            alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.6),
+                              decoration: BoxDecoration(
+                                color: isMine ? AppTheme.primaryBlue : Colors.grey.shade200,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(msg['text']!, style: TextStyle(color: isMine ? Colors.white : Colors.black87)),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _chatController,
+                      decoration: InputDecoration(
+                        hintText: locale.locale == 'th' ? 'พิมพ์ข้อความ...' : locale.locale == 'zh' ? '输入消息...' : 'Type a message...',
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
+                      ),
+                      onSubmitted: (_) => _sendChatMessage(),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.send, color: AppTheme.primaryBlue),
+                    onPressed: _sendChatMessage,
+                  ),
+                ],
               ),
             ],
           ),

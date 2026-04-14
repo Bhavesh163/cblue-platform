@@ -116,7 +116,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         );
       }
     } catch (e) {
-      setState(() { _error = 'Registration failed. Please try again.'; _step = 0; });
+      setState(() { _error = context.read<LocaleProvider>().t('registration_error'); _step = 0; });
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -147,11 +147,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 onPressed: _loading ? null : details.onStepContinue,
                 child: _loading
                     ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : Text(_step == 2 ? t('submit') : 'Next'),
+                    : Text(_step == 2 ? t('submit') : t('next')),
               ),
               if (_step > 0) ...[
                 const SizedBox(width: 12),
-                TextButton(onPressed: details.onStepCancel, child: const Text('Back')),
+                TextButton(onPressed: details.onStepCancel, child: Text(t('back'))),
               ],
             ]),
           );
@@ -173,11 +173,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     decoration: BoxDecoration(color: AppTheme.errorRed.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
                     child: Text(_error!, style: const TextStyle(color: AppTheme.errorRed)),
                   ),
-                TextFormField(controller: _name, decoration: InputDecoration(labelText: t('full_name')), validator: (v) => v != null && v.isNotEmpty ? null : 'Required'),
+                TextFormField(controller: _name, decoration: InputDecoration(labelText: t('full_name')), validator: (v) => v != null && v.isNotEmpty ? null : t('required_field')),
                 const SizedBox(height: 12),
-                TextFormField(controller: _email, decoration: InputDecoration(labelText: t('email')), keyboardType: TextInputType.emailAddress, validator: (v) => v != null && v.contains('@') ? null : 'Invalid email'),
+                TextFormField(controller: _email, decoration: InputDecoration(labelText: t('email')), keyboardType: TextInputType.emailAddress, validator: (v) => v != null && v.contains('@') ? null : t('invalid_email')),
                 const SizedBox(height: 12),
-                TextFormField(controller: _phone, decoration: InputDecoration(labelText: t('phone')), keyboardType: TextInputType.phone, validator: (v) => v != null && v.length >= 9 ? null : 'Invalid phone'),
+                TextFormField(controller: _phone, decoration: InputDecoration(labelText: t('phone')), keyboardType: TextInputType.phone, validator: (v) => v != null && v.length >= 9 ? null : t('invalid_phone')),
                 const SizedBox(height: 12),
                 TextFormField(controller: _company, decoration: InputDecoration(labelText: t('company'))),
                 const SizedBox(height: 12),
@@ -193,19 +193,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 if (_category != 'property_lister') ...[
                   Text(t('select_services'), style: const TextStyle(fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8, runSpacing: 4,
-                    children: _servicesForCategory().map((s) => FilterChip(
-                      label: Text(s, style: const TextStyle(fontSize: 12)),
-                      selected: _selectedServices.contains(s),
-                      onSelected: (sel) => setState(() => sel ? _selectedServices.add(s) : _selectedServices.remove(s)),
-                    )).toList(),
-                  ),
+                  Builder(builder: (ctx) {
+                    final locale = ctx.watch<LocaleProvider>().locale;
+                    return Wrap(
+                      spacing: 8, runSpacing: 4,
+                      children: _servicesForCategory().map((s) => FilterChip(
+                        label: Text(_localizedService(s, locale), style: const TextStyle(fontSize: 12)),
+                        selected: _selectedServices.contains(s),
+                        onSelected: (sel) => setState(() => sel ? _selectedServices.add(s) : _selectedServices.remove(s)),
+                      )).toList(),
+                    );
+                  }),
                   const SizedBox(height: 12),
                 ],
-                TextFormField(controller: _password, decoration: InputDecoration(labelText: t('password')), obscureText: true, validator: (v) => v != null && v.length >= 6 ? null : 'Min 6 chars'),
+                TextFormField(controller: _password, decoration: InputDecoration(labelText: t('password')), obscureText: true, validator: (v) => v != null && v.length >= 6 ? null : t('min_6_chars')),
                 const SizedBox(height: 12),
-                TextFormField(controller: _confirmPw, decoration: InputDecoration(labelText: t('confirm_password')), obscureText: true, validator: (v) => v == _password.text ? null : 'Passwords must match'),
+                TextFormField(controller: _confirmPw, decoration: InputDecoration(labelText: t('confirm_password')), obscureText: true, validator: (v) => v == _password.text ? null : t('passwords_mismatch')),
                 const SizedBox(height: 12),
                 CheckboxListTile(
                   value: _pdpa,
@@ -229,8 +232,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   child: _selfie == null ? const Icon(Icons.camera_alt) : null,
                 ),
                 title: Text(t('take_selfie')),
-                subtitle: Text(_selfie != null ? 'Captured ✓' : 'Required'),
-                trailing: ElevatedButton(onPressed: () => _pickImage('selfie'), child: const Text('Camera')),
+                subtitle: Text(_selfie != null ? t('captured') : t('required_field')),
+                trailing: ElevatedButton(onPressed: () => _pickImage('selfie'), child: Text(t('camera'))),
               ),
               const Divider(),
               ListTile(
@@ -239,8 +242,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   child: _idCard == null ? const Icon(Icons.badge) : null,
                 ),
                 title: Text(t('upload_id')),
-                subtitle: Text(_idCard != null ? 'Uploaded ✓' : 'Required'),
-                trailing: ElevatedButton(onPressed: () => _pickImage('id'), child: const Text('Gallery')),
+                subtitle: Text(_idCard != null ? t('uploaded') : t('required_field')),
+                trailing: ElevatedButton(onPressed: () => _pickImage('id'), child: Text(t('gallery'))),
               ),
             ]),
           ),
@@ -283,7 +286,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               OutlinedButton.icon(
                 onPressed: _portfolio.length < 10 ? _pickPortfolio : null,
                 icon: const Icon(Icons.add_photo_alternate),
-                label: Text('${_portfolio.length}/10 images'),
+                label: Text('${_portfolio.length}/10 ${t('images_count')}'),
               ),
               const SizedBox(height: 8),
               Text(t('pdpa_notice'), style: TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
@@ -294,12 +297,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  List<String> _servicesForCategory() {
+  Map<String, List<String>> _servicesMapForCategory() {
     switch (_category) {
       case 'household': return AppConstants.householdServices;
       case 'project': return AppConstants.projectServices;
       case 'professional': return AppConstants.professionalServices;
-      default: return [];
+      default: return {'en': [], 'th': [], 'zh': []};
     }
+  }
+
+  List<String> _servicesForCategory() => _servicesMapForCategory()['en'] ?? [];
+
+  String _localizedService(String enName, String locale) {
+    final map = _servicesMapForCategory();
+    final enList = map['en'] ?? [];
+    final idx = enList.indexOf(enName);
+    if (idx < 0) return enName;
+    final locList = map[locale] ?? enList;
+    return idx < locList.length ? locList[idx] : enName;
   }
 }

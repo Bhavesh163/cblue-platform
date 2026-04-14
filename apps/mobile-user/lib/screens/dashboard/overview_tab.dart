@@ -77,7 +77,7 @@ class OverviewTab extends StatelessWidget {
               const SizedBox(width: 12),
               _StatCard(
                 icon: Icons.star,
-                label: locale.locale == 'th' ? 'คะแนนเฉลี่ย' : locale.locale == 'zh' ? '平均评分' : 'Avg Rating',
+                label: locale.t('avg_rating'),
                 value: '4.8',
                 color: AppTheme.star,
               ),
@@ -122,7 +122,7 @@ class OverviewTab extends StatelessWidget {
 
           // Recent activity
           Text(
-            locale.locale == 'th' ? 'กิจกรรมล่าสุด' : locale.locale == 'zh' ? '最近活动' : 'Recent Activity',
+            locale.t('recent_activity'),
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),

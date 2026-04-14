@@ -91,7 +91,7 @@ class _HistoryTabState extends State<HistoryTab> {
               Text('${h['customer']}  •  ${h['date']}', style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
               const SizedBox(height: 8),
               Row(children: [
-                Text('Earned: ${h['earned']}', style: const TextStyle(fontWeight: FontWeight.w600, color: AppTheme.primaryGreen)),
+                Text('${t('earned')}: ${h['earned']}', style: const TextStyle(fontWeight: FontWeight.w600, color: AppTheme.primaryGreen)),
                 const Spacer(),
                 Text('${t('processing_fee')}: ${h['fee']}', style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
               ]),

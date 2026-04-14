@@ -98,12 +98,36 @@ class RequestsTab extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     TextButton(
-                      onPressed: () {},
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('${locale.t('cancel')}: ${service[locale.locale] ?? service['en']!}'), duration: const Duration(seconds: 2)),
+                        );
+                      },
                       child: Text(locale.t('cancel')),
                     ),
                     const SizedBox(width: 8),
                     ElevatedButton(
-                      onPressed: () {},
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (_) => AlertDialog(
+                            title: Text(service[locale.locale] ?? service['en']!),
+                            content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(desc[locale.locale] ?? desc['en']!),
+                                const SizedBox(height: 12),
+                                Text('${locale.t('status_label')}: $status', style: const TextStyle(fontWeight: FontWeight.w600)),
+                                Text('${locale.t('date_label')}: ${req['date']}', style: const TextStyle(color: AppTheme.textSecondary)),
+                              ],
+                            ),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(context), child: Text(locale.t('ok'))),
+                            ],
+                          ),
+                        );
+                      },
                       style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8)),
                       child: Text(
                         locale.locale == 'th' ? 'ดูรายละเอียด' : locale.locale == 'zh' ? '查看详情' : 'View Details',

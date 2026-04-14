@@ -32,11 +32,12 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       final auth = context.read<AuthProvider>();
       await auth.login(res['subscriber'] ?? res, res['token'] ?? '');
-      await auth.acceptPdpa();
+      // PDPA consent is restored from storage on login; do not auto-accept
     } catch (e) {
+      final t = context.read<LocaleProvider>().t;
       setState(() => _error = e.toString().contains('401')
-          ? 'Invalid email or password'
-          : 'Connection error. Please try again.');
+          ? t('invalid_credentials')
+          : t('connection_error'));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -98,8 +99,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     prefixIcon: const Icon(Icons.email_outlined),
                   ),
                   validator: (v) {
-                    if (v == null || v.isEmpty) return 'Required';
-                    if (!RegExp(r'\S+@\S+\.\S+').hasMatch(v)) return 'Invalid email';
+                    if (v == null || v.isEmpty) return locale.t('required_field');
+                    if (!RegExp(r'\S+@\S+\.\S+').hasMatch(v)) return locale.t('invalid_email');
                     return null;
                   },
                 ),

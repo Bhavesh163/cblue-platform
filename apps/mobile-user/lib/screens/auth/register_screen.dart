@@ -26,8 +26,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
+    final t = context.read<LocaleProvider>().t;
     if (!_pdpaChecked) {
-      setState(() => _error = 'Please accept PDPA consent');
+      setState(() => _error = t('pdpa_required'));
       return;
     }
     setState(() { _loading = true; _error = null; });
@@ -46,8 +47,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
     } catch (e) {
       setState(() => _error = e.toString().contains('409')
-          ? 'Email already registered'
-          : 'Registration failed. Please try again.');
+          ? t('email_exists')
+          : t('registration_error'));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -85,7 +86,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   labelText: '${locale.t('name')} *',
                   prefixIcon: const Icon(Icons.person_outlined),
                 ),
-                validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                validator: (v) => v == null || v.isEmpty ? locale.t('required_field') : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -96,8 +97,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   prefixIcon: const Icon(Icons.email_outlined),
                 ),
                 validator: (v) {
-                  if (v == null || v.isEmpty) return 'Required';
-                  if (!RegExp(r'\S+@\S+\.\S+').hasMatch(v)) return 'Invalid email';
+                  if (v == null || v.isEmpty) return locale.t('required_field');
+                  if (!RegExp(r'\S+@\S+\.\S+').hasMatch(v)) return locale.t('invalid_email');
                   return null;
                 },
               ),
@@ -140,7 +141,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   prefixIcon: const Icon(Icons.lock_outlined),
                 ),
                 validator: (v) {
-                  if (v != _passwordCtrl.text) return 'Passwords do not match';
+                  if (v != _passwordCtrl.text) return locale.t('passwords_mismatch');
                   return null;
                 },
               ),

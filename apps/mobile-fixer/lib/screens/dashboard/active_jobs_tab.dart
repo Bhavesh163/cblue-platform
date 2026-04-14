@@ -89,7 +89,7 @@ class _ActiveJobsTabState extends State<ActiveJobsTab> {
               const SizedBox(height: 4),
               Text(j['customer'] as String, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
               const SizedBox(height: 4),
-              Text('Date: ${j['date']}', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+              Text('${t('date_label')}: ${j['date']}', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
               const SizedBox(height: 12),
               // Progress bar
               Row(children: [

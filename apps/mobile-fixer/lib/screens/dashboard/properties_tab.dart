@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
+import '../properties/property_list_screen.dart';
 
 class PropertiesTab extends StatelessWidget {
   const PropertiesTab({super.key});
@@ -70,10 +71,16 @@ class PropertiesTab extends StatelessWidget {
               ]),
               const SizedBox(height: 12),
               Row(children: [
-                OutlinedButton.icon(onPressed: () {}, icon: const Icon(Icons.edit, size: 16), label: Text(t('edit'))),
+                OutlinedButton.icon(onPressed: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const PropertyListScreen()));
+                }, icon: const Icon(Icons.edit, size: 16), label: Text(t('edit'))),
                 const SizedBox(width: 8),
                 OutlinedButton.icon(
-                  onPressed: () {},
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('${p['title']} ${isActive ? t('deactivate') : t('activate')}d'), duration: const Duration(seconds: 2)),
+                    );
+                  },
                   icon: Icon(isActive ? Icons.visibility_off : Icons.visibility, size: 16),
                   label: Text(isActive ? t('deactivate') : t('activate')),
                 ),

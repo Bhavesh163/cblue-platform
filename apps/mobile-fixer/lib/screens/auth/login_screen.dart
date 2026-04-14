@@ -29,7 +29,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final data = res.data;
       await context.read<AuthProvider>().login(data['user'], data['token']);
     } catch (e) {
-      setState(() => _error = 'Invalid email or password');
+      setState(() => _error = context.read<LocaleProvider>().t('invalid_credentials'));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -66,14 +66,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   controller: _email,
                   decoration: InputDecoration(labelText: t('email'), prefixIcon: const Icon(Icons.email)),
                   keyboardType: TextInputType.emailAddress,
-                  validator: (v) => v != null && v.contains('@') ? null : 'Invalid email',
+                  validator: (v) => v != null && v.contains('@') ? null : t('invalid_email'),
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _password,
                   decoration: InputDecoration(labelText: t('password'), prefixIcon: const Icon(Icons.lock)),
                   obscureText: true,
-                  validator: (v) => v != null && v.length >= 6 ? null : 'Min 6 characters',
+                  validator: (v) => v != null && v.length >= 6 ? null : t('min_6_chars'),
                 ),
                 const SizedBox(height: 8),
                 Align(

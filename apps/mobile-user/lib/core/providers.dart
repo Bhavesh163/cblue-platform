@@ -116,6 +116,20 @@ class Translations {
     'workflow_complete': {'en': 'Workflow Complete!', 'th': 'สำเร็จ!', 'zh': '流程完成！'},
     'back_to_home': {'en': 'Back to Home', 'th': 'กลับหน้าแรก', 'zh': '返回首页'},
     'contact_lister': {'en': 'Contact Lister', 'th': 'ติดต่อผู้ลงประกาศ', 'zh': '联系卖家'},
+    // Error & validation messages
+    'invalid_credentials': {'en': 'Invalid email or password', 'th': 'อีเมลหรือรหัสผ่านไม่ถูกต้อง', 'zh': '电子邮件或密码无效'},
+    'connection_error': {'en': 'Connection error. Please try again.', 'th': 'เชื่อมต่อผิดพลาด กรุณาลองใหม่', 'zh': '连接错误，请重试'},
+    'pdpa_required': {'en': 'Please accept PDPA consent', 'th': 'กรุณายอมรับ PDPA', 'zh': '请接受PDPA同意'},
+    'email_exists': {'en': 'Email already registered', 'th': 'อีเมลนี้ลงทะเบียนแล้ว', 'zh': '该邮箱已注册'},
+    'registration_error': {'en': 'Registration failed. Please try again.', 'th': 'ลงทะเบียนล้มเหลว กรุณาลองใหม่', 'zh': '注册失败，请重试'},
+    'required_field': {'en': 'Required', 'th': 'จำเป็น', 'zh': '必填'},
+    'invalid_email': {'en': 'Invalid email', 'th': 'อีเมลไม่ถูกต้อง', 'zh': '邮箱格式无效'},
+    'passwords_mismatch': {'en': 'Passwords do not match', 'th': 'รหัสผ่านไม่ตรงกัน', 'zh': '密码不匹配'},
+    'ok': {'en': 'OK', 'th': 'ตกลง', 'zh': '好的'},
+    'status_label': {'en': 'Status', 'th': 'สถานะ', 'zh': '状态'},
+    'date_label': {'en': 'Date', 'th': 'วันที่', 'zh': '日期'},
+    'avg_rating': {'en': 'Avg Rating', 'th': 'คะแนนเฉลี่ย', 'zh': '平均评分'},
+    'recent_activity': {'en': 'Recent Activity', 'th': 'กิจกรรมล่าสุด', 'zh': '最近活动'},
   };
 
   static String get(String key, String locale) {
@@ -172,6 +186,9 @@ class AuthProvider extends ChangeNotifier {
     _token = token;
     await _storage.write(key: 'subscriber', value: json.encode(subscriber));
     await _storage.write(key: 'subscriber_token', value: token);
+    // Restore PDPA consent from storage if previously accepted
+    final pdpa = await _storage.read(key: 'pdpa_consent_customer');
+    _pdpaConsent = pdpa != null;
     notifyListeners();
   }
 

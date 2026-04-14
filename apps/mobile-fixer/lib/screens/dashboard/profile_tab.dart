@@ -45,7 +45,16 @@ class ProfileTab extends StatelessWidget {
               const SizedBox(height: 8),
               Wrap(spacing: 8, runSpacing: 6, children: [
                 'Plumbing', 'Electrical', 'AC Installation', 'General Maintenance',
-              ].map((s) => Chip(label: Text(s, style: const TextStyle(fontSize: 12)), backgroundColor: AppTheme.primaryBlue.withValues(alpha: 0.1))).toList()),
+              ].map((s) {
+                final locale = context.watch<LocaleProvider>().locale;
+                final Map<String, String> skillNames = {
+                  'Plumbing': locale == 'th' ? 'ประปา' : locale == 'zh' ? '水管' : 'Plumbing',
+                  'Electrical': locale == 'th' ? 'ไฟฟ้า' : locale == 'zh' ? '电气' : 'Electrical',
+                  'AC Installation': locale == 'th' ? 'ติดตั้งแอร์' : locale == 'zh' ? '空调安装' : 'AC Installation',
+                  'General Maintenance': locale == 'th' ? 'ซ่อมบำรุงทั่วไป' : locale == 'zh' ? '一般维修' : 'General Maintenance',
+                };
+                return Chip(label: Text(skillNames[s] ?? s, style: const TextStyle(fontSize: 12)), backgroundColor: AppTheme.primaryBlue.withValues(alpha: 0.1));
+              }).toList()),
             ]),
           ),
         ),
@@ -60,10 +69,10 @@ class ProfileTab extends StatelessWidget {
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('alerts')), backgroundColor: AppTheme.primaryBlue));
             }),
             _SettingsTile(icon: Icons.camera_alt_outlined, label: t('kyc_verification'), onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('KYC verification is up to date ✓'), backgroundColor: AppTheme.primaryGreen));
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('kyc_up_to_date')), backgroundColor: AppTheme.primaryGreen));
             }),
             _SettingsTile(icon: Icons.photo_library_outlined, label: t('portfolio'), onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Portfolio uploaded ✓'), backgroundColor: AppTheme.primaryGreen));
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('portfolio_ok')), backgroundColor: AppTheme.primaryGreen));
             }),
             _SettingsTile(icon: Icons.shield_outlined, label: 'PDPA', onTap: () {
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('pdpa_notice')), backgroundColor: AppTheme.primaryBlue));
@@ -143,9 +152,9 @@ class ProfileTab extends StatelessWidget {
       builder: (_) => AlertDialog(
         title: Text(t('change_password')),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(controller: currentPw, decoration: InputDecoration(labelText: t('password')), obscureText: true),
+          TextField(controller: currentPw, decoration: InputDecoration(labelText: t('current_password')), obscureText: true),
           const SizedBox(height: 12),
-          TextField(controller: newPw, decoration: InputDecoration(labelText: t('confirm_password')), obscureText: true),
+          TextField(controller: newPw, decoration: InputDecoration(labelText: t('new_password')), obscureText: true),
         ]),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: Text(t('cancel'))),
