@@ -172,6 +172,9 @@ class AuthProvider extends ChangeNotifier {
     _token = token;
     await _storage.write(key: 'subscriber', value: json.encode(subscriber));
     await _storage.write(key: 'subscriber_token', value: token);
+    // Restore PDPA consent from storage if previously accepted
+    final pdpa = await _storage.read(key: 'pdpa_consent_customer');
+    _pdpaConsent = pdpa != null;
     notifyListeners();
   }
 

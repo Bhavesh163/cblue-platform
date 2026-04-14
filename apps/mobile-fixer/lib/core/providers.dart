@@ -100,6 +100,23 @@ class Translations {
     'job_declined': {'en': 'Job declined', 'th': 'ปฏิเสธงานแล้ว', 'zh': '工作已拒绝'},
     'kyc_upload_failed': {'en': 'KYC upload failed. You can update later from Profile.', 'th': 'อัปโหลด KYC ล้มเหลว สามารถอัปเดตได้ภายหลังจากโปรไฟล์', 'zh': 'KYC上传失败，您可以稍后在个人资料中更新。'},
     'portfolio_upload_failed': {'en': 'Portfolio upload failed. You can update later from Profile.', 'th': 'อัปโหลดผลงานล้มเหลว สามารถอัปเดตได้ภายหลังจากโปรไฟล์', 'zh': '作品上传失败，您可以稍后在个人资料中更新。'},
+    'current_password': {'en': 'Current Password', 'th': 'รหัสผ่านปัจจุบัน', 'zh': '当前密码'},
+    'new_password': {'en': 'New Password', 'th': 'รหัสผ่านใหม่', 'zh': '新密码'},
+    'file_sharing_soon': {'en': 'File sharing coming soon', 'th': 'แชร์ไฟล์เร็วๆ นี้', 'zh': '文件分享即将推出'},
+    'new_job_request': {'en': 'New job request', 'th': 'งานใหม่เข้ามา', 'zh': '新工作请求'},
+    'payment_received': {'en': 'Payment received', 'th': 'ได้รับการชำระเงิน', 'zh': '已收到付款'},
+    'job_reminder': {'en': 'Job reminder', 'th': 'แจ้งเตือนงาน', 'zh': '工作提醒'},
+    'review_received': {'en': 'Review received', 'th': 'ได้รับรีวิว', 'zh': '收到评价'},
+    'system_update': {'en': 'System update', 'th': 'อัปเดตระบบ', 'zh': '系统更新'},
+    'promotion': {'en': 'Promotion', 'th': 'โปรโมชั่น', 'zh': '促销活动'},
+    'earnings': {'en': 'Earnings', 'th': 'รายได้', 'zh': '收入'},
+    'incoming_requests': {'en': 'Incoming Requests', 'th': 'คำขอที่เข้ามา', 'zh': '收到的请求'},
+    'recent_activity': {'en': 'Recent Activity', 'th': 'กิจกรรมล่าสุด', 'zh': '最近活动'},
+    'progress': {'en': 'Progress', 'th': 'ความคืบหน้า', 'zh': '进度'},
+    'budget': {'en': 'Budget', 'th': 'งบประมาณ', 'zh': '预算'},
+    'urgency': {'en': 'Urgency', 'th': 'ความเร่งด่วน', 'zh': '紧急程度'},
+    'earned': {'en': 'Earned', 'th': 'รายได้', 'zh': '收入'},
+    'fee': {'en': 'Fee', 'th': 'ค่าธรรมเนียม', 'zh': '手续费'},
   };
 
   static String get(String key, String locale) {

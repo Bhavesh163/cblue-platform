@@ -11,14 +11,18 @@ class AlertsTab extends StatefulWidget {
 }
 
 class _AlertsTabState extends State<AlertsTab> {
-  final _alerts = [
-    {'title': 'New job request from Customer #C1032', 'type': 'job', 'time': '10 min ago', 'read': false},
-    {'title': 'Payment of ฿1,500 deposited to your account', 'type': 'payment', 'time': '2 hours ago', 'read': false},
-    {'title': 'Your tier has been upgraded to Premium!', 'type': 'tier', 'time': '1 day ago', 'read': true},
-    {'title': 'Customer #C0985 left you a 5-star review', 'type': 'review', 'time': '2 days ago', 'read': true},
-    {'title': 'Reminder: Job PO-2506-0049 starts tomorrow', 'type': 'reminder', 'time': '3 days ago', 'read': true},
-    {'title': 'Property listing "Modern Condo" approved', 'type': 'property', 'time': '4 days ago', 'read': true},
-  ];
+  List<Map<String, dynamic>>? _alerts;
+
+  List<Map<String, dynamic>> _buildAlerts(String Function(String) t) {
+    return [
+      {'title': '${t('new_job_request')}: Customer #C1032', 'type': 'job', 'time': '10 min ago', 'read': false},
+      {'title': '${t('payment_received')}: ฿1,500', 'type': 'payment', 'time': '2 hours ago', 'read': false},
+      {'title': '${t('system_update')}: Tier upgraded!', 'type': 'tier', 'time': '1 day ago', 'read': true},
+      {'title': '${t('review_received')}: ⭐⭐⭐⭐⭐', 'type': 'review', 'time': '2 days ago', 'read': true},
+      {'title': '${t('job_reminder')}: PO-2506-0049', 'type': 'reminder', 'time': '3 days ago', 'read': true},
+      {'title': '${t('properties')}: Modern Condo ${t('approved')}', 'type': 'property', 'time': '4 days ago', 'read': true},
+    ];
+  }
 
   IconData _iconFor(String type) {
     switch (type) {
@@ -46,13 +50,15 @@ class _AlertsTabState extends State<AlertsTab> {
 
   @override
   Widget build(BuildContext context) {
-    context.watch<LocaleProvider>();
+    final t = context.watch<LocaleProvider>().t;
+    _alerts ??= _buildAlerts(t);
+    final alerts = _alerts!;
 
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: _alerts.length,
+      itemCount: alerts.length,
       itemBuilder: (_, i) {
-        final a = _alerts[i];
+        final a = alerts[i];
         final isRead = a['read'] as bool;
         final type = a['type'] as String;
 
@@ -67,7 +73,7 @@ class _AlertsTabState extends State<AlertsTab> {
             title: Text(a['title'] as String, style: TextStyle(fontSize: 14, fontWeight: isRead ? FontWeight.normal : FontWeight.w600)),
             subtitle: Text(a['time'] as String, style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
             trailing: isRead ? null : Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppTheme.primaryBlue, shape: BoxShape.circle)),
-            onTap: () => setState(() => _alerts[i] = {...a, 'read': true}),
+            onTap: () => setState(() => alerts[i] = {...a, 'read': true}),
           ),
         );
       },

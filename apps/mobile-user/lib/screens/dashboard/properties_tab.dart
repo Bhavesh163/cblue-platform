@@ -53,7 +53,7 @@ class PropertiesTab extends StatelessWidget {
       itemCount: _demoProperties.length + (standalone ? 1 : 0),
       itemBuilder: (context, i) {
         if (standalone && i == 0) {
-          return _buildSearchBar(locale);
+          return _buildSearchBar(context, locale);
         }
         final propIdx = standalone ? i - 1 : i;
         final prop = _demoProperties[propIdx];
@@ -153,7 +153,7 @@ class PropertiesTab extends StatelessWidget {
     );
   }
 
-  Widget _buildSearchBar(LocaleProvider locale) {
+  Widget _buildSearchBar(BuildContext context, LocaleProvider locale) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: TextFormField(
@@ -162,7 +162,11 @@ class PropertiesTab extends StatelessWidget {
           prefixIcon: const Icon(Icons.search),
           suffixIcon: IconButton(
             icon: const Icon(Icons.tune),
-            onPressed: () {},
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(locale.locale == 'th' ? 'ตัวกรองขั้นสูง เร็วๆ นี้' : locale.locale == 'zh' ? '高级筛选即将推出' : 'Advanced filters coming soon'), duration: const Duration(seconds: 2)),
+              );
+            },
           ),
         ),
       ),

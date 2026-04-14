@@ -159,7 +159,11 @@ class _ChatTabState extends State<ChatTab> {
         padding: const EdgeInsets.all(12),
         color: Colors.white,
         child: Row(children: [
-          IconButton(icon: const Icon(Icons.attach_file), onPressed: () {}),
+          IconButton(icon: const Icon(Icons.attach_file), onPressed: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(t('file_sharing_soon')), duration: const Duration(seconds: 2)),
+            );
+          }),
           Expanded(
             child: TextField(
               controller: _msgController,

@@ -143,9 +143,9 @@ class ProfileTab extends StatelessWidget {
       builder: (_) => AlertDialog(
         title: Text(t('change_password')),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(controller: currentPw, decoration: InputDecoration(labelText: t('password')), obscureText: true),
+          TextField(controller: currentPw, decoration: InputDecoration(labelText: t('current_password')), obscureText: true),
           const SizedBox(height: 12),
-          TextField(controller: newPw, decoration: InputDecoration(labelText: t('confirm_password')), obscureText: true),
+          TextField(controller: newPw, decoration: InputDecoration(labelText: t('new_password')), obscureText: true),
         ]),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: Text(t('cancel'))),

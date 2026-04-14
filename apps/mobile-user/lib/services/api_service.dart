@@ -154,4 +154,10 @@ class ApiService {
       return null;
     }
   }
+
+  // Upload order images
+  static Future<void> uploadOrderImages(String orderId, FormData formData) async {
+    final dio = await _authedDio;
+    await dio.post('/orders/$orderId/images', data: formData);
+  }
 }

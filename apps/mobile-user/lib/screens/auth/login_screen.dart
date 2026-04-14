@@ -32,7 +32,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       final auth = context.read<AuthProvider>();
       await auth.login(res['subscriber'] ?? res, res['token'] ?? '');
-      await auth.acceptPdpa();
+      // PDPA consent is restored from storage on login; do not auto-accept
     } catch (e) {
       setState(() => _error = e.toString().contains('401')
           ? 'Invalid email or password'

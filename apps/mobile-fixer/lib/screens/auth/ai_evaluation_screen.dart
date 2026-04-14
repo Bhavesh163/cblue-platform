@@ -47,8 +47,8 @@ class _AiEvaluationScreenState extends State<AiEvaluationScreen> {
     if (!mounted) return;
 
     // Simulate tier assignment
-    final tiers = ['Economy', 'Standard', 'Upper', 'Luxury', 'Grandeur'];
-    final tierIndex = 1 + rng.nextInt(3); // Standard to Luxury
+    final tiers = ['Economy', 'Standard', 'Corporate', 'Specialist', 'Expert'];
+    final tierIndex = rng.nextInt(5); // Economy to Expert
     setState(() {
       _assignedTier = tiers[tierIndex];
       _score = 60 + rng.nextInt(35);
