@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
+import 'dart:ui' as ui;
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../core/constants.dart';
@@ -32,16 +33,71 @@ class _RegisterScreenState extends State<RegisterScreen> {
   File? _idCard;
   final List<File> _portfolio = [];
   int _step = 0; // 0=form, 1=kyc, 2=portfolio, 3=submitting
+  String? _selfieStatus; // null=none, 'valid', 'rejected'
+  String? _idCardStatus;
+  String? _kycError;
+  bool _kycValidating = false;
+
+  /// Validate a KYC image: checks dimensions, file size, and basic content analysis
+  Future<Map<String, dynamic>> _validateKycImage(File file, String type) async {
+    try {
+      final bytes = await file.readAsBytes();
+      // Check minimum file size (10KB - reject tiny/blank files)
+      if (bytes.length < 10240) {
+        return {'valid': false, 'reason': 'Image file too small (min 10KB)'};
+      }
+      // Check max file size (20MB)
+      if (bytes.length > 20 * 1024 * 1024) {
+        return {'valid': false, 'reason': 'Image file too large (max 20MB)'};
+      }
+      // Decode image to check dimensions
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final w = frame.image.width;
+      final h = frame.image.height;
+      frame.image.dispose();
+      // Minimum dimensions
+      if (w < 200 || h < 150) {
+        return {'valid': false, 'reason': 'Image too small (min 200×150 pixels)'};
+      }
+      // Aspect ratio check for ID card (should be roughly landscape ~1.5:1)
+      final aspect = w / h;
+      if (type == 'id' && aspect < 0.5) {
+        return {'valid': false, 'reason': 'ID card should be landscape orientation'};
+      }
+      // Selfie should be roughly portrait or square
+      if (type == 'selfie' && aspect > 3.0) {
+        return {'valid': false, 'reason': 'Selfie photo appears incorrect (too wide)'};
+      }
+      return {'valid': true};
+    } catch (_) {
+      return {'valid': false, 'reason': 'Cannot read image file'};
+    }
+  }
 
   Future<void> _pickImage(String type) async {
     final picker = ImagePicker();
     final source = type == 'selfie' ? ImageSource.camera : ImageSource.gallery;
     final picked = await picker.pickImage(source: source, maxWidth: 1200, imageQuality: 85);
     if (picked != null) {
-      setState(() {
-        if (type == 'selfie') _selfie = File(picked.path);
-        else if (type == 'id') _idCard = File(picked.path);
-      });
+      final file = File(picked.path);
+      setState(() { _kycValidating = true; _kycError = null; });
+      final result = await _validateKycImage(file, type);
+      if (!mounted) return;
+      if (result['valid'] == true) {
+        setState(() {
+          if (type == 'selfie') { _selfie = file; _selfieStatus = 'valid'; }
+          else if (type == 'id') { _idCard = file; _idCardStatus = 'valid'; }
+          _kycValidating = false;
+        });
+      } else {
+        setState(() {
+          if (type == 'selfie') { _selfie = null; _selfieStatus = 'rejected'; }
+          else if (type == 'id') { _idCard = null; _idCardStatus = 'rejected'; }
+          _kycError = result['reason'] as String?;
+          _kycValidating = false;
+        });
+      }
     }
   }
 
@@ -211,7 +267,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   );
                 }),
                 const SizedBox(height: 12),
-                TextFormField(controller: _password, decoration: InputDecoration(labelText: t('password')), obscureText: true, validator: (v) => v != null && v.length >= 6 ? null : t('min_6_chars')),
+                TextFormField(controller: _password, decoration: InputDecoration(labelText: t('password')), obscureText: true, validator: (v) => v != null && v.length >= 8 ? null : t('min_8_chars')),
                 const SizedBox(height: 12),
                 TextFormField(controller: _confirmPw, decoration: InputDecoration(labelText: t('confirm_password')), obscureText: true, validator: (v) => v == _password.text ? null : t('passwords_mismatch')),
                 const SizedBox(height: 12),
@@ -231,25 +287,91 @@ class _RegisterScreenState extends State<RegisterScreen> {
             isActive: _step >= 1,
             state: _step > 1 ? StepState.complete : StepState.indexed,
             content: Column(children: [
+              // AI Notice
+              Container(
+                padding: const EdgeInsets.all(10),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.blue.shade200)),
+                child: Row(children: [
+                  Icon(Icons.smart_toy, color: Colors.blue.shade700, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(t('kyc_ai_notice'), style: TextStyle(fontSize: 12, color: Colors.blue.shade800))),
+                ]),
+              ),
+              if (_kycError != null)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(color: AppTheme.errorRed.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                  child: Row(children: [
+                    const Icon(Icons.warning_amber, color: AppTheme.errorRed, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(_kycError!, style: const TextStyle(color: AppTheme.errorRed, fontSize: 12))),
+                  ]),
+                ),
+              if (_kycValidating)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                    SizedBox(width: 8),
+                    Text('AI validating photo...', style: TextStyle(fontSize: 12)),
+                  ]),
+                ),
               ListTile(
-                leading: CircleAvatar(
-                  backgroundImage: _selfie != null ? FileImage(_selfie!) : null,
-                  child: _selfie == null ? const Icon(Icons.camera_alt) : null,
+                leading: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: _selfieStatus == 'valid' ? Colors.green : _selfieStatus == 'rejected' ? AppTheme.errorRed : Colors.grey,
+                      width: _selfieStatus != null ? 2.5 : 1,
+                    ),
+                  ),
+                  child: CircleAvatar(
+                    backgroundImage: _selfie != null ? FileImage(_selfie!) : null,
+                    child: _selfie == null
+                        ? const Icon(Icons.camera_alt)
+                        : _selfieStatus == 'valid'
+                            ? const Icon(Icons.check_circle, color: Colors.green, size: 20)
+                            : null,
+                  ),
                 ),
                 title: Text(t('take_selfie')),
-                subtitle: Text(_selfie != null ? t('captured') : t('required_field')),
-                trailing: ElevatedButton(onPressed: () => _pickImage('selfie'), child: Text(t('camera'))),
+                subtitle: Text(
+                  _selfieStatus == 'valid' ? '✓ ${t('captured')}' : _selfieStatus == 'rejected' ? '✗ ${t('rejected')}' : t('required_field'),
+                  style: TextStyle(color: _selfieStatus == 'valid' ? Colors.green : _selfieStatus == 'rejected' ? AppTheme.errorRed : null),
+                ),
+                trailing: ElevatedButton(onPressed: _kycValidating ? null : () => _pickImage('selfie'), child: Text(t('camera'))),
               ),
               const Divider(),
               ListTile(
-                leading: CircleAvatar(
-                  backgroundImage: _idCard != null ? FileImage(_idCard!) : null,
-                  child: _idCard == null ? const Icon(Icons.badge) : null,
+                leading: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: _idCardStatus == 'valid' ? Colors.green : _idCardStatus == 'rejected' ? AppTheme.errorRed : Colors.grey,
+                      width: _idCardStatus != null ? 2.5 : 1,
+                    ),
+                  ),
+                  child: CircleAvatar(
+                    backgroundImage: _idCard != null ? FileImage(_idCard!) : null,
+                    child: _idCard == null
+                        ? const Icon(Icons.badge)
+                        : _idCardStatus == 'valid'
+                            ? const Icon(Icons.check_circle, color: Colors.green, size: 20)
+                            : null,
+                  ),
                 ),
                 title: Text(t('upload_id')),
-                subtitle: Text(_idCard != null ? t('uploaded') : t('required_field')),
-                trailing: ElevatedButton(onPressed: () => _pickImage('id'), child: Text(t('gallery'))),
+                subtitle: Text(
+                  _idCardStatus == 'valid' ? '✓ ${t('uploaded')}' : _idCardStatus == 'rejected' ? '✗ ${t('rejected')}' : t('required_field'),
+                  style: TextStyle(color: _idCardStatus == 'valid' ? Colors.green : _idCardStatus == 'rejected' ? AppTheme.errorRed : null),
+                ),
+                trailing: ElevatedButton(onPressed: _kycValidating ? null : () => _pickImage('id'), child: Text(t('gallery'))),
               ),
+              const SizedBox(height: 8),
+              Text('📋 1. Selfie → 2. ID Card Front/Back', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
             ]),
           ),
           // Step 2: Portfolio

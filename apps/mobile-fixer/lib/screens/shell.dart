@@ -85,7 +85,14 @@ class _AppShellState extends State<AppShell> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_navIndex == 0 ? t('dashboard') : t('my_properties')),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset('assets/images/logo.jpg', height: 28),
+            const SizedBox(width: 8),
+            Text(_navIndex == 0 ? t('dashboard') : t('my_properties'), style: const TextStyle(fontSize: 14)),
+          ],
+        ),
         actions: const [LocaleSwitcher(), SizedBox(width: 8)],
       ),
       body: bodies[_navIndex],

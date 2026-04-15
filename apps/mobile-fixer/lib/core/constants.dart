@@ -51,10 +51,12 @@ class AppConstants {
     };
   }
 
-  // Property types
-  static const List<String> propertyTypes = [
-    'Condo', 'House & Villa', 'Townhouse', 'Land', 'Commercial', 'Warehouse & Factory',
-  ];
+  // Property types (trilingual)
+  static const Map<String, List<String>> propertyTypes = {
+    'en': ['Condo', 'House & Villa', 'Townhouse', 'Land', 'Commercial', 'Warehouse & Factory'],
+    'th': ['คอนโด', 'บ้านและวิลล่า', 'ทาวน์เฮาส์', 'ที่ดิน', 'อาคารพาณิชย์', 'โกดังและโรงงาน'],
+    'zh': ['公寓', '别墅', '联排别墅', '土地', '商业', '仓库和工厂'],
+  };
 
   // Listing types
   static const List<String> listingTypes = ['SALE', 'RENT'];

@@ -7,7 +7,7 @@ import 'dart:convert';
 // ---------------------------------------------------------------------------
 class Translations {
   static const Map<String, Map<String, String>> _t = {
-    'app_title': {'en': 'CBLUE Partner', 'th': 'CBLUE พาร์ทเนอร์', 'zh': 'CBLUE 合作伙伴'},
+    'app_title': {'en': 'Cblue Partner', 'th': 'Cblue พาร์ทเนอร์', 'zh': 'Cblue 合作伙伴'},
     'dashboard': {'en': 'Our Partner', 'th': 'พาร์ทเนอร์ของเรา', 'zh': '我们的合作伙伴'},
     'overview': {'en': 'Overview', 'th': 'ภาพรวม', 'zh': '概览'},
     'active_jobs': {'en': 'Active Jobs', 'th': 'งานปัจจุบัน', 'zh': '活跃工作'},
@@ -137,6 +137,8 @@ class Translations {
     'invalid_email': {'en': 'Invalid email', 'th': 'อีเมลไม่ถูกต้อง', 'zh': '邮箱格式无效'},
     'invalid_phone': {'en': 'Invalid phone number', 'th': 'เบอร์โทรศัพท์ไม่ถูกต้อง', 'zh': '电话号码无效'},
     'min_6_chars': {'en': 'Min 6 characters', 'th': 'อย่างน้อย 6 ตัวอักษร', 'zh': '最少6个字符'},
+    'min_8_chars': {'en': 'Min 8 characters', 'th': 'อย่างน้อย 8 ตัวอักษร', 'zh': '最少8个字符'},
+    'kyc_ai_notice': {'en': 'AI will verify your ID card and selfie. Please ensure photos are clear and properly oriented.', 'th': 'AI จะตรวจสอบบัตรประชาชนและเซลฟี่ของคุณ กรุณาถ่ายภาพให้ชัดเจนและถูกต้อง', 'zh': 'AI将验证您的身份证和自拍照。请确保照片清晰且方向正确。'},
     'passwords_mismatch': {'en': 'Passwords do not match', 'th': 'รหัสผ่านไม่ตรงกัน', 'zh': '密码不匹配'},
     'next': {'en': 'Next', 'th': 'ถัดไป', 'zh': '下一步'},
     'back': {'en': 'Back', 'th': 'ย้อนกลับ', 'zh': '返回'},
@@ -157,6 +159,7 @@ class Translations {
     'credentials': {'en': 'Credentials Analysis', 'th': 'วิเคราะห์คุณสมบัติ', 'zh': '资质分析'},
     'experience': {'en': 'Experience Assessment', 'th': 'ประเมินประสบการณ์', 'zh': '经验评估'},
     'fraud_scan': {'en': 'Fraud Detection Scan', 'th': 'สแกนตรวจจับการฉ้อโกง', 'zh': '欺诈检测扫描'},
+    'ocr_analysis': {'en': '📄 AI OCR Document Analysis', 'th': '📄 AI OCR วิเคราะห์เอกสาร', 'zh': '📄 AI OCR文档分析'},
     'portfolio_ocr': {'en': 'Portfolio OCR & Analysis', 'th': 'วิเคราะห์ OCR ผลงาน', 'zh': '作品集OCR和分析'},
     'price_list_eval': {'en': 'Price List Evaluation', 'th': 'ประเมินรายการราคา', 'zh': '价格表评估'},
     'tier_assign': {'en': 'Tier Assignment', 'th': 'กำหนดระดับ', 'zh': '等级分配'},

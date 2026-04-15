@@ -99,6 +99,7 @@ export class FixerController {
   // ── Portfolio AI Digest ──
 
   @Post('portfolio-digest')
+  @UseGuards(JwtAuthGuard)
   @UseInterceptors(FilesInterceptor('files', 10))
   async digestPortfolio(
     @UploadedFiles() files: Express.Multer.File[],

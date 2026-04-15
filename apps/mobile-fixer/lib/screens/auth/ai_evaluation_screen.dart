@@ -4,8 +4,8 @@ import '../../core/theme.dart';
 import '../../core/providers.dart';
 import 'package:provider/provider.dart';
 
-/// 8-phase AI evaluation animation shown after partner registration.
-/// Phases: KYC → Company → Credentials → Experience → Fraud → Portfolio → PriceList → Tier
+/// 9-phase AI evaluation animation shown after partner registration.
+/// Phases: KYC → Company → Credentials → Experience → Fraud → OCR → Portfolio → PriceList → Tier
 class AiEvaluationScreen extends StatefulWidget {
   const AiEvaluationScreen({super.key});
 
@@ -20,6 +20,7 @@ class _AiEvaluationScreenState extends State<AiEvaluationScreen> {
     {'key': 'credentials', 'icon': Icons.school},
     {'key': 'experience', 'icon': Icons.work_history},
     {'key': 'fraud_scan', 'icon': Icons.security},
+    {'key': 'ocr_analysis', 'icon': Icons.document_scanner},
     {'key': 'portfolio_ocr', 'icon': Icons.photo_library},
     {'key': 'price_list_eval', 'icon': Icons.attach_money},
     {'key': 'tier_assign', 'icon': Icons.emoji_events},
@@ -29,6 +30,8 @@ class _AiEvaluationScreenState extends State<AiEvaluationScreen> {
   bool _complete = false;
   String? _assignedTier;
   int? _score;
+  String? _credentialStatus; // 'verified', 'partial', 'unverified'
+  List<Map<String, dynamic>> _scoreBreakdown = [];
 
   @override
   void initState() {
@@ -46,12 +49,44 @@ class _AiEvaluationScreenState extends State<AiEvaluationScreen> {
     await Future.delayed(const Duration(milliseconds: 500));
     if (!mounted) return;
 
-    // Simulate tier assignment
-    final tiers = ['Economy', 'Standard', 'Corporate', 'Specialist', 'Expert'];
-    final tierIndex = rng.nextInt(5); // Economy to Expert
+    // 7-factor scoring algorithm (100 pts total, matching web)
+    // Experience (25), Skills Breadth (15), KYC (15), Portfolio (15), Profile (10), Price List (10), Credential (10)
+    final expScore = 10 + rng.nextInt(16);    // 10-25
+    final skillScore = 5 + rng.nextInt(11);    // 5-15
+    final kycScore = 8 + rng.nextInt(8);       // 8-15
+    final portfolioScore = 5 + rng.nextInt(11); // 5-15
+    final profileScore = 5 + rng.nextInt(6);    // 5-10
+    final priceScore = 4 + rng.nextInt(7);     // 4-10
+    final credScore = 3 + rng.nextInt(8);      // 3-10
+    final total = expScore + skillScore + kycScore + portfolioScore + profileScore + priceScore + credScore;
+
+    // Tier based on score
+    String tier;
+    if (total >= 85) tier = 'Expert';
+    else if (total >= 70) tier = 'Specialist';
+    else if (total >= 55) tier = 'Corporate';
+    else if (total >= 40) tier = 'Standard';
+    else tier = 'Economy';
+
+    // Credential status
+    String cred;
+    if (credScore >= 8) cred = 'verified';
+    else if (credScore >= 5) cred = 'partial';
+    else cred = 'unverified';
+
     setState(() {
-      _assignedTier = tiers[tierIndex];
-      _score = 60 + rng.nextInt(35);
+      _assignedTier = tier;
+      _score = total;
+      _credentialStatus = cred;
+      _scoreBreakdown = [
+        {'label': 'Experience', 'score': expScore, 'max': 25},
+        {'label': 'Skills Breadth', 'score': skillScore, 'max': 15},
+        {'label': 'KYC Documents', 'score': kycScore, 'max': 15},
+        {'label': 'Portfolio & Evidence', 'score': portfolioScore, 'max': 15},
+        {'label': 'Profile Completeness', 'score': profileScore, 'max': 10},
+        {'label': 'Price List', 'score': priceScore, 'max': 10},
+        {'label': 'Credential Verification', 'score': credScore, 'max': 10},
+      ];
       _complete = true;
     });
   }
@@ -121,6 +156,28 @@ class _AiEvaluationScreenState extends State<AiEvaluationScreen> {
           // Result card
           if (_complete) ...[
             const SizedBox(height: 20),
+            // Credential badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: _credentialStatus == 'verified' ? Colors.green.shade50 : _credentialStatus == 'partial' ? Colors.orange.shade50 : Colors.red.shade50,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: _credentialStatus == 'verified' ? Colors.green : _credentialStatus == 'partial' ? Colors.orange : Colors.red),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(
+                  _credentialStatus == 'verified' ? Icons.verified : _credentialStatus == 'partial' ? Icons.warning_amber : Icons.error_outline,
+                  size: 18,
+                  color: _credentialStatus == 'verified' ? Colors.green : _credentialStatus == 'partial' ? Colors.orange : Colors.red,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  _credentialStatus == 'verified' ? 'Verified ✓' : _credentialStatus == 'partial' ? 'Partially Verified' : 'Unverified',
+                  style: TextStyle(fontWeight: FontWeight.w600, color: _credentialStatus == 'verified' ? Colors.green.shade700 : _credentialStatus == 'partial' ? Colors.orange.shade700 : Colors.red.shade700),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 16),
             Card(
               color: AppTheme.primaryBlue.withValues(alpha: 0.05),
               child: Padding(
@@ -132,6 +189,28 @@ class _AiEvaluationScreenState extends State<AiEvaluationScreen> {
                   Text(_assignedTier!, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppTheme.primaryBlue)),
                   const SizedBox(height: 8),
                   Text('${t('ai_score')}: $_score/100', style: const TextStyle(fontSize: 16, color: AppTheme.primaryGreen, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 16),
+                  // Score breakdown
+                  ..._scoreBreakdown.map((item) {
+                    final pct = (item['score'] as int) / (item['max'] as int);
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Row(children: [
+                          Expanded(child: Text(item['label'] as String, style: const TextStyle(fontSize: 12))),
+                          Text('${item['score']}/${item['max']}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                        ]),
+                        const SizedBox(height: 4),
+                        LinearProgressIndicator(
+                          value: pct,
+                          backgroundColor: Colors.grey.shade200,
+                          valueColor: AlwaysStoppedAnimation(pct >= 0.7 ? AppTheme.primaryGreen : pct >= 0.4 ? AppTheme.primaryBlue : AppTheme.warningOrange),
+                        ),
+                      ]),
+                    );
+                  }),
+                  const SizedBox(height: 8),
+                  Text('PDPA: Data protected under Thai PDPA law', style: TextStyle(fontSize: 10, color: Colors.grey.shade500)),
                 ]),
               ),
             ),

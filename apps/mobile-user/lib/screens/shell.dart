@@ -44,7 +44,7 @@ class _AppShellState extends State<AppShell> {
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('CBLUE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+            Image.asset('assets/images/logo.jpg', height: 28),
             const SizedBox(width: 8),
             Text(
               locale.t('customerPage'),

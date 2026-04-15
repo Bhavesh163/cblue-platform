@@ -53,7 +53,8 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final t = context.watch<LocaleProvider>().t;
+    final localeProv = context.watch<LocaleProvider>();
+    final t = localeProv.t;
 
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
@@ -442,7 +443,15 @@ class _AddEditPropertySheetState extends State<_AddEditPropertySheet> {
             DropdownButtonFormField<String>(
               initialValue: _type,
               decoration: InputDecoration(labelText: t('property_type')),
-              items: AppConstants.propertyTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+              items: () {
+                final locale = context.read<LocaleProvider>().locale;
+                final enTypes = AppConstants.propertyTypes['en']!;
+                final localeTypes = AppConstants.propertyTypes[locale] ?? enTypes;
+                return enTypes.asMap().entries.map((e) {
+                  final label = e.key < localeTypes.length ? localeTypes[e.key] : e.value;
+                  return DropdownMenuItem(value: e.value, child: Text(label));
+                }).toList();
+              }(),
               onChanged: (v) => setState(() => _type = v!),
             ),
             const SizedBox(height: 12),
