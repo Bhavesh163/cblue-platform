@@ -50,6 +50,79 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30">
+      {/* FAQPage JSON-LD for Google/Bing rich snippets */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "FAQPage",
+            mainEntity: [
+              {
+                "@type": "Question",
+                name: locale === "th" ? "CBLUE คืออะไร?" : locale === "zh" ? "CBLUE是什么？" : "What is CBLUE?",
+                acceptedAnswer: {
+                  "@type": "Answer",
+                  text: locale === "th"
+                    ? "CBLUE คือแพลตฟอร์มอันดับ 1 ของไทยสำหรับจองช่างซ่อมบ้าน ทีมโครงการ มืออาชีพ และอสังหาริมทรัพย์ ด้วยระบบ AI จับคู่อัตโนมัติ ครอบคลุม 77 จังหวัดทั่วไทย"
+                    : locale === "zh"
+                    ? "CBLUE是泰国第一的AI智能家居服务平台，提供维修技工、项目团队、专业人士预约及房地产服务，覆盖泰国77个府。"
+                    : "CBLUE is Thailand's #1 AI-powered platform for booking verified home fixers, project teams, professionals, and browsing real estate listings across all 77 provinces.",
+                },
+              },
+              {
+                "@type": "Question",
+                name: locale === "th" ? "จองช่างซ่อมบ้านผ่าน CBLUE เริ่มต้นเท่าไหร่?" : locale === "zh" ? "通过CBLUE预约维修技工费用多少？" : "How much does it cost to book a fixer on CBLUE?",
+                acceptedAnswer: {
+                  "@type": "Answer",
+                  text: locale === "th"
+                    ? "ค่าดำเนินการเริ่มต้นที่ 200 บาทสำหรับระดับ Economy, 400 บาท Standard, 600 บาท Corporate, 800 บาท Specialist, และ 1,000 บาทสำหรับ Expert ชำระผ่าน PromptPay QR"
+                    : locale === "zh"
+                    ? "处理费从200泰铢起：Economy 200฿, Standard 400฿, Corporate 600฿, Specialist 800฿, Expert 1,000฿，通过PromptPay二维码支付。"
+                    : "Processing fees start at 200 THB for Economy tier, 400 for Standard, 600 for Corporate, 800 for Specialist, and 1,000 THB for Expert tier. Payment via PromptPay QR.",
+                },
+              },
+              {
+                "@type": "Question",
+                name: locale === "th" ? "CBLUE มีบริการอะไรบ้าง?" : locale === "zh" ? "CBLUE提供哪些服务？" : "What services does CBLUE offer?",
+                acceptedAnswer: {
+                  "@type": "Answer",
+                  text: locale === "th"
+                    ? "CBLUE ให้บริการ 4 หมวด: (1) ช่างซ่อมบ้าน — ประปา ไฟฟ้า แอร์ ตกแต่งภายใน จัดสวน หลังคา (2) ทีมโครงการ — เว็บไซต์ AI สมาร์ทโฮม โซลาร์เซลล์ 20+ บริการ (3) มืออาชีพ — ทนาย สถาปนิก วิศวกร นักบัญชี (4) อสังหาริมทรัพย์ — ซื้อ ขาย เช่า คอนโด บ้าน ที่ดิน"
+                    : locale === "zh"
+                    ? "CBLUE提供4大服务：(1)家庭维修——水管、电气、空调、室内设计、园艺、屋顶 (2)项目团队——网站、AI、智能家居、太阳能20+服务 (3)专业人士——律师、建筑师、工程师、会计 (4)房地产——买卖租公寓、别墅、土地"
+                    : "CBLUE offers 4 service categories: (1) Household Fixers — plumbing, electrical, AC, interior design, landscaping, roofing (2) Project Teams — website, AI, smart home, solar, 20+ services (3) Professionals — lawyer, architect, engineer, accountant (4) Real Estate — buy, sell, rent condos, houses, land",
+                },
+              },
+              {
+                "@type": "Question",
+                name: locale === "th" ? "หาช่างซ่อมบ้านใกล้ฉันได้อย่างไร?" : locale === "zh" ? "如何找到附近的家修技工？" : "How do I find a home repair technician near me?",
+                acceptedAnswer: {
+                  "@type": "Answer",
+                  text: locale === "th"
+                    ? "เลือกบริการที่ต้องการ กรอกรายละเอียดและที่อยู่ ระบบ AI จะจับคู่ช่างซ่อมบ้านที่ดีที่สุด 8 คนในพื้นที่ของคุณ พร้อมแสดงราคา ระดับ และดาวประเมิน"
+                    : locale === "zh"
+                    ? "选择所需服务，填写详情和地址，AI系统将匹配您所在区域最佳的8位维修技工，显示价格、等级和评价星级。"
+                    : "Select your service, fill in details and location. Our AI matches the top 8 verified fixers in your area, showing prices, tier levels, and satisfaction ratings.",
+                },
+              },
+            ],
+          }),
+        }}
+      />
+      {/* BreadcrumbList */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "BreadcrumbList",
+            itemListElement: [
+              { "@type": "ListItem", position: 1, name: "CBLUE", item: `https://www.cblue.co.th/${locale}` },
+            ],
+          }),
+        }}
+      />
       {/* Hero */}
       <section className="relative min-h-[600px] flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0 z-0">

@@ -48,7 +48,7 @@ const projectServices = [
   { id: "kitchen", value: "KITCHEN", image: "/images/kitchen.png", name: "Kitchen", nameTh: "ครัว", nameZh: "厨房" },
   { id: "hvac-mep", value: "MEP_RETROFIT", image: "/images/hvac.png", name: "HVAC MEP & Retrofit", nameTh: "HVAC MEP", nameZh: "暖通机电翻新" },
   { id: "reinstatement", value: "REINSTATEMENT", image: "/images/reinstatement-fitout.png", name: "Reinstatement & Fit-out", nameTh: "คืนสภาพและตกแต่ง", nameZh: "恢复和装修" },
-  { id: "automation", value: "SMART_BUILDING_AUTOMATION", image: "/images/smart-home-bms.png", name: "Automation", nameTh: "ระบบอัตโนมัติ", nameZh: "自动化" },
+  { id: "automation", value: "SMART_BUILDING_AUTOMATION", image: "/images/automation.png", name: "Automation", nameTh: "ระบบอัตโนมัติ", nameZh: "自动化" },
   { id: "environmental", value: "ENVIRONMENTAL_SERVICES", image: "/images/green-theme.jpg", name: "Environmental Services", nameTh: "บริการสิ่งแวดล้อม", nameZh: "环保服务" },
   { id: "security-cctv", value: "SECURITY_CCTV", image: "/images/security-system.jpg", name: "Security & CCTV", nameTh: "ระบบ CCTV", nameZh: "安防监控" },
   { id: "door-access", value: "DOOR_ACCESS_CONTROL", image: "/images/door-access-control.png", name: "Door & Access Control", nameTh: "ระบบควบคุมประตู", nameZh: "门禁系统" },
@@ -86,6 +86,72 @@ export default function ServicesPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30">
+      {/* Services page JSON-LD: ItemList + Service schema for rich results */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "ItemList",
+            name: "CBLUE Services - Thailand Home Services, Project Teams & Professionals",
+            description: "Complete list of services offered by CBLUE platform across Thailand",
+            url: `https://www.cblue.co.th/${locale}/services`,
+            numberOfItems: householdServices.length + projectServices.length + professionalServices.length + realEstateServices.length,
+            itemListElement: [
+              ...householdServices.map((svc, i) => ({
+                "@type": "ListItem",
+                position: i + 1,
+                item: {
+                  "@type": "Service",
+                  name: svc.titleKey,
+                  url: `https://www.cblue.co.th/${locale}/booking/household?service=${svc.serviceValue}`,
+                  provider: { "@type": "Organization", name: "CBLUE" },
+                  areaServed: { "@type": "Country", name: "Thailand" },
+                  serviceType: "Home Maintenance",
+                },
+              })),
+              ...projectServices.map((svc, i) => ({
+                "@type": "ListItem",
+                position: householdServices.length + i + 1,
+                item: {
+                  "@type": "Service",
+                  name: svc.name,
+                  url: `https://www.cblue.co.th/${locale}/booking/project?service=${svc.value}`,
+                  provider: { "@type": "Organization", name: "CBLUE" },
+                  areaServed: { "@type": "Country", name: "Thailand" },
+                  serviceType: "Project Services",
+                },
+              })),
+              ...professionalServices.map((svc, i) => ({
+                "@type": "ListItem",
+                position: householdServices.length + projectServices.length + i + 1,
+                item: {
+                  "@type": "Service",
+                  name: svc.name,
+                  url: `https://www.cblue.co.th/${locale}/booking/professional?service=${svc.value}`,
+                  provider: { "@type": "Organization", name: "CBLUE" },
+                  areaServed: { "@type": "Country", name: "Thailand" },
+                  serviceType: "Professional Services",
+                },
+              })),
+            ],
+          }),
+        }}
+      />
+      {/* BreadcrumbList for Google rich results */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "BreadcrumbList",
+            itemListElement: [
+              { "@type": "ListItem", position: 1, name: "CBLUE", item: `https://www.cblue.co.th/${locale}` },
+              { "@type": "ListItem", position: 2, name: locale === "th" ? "บริการทั้งหมด" : locale === "zh" ? "所有服务" : "All Services", item: `https://www.cblue.co.th/${locale}/services` },
+            ],
+          }),
+        }}
+      />
       {/* Hero with scenic background */}
       <section className="relative overflow-hidden min-h-[400px] flex items-center">
         <Image src="/images/scenic-building.jpg" alt="" fill className="object-cover" priority />

@@ -109,6 +109,15 @@ export const metadata: Metadata = {
     icon: "/images/favicon-c.png",
     apple: "/images/favicon-c.png",
   },
+  other: {
+    "msvalidate.01": "",
+    "apple-mobile-web-app-capable": "yes",
+    "apple-mobile-web-app-status-bar-style": "black-translucent",
+    "apple-mobile-web-app-title": "CBLUE",
+    "format-detection": "telephone=no",
+    "mobile-web-app-capable": "yes",
+    "theme-color": "#0284c7",
+  },
 };
 
 export default function RootLayout({
@@ -118,7 +127,12 @@ export default function RootLayout({
 }>) {
   return (
     <html>
+      <head>
+        <meta name="theme-color" content="#0284c7" />
+        <link rel="preconnect" href="https://www.cblue.co.th" />
+      </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        {/* Organization schema */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -128,7 +142,7 @@ export default function RootLayout({
               name: "CBLUE",
               url: "https://www.cblue.co.th",
               logo: "https://www.cblue.co.th/images/logo.jpg",
-              description: "Thailand's #1 AI-powered platform for home services, project teams, professionals, and real estate.",
+              description: "Thailand's #1 AI-powered platform for home services, project teams, professionals, and real estate. แพลตฟอร์มช่างซ่อมบ้าน ทีมโครงการ มืออาชีพ และอสังหาริมทรัพย์. 泰国第一AI家居服务与房地产平台",
               address: { "@type": "PostalAddress", addressCountry: "TH" },
               sameAs: [],
               areaServed: { "@type": "Country", name: "Thailand" },
@@ -143,6 +157,65 @@ export default function RootLayout({
                 "Real Estate", "Property Listing", "Property Management",
                 "Smart Home", "Smart Farming", "Environmental Services", "Security & CCTV",
               ],
+            }),
+          }}
+        />
+        {/* WebSite schema with SearchAction for Google/Bing sitelinks search */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "WebSite",
+              name: "CBLUE",
+              alternateName: ["cblue.co.th", "ช่างซ่อมบ้าน CBLUE", "CBLUE泰国"],
+              url: "https://www.cblue.co.th",
+              inLanguage: ["th", "en", "zh"],
+              potentialAction: {
+                "@type": "SearchAction",
+                target: {
+                  "@type": "EntryPoint",
+                  urlTemplate: "https://www.cblue.co.th/th/services?q={search_term_string}",
+                },
+                "query-input": "required name=search_term_string",
+              },
+            }),
+          }}
+        />
+        {/* LocalBusiness schema for Google Maps / local SEO */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "LocalBusiness",
+              "@id": "https://www.cblue.co.th/#business",
+              name: "CBLUE Thailand",
+              image: "https://www.cblue.co.th/images/logo.jpg",
+              url: "https://www.cblue.co.th",
+              telephone: "",
+              address: {
+                "@type": "PostalAddress",
+                addressLocality: "Bangkok",
+                addressRegion: "Bangkok",
+                addressCountry: "TH",
+              },
+              geo: {
+                "@type": "GeoCoordinates",
+                latitude: 13.7563,
+                longitude: 100.5018,
+              },
+              priceRange: "฿200 - ฿1000",
+              openingHoursSpecification: {
+                "@type": "OpeningHoursSpecification",
+                dayOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+                opens: "00:00",
+                closes: "23:59",
+              },
+              areaServed: {
+                "@type": "Country",
+                name: "Thailand",
+              },
             }),
           }}
         />
