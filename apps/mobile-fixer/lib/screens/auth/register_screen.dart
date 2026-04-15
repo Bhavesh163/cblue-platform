@@ -27,7 +27,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _pdpa = false;
   bool _loading = false;
   String? _error;
-  String _category = 'household';
   final List<String> _selectedServices = [];
   File? _selfie;
   File? _idCard;
@@ -80,7 +79,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
         'phone': _phone.text.trim(),
         'company': _company.text.trim(),
         'password': _password.text,
-        'category': _category,
         'services': _selectedServices,
         'pdpaConsent': true,
       });
@@ -192,31 +190,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 const SizedBox(height: 12),
                 TextFormField(controller: _company, decoration: InputDecoration(labelText: t('company'))),
                 const SizedBox(height: 12),
-                // Category selection
-                DropdownButtonFormField<String>(
-                  initialValue: _category,
-                  decoration: InputDecoration(labelText: t('service_category')),
-                  items: ['household', 'project', 'professional', 'property_lister'].map((c) => DropdownMenuItem(value: c, child: Text(t(c)))).toList(),
-                  onChanged: (v) => setState(() { _category = v!; _selectedServices.clear(); }),
-                ),
-                const SizedBox(height: 12),
-                // Services multi-select
-                if (_category != 'property_lister') ...[
-                  Text(t('select_services'), style: const TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
-                  Builder(builder: (ctx) {
-                    final locale = ctx.watch<LocaleProvider>().locale;
-                    return Wrap(
-                      spacing: 8, runSpacing: 4,
-                      children: _servicesForCategory().map((s) => FilterChip(
-                        label: Text(_localizedService(s, locale), style: const TextStyle(fontSize: 12)),
+                // Services multi-select (all services shown together, no category separation)
+                Text(t('select_services'), style: const TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                Builder(builder: (ctx) {
+                  final locale = ctx.watch<LocaleProvider>().locale;
+                  final allEn = AppConstants.allServices['en']!;
+                  return Wrap(
+                    spacing: 8, runSpacing: 4,
+                    children: allEn.map((s) {
+                      final allLocale = AppConstants.allServices[locale] ?? allEn;
+                      final idx = allEn.indexOf(s);
+                      final label = idx >= 0 && idx < allLocale.length ? allLocale[idx] : s;
+                      return FilterChip(
+                        label: Text(label, style: const TextStyle(fontSize: 12)),
                         selected: _selectedServices.contains(s),
                         onSelected: (sel) => setState(() => sel ? _selectedServices.add(s) : _selectedServices.remove(s)),
-                      )).toList(),
-                    );
-                  }),
-                  const SizedBox(height: 12),
-                ],
+                      );
+                    }).toList(),
+                  );
+                }),
+                const SizedBox(height: 12),
                 TextFormField(controller: _password, decoration: InputDecoration(labelText: t('password')), obscureText: true, validator: (v) => v != null && v.length >= 6 ? null : t('min_6_chars')),
                 const SizedBox(height: 12),
                 TextFormField(controller: _confirmPw, decoration: InputDecoration(labelText: t('confirm_password')), obscureText: true, validator: (v) => v == _password.text ? null : t('passwords_mismatch')),
@@ -327,25 +321,5 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _password.dispose();
     _confirmPw.dispose();
     super.dispose();
-  }
-
-  Map<String, List<String>> _servicesMapForCategory() {
-    switch (_category) {
-      case 'household': return AppConstants.householdServices;
-      case 'project': return AppConstants.projectServices;
-      case 'professional': return AppConstants.professionalServices;
-      default: return {'en': [], 'th': [], 'zh': []};
-    }
-  }
-
-  List<String> _servicesForCategory() => _servicesMapForCategory()['en'] ?? [];
-
-  String _localizedService(String enName, String locale) {
-    final map = _servicesMapForCategory();
-    final enList = map['en'] ?? [];
-    final idx = enList.indexOf(enName);
-    if (idx < 0) return enName;
-    final locList = map[locale] ?? enList;
-    return idx < locList.length ? locList[idx] : enName;
   }
 }

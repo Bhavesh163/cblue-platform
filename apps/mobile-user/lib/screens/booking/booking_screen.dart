@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../core/theme.dart';
 import '../../core/constants.dart';
 import '../../core/providers.dart';
@@ -87,6 +88,9 @@ class _BookingFormState extends State<_BookingForm> with AutomaticKeepAliveClien
   bool _loading = false;
   String? _autoProvince;
   String? _autoDistrict;
+  double? _gpsLat;
+  double? _gpsLng;
+  bool _gpsLoading = false;
 
   // Thailand postal code → province/district lookup (major postcodes)
   static const Map<String, Map<String, String>> _postalLookup = {
@@ -139,6 +143,30 @@ class _BookingFormState extends State<_BookingForm> with AutomaticKeepAliveClien
       _autoProvince = lookup?['province'];
       _autoDistrict = lookup?['district'];
     });
+  }
+
+  Future<void> _detectGps() async {
+    setState(() { _gpsLoading = true; });
+    try {
+      LocationPermission perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.read<LocaleProvider>().t('gps_denied'))));
+        }
+        return;
+      }
+      final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 10)));
+      setState(() { _gpsLat = pos.latitude; _gpsLng = pos.longitude; });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.read<LocaleProvider>().t('gps_error'))));
+      }
+    } finally {
+      if (mounted) setState(() { _gpsLoading = false; });
+    }
   }
 
   @override
@@ -207,6 +235,7 @@ class _BookingFormState extends State<_BookingForm> with AutomaticKeepAliveClien
         'description': _descCtrl.text.trim(),
         'postalCode': _postalCtrl.text.trim(),
         'startDate': _startDate!.toIso8601String(),
+        if (_gpsLat != null && _gpsLng != null) 'gpsCoords': {'lat': _gpsLat, 'lng': _gpsLng},
       });
 
       // Upload images if selected
@@ -357,6 +386,22 @@ class _BookingFormState extends State<_BookingForm> with AutomaticKeepAliveClien
                     style: const TextStyle(fontSize: 13, color: AppTheme.primaryGreen, fontWeight: FontWeight.w500),
                   )),
                 ]),
+              ),
+            ],
+            const SizedBox(height: 12),
+            // GPS auto-detect
+            OutlinedButton.icon(
+              onPressed: _gpsLoading ? null : _detectGps,
+              icon: _gpsLoading
+                  ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.gps_fixed, size: 18),
+              label: Text(_gpsLoading ? locale.t('detecting') : locale.t('auto_detect_gps')),
+            ),
+            if (_gpsLat != null && _gpsLng != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                '📍 ${_gpsLat!.toStringAsFixed(6)}, ${_gpsLng!.toStringAsFixed(6)}',
+                style: const TextStyle(fontSize: 12, color: AppTheme.primaryGreen),
               ),
             ],
             const SizedBox(height: 12),

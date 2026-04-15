@@ -21,26 +21,35 @@ class AppConstants {
     'Grandeur': 1000.0,
   };
 
-  // Household services
+  // Household services (matches web)
   static const Map<String, List<String>> householdServices = {
-    'en': ['Plumbing', 'Electrical', 'Air Conditioning', 'Painting', 'Cleaning', 'General Maintenance'],
-    'th': ['ประปา', 'ไฟฟ้า', 'แอร์', 'ทาสี', 'ทำความสะอาด', 'ซ่อมบำรุงทั่วไป'],
-    'zh': ['水管', '电气', '空调', '油漆', '清洁', '一般维修'],
+    'en': ['Plumbing', 'Electrical', 'Air Conditioning', 'Interior Design', 'Landscaping', 'Cladding/Roofing'],
+    'th': ['ประปา', 'ไฟฟ้า', 'แอร์', 'ออกแบบภายใน', 'จัดสวน', 'หลังคา/ผนัง'],
+    'zh': ['水管', '电气', '空调', '室内设计', '园林绿化', '屋顶/外墙'],
   };
 
-  // Project services
+  // Project services (matches web)
   static const Map<String, List<String>> projectServices = {
-    'en': ['Architect', 'Interior Designer', 'Structural Engineer', 'Landscape Designer', 'MEP Engineer', 'Quantity Surveyor', 'Project Manager', 'Contractor (Renovation)', 'Contractor (New Build)', 'Contractor (Fit-out)', 'Roofing Specialist', 'Waterproofing', 'Foundation Specialist', 'Steel Fabricator', 'Glass & Aluminium', 'HVAC Specialist', 'Fire Protection', 'Security Systems', 'Smart Home', 'Solar Installation'],
-    'th': ['สถาปนิก', 'มัณฑนากร', 'วิศวกรโครงสร้าง', 'ภูมิสถาปนิก', 'วิศวกร MEP', 'ปริมาณสำรวจ', 'ผู้จัดการโครงการ', 'ผู้รับเหมา (ปรับปรุง)', 'ผู้รับเหมา (สร้างใหม่)', 'ผู้รับเหมา (ตกแต่ง)', 'ช่างหลังคา', 'กันซึม', 'ช่างฐานราก', 'ช่างเหล็ก', 'กระจก & อลูมิเนียม', 'ช่าง HVAC', 'ระบบดับเพลิง', 'ระบบรักษาความปลอดภัย', 'สมาร์ทโฮม', 'ติดตั้งโซลาร์'],
-    'zh': ['建筑师', '室内设计师', '结构工程师', '景观设计师', 'MEP工程师', '工料测量师', '项目经理', '承包商（翻新）', '承包商（新建）', '承包商（装修）', '屋顶专家', '防水', '地基专家', '钢铁制造', '玻璃与铝材', 'HVAC专家', '消防', '安防系统', '智能家居', '太阳能安装'],
+    'en': ['Website Development', 'Mobile App Development', 'AI Integration', 'Software Development', 'Machine Learning', 'Consulting', 'Solar Panels', 'EV Charging', 'Green Building Design', 'HVAC MEP & Retrofit', 'Kitchen', 'Reinstatement', 'Fit-out', 'Automation', 'Environmental Services', 'Security and CCTV', 'Door and Access Control', 'Green Construction', 'Smart Home/Building & BMS', 'Smart Farming'],
+    'th': ['พัฒนาเว็บไซต์', 'พัฒนาแอปมือถือ', 'AI Integration', 'พัฒนาซอฟต์แวร์', 'Machine Learning', 'ที่ปรึกษา', 'แผงโซลาร์', 'สถานีชาร์จ EV', 'ออกแบบอาคารสีเขียว', 'HVAC MEP', 'ครัว', 'คืนสภาพ', 'ตกแต่ง', 'ระบบอัตโนมัติ', 'บริการสิ่งแวดล้อม', 'กล้องวงจรปิด', 'ระบบประตู', 'ก่อสร้างสีเขียว', 'สมาร์ทโฮม/BMS', 'เกษตรอัจฉริยะ'],
+    'zh': ['网站开发', '移动应用开发', 'AI集成', '软件开发', '机器学习', '咨询', '太阳能板', 'EV充电', '绿色建筑设计', 'HVAC MEP', '厨房', '恢复', '装修', '自动化', '环境服务', '安防监控', '门禁系统', '绿色施工', '智能家居/BMS', '智慧农业'],
   };
 
-  // Professional services
+  // Professional services (matches web)
   static const Map<String, List<String>> professionalServices = {
-    'en': ['Real Estate Agent', 'Property Valuator', 'Mortgage Broker', 'Legal Advisor', 'Tax Consultant', 'Insurance Agent', 'Home Inspector', 'Feng Shui Consultant', 'Moving Service', 'Pest Control', 'Garden Maintenance', 'Pool Maintenance', 'Security Guard', 'Property Manager', 'Facility Manager'],
-    'th': ['นายหน้าอสังหาฯ', 'ผู้ประเมินทรัพย์สิน', 'นายหน้าสินเชื่อ', 'ที่ปรึกษากฎหมาย', 'ที่ปรึกษาภาษี', 'ตัวแทนประกัน', 'ผู้ตรวจสอบบ้าน', 'ที่ปรึกษาฮวงจุ้ย', 'บริการขนย้าย', 'กำจัดแมลง', 'ดูแลสวน', 'ดูแลสระว่ายน้ำ', 'รปภ.', 'ผู้จัดการอสังหาฯ', 'ผู้จัดการอาคาร'],
-    'zh': ['房产经纪人', '房产评估师', '抵押贷款经纪人', '法律顾问', '税务顾问', '保险代理', '房屋检查员', '风水顾问', '搬家服务', '害虫防治', '花园维护', '泳池维护', '保安', '物业经理', '设施经理'],
+    'en': ['Lawyer', 'Accountant', 'CPA', 'Architect', 'Interior Designer', 'Design Civil Engineer', 'Construction Civil Engineer', 'Design Mechanical Engineer', 'Construction Mechanical Engineer', 'Design Electrical Engineer', 'Construction Electrical Engineer', 'Software Programmer', 'Digital Marketing', 'Safety Officer', 'Others'],
+    'th': ['ทนายความ', 'นักบัญชี', 'ผู้สอบบัญชี', 'สถาปนิก', 'นักออกแบบภายใน', 'วิศวกรโยธาออกแบบ', 'วิศวกรโยธาก่อสร้าง', 'วิศวกรเครื่องกลออกแบบ', 'วิศวกรเครื่องกลก่อสร้าง', 'วิศวกรไฟฟ้าออกแบบ', 'วิศวกรไฟฟ้าก่อสร้าง', 'โปรแกรมเมอร์', 'การตลาดดิจิทัล', 'เจ้าหน้าที่ความปลอดภัย', 'อื่นๆ'],
+    'zh': ['律师', '会计师', '注册会计师', '建筑师', '室内设计师', '设计土木工程师', '施工土木工程师', '设计机械工程师', '施工机械工程师', '设计电气工程师', '施工电气工程师', '软件程序员', '数字营销', '安全官', '其他'],
   };
+
+  // All services combined (for unified partner registration)
+  static Map<String, List<String>> get allServices {
+    return {
+      'en': [...householdServices['en']!, ...projectServices['en']!, ...professionalServices['en']!],
+      'th': [...householdServices['th']!, ...projectServices['th']!, ...professionalServices['th']!],
+      'zh': [...householdServices['zh']!, ...projectServices['zh']!, ...professionalServices['zh']!],
+    };
+  }
 
   // Property types
   static const List<String> propertyTypes = [

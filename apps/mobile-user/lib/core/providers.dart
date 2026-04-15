@@ -92,6 +92,10 @@ class Translations {
     'district': {'en': 'District', 'th': 'เขต/อำเภอ', 'zh': '区'},
     'subdistrict': {'en': 'Sub-district', 'th': 'แขวง/ตำบล', 'zh': '分区'},
     'postalCode': {'en': 'Postal Code', 'th': 'รหัสไปรษณีย์', 'zh': '邮编'},
+    'auto_detect_gps': {'en': 'Auto-detect Location (GPS)', 'th': 'ตรวจจับตำแหน่ง (GPS)', 'zh': '自动检测位置 (GPS)'},
+    'detecting': {'en': 'Detecting...', 'th': 'กำลังตรวจจับ...', 'zh': '检测中...'},
+    'gps_denied': {'en': 'Location access denied. Please enable in settings.', 'th': 'ไม่ได้รับอนุญาตเข้าถึงตำแหน่ง กรุณาเปิดใน Settings', 'zh': '位置访问被拒绝，请在设置中启用'},
+    'gps_error': {'en': 'Could not detect location', 'th': 'ไม่สามารถตรวจจับตำแหน่งได้', 'zh': '无法检测位置'},
     'address': {'en': 'Address', 'th': 'ที่อยู่', 'zh': '地址'},
     'houseNumber': {'en': 'House Number', 'th': 'บ้านเลขที่', 'zh': '门牌号'},
     // Properties workflow

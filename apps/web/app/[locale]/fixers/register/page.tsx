@@ -130,13 +130,11 @@ export default function FixerRegisterPage() {
 
   /* Camera helpers for KYC */
   const startCamera = async () => {
+    setError("");
     try {
-      if (typeof window === "undefined" || !window.isSecureContext) {
-        setError(locale === "th" ? "กล้องต้องใช้ HTTPS กรุณาใช้ปุ่มอัพโหลดไฟล์แทน" : locale === "zh" ? "摄像头需要HTTPS连接，请使用上传文件按钮" : "Camera requires a secure (HTTPS) connection. Please use the Upload File button instead.");
-        return;
-      }
+      if (typeof window === "undefined" || typeof navigator === "undefined") return;
       if (!navigator.mediaDevices?.getUserMedia) {
-        setError(locale === "th" ? "เบราว์เซอร์ไม่รองรับกล้อง กรุณาใช้ปุ่มอัพโหลดไฟล์แทน" : locale === "zh" ? "浏览器不支持摄像头，请使用上传文件按钮" : "Browser does not support camera. Please use the Upload File button instead.");
+        setError(locale === "th" ? "เบราว์เซอร์ไม่รองรับกล้อง กรุณาใช้ปุ่มอัพโหลดไฟล์แทน" : locale === "zh" ? "浏览器不支持摄像头，请使用上传文件按钮" : "Browser does not support camera access. Please use the Upload File button instead.");
         return;
       }
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -149,13 +147,16 @@ export default function FixerRegisterPage() {
       }
       setShowCamera(true);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "";
-      if (msg.includes("NotAllowed") || msg.includes("Permission")) {
-        setError(locale === "th" ? "กรุณาอนุญาตการเข้าถึงกล้องในการตั้งค่าเบราว์เซอร์" : locale === "zh" ? "请在浏览器设置中允许摄像头访问" : "Please allow camera access in your browser settings.");
-      } else if (msg.includes("NotFound") || msg.includes("DevicesNotFound")) {
+      const name = err instanceof DOMException ? err.name : "";
+      const msg = err instanceof Error ? err.message : String(err);
+      if (name === "NotAllowedError" || msg.includes("Permission")) {
+        setError(locale === "th" ? "กรุณาอนุญาตการเข้าถึงกล้องในการตั้งค่าเบราว์เซอร์ แล้วกดเปิดกล้องอีกครั้ง" : locale === "zh" ? "请在浏览器设置中允许摄像头访问，然后再次点击打开摄像头" : "Camera access was denied. Please allow camera permissions in your browser settings, then click Open Camera again.");
+      } else if (name === "NotFoundError" || name === "DevicesNotFoundError" || msg.includes("Requested device not found")) {
         setError(locale === "th" ? "ไม่พบกล้องบนอุปกรณ์นี้ กรุณาใช้ปุ่มอัพโหลดไฟล์แทน" : locale === "zh" ? "未找到摄像头，请使用上传文件按钮" : "No camera found on this device. Please use the Upload File button instead.");
+      } else if (name === "NotReadableError" || name === "AbortError") {
+        setError(locale === "th" ? "กล้องถูกใช้งานโดยแอปอื่น กรุณาปิดแอปอื่นแล้วลองใหม่" : locale === "zh" ? "摄像头被其他应用占用，请关闭其他应用后重试" : "Camera is being used by another application. Please close other apps and try again.");
       } else {
-        setError(locale === "th" ? "ไม่สามารถเปิดกล้องได้ กรุณาอนุญาตการเข้าถึงกล้องในการตั้งค่าเบราว์เซอร์" : locale === "zh" ? "无法打开摄像头，请在浏览器设置中允许摄像头访问" : "Could not access camera. Please allow camera permissions in your browser settings.");
+        setError(locale === "th" ? "ไม่สามารถเปิดกล้องได้ กรุณาตรวจสอบว่าเบราว์เซอร์อนุญาตการเข้าถึงกล้อง" : locale === "zh" ? "无法打开摄像头，请检查浏览器权限设置" : `Could not access camera: ${msg}. Please check your browser camera permissions.`);
       }
     }
   };
@@ -814,8 +815,8 @@ export default function FixerRegisterPage() {
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "บ้านเลขที่" : locale === "zh" ? "门牌号" : "House No."} <span className="text-red-500">*</span></label>
-                <input name="companyHouseNumber" type="text" required value={form.companyHouseNumber} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="123/45" />
+                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "บ้านเลขที่" : locale === "zh" ? "门牌号" : "House No."}</label>
+                <input name="companyHouseNumber" type="text" value={form.companyHouseNumber} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="123/45" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "อาคาร / ชั้น" : locale === "zh" ? "建筑 / 楼层" : "Building / Floor"}</label>
@@ -833,29 +834,29 @@ export default function FixerRegisterPage() {
                 <input name="companySoi" type="text" value={form.companySoi} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder={locale === "th" ? "ซอย 21" : locale === "zh" ? "21巷" : "Soi 21"} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "จังหวัด" : locale === "zh" ? "府" : "Province"} <span className="text-red-500">*</span></label>
-                <select name="companyProvince" required value={form.companyProvince} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 outline-none bg-white">
+                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "จังหวัด" : locale === "zh" ? "府" : "Province"}</label>
+                <select name="companyProvince" value={form.companyProvince} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 outline-none bg-white">
                   <option value="">-- {locale === "th" ? "เลือกจังหวัด" : locale === "zh" ? "选择府" : "Select Province"} --</option>
                   {THAI_PROVINCES.map((p) => (<option key={p} value={p}>{p}</option>))}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "อำเภอ/เขต" : locale === "zh" ? "县/区" : "District"} <span className="text-red-500">*</span></label>
-                <select name="companyDistrict" required value={form.companyDistrict} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 outline-none bg-white">
+                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "อำเภอ/เขต" : locale === "zh" ? "县/区" : "District"}</label>
+                <select name="companyDistrict" value={form.companyDistrict} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 outline-none bg-white">
                   <option value="">-- {locale === "th" ? "เลือกอำเภอ/เขต" : locale === "zh" ? "选择县/区" : "Select District"} --</option>
                   {getDistrictsForProvince(form.companyProvince).map((d) => (<option key={d} value={d}>{d}</option>))}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "ตำบล/แขวง" : locale === "zh" ? "乡/镇" : "Sub-district"} <span className="text-red-500">*</span></label>
-                <select name="companySubdistrict" required value={form.companySubdistrict} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 outline-none bg-white">
+                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "ตำบล/แขวง" : locale === "zh" ? "乡/镇" : "Sub-district"}</label>
+                <select name="companySubdistrict" value={form.companySubdistrict} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 outline-none bg-white">
                   <option value="">-- {locale === "th" ? "เลือกตำบล/แขวง" : locale === "zh" ? "选择乡/镇" : "Select Sub-district"} --</option>
                   {getSubdistrictsForDistrict(form.companyProvince, form.companyDistrict).map((sd) => (<option key={sd} value={sd}>{sd}</option>))}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "รหัสไปรษณีย์" : locale === "zh" ? "邮政编码" : "Postal Code"} <span className="text-red-500">*</span></label>
-                <input name="companyPostalCode" type="text" required maxLength={5} value={form.companyPostalCode} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="10110" />
+                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "รหัสไปรษณีย์" : locale === "zh" ? "邮政编码" : "Postal Code"}</label>
+                <input name="companyPostalCode" type="text" maxLength={5} value={form.companyPostalCode} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="10110" />
               </div>
             </div>
           </fieldset>
@@ -892,7 +893,7 @@ export default function FixerRegisterPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                      {locale === "th" ? "รหัสผ่าน" : locale === "zh" ? "密码" : "Password"} <span className="text-red-500">*</span>
+                      {locale === "th" ? "รหัสผ่าน" : locale === "zh" ? "密码" : "Password"}
                     </label>
                     <input
                       id="password"
@@ -909,7 +910,7 @@ export default function FixerRegisterPage() {
                   {authMode === "register" && (
                     <div>
                       <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                        {locale === "th" ? "ยืนยันรหัสผ่าน" : locale === "zh" ? "确认密码" : "Confirm Password"} <span className="text-red-500">*</span>
+                        {locale === "th" ? "ยืนยันรหัสผ่าน" : locale === "zh" ? "确认密码" : "Confirm Password"}
                       </label>
                       <input
                         id="confirmPassword"
@@ -942,7 +943,7 @@ export default function FixerRegisterPage() {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {locale === "th" ? "ถ่ายรูป / อัพโหลดรูปบัตรประชาชน" : locale === "zh" ? "拍照或上传身份证照片" : "Capture / Upload ID Card Photos"} <span className="text-red-500">*</span>
+                  {locale === "th" ? "ถ่ายรูป / อัพโหลดรูปบัตรประชาชน" : locale === "zh" ? "拍照或上传身份证照片" : "Capture / Upload ID Card Photos"}
                 </label>
                 <p className="text-xs text-gray-500 mb-2">
                   {locale === "th" ? "ถ่ายรูปบัตรประชาชนหน้า-หลัง และภาพถ่ายคู่กับบัตร (selfie) สูงสุด 3 รูป" : locale === "zh" ? "拍摄身份证正反面及手持身份证自拍照，最多3张" : "Take photos of ID card front/back and a selfie with your ID (max 3)"}
@@ -1022,7 +1023,7 @@ export default function FixerRegisterPage() {
             </legend>
             <div>
               <label htmlFor="portfolioImages" className="block text-sm font-medium text-gray-700 mb-1">
-                {locale === "th" ? "อัพโหลดรูปภาพผลงาน" : locale === "zh" ? "上传作品图片" : "Upload Portfolio Images"} <span className="text-red-500">*</span>
+                {locale === "th" ? "อัพโหลดรูปภาพผลงาน" : locale === "zh" ? "上传作品图片" : "Upload Portfolio Images"}
               </label>
               <p className="text-xs text-gray-500 mb-2">
                 {locale === "th" ? "แสดงตัวอย่างผลงาน รูปภาพ PDF หรือเอกสาร สูงสุด 10 ไฟล์" : locale === "zh" ? "展示过往作品，图片、PDF或文档，最多10个文件" : "Show your past work — images, PDFs or documents, up to 10 files"}
@@ -1064,7 +1065,7 @@ export default function FixerRegisterPage() {
           {/* Skills Selection */}
           <fieldset>
             <legend className="text-lg font-semibold text-gray-900 mb-4">
-              {locale === "th" ? "บริการที่ให้บริการ" : locale === "zh" ? "提供的服务" : "Services Offered"} <span className="text-red-500">*</span>
+              {locale === "th" ? "บริการที่ให้บริการ" : locale === "zh" ? "提供的服务" : "Services Offered"}
             </legend>
             <p className="text-xs text-gray-500 mb-3">
               {locale === "th" ? "เลือกบริการที่ท่านสามารถให้บริการได้ (เลือกได้หลายรายการ)" : locale === "zh" ? "选择您可以提供的服务（可多选）" : "Select services you can provide (multiple selections allowed)"}
@@ -1153,7 +1154,7 @@ export default function FixerRegisterPage() {
             </legend>
             <div>
               <label htmlFor="scheduledDate" className="block text-sm font-medium text-gray-700 mb-1">
-                {locale === "th" ? "วันที่ต้องการเริ่มงาน" : locale === "zh" ? "期望开始日期" : "Desired Start Date"} <span className="text-red-500">*</span>
+                {locale === "th" ? "วันที่ต้องการเริ่มงาน" : locale === "zh" ? "期望开始日期" : "Desired Start Date"}
               </label>
               <input
                 id="scheduledDate"
