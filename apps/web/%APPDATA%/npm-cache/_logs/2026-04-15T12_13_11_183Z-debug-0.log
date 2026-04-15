@@ -1,0 +1,37 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js
+1 info using npm@11.4.2
+2 info using node@v24.3.0
+3 silly config load:file:C:\Program Files\nodejs\node_modules\npm\npmrc
+4 info config found workspace root at \\wsl.localhost\Ubuntu-24.04\home\ballhog\cblue-platform
+5 silly config load:file:\\wsl.localhost\Ubuntu-24.04\home\ballhog\cblue-platform\.npmrc
+6 silly config load:file:C:\Users\Admin\.npmrc
+7 silly config load:file:\\wsl.localhost\Ubuntu-24.04\home\ballhog\cblue-platform\apps\web\%APPDATA%\npm\etc\npmrc
+8 verbose title npm run dev
+9 verbose argv "run" "dev"
+10 verbose logfile logs-max:10 dir:\\wsl.localhost\Ubuntu-24.04\home\ballhog\cblue-platform\apps\web\%APPDATA%\npm-cache\_logs\2026-04-15T12_13_11_183Z-
+11 verbose logfile \\wsl.localhost\Ubuntu-24.04\home\ballhog\cblue-platform\apps\web\%APPDATA%\npm-cache\_logs\2026-04-15T12_13_11_183Z-debug-0.log
+12 silly logfile done cleaning log files
+13 verbose stack Error: command failed
+13 verbose stack     at promiseSpawn (C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\promise-spawn\lib\index.js:22:22)
+13 verbose stack     at spawnWithShell (C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\promise-spawn\lib\index.js:124:10)
+13 verbose stack     at promiseSpawn (C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\promise-spawn\lib\index.js:12:12)
+13 verbose stack     at runScriptPkg (C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\run-script\lib\run-script-pkg.js:79:13)
+13 verbose stack     at runScript (C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\run-script\lib\run-script.js:9:12)
+13 verbose stack     at #run (C:\Program Files\nodejs\node_modules\npm\lib\commands\run.js:135:13)
+13 verbose stack     at RunScript.execWorkspaces (C:\Program Files\nodejs\node_modules\npm\lib\commands\run.js:67:24)
+13 verbose stack     at async Npm.exec (C:\Program Files\nodejs\node_modules\npm\lib\npm.js:208:9)
+13 verbose stack     at async module.exports (C:\Program Files\nodejs\node_modules\npm\lib\cli\entry.js:67:5)
+14 verbose pkgid web@0.1.0
+15 error Lifecycle script `dev` failed with error:
+16 error code 1
+17 error path \\wsl.localhost\Ubuntu-24.04\home\ballhog\cblue-platform\apps\web
+18 error workspace web@0.1.0
+19 error location \\wsl.localhost\Ubuntu-24.04\home\ballhog\cblue-platform\apps\web
+20 error command failed
+21 error command C:\WINDOWS\system32\cmd.exe /d /s /c next dev --port 3000
+22 verbose cwd \\wsl.localhost\Ubuntu-24.04\home\ballhog\cblue-platform\apps\web
+23 verbose os Windows_NT 10.0.26200
+24 verbose node v24.3.0
+25 verbose npm  v11.4.2
+26 verbose exit 1
+27 verbose code 1

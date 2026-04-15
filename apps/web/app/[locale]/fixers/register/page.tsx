@@ -131,6 +131,10 @@ export default function FixerRegisterPage() {
   /* Camera helpers for KYC */
   const startCamera = async () => {
     try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setError(locale === "th" ? "เบราว์เซอร์ไม่รองรับกล้อง กรุณาใช้ปุ่มอัพโหลดไฟล์แทน" : locale === "zh" ? "浏览器不支持摄像头，请使用上传文件按钮" : "Browser does not support camera. Please use the Upload File button instead.");
+        return;
+      }
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
       });
@@ -141,7 +145,7 @@ export default function FixerRegisterPage() {
       }
       setShowCamera(true);
     } catch {
-      setError(locale === "th" ? "ไม่สามารถเปิดกล้องได้ กรุณาอนุญาตการเข้าถึงกล้อง" : locale === "zh" ? "无法打开摄像头，请允许摄像头访问" : "Could not access camera. Please allow camera permissions.");
+      setError(locale === "th" ? "ไม่สามารถเปิดกล้องได้ กรุณาอนุญาตการเข้าถึงกล้องในการตั้งค่าเบราว์เซอร์" : locale === "zh" ? "无法打开摄像头，请在浏览器设置中允许摄像头访问" : "Could not access camera. Please allow camera permissions in your browser settings.");
     }
   };
   const capturePhoto = () => {
@@ -774,13 +778,12 @@ export default function FixerRegisterPage() {
               </div>
               <div>
                 <label htmlFor="company" className="block text-sm font-medium text-gray-700 mb-1">
-                  {locale === "th" ? "บริษัท" : locale === "zh" ? "公司" : "Company"} <span className="text-red-500">*</span>
+                  {locale === "th" ? "บริษัท" : locale === "zh" ? "公司" : "Company"}
                 </label>
                 <input
                   id="company"
                   name="company"
                   type="text"
-                  required
                   value={form.company}
                   onChange={handleChange}
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
@@ -951,8 +954,9 @@ export default function FixerRegisterPage() {
 
                 {/* Action buttons */}
                 <div className="flex gap-3 mb-3">
+                  {/* Open Camera — desktop only */}
                   {!showCamera && (
-                    <button type="button" onClick={startCamera} className="flex items-center gap-2 px-4 py-2.5 bg-sky-600 text-white rounded-lg text-sm font-semibold hover:bg-sky-700 transition shadow">
+                    <button type="button" onClick={startCamera} className="hidden sm:flex items-center gap-2 px-4 py-2.5 bg-sky-600 text-white rounded-lg text-sm font-semibold hover:bg-sky-700 transition shadow">
                       📷 {locale === "th" ? "เปิดกล้อง" : locale === "zh" ? "打开摄像头" : "Open Camera"}
                     </button>
                   )}
@@ -968,34 +972,25 @@ export default function FixerRegisterPage() {
                       }}
                     />
                   </label>
-                  {/* Mobile-specific capture button */}
-                  <label className="flex items-center gap-2 px-4 py-2.5 bg-green-50 text-green-700 rounded-lg text-sm font-semibold hover:bg-green-100 transition shadow cursor-pointer border border-green-200 sm:hidden">
-                    🤳 {locale === "th" ? "ถ่ายรูป" : locale === "zh" ? "拍照" : "Take Photo"}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      className="hidden"
-                      onChange={(e) => {
-                        if (e.target.files) setKycImages((prev) => [...prev, ...Array.from(e.target.files!)].slice(0, 3));
-                      }}
-                    />
-                  </label>
                 </div>
 
                 {/* Preview captured/uploaded images */}
                 {kycImages.length > 0 && (
                   <div className="flex gap-2 flex-wrap">
-                    {kycImages.map((img, i) => (
-                      <div key={i} className="relative group">
+                    {kycImages.map((img, i) => {
+                      const kycLabel = i === 0 ? (locale === "th" ? "หน้า" : locale === "zh" ? "正面" : "Front") : i === 1 ? (locale === "th" ? "หลัง" : locale === "zh" ? "反面" : "Back") : (locale === "th" ? "เซลฟี่" : locale === "zh" ? "自拍" : "Selfie");
+                      return (
+                      <div key={i} className="relative group text-center">
                         <img src={URL.createObjectURL(img)} alt={`KYC ${i + 1}`} className="w-20 h-20 object-cover rounded-lg border border-gray-200" />
+                        <span className="block text-[10px] text-gray-500 mt-0.5">{kycLabel}</span>
                         <button
                           type="button"
                           onClick={() => setKycImages((prev) => prev.filter((_, idx) => idx !== i))}
                           className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
                         >✕</button>
                       </div>
-                    ))}
+                      );
+                    })}
                     <p className="text-xs text-green-600 self-end">
                       {kycImages.length}/3 {locale === "th" ? "รูป" : locale === "zh" ? "张照片" : "photo(s)"}
                     </p>

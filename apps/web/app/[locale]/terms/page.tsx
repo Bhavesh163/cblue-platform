@@ -24,7 +24,7 @@ const T: Record<string, Record<string, string>> = {
     s8t: "8. Anonymous Communication",
     s8: "All communication between customers and fixers/professionals through the CBLUE chat system is anonymous. Personal contact information (name, phone number) is not shared until both parties consent. Misuse of the communication system may result in account suspension.",
     s9t: "9. Cancellation & Refunds",
-    s9: "Customers may cancel a booking before the fixer/professional confirms. Once confirmed and the processing fee is paid, refunds are subject to CBLUE's refund policy. Refund requests must be submitted through the Get Support page within 7 days of the service date.",
+    s9: "Customers may cancel a booking before the fixer/professional confirms. Once confirmed and the processing fee is paid, refunds are subject to CBLUE's refund policy. Refund requests must be submitted through the Contact Us page within 7 days of the service date.",
     s10t: "10. Limitation of Liability",
     s10: "CBLUE acts as a marketplace platform and is not directly responsible for the quality of work performed by fixers or professionals. We facilitate connections and provide quality assurance through our tier and review system. CBLUE's total liability shall not exceed the processing fee paid for the relevant booking.",
     s11t: "11. Intellectual Property",
@@ -34,7 +34,7 @@ const T: Record<string, Record<string, string>> = {
     s13t: "13. Changes to Terms",
     s13: "CBLUE may update these Terms of Service at any time. Continued use of the platform after changes constitutes acceptance of the updated terms. Users will be notified of material changes via email or platform notification.",
     s14t: "14. Contact",
-    s14: "For questions about these Terms of Service, please use our Get Support page or email cblue.thailand@gmail.com.",
+    s14: "For questions about these Terms of Service, please use our Contact Us page or email cblue.thailand@gmail.com.",
   },
   th: {
     title: "ข้อกำหนดการใช้บริการ",
@@ -66,7 +66,7 @@ const T: Record<string, Record<string, string>> = {
     s13t: "13. การเปลี่ยนแปลงข้อกำหนด",
     s13: "CBLUE อาจอัปเดตข้อกำหนดได้ตลอดเวลา การใช้ต่อเนื่องหลังเปลี่ยนแปลงถือว่ายอมรับ จะแจ้งผู้ใช้ผ่านอีเมลหรือแจ้งเตือนในแพลตฟอร์ม",
     s14t: "14. ติดต่อ",
-    s14: "หากมีคำถามเกี่ยวกับข้อกำหนด กรุณาใช้หน้า Get Support หรืออีเมล cblue.thailand@gmail.com",
+    s14: "หากมีคำถามเกี่ยวกับข้อกำหนด กรุณาใช้หน้า ติดต่อเรา หรืออีเมล cblue.thailand@gmail.com",
   },
   zh: {
     title: "服务条款",
@@ -98,7 +98,7 @@ const T: Record<string, Record<string, string>> = {
     s13t: "13. 条款变更",
     s13: "CBLUE 可随时更新这些服务条款。继续使用即表示接受更新后的条款。",
     s14t: "14. 联系方式",
-    s14: "如对这些服务条款有疑问，请使用 Get Support 页面或发邮件至 cblue.thailand@gmail.com。",
+    s14: "如对这些服务条款有疑问，请使用 联系我们 页面或发邮件至 cblue.thailand@gmail.com。",
   },
 };
 

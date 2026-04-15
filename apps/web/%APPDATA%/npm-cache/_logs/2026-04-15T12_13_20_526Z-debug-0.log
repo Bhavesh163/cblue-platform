@@ -1,0 +1,37 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js
+1 info using npm@11.4.2
+2 info using node@v24.3.0
+3 silly config load:file:C:\Program Files\nodejs\node_modules\npm\npmrc
+4 info config found workspace root at \\wsl.localhost\Ubuntu-24.04\home\ballhog\cblue-platform
+5 silly config load:file:\\wsl.localhost\Ubuntu-24.04\home\ballhog\cblue-platform\.npmrc
+6 silly config load:file:C:\Users\Admin\.npmrc
+7 silly config load:file:\\wsl.localhost\Ubuntu-24.04\home\ballhog\cblue-platform\apps\web\%APPDATA%\npm\etc\npmrc
+8 verbose title npm install
+9 verbose argv "install"
+10 verbose logfile logs-max:10 dir:\\wsl.localhost\Ubuntu-24.04\home\ballhog\cblue-platform\apps\web\%APPDATA%\npm-cache\_logs\2026-04-15T12_13_20_526Z-
+11 verbose logfile \\wsl.localhost\Ubuntu-24.04\home\ballhog\cblue-platform\apps\web\%APPDATA%\npm-cache\_logs\2026-04-15T12_13_20_526Z-debug-0.log
+12 silly logfile done cleaning log files
+13 silly packumentCache heap:4496293888 maxSize:1124073472 maxEntrySize:562036736
+14 verbose stack RangeError: Maximum call stack size exceeded
+14 verbose stack     at basename (node:path:837:11)
+14 verbose stack     at realpathCached (C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\arborist\lib\realpath.js:24:16)
+14 verbose stack     at realpathCached (C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\arborist\lib\realpath.js:38:10)
+14 verbose stack     at realpathCached (C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\arborist\lib\realpath.js:38:10)
+14 verbose stack     at realpathCached (C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\arborist\lib\realpath.js:38:10)
+14 verbose stack     at realpathCached (C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\arborist\lib\realpath.js:38:10)
+14 verbose stack     at realpathCached (C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\arborist\lib\realpath.js:38:10)
+14 verbose stack     at realpathCached (C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\arborist\lib\realpath.js:38:10)
+14 verbose stack     at realpathCached (C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\arborist\lib\realpath.js:38:10)
+14 verbose stack     at realpathCached (C:\Program Files\nodejs\node_modules\npm\node_modules\@npmcli\arborist\lib\realpath.js:38:10)
+15 error Maximum call stack size exceeded
+16 silly unfinished npm timer reify 1776255200936
+17 silly unfinished npm timer reify:loadTrees 1776255200938
+18 silly unfinished npm timer idealTree 1776255200950
+19 silly unfinished npm timer idealTree:init 1776255200950
+20 verbose cwd \\wsl.localhost\Ubuntu-24.04\home\ballhog\cblue-platform\apps\web
+21 verbose os Windows_NT 10.0.26200
+22 verbose node v24.3.0
+23 verbose npm  v11.4.2
+24 verbose exit 1
+25 verbose code 1
+26 error A complete log of this run can be found in: \\wsl.localhost\Ubuntu-24.04\home\ballhog\cblue-platform\apps\web\%APPDATA%\npm-cache\_logs\2026-04-15T12_13_20_526Z-debug-0.log

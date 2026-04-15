@@ -10,6 +10,7 @@ const T: Record<string, Record<string, string>> = {
     subtitle: "Having an issue? We're here to help.",
     categoryLabel: "Support Category",
     catFixer: "Fixer / Maintenance Issue",
+    catProject: "Project Issue",
     catProfessional: "Professional Service Issue",
     catRealEstate: "Real Estate Issue",
     catBilling: "Billing / Payment Issue",
@@ -50,6 +51,7 @@ const T: Record<string, Record<string, string>> = {
     subtitle: "มีปัญหา? เราพร้อมช่วยเหลือคุณ",
     categoryLabel: "หมวดหมู่การสนับสนุน",
     catFixer: "ปัญหาช่าง / ซ่อมบำรุง",
+    catProject: "ปัญหาโครงการ",
     catProfessional: "ปัญหาบริการมืออาชีพ",
     catRealEstate: "ปัญหาอสังหาริมทรัพย์",
     catBilling: "ปัญหาการเรียกเก็บเงิน / การชำระเงิน",
@@ -90,6 +92,7 @@ const T: Record<string, Record<string, string>> = {
     subtitle: "遇到问题？我们随时为您提供帮助。",
     categoryLabel: "支持类别",
     catFixer: "技工/维护问题",
+    catProject: "项目问题",
     catProfessional: "专业服务问题",
     catRealEstate: "房地产问题",
     catBilling: "账单/付款问题",
@@ -127,7 +130,7 @@ const T: Record<string, Record<string, string>> = {
   },
 };
 
-const CATEGORIES = ["catFixer", "catProfessional", "catRealEstate", "catBilling", "catGeneral"] as const;
+const CATEGORIES = ["catFixer", "catProject", "catProfessional", "catRealEstate", "catBilling", "catGeneral"] as const;
 const ISSUE_TYPES = ["issueDelay", "issueQuality", "issueCharge", "issueRefund", "issueComm", "issueDamage", "issuePayment", "issueReceipt", "issueAccount", "issueOther"] as const;
 
 export default function GetSupportPage() {
