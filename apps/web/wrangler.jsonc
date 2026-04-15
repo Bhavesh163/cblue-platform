@@ -7,6 +7,10 @@
     "nodejs_compat",
     "global_fetch_strictly_public"
   ],
+  "routes": [
+    { "pattern": "cblue.co.th/*", "zone_name": "cblue.co.th" },
+    { "pattern": "www.cblue.co.th/*", "zone_name": "cblue.co.th" }
+  ],
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
