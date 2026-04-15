@@ -31,7 +31,7 @@ class AppConstants {
   // Project services (matches web)
   static const Map<String, List<String>> projectServices = {
     'en': ['Website Development', 'Mobile App Development', 'AI Integration', 'Software Development', 'Machine Learning', 'Consulting', 'Solar Panels', 'EV Charging', 'Green Building Design', 'HVAC MEP & Retrofit', 'Kitchen', 'Reinstatement', 'Fit-out', 'Automation', 'Environmental Services', 'Security and CCTV', 'Door and Access Control', 'Green Construction', 'Smart Home/Building & BMS', 'Smart Farming'],
-    'th': ['พัฒนาเว็บไซต์', 'พัฒนาแอปมือถือ', 'AI Integration', 'พัฒนาซอฟต์แวร์', 'Machine Learning', 'ที่ปรึกษา', 'แผงโซลาร์', 'สถานีชาร์จ EV', 'ออกแบบอาคารสีเขียว', 'HVAC MEP', 'ครัว', 'คืนสภาพ', 'ตกแต่ง', 'ระบบอัตโนมัติ', 'บริการสิ่งแวดล้อม', 'กล้องวงจรปิด', 'ระบบประตู', 'ก่อสร้างสีเขียว', 'สมาร์ทโฮม/BMS', 'เกษตรอัจฉริยะ'],
+    'th': ['พัฒนาเว็บไซต์', 'พัฒนาแอปมือถือ', 'บูรณาการ AI', 'พัฒนาซอฟต์แวร์', 'แมชชีนเลิร์นนิ่ง', 'ที่ปรึกษา', 'แผงโซลาร์', 'สถานีชาร์จ EV', 'ออกแบบอาคารสีเขียว', 'ระบบปรับอากาศ MEP', 'ครัว', 'คืนสภาพ', 'ตกแต่ง', 'ระบบอัตโนมัติ', 'บริการสิ่งแวดล้อม', 'กล้องวงจรปิด', 'ระบบประตู', 'ก่อสร้างสีเขียว', 'สมาร์ทโฮม/BMS', 'เกษตรอัจฉริยะ'],
     'zh': ['网站开发', '移动应用开发', 'AI集成', '软件开发', '机器学习', '咨询', '太阳能板', 'EV充电', '绿色建筑设计', 'HVAC MEP', '厨房', '恢复', '装修', '自动化', '环境服务', '安防监控', '门禁系统', '绿色施工', '智能家居/BMS', '智慧农业'],
   };
 
@@ -53,7 +53,7 @@ class AppConstants {
 
   // Property types
   static const List<String> propertyTypes = [
-    'Condo', 'House', 'Townhouse', 'Land', 'Commercial', 'Apartment',
+    'Condo', 'House & Villa', 'Townhouse', 'Land', 'Commercial', 'Warehouse & Factory',
   ];
 
   // Listing types

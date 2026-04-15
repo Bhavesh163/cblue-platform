@@ -128,6 +128,125 @@ export default function FixerRegisterPage() {
     }
   }, []);
 
+  /* KYC AI Image Validation — checks if uploaded photo matches expected document type */
+  const [kycSlotStatus, setKycSlotStatus] = useState<("pending" | "valid" | "rejected")[]>([]);
+  const [kycValidating, setKycValidating] = useState(false);
+
+  const validateKycImage = useCallback(async (file: File, slotIndex: number): Promise<{ valid: boolean; reason?: string }> => {
+    return new Promise((resolve) => {
+      const img = new window.Image();
+      img.onload = () => {
+        const w = img.naturalWidth;
+        const h = img.naturalHeight;
+        const aspect = w / h;
+
+        // Reject very small images (minimum 200x150 for readable ID)
+        if (w < 200 || h < 150) {
+          resolve({ valid: false, reason: locale === "th" ? "รูปภาพเล็กเกินไป — ต้องมีความละเอียดอย่างน้อย 200x150 พิกเซล" : locale === "zh" ? "图片太小 — 最低分辨率 200x150 像素" : "Image too small — minimum 200×150 pixels required" });
+          return;
+        }
+
+        // Analyze image content via canvas (color variance to reject blank/solid images)
+        const canvas = document.createElement("canvas");
+        const sz = 64; // Downsample for perf
+        canvas.width = sz;
+        canvas.height = sz;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { resolve({ valid: true }); return; }
+        ctx.drawImage(img, 0, 0, sz, sz);
+        const data = ctx.getImageData(0, 0, sz, sz).data;
+
+        // Calculate color variance — solid/blank images have very low variance
+        let sumR = 0, sumG = 0, sumB = 0, count = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          sumR += data[i]!; sumG += data[i + 1]!; sumB += data[i + 2]!; count++;
+        }
+        const avgR = sumR / count, avgG = sumG / count, avgB = sumB / count;
+        let variance = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          variance += (data[i]! - avgR) ** 2 + (data[i + 1]! - avgG) ** 2 + (data[i + 2]! - avgB) ** 2;
+        }
+        variance /= count;
+
+        // Reject solid/blank images (very low color variance)
+        if (variance < 50) {
+          resolve({ valid: false, reason: locale === "th" ? "รูปภาพดูเหมือนว่างเปล่าหรือเป็นสีเดียว — กรุณาอัพโหลดรูปบัตรประชาชนจริง" : locale === "zh" ? "图片看起来是空白或纯色 — 请上传真实身份证照片" : "Image appears blank or solid color — please upload actual ID card photo" });
+          return;
+        }
+
+        // Edge detection: use Sobel-like gradient to check for text/features
+        let edgeSum = 0;
+        for (let y = 1; y < sz - 1; y++) {
+          for (let x = 1; x < sz - 1; x++) {
+            const idx = (y * sz + x) * 4;
+            const left = data[((y) * sz + (x - 1)) * 4]!;
+            const right = data[((y) * sz + (x + 1)) * 4]!;
+            const top = data[((y - 1) * sz + (x)) * 4]!;
+            const bottom = data[((y + 1) * sz + (x)) * 4]!;
+            edgeSum += Math.abs(right - left) + Math.abs(bottom - top);
+          }
+        }
+        const edgeDensity = edgeSum / ((sz - 2) * (sz - 2));
+
+        // For ID card slots (0=front, 1=back): expect landscape aspect + decent edge density
+        if (slotIndex < 2) {
+          // ID card front/back: typically landscape ~1.4-1.8 aspect ratio
+          if (aspect < 0.7 && edgeDensity < 8) {
+            // Very tall portrait with low detail — likely not an ID card
+            resolve({ valid: false, reason: locale === "th" ? "AI ตรวจพบว่ารูปนี้ไม่ใช่บัตรประชาชน — บัตรประชาชนควรเป็นรูปแนวนอน" : locale === "zh" ? "AI检测到此图不是身份证 — 身份证应为横向照片" : "AI detected this is not an ID card — ID cards should be landscape orientation" });
+            return;
+          }
+          // Very low edge density for card photos
+          if (edgeDensity < 5) {
+            resolve({ valid: false, reason: locale === "th" ? "AI ตรวจพบว่ารูปนี้อาจไม่ใช่เอกสาร — กรุณาอัพโหลดรูปบัตรประชาชนที่ชัดเจน" : locale === "zh" ? "AI检测到此图可能不是文件 — 请上传清晰的身份证照片" : "AI detected this may not be a document — please upload a clear ID card photo" });
+            return;
+          }
+        }
+
+        // For selfie slot (2): expect portrait or square, reasonable detail
+        if (slotIndex === 2) {
+          if (edgeDensity < 4) {
+            resolve({ valid: false, reason: locale === "th" ? "AI ตรวจพบว่ารูปนี้ไม่ใช่เซลฟี่ — กรุณาถ่ายเซลฟี่คู่กับบัตรประชาชน" : locale === "zh" ? "AI检测到此图不是自拍 — 请拍摄手持身份证自拍照" : "AI detected this is not a selfie — please take a selfie holding your ID card" });
+            return;
+          }
+        }
+
+        resolve({ valid: true });
+      };
+      img.onerror = () => resolve({ valid: false, reason: locale === "th" ? "ไม่สามารถอ่านไฟล์รูปภาพได้" : locale === "zh" ? "无法读取图片文件" : "Cannot read image file" });
+      img.src = URL.createObjectURL(file);
+    });
+  }, [locale]);
+
+  const addKycImagesWithValidation = useCallback(async (files: File[]) => {
+    if (files.length === 0) return;
+    setKycValidating(true);
+    setError("");
+    const currentCount = kycImages.length;
+    const newFiles: File[] = [];
+    const newStatuses: ("pending" | "valid" | "rejected")[] = [...kycSlotStatus];
+
+    for (let i = 0; i < files.length && currentCount + newFiles.length < 3; i++) {
+      const slotIdx = currentCount + newFiles.length;
+      const result = await validateKycImage(files[i]!, slotIdx);
+      if (result.valid) {
+        newFiles.push(files[i]!);
+        newStatuses[slotIdx] = "valid";
+      } else {
+        newStatuses[slotIdx] = "rejected";
+        setError(result.reason || "Image rejected");
+        setKycValidating(false);
+        return; // Stop on first rejection to show user the error
+      }
+    }
+
+    if (newFiles.length > 0) {
+      setKycImages((prev) => [...prev, ...newFiles].slice(0, 3));
+      setKycSlotStatus(newStatuses);
+    }
+    setKycValidating(false);
+  }, [kycImages.length, kycSlotStatus, validateKycImage]);
+
   /* Camera helpers for KYC */
   const startCamera = async () => {
     setError("");
@@ -169,7 +288,7 @@ export default function FixerRegisterPage() {
     canvas.toBlob((blob) => {
       if (blob) {
         const file = new File([blob], `kyc-capture-${Date.now()}.jpg`, { type: "image/jpeg" });
-        setKycImages((prev) => [...prev, file].slice(0, 3));
+        addKycImagesWithValidation([file]);
       }
     }, "image/jpeg", 0.9);
   };
@@ -703,6 +822,7 @@ export default function FixerRegisterPage() {
                 setAiProgress(0);
                 setForm(initialForm);
                 setKycImages([]);
+                setKycSlotStatus([]);
                 setPortfolioImages([]);
                 setDigestResult(null);
                 setPriceRows([{ service: "", finalPrice: "" }]);
@@ -980,7 +1100,7 @@ export default function FixerRegisterPage() {
                       multiple
                       className="hidden"
                       onChange={(e) => {
-                        if (e.target.files) setKycImages((prev) => [...prev, ...Array.from(e.target.files!)].slice(0, 3));
+                        if (e.target.files) addKycImagesWithValidation(Array.from(e.target.files));
                       }}
                     />
                   </label>
@@ -989,19 +1109,35 @@ export default function FixerRegisterPage() {
                 <p className="text-xs text-gray-400 mb-2">
                   {locale === "th" ? "📋 อัพโหลดตามลำดับ: 1) บัตรด้านหน้า 2) บัตรด้านหลัง 3) เซลฟี่คู่กับบัตร" : locale === "zh" ? "📋 按顺序上传：1) 证件正面 2) 证件反面 3) 手持证件自拍" : "📋 Upload in order: 1) ID card front 2) ID card back 3) Selfie with ID"}
                 </p>
+                <p className="text-xs text-sky-600 mb-2">
+                  🤖 {locale === "th" ? "ระบบ AI จะตรวจสอบว่ารูปภาพเป็นบัตรประชาชนจริงหรือไม่ รูปที่ไม่ถูกต้องจะถูกปฏิเสธ" : locale === "zh" ? "AI系统将验证照片是否为真实身份证 — 不正确的照片将被拒绝" : "AI system will verify photos are real ID cards — incorrect photos will be rejected"}
+                </p>
+
+                {/* Validating indicator */}
+                {kycValidating && (
+                  <div className="flex items-center gap-2 text-sm text-sky-600 mb-2">
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                    {locale === "th" ? "🤖 AI กำลังตรวจสอบรูปภาพ..." : locale === "zh" ? "🤖 AI正在验证照片..." : "🤖 AI verifying photo..."}
+                  </div>
+                )}
 
                 {/* Preview captured/uploaded images */}
                 {kycImages.length > 0 && (
                   <div className="flex gap-2 flex-wrap">
                     {kycImages.map((img, i) => {
                       const kycLabel = i === 0 ? (locale === "th" ? "หน้า" : locale === "zh" ? "正面" : "Front") : i === 1 ? (locale === "th" ? "หลัง" : locale === "zh" ? "反面" : "Back") : (locale === "th" ? "เซลฟี่" : locale === "zh" ? "自拍" : "Selfie");
+                      const status = kycSlotStatus[i] || "valid";
                       return (
                       <div key={i} className="relative group text-center">
-                        <img src={URL.createObjectURL(img)} alt={`KYC ${i + 1}`} className="w-20 h-20 object-cover rounded-lg border border-gray-200" />
+                        <img src={URL.createObjectURL(img)} alt={`KYC ${i + 1}`} className={`w-20 h-20 object-cover rounded-lg border-2 ${status === "valid" ? "border-green-400" : "border-gray-200"}`} />
                         <span className="block text-[10px] text-gray-500 mt-0.5">{kycLabel}</span>
+                        {status === "valid" && <span className="absolute top-0.5 left-0.5 text-green-500 text-xs">✓</span>}
                         <button
                           type="button"
-                          onClick={() => setKycImages((prev) => prev.filter((_, idx) => idx !== i))}
+                          onClick={() => {
+                            setKycImages((prev) => prev.filter((_, idx) => idx !== i));
+                            setKycSlotStatus((prev) => prev.filter((_, idx) => idx !== i));
+                          }}
                           className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
                         >✕</button>
                       </div>

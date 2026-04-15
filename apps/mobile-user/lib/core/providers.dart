@@ -9,7 +9,7 @@ class Translations {
     // Nav
     'home': {'en': 'Home', 'th': 'หน้าแรก', 'zh': '首页'},
     'services': {'en': 'Services', 'th': 'บริการ', 'zh': '服务'},
-    'dashboard': {'en': 'Dashboard', 'th': 'แดชบอร์ด', 'zh': '仪表板'},
+    'dashboard': {'en': 'Our Customer', 'th': 'ลูกค้าของเรา', 'zh': '我们的客户'},
     'profile': {'en': 'Profile', 'th': 'โปรไฟล์', 'zh': '个人资料'},
     'chat': {'en': 'Chat', 'th': 'แชท', 'zh': '聊天'},
     'alerts': {'en': 'Alerts', 'th': 'แจ้งเตือน', 'zh': '通知'},
@@ -84,7 +84,7 @@ class Translations {
     'rateExperience': {'en': 'Rate your experience', 'th': 'ให้คะแนนประสบการณ์', 'zh': '评价您的体验'},
     'viewSummary': {'en': 'View Summary', 'th': 'ดูสรุป', 'zh': '查看总结'},
     'poNumber': {'en': 'PO Number', 'th': 'เลขที่ PO', 'zh': 'PO编号'},
-    'customerPage': {'en': 'Customer Page', 'th': 'หน้าลูกค้า', 'zh': '客户页面'},
+    'customerPage': {'en': 'Our Customer', 'th': 'ลูกค้าของเรา', 'zh': '我们的客户'},
     'welcome': {'en': 'Welcome to CBLUE', 'th': 'ยินดีต้อนรับสู่ CBLUE', 'zh': '欢迎来到CBLUE'},
     'bookFixers': {'en': 'Book Fixers & Pros', 'th': 'จองช่างและมืออาชีพ', 'zh': '预约维修和专业人士'},
     'realEstate': {'en': 'Real Estate', 'th': 'อสังหาริมทรัพย์', 'zh': '房地产'},

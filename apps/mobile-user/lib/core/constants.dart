@@ -36,9 +36,9 @@ class AppConstants {
   static const List<Map<String, String>> projectServices = [
     {'en': 'Website Development', 'th': 'พัฒนาเว็บไซต์', 'zh': '网站开发'},
     {'en': 'Mobile App Development', 'th': 'พัฒนาแอป', 'zh': '移动应用开发'},
-    {'en': 'AI Integration', 'th': 'AI Integration', 'zh': 'AI集成'},
+    {'en': 'AI Integration', 'th': 'บูรณาการ AI', 'zh': 'AI集成'},
     {'en': 'Software Development', 'th': 'พัฒนาซอฟต์แวร์', 'zh': '软件开发'},
-    {'en': 'Machine Learning', 'th': 'Machine Learning', 'zh': '机器学习'},
+    {'en': 'Machine Learning', 'th': 'แมชชีนเลิร์นนิ่ง', 'zh': '机器学习'},
     {'en': 'Consulting', 'th': 'ที่ปรึกษา', 'zh': '咨询'},
     {'en': 'Solar Panels', 'th': 'แผงโซลาร์', 'zh': '太阳能板'},
     {'en': 'EV Charging', 'th': 'สถานีชาร์จ EV', 'zh': 'EV充电'},

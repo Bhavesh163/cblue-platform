@@ -55,7 +55,7 @@ export function Footer() {
   const companyLinks = [
     { label: t("footer.about"), href: `${prefix}/about` },
     { label: t("nav.services"), href: `${prefix}/services` },
-    { label: locale === "th" ? "หน้าลูกค้า" : locale === "zh" ? "客户页面" : "Customer Page", href: `${prefix}/dashboard` },
+    { label: locale === "th" ? "ลูกค้าของเรา" : locale === "zh" ? "我们的客户" : "Our Customer", href: `${prefix}/dashboard` },
     { label: t("nav.forFixers"), href: `${prefix}/fixers` },
     { label: t("footer.contact"), href: `${prefix}/get-support` },
   ];

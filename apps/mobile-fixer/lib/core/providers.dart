@@ -8,7 +8,7 @@ import 'dart:convert';
 class Translations {
   static const Map<String, Map<String, String>> _t = {
     'app_title': {'en': 'CBLUE Partner', 'th': 'CBLUE พาร์ทเนอร์', 'zh': 'CBLUE 合作伙伴'},
-    'dashboard': {'en': 'Dashboard', 'th': 'แดชบอร์ด', 'zh': '仪表板'},
+    'dashboard': {'en': 'Our Partner', 'th': 'พาร์ทเนอร์ของเรา', 'zh': '我们的合作伙伴'},
     'overview': {'en': 'Overview', 'th': 'ภาพรวม', 'zh': '概览'},
     'active_jobs': {'en': 'Active Jobs', 'th': 'งานปัจจุบัน', 'zh': '活跃工作'},
     'incoming': {'en': 'Incoming', 'th': 'งานเข้า', 'zh': '待接收'},

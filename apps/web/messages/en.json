@@ -6,9 +6,9 @@
     "household": "Household Maintenance",
     "project": "Projects",
     "professional": "Book Professionals",
-    "forFixers": "Partner Page",
+    "forFixers": "Our Partner",
     "realEstate": "Real Estate",
-    "dashboard": "Customer Page",
+    "dashboard": "Our Customer",
     "supportUs": "Contact Us",
     "proZone": "Fixer and Pro Member",
     "bookNow": "Book Now",
@@ -182,7 +182,7 @@
     }
   },
   "dashboard": {
-    "title": "Customer Page",
+    "title": "Our Customer",
     "overview": "Overview",
     "orders": "Total Orders",
     "pending": "Pending",
