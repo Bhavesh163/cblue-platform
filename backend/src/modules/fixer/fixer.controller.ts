@@ -96,10 +96,9 @@ export class FixerController {
     return this.fixerService.getAvailability(userId);
   }
 
-  // ── Portfolio AI Digest ──
+  // ── Portfolio AI Digest (no auth — called during registration before user has token) ──
 
   @Post('portfolio-digest')
-  @UseGuards(JwtAuthGuard)
   @UseInterceptors(FilesInterceptor('files', 10))
   async digestPortfolio(
     @UploadedFiles() files: Express.Multer.File[],

@@ -107,9 +107,15 @@ function HouseholdBookingContent() {
   const searchParams = useSearchParams();
   const prefilledService = searchParams.get("service") || "";
 
-  const [form, setForm] = useState<FormData>({
-    ...initialForm,
-    serviceCategory: prefilledService,
+  const [form, setForm] = useState<FormData>(() => {
+    // Restore form data from sessionStorage if available
+    if (typeof window !== "undefined") {
+      try {
+        const saved = sessionStorage.getItem("cblue_booking_household");
+        if (saved) return { ...initialForm, ...JSON.parse(saved), serviceCategory: prefilledService || JSON.parse(saved).serviceCategory || "" };
+      } catch { /* ignore */ }
+    }
+    return { ...initialForm, serviceCategory: prefilledService };
   });
   const [images, setImages] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -126,7 +132,18 @@ function HouseholdBookingContent() {
   useEffect(() => {
     try {
       const stored = localStorage.getItem("subscriber");
-      if (stored) setSubscriber(JSON.parse(stored));
+      if (stored) {
+        const sub = JSON.parse(stored);
+        setSubscriber(sub);
+        // Pre-fill form fields from subscriber data
+        setForm((prev) => ({
+          ...prev,
+          name: prev.name || sub.name || "",
+          email: prev.email || sub.email || "",
+          phone: prev.phone || sub.phone || "",
+          company: prev.company || sub.company || "",
+        }));
+      }
     } catch { /* ignore */ }
   }, []);
 
@@ -135,6 +152,11 @@ function HouseholdBookingContent() {
       setForm((prev) => ({ ...prev, serviceCategory: prefilledService }));
     }
   }, [prefilledService]);
+
+  // Save form data to sessionStorage on every change
+  useEffect(() => {
+    try { sessionStorage.setItem("cblue_booking_household", JSON.stringify(form)); } catch { /* ignore */ }
+  }, [form]);
 
   const handleRecaptcha = useCallback((token: string) => setRecaptchaToken(token), []);
   const handleRecaptchaExpire = useCallback(() => setRecaptchaToken(""), []);
@@ -276,6 +298,7 @@ function HouseholdBookingContent() {
       };
       console.log("Household booking submission:", payload);
       setSuccess(true);
+      try { sessionStorage.removeItem("cblue_booking_household"); } catch { /* ignore */ }
     } catch {
       setError(t("submitError"));
     } finally {

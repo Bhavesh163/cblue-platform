@@ -326,14 +326,16 @@ function generateDemoFixers(service: string): Fixer[] {
 }
 
 function getProcessingFee(bookingType: BookingType, tier: string): number {
+  // Property uses economy/standard/upper/luxury/grandeur tiers
   if (bookingType === "property") {
-    if (tier === "economy") return 300;
-    if (tier === "standard") return 500;
-    if (tier === "corporate") return 800;
-    if (tier === "specialist") return 1200;
-    if (tier === "expert") return 2000;
-    return 300;
+    if (tier === "economy") return 200;
+    if (tier === "standard") return 400;
+    if (tier === "upper") return 600;
+    if (tier === "luxury") return 800;
+    if (tier === "grandeur") return 1000;
+    return 200;
   }
+  // Fixer/Pro uses economy/standard/corporate/specialist/expert tiers
   if (tier === "economy") return 200;
   if (tier === "standard") return 400;
   if (tier === "corporate") return 600;
@@ -487,12 +489,17 @@ export default function FixerResults({
     if (step !== "matching" && selectedFixer) {
       try {
         localStorage.setItem("cblue_workflow", JSON.stringify({
-          step, fixerAlias: selectedFixer.alias, poNumber, customerRating, customerComment, variationApproved,
-          meetingDate, meetingTime, meetingNotes,
+          step, poNumber, customerRating, customerComment, variationApproved,
+          meetingDate, meetingTime, meetingNotes, service, bookingType,
+          selectedFixerId: selectedFixer.id,
         }));
       } catch { /* ignore */ }
     }
-  }, [step, selectedFixer, poNumber, customerRating, customerComment, variationApproved, meetingDate, meetingTime, meetingNotes]);
+    // Clean up on done step
+    if (step === "done") {
+      try { localStorage.removeItem("cblue_workflow"); } catch { /* ignore */ }
+    }
+  }, [step, selectedFixer, poNumber, customerRating, customerComment, variationApproved, meetingDate, meetingTime, meetingNotes, service, bookingType]);
 
   // AI Matching animation sequence
   useEffect(() => {
@@ -634,7 +641,6 @@ export default function FixerResults({
     th: { matching: "จับคู่", list: "เลือก", confirm: "ยืนยัน", po: "PO", notify: "แจ้ง", payment: "จ่าย", chat: "แชท", meeting: "นัดหมาย", variation: "เปลี่ยนแปลง", complete: "เสร็จ", rate: "คะแนน", done: "จบ" },
     zh: { matching: "匹配", list: "选择", confirm: "确认", po: "PO", notify: "通知", payment: "支付", chat: "聊天", meeting: "会面", variation: "变更", complete: "完工", rate: "评分", done: "完成" },
   };
-  const currentStepIndex = flowSteps.indexOf(step);
   const hideVariation = !showVariation && step !== "variation";
   const visibleSteps = hideVariation ? flowSteps.filter(s => s !== "variation") : flowSteps;
   const visibleIndex = visibleSteps.indexOf(step);

@@ -38,17 +38,29 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String? _kycError;
   bool _kycValidating = false;
 
-  /// Validate a KYC image: checks dimensions, file size, and basic content analysis
+  /// Validate a KYC image: checks dimensions, file size, aspect ratio, and content heuristics
   Future<Map<String, dynamic>> _validateKycImage(File file, String type) async {
+    // Capture t() before async gap to avoid build_context_synchronously warning
+    final String Function(String) t = context.read<LocaleProvider>().t;
+    final tFileTooSmall = t('kyc_file_too_small');
+    final tFileTooLarge = t('kyc_file_too_large');
+    final tTooSmall = t('kyc_too_small');
+    final tTooLargeDims = t('kyc_too_large_dims');
+    final tIdLandscape = t('kyc_id_landscape');
+    final tIdNotCard = t('kyc_id_not_card');
+    final tSelfieTooWide = t('kyc_selfie_too_wide');
+    final tSelfieTooSmall = t('kyc_selfie_too_small');
+    final tInvalidFormat = t('kyc_invalid_format');
+    final tReadError = t('kyc_read_error');
     try {
       final bytes = await file.readAsBytes();
       // Check minimum file size (10KB - reject tiny/blank files)
       if (bytes.length < 10240) {
-        return {'valid': false, 'reason': 'Image file too small (min 10KB)'};
+        return {'valid': false, 'reason': tFileTooSmall};
       }
       // Check max file size (20MB)
       if (bytes.length > 20 * 1024 * 1024) {
-        return {'valid': false, 'reason': 'Image file too large (max 20MB)'};
+        return {'valid': false, 'reason': tFileTooLarge};
       }
       // Decode image to check dimensions
       final codec = await ui.instantiateImageCodec(bytes);
@@ -56,22 +68,55 @@ class _RegisterScreenState extends State<RegisterScreen> {
       final w = frame.image.width;
       final h = frame.image.height;
       frame.image.dispose();
-      // Minimum dimensions
+      // Minimum dimensions for readable ID
       if (w < 200 || h < 150) {
-        return {'valid': false, 'reason': 'Image too small (min 200×150 pixels)'};
+        return {'valid': false, 'reason': tTooSmall};
       }
-      // Aspect ratio check for ID card (should be roughly landscape ~1.5:1)
+      // Maximum dimension check (reject screenshots of unrelated content)
+      if (w > 8000 || h > 8000) {
+        return {'valid': false, 'reason': tTooLargeDims};
+      }
       final aspect = w / h;
-      if (type == 'id' && aspect < 0.5) {
-        return {'valid': false, 'reason': 'ID card should be landscape orientation'};
+
+      if (type == 'id') {
+        // Thai ID card is ~85.6mm × 53.98mm = aspect ~1.586
+        // Accept landscape range 1.1-2.5 OR portrait if resolution is high
+        if (aspect < 0.5) {
+          return {'valid': false, 'reason': tIdLandscape};
+        }
+        // Extreme landscape (panorama/banner) is not an ID card
+        if (aspect > 3.0) {
+          return {'valid': false, 'reason': tIdNotCard};
+        }
+        // Perfectly square images are unlikely to be ID cards
+        if (aspect > 0.95 && aspect < 1.05 && w < 500) {
+          return {'valid': false, 'reason': tIdNotCard};
+        }
       }
-      // Selfie should be roughly portrait or square
-      if (type == 'selfie' && aspect > 3.0) {
-        return {'valid': false, 'reason': 'Selfie photo appears incorrect (too wide)'};
+
+      if (type == 'selfie') {
+        // Selfie should be portrait or square (face photo)
+        if (aspect > 3.0) {
+          return {'valid': false, 'reason': tSelfieTooWide};
+        }
+        // Very tiny selfies are suspicious
+        if (w < 300 && h < 300) {
+          return {'valid': false, 'reason': tSelfieTooSmall};
+        }
       }
+
+      // Check bytes for image header validity (JPEG SOI or PNG signature)
+      if (bytes.length >= 4) {
+        final isJpeg = bytes[0] == 0xFF && bytes[1] == 0xD8;
+        final isPng = bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47;
+        if (!isJpeg && !isPng) {
+          return {'valid': false, 'reason': tInvalidFormat};
+        }
+      }
+
       return {'valid': true};
     } catch (_) {
-      return {'valid': false, 'reason': 'Cannot read image file'};
+      return {'valid': false, 'reason': tReadError};
     }
   }
 

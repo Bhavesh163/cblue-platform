@@ -140,13 +140,13 @@ export default function FixerRegisterPage() {
         const h = img.naturalHeight;
         const aspect = w / h;
 
-        // Reject very small images (minimum 200x150 for readable ID)
+        // ── 1. MINIMUM SIZE: readable ID ──
         if (w < 200 || h < 150) {
           resolve({ valid: false, reason: locale === "th" ? "รูปภาพเล็กเกินไป — ต้องมีความละเอียดอย่างน้อย 200x150 พิกเซล" : locale === "zh" ? "图片太小 — 最低分辨率 200x150 像素" : "Image too small — minimum 200×150 pixels required" });
           return;
         }
 
-        // Analyze image content via canvas (color variance to reject blank/solid images)
+        // ── CANVAS ANALYSIS ──
         const canvas = document.createElement("canvas");
         const sz = 64; // Downsample for perf
         canvas.width = sz;
@@ -155,30 +155,29 @@ export default function FixerRegisterPage() {
         if (!ctx) { resolve({ valid: true }); return; }
         ctx.drawImage(img, 0, 0, sz, sz);
         const data = ctx.getImageData(0, 0, sz, sz).data;
+        const total = sz * sz;
 
-        // Calculate color variance — solid/blank images have very low variance
-        let sumR = 0, sumG = 0, sumB = 0, count = 0;
+        // ── 2. COLOR VARIANCE — reject solid/blank images ──
+        let sumR = 0, sumG = 0, sumB = 0;
         for (let i = 0; i < data.length; i += 4) {
-          sumR += data[i]!; sumG += data[i + 1]!; sumB += data[i + 2]!; count++;
+          sumR += data[i]!; sumG += data[i + 1]!; sumB += data[i + 2]!;
         }
-        const avgR = sumR / count, avgG = sumG / count, avgB = sumB / count;
+        const avgR = sumR / total, avgG = sumG / total, avgB = sumB / total;
         let variance = 0;
         for (let i = 0; i < data.length; i += 4) {
           variance += (data[i]! - avgR) ** 2 + (data[i + 1]! - avgG) ** 2 + (data[i + 2]! - avgB) ** 2;
         }
-        variance /= count;
+        variance /= total;
 
-        // Reject solid/blank images (very low color variance)
         if (variance < 50) {
           resolve({ valid: false, reason: locale === "th" ? "รูปภาพดูเหมือนว่างเปล่าหรือเป็นสีเดียว — กรุณาอัพโหลดรูปบัตรประชาชนจริง" : locale === "zh" ? "图片看起来是空白或纯色 — 请上传真实身份证照片" : "Image appears blank or solid color — please upload actual ID card photo" });
           return;
         }
 
-        // Edge detection: use Sobel-like gradient to check for text/features
+        // ── 3. EDGE DETECTION — Sobel gradient for text/features ──
         let edgeSum = 0;
         for (let y = 1; y < sz - 1; y++) {
           for (let x = 1; x < sz - 1; x++) {
-            const idx = (y * sz + x) * 4;
             const left = data[((y) * sz + (x - 1)) * 4]!;
             const right = data[((y) * sz + (x + 1)) * 4]!;
             const top = data[((y - 1) * sz + (x)) * 4]!;
@@ -188,25 +187,74 @@ export default function FixerRegisterPage() {
         }
         const edgeDensity = edgeSum / ((sz - 2) * (sz - 2));
 
-        // For ID card slots (0=front, 1=back): expect landscape aspect + decent edge density
+        // ── 4. SKIN TONE DETECTION — for selfie verification ──
+        let skinPixels = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i]!, g = data[i + 1]!, b = data[i + 2]!;
+          // YCbCr-based skin detection (works across skin tones)
+          const y2 = 0.299 * r + 0.587 * g + 0.114 * b;
+          const cb = 128 - 0.169 * r - 0.331 * g + 0.500 * b;
+          const cr = 128 + 0.500 * r - 0.419 * g - 0.081 * b;
+          if (y2 > 50 && cb > 77 && cb < 127 && cr > 133 && cr < 173) skinPixels++;
+        }
+        const skinRatio = skinPixels / total;
+
+        // ── 5. TEXT-LIKE REGION DENSITY — structured text areas ──
+        let horizontalEdgeRows = 0;
+        for (let y = 1; y < sz - 1; y++) {
+          let rowEdge = 0;
+          for (let x = 1; x < sz - 1; x++) {
+            const left = data[((y) * sz + (x - 1)) * 4]!;
+            const right = data[((y) * sz + (x + 1)) * 4]!;
+            if (Math.abs(right - left) > 20) rowEdge++;
+          }
+          if (rowEdge > sz * 0.25) horizontalEdgeRows++;
+        }
+        const textDensity = horizontalEdgeRows / (sz - 2);
+
+        // ───── SLOT 0 & 1: ID CARD FRONT / BACK ─────
         if (slotIndex < 2) {
-          // ID card front/back: typically landscape ~1.4-1.8 aspect ratio
+          // ID cards are landscape (~1.4-1.8 aspect ratio for Thai ID)
           if (aspect < 0.7 && edgeDensity < 8) {
-            // Very tall portrait with low detail — likely not an ID card
             resolve({ valid: false, reason: locale === "th" ? "AI ตรวจพบว่ารูปนี้ไม่ใช่บัตรประชาชน — บัตรประชาชนควรเป็นรูปแนวนอน" : locale === "zh" ? "AI检测到此图不是身份证 — 身份证应为横向照片" : "AI detected this is not an ID card — ID cards should be landscape orientation" });
             return;
           }
-          // Very low edge density for card photos
+          // Need sufficient text/features for a document
           if (edgeDensity < 5) {
             resolve({ valid: false, reason: locale === "th" ? "AI ตรวจพบว่ารูปนี้อาจไม่ใช่เอกสาร — กรุณาอัพโหลดรูปบัตรประชาชนที่ชัดเจน" : locale === "zh" ? "AI检测到此图可能不是文件 — 请上传清晰的身份证照片" : "AI detected this may not be a document — please upload a clear ID card photo" });
             return;
           }
+          // ID card should have text regions (at least 15% rows with text-like edges)
+          if (textDensity < 0.12 && edgeDensity < 10) {
+            resolve({ valid: false, reason: locale === "th" ? "AI ไม่พบข้อความบนเอกสาร — กรุณาอัพโหลดรูปบัตรประชาชนที่ชัดเจน" : locale === "zh" ? "AI未检测到文件上的文字 — 请上传清晰的身份证照片" : "AI did not detect text on this document — please upload a clear ID card photo" });
+            return;
+          }
+          // Too much skin in ID card slot = probably a selfie, not an ID card
+          if (skinRatio > 0.45) {
+            resolve({ valid: false, reason: locale === "th" ? "AI ตรวจพบว่ารูปนี้อาจเป็นเซลฟี่ — กรุณาอัพโหลดรูปบัตรประชาชน" + (slotIndex === 0 ? "ด้านหน้า" : "ด้านหลัง") : locale === "zh" ? "AI检测到这可能是自拍照 — 请上传身份证" + (slotIndex === 0 ? "正面" : "背面") + "照片" : `AI detected this may be a selfie — please upload ID card ${slotIndex === 0 ? "front" : "back"} photo` });
+            return;
+          }
+          // FRONT slot additional: should have moderate skin (face photo area ~10-40%)
+          if (slotIndex === 0 && skinRatio < 0.02 && edgeDensity < 12) {
+            resolve({ valid: false, reason: locale === "th" ? "AI ไม่พบรูปถ่ายบนบัตร — กรุณาอัพโหลดบัตรประชาชน ด้านหน้า ที่มีรูปถ่าย" : locale === "zh" ? "AI未在卡上检测到照片 — 请上传带照片的身份证正面" : "AI did not detect a photo on the card — please upload the ID card front with photo" });
+            return;
+          }
         }
 
-        // For selfie slot (2): expect portrait or square, reasonable detail
+        // ───── SLOT 2: SELFIE WITH ID CARD ─────
         if (slotIndex === 2) {
           if (edgeDensity < 4) {
             resolve({ valid: false, reason: locale === "th" ? "AI ตรวจพบว่ารูปนี้ไม่ใช่เซลฟี่ — กรุณาถ่ายเซลฟี่คู่กับบัตรประชาชน" : locale === "zh" ? "AI检测到此图不是自拍 — 请拍摄手持身份证自拍照" : "AI detected this is not a selfie — please take a selfie holding your ID card" });
+            return;
+          }
+          // Selfie MUST have skin tone (face visible) — at least 8%
+          if (skinRatio < 0.06) {
+            resolve({ valid: false, reason: locale === "th" ? "AI ไม่พบใบหน้าในรูป — กรุณาถ่ายเซลฟี่ที่เห็นหน้าชัดเจนพร้อมบัตรประชาชน" : locale === "zh" ? "AI未检测到人脸 — 请拍摄面部清晰可见的自拍照并持身份证" : "AI did not detect a face — please take a selfie with your face clearly visible, holding your ID card" });
+            return;
+          }
+          // Selfie should NOT be pure landscape (too wide = not a selfie)
+          if (aspect > 2.5 && skinRatio < 0.12) {
+            resolve({ valid: false, reason: locale === "th" ? "รูปภาพกว้างเกินไปสำหรับเซลฟี่ — กรุณาถ่ายรูปแนวตั้งหรือสี่เหลี่ยม" : locale === "zh" ? "图片太宽，不像自拍 — 请拍摄竖版或方形照片" : "Image too wide for a selfie — please take a portrait or square photo" });
             return;
           }
         }

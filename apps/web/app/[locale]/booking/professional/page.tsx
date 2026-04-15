@@ -111,9 +111,14 @@ function ProfessionalBookingContent() {
   const searchParams = useSearchParams();
   const prefilledService = searchParams.get("service") || "";
 
-  const [form, setForm] = useState<FormData>({
-    ...initialForm,
-    serviceCategory: prefilledService,
+  const [form, setForm] = useState<FormData>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = sessionStorage.getItem("cblue_booking_professional");
+        if (saved) return { ...initialForm, ...JSON.parse(saved), serviceCategory: prefilledService || JSON.parse(saved).serviceCategory || "" };
+      } catch { /* ignore */ }
+    }
+    return { ...initialForm, serviceCategory: prefilledService };
   });
   const [images, setImages] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -134,10 +139,25 @@ function ProfessionalBookingContent() {
     }
   }, [prefilledService]);
 
+  // Save form data to sessionStorage on every change
+  useEffect(() => {
+    try { sessionStorage.setItem("cblue_booking_professional", JSON.stringify(form)); } catch { /* ignore */ }
+  }, [form]);
+
   useEffect(() => {
     try {
       const stored = localStorage.getItem("subscriber");
-      if (stored) setSubscriber(JSON.parse(stored));
+      if (stored) {
+        const sub = JSON.parse(stored);
+        setSubscriber(sub);
+        setForm((prev) => ({
+          ...prev,
+          name: prev.name || sub.name || "",
+          email: prev.email || sub.email || "",
+          phone: prev.phone || sub.phone || "",
+          company: prev.company || sub.company || "",
+        }));
+      }
     } catch {}
   }, []);
 
@@ -281,6 +301,7 @@ function ProfessionalBookingContent() {
       console.log("Professional booking submission:", payload);
 
       setSuccess(true);
+      try { sessionStorage.removeItem("cblue_booking_professional"); } catch { /* ignore */ }
     } catch {
       setError(t("submitError"));
     } finally {

@@ -105,9 +105,14 @@ function ProjectBookingContent() {
   const searchParams = useSearchParams();
   const prefilledService = searchParams.get("service") || "";
 
-  const [form, setForm] = useState<FormData>({
-    ...initialForm,
-    serviceCategory: prefilledService,
+  const [form, setForm] = useState<FormData>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = sessionStorage.getItem("cblue_booking_project");
+        if (saved) return { ...initialForm, ...JSON.parse(saved), serviceCategory: prefilledService || JSON.parse(saved).serviceCategory || "" };
+      } catch { /* ignore */ }
+    }
+    return { ...initialForm, serviceCategory: prefilledService };
   });
   const [images, setImages] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -124,7 +129,17 @@ function ProjectBookingContent() {
   useEffect(() => {
     try {
       const stored = localStorage.getItem("subscriber");
-      if (stored) setSubscriber(JSON.parse(stored));
+      if (stored) {
+        const sub = JSON.parse(stored);
+        setSubscriber(sub);
+        setForm((prev) => ({
+          ...prev,
+          name: prev.name || sub.name || "",
+          email: prev.email || sub.email || "",
+          phone: prev.phone || sub.phone || "",
+          company: prev.company || sub.company || "",
+        }));
+      }
     } catch { /* ignore */ }
   }, []);
 
@@ -133,6 +148,11 @@ function ProjectBookingContent() {
       setForm((prev) => ({ ...prev, serviceCategory: prefilledService }));
     }
   }, [prefilledService]);
+
+  // Save form data to sessionStorage on every change
+  useEffect(() => {
+    try { sessionStorage.setItem("cblue_booking_project", JSON.stringify(form)); } catch { /* ignore */ }
+  }, [form]);
 
   const handleRecaptcha = useCallback((token: string) => setRecaptchaToken(token), []);
   const handleRecaptchaExpire = useCallback(() => setRecaptchaToken(""), []);
@@ -273,6 +293,7 @@ function ProjectBookingContent() {
       };
       console.log("Project booking submission:", payload);
       setSuccess(true);
+      try { sessionStorage.removeItem("cblue_booking_project"); } catch { /* ignore */ }
     } catch {
       setError(t("submitError"));
     } finally {
