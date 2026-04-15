@@ -44,7 +44,6 @@ export function Header() {
               height={25}
               loading="eager"
               className="h-[1.87rem] w-auto object-contain"
-              style={{ height: "auto" }}
             />
           </Link>
 
