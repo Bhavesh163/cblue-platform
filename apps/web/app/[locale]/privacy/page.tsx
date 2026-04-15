@@ -34,7 +34,7 @@ const T: Record<string, Record<string, string>> = {
     s13t: "13. Changes to This Policy",
     s13: "We may update this Privacy Policy periodically. Material changes will be communicated via email or platform notification. The \"Last Updated\" date at the top indicates the most recent revision.",
     s14t: "14. Contact Us",
-    s14: "For privacy-related inquiries or to exercise your data rights:\n• Contact Us page: Available through the website footer\n• Email: cblue.thailand@gmail.com\n• Data Protection Officer: Construction Blue Co., Ltd., Thailand",
+    s14: "For privacy-related inquiries or to exercise your data rights:\n• About Us page: Available through the website navigation\n• Email: cblue.thailand@gmail.com\n• Data Protection Officer: Construction Blue Co., Ltd., Thailand",
   },
   th: {
     title: "นโยบายความเป็นส่วนตัว",
@@ -66,7 +66,7 @@ const T: Record<string, Record<string, string>> = {
     s13t: "13. การเปลี่ยนแปลงนโยบาย",
     s13: "เราอาจอัปเดตนโยบายนี้เป็นระยะ จะแจ้งผ่านอีเมลหรือแพลตฟอร์ม",
     s14t: "14. ติดต่อเรา",
-    s14: "สำหรับเรื่องความเป็นส่วนตัว:\n• หน้า ติดต่อเรา\n• อีเมล: cblue.thailand@gmail.com\n• เจ้าหน้าที่คุ้มครองข้อมูล: Construction Blue Co., Ltd. ประเทศไทย",
+    s14: "สำหรับเรื่องความเป็นส่วนตัว:\n• หน้า เกี่ยวกับเรา (About Us)\n• อีเมล: cblue.thailand@gmail.com\n• เจ้าหน้าที่คุ้มครองข้อมูล: Construction Blue Co., Ltd. ประเทศไทย",
   },
   zh: {
     title: "隐私政策",
@@ -98,7 +98,7 @@ const T: Record<string, Record<string, string>> = {
     s13t: "13. 政策变更",
     s13: "我们可能定期更新本政策。重大变更将通过邮件或平台通知。",
     s14t: "14. 联系我们",
-    s14: "隐私相关问题：\n• 联系我们 页面\n• 邮箱：cblue.thailand@gmail.com\n• 数据保护官：Construction Blue Co., Ltd. 泰国",
+    s14: "隐私相关问题：\n• 关于我们 (About Us) 页面\n• 邮箱：cblue.thailand@gmail.com\n• 数据保护官：Construction Blue Co., Ltd. 泰国",
   },
 };
 

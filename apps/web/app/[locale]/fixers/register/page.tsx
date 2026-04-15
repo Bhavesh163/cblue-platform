@@ -131,21 +131,32 @@ export default function FixerRegisterPage() {
   /* Camera helpers for KYC */
   const startCamera = async () => {
     try {
+      if (typeof window === "undefined" || !window.isSecureContext) {
+        setError(locale === "th" ? "กล้องต้องใช้ HTTPS กรุณาใช้ปุ่มอัพโหลดไฟล์แทน" : locale === "zh" ? "摄像头需要HTTPS连接，请使用上传文件按钮" : "Camera requires a secure (HTTPS) connection. Please use the Upload File button instead.");
+        return;
+      }
       if (!navigator.mediaDevices?.getUserMedia) {
         setError(locale === "th" ? "เบราว์เซอร์ไม่รองรับกล้อง กรุณาใช้ปุ่มอัพโหลดไฟล์แทน" : locale === "zh" ? "浏览器不支持摄像头，请使用上传文件按钮" : "Browser does not support camera. Please use the Upload File button instead.");
         return;
       }
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
       });
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
+        await videoRef.current.play();
       }
       setShowCamera(true);
-    } catch {
-      setError(locale === "th" ? "ไม่สามารถเปิดกล้องได้ กรุณาอนุญาตการเข้าถึงกล้องในการตั้งค่าเบราว์เซอร์" : locale === "zh" ? "无法打开摄像头，请在浏览器设置中允许摄像头访问" : "Could not access camera. Please allow camera permissions in your browser settings.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg.includes("NotAllowed") || msg.includes("Permission")) {
+        setError(locale === "th" ? "กรุณาอนุญาตการเข้าถึงกล้องในการตั้งค่าเบราว์เซอร์" : locale === "zh" ? "请在浏览器设置中允许摄像头访问" : "Please allow camera access in your browser settings.");
+      } else if (msg.includes("NotFound") || msg.includes("DevicesNotFound")) {
+        setError(locale === "th" ? "ไม่พบกล้องบนอุปกรณ์นี้ กรุณาใช้ปุ่มอัพโหลดไฟล์แทน" : locale === "zh" ? "未找到摄像头，请使用上传文件按钮" : "No camera found on this device. Please use the Upload File button instead.");
+      } else {
+        setError(locale === "th" ? "ไม่สามารถเปิดกล้องได้ กรุณาอนุญาตการเข้าถึงกล้องในการตั้งค่าเบราว์เซอร์" : locale === "zh" ? "无法打开摄像头，请在浏览器设置中允许摄像头访问" : "Could not access camera. Please allow camera permissions in your browser settings.");
+      }
     }
   };
   const capturePhoto = () => {
@@ -954,9 +965,9 @@ export default function FixerRegisterPage() {
 
                 {/* Action buttons */}
                 <div className="flex gap-3 mb-3">
-                  {/* Open Camera — desktop only */}
+                  {/* Open Camera — desktop only (hidden on mobile/tablet) */}
                   {!showCamera && (
-                    <button type="button" onClick={startCamera} className="hidden sm:flex items-center gap-2 px-4 py-2.5 bg-sky-600 text-white rounded-lg text-sm font-semibold hover:bg-sky-700 transition shadow">
+                    <button type="button" onClick={startCamera} className="hidden md:flex items-center gap-2 px-4 py-2.5 bg-sky-600 text-white rounded-lg text-sm font-semibold hover:bg-sky-700 transition shadow">
                       📷 {locale === "th" ? "เปิดกล้อง" : locale === "zh" ? "打开摄像头" : "Open Camera"}
                     </button>
                   )}
@@ -973,6 +984,10 @@ export default function FixerRegisterPage() {
                     />
                   </label>
                 </div>
+                {/* KYC photo guide */}
+                <p className="text-xs text-gray-400 mb-2">
+                  {locale === "th" ? "📋 อัพโหลดตามลำดับ: 1) บัตรด้านหน้า 2) บัตรด้านหลัง 3) เซลฟี่คู่กับบัตร" : locale === "zh" ? "📋 按顺序上传：1) 证件正面 2) 证件反面 3) 手持证件自拍" : "📋 Upload in order: 1) ID card front 2) ID card back 3) Selfie with ID"}
+                </p>
 
                 {/* Preview captured/uploaded images */}
                 {kycImages.length > 0 && (
