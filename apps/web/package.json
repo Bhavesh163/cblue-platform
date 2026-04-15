@@ -8,7 +8,7 @@
 
     "build": "next build",
 
-    "cf:build": "opennextjs-cloudflare build && node scripts/cf-post-build.mjs",
+    "cf:build": "opennextjs-cloudflare build",
 
     "preview": "opennextjs-cloudflare preview",
 
