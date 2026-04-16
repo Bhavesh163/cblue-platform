@@ -12,7 +12,7 @@ import GpsDetectButton from "../../components/GpsDetectButton";
 const PROPERTY_TYPES = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "APARTMENT"] as const;
 const LISTING_TYPES = ["SALE", "RENT"] as const;
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
+
 
 export default function PropertyRegisterPage() {
   const t = useTranslations("realEstate");
@@ -26,7 +26,7 @@ export default function PropertyRegisterPage() {
   const [error, setError] = useState("");
   const [consentChecked, setConsentChecked] = useState(false);
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [locationType, setLocationType] = useState<"dropdown" | "address">("dropdown");
+  const [locationType, setLocationType] = useState<"gps" | "dropdown" | "address">("dropdown");
   const [subscriber, setSubscriber] = useState<{ name: string; email?: string; role?: string } | null>(null);
   const [authMode, setAuthMode] = useState<"login" | "register">("register");
 
@@ -134,7 +134,7 @@ export default function PropertyRegisterPage() {
         const body = authMode === "login"
           ? { email: form.contactEmail.toLowerCase(), password: form.password }
           : { name: form.contactName || form.contactEmail, email: form.contactEmail.toLowerCase(), phone: form.contactPhone, password: form.password };
-        const authRes = await fetch(`${API_BASE}${endpoint}`, {
+        const authRes = await fetch(`${endpoint}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -184,7 +184,7 @@ export default function PropertyRegisterPage() {
         ...(form.password ? { password: form.password } : {}),
       };
 
-      const res = await fetch(`${API_BASE}/properties`, {
+      const res = await fetch(`/api/v1/properties`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -484,41 +484,40 @@ export default function PropertyRegisterPage() {
               </legend>
 
               <div className="space-y-4 mt-4">
-                {/* GPS Auto-detect */}
-                <GpsDetectButton onDetected={(coords) => setGpsCoords(coords)} />
-                {gpsCoords && (
-                  <p className="text-xs text-green-600">
-                    📍 {locale === "th" ? "ตำแหน่ง" : locale === "zh" ? "位置" : "Location"}: {gpsCoords.lat.toFixed(6)}, {gpsCoords.lng.toFixed(6)}
-                  </p>
-                )}
-
-                {/* Location type toggle */}
-                <div className="flex gap-4">
+                {/* Location method selector — 3 mutually exclusive options */}
+                <div className="flex flex-wrap gap-4">
                   <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="radio"
-                      name="locationType"
-                      value="dropdown"
-                      checked={locationType === "dropdown"}
-                      onChange={() => setLocationType("dropdown")}
-                      className="text-green-600 focus:ring-green-500"
-                    />
+                    <input type="radio" name="locationType" value="gps" checked={locationType === "gps"} onChange={() => setLocationType("gps")} className="text-green-600 focus:ring-green-500" />
+                    📍 {locale === "th" ? "ตรวจจับตำแหน่งอัตโนมัติ (GPS)" : locale === "zh" ? "自动检测位置 (GPS)" : "Auto-detect Location (GPS)"}
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="radio" name="locationType" value="dropdown" checked={locationType === "dropdown"} onChange={() => setLocationType("dropdown")} className="text-green-600 focus:ring-green-500" />
                     {locale === "th" ? "เลือกจากรายการ" : locale === "zh" ? "从列表选择" : "Select from list"}
                   </label>
                   <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="radio"
-                      name="locationType"
-                      value="address"
-                      checked={locationType === "address"}
-                      onChange={() => setLocationType("address")}
-                      className="text-green-600 focus:ring-green-500"
-                    />
+                    <input type="radio" name="locationType" value="address" checked={locationType === "address"} onChange={() => setLocationType("address")} className="text-green-600 focus:ring-green-500" />
                     {locale === "th" ? "กรอกที่อยู่ / รหัสไปรษณีย์" : locale === "zh" ? "输入地址/邮政编码" : "Enter address / postal code"}
                   </label>
                 </div>
 
-                {locationType === "dropdown" ? (
+                {/* GPS mode */}
+                {locationType === "gps" && (
+                  <div className="space-y-2">
+                    <GpsDetectButton onDetected={(coords) => setGpsCoords(coords)} />
+                    {gpsCoords ? (
+                      <p className="text-sm text-green-600 font-medium">
+                        ✅ 📍 {locale === "th" ? "ตำแหน่ง" : locale === "zh" ? "位置" : "Location"}: {gpsCoords.lat.toFixed(6)}, {gpsCoords.lng.toFixed(6)}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-gray-500">
+                        {locale === "th" ? "กดปุ่มด้านบนเพื่อตรวจจับตำแหน่งอัตโนมัติ" : locale === "zh" ? "点击上方按钮自动检测位置" : "Click the button above to auto-detect your location"}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Dropdown mode */}
+                {locationType === "dropdown" && (
                   <><div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {/* Province */}
                     <div>
@@ -608,7 +607,10 @@ export default function PropertyRegisterPage() {
                       <input type="text" name="soi" value={form.soi} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500" placeholder={locale === "th" ? "ซอย 21" : locale === "zh" ? "21巷" : "Soi 21"} />
                     </div>
                   </div>
-                </>) : (
+                </>)}
+
+                {/* Address text mode */}
+                {locationType === "address" && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {/* Address Line */}
                     <div className="sm:col-span-2">

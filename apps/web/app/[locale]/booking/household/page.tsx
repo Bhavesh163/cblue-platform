@@ -12,7 +12,7 @@ import ReCaptcha from "../../components/ReCaptcha";
 import GpsDetectButton from "../../components/GpsDetectButton";
 import FixerResults from "../../components/FixerResults";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
+
 
 const BUDGET_RANGES = [
   { value: "UNDER_5000", th: "ต่ำกว่า 5,000 บาท", en: "Under ฿5,000", zh: "低于 ฿5,000" },
@@ -40,7 +40,7 @@ interface FormData {
   serviceCategory: string;
   scheduledDate: string;
   scheduledTime: string;
-  locationType: "dropdown" | "address";
+  locationType: "gps" | "dropdown" | "address";
   province: string;
   district: string;
   subdistrict: string;
@@ -233,7 +233,7 @@ function HouseholdBookingContent() {
         const body = authMode === "login"
           ? { email: form.email.toLowerCase(), password: authPassword }
           : { name: form.name || form.email, email: form.email.toLowerCase(), phone: form.phone, company: form.company || undefined, password: authPassword };
-        const authRes = await fetch(`${API_BASE}${endpoint}`, {
+        const authRes = await fetch(`${endpoint}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -659,41 +659,40 @@ function HouseholdBookingContent() {
               {t("locationHome")}
             </legend>
             <div className="space-y-4">
-              {/* GPS Auto-detect */}
-              <GpsDetectButton onDetected={(coords) => setGpsCoords(coords)} />
-              {gpsCoords && (
-                <p className="text-xs text-green-600">
-                  📍 {locale === "th" ? "ตำแหน่ง" : locale === "zh" ? "位置" : "Location"}: {gpsCoords.lat.toFixed(6)}, {gpsCoords.lng.toFixed(6)}
-                </p>
-              )}
-
-              {/* Location type toggle */}
-              <div className="flex gap-4">
+              {/* Location method selector — 3 mutually exclusive options */}
+              <div className="flex flex-wrap gap-4">
                 <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="radio"
-                    name="locationType"
-                    value="dropdown"
-                    checked={form.locationType === "dropdown"}
-                    onChange={handleChange}
-                    className="text-blue-600 focus:ring-blue-500"
-                  />
+                  <input type="radio" name="locationType" value="gps" checked={form.locationType === "gps"} onChange={handleChange} className="text-blue-600 focus:ring-blue-500" />
+                  📍 {locale === "th" ? "ตรวจจับตำแหน่งอัตโนมัติ (GPS)" : locale === "zh" ? "自动检测位置 (GPS)" : "Auto-detect Location (GPS)"}
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="radio" name="locationType" value="dropdown" checked={form.locationType === "dropdown"} onChange={handleChange} className="text-blue-600 focus:ring-blue-500" />
                   {locale === "th" ? "เลือกจากรายการ" : locale === "zh" ? "从列表选择" : "Select from list"}
                 </label>
                 <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="radio"
-                    name="locationType"
-                    value="address"
-                    checked={form.locationType === "address"}
-                    onChange={handleChange}
-                    className="text-blue-600 focus:ring-blue-500"
-                  />
+                  <input type="radio" name="locationType" value="address" checked={form.locationType === "address"} onChange={handleChange} className="text-blue-600 focus:ring-blue-500" />
                   {locale === "th" ? "กรอกที่อยู่ / รหัสไปรษณีย์" : locale === "zh" ? "输入地址 / 邮政编码" : "Enter address / postal code"}
                 </label>
               </div>
 
-              {form.locationType === "dropdown" ? (
+              {/* GPS mode */}
+              {form.locationType === "gps" && (
+                <div className="space-y-2">
+                  <GpsDetectButton onDetected={(coords) => setGpsCoords(coords)} />
+                  {gpsCoords ? (
+                    <p className="text-sm text-green-600 font-medium">
+                      ✅ 📍 {locale === "th" ? "ตำแหน่ง" : locale === "zh" ? "位置" : "Location"}: {gpsCoords.lat.toFixed(6)}, {gpsCoords.lng.toFixed(6)}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-500">
+                      {locale === "th" ? "กดปุ่มด้านบนเพื่อตรวจจับตำแหน่งอัตโนมัติ" : locale === "zh" ? "点击上方按钮自动检测位置" : "Click the button above to auto-detect your location"}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Dropdown mode */}
+              {form.locationType === "dropdown" && (
                 <><div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="province" className="block text-sm font-medium text-gray-700 mb-1">
@@ -796,7 +795,10 @@ function HouseholdBookingContent() {
                     <input id="soi" name="soi" type="text" value={form.soi} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder={locale === "th" ? "ซอย 21" : locale === "zh" ? "21巷" : "Soi 21"} />
                   </div>
                 </div>
-              </>) : (
+              </>)}
+
+              {/* Address text mode */}
+              {form.locationType === "address" && (
                 <div>
                   <label htmlFor="addressText" className="block text-sm font-medium text-gray-700 mb-1">
                     {locale === "th" ? "ที่อยู่ หรือ รหัสไปรษณีย์" : locale === "zh" ? "地址或邮政编码" : "Address or Postal Code"} <span className="text-red-500">*</span>

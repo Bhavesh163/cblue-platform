@@ -86,11 +86,13 @@ class _BookingFormState extends State<_BookingForm> with AutomaticKeepAliveClien
   DateTime? _startDate;
   List<XFile> _images = [];
   bool _loading = false;
+  String _locationType = 'postal'; // 'gps' | 'postal' | 'address'
   String? _autoProvince;
   String? _autoDistrict;
   double? _gpsLat;
   double? _gpsLng;
   bool _gpsLoading = false;
+  final TextEditingController _addressCtrl = TextEditingController();
 
   // Thailand postal code → province/district lookup (major postcodes)
   static const Map<String, Map<String, String>> _postalLookup = {
@@ -233,9 +235,11 @@ class _BookingFormState extends State<_BookingForm> with AutomaticKeepAliveClien
         'phone': _phoneCtrl.text.trim(),
         'company': _companyCtrl.text.trim(),
         'description': _descCtrl.text.trim(),
-        'postalCode': _postalCtrl.text.trim(),
+        'locationType': _locationType,
+        if (_locationType == 'postal') 'postalCode': _postalCtrl.text.trim(),
+        if (_locationType == 'address') 'address': _addressCtrl.text.trim(),
         'startDate': _startDate!.toIso8601String(),
-        if (_gpsLat != null && _gpsLng != null) 'gpsCoords': {'lat': _gpsLat, 'lng': _gpsLng},
+        if (_locationType == 'gps' && _gpsLat != null && _gpsLng != null) 'gpsCoords': {'lat': _gpsLat, 'lng': _gpsLng},
       });
 
       // Upload images if selected
@@ -357,51 +361,95 @@ class _BookingFormState extends State<_BookingForm> with AutomaticKeepAliveClien
               ),
             ),
             const SizedBox(height: 12),
-            // Location: postal code
-            TextFormField(
-              controller: _postalCtrl,
-              keyboardType: TextInputType.number,
-              maxLength: 5,
-              decoration: InputDecoration(
-                labelText: locale.t('postalCode'),
-                prefixIcon: const Icon(Icons.location_on_outlined),
-                counterText: '',
-              ),
-              onChanged: _onPostalChanged,
+            // Location method selector
+            Text(locale.t('location_method'), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(child: ChoiceChip(
+                  label: Text(locale.t('use_gps')),
+                  selected: _locationType == 'gps',
+                  onSelected: (_) => setState(() { _locationType = 'gps'; }),
+                  selectedColor: AppTheme.primaryGreen.withValues(alpha: 0.2),
+                )),
+                const SizedBox(width: 8),
+                Expanded(child: ChoiceChip(
+                  label: Text(locale.t('use_postal_code')),
+                  selected: _locationType == 'postal',
+                  onSelected: (_) => setState(() { _locationType = 'postal'; }),
+                  selectedColor: AppTheme.primaryGreen.withValues(alpha: 0.2),
+                )),
+                const SizedBox(width: 8),
+                Expanded(child: ChoiceChip(
+                  label: Text(locale.t('use_address')),
+                  selected: _locationType == 'address',
+                  onSelected: (_) => setState(() { _locationType = 'address'; }),
+                  selectedColor: AppTheme.primaryGreen.withValues(alpha: 0.2),
+                )),
+              ],
             ),
-            if (_autoProvince != null) ...[
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryGreen.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppTheme.primaryGreen.withValues(alpha: 0.3)),
-                ),
-                child: Row(children: [
-                  const Icon(Icons.check_circle, size: 16, color: AppTheme.primaryGreen),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(
-                    '${locale.t('province')}: $_autoProvince  •  ${locale.t('district')}: $_autoDistrict',
-                    style: const TextStyle(fontSize: 13, color: AppTheme.primaryGreen, fontWeight: FontWeight.w500),
-                  )),
-                ]),
-              ),
-            ],
             const SizedBox(height: 12),
-            // GPS auto-detect
-            OutlinedButton.icon(
-              onPressed: _gpsLoading ? null : _detectGps,
-              icon: _gpsLoading
-                  ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.gps_fixed, size: 18),
-              label: Text(_gpsLoading ? locale.t('detecting') : locale.t('auto_detect_gps')),
-            ),
-            if (_gpsLat != null && _gpsLng != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                '📍 ${_gpsLat!.toStringAsFixed(6)}, ${_gpsLng!.toStringAsFixed(6)}',
-                style: const TextStyle(fontSize: 12, color: AppTheme.primaryGreen),
+            // GPS mode
+            if (_locationType == 'gps') ...[
+              OutlinedButton.icon(
+                onPressed: _gpsLoading ? null : _detectGps,
+                icon: _gpsLoading
+                    ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.gps_fixed, size: 18),
+                label: Text(_gpsLoading ? locale.t('detecting') : locale.t('auto_detect_gps')),
+              ),
+              if (_gpsLat != null && _gpsLng != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  '📍 ${_gpsLat!.toStringAsFixed(6)}, ${_gpsLng!.toStringAsFixed(6)}',
+                  style: const TextStyle(fontSize: 12, color: AppTheme.primaryGreen),
+                ),
+              ],
+            ],
+            // Postal code mode
+            if (_locationType == 'postal') ...[
+              TextFormField(
+                controller: _postalCtrl,
+                keyboardType: TextInputType.number,
+                maxLength: 5,
+                decoration: InputDecoration(
+                  labelText: locale.t('postalCode'),
+                  prefixIcon: const Icon(Icons.location_on_outlined),
+                  counterText: '',
+                ),
+                onChanged: _onPostalChanged,
+              ),
+              if (_autoProvince != null) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryGreen.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppTheme.primaryGreen.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(children: [
+                    const Icon(Icons.check_circle, size: 16, color: AppTheme.primaryGreen),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(
+                      '${locale.t('province')}: $_autoProvince  •  ${locale.t('district')}: $_autoDistrict',
+                      style: const TextStyle(fontSize: 13, color: AppTheme.primaryGreen, fontWeight: FontWeight.w500),
+                    )),
+                  ]),
+                ),
+              ],
+            ],
+            // Freeform address mode
+            if (_locationType == 'address') ...[
+              TextFormField(
+                controller: _addressCtrl,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  labelText: locale.t('use_address'),
+                  alignLabelWithHint: true,
+                  prefixIcon: const Icon(Icons.home_outlined),
+                ),
+                validator: (v) => _locationType == 'address' && (v == null || v.isEmpty) ? locale.t('required_field') : null,
               ),
             ],
             const SizedBox(height: 12),

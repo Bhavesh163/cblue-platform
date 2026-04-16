@@ -40,7 +40,7 @@ const STATUS_STEPS = [
   "COMPLETED",
 ];
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
+
 
 export default function OrdersPage() {
   const t = useTranslations("dashboard");
@@ -58,7 +58,7 @@ export default function OrdersPage() {
   useEffect(() => {
     async function fetchOrders() {
       try {
-        const res = await fetch(`${API_BASE}/api/orders`, {
+        const res = await fetch(`/api/v1/orders`, {
           credentials: "include",
         });
         if (res.ok) {

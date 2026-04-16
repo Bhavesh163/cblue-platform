@@ -10,7 +10,7 @@ import PdpaConsent from "../components/PdpaConsent";
 const PROPERTY_TYPES = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "APARTMENT"] as const;
 const LISTING_TYPES = ["SALE", "RENT"] as const;
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
+
 
 interface Property {
   id: string;
@@ -91,7 +91,7 @@ export default function PropertiesPage() {
 
     async function fetchLatest() {
       try {
-        const res = await fetch(`${API_BASE}/properties?limit=20`);
+        const res = await fetch(`/api/v1/properties?limit=20`);
         if (res.ok) {
           const data = await res.json();
           setLatestProperties(data.properties || []);
@@ -117,7 +117,7 @@ export default function PropertiesPage() {
       if (f.bedrooms) params.set("bedrooms", f.bedrooms);
       if (f.keyword) params.set("keyword", f.keyword);
 
-      const res = await fetch(`${API_BASE}/properties?${params.toString()}`);
+      const res = await fetch(`/api/v1/properties?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setProperties(data.properties || []);
@@ -256,7 +256,7 @@ export default function PropertiesPage() {
                   const body = authMode === "login"
                     ? { email: authEmail.toLowerCase(), password: authPassword }
                     : { name: authEmail.split("@")[0] || authEmail, email: authEmail.toLowerCase(), password: authPassword };
-                  const authRes = await fetch(`${API_BASE}${endpoint}`, {
+                  const authRes = await fetch(`${endpoint}`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(body),

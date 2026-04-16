@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import Link from "next/link";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
+
 
 export default function SubscriptionRegisterPage() {
   const t = useTranslations("subscription");
@@ -40,7 +40,7 @@ export default function SubscriptionRegisterPage() {
     setError("");
 
     try {
-      const res = await fetch(`${API_BASE}/api/v1/subscription/register`, {
+      const res = await fetch(`/api/v1/subscription/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -5,7 +5,7 @@ import { useTranslations, useLocale } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
+
 
 function ResetPasswordForm() {
   const t = useTranslations("subscription");
@@ -34,7 +34,7 @@ function ResetPasswordForm() {
     setError("");
 
     try {
-      const res = await fetch(`${API_BASE}/api/v1/subscription/reset-password`, {
+      const res = await fetch(`/api/v1/subscription/reset-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, newPassword: password }),

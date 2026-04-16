@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useLocale } from "next-intl";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
+
 
 /* --- Interfaces --- */
 interface ChatMessage { id: string; sender: "customer" | "provider"; text: string; timestamp: string; }

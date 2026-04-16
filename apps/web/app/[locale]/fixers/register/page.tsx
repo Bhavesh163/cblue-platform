@@ -9,8 +9,6 @@ import ReCaptcha from "../../components/ReCaptcha";
 import GpsDetectButton from "../../components/GpsDetectButton";
 import Link from "next/link";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
-
 interface PriceRow {
   service: string;
   finalPrice: string;
@@ -37,7 +35,7 @@ interface FormData {
   travelRadius: string;
   selectedSkills: string[];
   scheduledDate: string;
-  locationType: "dropdown" | "address";
+  locationType: "gps" | "dropdown" | "address";
   province: string;
   district: string;
   postalCode: string;
@@ -113,7 +111,7 @@ export default function FixerRegisterPage() {
     try {
       const fd = new globalThis.FormData();
       for (const f of files) fd.append("files", f);
-      const res = await fetch(`${API_BASE}/api/v1/fixers/portfolio-digest`, {
+      const res = await fetch(`/api/v1/fixers/portfolio-digest`, {
         method: "POST",
         body: fd,
       });
@@ -421,7 +419,7 @@ export default function FixerRegisterPage() {
         const body = authMode === "login"
           ? { email: form.email.toLowerCase(), password: form.password }
           : { name: form.name || form.email, email: form.email.toLowerCase(), phone: form.phone, company: form.company || undefined, password: form.password };
-        const authRes = await fetch(`${API_BASE}${endpoint}`, {
+        const authRes = await fetch(`${endpoint}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -1358,15 +1356,19 @@ export default function FixerRegisterPage() {
               {locale === "th" ? "สถานที่ตั้ง / พื้นที่ให้บริการ" : locale === "zh" ? "服务地点 / 服务区域" : "Location / Service Area"}
             </legend>
             <div className="space-y-4">
-              {/* GPS Auto-detect */}
-              <GpsDetectButton onDetected={(coords) => setGpsCoords(coords)} />
-              {gpsCoords && (
-                <p className="text-xs text-green-600">
-                  📍 {locale === "th" ? "ตำแหน่ง" : locale === "zh" ? "位置" : "Location"}: {gpsCoords.lat.toFixed(6)}, {gpsCoords.lng.toFixed(6)}
-                </p>
-              )}
-
-              <div className="flex gap-4">
+              {/* Location method selector — 3 mutually exclusive options */}
+              <div className="flex flex-wrap gap-4">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="locationType"
+                    value="gps"
+                    checked={form.locationType === "gps"}
+                    onChange={handleChange}
+                    className="text-blue-600 focus:ring-blue-500"
+                  />
+                  📍 {locale === "th" ? "ตรวจจับตำแหน่งอัตโนมัติ (GPS)" : locale === "zh" ? "自动检测位置 (GPS)" : "Auto-detect Location (GPS)"}
+                </label>
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="radio"
@@ -1391,7 +1393,24 @@ export default function FixerRegisterPage() {
                 </label>
               </div>
 
-              {form.locationType === "dropdown" ? (
+              {/* GPS mode */}
+              {form.locationType === "gps" && (
+                <div className="space-y-2">
+                  <GpsDetectButton onDetected={(coords) => setGpsCoords(coords)} />
+                  {gpsCoords ? (
+                    <p className="text-sm text-green-600 font-medium">
+                      ✅ 📍 {locale === "th" ? "ตำแหน่ง" : locale === "zh" ? "位置" : "Location"}: {gpsCoords.lat.toFixed(6)}, {gpsCoords.lng.toFixed(6)}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-500">
+                      {locale === "th" ? "กดปุ่มด้านบนเพื่อตรวจจับตำแหน่งอัตโนมัติ" : locale === "zh" ? "点击上方按钮自动检测位置" : "Click the button above to auto-detect your location"}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Dropdown mode */}
+              {form.locationType === "dropdown" && (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label htmlFor="province" className="block text-sm font-medium text-gray-700 mb-1">
@@ -1446,7 +1465,10 @@ export default function FixerRegisterPage() {
                     />
                   </div>
                 </div>
-              ) : (
+              )}
+
+              {/* Address text mode */}
+              {form.locationType === "address" && (
                 <div>
                   <label htmlFor="addressText" className="block text-sm font-medium text-gray-700 mb-1">
                     {locale === "th" ? "ที่อยู่ หรือ รหัสไปรษณีย์" : locale === "zh" ? "地址或邮政编码" : "Address or Postal Code"} <span className="text-red-500">*</span>
