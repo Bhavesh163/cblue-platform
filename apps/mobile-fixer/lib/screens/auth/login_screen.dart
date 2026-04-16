@@ -26,7 +26,7 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final res = await ApiService().login(_email.text.trim(), _password.text);
       if (!mounted) return;
-      final data = res.data;
+      final data = ApiService.normalizeAuthResponse(res.data);
       await context.read<AuthProvider>().login(data['user'], data['token']);
     } catch (e) {
       setState(() => _error = context.read<LocaleProvider>().t('invalid_credentials'));

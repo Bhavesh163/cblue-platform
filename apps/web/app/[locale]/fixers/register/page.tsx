@@ -460,17 +460,24 @@ export default function FixerRegisterPage() {
     setError("");
 
     try {
+      const token = localStorage.getItem("subscriber_token");
       const payload = {
         name: form.name,
         email: form.email,
         phone: form.phone,
         company: form.company,
         bio: form.bio,
+        description: form.description,
+        pastExperience: form.pastExperience,
+        pastProjectType: form.pastProjectType,
         yearsExperience: form.yearsExperience
           ? parseInt(form.yearsExperience)
           : undefined,
         travelRadius: parseInt(form.travelRadius),
-        skills: form.selectedSkills,
+        skills: form.selectedSkills.map((s) => ({
+          category: s,
+          name: s,
+        })),
         scheduledDate: form.scheduledDate,
         address: {
           province: form.province,
@@ -488,20 +495,37 @@ export default function FixerRegisterPage() {
           subdistrict: form.companySubdistrict,
           postalCode: form.companyPostalCode,
         },
-        description: form.description,
-        pastExperience: form.pastExperience,
-        pastProjectType: form.pastProjectType,
-        priceList: priceRows.filter((r) => r.service),
+        priceList: priceRows.filter((r) => r.service).map((r) => ({
+          service: r.service,
+          unit: r.unit,
+          finalPrice: r.finalPrice,
+        })),
         gpsCoords: gpsCoords || undefined,
         recaptchaToken,
         kycImageCount: kycImages.length,
         portfolioImageCount: portfolioImages.length,
       };
-      // payload ready for API submission (password excluded from logs for security)
-      console.log("Fixer registration submission:", { ...payload, fieldsCount: Object.keys(payload).length });
+
+      const regRes = await fetch("/api/v1/fixers/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!regRes.ok) {
+        const errData = await regRes.json().catch(() => ({ message: "" }));
+        const msg = errData.message || (locale === "th" ? "ลงทะเบียนล้มเหลว" : locale === "zh" ? "注册失败" : "Registration failed");
+        setError(msg);
+        setSubmitting(false);
+        return;
+      }
+
       setSuccess(true);
     } catch {
-      setError(t("consent"));
+      setError(locale === "th" ? "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้" : locale === "zh" ? "无法连接服务器" : "Cannot connect to server");
     } finally {
       setSubmitting(false);
     }

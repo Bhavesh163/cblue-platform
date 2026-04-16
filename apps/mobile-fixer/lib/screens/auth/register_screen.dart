@@ -173,8 +173,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     try {
       final api = ApiService();
 
-      // 1. Register user
-      final res = await api.register({
+      // 1. Register subscriber + fixer profile (2-step flow)
+      final data = await api.register({
         'name': _name.text.trim(),
         'email': _email.text.trim(),
         'phone': _phone.text.trim(),
@@ -184,7 +184,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
         'pdpaConsent': true,
       });
       if (!mounted) return;
-      final data = res.data;
       await context.read<AuthProvider>().login(data['user'], data['token']);
       await context.read<AuthProvider>().acceptPdpa();
 

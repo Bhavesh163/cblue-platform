@@ -18,6 +18,7 @@ enum FixerTier {
   ECONOMY
   STANDARD
   CORPORATE
+  SPECIALIST
   EXPERT
 }
 
@@ -169,6 +170,15 @@ model Fixer {
   travelRadius    Int         @default(10) // km
   yearsExperience Int?
   bio             String?
+  description     String?     // service description
+  pastExperience  String?     // narrative of past work
+  pastProjectType String?     // type of past projects
+  priceList       Json?       // [{service, unit, finalPrice}]
+  serviceProvince String?     // primary service area province
+  serviceDistrict String?     // primary service area district
+  servicePostalCode String?   // primary service area postal code
+  gpsLat          Float?
+  gpsLng          Float?
 
   skills       FixerSkill[]
   availability FixerAvailability[]

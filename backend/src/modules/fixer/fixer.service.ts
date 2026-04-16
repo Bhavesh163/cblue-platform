@@ -45,15 +45,40 @@ export class FixerService {
       data: {
         userId,
         bio: dto.bio,
+        description: dto.description,
+        pastExperience: dto.pastExperience,
+        pastProjectType: dto.pastProjectType,
         yearsExperience: dto.yearsExperience,
         travelRadius: dto.travelRadius,
+        priceList: dto.priceList ? JSON.parse(JSON.stringify(dto.priceList)) : undefined,
+        serviceProvince: dto.address?.province,
+        serviceDistrict: dto.address?.district,
+        servicePostalCode: dto.address?.postalCode,
+        gpsLat: dto.gpsCoords?.lat,
+        gpsLng: dto.gpsCoords?.lng,
       },
       include: { user: true },
     });
 
+    // Bulk-create skills if provided
+    if (dto.skills && dto.skills.length > 0) {
+      await this.prisma.fixerSkill.createMany({
+        data: dto.skills.map((s) => ({
+          fixerId: fixer.id,
+          category: s.category,
+          name: s.name,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
     this.eventEmitter.emit('fixer.registered', { fixerId: fixer.id, userId });
 
-    return fixer;
+    // Re-fetch with skills included
+    return this.prisma.fixer.findUnique({
+      where: { id: fixer.id },
+      include: { user: true, skills: true },
+    });
   }
 
   async getProfile(fixerId: string) {
