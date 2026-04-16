@@ -79,7 +79,7 @@ class Translations {
     'portfolio': {'en': 'Portfolio', 'th': 'ผลงาน', 'zh': '作品集'},
     'upload_portfolio': {'en': 'Upload Portfolio', 'th': 'อัปโหลดผลงาน', 'zh': '上传作品集'},
     'pdpa_consent': {'en': 'I agree to the PDPA data consent policy', 'th': 'ฉันยินยอมตามนโยบาย PDPA', 'zh': '我同意 PDPA 数据同意政策'},
-    'pdpa_notice': {'en': 'Your data is retained for 90 days per PDPA policy.', 'th': 'ข้อมูลของคุณจะถูกเก็บรักษา 90 วันตามนโยบาย PDPA', 'zh': '您的数据将根据 PDPA 政策保留 90 天。'},
+    'pdpa_notice': {'en': 'Your data is retained for 3 years (consent), 18 months (history). Inactive accounts deleted after 12 months per PDPA.', 'th': 'ข้อมูลเก็บรักษาตาม PDPA: ความยินยอม 3 ปี, ประวัติ 18 เดือน, บัญชีไม่ใช้งาน 12 เดือน', 'zh': '数据按PDPA保留：同意3年，历史18个月，不活跃帐户12个月。'},
     'anonymous_chat_notice': {'en': 'Chat is anonymous until payment is confirmed for your safety.', 'th': 'แชทเป็นนิรนามจนกว่าจะยืนยันการชำระเงินเพื่อความปลอดภัยของคุณ', 'zh': '为了您的安全，聊天在确认付款前是匿名的。'},
     'send_reset_link': {'en': 'Send Reset Link', 'th': 'ส่งลิงก์รีเซ็ต', 'zh': '发送重置链接'},
     'reset_sent': {'en': 'Reset link sent to your email', 'th': 'ส่งลิงก์รีเซ็ตไปยังอีเมลของคุณแล้ว', 'zh': '重置链接已发送到您的邮箱'},

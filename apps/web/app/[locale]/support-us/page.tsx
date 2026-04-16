@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, FormEvent } from "react";
-import { useTranslations, useLocale } from "next-intl";
+import { useTranslations } from "next-intl";
 import Image from "next/image";
 
 type InquiryType = "service" | "support" | "household";
@@ -30,7 +30,6 @@ const BUDGET_RANGES = [
 
 export default function SupportUsPage() {
   const t = useTranslations("supportUs");
-  const locale = useLocale();
 
   const [inquiryType, setInquiryType] = useState<InquiryType>("service");
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");

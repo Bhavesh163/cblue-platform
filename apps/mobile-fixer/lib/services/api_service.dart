@@ -85,7 +85,7 @@ class ApiService {
   }
 
   Future<Response> forgotPassword(String email) =>
-      _dio.post('/auth/forgot-password', data: {'email': email, 'role': 'fixer'});
+      _dio.post('/subscription/forgot-password', data: {'email': email});
 
   // KYC ----------------------------------------------------------------
   Future<Response> uploadKyc({File? selfie, File? idCard}) async {

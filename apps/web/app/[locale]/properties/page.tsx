@@ -8,7 +8,6 @@ import { THAI_PROVINCES } from "../lib/constants";
 import PdpaConsent from "../components/PdpaConsent";
 
 const PROPERTY_TYPES = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "APARTMENT"] as const;
-const LISTING_TYPES = ["SALE", "RENT"] as const;
 
 
 

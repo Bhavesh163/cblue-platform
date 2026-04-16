@@ -896,7 +896,7 @@ export default function FixerRegisterPage() {
                 setKycSlotStatus([]);
                 setPortfolioImages([]);
                 setDigestResult(null);
-                setPriceRows([{ service: "", finalPrice: "" }]);
+                setPriceRows([{ service: "", unit: "", finalPrice: "" }]);
               }}
               className="mt-8 px-6 py-2.5 text-sm font-semibold text-blue-700 border border-blue-700 rounded-lg hover:bg-blue-50"
             >

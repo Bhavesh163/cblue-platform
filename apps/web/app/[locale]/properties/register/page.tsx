@@ -10,7 +10,6 @@ import { getSubdistrictsForDistrict, lookupByPostalCode } from "../../lib/thai-s
 import GpsDetectButton from "../../components/GpsDetectButton";
 
 const PROPERTY_TYPES = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "APARTMENT"] as const;
-const LISTING_TYPES = ["SALE", "RENT"] as const;
 
 
 
