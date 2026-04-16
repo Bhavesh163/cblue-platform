@@ -291,24 +291,47 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 const SizedBox(height: 12),
                 TextFormField(controller: _company, decoration: InputDecoration(labelText: t('company'))),
                 const SizedBox(height: 12),
-                // Services multi-select (all services shown together, no category separation)
+                // Services multi-select (categorized: household, project, professional)
                 Text(t('select_services'), style: const TextStyle(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
                 Builder(builder: (ctx) {
                   final locale = ctx.watch<LocaleProvider>().locale;
-                  final allEn = AppConstants.allServices['en']!;
-                  return Wrap(
-                    spacing: 8, runSpacing: 4,
-                    children: allEn.map((s) {
-                      final allLocale = AppConstants.allServices[locale] ?? allEn;
-                      final idx = allEn.indexOf(s);
-                      final label = idx >= 0 && idx < allLocale.length ? allLocale[idx] : s;
-                      return FilterChip(
-                        label: Text(label, style: const TextStyle(fontSize: 12)),
-                        selected: _selectedServices.contains(s),
-                        onSelected: (sel) => setState(() => sel ? _selectedServices.add(s) : _selectedServices.remove(s)),
-                      );
-                    }).toList(),
+
+                  Widget buildCategory(String icon, String titleEn, String titleTh, String titleZh, Map<String, List<String>> services, Color color) {
+                    final enList = services['en']!;
+                    final localeList = services[locale] ?? enList;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 8),
+                        Text(
+                          '$icon ${locale == 'th' ? titleTh : locale == 'zh' ? titleZh : titleEn}',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: color),
+                        ),
+                        const SizedBox(height: 4),
+                        Wrap(
+                          spacing: 8, runSpacing: 4,
+                          children: enList.asMap().entries.map((e) {
+                            final label = e.key < localeList.length ? localeList[e.key] : e.value;
+                            return FilterChip(
+                              label: Text(label, style: const TextStyle(fontSize: 12)),
+                              selected: _selectedServices.contains(e.value),
+                              selectedColor: color.withValues(alpha: 0.2),
+                              onSelected: (sel) => setState(() => sel ? _selectedServices.add(e.value) : _selectedServices.remove(e.value)),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    );
+                  }
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      buildCategory('🏠', 'Household Maintenance', 'งานซ่อมบำรุงบ้าน', '家庭维修', AppConstants.householdServices, Colors.blue.shade700),
+                      buildCategory('🏗️', 'Project Work', 'งานโครงการ', '项目工程', AppConstants.projectServices, Colors.green.shade700),
+                      buildCategory('👔', 'Book Professionals', 'มืออาชีพ', '专业人士', AppConstants.professionalServices, Colors.purple.shade700),
+                    ],
                   );
                 }),
                 const SizedBox(height: 12),

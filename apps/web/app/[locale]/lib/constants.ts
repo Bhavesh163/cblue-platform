@@ -53,6 +53,10 @@ export const FIXER_ALL_SERVICES = [
   ...PROJECT_SERVICES.filter(
     (ps) => !HOUSEHOLD_SERVICES.some((hs) => (hs.value as string) === (ps.value as string))
   ),
+  ...PROFESSIONAL_SERVICES.filter(
+    (ps) => !HOUSEHOLD_SERVICES.some((hs) => (hs.value as string) === (ps.value as string)) &&
+            !PROJECT_SERVICES.some((pj) => (pj.value as string) === (ps.value as string))
+  ),
 ] as const;
 
 export const THAI_PROVINCES = [

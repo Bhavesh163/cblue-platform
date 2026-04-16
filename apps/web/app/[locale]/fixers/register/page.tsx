@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef, type FormEvent, type ChangeEvent } from "react";
 import { useTranslations, useLocale } from "next-intl";
-import { FIXER_ALL_SERVICES, THAI_PROVINCES } from "../../lib/constants";
+import { HOUSEHOLD_SERVICES, PROJECT_SERVICES, PROFESSIONAL_SERVICES, THAI_PROVINCES } from "../../lib/constants";
 import { getDistrictsForProvince } from "../../lib/thai-address-data";
 import { getSubdistrictsForDistrict, lookupByPostalCode } from "../../lib/thai-subdistrict-data";
 import ReCaptcha from "../../components/ReCaptcha";
@@ -11,6 +11,7 @@ import Link from "next/link";
 
 interface PriceRow {
   service: string;
+  unit: string;
   finalPrice: string;
 }
 
@@ -87,7 +88,7 @@ export default function FixerRegisterPage() {
   const [showCamera, setShowCamera] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const [priceRows, setPriceRows] = useState<PriceRow[]>([{ service: "", finalPrice: "" }]);
+  const [priceRows, setPriceRows] = useState<PriceRow[]>([{ service: "", unit: "", finalPrice: "" }]);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
@@ -1252,8 +1253,13 @@ export default function FixerRegisterPage() {
             <p className="text-xs text-gray-500 mb-3">
               {locale === "th" ? "เลือกบริการที่ท่านสามารถให้บริการได้ (เลือกได้หลายรายการ)" : locale === "zh" ? "选择您可以提供的服务（可多选）" : "Select services you can provide (multiple selections allowed)"}
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {FIXER_ALL_SERVICES.map((svc) => (
+
+            {/* Household Maintenance */}
+            <h4 className="text-sm font-semibold text-blue-700 mt-4 mb-2 flex items-center gap-2">
+              🏠 {locale === "th" ? "งานซ่อมบำรุงบ้าน" : locale === "zh" ? "家庭维修" : "Household Maintenance"}
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+              {HOUSEHOLD_SERVICES.map((svc) => (
                 <label
                   key={svc.value}
                   className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
@@ -1267,6 +1273,56 @@ export default function FixerRegisterPage() {
                     checked={form.selectedSkills.includes(svc.value)}
                     onChange={() => handleSkillToggle(svc.value)}
                     className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700">{locale === "th" ? svc.labelTh : locale === "zh" ? svc.labelZh : svc.label}</span>
+                </label>
+              ))}
+            </div>
+
+            {/* Project Work */}
+            <h4 className="text-sm font-semibold text-green-700 mt-4 mb-2 flex items-center gap-2">
+              🏗️ {locale === "th" ? "งานโครงการ" : locale === "zh" ? "项目工程" : "Project Work"}
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+              {PROJECT_SERVICES.map((svc) => (
+                <label
+                  key={svc.value}
+                  className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                    form.selectedSkills.includes(svc.value)
+                      ? "border-green-500 bg-green-50"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={form.selectedSkills.includes(svc.value)}
+                    onChange={() => handleSkillToggle(svc.value)}
+                    className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                  />
+                  <span className="text-sm text-gray-700">{locale === "th" ? svc.labelTh : locale === "zh" ? svc.labelZh : svc.label}</span>
+                </label>
+              ))}
+            </div>
+
+            {/* Book Professionals */}
+            <h4 className="text-sm font-semibold text-purple-700 mt-4 mb-2 flex items-center gap-2">
+              👔 {locale === "th" ? "มืออาชีพ" : locale === "zh" ? "专业人士" : "Book Professionals"}
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {PROFESSIONAL_SERVICES.map((svc) => (
+                <label
+                  key={svc.value}
+                  className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                    form.selectedSkills.includes(svc.value)
+                      ? "border-purple-500 bg-purple-50"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={form.selectedSkills.includes(svc.value)}
+                    onChange={() => handleSkillToggle(svc.value)}
+                    className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
                   />
                   <span className="text-sm text-gray-700">{locale === "th" ? svc.labelTh : locale === "zh" ? svc.labelZh : svc.label}</span>
                 </label>
@@ -1522,6 +1578,7 @@ export default function FixerRegisterPage() {
                 <thead>
                   <tr className="bg-gray-50">
                     <th className="text-left px-3 py-2 font-medium text-gray-700 border-b">{locale === "th" ? "บริการ" : locale === "zh" ? "服务" : "Service"}</th>
+                    <th className="text-center px-3 py-2 font-medium text-gray-700 border-b">{locale === "th" ? "หน่วย" : locale === "zh" ? "单位" : "Unit"}</th>
                     <th className="text-center px-3 py-2 font-medium text-sky-700 border-b bg-sky-50">{locale === "th" ? "ราคาสุดท้าย รวม VAT (บาท)" : locale === "zh" ? "最终价格 含增值税（泰铢）" : "Final Price incl. VAT (THB)"}</th>
                     <th className="px-2 py-2 border-b w-10" />
                   </tr>
@@ -1533,6 +1590,11 @@ export default function FixerRegisterPage() {
                         <input type="text" value={row.service} placeholder={locale === "th" ? "เช่น ซ่อมท่อ" : locale === "zh" ? "例如 修水管" : "e.g. Pipe repair"}
                           onChange={(e) => { const nr = [...priceRows]; nr[idx] = { ...nr[idx]!, service: e.target.value }; setPriceRows(nr); }}
                           className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded focus:border-blue-500 outline-none" />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <input type="text" value={row.unit} placeholder={locale === "th" ? "เช่น จุด, ตร.ม." : locale === "zh" ? "例如 个, 平方米" : "e.g. point, sq.m."}
+                          onChange={(e) => { const nr = [...priceRows]; nr[idx] = { ...nr[idx]!, unit: e.target.value }; setPriceRows(nr); }}
+                          className="w-full px-2 py-1.5 text-sm text-center border border-gray-200 rounded focus:border-blue-500 outline-none" />
                       </td>
                       <td className="px-2 py-1.5">
                         <input type="number" min={0} value={row.finalPrice} placeholder="฿"
@@ -1551,7 +1613,7 @@ export default function FixerRegisterPage() {
               </table>
             </div>
             <button type="button"
-              onClick={() => setPriceRows([...priceRows, { service: "", finalPrice: "" }])}
+              onClick={() => setPriceRows([...priceRows, { service: "", unit: "", finalPrice: "" }])}
               className="mt-2 text-sm text-blue-600 hover:text-blue-800 font-medium">
               + {locale === "th" ? "เพิ่มรายการ" : locale === "zh" ? "添加行" : "Add Row"}
             </button>
