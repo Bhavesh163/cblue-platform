@@ -378,14 +378,14 @@ function HouseholdBookingContent() {
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       {locale === "th" ? "รหัสผ่าน" : locale === "zh" ? "密码" : "Password"} <span className="text-red-500">*</span>
                     </label>
-                    <input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} required minLength={8} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none" placeholder="••••••••" />
+                    <input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none" placeholder="••••••••" />
                   </div>
                   {authMode === "register" && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         {locale === "th" ? "ยืนยันรหัสผ่าน" : locale === "zh" ? "确认密码" : "Confirm Password"} <span className="text-red-500">*</span>
                       </label>
-                      <input type="password" value={authConfirmPassword} onChange={(e) => setAuthConfirmPassword(e.target.value)} required minLength={8} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none" placeholder="••••••••" />
+                      <input type="password" value={authConfirmPassword} onChange={(e) => setAuthConfirmPassword(e.target.value)} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none" placeholder="••••••••" />
                     </div>
                   )}
                 </div>
@@ -412,7 +412,6 @@ function HouseholdBookingContent() {
                   id="name"
                   name="name"
                   type="text"
-                  required
                   value={form.name}
                   onChange={handleChange}
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
@@ -426,8 +425,8 @@ function HouseholdBookingContent() {
                 <input
                   id="email"
                   name="email"
-                  type="email"
-                  required
+                  type="text"
+                  inputMode="email"
                   value={form.email}
                   onChange={handleChange}
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
@@ -443,7 +442,6 @@ function HouseholdBookingContent() {
                   name="phone"
                   type="text"
                   inputMode="tel"
-                  required
                   value={form.phone}
                   onChange={handleChange}
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"

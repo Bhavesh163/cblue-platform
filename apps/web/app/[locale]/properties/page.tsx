@@ -230,13 +230,12 @@ export default function PropertiesPage() {
               </button>
             </div>
             <div className="space-y-3">
-              <input type="email" placeholder={locale === "th" ? "อีเมล" : locale === "zh" ? "电子邮件" : "Email"} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
+              <input type="text" inputMode="email" placeholder={locale === "th" ? "อีเมล" : locale === "zh" ? "电子邮件" : "Email"} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
                 value={authEmail}
                 onChange={(e) => { setAuthEmail(e.target.value); setAuthError(""); }}
               />
               <input type="password" placeholder={locale === "th" ? "รหัสผ่าน (อย่างน้อย 8 ตัว)" : locale === "zh" ? "密码（至少8个字符）" : "Password (min 8 chars)"} value={authPassword}
                 onChange={(e) => { setAuthPassword(e.target.value); setAuthError(""); }}
-                minLength={8}
                 className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
               />
               {authMode === "register" && (

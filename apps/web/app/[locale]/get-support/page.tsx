@@ -229,7 +229,7 @@ export default function GetSupportPage() {
 
       <div className="max-w-3xl mx-auto px-4 sm:px-6 -mt-6 relative z-10 pb-12">
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 sm:p-8 space-y-6">
+        <form onSubmit={handleSubmit} noValidate className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 sm:p-8 space-y-6">
           {error && (
             <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
           )}
@@ -281,21 +281,21 @@ export default function GetSupportPage() {
               <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
                 {t("name")} <span className="text-red-500">*</span>
               </label>
-              <input id="name" name="name" type="text" required value={form.name} onChange={handleChange}
+              <input id="name" name="name" type="text" value={form.name} onChange={handleChange}
                 className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none" />
             </div>
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
                 {t("email")} <span className="text-red-500">*</span>
               </label>
-              <input id="email" name="email" type="email" required value={form.email} onChange={handleChange}
+              <input id="email" name="email" type="text" inputMode="email" value={form.email} onChange={handleChange}
                 className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none" />
             </div>
             <div className="sm:col-span-2">
               <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
                 {t("phone")}
               </label>
-              <input id="phone" name="phone" type="tel" value={form.phone} onChange={handleChange}
+              <input id="phone" name="phone" type="text" inputMode="tel" value={form.phone} onChange={handleChange}
                 className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none" />
             </div>
           </div>

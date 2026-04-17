@@ -35,7 +35,15 @@ export default function SubscriptionRegisterPage() {
       setError(t("pdpaRequired"));
       return;
     }
-    if (form.phone && !/^[0-9\s\-+()]{9,15}$/.test(form.phone)) {
+    if (!form.name.trim() || !form.email.trim() || !form.phone.trim()) {
+      setError(locale === "th" ? "กรุณากรอกข้อมูลที่จำเป็น" : locale === "zh" ? "请填写必填字段" : "Please fill in all required fields");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      setError(locale === "th" ? "รูปแบบอีเมลไม่ถูกต้อง" : locale === "zh" ? "邮箱格式不正确" : "Invalid email format");
+      return;
+    }
+    if (!/^[0-9\s\-+()]{9,15}$/.test(form.phone)) {
       setError(t("invalidPhone"));
       return;
     }
@@ -101,7 +109,7 @@ export default function SubscriptionRegisterPage() {
             <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
               {t("name")}
             </label>
-            <input id="name" name="name" type="text" required value={form.name} onChange={handleChange}
+            <input id="name" name="name" type="text" value={form.name} onChange={handleChange}
               className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               placeholder="สมชาย ใจดี" />
           </div>
@@ -109,7 +117,7 @@ export default function SubscriptionRegisterPage() {
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
               {t("email")}
             </label>
-            <input id="email" name="email" type="email" required value={form.email} onChange={handleChange}
+            <input id="email" name="email" type="text" inputMode="email" value={form.email} onChange={handleChange}
               className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               placeholder="email@example.com" />
           </div>
@@ -117,7 +125,7 @@ export default function SubscriptionRegisterPage() {
             <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
               {t("phone")}
             </label>
-            <input id="phone" name="phone" type="text" inputMode="tel" required value={form.phone} onChange={handleChange}
+            <input id="phone" name="phone" type="text" inputMode="tel" value={form.phone} onChange={handleChange}
               className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               placeholder="0812345678" />
           </div>
@@ -133,7 +141,7 @@ export default function SubscriptionRegisterPage() {
             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
               {t("password")}
             </label>
-            <input id="password" name="password" type="password" required minLength={8} value={form.password} onChange={handleChange}
+            <input id="password" name="password" type="password" value={form.password} onChange={handleChange}
               className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               placeholder="••••••••" />
           </div>
@@ -141,7 +149,7 @@ export default function SubscriptionRegisterPage() {
             <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
               {t("confirmPassword")}
             </label>
-            <input id="confirmPassword" name="confirmPassword" type="password" required minLength={8} value={form.confirmPassword} onChange={handleChange}
+            <input id="confirmPassword" name="confirmPassword" type="password" value={form.confirmPassword} onChange={handleChange}
               className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               placeholder="••••••••" />
           </div>

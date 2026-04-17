@@ -620,7 +620,7 @@ function PropertiesTab({ t, locale, prefix, properties }: {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">{t.editContact}</label>
-                      <input type="tel" value={editForm.contactPhone} onChange={(e) => setEditForm({ ...editForm, contactPhone: e.target.value })}
+                      <input type="text" inputMode="tel" value={editForm.contactPhone} onChange={(e) => setEditForm({ ...editForm, contactPhone: e.target.value })}
                         className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500" placeholder="091-xxx-xxxx" />
                     </div>
                   </div>

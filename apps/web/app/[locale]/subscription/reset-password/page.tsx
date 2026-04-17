@@ -103,12 +103,12 @@ function ResetPasswordForm() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} noValidate className="space-y-4">
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
               {t("newPassword")}
             </label>
-            <input id="password" type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)}
+            <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
               className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               placeholder="••••••••" />
           </div>
@@ -116,7 +116,7 @@ function ResetPasswordForm() {
             <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
               {t("confirmPassword")}
             </label>
-            <input id="confirmPassword" type="password" required minLength={8} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
+            <input id="confirmPassword" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
               className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               placeholder="••••••••" />
           </div>

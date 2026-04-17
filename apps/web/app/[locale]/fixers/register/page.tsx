@@ -964,7 +964,6 @@ export default function FixerRegisterPage() {
                   id="name"
                   name="name"
                   type="text"
-                  required
                   value={form.name}
                   onChange={handleChange}
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
@@ -978,8 +977,8 @@ export default function FixerRegisterPage() {
                 <input
                   id="email"
                   name="email"
-                  type="email"
-                  required
+                  type="text"
+                  inputMode="email"
                   value={form.email}
                   onChange={handleChange}
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
@@ -995,7 +994,6 @@ export default function FixerRegisterPage() {
                   name="phone"
                   type="text"
                   inputMode="tel"
-                  required
                   value={form.phone}
                   onChange={handleChange}
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
@@ -1113,8 +1111,6 @@ export default function FixerRegisterPage() {
                       id="password"
                       name="password"
                       type="password"
-                      required
-                      minLength={8}
                       value={form.password}
                       onChange={handleChange}
                       className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none"
@@ -1130,8 +1126,6 @@ export default function FixerRegisterPage() {
                         id="confirmPassword"
                         name="confirmPassword"
                         type="password"
-                        required
-                        minLength={8}
                         value={form.confirmPassword}
                         onChange={handleChange}
                         className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none"

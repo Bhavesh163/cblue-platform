@@ -188,20 +188,20 @@ export default function SupportUsPage() {
             ))}
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} noValidate className="space-y-5">
             {/* Common Fields */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className={labelCls}>{t("fullName")} *</label>
-                <input type="text" value={form.name} onChange={(e) => set("name", e.target.value)} className={inputCls} required />
+                <input type="text" value={form.name} onChange={(e) => set("name", e.target.value)} className={inputCls} />
               </div>
               <div>
                 <label className={labelCls}>{t("email")} *</label>
-                <input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} className={inputCls} required />
+                <input type="text" inputMode="email" value={form.email} onChange={(e) => set("email", e.target.value)} className={inputCls} />
               </div>
               <div>
                 <label className={labelCls}>{t("phone")} *</label>
-                <input type="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} className={inputCls} required />
+                <input type="text" inputMode="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} className={inputCls} />
               </div>
               <div>
                 <label className={labelCls}>{t("company")}</label>

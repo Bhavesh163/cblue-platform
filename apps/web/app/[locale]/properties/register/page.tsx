@@ -294,14 +294,14 @@ export default function PropertyRegisterPage() {
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         {locale === "th" ? "รหัสผ่าน" : locale === "zh" ? "密码" : "Password"} <span className="text-red-500">*</span>
                       </label>
-                      <input type="password" name="password" value={form.password} onChange={handleChange} required minLength={8} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500" placeholder="••••••••" />
+                      <input type="password" name="password" value={form.password} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500" placeholder="••••••••" />
                     </div>
                     {authMode === "register" && (
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           {locale === "th" ? "ยืนยันรหัสผ่าน" : locale === "zh" ? "确认密码" : "Confirm Password"} <span className="text-red-500">*</span>
                         </label>
-                        <input type="password" name="confirmPassword" value={form.confirmPassword} onChange={handleChange} required minLength={8} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500" placeholder="••••••••" />
+                        <input type="password" name="confirmPassword" value={form.confirmPassword} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500" placeholder="••••••••" />
                       </div>
                     )}
                   </div>
@@ -673,7 +673,8 @@ export default function PropertyRegisterPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">{tb("email")}</label>
                   <input
-                    type="email"
+                    type="text"
+                    inputMode="email"
                     name="contactEmail"
                     value={form.contactEmail}
                     onChange={handleChange}
