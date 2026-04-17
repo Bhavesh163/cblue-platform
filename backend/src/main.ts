@@ -3,7 +3,6 @@ import { ValidationPipe, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
-import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import helmet from 'helmet';
 
 async function bootstrap() {
@@ -36,9 +35,6 @@ async function bootstrap() {
 
   // Global exception filter
   app.useGlobalFilters(new AllExceptionsFilter());
-
-  // Global response transform
-  app.useGlobalInterceptors(new TransformInterceptor());
 
   const port = configService.get<number>('port') || 3002;
   await app.listen(port);

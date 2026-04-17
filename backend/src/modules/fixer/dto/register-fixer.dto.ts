@@ -44,7 +44,31 @@ class AddressDto {
 
   @IsOptional()
   @IsString()
+  subdistrict?: string;
+
+  @IsOptional()
+  @IsString()
   postalCode?: string;
+
+  @IsOptional()
+  @IsString()
+  houseNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  building?: string;
+
+  @IsOptional()
+  @IsString()
+  floor?: string;
+
+  @IsOptional()
+  @IsString()
+  road?: string;
+
+  @IsOptional()
+  @IsString()
+  soi?: string;
 }
 
 class GpsCoordsDto {
@@ -56,6 +80,23 @@ class GpsCoordsDto {
 }
 
 export class RegisterFixerDto {
+  // ── Fields sent by frontend but belonging to subscriber (ignored by service) ──
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  company?: string;
+
   @IsOptional()
   @IsString()
   bio?: string;
@@ -110,4 +151,26 @@ export class RegisterFixerDto {
   @IsOptional()
   @IsString()
   scheduledDate?: string;
+
+  // ── Extra fields sent by frontend (accepted but not stored in fixer table) ──
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AddressDto)
+  companyAddress?: AddressDto;
+
+  @IsOptional()
+  @IsString()
+  recaptchaToken?: string;
+
+  @IsOptional()
+  @IsInt()
+  kycImageCount?: number;
+
+  @IsOptional()
+  @IsInt()
+  portfolioImageCount?: number;
+
+  @IsOptional()
+  @IsString()
+  addressText?: string;
 }
