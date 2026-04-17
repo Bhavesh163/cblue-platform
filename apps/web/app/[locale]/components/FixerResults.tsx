@@ -427,7 +427,7 @@ export default function FixerResults({
   onNewBooking: () => void;
 }) {
   const t = (key: string) => T[locale]?.[key] || T["en"]![key] || key;
-  const [fixers] = useState<Fixer[]>(() => generateDemoFixers(service));
+  const [fixers, setFixers] = useState<Fixer[]>([]);
   const [step, setStep] = useState<Step>("matching");
   const [selectedFixer, setSelectedFixer] = useState<Fixer | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -435,13 +435,11 @@ export default function FixerResults({
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [aiStep, setAiStep] = useState(0);
 
-  // Issue image preview URLs (created once from File[])
-  const [issueImageUrls] = useState<string[]>(() =>
-    (issueImages || []).map(f => URL.createObjectURL(f))
-  );
+  // Issue image preview URLs — created client-side only
+  const [issueImageUrls, setIssueImageUrls] = useState<string[]>([]);
 
   // PO state
-  const [poNumber] = useState(() => generatePONumber());
+  const [poNumber, setPoNumber] = useState("PO-0000-0000");
   const [partnerConfirmed, setPartnerConfirmed] = useState(false);
 
   // Meeting state
@@ -452,16 +450,8 @@ export default function FixerResults({
   // Rating state
   const [customerRating, setCustomerRating] = useState(0);
   const [customerComment, setCustomerComment] = useState("");
-  const [fixerRatingOfCustomer] = useState(() => 3 + Math.floor(Math.random() * 3)); // simulated
-  const [fixerCommentOfCustomer] = useState(() => {
-    const comments: Record<string, string[]> = {
-      en: ["Great customer, very clear instructions", "Punctual and polite", "Easy to work with, would serve again", "Good communication throughout"],
-      th: ["ลูกค้าดี บอกรายละเอียดชัดเจน", "ตรงเวลา สุภาพ", "ทำงานด้วยง่าย ยินดีให้บริการอีก", "สื่อสารดีตลอดงาน"],
-      zh: ["很好的客户，指示清晰", "准时且礼貌", "合作愉快，愿意再次服务", "全程沟通良好"],
-    };
-    const pool = comments[locale] ?? comments["en"]!;
-    return pool[Math.floor(Math.random() * pool.length)]!;
-  });
+  const [fixerRatingOfCustomer, setFixerRatingOfCustomer] = useState(4);
+  const [fixerCommentOfCustomer, setFixerCommentOfCustomer] = useState("");
   const [partnerRateReady, setPartnerRateReady] = useState(false);
   const [customerRated, setCustomerRated] = useState(false);
 
@@ -483,6 +473,21 @@ export default function FixerResults({
       setVariationAmount(Math.floor(f * 0.3 + Math.random() * f * 0.5));
     }
   }, [step, selectedFixer, bookingType]);
+
+  // Hydration-safe: initialize random/date-dependent values on client
+  useEffect(() => {
+    setFixers(generateDemoFixers(service));
+    setIssueImageUrls((issueImages || []).map(f => URL.createObjectURL(f)));
+    setPoNumber(generatePONumber());
+    setFixerRatingOfCustomer(3 + Math.floor(Math.random() * 3));
+    const comments: Record<string, string[]> = {
+      en: ["Great customer, very clear instructions", "Punctual and polite", "Easy to work with, would serve again", "Good communication throughout"],
+      th: ["ลูกค้าดี บอกรายละเอียดชัดเจน", "ตรงเวลา สุภาพ", "ทำงานด้วยง่าย ยินดีให้บริการอีก", "สื่อสารดีตลอดงาน"],
+      zh: ["很好的客户，指示清晰", "准时且礼貌", "合作愉快，愿意再次服务", "全程沟通良好"],
+    };
+    const pool = comments[locale] ?? comments["en"]!;
+    setFixerCommentOfCustomer(pool[Math.floor(Math.random() * pool.length)]!);
+  }, [locale]);
 
   // Persist workflow state to localStorage
   useEffect(() => {
@@ -1177,7 +1182,7 @@ export default function FixerResults({
 
   // Step: Payment QR
   if (step === "payment" && selectedFixer) {
-    const refCode = `CBLUE-${Date.now().toString(36).toUpperCase()}`;
+    const refCode = `CBLUE-${poNumber.replace("PO-", "")}`;
     return (
       <><StepProgressBar />
       <div className="mx-auto max-w-md px-4 py-12">
@@ -1237,15 +1242,17 @@ export default function FixerResults({
 
   // Step: PO Created
   if (step === "po" && selectedFixer) {
-    const today = new Date().toLocaleDateString(locale === "th" ? "th-TH" : locale === "zh" ? "zh-CN" : "en-US", { year: "numeric", month: "long", day: "numeric" });
+    const today = typeof window !== "undefined" ? new Date().toLocaleDateString(locale === "th" ? "th-TH" : locale === "zh" ? "zh-CN" : "en-US", { year: "numeric", month: "long", day: "numeric" }) : "";
     // Get customer info from localStorage for formal PO address
     let customerName = "";
     let customerAddress = "";
-    try {
-      const sub = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("subscriber") || "{}") : {};
-      customerName = sub.name || sub.email || (locale === "th" ? "ลูกค้า" : locale === "zh" ? "客户" : "Customer");
-      customerAddress = sub.address || sub.province || "";
-    } catch { /* safe fallback */ }
+    if (typeof window !== "undefined") {
+      try {
+        const sub = JSON.parse(localStorage.getItem("subscriber") || "{}");
+        customerName = sub.name || sub.email || (locale === "th" ? "ลูกค้า" : locale === "zh" ? "客户" : "Customer");
+        customerAddress = sub.address || sub.province || "";
+      } catch { /* safe fallback */ }
+    }
     return (
       <><StepProgressBar />
       <div className="mx-auto max-w-lg px-4 py-12">

@@ -23,6 +23,8 @@ jobs:
       - name: Build with OpenNext
         working-directory: apps/web
         run: npx @opennextjs/cloudflare build
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
 
       - name: Deploy to Cloudflare Workers
         working-directory: apps/web

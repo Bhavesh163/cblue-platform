@@ -120,11 +120,11 @@ const T: { en: Translations; th: Translations; zh: Translations; [k: string]: Tr
 
 /* --- Demo Data --- */
 const DEMO_JOBS: Job[] = [
-  { id: "j1", customerAlias: "C-1824", serviceCategory: "Plumbing", status: "in_progress", description: "Fix kitchen sink leak", createdAt: new Date(Date.now() - 86400000).toISOString(), type: "household", tier: "Standard" },
-  { id: "j2", customerAlias: "C-3901", serviceCategory: "Electrical", status: "pending", description: "Install new ceiling fan", createdAt: new Date(Date.now() - 172800000).toISOString(), type: "household", tier: "Economy" },
-  { id: "j3", customerAlias: "C-7752", serviceCategory: "Plumbing", status: "completed", description: "Replace bathroom faucet", createdAt: new Date(Date.now() - 604800000).toISOString(), type: "household", tier: "Corporate" },
-  { id: "j4", customerAlias: "C-4409", serviceCategory: "Smart Home", status: "completed", description: "Smart home setup", createdAt: new Date(Date.now() - 1209600000).toISOString(), type: "project", tier: "Specialist" },
-  { id: "j5", customerAlias: "C-5510", serviceCategory: "Architect", status: "completed", description: "Building design consultation", createdAt: new Date(Date.now() - 2000000000).toISOString(), type: "professional", tier: "Expert" },
+  { id: "j1", customerAlias: "C-1824", serviceCategory: "Plumbing", status: "in_progress", description: "Fix kitchen sink leak", createdAt: "2026-04-17T00:00:00.000Z", type: "household", tier: "Standard" },
+  { id: "j2", customerAlias: "C-3901", serviceCategory: "Electrical", status: "pending", description: "Install new ceiling fan", createdAt: "2026-04-16T00:00:00.000Z", type: "household", tier: "Economy" },
+  { id: "j3", customerAlias: "C-7752", serviceCategory: "Plumbing", status: "completed", description: "Replace bathroom faucet", createdAt: "2026-04-11T00:00:00.000Z", type: "household", tier: "Corporate" },
+  { id: "j4", customerAlias: "C-4409", serviceCategory: "Smart Home", status: "completed", description: "Smart home setup", createdAt: "2026-04-04T00:00:00.000Z", type: "project", tier: "Specialist" },
+  { id: "j5", customerAlias: "C-5510", serviceCategory: "Architect", status: "completed", description: "Building design consultation", createdAt: "2026-03-01T00:00:00.000Z", type: "professional", tier: "Expert" },
 ];
 
 const DEMO_PROFILE: ProviderProfile = {
@@ -140,14 +140,14 @@ const DEMO_PROFILE: ProviderProfile = {
 
 const DEMO_MESSAGES: Record<string, ChatMessage[]> = {
   j1: [
-    { id: "m1", sender: "customer", text: "Hi, the kitchen sink has been leaking for 2 days", timestamp: new Date(Date.now() - 80000000).toISOString() },
-    { id: "m2", sender: "provider", text: "I can come check it tomorrow morning. Can you send a photo?", timestamp: new Date(Date.now() - 79000000).toISOString() },
-    { id: "m3", sender: "customer", text: "Sure, here is the photo. It is under the sink pipe connection.", timestamp: new Date(Date.now() - 78000000).toISOString() },
-    { id: "m4", sender: "provider", text: "Looks like a worn gasket. I will bring replacement parts.", timestamp: new Date(Date.now() - 77000000).toISOString() },
+    { id: "m1", sender: "customer", text: "Hi, the kitchen sink has been leaking for 2 days", timestamp: "2026-04-17T02:00:00.000Z" },
+    { id: "m2", sender: "provider", text: "I can come check it tomorrow morning. Can you send a photo?", timestamp: "2026-04-17T02:15:00.000Z" },
+    { id: "m3", sender: "customer", text: "Sure, here is the photo. It is under the sink pipe connection.", timestamp: "2026-04-17T02:30:00.000Z" },
+    { id: "m4", sender: "provider", text: "Looks like a worn gasket. I will bring replacement parts.", timestamp: "2026-04-17T02:45:00.000Z" },
   ],
   j2: [
-    { id: "m5", sender: "customer", text: "I need a ceiling fan installed in my living room", timestamp: new Date(Date.now() - 160000000).toISOString() },
-    { id: "m6", sender: "provider", text: "What size fan? And do you already have a mounting bracket?", timestamp: new Date(Date.now() - 159000000).toISOString() },
+    { id: "m5", sender: "customer", text: "I need a ceiling fan installed in my living room", timestamp: "2026-04-16T04:00:00.000Z" },
+    { id: "m6", sender: "provider", text: "What size fan? And do you already have a mounting bracket?", timestamp: "2026-04-16T04:15:00.000Z" },
   ],
 };
 

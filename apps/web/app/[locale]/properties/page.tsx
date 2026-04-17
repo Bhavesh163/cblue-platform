@@ -48,18 +48,11 @@ export default function PropertiesPage() {
   const [chatInput, setChatInput] = useState("");
   const [meetingDate, setMeetingDate] = useState("");
   const [meetingTime, setMeetingTime] = useState("");
+  const [todayStr, setTodayStr] = useState("");
   const [rating, setRating] = useState(0);
   const [ratingComment, setRatingComment] = useState("");
-  const [listerRating] = useState(() => 3 + Math.floor(Math.random() * 3));
-  const [listerComment] = useState(() => {
-    const comments: Record<string, string[]> = {
-      en: ["Polite and punctual customer", "Very interested buyer, asked good questions", "Easy to deal with, would recommend", "Serious buyer with clear requirements"],
-      th: ["ลูกค้าสุภาพ ตรงเวลา", "ผู้ซื้อสนใจจริง ถามคำถามดี", "ทำงานด้วยง่าย แนะนำได้", "ผู้ซื้อจริงจัง มีความต้องการชัดเจน"],
-      zh: ["礼貌准时的客户", "买家非常感兴趣，问了好问题", "容易打交道，愿意推荐", "认真的买家，需求明确"],
-    };
-    const pool = comments[locale] ?? comments["en"]!;
-    return pool[Math.floor(Math.random() * pool.length)]!;
-  });
+  const [listerRating, setListerRating] = useState(4);
+  const [listerComment, setListerComment] = useState("");
   const [listerRateReady, setListerRateReady] = useState(false);
   const [customerRated, setCustomerRated] = useState(false);
   const [authPassword, setAuthPassword] = useState("");
@@ -100,6 +93,17 @@ export default function PropertiesPage() {
       }
     }
     fetchLatest();
+
+    // Hydration-safe: initialize random values
+    setListerRating(3 + Math.floor(Math.random() * 3));
+    setTodayStr(new Date().toISOString().split("T")[0] ?? "");
+    const comments: Record<string, string[]> = {
+      en: ["Polite and punctual customer", "Very interested buyer, asked good questions", "Easy to deal with, would recommend", "Serious buyer with clear requirements"],
+      th: ["ลูกค้าสุภาพ ตรงเวลา", "ผู้ซื้อสนใจจริง ถามคำถามดี", "ทำงานด้วยง่าย แนะนำได้", "ผู้ซื้อจริงจัง มีความต้องการชัดเจน"],
+      zh: ["礼貌准时的客户", "买家非常感兴趣，问了好问题", "容易打交道，愿意推荐", "认真的买家，需求明确"],
+    };
+    const pool = comments[locale] ?? comments["en"]!;
+    setListerComment(pool[Math.floor(Math.random() * pool.length)]!);
   }, []);
 
   async function handleSearch(overrides?: Partial<typeof filters>) {
@@ -448,7 +452,7 @@ export default function PropertiesPage() {
                     <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ทรัพย์สิน" : locale === "zh" ? "房产" : "Property"}</span><span className="font-semibold">{showContactFlow.title}</span></div>
                     <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ระดับ" : locale === "zh" ? "等级" : "Tier"}</span><span className="font-semibold">{selectedTier}</span></div>
                     <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}</span><span className="font-bold text-green-700">฿{PROPERTY_TIERS.find((ti) => ti.name === selectedTier)?.fee || 0}</span></div>
-                    <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "วันที่" : locale === "zh" ? "日期" : "Date"}</span><span className="font-semibold">{new Date().toLocaleDateString()}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "วันที่" : locale === "zh" ? "日期" : "Date"}</span><span className="font-semibold">{todayStr}</span></div>
                   </div>
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700 mb-3">
                     ⚠️ {locale === "th"
@@ -570,7 +574,7 @@ export default function PropertiesPage() {
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "วันที่" : locale === "zh" ? "日期" : "Date"}</label>
                       <input type="date" value={meetingDate} onChange={(e) => setMeetingDate(e.target.value)}
-                        min={new Date().toISOString().split("T")[0]}
+                        min={todayStr}
                         className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-emerald-500" />
                     </div>
                     <div>

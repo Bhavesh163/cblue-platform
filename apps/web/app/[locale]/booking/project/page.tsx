@@ -105,15 +105,7 @@ function ProjectBookingContent() {
   const searchParams = useSearchParams();
   const prefilledService = searchParams.get("service") || "";
 
-  const [form, setForm] = useState<FormData>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = sessionStorage.getItem("cblue_booking_project");
-        if (saved) return { ...initialForm, ...JSON.parse(saved), serviceCategory: prefilledService || JSON.parse(saved).serviceCategory || "" };
-      } catch { /* ignore */ }
-    }
-    return { ...initialForm, serviceCategory: prefilledService };
-  });
+  const [form, setForm] = useState<FormData>({ ...initialForm, serviceCategory: prefilledService });
   const [images, setImages] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -127,6 +119,14 @@ function ProjectBookingContent() {
   const prefix = `/${locale}`;
 
   useEffect(() => {
+    // Restore from sessionStorage (hydration-safe)
+    try {
+      const saved = sessionStorage.getItem("cblue_booking_project");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setForm((prev) => ({ ...prev, ...parsed, serviceCategory: prefilledService || parsed.serviceCategory || prev.serviceCategory }));
+      }
+    } catch { /* ignore */ }
     try {
       const stored = localStorage.getItem("subscriber");
       if (stored) {

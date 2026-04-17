@@ -107,16 +107,7 @@ function HouseholdBookingContent() {
   const searchParams = useSearchParams();
   const prefilledService = searchParams.get("service") || "";
 
-  const [form, setForm] = useState<FormData>(() => {
-    // Restore form data from sessionStorage if available
-    if (typeof window !== "undefined") {
-      try {
-        const saved = sessionStorage.getItem("cblue_booking_household");
-        if (saved) return { ...initialForm, ...JSON.parse(saved), serviceCategory: prefilledService || JSON.parse(saved).serviceCategory || "" };
-      } catch { /* ignore */ }
-    }
-    return { ...initialForm, serviceCategory: prefilledService };
-  });
+  const [form, setForm] = useState<FormData>({ ...initialForm, serviceCategory: prefilledService });
   const [images, setImages] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -130,12 +121,19 @@ function HouseholdBookingContent() {
   const prefix = `/${locale}`;
 
   useEffect(() => {
+    // Restore from sessionStorage (hydration-safe)
+    try {
+      const saved = sessionStorage.getItem("cblue_booking_household");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setForm((prev) => ({ ...prev, ...parsed, serviceCategory: prefilledService || parsed.serviceCategory || prev.serviceCategory }));
+      }
+    } catch { /* ignore */ }
     try {
       const stored = localStorage.getItem("subscriber");
       if (stored) {
         const sub = JSON.parse(stored);
         setSubscriber(sub);
-        // Pre-fill form fields from subscriber data
         setForm((prev) => ({
           ...prev,
           name: prev.name || sub.name || "",
