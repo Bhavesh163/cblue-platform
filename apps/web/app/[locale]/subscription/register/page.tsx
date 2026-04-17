@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useTranslations, useLocale } from "next-intl";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 
@@ -9,6 +10,7 @@ import Link from "next/link";
 export default function SubscriptionRegisterPage() {
   const t = useTranslations("subscription");
   const locale = useLocale();
+  const router = useRouter();
   const prefix = `/${locale}`;
 
   const [form, setForm] = useState({
@@ -21,6 +23,7 @@ export default function SubscriptionRegisterPage() {
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [pdpaConsent, setPdpaConsent] = useState(false);
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -28,6 +31,14 @@ export default function SubscriptionRegisterPage() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!pdpaConsent) {
+      setError(t("pdpaRequired"));
+      return;
+    }
+    if (form.phone && !/^[0-9\s\-+()]{9,15}$/.test(form.phone)) {
+      setError(t("invalidPhone"));
+      return;
+    }
     if (form.password.length < 8) {
       setError(t("passwordMin8"));
       return;
@@ -54,13 +65,13 @@ export default function SubscriptionRegisterPage() {
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.message || "Registration failed");
+        throw new Error(data.message || t("registerError"));
       }
 
       const data = await res.json();
       localStorage.setItem("subscriber_token", data.accessToken);
       localStorage.setItem("subscriber", JSON.stringify(data.subscriber));
-      window.location.href = `${prefix}/dashboard`;
+      router.push(`${prefix}/dashboard`);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("registerError"));
     } finally {
@@ -134,9 +145,22 @@ export default function SubscriptionRegisterPage() {
               placeholder="••••••••" />
           </div>
 
+          <div className="flex items-start gap-2">
+            <input
+              id="pdpa"
+              type="checkbox"
+              checked={pdpaConsent}
+              onChange={(e) => setPdpaConsent(e.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500"
+            />
+            <label htmlFor="pdpa" className="text-xs text-gray-600">
+              {t("pdpaConsentLabel")}
+            </label>
+          </div>
+
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !pdpaConsent}
             className="w-full py-2.5 bg-sky-600 text-white font-semibold rounded-lg hover:bg-sky-700 transition disabled:bg-gray-300 disabled:cursor-not-allowed"
           >
             {loading ? t("registering") : t("register")}

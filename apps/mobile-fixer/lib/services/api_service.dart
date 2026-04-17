@@ -66,8 +66,9 @@ class ApiService {
         'address': data['address'],
         'gpsCoords': data['gpsCoords'],
       });
-    } catch (_) {
-      // Fixer profile creation failed but subscriber exists — still allow login
+    } catch (e) {
+      // Fixer profile creation failed but subscriber exists — flag it
+      return {'user': user, 'token': token, 'fixerProfileError': e.toString()};
     }
 
     return {'user': user, 'token': token};

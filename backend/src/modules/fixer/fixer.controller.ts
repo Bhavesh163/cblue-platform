@@ -8,8 +8,10 @@ import {
   UseGuards,
   UseInterceptors,
   UploadedFiles,
+  BadRequestException,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { Throttle } from '@nestjs/throttler';
 import { FixerService } from './fixer.service';
 import { RegisterFixerDto } from './dto/register-fixer.dto';
 import { AddSkillDto } from './dto/add-skill.dto';
@@ -99,10 +101,28 @@ export class FixerController {
   // ── Portfolio AI Digest (no auth — called during registration before user has token) ──
 
   @Post('portfolio-digest')
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
   @UseInterceptors(FilesInterceptor('files', 10))
   async digestPortfolio(
     @UploadedFiles() files: Express.Multer.File[],
   ) {
+    const ALLOWED_MIMES = [
+      'image/jpeg', 'image/png', 'image/webp',
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    ];
+    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+    for (const file of files) {
+      if (!ALLOWED_MIMES.includes(file.mimetype)) {
+        throw new BadRequestException(`Unsupported file type: ${file.originalname}`);
+      }
+      if (file.size > MAX_FILE_SIZE) {
+        throw new BadRequestException(`File too large: ${file.originalname} (max 50MB)`);
+      }
+    }
     return this.fixerService.digestPortfolio(files);
   }
 }

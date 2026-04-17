@@ -34,6 +34,7 @@ class ApiService {
       'password': password,
       if (phone != null) 'phone': phone,
       if (company != null) 'company': company,
+      'pdpaConsent': true,
     });
     return res.data;
   }

@@ -42,7 +42,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
       if (!mounted) return;
       final auth = context.read<AuthProvider>();
-      await auth.login(res['subscriber'] ?? res, res['token'] ?? '');
+      await auth.login(res['subscriber'] ?? res, res['accessToken'] ?? res['token'] ?? '');
       await auth.acceptPdpa();
       if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
     } catch (e) {

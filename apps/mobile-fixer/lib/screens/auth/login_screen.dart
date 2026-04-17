@@ -46,7 +46,10 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Form(
               key: _formKey,
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.handyman, size: 64, color: AppTheme.primaryGreen),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Image.asset('assets/images/logo-square.png', width: 64, height: 64, fit: BoxFit.contain),
+                ),
                 const SizedBox(height: 8),
                 Text(t('app_title'),
                     style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppTheme.primaryBlue)),
@@ -66,14 +69,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   controller: _email,
                   decoration: InputDecoration(labelText: t('email'), prefixIcon: const Icon(Icons.email)),
                   keyboardType: TextInputType.emailAddress,
-                  validator: (v) => v != null && v.contains('@') ? null : t('invalid_email'),
+                  validator: (v) => v != null && RegExp(r'\S+@\S+\.\S+').hasMatch(v) ? null : t('invalid_email'),
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _password,
                   decoration: InputDecoration(labelText: t('password'), prefixIcon: const Icon(Icons.lock)),
                   obscureText: true,
-                  validator: (v) => v != null && v.length >= 6 ? null : t('min_6_chars'),
+                  validator: (v) => v != null && v.length >= 8 ? null : t('min_8_chars'),
                 ),
                 const SizedBox(height: 8),
                 Align(
@@ -107,5 +110,12 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _password.dispose();
+    super.dispose();
   }
 }

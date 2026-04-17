@@ -17,7 +17,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   bool _sent = false;
 
   Future<void> _send() async {
-    if (_email.text.trim().isEmpty) return;
+    final email = _email.text.trim();
+    if (email.isEmpty || !RegExp(r'\S+@\S+\.\S+').hasMatch(email)) return;
     setState(() => _loading = true);
     try {
       await ApiService().forgotPassword(_email.text.trim());
@@ -65,5 +66,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               ]),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _email.dispose();
+    super.dispose();
   }
 }

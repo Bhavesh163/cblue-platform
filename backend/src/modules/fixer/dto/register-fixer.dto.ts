@@ -6,6 +6,8 @@ import {
   IsArray,
   Min,
   Max,
+  Matches,
+  ArrayMinSize,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -27,6 +29,7 @@ class PriceRowDto {
   unit?: string;
 
   @IsString()
+  @Matches(/^\d+(\.\d{1,2})?$/, { message: 'finalPrice must be a valid positive number' })
   finalPrice: string;
 }
 
@@ -83,6 +86,7 @@ export class RegisterFixerDto {
 
   @IsOptional()
   @IsArray()
+  @ArrayMinSize(1, { message: 'At least 1 skill is required' })
   @ValidateNested({ each: true })
   @Type(() => SkillEntryDto)
   skills?: SkillEntryDto[];

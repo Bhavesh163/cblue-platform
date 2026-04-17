@@ -374,7 +374,10 @@
     "registerHere": "在此注册",
     "hasAccount": "已有账户？",
     "loginHere": "在此登录",
-    "backToLogin": "返回登录"
+    "backToLogin": "返回登录",
+    "pdpaRequired": "您必须同意PDPA条款才能注册。",
+    "pdpaConsentLabel": "本人同意CBLUE根据《个人数据保护法》(PDPA)收集和处理本人的个人数据。数据将保留3年，12个月未使用的账户将被删除。",
+    "invalidPhone": "请输入有效的电话号码（9-15位数字）。"
   },
   "supportUs": {
     "title": "联系我们",

@@ -40,11 +40,12 @@ export class SubscriptionService {
         email: dto.email.toLowerCase(),
         passwordHash,
         name: dto.name,
-        phone: dto.phone,
+        phone: dto.phone ?? '',
         company: dto.company,
         serviceCategory: dto.serviceCategory,
         description: dto.description,
         status: 'ACTIVE',
+        pdpaConsentAt: dto.pdpaConsent ? new Date() : null,
       },
     });
 
@@ -228,19 +229,21 @@ export class SubscriptionService {
             Name: 'CBLUE',
           },
           To: [{ Email: email, Name: name }],
-          Subject: 'CBLUE - รีเซ็ตรหัสผ่าน (Password Reset)',
+          Subject: 'CBLUE - Password Reset / รีเซ็ตรหัสผ่าน / 重置密码',
           HTMLPart: `
             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <h2 style="color: #0284c7;">CBLUE - รีเซ็ตรหัสผ่าน</h2>
-              <p>สวัสดีคุณ ${name},</p>
+              <h2 style="color: #0284c7;">CBLUE - Password Reset</h2>
+              <p>Hello ${name},</p>
+              <p>You requested a password reset. Click the button below to set a new password:</p>
               <p>คุณได้ร้องขอการรีเซ็ตรหัสผ่าน กรุณากดปุ่มด้านล่างเพื่อตั้งรหัสผ่านใหม่:</p>
+              <p>您已请求重置密码。请点击下方按钮设置新密码：</p>
               <a href="${resetUrl}" style="display: inline-block; padding: 12px 24px; background-color: #0284c7; color: white; text-decoration: none; border-radius: 8px; margin: 16px 0;">
-                ตั้งรหัสผ่านใหม่
+                Reset Password / ตั้งรหัสผ่านใหม่ / 重置密码
               </a>
-              <p style="color: #666; font-size: 14px;">ลิงก์นี้จะหมดอายุใน 1 ชั่วโมง</p>
-              <p style="color: #666; font-size: 14px;">หากคุณไม่ได้ร้องขอ กรุณาเพิกเฉยอีเมลนี้</p>
+              <p style="color: #666; font-size: 14px;">This link expires in 1 hour. / ลิงก์นี้จะหมดอายุใน 1 ชั่วโมง / 此链接将在1小时后失效。</p>
+              <p style="color: #666; font-size: 14px;">If you didn't request this, please ignore this email. / หากคุณไม่ได้ร้องขอ กรุณาเพิกเฉยอีเมลนี้</p>
               <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
-              <p style="color: #999; font-size: 12px;">© CBLUE Co., Ltd.</p>
+              <p style="color: #999; font-size: 12px;">© Construction Blue Co., Ltd.</p>
             </div>
           `,
         },

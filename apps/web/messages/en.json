@@ -374,7 +374,10 @@
     "registerHere": "Register here",
     "hasAccount": "Already have an account?",
     "loginHere": "Log in here",
-    "backToLogin": "Back to login"
+    "backToLogin": "Back to login",
+    "pdpaRequired": "You must accept the PDPA consent to register.",
+    "pdpaConsentLabel": "I consent to CBLUE collecting and processing my personal data in accordance with the Personal Data Protection Act (PDPA). Data will be retained for 3 years and accounts inactive for 12 months will be deleted.",
+    "invalidPhone": "Please enter a valid phone number (9-15 digits)."
   },
   "supportUs": {
     "title": "Contact Us",

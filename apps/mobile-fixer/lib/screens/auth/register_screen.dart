@@ -187,6 +187,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
       await context.read<AuthProvider>().login(data['user'], data['token']);
       await context.read<AuthProvider>().acceptPdpa();
 
+      // Show warning if fixer profile creation failed
+      if (data['fixerProfileError'] != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.read<LocaleProvider>().t('registration_error')), backgroundColor: Colors.orange, duration: const Duration(seconds: 4)),
+        );
+      }
+
       // 2. Upload KYC files (selfie + ID card)
       bool kycFailed = false;
       try {
@@ -284,7 +291,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                 TextFormField(controller: _name, decoration: InputDecoration(labelText: t('full_name')), validator: (v) => v != null && v.isNotEmpty ? null : t('required_field')),
                 const SizedBox(height: 12),
-                TextFormField(controller: _email, decoration: InputDecoration(labelText: t('email')), keyboardType: TextInputType.emailAddress, validator: (v) => v != null && v.contains('@') ? null : t('invalid_email')),
+                TextFormField(controller: _email, decoration: InputDecoration(labelText: t('email')), keyboardType: TextInputType.emailAddress, validator: (v) => v != null && RegExp(r'\S+@\S+\.\S+').hasMatch(v) ? null : t('invalid_email')),
                 const SizedBox(height: 12),
                 TextFormField(controller: _phone, decoration: InputDecoration(labelText: t('phone')), keyboardType: TextInputType.phone, validator: (v) => v != null && v.length >= 9 ? null : t('invalid_phone')),
                 const SizedBox(height: 12),

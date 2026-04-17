@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useTranslations, useLocale } from "next-intl";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 
@@ -9,6 +10,7 @@ import Link from "next/link";
 export default function SubscriptionLoginPage() {
   const t = useTranslations("subscription");
   const locale = useLocale();
+  const router = useRouter();
   const prefix = `/${locale}`;
 
   const [email, setEmail] = useState("");
@@ -34,13 +36,13 @@ export default function SubscriptionLoginPage() {
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.message || "Login failed");
+        throw new Error(data.message || t("loginError"));
       }
 
       const data = await res.json();
       localStorage.setItem("subscriber_token", data.accessToken);
       localStorage.setItem("subscriber", JSON.stringify(data.subscriber));
-      window.location.href = `${prefix}/dashboard`;
+      router.push(`${prefix}/dashboard`);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("loginError"));
     } finally {

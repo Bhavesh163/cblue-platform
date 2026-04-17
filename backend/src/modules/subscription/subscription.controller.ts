@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { SubscriptionService } from './subscription.service';
 import { CreateSubscriberDto } from './dto/create-subscriber.dto';
 import { LoginSubscriberDto } from './dto/login-subscriber.dto';
@@ -19,6 +20,7 @@ export class SubscriptionController {
   constructor(private readonly subscriptionService: SubscriptionService) {}
 
   @Post('register')
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
   register(@Body() dto: CreateSubscriberDto) {
     return this.subscriptionService.register(dto);
   }
@@ -31,6 +33,7 @@ export class SubscriptionController {
 
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 60000, limit: 3 } })
   forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.subscriptionService.forgotPassword(dto);
   }

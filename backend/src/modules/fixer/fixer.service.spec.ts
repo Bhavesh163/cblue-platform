@@ -87,7 +87,7 @@ describe('FixerService', () => {
         travelRadius: 15,
       });
 
-      expect(result.id).toBe('fixer-1');
+      expect(result!.id).toBe('fixer-1');
       expect(eventEmitter.emit).toHaveBeenCalledWith(
         'fixer.registered',
         expect.objectContaining({ fixerId: 'fixer-1' }),

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useLocale } from "next-intl";
+import { useRouter } from "next/navigation";
 import PdpaConsent from "../components/PdpaConsent";
 
 interface PartnerInfo {
@@ -90,6 +91,7 @@ type TabKey = "overview" | "jobs" | "requests" | "properties" | "history" | "cha
 
 export default function FixerProPage() {
   const locale = useLocale();
+  const router = useRouter();
   const prefix = `/${locale}`;
 
   const [partner, setPartner] = useState<PartnerInfo | null>(null);
@@ -158,7 +160,7 @@ export default function FixerProPage() {
                   <p className="text-purple-200 text-xs">{partner.email}</p>
                 </div>
                 <button
-                  onClick={() => { localStorage.removeItem("subscriber"); localStorage.removeItem("subscriber_token"); localStorage.removeItem("pdpa_consent_partner"); window.location.href = prefix; }}
+                  onClick={() => { localStorage.removeItem("subscriber"); localStorage.removeItem("subscriber_token"); localStorage.removeItem("pdpa_consent_partner"); router.push(prefix); }}
                   className="ml-2 px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold rounded-lg transition"
                 >
                   {locale === "th" ? "ออกจากระบบ" : locale === "zh" ? "退出登录" : "Logout"}
@@ -702,6 +704,7 @@ function PartnerNotifications({ locale }: { locale: string }) {
 
 /* ===== PARTNER PROFILE ===== */
 function PartnerProfile({ locale, prefix, partner }: { locale: string; prefix: string; partner: PartnerInfo | null }) {
+  const router = useRouter();
   if (!partner) {
     return (
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-10 text-center">
@@ -789,7 +792,7 @@ function PartnerProfile({ locale, prefix, partner }: { locale: string; prefix: s
       {/* Logout */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <button
-          onClick={() => { localStorage.removeItem("subscriber"); localStorage.removeItem("subscriber_token"); localStorage.removeItem("pdpa_consent_partner"); window.location.href = prefix; }}
+          onClick={() => { localStorage.removeItem("subscriber"); localStorage.removeItem("subscriber_token"); localStorage.removeItem("pdpa_consent_partner"); router.push(prefix); }}
           className="w-full py-3 bg-red-50 hover:bg-red-100 text-red-700 font-bold text-sm rounded-xl border border-red-200 transition"
         >
           🚪 {locale === "th" ? "ออกจากระบบ" : locale === "zh" ? "退出登录" : "Logout"}

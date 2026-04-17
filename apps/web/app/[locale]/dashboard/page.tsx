@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useTranslations, useLocale } from "next-intl";
+import { useRouter } from "next/navigation";
 import PdpaConsent from "../components/PdpaConsent";
 
 interface SubscriberInfo {
@@ -99,6 +100,7 @@ type TabKey = "overview" | "bookings" | "requests" | "property" | "history" | "c
 export default function DashboardPage() {
   const t = useTranslations("dashboard");
   const locale = useLocale();
+  const router = useRouter();
   const prefix = `/${locale}`;
 
   const [subscriber, setSubscriber] = useState<SubscriberInfo | null>(null);
@@ -164,7 +166,7 @@ export default function DashboardPage() {
                   <p className="text-sky-200 text-xs">{subscriber.email}</p>
                 </div>
                 <button
-                  onClick={() => { localStorage.removeItem("subscriber"); localStorage.removeItem("subscriber_token"); localStorage.removeItem("pdpa_consent_customer"); window.location.href = prefix; }}
+                  onClick={() => { localStorage.removeItem("subscriber"); localStorage.removeItem("subscriber_token"); localStorage.removeItem("pdpa_consent_customer"); router.push(prefix); }}
                   className="ml-2 px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold rounded-lg transition"
                 >
                   {locale === "th" ? "ออกจากระบบ" : locale === "zh" ? "退出登录" : "Logout"}
@@ -740,6 +742,7 @@ function NotificationsTab({ locale }: { locale: string }) {
 
 /* ===== PROFILE TAB ===== */
 function ProfileTab({ locale, prefix, subscriber }: { locale: string; prefix: string; subscriber: SubscriberInfo | null }) {
+  const router = useRouter();
   if (!subscriber) {
     return (
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-10 text-center">
@@ -807,7 +810,7 @@ function ProfileTab({ locale, prefix, subscriber }: { locale: string; prefix: st
       {/* Logout */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <button
-          onClick={() => { localStorage.removeItem("subscriber"); localStorage.removeItem("subscriber_token"); localStorage.removeItem("pdpa_consent_customer"); window.location.href = prefix; }}
+          onClick={() => { localStorage.removeItem("subscriber"); localStorage.removeItem("subscriber_token"); localStorage.removeItem("pdpa_consent_customer"); router.push(prefix); }}
           className="w-full py-3 bg-red-50 hover:bg-red-100 text-red-700 font-bold text-sm rounded-xl border border-red-200 transition"
         >
           🚪 {locale === "th" ? "ออกจากระบบ" : locale === "zh" ? "退出登录" : "Logout"}

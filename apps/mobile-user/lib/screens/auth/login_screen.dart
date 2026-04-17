@@ -31,7 +31,7 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       if (!mounted) return;
       final auth = context.read<AuthProvider>();
-      await auth.login(res['subscriber'] ?? res, res['token'] ?? '');
+      await auth.login(res['subscriber'] ?? res, res['accessToken'] ?? res['token'] ?? '');
       // PDPA consent is restored from storage on login; do not auto-accept
     } catch (e) {
       final t = context.read<LocaleProvider>().t;
@@ -49,7 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('CBLUE'),
+        title: Text(locale.t('app_title')),
         actions: const [LocaleSwitcher()],
       ),
       body: Center(
@@ -61,14 +61,9 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 // Logo area
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryBlue.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Icon(Icons.handyman, size: 40, color: AppTheme.primaryBlue),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Image.asset('assets/images/logo-square.png', width: 80, height: 80, fit: BoxFit.contain),
                 ),
                 const SizedBox(height: 16),
                 Text(
