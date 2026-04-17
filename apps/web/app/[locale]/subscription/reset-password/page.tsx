@@ -41,7 +41,7 @@ function ResetPasswordForm() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({ message: "" }));
         throw new Error(data.message || "Failed");
       }
 

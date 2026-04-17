@@ -35,11 +35,12 @@ export default function SubscriptionLoginPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({ message: "" }));
         throw new Error(data.message || t("loginError"));
       }
 
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
+      if (!data || !data.accessToken) throw new Error(t("loginError"));
       localStorage.setItem("subscriber_token", data.accessToken);
       localStorage.setItem("subscriber", JSON.stringify(data.subscriber));
       router.push(`${prefix}/dashboard`);

@@ -73,11 +73,12 @@ export default function SubscriptionRegisterPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({ message: "" }));
         throw new Error(data.message || t("registerError"));
       }
 
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
+      if (!data || !data.accessToken) throw new Error(t("registerError"));
       localStorage.setItem("subscriber_token", data.accessToken);
       localStorage.setItem("subscriber", JSON.stringify(data.subscriber));
       router.push(`${prefix}/dashboard`);
