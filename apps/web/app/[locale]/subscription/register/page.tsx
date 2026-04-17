@@ -60,6 +60,7 @@ export default function SubscriptionRegisterPage() {
           phone: form.phone,
           company: form.company,
           password: form.password,
+          pdpaConsent: true,
         }),
       });
 
@@ -95,7 +96,7 @@ export default function SubscriptionRegisterPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} noValidate className="space-y-4">
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
               {t("name")}
@@ -116,7 +117,7 @@ export default function SubscriptionRegisterPage() {
             <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
               {t("phone")}
             </label>
-            <input id="phone" name="phone" type="tel" required value={form.phone} onChange={handleChange}
+            <input id="phone" name="phone" type="text" inputMode="tel" required value={form.phone} onChange={handleChange}
               className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               placeholder="0812345678" />
           </div>

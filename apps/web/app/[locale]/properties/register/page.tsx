@@ -258,7 +258,7 @@ export default function PropertyRegisterPage() {
       {/* Form */}
       <section className="py-10">
         <div className="mx-auto max-w-3xl px-4 sm:px-6">
-          <form onSubmit={handleSubmit} className="space-y-8">
+          <form onSubmit={handleSubmit} noValidate className="space-y-8">
 
             {/* Account Authentication — Inline Login / Register */}
             <fieldset className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200 p-6">
@@ -662,7 +662,8 @@ export default function PropertyRegisterPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">{tb("phone")}</label>
                   <input
-                    type="tel"
+                    type="text"
+                    inputMode="tel"
                     name="contactPhone"
                     value={form.contactPhone}
                     onChange={handleChange}

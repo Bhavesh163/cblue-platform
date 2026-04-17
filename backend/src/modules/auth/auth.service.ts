@@ -113,7 +113,7 @@ export class AuthService {
     }
 
     // Generate tokens
-    const tokens = await this.generateTokens(user.id, user.phone, user.role);
+    const tokens = await this.generateTokens(user.id, user.phone ?? '', user.role);
 
     return {
       ...tokens,
@@ -140,7 +140,7 @@ export class AuthService {
         throw new UnauthorizedException('User not found or inactive');
       }
 
-      return this.generateTokens(user.id, user.phone, user.role);
+      return this.generateTokens(user.id, user.phone ?? '', user.role);
     } catch {
       throw new UnauthorizedException('Invalid refresh token');
     }

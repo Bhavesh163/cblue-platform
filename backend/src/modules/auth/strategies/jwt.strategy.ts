@@ -8,6 +8,7 @@ export interface JwtPayload {
   sub: string;
   phone: string;
   role: string;
+  email?: string;
 }
 
 @Injectable()
@@ -30,6 +31,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!user || !user.isActive) {
       return null;
     }
-    return { id: user.id, phone: user.phone, role: user.role };
+    return { id: user.id, phone: user.phone ?? '', role: user.role };
   }
 }

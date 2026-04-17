@@ -107,12 +107,14 @@ enum DayOfWeek {
 
 model User {
   id        String   @id @default(uuid())
-  phone     String   @unique
+  phone     String?  @unique
   email     String?  @unique
   name      String?
   company   String?
   role      UserRole @default(USER)
   isActive  Boolean  @default(true)
+
+  subscriberId String? @unique
 
   addresses     Address[]
   fixer         Fixer?

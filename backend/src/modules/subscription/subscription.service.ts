@@ -49,7 +49,29 @@ export class SubscriptionService {
       },
     });
 
-    const token = await this.generateToken(subscriber.id, subscriber.email);
+    // Bridge: find or create a User record linked to this Subscriber so JwtAuthGuard works
+    let user = await this.prisma.user.findFirst({
+      where: { email: dto.email.toLowerCase() },
+    });
+    if (user) {
+      // Link existing User (e.g., from OTP auth) to this subscriber
+      user = await this.prisma.user.update({
+        where: { id: user.id },
+        data: { subscriberId: subscriber.id },
+      });
+    } else {
+      user = await this.prisma.user.create({
+        data: {
+          email: dto.email.toLowerCase(),
+          name: dto.name,
+          company: dto.company,
+          subscriberId: subscriber.id,
+          role: 'USER',
+        },
+      });
+    }
+
+    const token = await this.generateToken(user.id, subscriber.email);
 
     return {
       accessToken: token,
@@ -80,7 +102,24 @@ export class SubscriptionService {
       throw new UnauthorizedException('Account is suspended or cancelled');
     }
 
-    const token = await this.generateToken(subscriber.id, subscriber.email);
+    // Bridge: find or create User record for this subscriber
+    let user = await this.prisma.user.findFirst({
+      where: { subscriberId: subscriber.id },
+    });
+    if (!user) {
+      // Legacy subscriber without a User — create one
+      user = await this.prisma.user.create({
+        data: {
+          email: subscriber.email,
+          name: subscriber.name,
+          company: subscriber.company,
+          subscriberId: subscriber.id,
+          role: 'USER',
+        },
+      });
+    }
+
+    const token = await this.generateToken(user.id, subscriber.email);
 
     return {
       accessToken: token,
@@ -189,9 +228,9 @@ export class SubscriptionService {
     });
   }
 
-  private async generateToken(subscriberId: string, email: string) {
+  private async generateToken(userId: string, email: string) {
     return this.jwtService.signAsync(
-      { sub: subscriberId, email, type: 'subscriber' },
+      { sub: userId, email },
       {
         secret: this.configService.getOrThrow<string>('jwt.secret'),
         expiresIn: '24h',

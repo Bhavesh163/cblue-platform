@@ -26,6 +26,10 @@ class PriceRowDto {
 
   @IsOptional()
   @IsString()
+  quantity?: string;
+
+  @IsOptional()
+  @IsString()
   unit?: string;
 
   @IsString()

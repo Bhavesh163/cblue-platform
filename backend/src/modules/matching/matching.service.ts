@@ -106,7 +106,7 @@ export class MatchingService {
 
       return {
         fixerId: fixer.id,
-        fixerName: fixer.user.name || fixer.user.phone,
+        fixerName: fixer.user.name || fixer.user.phone || 'Unknown',
         score: Math.round(totalScore * 100) / 100,
         distance: null, // Would be calculated with real coordinates
         rating: fixer.rating,

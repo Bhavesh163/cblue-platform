@@ -11,6 +11,7 @@ import Link from "next/link";
 
 interface PriceRow {
   service: string;
+  quantity: string;
   unit: string;
   finalPrice: string;
 }
@@ -88,7 +89,7 @@ export default function FixerRegisterPage() {
   const [showCamera, setShowCamera] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const [priceRows, setPriceRows] = useState<PriceRow[]>([{ service: "", unit: "", finalPrice: "" }]);
+  const [priceRows, setPriceRows] = useState<PriceRow[]>([{ service: "", quantity: "", unit: "", finalPrice: "" }]);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
@@ -427,14 +428,34 @@ export default function FixerRegisterPage() {
         });
         if (!authRes.ok) {
           const errData = await authRes.json().catch(() => ({ message: "" }));
-          const msg = errData.message || (locale === "th" ? "เข้าสู่ระบบ/สมัครสมาชิกล้มเหลว" : locale === "zh" ? "登录/注册失败" : "Login/Register failed");
-          setError(msg);
-          return;
+          // Auto-fallback: if register returns 409 (email exists), retry as login
+          if (authRes.status === 409 && authMode === "register") {
+            const loginRes = await fetch("/api/v1/subscription/login", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email: form.email.toLowerCase(), password: form.password }),
+            });
+            if (loginRes.ok) {
+              const loginData = await loginRes.json();
+              localStorage.setItem("subscriber_token", loginData.accessToken);
+              localStorage.setItem("subscriber", JSON.stringify(loginData.subscriber));
+              setSubscriber(loginData.subscriber);
+              setAuthMode("login");
+            } else {
+              setError(locale === "th" ? "อีเมลนี้ลงทะเบียนแล้ว กรุณาเข้าสู่ระบบด้วยรหัสผ่านที่ถูกต้อง" : locale === "zh" ? "此电子邮件已注册，请使用正确的密码登录" : "This email is already registered. Please log in with the correct password.");
+              return;
+            }
+          } else {
+            const msg = errData.message || (locale === "th" ? "เข้าสู่ระบบ/สมัครสมาชิกล้มเหลว" : locale === "zh" ? "登录/注册失败" : "Login/Register failed");
+            setError(msg);
+            return;
+          }
+        } else {
+          const authData = await authRes.json();
+          localStorage.setItem("subscriber_token", authData.accessToken);
+          localStorage.setItem("subscriber", JSON.stringify(authData.subscriber));
+          setSubscriber(authData.subscriber);
         }
-        const authData = await authRes.json();
-        localStorage.setItem("subscriber_token", authData.accessToken);
-        localStorage.setItem("subscriber", JSON.stringify(authData.subscriber));
-        setSubscriber(authData.subscriber);
       } catch {
         setError(locale === "th" ? "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้" : locale === "zh" ? "无法连接服务器" : "Cannot connect to server");
         return;
@@ -470,10 +491,10 @@ export default function FixerRegisterPage() {
         description: form.description,
         pastExperience: form.pastExperience,
         pastProjectType: form.pastProjectType,
-        yearsExperience: form.yearsExperience
+        yearsExperience: form.yearsExperience && !isNaN(parseInt(form.yearsExperience))
           ? parseInt(form.yearsExperience)
           : undefined,
-        travelRadius: parseInt(form.travelRadius),
+        travelRadius: !isNaN(parseInt(form.travelRadius)) ? parseInt(form.travelRadius) : 10,
         skills: form.selectedSkills.map((s) => ({
           category: s,
           name: s,
@@ -495,8 +516,9 @@ export default function FixerRegisterPage() {
           subdistrict: form.companySubdistrict,
           postalCode: form.companyPostalCode,
         },
-        priceList: priceRows.filter((r) => r.service).map((r) => ({
+        priceList: priceRows.filter((r) => r.service && r.finalPrice && /^\d+(\.\d{1,2})?$/.test(r.finalPrice)).map((r) => ({
           service: r.service,
+          quantity: r.quantity || undefined,
           unit: r.unit,
           finalPrice: r.finalPrice,
         })),
@@ -896,7 +918,7 @@ export default function FixerRegisterPage() {
                 setKycSlotStatus([]);
                 setPortfolioImages([]);
                 setDigestResult(null);
-                setPriceRows([{ service: "", unit: "", finalPrice: "" }]);
+                setPriceRows([{ service: "", quantity: "", unit: "", finalPrice: "" }]);
               }}
               className="mt-8 px-6 py-2.5 text-sm font-semibold text-blue-700 border border-blue-700 rounded-lg hover:bg-blue-50"
             >
@@ -921,7 +943,7 @@ export default function FixerRegisterPage() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 sm:p-8 space-y-6">
+        <form onSubmit={handleSubmit} noValidate className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 sm:p-8 space-y-6">
           {error && (
             <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
               {error}
@@ -971,7 +993,8 @@ export default function FixerRegisterPage() {
                 <input
                   id="phone"
                   name="phone"
-                  type="tel"
+                  type="text"
+                  inputMode="tel"
                   required
                   value={form.phone}
                   onChange={handleChange}
@@ -1602,6 +1625,7 @@ export default function FixerRegisterPage() {
                 <thead>
                   <tr className="bg-gray-50">
                     <th className="text-left px-3 py-2 font-medium text-gray-700 border-b">{locale === "th" ? "บริการ" : locale === "zh" ? "服务" : "Service"}</th>
+                    <th className="text-center px-3 py-2 font-medium text-gray-700 border-b">{locale === "th" ? "จำนวน" : locale === "zh" ? "数量" : "Quantity"}</th>
                     <th className="text-center px-3 py-2 font-medium text-gray-700 border-b">{locale === "th" ? "หน่วย" : locale === "zh" ? "单位" : "Unit"}</th>
                     <th className="text-center px-3 py-2 font-medium text-sky-700 border-b bg-sky-50">{locale === "th" ? "ราคาสุดท้าย รวม VAT (บาท)" : locale === "zh" ? "最终价格 含增值税（泰铢）" : "Final Price incl. VAT (THB)"}</th>
                     <th className="px-2 py-2 border-b w-10" />
@@ -1614,6 +1638,11 @@ export default function FixerRegisterPage() {
                         <input type="text" value={row.service} placeholder={locale === "th" ? "เช่น ซ่อมท่อ" : locale === "zh" ? "例如 修水管" : "e.g. Pipe repair"}
                           onChange={(e) => { const nr = [...priceRows]; nr[idx] = { ...nr[idx]!, service: e.target.value }; setPriceRows(nr); }}
                           className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded focus:border-blue-500 outline-none" />
+                      </td>
+                      <td className="px-2 py-1.5 w-20">
+                        <input type="text" value={row.quantity} placeholder={locale === "th" ? "เช่น 1" : locale === "zh" ? "例如 1" : "e.g. 1"}
+                          onChange={(e) => { const nr = [...priceRows]; nr[idx] = { ...nr[idx]!, quantity: e.target.value }; setPriceRows(nr); }}
+                          className="w-full px-2 py-1.5 text-sm text-center border border-gray-200 rounded focus:border-blue-500 outline-none" />
                       </td>
                       <td className="px-2 py-1.5">
                         <input type="text" value={row.unit} placeholder={locale === "th" ? "เช่น จุด, ตร.ม." : locale === "zh" ? "例如 个, 平方米" : "e.g. point, sq.m."}
@@ -1637,7 +1666,7 @@ export default function FixerRegisterPage() {
               </table>
             </div>
             <button type="button"
-              onClick={() => setPriceRows([...priceRows, { service: "", unit: "", finalPrice: "" }])}
+              onClick={() => setPriceRows([...priceRows, { service: "", quantity: "", unit: "", finalPrice: "" }])}
               className="mt-2 text-sm text-blue-600 hover:text-blue-800 font-medium">
               + {locale === "th" ? "เพิ่มรายการ" : locale === "zh" ? "添加行" : "Add Row"}
             </button>

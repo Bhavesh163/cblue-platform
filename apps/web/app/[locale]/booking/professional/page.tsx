@@ -340,7 +340,7 @@ function ProfessionalBookingContent() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 sm:p-8 space-y-6">
+        <form onSubmit={handleSubmit} noValidate className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 sm:p-8 space-y-6">
           {error && (
             <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
               {error}
@@ -444,7 +444,8 @@ function ProfessionalBookingContent() {
                 <input
                   id="phone"
                   name="phone"
-                  type="tel"
+                  type="text"
+                  inputMode="tel"
                   required
                   value={form.phone}
                   onChange={handleChange}
