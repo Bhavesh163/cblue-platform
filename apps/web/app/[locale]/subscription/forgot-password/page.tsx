@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import Link from "next/link";
+import { getApiUrl } from "../../lib/api";
 
 
 
@@ -22,7 +23,7 @@ export default function ForgotPasswordPage() {
     setError("");
 
     try {
-      const res = await fetch(`/api/v1/subscription/forgot-password`, {
+      const res = await fetch(getApiUrl("/subscription/forgot-password"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),

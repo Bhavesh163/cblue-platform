@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useTranslations, useLocale } from "next-intl";
 import { useParams } from "next/navigation";
+import { getApiUrl } from "../../lib/api";
 
 
 
@@ -56,7 +57,7 @@ export default function PropertyDetailPage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`/api/v1/properties/${encodeURIComponent(id)}`);
+        const res = await fetch(getApiUrl(`/properties/${encodeURIComponent(id)}`));
         if (res.ok) {
           setProperty(await res.json());
         } else {

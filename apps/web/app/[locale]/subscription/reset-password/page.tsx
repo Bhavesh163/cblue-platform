@@ -4,6 +4,7 @@ import { useState, Suspense, type FormEvent } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { getApiUrl } from "../../lib/api";
 
 
 
@@ -34,7 +35,7 @@ function ResetPasswordForm() {
     setError("");
 
     try {
-      const res = await fetch(`/api/v1/subscription/reset-password`, {
+      const res = await fetch(getApiUrl("/subscription/reset-password"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, newPassword: password }),

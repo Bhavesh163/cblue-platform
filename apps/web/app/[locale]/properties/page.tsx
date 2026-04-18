@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useTranslations, useLocale } from "next-intl";
 import { THAI_PROVINCES } from "../lib/constants";
+import { getApiUrl } from "../lib/api";
 import PdpaConsent from "../components/PdpaConsent";
 
 const PROPERTY_TYPES = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "APARTMENT"] as const;
@@ -83,7 +84,7 @@ export default function PropertiesPage() {
 
     async function fetchLatest() {
       try {
-        const res = await fetch(`/api/v1/properties?limit=20`);
+        const res = await fetch(getApiUrl("/properties?limit=20"));
         if (res.ok) {
           const data = await res.json();
           setLatestProperties(data.properties || []);
@@ -120,7 +121,7 @@ export default function PropertiesPage() {
       if (f.bedrooms) params.set("bedrooms", f.bedrooms);
       if (f.keyword) params.set("keyword", f.keyword);
 
-      const res = await fetch(`/api/v1/properties?${params.toString()}`);
+      const res = await fetch(getApiUrl(`/properties?${params.toString()}`));
       if (res.ok) {
         const data = await res.json();
         setProperties(data.properties || []);

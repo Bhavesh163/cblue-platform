@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { getApiUrl } from "../../lib/api";
 
 
 
@@ -28,7 +29,7 @@ export default function SubscriptionLoginPage() {
     setError("");
 
     try {
-      const res = await fetch(`/api/v1/subscription/login`, {
+      const res = await fetch(getApiUrl("/subscription/login"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),

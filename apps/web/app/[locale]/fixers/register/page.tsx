@@ -5,6 +5,7 @@ import { useTranslations, useLocale } from "next-intl";
 import { HOUSEHOLD_SERVICES, PROJECT_SERVICES, PROFESSIONAL_SERVICES, THAI_PROVINCES } from "../../lib/constants";
 import { getDistrictsForProvince } from "../../lib/thai-address-data";
 import { getSubdistrictsForDistrict, lookupByPostalCode } from "../../lib/thai-subdistrict-data";
+import { getApiUrl } from "../../lib/api";
 import ReCaptcha from "../../components/ReCaptcha";
 import GpsDetectButton from "../../components/GpsDetectButton";
 import Link from "next/link";
@@ -113,7 +114,7 @@ export default function FixerRegisterPage() {
     try {
       const fd = new globalThis.FormData();
       for (const f of files) fd.append("files", f);
-      const res = await fetch(`/api/v1/fixers/portfolio-digest`, {
+      const res = await fetch(getApiUrl("/fixers/portfolio-digest"), {
         method: "POST",
         body: fd,
       });
@@ -417,11 +418,11 @@ export default function FixerRegisterPage() {
         return;
       }
       try {
-        const endpoint = authMode === "login" ? "/api/v1/subscription/login" : "/api/v1/subscription/register";
+        const endpoint = authMode === "login" ? getApiUrl("/subscription/login") : getApiUrl("/subscription/register");
         const body = authMode === "login"
           ? { email: form.email.toLowerCase(), password: form.password }
           : { name: form.name || form.email, email: form.email.toLowerCase(), phone: form.phone, company: form.company || undefined, password: form.password };
-        const authRes = await fetch(`${endpoint}`, {
+        const authRes = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -430,7 +431,7 @@ export default function FixerRegisterPage() {
           const errData = await authRes.json().catch(() => ({ message: "" }));
           // Auto-fallback: if register returns 409 (email exists), retry as login
           if (authRes.status === 409 && authMode === "register") {
-            const loginRes = await fetch("/api/v1/subscription/login", {
+            const loginRes = await fetch(getApiUrl("/subscription/login"), {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ email: form.email.toLowerCase(), password: form.password }),
@@ -528,7 +529,7 @@ export default function FixerRegisterPage() {
         portfolioImageCount: portfolioImages.length,
       };
 
-      const regRes = await fetch("/api/v1/fixers/register", {
+      const regRes = await fetch(getApiUrl("/fixers/register"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
