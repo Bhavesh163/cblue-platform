@@ -86,6 +86,20 @@ export default function SubscriptionRegisterPage() {
         if (res.status === 409) {
           throw new Error(locale === "th" ? "อีเมลนี้ถูกใช้งานแล้ว" : locale === "zh" ? "该邮箱已被注册" : "Email already registered");
         }
+        if (res.status === 502 || res.status === 530 || res.status === 503) {
+          throw new Error(locale === "th" 
+            ? "ระบบกำลังปรับปรุง กรุณาลองใหม่ในอีกสักครู่" 
+            : locale === "zh" 
+            ? "系统正在维护中，请稍后再试" 
+            : "Service temporarily unavailable. Please try again shortly.");
+        }
+        if (res.status === 429) {
+          throw new Error(locale === "th" 
+            ? "คำขอมากเกินไป กรุณารอสักครู่แล้วลองใหม่" 
+            : locale === "zh" 
+            ? "请求过多，请稍后再试" 
+            : "Too many requests. Please wait a moment and try again.");
+        }
         throw new Error(msg || t("registerError"));
       }
 

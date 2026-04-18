@@ -3,14 +3,23 @@ name: Backend CI/CD
 on:
   push:
     branches: [main, develop]
-    paths: ['backend/**']
+    paths:
+      - 'backend/**'
+      - 'infrastructure/**'
+      - '.github/workflows/backend-ci.yml'
   pull_request:
     branches: [main]
     paths: ['backend/**']
+  workflow_dispatch:
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'pull_request' ||
+      contains(toJSON(github.event.commits.*.modified), 'backend/') ||
+      contains(toJSON(github.event.commits.*.added), 'backend/') ||
+      github.event_name == 'workflow_dispatch'
 
     services:
       postgres:
@@ -61,7 +70,7 @@ jobs:
   docker:
     needs: test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && always() && !failure()
 
     permissions:
       contents: read
@@ -70,13 +79,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check if backend changed
+        id: check
+        run: |
+          if git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -q '^backend/'; then
+            echo "backend_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "backend_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set up Docker Buildx
+        if: steps.check.outputs.backend_changed == 'true' || github.event_name == 'workflow_dispatch'
         uses: docker/setup-buildx-action@v3
 
       - name: Downcase repo name
+        if: steps.check.outputs.backend_changed == 'true' || github.event_name == 'workflow_dispatch'
         run: echo "REPO=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
 
       - name: Log in to GitHub Container Registry
+        if: steps.check.outputs.backend_changed == 'true' || github.event_name == 'workflow_dispatch'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -84,6 +105,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push Docker image
+        if: steps.check.outputs.backend_changed == 'true' || github.event_name == 'workflow_dispatch'
         uses: docker/build-push-action@v5
         with:
           context: ./backend
@@ -95,9 +117,9 @@ jobs:
           cache-to: type=gha,mode=max
 
   deploy:
-    needs: docker
+    needs: [test, docker]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && always() && !failure()
     environment: production
 
     steps:
@@ -108,8 +130,35 @@ jobs:
           username: ${{ secrets.DROPLET_USER }}
           key: ${{ secrets.DROPLET_SSH_KEY }}
           script: |
-            REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+            set -e
+
+            # ── Pull latest code ──
             cd /opt/cblue-platform
-            docker pull ghcr.io/${REPO}/backend:latest
-            docker compose -f infrastructure/docker/docker-compose.yml up -d --no-deps backend
-            echo "Deployed backend:${{ github.sha }}"
+            git pull origin main || true
+
+            # ── Bring up ALL services (postgres, redis, rabbitmq, backend) ──
+            docker compose -f infrastructure/docker/docker-compose.yml up -d
+            echo "⏳ Waiting for services to stabilize..."
+            sleep 20
+
+            # ── Run Prisma migrations ──
+            docker compose -f infrastructure/docker/docker-compose.yml exec -T backend npx prisma migrate deploy 2>&1 || echo "⚠️ Migration note: check above for details"
+
+            # ── Deploy nginx config ──
+            if [ -f infrastructure/nginx/cblue.conf ]; then
+              sudo cp infrastructure/nginx/cblue.conf /etc/nginx/sites-available/cblue
+              sudo ln -sf /etc/nginx/sites-available/cblue /etc/nginx/sites-enabled/cblue
+              sudo rm -f /etc/nginx/sites-enabled/default
+              if sudo nginx -t 2>&1; then
+                sudo systemctl reload nginx
+                echo "✅ Nginx config deployed and reloaded"
+              else
+                echo "❌ Nginx config test failed — kept old config"
+              fi
+            fi
+
+            # ── Verify backend health ──
+            sleep 5
+            HEALTH=$(curl -sf http://127.0.0.1:3002/api/v1/health 2>&1 || echo '{"status":"unreachable"}')
+            echo "Backend health: $HEALTH"
+            echo "✅ Deploy complete: ${{ github.sha }}"

@@ -35,41 +35,45 @@ export class SubscriptionService {
 
     const passwordHash = await bcrypt.hash(dto.password, this.SALT_ROUNDS);
 
-    const subscriber = await this.prisma.subscriber.create({
-      data: {
-        email: dto.email.toLowerCase(),
-        passwordHash,
-        name: dto.name,
-        phone: dto.phone ?? '',
-        company: dto.company,
-        serviceCategory: dto.serviceCategory,
-        description: dto.description,
-        status: 'ACTIVE',
-        pdpaConsentAt: dto.pdpaConsent ? new Date() : null,
-      },
-    });
-
-    // Bridge: find or create a User record linked to this Subscriber so JwtAuthGuard works
-    let user = await this.prisma.user.findFirst({
-      where: { email: dto.email.toLowerCase() },
-    });
-    if (user) {
-      // Link existing User (e.g., from OTP auth) to this subscriber
-      user = await this.prisma.user.update({
-        where: { id: user.id },
-        data: { subscriberId: subscriber.id },
-      });
-    } else {
-      user = await this.prisma.user.create({
+    // Use transaction to ensure Subscriber + User are created atomically
+    const { subscriber, user } = await this.prisma.$transaction(async (tx) => {
+      const subscriber = await tx.subscriber.create({
         data: {
           email: dto.email.toLowerCase(),
+          passwordHash,
           name: dto.name,
+          phone: dto.phone ?? '',
           company: dto.company,
-          subscriberId: subscriber.id,
-          role: 'USER',
+          serviceCategory: dto.serviceCategory,
+          description: dto.description,
+          status: 'ACTIVE',
+          pdpaConsentAt: dto.pdpaConsent ? new Date() : null,
         },
       });
-    }
+
+      // Bridge: find or create a User record linked to this Subscriber so JwtAuthGuard works
+      let user = await tx.user.findFirst({
+        where: { email: dto.email.toLowerCase() },
+      });
+      if (user) {
+        user = await tx.user.update({
+          where: { id: user.id },
+          data: { subscriberId: subscriber.id },
+        });
+      } else {
+        user = await tx.user.create({
+          data: {
+            email: dto.email.toLowerCase(),
+            name: dto.name,
+            company: dto.company,
+            subscriberId: subscriber.id,
+            role: 'USER',
+          },
+        });
+      }
+
+      return { subscriber, user };
+    });
 
     const token = await this.generateToken(user.id, subscriber.email);
 

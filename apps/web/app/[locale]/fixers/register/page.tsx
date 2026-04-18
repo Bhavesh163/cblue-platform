@@ -432,6 +432,14 @@ export default function FixerRegisterPage() {
         });
         if (!authRes.ok) {
           const errData = await authRes.json().catch(() => ({ message: "" }));
+          if (authRes.status === 502 || authRes.status === 530 || authRes.status === 503) {
+            setError(locale === "th" ? "ระบบกำลังปรับปรุง กรุณาลองใหม่ในอีกสักครู่" : locale === "zh" ? "系统正在维护中，请稍后再试" : "Service temporarily unavailable. Please try again shortly.");
+            return;
+          }
+          if (authRes.status === 429) {
+            setError(locale === "th" ? "คำขอมากเกินไป กรุณารอสักครู่แล้วลองใหม่" : locale === "zh" ? "请求过多，请稍后再试" : "Too many requests. Please wait a moment and try again.");
+            return;
+          }
           // Auto-fallback: if register returns 409 (email exists), retry as login
           if (authRes.status === 409 && authMode === "register") {
             const loginRes = await fetch("/api/v1/subscription/login", {
