@@ -17,7 +17,7 @@
   },
   // Environment variables available to the worker
   "vars": {
-    "API_BACKEND_URL": "https://api.cblue.co.th"
+    "API_BACKEND_URL": "http://168.144.39.0"
   },
   "services": [
     {

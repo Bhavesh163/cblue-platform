@@ -1,91 +1,94 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const getBackendUrl = (): string => {
-  // Priority: explicit backend URL → CI secret → wrangler vars → hardcoded fallback
-  return (
-    process.env.API_BACKEND_URL ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    (process.env.NODE_ENV === "production"
-      ? "https://api.cblue.co.th"
-      : "http://localhost:3002")
-  );
-};
+// Force edge runtime — required for Cloudflare Workers via OpenNext
+export const runtime = "edge";
 
-// Headers that must not be forwarded between hops
-const HOP_BY_HOP = new Set([
-  "host",
-  "connection",
-  "keep-alive",
-  "transfer-encoding",
-  "te",
-  "trailer",
-  "upgrade",
+/**
+ * Resolve the backend base URL.
+ *
+ * Production: CF Worker → http://168.144.39.0 (DigitalOcean droplet nginx)
+ * nginx routes via Host header to NestJS on 127.0.0.1:3002
+ *
+ * NEXT_PUBLIC_API_URL is intentionally NOT used here because it's set to
+ * https://api.cblue.co.th which has no DNS record (yet). Once the DNS A
+ * record is created, API_BACKEND_URL in wrangler.jsonc can be updated to
+ * https://api.cblue.co.th and this will work through Cloudflare.
+ */
+const BACKEND_URL: string = (() => {
+  // 1. Wrangler vars (set in wrangler.jsonc → available on CF Workers)
+  if (process.env.API_BACKEND_URL) return process.env.API_BACKEND_URL;
+  // 2. Production fallback: droplet IP directly
+  if (process.env.NODE_ENV === "production") return "http://168.144.39.0";
+  // 3. Local dev
+  return "http://localhost:3002";
+})();
+
+// Host header to send to nginx so it routes to the correct server block
+const BACKEND_HOST = "api.cblue.co.th";
+
+const SKIP_REQ = new Set([
+  "host", "connection", "keep-alive", "transfer-encoding",
+  "te", "trailer", "upgrade",
 ]);
+const SKIP_RES = new Set(["content-encoding", "transfer-encoding"]);
 
-const STRIP_RESPONSE = new Set(["content-encoding", "transfer-encoding"]);
-
-async function proxy(
+async function handler(
   request: NextRequest,
-  { params }: { params: Promise<{ path: string[] }> }
-) {
-  const { path } = await params;
-  const backend = getBackendUrl();
-  const target = new URL(`/api/v1/${path.join("/")}`, backend);
-
-  // Forward query parameters
-  request.nextUrl.searchParams.forEach((value, key) => {
-    target.searchParams.set(key, value);
-  });
-
-  // Build forwarded headers
-  const headers = new Headers();
-  request.headers.forEach((value, key) => {
-    if (!HOP_BY_HOP.has(key.toLowerCase())) {
-      headers.set(key, value);
-    }
-  });
-
-  // GET / HEAD must not have a body
-  const body = ["GET", "HEAD"].includes(request.method)
-    ? undefined
-    : await request.arrayBuffer();
-
+  context: { params: Promise<{ path: string[] }> },
+): Promise<Response> {
+  let target = "";
   try {
-    const upstream = await fetch(target.toString(), {
+    const { path } = await context.params;
+    const url = new URL(`/api/v1/${path.join("/")}`, BACKEND_URL);
+
+    // Forward query string
+    request.nextUrl.searchParams.forEach((v, k) => url.searchParams.set(k, v));
+    target = url.toString();
+
+    // Forward headers (skip hop-by-hop)
+    const headers = new Headers();
+    request.headers.forEach((v, k) => {
+      if (!SKIP_REQ.has(k.toLowerCase())) headers.set(k, v);
+    });
+    headers.set("host", BACKEND_HOST);
+
+    // Build fetch init
+    const init: RequestInit & { duplex?: string } = {
       method: request.method,
       headers,
-      body,
+    };
+
+    if (!["GET", "HEAD"].includes(request.method)) {
+      init.body = request.body;
+      init.duplex = "half"; // required for streaming body on edge
+    }
+
+    const upstream = await fetch(target, init);
+
+    // Build response (strip hop-by-hop)
+    const resHeaders = new Headers();
+    upstream.headers.forEach((v, k) => {
+      if (!SKIP_RES.has(k.toLowerCase())) resHeaders.set(k, v);
     });
 
-    const responseHeaders = new Headers();
-    upstream.headers.forEach((value, key) => {
-      if (!STRIP_RESPONSE.has(key.toLowerCase())) {
-        responseHeaders.set(key, value);
-      }
-    });
-
-    return new NextResponse(upstream.body, {
+    return new Response(upstream.body, {
       status: upstream.status,
       statusText: upstream.statusText,
-      headers: responseHeaders,
+      headers: resHeaders,
     });
   } catch (err) {
-    console.error("[api-proxy] upstream fetch failed:", err);
-    return NextResponse.json(
-      { error: "Backend unreachable", detail: String(err) },
-      { status: 502 }
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[api-proxy]", request.method, target, msg);
+    return Response.json(
+      { error: "proxy_error", message: msg, backend: BACKEND_URL },
+      { status: 502 },
     );
   }
 }
 
-export const GET = proxy;
-export const POST = proxy;
-export const PUT = proxy;
-export const PATCH = proxy;
-export const DELETE = proxy;
-export const OPTIONS = proxy;
-
-// Allow large file uploads (portfolio images, KYC docs)
-export const config = {
-  api: { bodyParser: false },
-};
+export const GET = handler;
+export const POST = handler;
+export const PUT = handler;
+export const PATCH = handler;
+export const DELETE = handler;
+export const OPTIONS = handler;
