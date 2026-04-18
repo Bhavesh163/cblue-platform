@@ -36,7 +36,11 @@ export default function SubscriptionLoginPage() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({ message: "" }));
-        throw new Error(data.message || t("loginError"));
+        const msg = Array.isArray(data.message) ? data.message.join(", ") : data.message;
+        if (res.status === 401) {
+          throw new Error(locale === "th" ? "อีเมลหรือรหัสผ่านไม่ถูกต้อง" : locale === "zh" ? "邮箱或密码不正确" : "Invalid email or password");
+        }
+        throw new Error(msg || t("loginError"));
       }
 
       const data = await res.json().catch(() => null);

@@ -412,6 +412,10 @@ export default function FixerRegisterPage() {
         setError(locale === "th" ? "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร" : locale === "zh" ? "密码至少8个字符" : "Password must be at least 8 characters");
         return;
       }
+      if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{}|;:'",.<>?/`~])/.test(form.password)) {
+        setError(locale === "th" ? "รหัสผ่านต้องมีตัวพิมพ์เล็ก ตัวพิมพ์ใหญ่ ตัวเลข และอักขระพิเศษ" : locale === "zh" ? "密码必须包含小写字母、大写字母、数字和特殊字符" : "Password must contain uppercase, lowercase, number, and special character");
+        return;
+      }
       if (authMode === "register" && form.password !== form.confirmPassword) {
         setError(locale === "th" ? "รหัสผ่านไม่ตรงกัน" : locale === "zh" ? "密码不匹配" : "Passwords do not match");
         return;

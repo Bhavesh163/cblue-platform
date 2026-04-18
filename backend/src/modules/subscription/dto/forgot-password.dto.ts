@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, MinLength, Matches } from 'class-validator';
 
 export class ForgotPasswordDto {
   @IsEmail()
@@ -12,5 +12,8 @@ export class ResetPasswordDto {
 
   @IsString()
   @MinLength(8)
+  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{}|;:'",.<>?/`~])/, {
+    message: 'Password must contain at least one uppercase, one lowercase, one number, and one special character',
+  })
   newPassword: string;
 }

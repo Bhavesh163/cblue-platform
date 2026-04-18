@@ -51,6 +51,14 @@ export default function SubscriptionRegisterPage() {
       setError(t("passwordMin8"));
       return;
     }
+    if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{}|;:'",.<>?/`~])/.test(form.password)) {
+      setError(locale === "th" 
+        ? "รหัสผ่านต้องมีตัวพิมพ์เล็ก ตัวพิมพ์ใหญ่ ตัวเลข และอักขระพิเศษ" 
+        : locale === "zh" 
+        ? "密码必须包含小写字母、大写字母、数字和特殊字符" 
+        : "Password must contain uppercase, lowercase, number, and special character");
+      return;
+    }
     if (form.password !== form.confirmPassword) {
       setError(t("passwordMismatch"));
       return;
@@ -74,7 +82,11 @@ export default function SubscriptionRegisterPage() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({ message: "" }));
-        throw new Error(data.message || t("registerError"));
+        const msg = Array.isArray(data.message) ? data.message.join(", ") : data.message;
+        if (res.status === 409) {
+          throw new Error(locale === "th" ? "อีเมลนี้ถูกใช้งานแล้ว" : locale === "zh" ? "该邮箱已被注册" : "Email already registered");
+        }
+        throw new Error(msg || t("registerError"));
       }
 
       const data = await res.json().catch(() => null);
@@ -145,6 +157,11 @@ export default function SubscriptionRegisterPage() {
             <input id="password" name="password" type="password" value={form.password} onChange={handleChange}
               className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               placeholder="••••••••" />
+            <p className="mt-1 text-xs text-gray-400">
+              {locale === "th" ? "อย่างน้อย 8 ตัว มีตัวพิมพ์ใหญ่ ตัวพิมพ์เล็ก ตัวเลข และอักขระพิเศษ" 
+               : locale === "zh" ? "至少8位，含大写、小写、数字和特殊字符" 
+               : "Min 8 chars with uppercase, lowercase, number & special character"}
+            </p>
           </div>
           <div>
             <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">

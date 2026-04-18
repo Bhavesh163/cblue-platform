@@ -18,6 +18,10 @@ export default function ForgotPasswordPage() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError(locale === "th" ? "รูปแบบอีเมลไม่ถูกต้อง" : locale === "zh" ? "邮箱格式不正确" : "Invalid email format");
+      return;
+    }
     setLoading(true);
     setError("");
 

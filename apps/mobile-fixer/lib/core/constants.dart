@@ -1,6 +1,10 @@
 class AppConstants {
-  static const String apiBase = 'http://10.0.2.2:3002/api/v1';
-  static const String appName = 'CBLUE Partner';
+  // API URLs — use --dart-define=ENV=prod for production builds
+  static const String _env = String.fromEnvironment('ENV', defaultValue: 'dev');
+  static const String apiBase = _env == 'prod'
+      ? 'https://api.cblue.co.th/api/v1'
+      : 'http://10.0.2.2:3002/api/v1';
+  static const String appName = 'Cblue Partner';
 
   // Fixer tiers
   static const List<String> fixerTiers = ['Economy', 'Standard', 'Corporate', 'Specialist', 'Expert'];

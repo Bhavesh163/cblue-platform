@@ -27,6 +27,7 @@ export class SubscriptionController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 60000, limit: 10 } })
   login(@Body() dto: LoginSubscriberDto) {
     return this.subscriptionService.login(dto);
   }
@@ -40,6 +41,7 @@ export class SubscriptionController {
 
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.subscriptionService.resetPassword(dto);
   }
