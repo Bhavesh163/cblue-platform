@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { FixerService } from './fixer.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { ConfigService } from '@nestjs/config';
+import { HttpService } from '@nestjs/axios';
 import {
   ConflictException,
   NotFoundException,
@@ -49,6 +51,8 @@ describe('FixerService', () => {
         FixerService,
         { provide: PrismaService, useValue: prisma },
         { provide: EventEmitter2, useValue: eventEmitter },
+        { provide: ConfigService, useValue: { get: jest.fn() } },
+        { provide: HttpService, useValue: { post: jest.fn() } },
       ],
     }).compile();
 
@@ -73,13 +77,17 @@ describe('FixerService', () => {
     });
 
     it('should register fixer and emit event', async () => {
-      prisma.fixer.findUnique.mockResolvedValue(null);
-      prisma.user.update.mockResolvedValue({});
-      prisma.fixer.create.mockResolvedValue({
+      const createdFixer = {
         id: 'fixer-1',
         userId: 'user-1',
         user: { id: 'user-1' },
-      });
+        skills: [],
+      };
+      prisma.fixer.findUnique
+        .mockResolvedValueOnce(null) // first call: check existing
+        .mockResolvedValueOnce(createdFixer); // second call: re-fetch
+      prisma.user.update.mockResolvedValue({});
+      prisma.fixer.create.mockResolvedValue(createdFixer);
 
       const result = await service.register('user-1', {
         bio: 'Experienced plumber',

@@ -17,6 +17,24 @@ describe('SubscriptionService', () => {
       create: jest.fn(),
       update: jest.fn(),
     },
+    user: {
+      findFirst: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+    },
+    $transaction: jest.fn((fn: (tx: any) => Promise<any>) =>
+      fn({
+        subscriber: {
+          create: mockPrisma.subscriber.create,
+          update: mockPrisma.subscriber.update,
+        },
+        user: {
+          findFirst: mockPrisma.user.findFirst,
+          create: mockPrisma.user.create,
+          update: mockPrisma.user.update,
+        },
+      }),
+    ),
   };
 
   const mockJwtService = {
@@ -64,6 +82,13 @@ describe('SubscriptionService', () => {
         name: 'Test User',
         status: 'ACTIVE',
       });
+      mockPrisma.user.findFirst.mockResolvedValue(null);
+      mockPrisma.user.create.mockResolvedValue({
+        id: 'user-1',
+        email: 'test@example.com',
+        name: 'Test User',
+        subscriberId: 'sub-1',
+      });
 
       const result = await service.register({
         name: 'Test User',
@@ -102,6 +127,12 @@ describe('SubscriptionService', () => {
         company: null,
         status: 'ACTIVE',
         serviceCategory: null,
+      });
+
+      mockPrisma.user.findFirst.mockResolvedValue({
+        id: 'user-1',
+        email: 'test@example.com',
+        subscriberId: 'sub-1',
       });
 
       const result = await service.login({
