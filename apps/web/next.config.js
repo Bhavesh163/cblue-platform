@@ -13,19 +13,8 @@ const nextConfig = {
       },
     ];
   },
-  async rewrites() {
-    // In production builds (CF Workers), proxy API calls to the real backend.
-    // In local dev, proxy to localhost:3002.
-    const isProd = process.env.NODE_ENV === 'production';
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL
-      || (isProd ? 'https://api.cblue.co.th' : 'http://localhost:3002');
-    return [
-      {
-        source: '/api/v1/:path*',
-        destination: `${apiUrl}/api/v1/:path*`,
-      },
-    ];
-  },
+  // API proxy is handled by app/api/v1/[...path]/route.ts (works on CF Workers)
+  // Rewrites to external URLs do NOT work on Cloudflare Workers via OpenNext.
 };
 
 export default withNextIntl(nextConfig);

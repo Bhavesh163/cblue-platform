@@ -6,7 +6,6 @@ import { useTranslations, useLocale } from "next-intl";
 import { useParams } from "next/navigation";
 
 
-
 interface PropertyDetail {
   id: string;
   title: string;
@@ -57,7 +56,7 @@ export default function PropertyDetailPage() {
     async function load() {
       try {
         const res = await fetch(`/api/v1/properties/${encodeURIComponent(id)}`);
-        if (res.ok) {
+        if (res.ok) {`/api/v1/properties/${encodeURIComponent(id)}`
           setProperty(await res.json());
         } else {
           setNotFound(true);
