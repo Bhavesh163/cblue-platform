@@ -432,7 +432,7 @@ export default function FixerRegisterPage() {
         });
         if (!authRes.ok) {
           const errData = await authRes.json().catch(() => ({ message: "" }));
-          if (authRes.status === 502 || authRes.status === 530 || authRes.status === 503) {
+          if (authRes.status === 403 || authRes.status === 502 || authRes.status === 530 || authRes.status === 503) {
             setError(locale === "th" ? "ระบบกำลังปรับปรุง กรุณาลองใหม่ในอีกสักครู่" : locale === "zh" ? "系统正在维护中，请稍后再试" : "Service temporarily unavailable. Please try again shortly.");
             return;
           }
@@ -551,6 +551,16 @@ export default function FixerRegisterPage() {
 
       if (!regRes.ok) {
         const errData = await regRes.json().catch(() => ({ message: "" }));
+        if ([403, 502, 530, 503].includes(regRes.status)) {
+          setError(locale === "th" ? "ระบบกำลังปรับปรุง กรุณาลองใหม่ในอีกสักครู่" : locale === "zh" ? "系统正在维护中，请稍后再试" : "Service temporarily unavailable. Please try again shortly.");
+          setSubmitting(false);
+          return;
+        }
+        if (regRes.status === 429) {
+          setError(locale === "th" ? "คำขอมากเกินไป กรุณารอสักครู่แล้วลองใหม่" : locale === "zh" ? "请求过多，请稍后再试" : "Too many requests. Please wait a moment and try again.");
+          setSubmitting(false);
+          return;
+        }
         const msg = errData.message || (locale === "th" ? "ลงทะเบียนล้มเหลว" : locale === "zh" ? "注册失败" : "Registration failed");
         setError(msg);
         setSubmitting(false);

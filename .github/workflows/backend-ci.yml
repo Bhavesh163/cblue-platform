@@ -129,6 +129,30 @@ jobs:
             echo "has_secrets=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Validate SSH key format
+        if: steps.check_secrets.outputs.has_secrets == 'true'
+        env:
+          SSH_KEY: ${{ secrets.DROPLET_SSH_KEY }}
+        run: |
+          if echo "$SSH_KEY" | head -1 | grep -qE '^-----BEGIN'; then
+            echo "✅ SSH key format looks valid"
+          else
+            echo "❌ ERROR: DROPLET_SSH_KEY does not appear to be a valid SSH private key"
+            echo ""
+            echo "The key must:"
+            echo "  1. Be a PRIVATE key (not .pub file)"
+            echo "  2. Start with: -----BEGIN OPENSSH PRIVATE KEY----- or -----BEGIN RSA PRIVATE KEY-----"
+            echo "  3. End with:   -----END OPENSSH PRIVATE KEY----- or -----END RSA PRIVATE KEY-----"
+            echo "  4. NOT have a passphrase"
+            echo "  5. Include ALL lines between header and footer"
+            echo ""
+            echo "To generate a new key without passphrase:"
+            echo "  ssh-keygen -t ed25519 -f cblue-deploy -N '' -C 'cblue-deploy'"
+            echo "Then add cblue-deploy.pub to the droplet (~/.ssh/authorized_keys)"
+            echo "and paste the content of cblue-deploy into DROPLET_SSH_KEY secret"
+            exit 1
+          fi
+
       - name: Deploy to DigitalOcean Droplet
         if: steps.check_secrets.outputs.has_secrets == 'true'
         uses: appleboy/ssh-action@v1

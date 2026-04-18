@@ -86,7 +86,10 @@ export default function SubscriptionRegisterPage() {
         if (res.status === 409) {
           throw new Error(locale === "th" ? "อีเมลนี้ถูกใช้งานแล้ว" : locale === "zh" ? "该邮箱已被注册" : "Email already registered");
         }
-        if (res.status === 502 || res.status === 530 || res.status === 503) {
+        if ([400, 422].includes(res.status)) {
+          throw new Error(msg || (locale === "th" ? "ข้อมูลไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง" : locale === "zh" ? "输入数据无效，请检查后重试" : "Invalid input. Please check your details and try again."));
+        }
+        if ([403, 502, 530, 503].includes(res.status)) {
           throw new Error(locale === "th" 
             ? "ระบบกำลังปรับปรุง กรุณาลองใหม่ในอีกสักครู่" 
             : locale === "zh" 

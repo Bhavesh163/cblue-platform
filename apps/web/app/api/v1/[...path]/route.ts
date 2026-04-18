@@ -66,6 +66,22 @@ async function handler(
 
     const upstream = await fetch(target, init);
 
+    // If backend returned a non-JSON error (e.g., nginx HTML 403/404),
+    // convert to a proper JSON 502 so the frontend shows "service unavailable"
+    const ct = upstream.headers.get("content-type") || "";
+    if (!upstream.ok && !ct.includes("application/json")) {
+      // Drain the body so the connection is released
+      await upstream.text().catch(() => {});
+      return Response.json(
+        {
+          error: "backend_unavailable",
+          message: "Backend service is temporarily unavailable",
+          statusCode: 502,
+        },
+        { status: 502 },
+      );
+    }
+
     // Build response (strip hop-by-hop)
     const resHeaders = new Headers();
     upstream.headers.forEach((v, k) => {
