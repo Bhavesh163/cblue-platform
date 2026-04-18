@@ -20,6 +20,14 @@ export default function SubscriptionLoginPage() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!email.trim()) {
+      setError(locale === "th" ? "กรุณากรอกอีเมล" : locale === "zh" ? "请输入邮箱" : "Please enter your email");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError(locale === "th" ? "รูปแบบอีเมลไม่ถูกต้อง" : locale === "zh" ? "邮箱格式不正确" : "Invalid email format");
+      return;
+    }
     if (password.length < 8) {
       setError(t("passwordMin8"));
       return;

@@ -139,14 +139,26 @@ jobs:
           script: |
             set -e
 
+            echo "🚀 Starting deployment..."
+
+            # ── Ensure project directory exists ──
+            if [ ! -d /opt/cblue-platform ]; then
+              echo "📦 Cloning repository..."
+              sudo git clone https://github.com/Bhavesh163/cblue-platform.git /opt/cblue-platform
+            fi
+
             # ── Pull latest code ──
             cd /opt/cblue-platform
             git pull origin main || true
+            echo "✅ Code updated"
 
-            # ── Bring up ALL services (postgres, redis, rabbitmq, backend) ──
-            docker compose -f infrastructure/docker/docker-compose.yml up -d
+            # ── Bring up ALL services with local build ──
+            docker compose -f infrastructure/docker/docker-compose.yml up -d --build
             echo "⏳ Waiting for services to stabilize..."
-            sleep 20
+            sleep 25
+
+            # ── Verify containers are running ──
+            docker compose -f infrastructure/docker/docker-compose.yml ps
 
             # ── Run Prisma migrations ──
             docker compose -f infrastructure/docker/docker-compose.yml exec -T backend npx prisma migrate deploy 2>&1 || echo "⚠️ Migration note: check above for details"
@@ -168,4 +180,9 @@ jobs:
             sleep 5
             HEALTH=$(curl -sf http://127.0.0.1:3002/api/v1/health 2>&1 || echo '{"status":"unreachable"}')
             echo "Backend health: $HEALTH"
+
+            # ── Verify nginx proxy ──
+            PROXY_CHECK=$(curl -sf http://127.0.0.1/api/v1/health -H 'Host: api.cblue.co.th' 2>&1 || echo '{"status":"nginx_proxy_failed"}')
+            echo "Nginx proxy check: $PROXY_CHECK"
+
             echo "✅ Deploy complete: ${{ github.sha }}"

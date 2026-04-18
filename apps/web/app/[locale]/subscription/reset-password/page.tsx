@@ -26,6 +26,14 @@ function ResetPasswordForm() {
       setError(t("passwordMin8"));
       return;
     }
+    if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z0-9\s])/.test(password)) {
+      setError(locale === "th"
+        ? "รหัสผ่านต้องมีตัวพิมพ์เล็ก ตัวพิมพ์ใหญ่ ตัวเลข และอักขระพิเศษ"
+        : locale === "zh"
+        ? "密码必须包含小写字母、大写字母、数字和特殊字符"
+        : "Password must contain uppercase, lowercase, number, and special character");
+      return;
+    }
     if (password !== confirmPassword) {
       setError(t("passwordMismatch"));
       return;
@@ -42,7 +50,21 @@ function ResetPasswordForm() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({ message: "" }));
-        throw new Error(data.message || "Failed");
+        if (res.status === 502 || res.status === 530 || res.status === 503) {
+          throw new Error(locale === "th"
+            ? "ระบบกำลังปรับปรุง กรุณาลองใหม่ในอีกสักครู่"
+            : locale === "zh"
+            ? "系统正在维护中，请稍后再试"
+            : "Service temporarily unavailable. Please try again shortly.");
+        }
+        if (res.status === 429) {
+          throw new Error(locale === "th"
+            ? "คำขอมากเกินไป กรุณารอสักครู่แล้วลองใหม่"
+            : locale === "zh"
+            ? "请求过多，请稍后再试"
+            : "Too many requests. Please wait a moment and try again.");
+        }
+        throw new Error(data.message || t("resetError"));
       }
 
       setSuccess(true);
