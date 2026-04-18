@@ -7,7 +7,6 @@ import { useTranslations, useLocale } from "next-intl";
 import { THAI_PROVINCES } from "../../lib/constants";
 import { getDistrictsForProvince } from "../../lib/thai-address-data";
 import { getSubdistrictsForDistrict, lookupByPostalCode } from "../../lib/thai-subdistrict-data";
-import { getApiUrl } from "../../lib/api";
 import GpsDetectButton from "../../components/GpsDetectButton";
 
 const PROPERTY_TYPES = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "APARTMENT"] as const;
@@ -184,7 +183,7 @@ export default function PropertyRegisterPage() {
         ...(form.password ? { password: form.password } : {}),
       };
 
-      const res = await fetch(getApiUrl("/properties"), {
+      const res = await fetch("/api/v1/properties", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

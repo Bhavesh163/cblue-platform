@@ -14,7 +14,11 @@ const nextConfig = {
     ];
   },
   async rewrites() {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002';
+    // In production builds (CF Workers), proxy API calls to the real backend.
+    // In local dev, proxy to localhost:3002.
+    const isProd = process.env.NODE_ENV === 'production';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL
+      || (isProd ? 'https://api.cblue.co.th' : 'http://localhost:3002');
     return [
       {
         source: '/api/v1/:path*',

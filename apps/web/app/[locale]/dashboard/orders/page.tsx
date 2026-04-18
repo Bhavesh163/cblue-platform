@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useTranslations, useLocale } from "next-intl";
-import { getApiUrl } from "../../lib/api";
 
 interface Order {
   id: string;
@@ -59,7 +58,7 @@ export default function OrdersPage() {
   useEffect(() => {
     async function fetchOrders() {
       try {
-        const res = await fetch(getApiUrl("/orders"), {
+        const res = await fetch("/api/v1/orders", {
           credentials: "include",
         });
         if (res.ok) {
