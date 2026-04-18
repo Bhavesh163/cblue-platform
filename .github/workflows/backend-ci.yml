@@ -115,10 +115,20 @@ jobs:
     needs: [test, docker]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
-    environment: production
 
     steps:
+      - name: Check deployment secrets
+        run: |
+          if [ -z "${{ secrets.DROPLET_HOST }}" ]; then
+            echo "⚠️ DROPLET_HOST secret not configured — skipping deploy"
+            echo "Add secrets in GitHub → Settings → Secrets and variables → Actions"
+            echo "Required: DROPLET_HOST, DROPLET_USER, DROPLET_SSH_KEY"
+            exit 0
+          fi
+        id: check_secrets
+
       - name: Deploy to DigitalOcean Droplet
+        if: ${{ secrets.DROPLET_HOST != '' }}
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.DROPLET_HOST }}
