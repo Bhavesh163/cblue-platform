@@ -15,11 +15,6 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    if: >-
-      github.event_name == 'pull_request' ||
-      contains(toJSON(github.event.commits.*.modified), 'backend/') ||
-      contains(toJSON(github.event.commits.*.added), 'backend/') ||
-      github.event_name == 'workflow_dispatch'
 
     services:
       postgres:
@@ -70,7 +65,7 @@ jobs:
   docker:
     needs: test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && always() && !failure()
+    if: github.ref == 'refs/heads/main'
 
     permissions:
       contents: read
@@ -119,7 +114,7 @@ jobs:
   deploy:
     needs: [test, docker]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && always() && !failure()
+    if: github.ref == 'refs/heads/main'
     environment: production
 
     steps:

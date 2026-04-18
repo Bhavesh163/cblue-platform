@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 
-// Force edge runtime — required for Cloudflare Workers via OpenNext
-export const runtime = "edge";
+// NOTE: Do NOT set `export const runtime = "edge"` here.
+// OpenNext bundles everything into a single CF Worker — explicit edge runtime
+// on route handlers breaks the bundler. The Worker already runs at the edge.
 
 /**
  * Resolve the backend base URL.
