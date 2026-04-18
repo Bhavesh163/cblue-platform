@@ -118,17 +118,19 @@ jobs:
 
     steps:
       - name: Check deployment secrets
+        id: check_secrets
         run: |
           if [ -z "${{ secrets.DROPLET_HOST }}" ]; then
             echo "⚠️ DROPLET_HOST secret not configured — skipping deploy"
             echo "Add secrets in GitHub → Settings → Secrets and variables → Actions"
             echo "Required: DROPLET_HOST, DROPLET_USER, DROPLET_SSH_KEY"
-            exit 0
+            echo "has_secrets=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_secrets=true" >> "$GITHUB_OUTPUT"
           fi
-        id: check_secrets
 
       - name: Deploy to DigitalOcean Droplet
-        if: ${{ secrets.DROPLET_HOST != '' }}
+        if: steps.check_secrets.outputs.has_secrets == 'true'
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.DROPLET_HOST }}
