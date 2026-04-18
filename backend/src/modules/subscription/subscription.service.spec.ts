@@ -29,7 +29,7 @@ describe('SubscriptionService', () => {
       const config: Record<string, string> = {
         'mailjet.apiKey': '',
         'mailjet.apiSecret': '',
-        'frontendUrl': 'http://localhost:3000',
+        frontendUrl: 'http://localhost:3000',
         'mailjet.fromEmail': 'test@cblue.co.th',
       };
       return config[key];

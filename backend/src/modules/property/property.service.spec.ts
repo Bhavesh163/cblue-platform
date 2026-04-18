@@ -4,7 +4,6 @@ import { PrismaService } from '../../prisma/prisma.service';
 
 describe('PropertyService', () => {
   let service: PropertyService;
-  let prisma: PrismaService;
 
   const mockPrisma = {
     property: {
@@ -25,7 +24,6 @@ describe('PropertyService', () => {
     }).compile();
 
     service = module.get<PropertyService>(PropertyService);
-    prisma = module.get<PrismaService>(PrismaService);
   });
 
   afterEach(() => jest.clearAllMocks());
@@ -109,7 +107,12 @@ describe('PropertyService', () => {
 
   describe('findById', () => {
     it('should find a property by id', async () => {
-      const property = { id: 'prop-1', title: 'Condo A', images: [], user: { id: 'u1', name: 'John' } };
+      const property = {
+        id: 'prop-1',
+        title: 'Condo A',
+        images: [],
+        user: { id: 'u1', name: 'John' },
+      };
       mockPrisma.property.findUnique.mockResolvedValue(property);
 
       const result = await service.findById('prop-1');
@@ -141,7 +144,9 @@ describe('PropertyService', () => {
       mockPrisma.property.findUnique.mockResolvedValue(existing);
       mockPrisma.property.update.mockResolvedValue(updated);
 
-      const result = await service.update('prop-1', 'user-1', { title: 'Updated' });
+      const result = await service.update('prop-1', 'user-1', {
+        title: 'Updated',
+      });
       expect(result?.title).toBe('Updated');
     });
 
@@ -149,7 +154,9 @@ describe('PropertyService', () => {
       const existing = { id: 'prop-1', userId: 'user-2' };
       mockPrisma.property.findUnique.mockResolvedValue(existing);
 
-      const result = await service.update('prop-1', 'user-1', { title: 'Hack' });
+      const result = await service.update('prop-1', 'user-1', {
+        title: 'Hack',
+      });
       expect(result).toBeNull();
     });
   });
@@ -158,7 +165,10 @@ describe('PropertyService', () => {
     it('should soft-delete own property', async () => {
       const existing = { id: 'prop-1', userId: 'user-1' };
       mockPrisma.property.findUnique.mockResolvedValue(existing);
-      mockPrisma.property.update.mockResolvedValue({ ...existing, status: 'REMOVED' });
+      mockPrisma.property.update.mockResolvedValue({
+        ...existing,
+        status: 'REMOVED',
+      });
 
       const result = await service.remove('prop-1', 'user-1');
       expect(result?.status).toBe('REMOVED');

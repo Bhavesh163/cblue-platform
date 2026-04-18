@@ -1,19 +1,9 @@
-import {
-  Controller,
-  Post,
-  Get,
-  Body,
-  HttpCode,
-  HttpStatus,
-} from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { SubscriptionService } from './subscription.service';
 import { CreateSubscriberDto } from './dto/create-subscriber.dto';
 import { LoginSubscriberDto } from './dto/login-subscriber.dto';
-import {
-  ForgotPasswordDto,
-  ResetPasswordDto,
-} from './dto/forgot-password.dto';
+import { ForgotPasswordDto, ResetPasswordDto } from './dto/forgot-password.dto';
 
 @Controller('subscription')
 export class SubscriptionController {

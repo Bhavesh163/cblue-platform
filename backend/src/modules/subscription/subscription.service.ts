@@ -102,7 +102,10 @@ export class SubscriptionService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    if (subscriber.status === 'SUSPENDED' || subscriber.status === 'CANCELLED') {
+    if (
+      subscriber.status === 'SUSPENDED' ||
+      subscriber.status === 'CANCELLED'
+    ) {
       throw new UnauthorizedException('Account is suspended or cancelled');
     }
 
@@ -248,9 +251,8 @@ export class SubscriptionService {
     resetToken: string,
   ) {
     const mailjetApiKey = this.configService.get<string>('mailjet.apiKey');
-    const mailjetApiSecret = this.configService.get<string>(
-      'mailjet.apiSecret',
-    );
+    const mailjetApiSecret =
+      this.configService.get<string>('mailjet.apiSecret');
 
     if (!mailjetApiKey || !mailjetApiSecret) {
       this.logger.warn('Mailjet not configured — skipping email send');
@@ -268,7 +270,9 @@ export class SubscriptionService {
       Messages: [
         {
           From: {
-            Email: this.configService.get<string>('mailjet.fromEmail') || 'noreply@cblue.co.th',
+            Email:
+              this.configService.get<string>('mailjet.fromEmail') ||
+              'noreply@cblue.co.th',
             Name: 'CBLUE',
           },
           To: [{ Email: email, Name: name }],

@@ -33,7 +33,9 @@ class PriceRowDto {
   unit?: string;
 
   @IsString()
-  @Matches(/^\d+(\.\d{1,2})?$/, { message: 'finalPrice must be a valid positive number' })
+  @Matches(/^\d+(\.\d{1,2})?$/, {
+    message: 'finalPrice must be a valid positive number',
+  })
   finalPrice: string;
 }
 

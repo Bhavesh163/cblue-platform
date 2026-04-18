@@ -50,7 +50,9 @@ export class FixerService {
         pastProjectType: dto.pastProjectType,
         yearsExperience: dto.yearsExperience,
         travelRadius: dto.travelRadius,
-        priceList: dto.priceList ? JSON.parse(JSON.stringify(dto.priceList)) : undefined,
+        priceList: dto.priceList
+          ? JSON.parse(JSON.stringify(dto.priceList))
+          : undefined,
         serviceProvince: dto.address?.province,
         serviceDistrict: dto.address?.district,
         servicePostalCode: dto.address?.postalCode,
@@ -241,7 +243,7 @@ export class FixerService {
       );
 
       return response.data;
-    } catch (error: unknown) {
+    } catch {
       this.logger.warn(
         `Vision service unavailable at ${visionUrl}, using fallback`,
       );

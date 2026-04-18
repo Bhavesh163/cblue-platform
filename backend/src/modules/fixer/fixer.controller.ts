@@ -103,11 +103,11 @@ export class FixerController {
   @Post('portfolio-digest')
   @Throttle({ default: { ttl: 60000, limit: 5 } })
   @UseInterceptors(FilesInterceptor('files', 10))
-  async digestPortfolio(
-    @UploadedFiles() files: Express.Multer.File[],
-  ) {
+  async digestPortfolio(@UploadedFiles() files: Express.Multer.File[]) {
     const ALLOWED_MIMES = [
-      'image/jpeg', 'image/png', 'image/webp',
+      'image/jpeg',
+      'image/png',
+      'image/webp',
       'application/pdf',
       'application/msword',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -117,10 +117,14 @@ export class FixerController {
     const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
     for (const file of files) {
       if (!ALLOWED_MIMES.includes(file.mimetype)) {
-        throw new BadRequestException(`Unsupported file type: ${file.originalname}`);
+        throw new BadRequestException(
+          `Unsupported file type: ${file.originalname}`,
+        );
       }
       if (file.size > MAX_FILE_SIZE) {
-        throw new BadRequestException(`File too large: ${file.originalname} (max 50MB)`);
+        throw new BadRequestException(
+          `File too large: ${file.originalname} (max 50MB)`,
+        );
       }
     }
     return this.fixerService.digestPortfolio(files);

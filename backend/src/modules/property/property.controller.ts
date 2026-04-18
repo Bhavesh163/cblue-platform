@@ -62,10 +62,7 @@ export class PropertyController {
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard)
-  async remove(
-    @Param('id') id: string,
-    @CurrentUser('id') userId: string,
-  ) {
+  async remove(@Param('id') id: string, @CurrentUser('id') userId: string) {
     const property = await this.propertyService.remove(id, userId);
     if (!property) {
       throw new NotFoundException('Property not found');

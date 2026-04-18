@@ -113,7 +113,11 @@ export class AuthService {
     }
 
     // Generate tokens
-    const tokens = await this.generateTokens(user.id, user.phone ?? '', user.role);
+    const tokens = await this.generateTokens(
+      user.id,
+      user.phone ?? '',
+      user.role,
+    );
 
     return {
       ...tokens,
