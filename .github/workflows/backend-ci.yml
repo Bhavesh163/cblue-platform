@@ -224,15 +224,18 @@ jobs:
             # ── Login to GHCR and pull pre-built backend image ──
             REPO_LC=$(echo "$GH_REPO" | tr '[:upper:]' '[:lower:]')
             export GITHUB_REPOSITORY="$REPO_LC"
+            IMAGE="ghcr.io/$REPO_LC/backend:latest"
 
             PULLED_IMAGE=false
             if echo "$GH_TOKEN" | docker login ghcr.io -u github --password-stdin 2>/dev/null; then
               echo "✅ Logged in to GHCR"
-              if $DC -f infrastructure/docker/docker-compose.yml pull backend 2>/dev/null; then
+              # Use docker pull directly (more reliable than docker-compose pull on v1)
+              echo "Pulling $IMAGE ..."
+              if docker pull "$IMAGE" 2>&1; then
                 echo "✅ Pulled pre-built backend image from GHCR"
                 PULLED_IMAGE=true
               else
-                echo "⚠️ Could not pull image from GHCR — will build locally"
+                echo "⚠️ Could not pull $IMAGE — will build locally"
               fi
             else
               echo "⚠️ GHCR login failed — will build locally"
@@ -248,8 +251,14 @@ jobs:
               # Use pre-built image (fast — no build on droplet)
               $DC -f infrastructure/docker/docker-compose.yml up -d postgres redis rabbitmq backend
             else
-              # Fallback: build on droplet (slow but works)
-              $DC -f infrastructure/docker/docker-compose.yml up -d --build postgres redis rabbitmq backend
+              # Cannot build locally — droplet is too slow for npm ci (exceeds 20m timeout)
+              echo "❌ GHCR image pull failed and local build is not feasible on this droplet"
+              echo "Fix: Re-run the workflow or ensure the 'docker' job pushed the image to GHCR"
+              echo "Attempting up anyway in case image exists locally..."
+              $DC -f infrastructure/docker/docker-compose.yml up -d postgres redis rabbitmq backend || {
+                echo "❌ No backend image available. Deploy cannot proceed."
+                exit 1
+              }
             fi
             echo "⏳ Waiting for services to stabilize..."
             sleep 25
