@@ -169,7 +169,7 @@ jobs:
           username: ${{ secrets.DROPLET_USER }}
           key: ${{ secrets.DROPLET_SSH_KEY }}
           envs: GH_TOKEN,GH_REPO,DEPLOY_SHA
-          command_timeout: 20m
+          command_timeout: 25m
           script: |
             set -e
 
@@ -245,11 +245,18 @@ jobs:
             $DC -f infrastructure/docker/docker-compose.yml rm -sf backend nginx 2>/dev/null || true
 
             # ── Stop host nginx to free port 80 for Docker nginx container ──
-            echo "🔧 Stopping host nginx to free port 80..."
-            docker run --rm --pid=host --privileged alpine sh -c '
-              nsenter -t 1 -m -- systemctl stop nginx 2>/dev/null
-              nsenter -t 1 -m -- systemctl disable nginx 2>/dev/null
-            ' 2>/dev/null && echo "✅ Host nginx stopped" || echo "⚠️ Host nginx not running or already stopped"
+            # Uses PID file + kill (no nsenter, no systemctl, no --privileged — those hung)
+            echo "🔧 Freeing port 80..."
+            NGINX_PID=$(docker run --rm -v /var/run/nginx.pid:/nginx.pid:ro alpine cat /nginx.pid 2>/dev/null || true)
+            if [ -n "$NGINX_PID" ] && echo "$NGINX_PID" | grep -qE '^[0-9]+$'; then
+              echo "Host nginx running (PID: $NGINX_PID) — killing..."
+              docker run --rm --pid=host alpine kill "$NGINX_PID" 2>/dev/null || true
+              sleep 3
+              docker run --rm --pid=host alpine kill -9 "$NGINX_PID" 2>/dev/null || true
+              echo "✅ Host nginx killed"
+            else
+              echo "ℹ️ No host nginx PID found — port 80 may already be free"
+            fi
 
             # ── Start core services (including containerized nginx) ──
             if [ "$PULLED_IMAGE" = "true" ]; then
