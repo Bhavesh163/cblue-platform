@@ -7,14 +7,15 @@ import { NextRequest } from "next/server";
 /**
  * Resolve the backend base URL.
  *
- * Production: CF Worker → http://168.144.39.0:3002 (NestJS on DigitalOcean droplet)
- * Connects directly to NestJS port (no nginx proxy needed).
+ * Production: CF Worker → http://168.144.39.0 (nginx on port 80) → NestJS :3002
+ * Port 80 is confirmed open on the droplet; port 3002 is blocked by the
+ * DigitalOcean Cloud Firewall. nginx reverse-proxies to localhost:3002.
  */
 const BACKEND_URL: string = (() => {
   // 1. Wrangler vars (set in wrangler.jsonc → available on CF Workers)
   if (process.env.API_BACKEND_URL) return process.env.API_BACKEND_URL;
-  // 2. Production fallback: droplet IP + NestJS port directly (no nginx needed)
-  if (process.env.NODE_ENV === "production") return "http://168.144.39.0:3002";
+  // 2. Production fallback: droplet IP via nginx (port 80, open in firewall)
+  if (process.env.NODE_ENV === "production") return "http://168.144.39.0";
   // 3. Local dev
   return "http://localhost:3002";
 })();

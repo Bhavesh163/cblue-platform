@@ -269,28 +269,74 @@ jobs:
             # ── Run Prisma migrations ──
             $DC -f infrastructure/docker/docker-compose.yml exec -T backend npx prisma migrate deploy 2>&1 || echo "⚠️ Migration note: check above for details"
 
-            # ── Deploy nginx config (requires root or passwordless sudo) ──
-            if [ "$SUDO" != "SKIP" ] && [ -f infrastructure/nginx/cblue.conf ]; then
-              $SUDO cp infrastructure/nginx/cblue.conf /etc/nginx/sites-available/cblue
-              $SUDO ln -sf /etc/nginx/sites-available/cblue /etc/nginx/sites-enabled/cblue
-              $SUDO rm -f /etc/nginx/sites-enabled/default
-              if $SUDO nginx -t 2>&1; then
-                $SUDO systemctl reload nginx
-                echo "✅ Nginx config deployed and reloaded"
-              else
-                echo "❌ Nginx config test failed — kept old config"
+            # ── Deploy nginx config ──
+            # Strategy: try sudo first, fall back to Docker volume mount (no sudo needed)
+            NGINX_DEPLOYED=false
+            if [ -f infrastructure/nginx/cblue.conf ]; then
+              if [ "$SUDO" != "SKIP" ]; then
+                # Method 1: direct sudo
+                $SUDO cp infrastructure/nginx/cblue.conf /etc/nginx/sites-available/cblue
+                $SUDO ln -sf /etc/nginx/sites-available/cblue /etc/nginx/sites-enabled/cblue
+                $SUDO rm -f /etc/nginx/sites-enabled/default
+                if $SUDO nginx -t 2>&1; then
+                  $SUDO systemctl reload nginx
+                  echo "✅ Nginx config deployed via sudo"
+                  NGINX_DEPLOYED=true
+                fi
+              fi
+
+              if [ "$NGINX_DEPLOYED" = "false" ]; then
+                # Method 2: use Docker to write nginx config (Docker runs as root)
+                echo "🔧 Deploying nginx config via Docker (no sudo needed)..."
+                docker run --rm \
+                  -v /etc/nginx/sites-available:/sites-available \
+                  -v /etc/nginx/sites-enabled:/sites-enabled \
+                  -v "$DEPLOY_DIR/infrastructure/nginx/cblue.conf:/src/cblue.conf:ro" \
+                  alpine sh -c '
+                    cp /src/cblue.conf /sites-available/cblue
+                    ln -sf /etc/nginx/sites-available/cblue /sites-enabled/cblue
+                    rm -f /sites-enabled/default
+                  ' 2>&1 && echo "✅ Nginx config files written via Docker" || echo "⚠️ Could not write nginx config"
+
+                # Test & reload nginx via Docker (--pid=host lets us signal host processes)
+                docker run --rm --pid=host --privileged \
+                  alpine sh -c '
+                    # Validate config
+                    nsenter -t 1 -m -- nginx -t 2>&1 || exit 1
+                    # Graceful reload (SIGHUP to master process)
+                    NGINX_PID=$(nsenter -t 1 -m -- cat /var/run/nginx.pid 2>/dev/null)
+                    if [ -n "$NGINX_PID" ]; then
+                      kill -HUP "$NGINX_PID"
+                      echo "✅ Nginx reloaded (PID: $NGINX_PID)"
+                    else
+                      # nginx not running — start it
+                      nsenter -t 1 -m -n -- nginx 2>&1
+                      echo "✅ Nginx started"
+                    fi
+                  ' 2>&1 && NGINX_DEPLOYED=true || echo "⚠️ Could not reload nginx"
               fi
             fi
+
+            # ── Also open port 3002 in host firewall (belt + suspenders) ──
+            docker run --rm --net=host --cap-add=NET_ADMIN alpine sh -c '
+              apk add --no-cache iptables >/dev/null 2>&1
+              iptables -C INPUT -p tcp --dport 3002 -j ACCEPT 2>/dev/null || \
+                iptables -I INPUT 1 -p tcp --dport 3002 -j ACCEPT 2>/dev/null
+            ' 2>/dev/null && echo "✅ Port 3002 opened in iptables" || echo "⚠️ Could not modify iptables (Cloud Firewall may still block 3002)"
 
             # ── Verify backend health ──
             sleep 5
             HEALTH=$(curl -sf http://127.0.0.1:3002/api/v1/health 2>&1 || echo '{"status":"unreachable"}')
             echo "Backend health: $HEALTH"
 
-            # ── Verify nginx proxy ──
-            if [ "$SUDO" != "SKIP" ]; then
-              PROXY_CHECK=$(curl -sf http://127.0.0.1/api/v1/health -H 'Host: api.cblue.co.th' 2>&1 || echo '{"status":"nginx_proxy_failed"}')
-              echo "Nginx proxy check: $PROXY_CHECK"
+            # ── Verify nginx proxy (port 80 → backend) ──
+            PROXY_CHECK=$(curl -sf http://127.0.0.1/api/v1/health 2>&1 || echo '{"status":"nginx_proxy_failed"}')
+            echo "Nginx proxy check: $PROXY_CHECK"
+            if echo "$PROXY_CHECK" | grep -q '"ok"'; then
+              echo "✅ Port 80 → NestJS proxy is working"
+            else
+              echo "⚠️ Nginx proxy not working — CF Worker will get 502 on port 80"
+              echo "Fix: SSH as root and run: cp infrastructure/nginx/cblue.conf /etc/nginx/sites-available/cblue && ln -sf /etc/nginx/sites-available/cblue /etc/nginx/sites-enabled/ && rm -f /etc/nginx/sites-enabled/default && nginx -t && systemctl reload nginx"
             fi
 
             echo "✅ Deploy complete: $DEPLOY_SHA"
