@@ -7,25 +7,17 @@ import { NextRequest } from "next/server";
 /**
  * Resolve the backend base URL.
  *
- * Production: CF Worker → http://168.144.39.0 (DigitalOcean droplet nginx)
- * nginx routes via Host header to NestJS on 127.0.0.1:3002
- *
- * NEXT_PUBLIC_API_URL is intentionally NOT used here because it's set to
- * https://api.cblue.co.th which has no DNS record (yet). Once the DNS A
- * record is created, API_BACKEND_URL in wrangler.jsonc can be updated to
- * https://api.cblue.co.th and this will work through Cloudflare.
+ * Production: CF Worker → http://168.144.39.0:3002 (NestJS on DigitalOcean droplet)
+ * Connects directly to NestJS port (no nginx proxy needed).
  */
 const BACKEND_URL: string = (() => {
   // 1. Wrangler vars (set in wrangler.jsonc → available on CF Workers)
   if (process.env.API_BACKEND_URL) return process.env.API_BACKEND_URL;
-  // 2. Production fallback: droplet IP directly
-  if (process.env.NODE_ENV === "production") return "http://168.144.39.0";
+  // 2. Production fallback: droplet IP + NestJS port directly (no nginx needed)
+  if (process.env.NODE_ENV === "production") return "http://168.144.39.0:3002";
   // 3. Local dev
   return "http://localhost:3002";
 })();
-
-// Host header to send to nginx so it routes to the correct server block
-const BACKEND_HOST = "api.cblue.co.th";
 
 const SKIP_REQ = new Set([
   "host", "connection", "keep-alive", "transfer-encoding",
@@ -51,7 +43,6 @@ async function handler(
     request.headers.forEach((v, k) => {
       if (!SKIP_REQ.has(k.toLowerCase())) headers.set(k, v);
     });
-    headers.set("host", BACKEND_HOST);
 
     // Build fetch init
     const init: RequestInit & { duplex?: string } = {

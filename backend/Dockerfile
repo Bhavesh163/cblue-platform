@@ -22,11 +22,15 @@ WORKDIR /app
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma.config.ts ./
 
 RUN npm ci --omit=dev
 
 # Copy generated Prisma client from builder (prisma CLI is a devDep)
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+# Copy prisma CLI for running migrations in production
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder /app/node_modules/@prisma/engines ./node_modules/@prisma/engines
 
 # Don't run as root
 RUN addgroup -g 1001 -S nodejs && \
