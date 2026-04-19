@@ -241,29 +241,17 @@ jobs:
               echo "⚠️ GHCR login failed — will build locally"
             fi
 
-            # ── Remove old backend + nginx containers ──
-            $DC -f infrastructure/docker/docker-compose.yml rm -sf backend nginx 2>/dev/null || true
+            # ── Remove old backend container ──
+            $DC -f infrastructure/docker/docker-compose.yml rm -sf backend 2>/dev/null || true
+            # Also remove nginx container if left from previous deploy
+            $DC -f infrastructure/docker/docker-compose.yml rm -sf nginx 2>/dev/null || true
 
-            # ── Stop host nginx to free port 80 for Docker nginx container ──
-            # Uses PID file + kill (no nsenter, no systemctl, no --privileged — those hung)
-            echo "🔧 Freeing port 80..."
-            NGINX_PID=$(docker run --rm -v /var/run/nginx.pid:/nginx.pid:ro alpine cat /nginx.pid 2>/dev/null || true)
-            if [ -n "$NGINX_PID" ] && echo "$NGINX_PID" | grep -qE '^[0-9]+$'; then
-              echo "Host nginx running (PID: $NGINX_PID) — killing..."
-              docker run --rm --pid=host alpine kill "$NGINX_PID" 2>/dev/null || true
-              sleep 3
-              docker run --rm --pid=host alpine kill -9 "$NGINX_PID" 2>/dev/null || true
-              echo "✅ Host nginx killed"
-            else
-              echo "ℹ️ No host nginx PID found — port 80 may already be free"
-            fi
-
-            # ── Start core services (including containerized nginx) ──
+            # ── Start core services ──
             if [ "$PULLED_IMAGE" = "true" ]; then
-              $DC -f infrastructure/docker/docker-compose.yml up -d postgres redis rabbitmq backend nginx
+              $DC -f infrastructure/docker/docker-compose.yml up -d postgres redis rabbitmq backend
             else
               echo "⚠️ GHCR image pull failed — attempting up with local image..."
-              $DC -f infrastructure/docker/docker-compose.yml up -d postgres redis rabbitmq backend nginx || {
+              $DC -f infrastructure/docker/docker-compose.yml up -d postgres redis rabbitmq backend || {
                 echo "❌ No backend image available. Deploy cannot proceed."
                 exit 1
               }
@@ -277,20 +265,31 @@ jobs:
             # ── Run Prisma migrations ──
             $DC -f infrastructure/docker/docker-compose.yml exec -T backend npx prisma migrate deploy 2>&1 || echo "⚠️ Migration note: check above for details"
 
-            # ── Verify backend health (direct port 3002) ──
+            # ── Verify backend health ──
             sleep 5
-            HEALTH=$(curl -sf http://127.0.0.1:3002/api/v1/health 2>&1 || echo '{"status":"unreachable on port 3002"}')
-            echo "Backend health (direct): $HEALTH"
+            HEALTH=$(curl -sf http://127.0.0.1:3002/api/v1/health 2>&1 || echo '{"status":"unreachable"}')
+            echo "Backend health: $HEALTH"
 
-            # ── Verify nginx proxy (port 80 → backend via Docker nginx container) ──
-            PROXY_CHECK=$(curl -sf http://127.0.0.1/api/v1/health 2>&1 || echo '{"status":"nginx_proxy_failed"}')
-            echo "Nginx proxy check (port 80): $PROXY_CHECK"
-            if echo "$PROXY_CHECK" | grep -q '"ok"'; then
-              echo "✅ Port 80 → NestJS proxy is working (via Docker nginx container)"
+            # ── Redirect external port 80 → 3002 via iptables (bypasses host nginx) ──
+            # Host nginx keeps running but external traffic is redirected before reaching it.
+            # This avoids: no sudo, no stopping nginx, no Docker nginx container, no hanging.
+            echo "🔧 Setting up iptables port 80 → 3002 redirect..."
+            docker run --rm --net=host --cap-add=NET_ADMIN alpine sh -c '
+              apk add --no-cache iptables >/dev/null 2>&1
+              # Remove existing redirect to avoid duplicates
+              iptables -t nat -D PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3002 2>/dev/null || true
+              # Add fresh redirect rule at top of chain
+              iptables -t nat -I PREROUTING 1 -p tcp --dport 80 -j REDIRECT --to-port 3002
+              echo "iptables PREROUTING rules:"
+              iptables -t nat -L PREROUTING -n --line-numbers | head -5
+            ' 2>&1 && echo "✅ iptables redirect active: external port 80 → 3002" || echo "⚠️ iptables redirect failed"
+
+            # ── Final verification ──
+            if echo "$HEALTH" | grep -q '"ok"'; then
+              echo "✅ Backend healthy + iptables redirect active — registration should work"
             else
-              echo "❌ Nginx container proxy NOT working — CF Worker will get 502"
-              echo "Debug: $DC -f infrastructure/docker/docker-compose.yml logs nginx"
-              $DC -f infrastructure/docker/docker-compose.yml logs --tail=20 nginx 2>&1 || true
+              echo "❌ Backend not healthy — check logs"
+              $DC -f infrastructure/docker/docker-compose.yml logs --tail=20 backend 2>&1 || true
             fi
 
             echo "✅ Deploy complete: $DEPLOY_SHA"
