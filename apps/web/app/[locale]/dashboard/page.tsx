@@ -240,7 +240,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Tab Content */}
-        {activeTab === "overview" && <OverviewTab locale={locale} prefix={prefix} subscriber={subscriber} />}
+        {activeTab === "overview" && <OverviewTab locale={locale} subscriber={subscriber} />}
         {activeTab === "bookings" && <BookingsTab locale={locale} />}
         {activeTab === "requests" && <RequestsTab locale={locale} />}
         {activeTab === "property" && <PropertyTab locale={locale} prefix={prefix} />}
@@ -374,7 +374,7 @@ export default function DashboardPage() {
 }
 
 /* ===== OVERVIEW TAB ===== */
-function OverviewTab({ locale, prefix, subscriber }: { locale: string; prefix: string; subscriber: SubscriberInfo | null }) {
+function OverviewTab({ locale, subscriber }: { locale: string; subscriber: SubscriberInfo | null }) {
   return (
     <div className="space-y-6">
       {/* Stats */}

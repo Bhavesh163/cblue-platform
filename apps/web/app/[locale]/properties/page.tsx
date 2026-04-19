@@ -83,7 +83,7 @@ export default function PropertiesPage() {
     async function fetchLatest() {
       try {
         const res = await fetch("/api/v1/properties?limit=20");
-        if (res.ok) {"/api/v1/properties?limit=20"
+        if (res.ok) {
           const data = await res.json();
           setLatestProperties(data.properties || []);
         }
@@ -103,6 +103,7 @@ export default function PropertiesPage() {
     };
     const pool = comments[locale] ?? comments["en"]!;
     setListerComment(pool[Math.floor(Math.random() * pool.length)]!);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleSearch(overrides?: Partial<typeof filters>) {
@@ -120,7 +121,7 @@ export default function PropertiesPage() {
       if (f.keyword) params.set("keyword", f.keyword);
 
       const res = await fetch(`/api/v1/properties?${params.toString()}`);
-      if (res.ok) {`/api/v1/properties?${params.toString()}`
+      if (res.ok) {
         const data = await res.json();
         setProperties(data.properties || []);
       }

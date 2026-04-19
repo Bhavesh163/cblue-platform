@@ -51,7 +51,7 @@ export default function SubscriptionRegisterPage() {
       setError(t("passwordMin8"));
       return;
     }
-    if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{}|;:'",.<>?/`~])/.test(form.password)) {
+    if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{}|;:'",.<>?/`~])/.test(form.password)) {
       setError(locale === "th" 
         ? "รหัสผ่านต้องมีตัวพิมพ์เล็ก ตัวพิมพ์ใหญ่ ตัวเลข และอักขระพิเศษ" 
         : locale === "zh" 

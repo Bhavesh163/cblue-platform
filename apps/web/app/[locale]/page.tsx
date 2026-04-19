@@ -1,13 +1,11 @@
 import Link from "next/link";
 import Image from "next/image";
 import {useTranslations, useLocale} from "next-intl";
-import {getTranslations} from "next-intl/server";
 import type { Metadata } from "next";
 import { ScrollReveal } from "./components/ScrollReveal";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
-  const t = await getTranslations({ locale });
   const titles: Record<string, string> = {
     th: "CBLUE - แพลตฟอร์มช่างซ่อมบำรุง ทีมโครงการ มืออาชีพ และอสังหาริมทรัพย์อันดับ 1 ของไทย",
     en: "CBLUE - Thailand's #1 AI Home Services & Real Estate Platform",

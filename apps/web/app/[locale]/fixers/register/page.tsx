@@ -412,7 +412,7 @@ export default function FixerRegisterPage() {
         setError(locale === "th" ? "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร" : locale === "zh" ? "密码至少8个字符" : "Password must be at least 8 characters");
         return;
       }
-      if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{}|;:'",.<>?/`~])/.test(form.password)) {
+      if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{}|;:'",.<>?/`~])/.test(form.password)) {
         setError(locale === "th" ? "รหัสผ่านต้องมีตัวพิมพ์เล็ก ตัวพิมพ์ใหญ่ ตัวเลข และอักขระพิเศษ" : locale === "zh" ? "密码必须包含小写字母、大写字母、数字和特殊字符" : "Password must contain uppercase, lowercase, number, and special character");
         return;
       }
@@ -614,7 +614,6 @@ export default function FixerRegisterPage() {
         const descLength = (form.pastExperience || "").length;
         const hasDescription = descLength > 20;
         const hasDetailedDesc = descLength > 100;
-        const hasPriceList = priceRows.some(r => r.service && r.finalPrice);
         const priceRowCount = priceRows.filter(r => r.service && r.finalPrice).length;
         const hasBio = (form.bio || "").length > 30;
         const hasCompanyAddress = !!(form.companyProvince && form.companyDistrict && form.companyHouseNumber);

@@ -56,7 +56,7 @@ export default function PropertyDetailPage() {
     async function load() {
       try {
         const res = await fetch(`/api/v1/properties/${encodeURIComponent(id)}`);
-        if (res.ok) {`/api/v1/properties/${encodeURIComponent(id)}`
+        if (res.ok) {
           setProperty(await res.json());
         } else {
           setNotFound(true);

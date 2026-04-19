@@ -1,4 +1,4 @@
-import {NextIntlClientProvider, useMessages} from 'next-intl';
+import {NextIntlClientProvider} from 'next-intl';
 import {setRequestLocale} from 'next-intl/server';
 import {routing} from '../../i18n/routing';
 import {Header} from './components/Header';

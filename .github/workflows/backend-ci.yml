@@ -165,14 +165,34 @@ jobs:
 
             echo "🚀 Starting deployment..."
 
+            # ── Detect privilege level (avoid sudo failures on non-root users) ──
+            if [ "$(id -u)" -eq 0 ]; then
+              SUDO=""
+            elif sudo -n true 2>/dev/null; then
+              SUDO="sudo"
+            else
+              SUDO="SKIP"
+              echo "⚠️ Running as $(whoami) without passwordless sudo — nginx config will be skipped"
+              echo "Fix: set DROPLET_USER=root or add '$(whoami) ALL=(ALL) NOPASSWD:ALL' to /etc/sudoers"
+            fi
+
             # ── Ensure project directory exists ──
-            if [ ! -d /opt/cblue-platform ]; then
+            DEPLOY_DIR="/opt/cblue-platform"
+            if [ "$SUDO" = "SKIP" ]; then
+              DEPLOY_DIR="$HOME/cblue-platform"
+            fi
+
+            if [ ! -d "$DEPLOY_DIR" ]; then
               echo "📦 Cloning repository..."
-              sudo git clone https://github.com/Bhavesh163/cblue-platform.git /opt/cblue-platform
+              if [ -n "$SUDO" ] && [ "$SUDO" != "SKIP" ]; then
+                $SUDO mkdir -p "$DEPLOY_DIR"
+                $SUDO chown "$(whoami):$(whoami)" "$DEPLOY_DIR"
+              fi
+              git clone https://github.com/Bhavesh163/cblue-platform.git "$DEPLOY_DIR"
             fi
 
             # ── Pull latest code ──
-            cd /opt/cblue-platform
+            cd "$DEPLOY_DIR"
             git pull origin main || true
             echo "✅ Code updated"
 
@@ -187,13 +207,13 @@ jobs:
             # ── Run Prisma migrations ──
             docker compose -f infrastructure/docker/docker-compose.yml exec -T backend npx prisma migrate deploy 2>&1 || echo "⚠️ Migration note: check above for details"
 
-            # ── Deploy nginx config ──
-            if [ -f infrastructure/nginx/cblue.conf ]; then
-              sudo cp infrastructure/nginx/cblue.conf /etc/nginx/sites-available/cblue
-              sudo ln -sf /etc/nginx/sites-available/cblue /etc/nginx/sites-enabled/cblue
-              sudo rm -f /etc/nginx/sites-enabled/default
-              if sudo nginx -t 2>&1; then
-                sudo systemctl reload nginx
+            # ── Deploy nginx config (requires root or passwordless sudo) ──
+            if [ "$SUDO" != "SKIP" ] && [ -f infrastructure/nginx/cblue.conf ]; then
+              $SUDO cp infrastructure/nginx/cblue.conf /etc/nginx/sites-available/cblue
+              $SUDO ln -sf /etc/nginx/sites-available/cblue /etc/nginx/sites-enabled/cblue
+              $SUDO rm -f /etc/nginx/sites-enabled/default
+              if $SUDO nginx -t 2>&1; then
+                $SUDO systemctl reload nginx
                 echo "✅ Nginx config deployed and reloaded"
               else
                 echo "❌ Nginx config test failed — kept old config"
@@ -206,7 +226,9 @@ jobs:
             echo "Backend health: $HEALTH"
 
             # ── Verify nginx proxy ──
-            PROXY_CHECK=$(curl -sf http://127.0.0.1/api/v1/health -H 'Host: api.cblue.co.th' 2>&1 || echo '{"status":"nginx_proxy_failed"}')
-            echo "Nginx proxy check: $PROXY_CHECK"
+            if [ "$SUDO" != "SKIP" ]; then
+              PROXY_CHECK=$(curl -sf http://127.0.0.1/api/v1/health -H 'Host: api.cblue.co.th' 2>&1 || echo '{"status":"nginx_proxy_failed"}')
+              echo "Nginx proxy check: $PROXY_CHECK"
+            fi
 
             echo "✅ Deploy complete: ${{ github.sha }}"

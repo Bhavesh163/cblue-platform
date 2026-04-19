@@ -307,12 +307,12 @@ export default function PartnerZonePage() {
 
         {/* Tab Content */}
         {activeTab === "overview" && <OverviewTab t={t} locale={locale} prefix={prefix} profile={DEMO_PROFILE} activeJobs={activeJobs} pastJobs={pastJobs} notifications={DEMO_NOTIFICATIONS} properties={DEMO_PROPERTIES} />}
-        {activeTab === "jobs" && <JobsTab t={t} locale={locale} activeJobs={activeJobs} pastJobs={pastJobs} statusLabels={statusLabels} onSelectJob={(id) => { setSelectedJob(id); setActiveTab("chat"); }} />}
+        {activeTab === "jobs" && <JobsTab t={t} activeJobs={activeJobs} pastJobs={pastJobs} statusLabels={statusLabels} onSelectJob={(id) => { setSelectedJob(id); setActiveTab("chat"); }} />}
         {activeTab === "properties" && <PropertiesTab t={t} locale={locale} prefix={prefix} properties={DEMO_PROPERTIES} />}
-        {activeTab === "chat" && <ChatTabContent t={t} locale={locale} messages={messages} selectedJob={selectedJob} setSelectedJob={setSelectedJob} newMessage={newMessage} setNewMessage={setNewMessage} sendMessage={sendMessage} statusLabels={statusLabels} chatEndRef={chatEndRef} />}
+        {activeTab === "chat" && <ChatTabContent t={t} messages={messages} selectedJob={selectedJob} setSelectedJob={setSelectedJob} newMessage={newMessage} setNewMessage={setNewMessage} sendMessage={sendMessage} statusLabels={statusLabels} chatEndRef={chatEndRef} />}
         {activeTab === "notifications" && <NotificationsTab t={t} locale={locale} notifications={DEMO_NOTIFICATIONS} />}
         {activeTab === "history" && <HistoryTab t={t} locale={locale} pastJobs={pastJobs} statusLabels={statusLabels} />}
-        {activeTab === "profile" && <ProfileTab t={t} locale={locale} prefix={prefix} profile={DEMO_PROFILE} renderStars={renderStars} />}
+        {activeTab === "profile" && <ProfileTab t={t} locale={locale} profile={DEMO_PROFILE} renderStars={renderStars} />}
 
         {/* Tier Info */}
         <div className="mt-8 bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
@@ -436,8 +436,8 @@ function OverviewTab({ t, locale, prefix, profile, activeJobs, pastJobs, notific
 }
 
 /* ===== JOBS TAB ===== */
-function JobsTab({ t, locale, activeJobs, pastJobs, statusLabels, onSelectJob }: {
-  t: Translations; locale: string; activeJobs: Job[]; pastJobs: Job[];
+function JobsTab({ t, activeJobs, pastJobs, statusLabels, onSelectJob }: {
+  t: Translations; activeJobs: Job[]; pastJobs: Job[];
   statusLabels: Record<string, string>; onSelectJob: (id: string) => void;
 }) {
   function JobCard({ job, clickable }: { job: Job; clickable?: boolean }) {
@@ -648,8 +648,8 @@ function PropertiesTab({ t, locale, prefix, properties }: {
 }
 
 /* ===== CHAT TAB ===== */
-function ChatTabContent({ t, locale, messages, selectedJob, setSelectedJob, newMessage, setNewMessage, sendMessage, statusLabels, chatEndRef }: {
-  t: Translations; locale: string; messages: Record<string, ChatMessage[]>;
+function ChatTabContent({ t, messages, selectedJob, setSelectedJob, newMessage, setNewMessage, sendMessage, statusLabels, chatEndRef }: {
+  t: Translations; messages: Record<string, ChatMessage[]>;
   selectedJob: string | null; setSelectedJob: (id: string) => void;
   newMessage: string; setNewMessage: (s: string) => void; sendMessage: () => void;
   statusLabels: Record<string, string>; chatEndRef: React.RefObject<HTMLDivElement | null>;
@@ -772,8 +772,8 @@ function HistoryTab({ t, locale, pastJobs, statusLabels }: { t: Translations; lo
 }
 
 /* ===== PROFILE TAB ===== */
-function ProfileTab({ t, locale, prefix, profile, renderStars }: {
-  t: Translations; locale: string; prefix: string; profile: ProviderProfile;
+function ProfileTab({ t, locale, profile, renderStars }: {
+  t: Translations; locale: string; profile: ProviderProfile;
   renderStars: (r: number) => React.ReactNode;
 }) {
   return (
