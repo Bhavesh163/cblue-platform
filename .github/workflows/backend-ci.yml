@@ -235,6 +235,11 @@ jobs:
               echo "⚠️ GHCR login failed — will build locally"
             fi
 
+            # ── Remove old backend container (avoids docker-compose v1 ContainerConfig bug) ──
+            # docker-compose 1.29.2 crashes on "recreate" when the new image was built by BuildKit
+            # because BuildKit images lack the legacy ContainerConfig field. Removing first forces a clean create.
+            $DC -f infrastructure/docker/docker-compose.yml rm -sf backend 2>/dev/null || true
+
             # ── Start core services ──
             if [ "$PULLED_IMAGE" = "true" ]; then
               # Use pre-built image (fast — no build on droplet)
