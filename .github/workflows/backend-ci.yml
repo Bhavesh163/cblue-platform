@@ -173,6 +173,9 @@ jobs:
           script: |
             set -e
 
+            # docker-compose v1 has a 60s default HTTP timeout which is too low for slow droplets
+            export COMPOSE_HTTP_TIMEOUT=300
+
             echo "🚀 Starting deployment ($DEPLOY_SHA)..."
 
             # ── Detect privilege level (avoid sudo failures on non-root users) ──
@@ -252,7 +255,7 @@ jobs:
             sleep 25
 
             # ── Verify containers are running ──
-            $DC -f infrastructure/docker/docker-compose.yml ps
+            $DC -f infrastructure/docker/docker-compose.yml ps || echo "⚠️ ps timed out — continuing anyway"
 
             # ── Run Prisma migrations ──
             $DC -f infrastructure/docker/docker-compose.yml exec -T backend npx prisma migrate deploy 2>&1 || echo "⚠️ Migration note: check above for details"
