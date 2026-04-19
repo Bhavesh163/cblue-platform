@@ -116,6 +116,10 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
 
+    permissions:
+      contents: read
+      packages: read
+
     steps:
       - name: Check deployment secrets
         id: check_secrets
@@ -156,14 +160,20 @@ jobs:
       - name: Deploy to DigitalOcean Droplet
         if: steps.check_secrets.outputs.has_secrets == 'true'
         uses: appleboy/ssh-action@v1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          DEPLOY_SHA: ${{ github.sha }}
         with:
           host: ${{ secrets.DROPLET_HOST }}
           username: ${{ secrets.DROPLET_USER }}
           key: ${{ secrets.DROPLET_SSH_KEY }}
+          envs: GH_TOKEN,GH_REPO,DEPLOY_SHA
+          command_timeout: 20m
           script: |
             set -e
 
-            echo "🚀 Starting deployment..."
+            echo "🚀 Starting deployment ($DEPLOY_SHA)..."
 
             # ── Detect privilege level (avoid sudo failures on non-root users) ──
             if [ "$(id -u)" -eq 0 ]; then
@@ -208,8 +218,31 @@ jobs:
             fi
             echo "Using: $DC"
 
-            # ── Bring up ALL services with local build ──
-            $DC -f infrastructure/docker/docker-compose.yml up -d --build
+            # ── Login to GHCR and pull pre-built backend image ──
+            REPO_LC=$(echo "$GH_REPO" | tr '[:upper:]' '[:lower:]')
+            export GITHUB_REPOSITORY="$REPO_LC"
+
+            PULLED_IMAGE=false
+            if echo "$GH_TOKEN" | docker login ghcr.io -u github --password-stdin 2>/dev/null; then
+              echo "✅ Logged in to GHCR"
+              if $DC -f infrastructure/docker/docker-compose.yml pull backend 2>/dev/null; then
+                echo "✅ Pulled pre-built backend image from GHCR"
+                PULLED_IMAGE=true
+              else
+                echo "⚠️ Could not pull image from GHCR — will build locally"
+              fi
+            else
+              echo "⚠️ GHCR login failed — will build locally"
+            fi
+
+            # ── Start core services ──
+            if [ "$PULLED_IMAGE" = "true" ]; then
+              # Use pre-built image (fast — no build on droplet)
+              $DC -f infrastructure/docker/docker-compose.yml up -d postgres redis rabbitmq backend
+            else
+              # Fallback: build on droplet (slow but works)
+              $DC -f infrastructure/docker/docker-compose.yml up -d --build postgres redis rabbitmq backend
+            fi
             echo "⏳ Waiting for services to stabilize..."
             sleep 25
 
@@ -243,4 +276,4 @@ jobs:
               echo "Nginx proxy check: $PROXY_CHECK"
             fi
 
-            echo "✅ Deploy complete: ${{ github.sha }}"
+            echo "✅ Deploy complete: $DEPLOY_SHA"
