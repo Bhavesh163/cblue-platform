@@ -196,16 +196,28 @@ jobs:
             git pull origin main || true
             echo "✅ Code updated"
 
+            # ── Detect docker compose command (v2 plugin vs v1 standalone) ──
+            if docker compose version >/dev/null 2>&1; then
+              DC="docker compose"
+            elif command -v docker-compose >/dev/null 2>&1; then
+              DC="docker-compose"
+            else
+              echo "❌ Neither 'docker compose' nor 'docker-compose' found"
+              echo "Install Docker Compose: https://docs.docker.com/compose/install/"
+              exit 1
+            fi
+            echo "Using: $DC"
+
             # ── Bring up ALL services with local build ──
-            docker compose -f infrastructure/docker/docker-compose.yml up -d --build
+            $DC -f infrastructure/docker/docker-compose.yml up -d --build
             echo "⏳ Waiting for services to stabilize..."
             sleep 25
 
             # ── Verify containers are running ──
-            docker compose -f infrastructure/docker/docker-compose.yml ps
+            $DC -f infrastructure/docker/docker-compose.yml ps
 
             # ── Run Prisma migrations ──
-            docker compose -f infrastructure/docker/docker-compose.yml exec -T backend npx prisma migrate deploy 2>&1 || echo "⚠️ Migration note: check above for details"
+            $DC -f infrastructure/docker/docker-compose.yml exec -T backend npx prisma migrate deploy 2>&1 || echo "⚠️ Migration note: check above for details"
 
             # ── Deploy nginx config (requires root or passwordless sudo) ──
             if [ "$SUDO" != "SKIP" ] && [ -f infrastructure/nginx/cblue.conf ]; then
