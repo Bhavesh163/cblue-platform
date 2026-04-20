@@ -62,13 +62,20 @@ async function handler(
     // convert to a proper JSON 502 so the frontend shows "service unavailable"
     const ct = upstream.headers.get("content-type") || "";
     if (!upstream.ok && !ct.includes("application/json")) {
-      // Drain the body so the connection is released
-      await upstream.text().catch(() => {});
+      // Capture body for diagnostics
+      const body = await upstream.text().catch(() => "");
       return Response.json(
         {
           error: "backend_unavailable",
           message: "Backend service is temporarily unavailable",
           statusCode: 502,
+          _debug: {
+            upstreamStatus: upstream.status,
+            upstreamContentType: ct,
+            upstreamBody: body.slice(0, 300),
+            target,
+            backend: BACKEND_URL,
+          },
         },
         { status: 502 },
       );
