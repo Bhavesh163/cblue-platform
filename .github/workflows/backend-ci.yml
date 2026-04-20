@@ -73,11 +73,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Check if backend changed
         id: check
         run: |
-          if git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -q '^backend/'; then
+          if git diff --name-only HEAD~1 HEAD | grep -q '^backend/'; then
             echo "backend_changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "backend_changed=false" >> "$GITHUB_OUTPUT"
@@ -244,7 +246,7 @@ jobs:
             # If GHCR image unavailable, build from updated Dockerfile (git pull already ran)
             if [ "$PULLED_IMAGE" = "false" ]; then
               echo "🔨 Building backend image locally from Dockerfile..."
-              $DC -f infrastructure/docker/docker-compose.yml build --no-cache backend 2>&1
+              $DC -f infrastructure/docker/docker-compose.yml build backend 2>&1
               echo "✅ Local build complete"
             fi
 
@@ -261,12 +263,17 @@ jobs:
             echo "⏳ Waiting for services to stabilize..."
             sleep 25
 
-            # ── Verify containers are running ──
-            $DC -f infrastructure/docker/docker-compose.yml ps || echo "⚠️ ps timed out — continuing anyway"
-
             # ── Run Prisma migrations (MUST succeed) ──
             echo "🔍 Checking container environment..."
-            $DC -f infrastructure/docker/docker-compose.yml exec -T backend sh -c '
+            # Use docker exec directly (docker-compose v1 has socket timeout issues)
+            BACKEND_CONTAINER=$(docker ps --filter "name=backend" --format "{{.Names}}" | head -1)
+            if [ -z "$BACKEND_CONTAINER" ]; then
+              echo "❌ Backend container not found!"
+              docker ps -a 2>&1
+              exit 1
+            fi
+            echo "Using container: $BACKEND_CONTAINER"
+            docker exec "$BACKEND_CONTAINER" sh -c '
               echo "DATABASE_URL set: ${DATABASE_URL:+yes (len=${#DATABASE_URL})}"
               echo "Config files:" && ls -la prisma.config.* 2>/dev/null || true
               echo "Node version:" && node --version
@@ -277,7 +284,7 @@ jobs:
             if [ $MIGRATE_EXIT -ne 0 ]; then
               echo "❌ Prisma migration FAILED (exit $MIGRATE_EXIT)"
               echo "Checking backend logs for clues..."
-              $DC -f infrastructure/docker/docker-compose.yml logs --tail=30 backend 2>&1 || true
+              docker logs --tail=30 "$BACKEND_CONTAINER" 2>&1 || true
               # Don't exit — backend may still be healthy with existing tables
             else
               echo "✅ Prisma migrations applied successfully"
@@ -307,7 +314,7 @@ jobs:
               echo "✅ Backend healthy + iptables redirect active — registration should work"
             else
               echo "❌ Backend not healthy — check logs"
-              $DC -f infrastructure/docker/docker-compose.yml logs --tail=20 backend 2>&1 || true
+              docker logs --tail=20 "$BACKEND_CONTAINER" 2>&1 || true
             fi
 
             echo "✅ Deploy complete: $DEPLOY_SHA"
