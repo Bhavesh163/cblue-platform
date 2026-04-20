@@ -127,6 +127,8 @@ export class FixerController {
         );
       }
     }
-    return this.fixerService.digestPortfolio(files);
+    return this.fixerService.digestPortfolio(
+      files,
+    ) as Promise<Record<string, unknown>>;
   }
 }

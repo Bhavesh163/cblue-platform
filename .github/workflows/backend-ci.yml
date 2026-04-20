@@ -171,7 +171,7 @@ jobs:
           username: ${{ secrets.DROPLET_USER }}
           key: ${{ secrets.DROPLET_SSH_KEY }}
           envs: GH_TOKEN,GH_REPO,DEPLOY_SHA
-          command_timeout: 35m
+          command_timeout: 40m
           script: |
             set -e
 
@@ -227,22 +227,26 @@ jobs:
             PULLED_IMAGE=false
             if echo "$GH_TOKEN" | docker login ghcr.io -u github --password-stdin 2>&1; then
               echo "✅ Logged in to GHCR"
-              # 5-minute timeout on pull — fall back to local build if slow
-              echo "Pulling $IMAGE (5m timeout)..."
-              if timeout 300 docker pull "$IMAGE" 2>&1; then
+              # 20-minute timeout on pull — the droplet has slow bandwidth
+              echo "Pulling $IMAGE (20m timeout)..."
+              if timeout 1200 docker pull "$IMAGE" 2>&1; then
                 echo "✅ Pulled backend image from GHCR"
                 PULLED_IMAGE=true
               else
-                echo "⚠️ Pull timed out or failed — building locally"
+                echo "⚠️ Pull timed out or failed after 20m"
               fi
             else
-              echo "⚠️ GHCR login failed — building locally"
+              echo "⚠️ GHCR login failed"
             fi
 
             if [ "$PULLED_IMAGE" = "false" ]; then
-              echo "🔨 Building backend image locally..."
-              $DC -f infrastructure/docker/docker-compose.yml build backend 2>&1
-              echo "✅ Local build complete"
+              echo "⚠️ Using existing local image (local build too slow on this droplet)"
+              if docker images "$IMAGE" --format "{{.ID}}" | head -1 | grep -q .; then
+                echo "✅ Found existing local image"
+              else
+                echo "❌ No local image found and pull failed — cannot deploy"
+                exit 1
+              fi
             fi
 
             # ── Recreate backend container ──

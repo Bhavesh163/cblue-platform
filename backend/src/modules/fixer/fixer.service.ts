@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
+import { Prisma } from '@prisma/client';
 import { RegisterFixerDto } from './dto/register-fixer.dto';
 import { AddSkillDto } from './dto/add-skill.dto';
 import { SetAvailabilityDto } from './dto/set-availability.dto';
@@ -51,7 +52,7 @@ export class FixerService {
         yearsExperience: dto.yearsExperience,
         travelRadius: dto.travelRadius,
         priceList: dto.priceList
-          ? JSON.parse(JSON.stringify(dto.priceList))
+          ? (JSON.parse(JSON.stringify(dto.priceList)) as Prisma.InputJsonValue)
           : undefined,
         serviceProvince: dto.address?.province,
         serviceDistrict: dto.address?.district,
@@ -242,7 +243,7 @@ export class FixerService {
         }),
       );
 
-      return response.data;
+      return response.data as Record<string, unknown>;
     } catch {
       this.logger.warn(
         `Vision service unavailable at ${visionUrl}, using fallback`,
