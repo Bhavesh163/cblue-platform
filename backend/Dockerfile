@@ -26,9 +26,6 @@ COPY --from=builder /app/prisma ./prisma
 
 RUN npm ci --omit=dev
 
-# Generate plain ESM config for production — avoids TS loader + prisma/config import issues
-RUN printf 'export default {\n  schema: "prisma/schema.prisma",\n  migrations: { path: "prisma/migrations" },\n  datasource: { url: process.env.DATABASE_URL },\n};\n' > prisma.config.mjs
-
 # Copy generated Prisma client from builder (prisma CLI is a devDep)
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 # Copy prisma CLI for running migrations in production
@@ -36,6 +33,9 @@ COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/node_modules/@prisma/engines ./node_modules/@prisma/engines
 # Create .bin symlink so `npx prisma` works without re-downloading
 RUN mkdir -p node_modules/.bin && ln -sf ../prisma/build/index.js node_modules/.bin/prisma
+
+# Create a lightweight prisma.config.mjs for migrations (plain object, no defineConfig deps)
+RUN printf 'export default {\n  schema: "prisma/schema.prisma",\n  migrations: { path: "prisma/migrations" },\n  datasource: { url: process.env["DATABASE_URL"] },\n};\n' > prisma.config.mjs
 
 # Don't run as root
 RUN addgroup -g 1001 -S nodejs && \
