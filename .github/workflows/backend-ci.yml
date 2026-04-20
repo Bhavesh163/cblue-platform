@@ -227,13 +227,14 @@ jobs:
             PULLED_IMAGE=false
             if echo "$GH_TOKEN" | docker login ghcr.io -u github --password-stdin 2>&1; then
               echo "✅ Logged in to GHCR"
-              # 20-minute timeout on pull — the droplet has slow bandwidth
-              echo "Pulling $IMAGE (20m timeout)..."
-              if timeout 1200 docker pull "$IMAGE" 2>&1; then
+              # 25-minute timeout on pull — the droplet has slow bandwidth
+              # (20m was too short — layers were downloaded but extraction timed out)
+              echo "Pulling $IMAGE (25m timeout)..."
+              if timeout 1500 docker pull "$IMAGE" 2>&1; then
                 echo "✅ Pulled backend image from GHCR"
                 PULLED_IMAGE=true
               else
-                echo "⚠️ Pull timed out or failed after 20m"
+                echo "⚠️ Pull timed out or failed after 25m"
               fi
             else
               echo "⚠️ GHCR login failed"
@@ -249,16 +250,60 @@ jobs:
               fi
             fi
 
-            # ── Recreate backend container ──
+            # ── Start infrastructure first, then backend ──
             $DC -f infrastructure/docker/docker-compose.yml rm -sf backend 2>/dev/null || true
             $DC -f infrastructure/docker/docker-compose.yml rm -sf nginx 2>/dev/null || true
 
-            $DC -f infrastructure/docker/docker-compose.yml up -d postgres redis rabbitmq backend || {
-              echo "❌ Failed to start services"
-              exit 1
+            # Restart unhealthy infrastructure containers before starting backend
+            echo "🔧 Ensuring infrastructure containers are healthy..."
+            for SVC in postgres redis rabbitmq; do
+              STATUS=$(docker inspect --format='{{.State.Health.Status}}' "$(docker ps -aqf "name=$SVC" | head -1)" 2>/dev/null || echo "none")
+              if [ "$STATUS" = "unhealthy" ]; then
+                echo "  ⚠️ $SVC is unhealthy — restarting..."
+                $DC -f infrastructure/docker/docker-compose.yml restart "$SVC" 2>&1 || true
+              fi
+            done
+
+            # Start infrastructure services
+            $DC -f infrastructure/docker/docker-compose.yml up -d postgres redis rabbitmq 2>&1 || true
+            echo "⏳ Waiting for infrastructure to stabilize..."
+            sleep 15
+
+            # Wait for postgres specifically (it's the critical dependency)
+            for i in $(seq 1 12); do
+              PG_CONTAINER=$(docker ps --filter "name=postgres" --format "{{.Names}}" | head -1)
+              if [ -n "$PG_CONTAINER" ]; then
+                if docker exec "$PG_CONTAINER" pg_isready -U admin -d cblue >/dev/null 2>&1; then
+                  echo "✅ Postgres is ready"
+                  break
+                fi
+              fi
+              echo "  Waiting for postgres... ($i/12)"
+              sleep 5
+            done
+
+            # Start backend (depends_on uses service_started now, so this won't block on health)
+            $DC -f infrastructure/docker/docker-compose.yml up -d backend 2>&1 || {
+              echo "⚠️ docker-compose up backend failed — trying docker run fallback..."
+              docker run -d --name docker_backend_1 \
+                --network docker_default \
+                -p 3002:3002 \
+                -e DATABASE_URL="postgresql://admin:NewPass456!@postgres:5432/cblue" \
+                -e REDIS_HOST=redis -e REDIS_PORT=6379 \
+                -e RABBITMQ_URL="amqp://admin:password@rabbitmq:5672" \
+                -e JWT_SECRET=change-in-production \
+                -e JWT_REFRESH_SECRET=change-in-production \
+                -e JWT_EXPIRATION=15m -e JWT_REFRESH_EXPIRATION=7d \
+                -e PORT=3002 -e NODE_ENV=production \
+                --restart unless-stopped \
+                "$IMAGE" 2>&1 || {
+                  echo "❌ Failed to start backend container"
+                  docker ps -a 2>&1
+                  exit 1
+                }
             }
-            echo "⏳ Waiting for services to stabilize..."
-            sleep 25
+            echo "⏳ Waiting for backend to start..."
+            sleep 20
 
             # ── Run Prisma migrations via direct SQL (bypasses prisma CLI config issues) ──
             POSTGRES_CONTAINER=$(docker ps --filter "name=postgres" --format "{{.Names}}" | head -1)
