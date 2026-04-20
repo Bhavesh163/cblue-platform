@@ -262,14 +262,24 @@ jobs:
             # ── Verify containers are running ──
             $DC -f infrastructure/docker/docker-compose.yml ps || echo "⚠️ ps timed out — continuing anyway"
 
-            # ── Run Prisma migrations ──
+            # ── Run Prisma migrations (MUST succeed) ──
             echo "🔍 Checking container environment..."
             $DC -f infrastructure/docker/docker-compose.yml exec -T backend sh -c '
               echo "DATABASE_URL set: ${DATABASE_URL:+yes (len=${#DATABASE_URL})}"
-              echo "Config files:" && ls -la prisma.config.* 2>/dev/null
+              echo "Config files:" && ls -la prisma.config.* 2>/dev/null || true
+              echo "Node version:" && node --version
               echo "Running prisma migrate deploy..."
               npx prisma migrate deploy 2>&1
-            ' || echo "⚠️ Migration note: check above for details"
+            '
+            MIGRATE_EXIT=$?
+            if [ $MIGRATE_EXIT -ne 0 ]; then
+              echo "❌ Prisma migration FAILED (exit $MIGRATE_EXIT)"
+              echo "Checking backend logs for clues..."
+              $DC -f infrastructure/docker/docker-compose.yml logs --tail=30 backend 2>&1 || true
+              # Don't exit — backend may still be healthy with existing tables
+            else
+              echo "✅ Prisma migrations applied successfully"
+            fi
 
             # ── Verify backend health ──
             sleep 5

@@ -432,7 +432,7 @@ export default function FixerRegisterPage() {
         });
         if (!authRes.ok) {
           const errData = await authRes.json().catch(() => ({ message: "" }));
-          if (authRes.status === 403 || authRes.status === 502 || authRes.status === 530 || authRes.status === 503) {
+          if (authRes.status === 403 || authRes.status === 500 || authRes.status === 502 || authRes.status === 530 || authRes.status === 503) {
             setError(locale === "th" ? "ระบบกำลังปรับปรุง กรุณาลองใหม่ในอีกสักครู่" : locale === "zh" ? "系统正在维护中，请稍后再试" : "Service temporarily unavailable. Please try again shortly.");
             return;
           }
@@ -551,7 +551,7 @@ export default function FixerRegisterPage() {
 
       if (!regRes.ok) {
         const errData = await regRes.json().catch(() => ({ message: "" }));
-        if ([403, 502, 530, 503].includes(regRes.status)) {
+        if ([403, 500, 502, 530, 503].includes(regRes.status)) {
           setError(locale === "th" ? "ระบบกำลังปรับปรุง กรุณาลองใหม่ในอีกสักครู่" : locale === "zh" ? "系统正在维护中，请稍后再试" : "Service temporarily unavailable. Please try again shortly.");
           setSubmitting(false);
           return;

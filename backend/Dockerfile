@@ -22,10 +22,11 @@ WORKDIR /app
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
-# Copy TS config as .mjs — content is valid ESM JS, avoids TS loader in prod
-COPY --from=builder /app/prisma.config.ts ./prisma.config.mjs
 
 RUN npm ci --omit=dev
+
+# Generate plain ESM config for production — avoids TS loader + prisma/config import issues
+RUN printf 'export default {\n  schema: "prisma/schema.prisma",\n  migrations: { path: "prisma/migrations" },\n  datasource: { url: process.env.DATABASE_URL },\n};\n' > prisma.config.mjs
 
 # Copy generated Prisma client from builder (prisma CLI is a devDep)
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma

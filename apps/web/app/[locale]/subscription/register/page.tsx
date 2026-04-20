@@ -89,7 +89,7 @@ export default function SubscriptionRegisterPage() {
         if ([400, 422].includes(res.status)) {
           throw new Error(msg || (locale === "th" ? "ข้อมูลไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง" : locale === "zh" ? "输入数据无效，请检查后重试" : "Invalid input. Please check your details and try again."));
         }
-        if ([403, 502, 530, 503].includes(res.status)) {
+        if ([403, 500, 502, 530, 503].includes(res.status)) {
           throw new Error(locale === "th" 
             ? "ระบบกำลังปรับปรุง กรุณาลองใหม่ในอีกสักครู่" 
             : locale === "zh" 

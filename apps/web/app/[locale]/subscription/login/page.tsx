@@ -48,7 +48,7 @@ export default function SubscriptionLoginPage() {
         if (res.status === 401) {
           throw new Error(locale === "th" ? "อีเมลหรือรหัสผ่านไม่ถูกต้อง" : locale === "zh" ? "邮箱或密码不正确" : "Invalid email or password");
         }
-        if ([403, 502, 530, 503].includes(res.status)) {
+        if ([403, 500, 502, 530, 503].includes(res.status)) {
           throw new Error(locale === "th" 
             ? "ระบบกำลังปรับปรุง กรุณาลองใหม่ในอีกสักครู่" 
             : locale === "zh" 
