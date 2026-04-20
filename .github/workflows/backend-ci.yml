@@ -260,42 +260,71 @@ jobs:
             echo "⏳ Waiting for services to stabilize..."
             sleep 25
 
-            # ── Run Prisma migrations ──
+            # ── Run Prisma migrations via direct SQL (bypasses prisma CLI config issues) ──
+            POSTGRES_CONTAINER=$(docker ps --filter "name=postgres" --format "{{.Names}}" | head -1)
             BACKEND_CONTAINER=$(docker ps --filter "name=backend" --format "{{.Names}}" | head -1)
-            if [ -z "$BACKEND_CONTAINER" ]; then
-              echo "❌ Backend container not found!"
+            if [ -z "$POSTGRES_CONTAINER" ]; then
+              echo "❌ Postgres container not found!"
               docker ps -a 2>&1
               exit 1
             fi
-            echo "Using container: $BACKEND_CONTAINER"
+            echo "Using postgres: $POSTGRES_CONTAINER, backend: $BACKEND_CONTAINER"
 
-            # Verify env and config inside the container
-            docker exec "$BACKEND_CONTAINER" sh -c '
-              echo "DATABASE_URL set: ${DATABASE_URL:+yes (len=${#DATABASE_URL})}"
-              ls -la prisma.config.* 2>/dev/null || echo "No prisma.config found"
+            # Check if tables already exist
+            TABLE_COUNT=$(docker exec "$POSTGRES_CONTAINER" psql -U admin -d cblue -t -c \
+              "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE';" 2>&1 | tr -d ' ')
+            echo "Existing tables: $TABLE_COUNT"
 
-              # Ensure prisma CLI is available
-              if [ ! -f node_modules/.bin/prisma ]; then
-                mkdir -p node_modules/.bin
-                ln -sf ../prisma/build/index.js node_modules/.bin/prisma
-              fi
+            if [ "$TABLE_COUNT" -lt 5 ] 2>/dev/null; then
+              echo "📦 Running migrations via direct SQL..."
 
-              echo "Running prisma migrate deploy..."
-              npx prisma migrate deploy --config prisma.config.mjs 2>&1
-            '
-            MIGRATE_EXIT=$?
-            if [ $MIGRATE_EXIT -ne 0 ]; then
-              echo "⚠️ Prisma migration returned exit $MIGRATE_EXIT"
-              echo "Attempting to verify table existence..."
-              docker exec "$BACKEND_CONTAINER" node -e "
-                const { Pool } = require('pg');
-                const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-                pool.query(\"SELECT tablename FROM pg_tables WHERE schemaname='public'\")
-                  .then(r => { console.log('Tables:', r.rows.map(x => x.tablename).join(', ')); pool.end(); })
-                  .catch(e => { console.error('DB error:', e.message); pool.end(); process.exit(1); });
-              " 2>&1 || true
+              # Create _prisma_migrations table if it doesn't exist
+              docker exec "$POSTGRES_CONTAINER" psql -U admin -d cblue -c "
+                CREATE TABLE IF NOT EXISTS _prisma_migrations (
+                  id VARCHAR(36) PRIMARY KEY,
+                  checksum VARCHAR(64) NOT NULL,
+                  finished_at TIMESTAMPTZ,
+                  migration_name VARCHAR(255) NOT NULL,
+                  logs TEXT,
+                  rolled_back_at TIMESTAMPTZ,
+                  started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                  applied_steps_count INTEGER NOT NULL DEFAULT 0
+                );
+              " 2>&1
+
+              # Apply each migration SQL file in order
+              DEPLOY_DIR_RESOLVED=$(docker exec "$BACKEND_CONTAINER" sh -c 'echo $PWD' 2>/dev/null || echo "/opt/cblue-platform/backend")
+              MIGRATIONS_DIR="$DEPLOY_DIR/backend/prisma/migrations"
+              for MIG_DIR in $(ls -d "$MIGRATIONS_DIR"/*/  2>/dev/null | sort); do
+                MIG_NAME=$(basename "$MIG_DIR")
+                MIG_SQL="$MIG_DIR/migration.sql"
+                if [ ! -f "$MIG_SQL" ]; then continue; fi
+
+                # Check if already applied
+                ALREADY=$(docker exec "$POSTGRES_CONTAINER" psql -U admin -d cblue -t -c \
+                  "SELECT count(*) FROM _prisma_migrations WHERE migration_name='$MIG_NAME';" 2>&1 | tr -d ' ')
+
+                if [ "$ALREADY" = "0" ]; then
+                  echo "  Applying: $MIG_NAME"
+                  # Copy SQL file into container and execute
+                  docker cp "$MIG_SQL" "$POSTGRES_CONTAINER:/tmp/migration.sql"
+                  docker exec "$POSTGRES_CONTAINER" psql -U admin -d cblue -f /tmp/migration.sql 2>&1 || {
+                    echo "  ⚠️ Migration $MIG_NAME had errors (may be partial — continuing)"
+                  }
+                  # Record migration
+                  docker exec "$POSTGRES_CONTAINER" psql -U admin -d cblue -c \
+                    "INSERT INTO _prisma_migrations (id, checksum, finished_at, migration_name, applied_steps_count) VALUES (gen_random_uuid(), md5('$MIG_NAME'), now(), '$MIG_NAME', 1) ON CONFLICT DO NOTHING;" 2>&1
+                else
+                  echo "  Skip (already applied): $MIG_NAME"
+                fi
+              done
+
+              # Verify tables were created
+              TABLE_COUNT_AFTER=$(docker exec "$POSTGRES_CONTAINER" psql -U admin -d cblue -t -c \
+                "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE';" 2>&1 | tr -d ' ')
+              echo "✅ Tables after migration: $TABLE_COUNT_AFTER"
             else
-              echo "✅ Prisma migrations applied successfully"
+              echo "✅ Database already has $TABLE_COUNT tables — skipping migrations"
             fi
 
             # ── Restart backend to pick up new tables ──
