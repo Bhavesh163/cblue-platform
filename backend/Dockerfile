@@ -1,5 +1,6 @@
 # ── Build stage ──
 FROM node:20-alpine AS builder
+# Rebuild trigger: 2026-04-20
 
 WORKDIR /app
 
