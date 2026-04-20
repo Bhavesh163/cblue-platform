@@ -33,6 +33,8 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 # Copy prisma CLI for running migrations in production
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/node_modules/@prisma/engines ./node_modules/@prisma/engines
+# Create .bin symlink so `npx prisma` works without re-downloading
+RUN mkdir -p node_modules/.bin && ln -sf ../prisma/build/index.js node_modules/.bin/prisma
 
 # Don't run as root
 RUN addgroup -g 1001 -S nodejs && \

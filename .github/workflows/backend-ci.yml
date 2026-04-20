@@ -227,7 +227,7 @@ jobs:
             IMAGE="ghcr.io/$REPO_LC/backend:latest"
 
             PULLED_IMAGE=false
-            if echo "$GH_TOKEN" | docker login ghcr.io -u github --password-stdin 2>/dev/null; then
+            if echo "$GH_TOKEN" | docker login ghcr.io -u github --password-stdin 2>&1; then
               echo "✅ Logged in to GHCR"
               # Use docker pull directly (more reliable than docker-compose pull on v1)
               echo "Pulling $IMAGE ..."
@@ -241,21 +241,23 @@ jobs:
               echo "⚠️ GHCR login failed — will build locally"
             fi
 
+            # If GHCR image unavailable, build from updated Dockerfile (git pull already ran)
+            if [ "$PULLED_IMAGE" = "false" ]; then
+              echo "🔨 Building backend image locally from Dockerfile..."
+              $DC -f infrastructure/docker/docker-compose.yml build --no-cache backend 2>&1
+              echo "✅ Local build complete"
+            fi
+
             # ── Remove old backend container ──
             $DC -f infrastructure/docker/docker-compose.yml rm -sf backend 2>/dev/null || true
             # Also remove nginx container if left from previous deploy
             $DC -f infrastructure/docker/docker-compose.yml rm -sf nginx 2>/dev/null || true
 
             # ── Start core services ──
-            if [ "$PULLED_IMAGE" = "true" ]; then
-              $DC -f infrastructure/docker/docker-compose.yml up -d postgres redis rabbitmq backend
-            else
-              echo "⚠️ GHCR image pull failed — attempting up with local image..."
-              $DC -f infrastructure/docker/docker-compose.yml up -d postgres redis rabbitmq backend || {
-                echo "❌ No backend image available. Deploy cannot proceed."
-                exit 1
-              }
-            fi
+            $DC -f infrastructure/docker/docker-compose.yml up -d postgres redis rabbitmq backend || {
+              echo "❌ No backend image available. Deploy cannot proceed."
+              exit 1
+            }
             echo "⏳ Waiting for services to stabilize..."
             sleep 25
 
