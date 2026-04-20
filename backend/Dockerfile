@@ -22,7 +22,8 @@ WORKDIR /app
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/prisma.config.ts ./
+# Copy TS config as .mjs — content is valid ESM JS, avoids TS loader in prod
+COPY --from=builder /app/prisma.config.ts ./prisma.config.mjs
 
 RUN npm ci --omit=dev
 

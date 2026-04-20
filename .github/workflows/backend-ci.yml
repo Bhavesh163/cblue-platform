@@ -263,7 +263,13 @@ jobs:
             $DC -f infrastructure/docker/docker-compose.yml ps || echo "⚠️ ps timed out — continuing anyway"
 
             # ── Run Prisma migrations ──
-            $DC -f infrastructure/docker/docker-compose.yml exec -T backend npx prisma migrate deploy 2>&1 || echo "⚠️ Migration note: check above for details"
+            echo "🔍 Checking container environment..."
+            $DC -f infrastructure/docker/docker-compose.yml exec -T backend sh -c '
+              echo "DATABASE_URL set: ${DATABASE_URL:+yes (len=${#DATABASE_URL})}"
+              echo "Config files:" && ls -la prisma.config.* 2>/dev/null
+              echo "Running prisma migrate deploy..."
+              npx prisma migrate deploy 2>&1
+            ' || echo "⚠️ Migration note: check above for details"
 
             # ── Verify backend health ──
             sleep 5

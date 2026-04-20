@@ -7,15 +7,16 @@ import { NextRequest } from "next/server";
 /**
  * Resolve the backend base URL.
  *
- * Production: CF Worker → http://168.144.39.0 (nginx on port 80) → NestJS :3002
- * Port 80 is confirmed open on the droplet; port 3002 is blocked by the
- * DigitalOcean Cloud Firewall. nginx reverse-proxies to localhost:3002.
+ * Production: CF Worker → http://168-144-39-0.sslip.io (iptables on droplet
+ * redirects port 80 → 3002 → NestJS). We use sslip.io wildcard DNS because
+ * Cloudflare Workers cannot fetch bare IP addresses (error 1003).
+ * sslip.io resolves 168-144-39-0.sslip.io → 168.144.39.0.
  */
 const BACKEND_URL: string = (() => {
   // 1. Wrangler vars (set in wrangler.jsonc → available on CF Workers)
   if (process.env.API_BACKEND_URL) return process.env.API_BACKEND_URL;
-  // 2. Production fallback: droplet IP via nginx (port 80, open in firewall)
-  if (process.env.NODE_ENV === "production") return "http://168.144.39.0";
+  // 2. Production fallback: droplet via sslip.io wildcard DNS
+  if (process.env.NODE_ENV === "production") return "http://168-144-39-0.sslip.io";
   // 3. Local dev
   return "http://localhost:3002";
 })();
@@ -62,20 +63,12 @@ async function handler(
     // convert to a proper JSON 502 so the frontend shows "service unavailable"
     const ct = upstream.headers.get("content-type") || "";
     if (!upstream.ok && !ct.includes("application/json")) {
-      // Capture body for diagnostics
-      const body = await upstream.text().catch(() => "");
+      await upstream.text().catch(() => {});
       return Response.json(
         {
           error: "backend_unavailable",
           message: "Backend service is temporarily unavailable",
           statusCode: 502,
-          _debug: {
-            upstreamStatus: upstream.status,
-            upstreamContentType: ct,
-            upstreamBody: body.slice(0, 300),
-            target,
-            backend: BACKEND_URL,
-          },
         },
         { status: 502 },
       );
