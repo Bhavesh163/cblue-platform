@@ -16,10 +16,10 @@
     "binding": "ASSETS"
   },
   // Environment variables available to the worker
-  // sslip.io wildcard DNS: 168-144-39-0.sslip.io → 168.144.39.0
-  // CF Workers cannot fetch bare IPs (error 1003), so we use sslip.io
+  // nip.io wildcard DNS: 168.144.39.0.nip.io → 168.144.39.0
+  // CF Workers cannot fetch bare IPs (error 1003), so we use nip.io
   "vars": {
-    "API_BACKEND_URL": "http://168-144-39-0.sslip.io"
+    "API_BACKEND_URL": "http://168.144.39.0.nip.io"
   },
   "services": [
     {

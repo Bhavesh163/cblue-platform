@@ -7,16 +7,16 @@ import { NextRequest } from "next/server";
 /**
  * Resolve the backend base URL.
  *
- * Production: CF Worker → http://168-144-39-0.sslip.io (iptables on droplet
- * redirects port 80 → 3002 → NestJS). We use sslip.io wildcard DNS because
+ * Production: CF Worker → http://168.144.39.0.nip.io (iptables on droplet
+ * redirects port 80 → 3002 → NestJS). We use nip.io wildcard DNS because
  * Cloudflare Workers cannot fetch bare IP addresses (error 1003).
- * sslip.io resolves 168-144-39-0.sslip.io → 168.144.39.0.
+ * nip.io resolves 168.144.39.0.nip.io → 168.144.39.0.
  */
 const BACKEND_URL: string = (() => {
   // 1. Wrangler vars (set in wrangler.jsonc → available on CF Workers)
   if (process.env.API_BACKEND_URL) return process.env.API_BACKEND_URL;
-  // 2. Production fallback: droplet via sslip.io wildcard DNS
-  if (process.env.NODE_ENV === "production") return "http://168-144-39-0.sslip.io";
+  // 2. Production fallback: droplet via nip.io wildcard DNS
+  if (process.env.NODE_ENV === "production") return "http://168.144.39.0.nip.io";
   // 3. Local dev
   return "http://localhost:3002";
 })();
