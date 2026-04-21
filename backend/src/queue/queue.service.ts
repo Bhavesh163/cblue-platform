@@ -8,13 +8,18 @@ export class QueueService implements OnModuleInit {
 
   constructor(@Inject(RABBITMQ_CLIENT) private readonly client: ClientProxy) {}
 
-  async onModuleInit() {
+  onModuleInit() {
     try {
-      this.client.connect().then(() => {
-        this.logger.log('Connected to RabbitMQ');
-      }).catch(err => {
-        this.logger.warn('RabbitMQ not available — falling back to EventEmitter');
-      });
+      this.client
+        .connect()
+        .then(() => {
+          this.logger.log('Connected to RabbitMQ');
+        })
+        .catch(() => {
+          this.logger.warn(
+            'RabbitMQ not available — falling back to EventEmitter',
+          );
+        });
     } catch {
       this.logger.warn('RabbitMQ not available — falling back to EventEmitter');
     }
