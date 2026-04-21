@@ -10,8 +10,11 @@ export class QueueService implements OnModuleInit {
 
   async onModuleInit() {
     try {
-      await this.client.connect();
-      this.logger.log('Connected to RabbitMQ');
+      this.client.connect().then(() => {
+        this.logger.log('Connected to RabbitMQ');
+      }).catch(err => {
+        this.logger.warn('RabbitMQ not available — falling back to EventEmitter');
+      });
     } catch {
       this.logger.warn('RabbitMQ not available — falling back to EventEmitter');
     }
