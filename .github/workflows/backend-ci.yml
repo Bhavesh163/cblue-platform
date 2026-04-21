@@ -171,7 +171,7 @@ jobs:
           username: ${{ secrets.DROPLET_USER }}
           key: ${{ secrets.DROPLET_SSH_KEY }}
           envs: GH_TOKEN,GH_REPO,DEPLOY_SHA
-          command_timeout: 70m
+          command_timeout: 120m
           script: |
             set -e
 
@@ -227,14 +227,13 @@ jobs:
             PULLED_IMAGE=false
             if echo "$GH_TOKEN" | docker login ghcr.io -u github --password-stdin 2>&1; then
               echo "✅ Logged in to GHCR"
-              # 25-minute timeout on pull — the droplet has slow bandwidth
-              # (20m was too short — layers were downloaded but extraction timed out)
-              echo "Pulling $IMAGE (45m timeout)..."
-              if timeout 2700 docker pull "$IMAGE" 2>&1; then
+              # 90-minute timeout on pull — the droplet has extremely slow bandwidth
+              echo "Pulling $IMAGE (90m timeout)..."
+              if timeout 5400 docker pull "$IMAGE" 2>&1; then
                 echo "✅ Pulled backend image from GHCR"
                 PULLED_IMAGE=true
               else
-                echo "⚠️ Pull timed out or failed after 45m"
+                echo "⚠️ Pull timed out or failed after 90m"
               fi
             else
               echo "⚠️ GHCR login failed"
