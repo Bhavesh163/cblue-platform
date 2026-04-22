@@ -35,7 +35,7 @@ export default function Home() {
     { value: "1,000+", labelKey: "fixers" as const },
     { value: "77", labelKey: "provinces" as const },
     { value: "5", labelKey: "tiers" as const },
-    { value: "200 ฿", labelKey: "startPrice" as const },
+    { value: "100 ฿", labelKey: "startPrice" as const },
   ];
 
   const tiers = [
@@ -74,9 +74,9 @@ export default function Home() {
                 acceptedAnswer: {
                   "@type": "Answer",
                   text: locale === "th"
-                    ? "ค่าดำเนินการเริ่มต้นที่ 200 บาทสำหรับระดับ Economy, 400 บาท Standard, 600 บาท Corporate, 800 บาท Specialist, และ 1,000 บาทสำหรับ Expert ชำระผ่าน PromptPay QR"
+                    ? "ค่าดำเนินการเริ่มต้นที่ 100 บาทสำหรับระดับ Economy, 400 บาท Standard, 600 บาท Corporate, 800 บาท Specialist, และ 1,000 บาทสำหรับ Expert ชำระผ่าน PromptPay QR"
                     : locale === "zh"
-                    ? "处理费从200泰铢起：Economy 200฿, Standard 400฿, Corporate 600฿, Specialist 800฿, Expert 1,000฿，通过PromptPay二维码支付。"
+                    ? "处理费从200泰铢起：Economy 100฿, Standard 400฿, Corporate 600฿, Specialist 800฿, Expert 1,000฿，通过PromptPay二维码支付。"
                     : "Processing fees start at 200 THB for Economy tier, 400 for Standard, 600 for Corporate, 800 for Specialist, and 1,000 THB for Expert tier. Payment via PromptPay QR.",
                 },
               },
