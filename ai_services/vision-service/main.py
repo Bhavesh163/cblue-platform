@@ -69,35 +69,30 @@ class BatchResult(BaseModel):
 # ── OCR via Tesseract ──
 
 def ocr_image(image_bytes: bytes, lang: str = "tha+eng") -> str:
-    """Extract text from image bytes using Tesseract OCR."""
+    """Extract text from image bytes using Typhoon AI Vision."""
     try:
-        import pytesseract
-        from PIL import Image
-
-        img = Image.open(io.BytesIO(image_bytes))
-        # Convert to RGB if needed (e.g., RGBA PNGs)
-        if img.mode not in ("L", "RGB"):
-            img = img.convert("RGB")
-        text = pytesseract.image_to_string(img, lang=lang)
-        return text.strip()
-    except ImportError:
-        return "[OCR unavailable — pytesseract/tesseract not installed]"
+        from typhoon import ocr_image_typhoon
+        return ocr_image_typhoon(image_bytes)
     except Exception as e:
         return f"[OCR error: {e}]"
 
 
 def ocr_pdf(pdf_bytes: bytes, lang: str = "tha+eng") -> str:
-    """Extract text from PDF pages using pdf2image + Tesseract."""
+    """Extract text from PDF pages using pdf2image + Typhoon AI."""
     try:
         from pdf2image import convert_from_bytes
-        import pytesseract
+        from typhoon import ocr_image_typhoon
+        import io
 
-        pages = convert_from_bytes(pdf_bytes, dpi=200, first_page=1, last_page=10)
+        # Limit to 3 pages to avoid excessive AI API costs
+        pages = convert_from_bytes(pdf_bytes, dpi=150, first_page=1, last_page=3)
         texts = []
         for i, page_img in enumerate(pages):
             if page_img.mode != "RGB":
                 page_img = page_img.convert("RGB")
-            page_text = pytesseract.image_to_string(page_img, lang=lang)
+            buf = io.BytesIO()
+            page_img.save(buf, format='JPEG')
+            page_text = ocr_image_typhoon(buf.getvalue())
             if page_text.strip():
                 texts.append(f"__PAGE_{i + 1}__\n{page_text.strip()}")
         return "\n\n".join(texts) if texts else ""

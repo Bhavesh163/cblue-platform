@@ -93,6 +93,9 @@ export default function FixerRegisterPage() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+  useEffect(() => {
+    if (error) window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [error]);
   const [recaptchaToken, setRecaptchaToken] = useState("");
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [subscriber, setSubscriber] = useState<{ name: string; email?: string } | null>(null);
@@ -1072,7 +1075,7 @@ export default function FixerRegisterPage() {
           {/* Company / Personal Formal Address */}
           <fieldset>
             <legend className="text-lg font-semibold text-gray-900 mb-4">
-              🏢 {locale === "th" ? "ที่อยู่บริษัท / ที่อยู่ตามทะเบียนบ้าน" : locale === "zh" ? "公司地址 / 户籍地址" : "Company / Personal Formal Address"}
+              🏢 {locale === "th" ? "ที่อยู่บริษัท / ที่อยู่ตามทะเบียนบ้าน" : locale === "zh" ? "公司地址 / 户籍地址" : "Company / Personal Formal Address"} <span className="text-red-500">*</span>
             </legend>
             <p className="text-xs text-gray-500 mb-4">
               {locale === "th" ? "ที่อยู่สำหรับออกใบสั่งซื้อ (PO) และเอกสารทางการ" : locale === "zh" ? "用于采购订单(PO)和正式文件的地址" : "Address for Purchase Order (PO) and official documents"}
@@ -1341,7 +1344,7 @@ export default function FixerRegisterPage() {
           {/* Skills Selection */}
           <fieldset>
             <legend className="text-lg font-semibold text-gray-900 mb-4">
-              {locale === "th" ? "บริการที่ให้บริการ" : locale === "zh" ? "提供的服务" : "Services Offered"}
+              {locale === "th" ? "บริการที่ให้บริการ" : locale === "zh" ? "提供的服务" : "Services Offered"} <span className="text-red-500">*</span>
             </legend>
             <p className="text-xs text-gray-500 mb-3">
               {locale === "th" ? "เลือกบริการที่ท่านสามารถให้บริการได้ (เลือกได้หลายรายการ)" : locale === "zh" ? "选择您可以提供的服务（可多选）" : "Select services you can provide (multiple selections allowed)"}
@@ -1426,7 +1429,7 @@ export default function FixerRegisterPage() {
           {/* Experience */}
           <fieldset>
             <legend className="text-lg font-semibold text-gray-900 mb-4">
-              {locale === "th" ? "ประสบการณ์" : locale === "zh" ? "经验" : "Experience"}
+              {locale === "th" ? "ประสบการณ์" : locale === "zh" ? "经验" : "Experience"} <span className="text-red-500">*</span>
             </legend>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -1481,7 +1484,7 @@ export default function FixerRegisterPage() {
           {/* Availability */}
           <fieldset>
             <legend className="text-lg font-semibold text-gray-900 mb-4">
-              {locale === "th" ? "วันที่พร้อมเริ่มงาน" : locale === "zh" ? "可开始工作日期" : "Available Start Date"}
+              {locale === "th" ? "วันที่พร้อมเริ่มงาน" : locale === "zh" ? "可开始工作日期" : "Available Start Date"} <span className="text-red-500">*</span>
             </legend>
             <div>
               <label htmlFor="scheduledDate" className="block text-sm font-medium text-gray-700 mb-1">
@@ -1502,7 +1505,7 @@ export default function FixerRegisterPage() {
           {/* Location */}
           <fieldset>
             <legend className="text-lg font-semibold text-gray-900 mb-4">
-              {locale === "th" ? "สถานที่ตั้ง / พื้นที่ให้บริการ" : locale === "zh" ? "服务地点 / 服务区域" : "Location / Service Area"}
+              {locale === "th" ? "สถานที่ตั้ง / พื้นที่ให้บริการ" : locale === "zh" ? "服务地点 / 服务区域" : "Location / Service Area"} <span className="text-red-500">*</span>
             </legend>
             <div className="space-y-4">
               {/* Location method selector — 3 mutually exclusive options */}

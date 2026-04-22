@@ -2,6 +2,7 @@ FROM python:3.11-slim
 
 # Install Tesseract OCR + poppler (for pdf2image) + Thai language pack
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
     tesseract-ocr \
     tesseract-ocr-tha \
     tesseract-ocr-eng \
