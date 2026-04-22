@@ -205,7 +205,7 @@ export default function RootLayout({
                 latitude: 13.7563,
                 longitude: 100.5018,
               },
-              priceRange: "฿200 - ฿1000",
+              priceRange: "฿100 - ฿1000",
               openingHoursSpecification: {
                 "@type": "OpeningHoursSpecification",
                 dayOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],

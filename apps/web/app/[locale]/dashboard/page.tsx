@@ -26,7 +26,7 @@ const DEMO_ACTIVE = [
 ];
 
 const DEMO_HISTORY = [
-  { id: "h-1", type: "household" as ServiceType, service: "Electrical", serviceTh: "ไฟฟ้า", serviceZh: "电气维修", partner: "Fixer-0921", tier: "Economy", date: "2026-03-15", rating: 4.8, fee: "฿200" },
+  { id: "h-1", type: "household" as ServiceType, service: "Electrical", serviceTh: "ไฟฟ้า", serviceZh: "电气维修", partner: "Fixer-0921", tier: "Economy", date: "2026-03-15", rating: 4.8, fee: "฿100" },
   { id: "h-2", type: "project" as ServiceType, service: "Website Dev", serviceTh: "พัฒนาเว็บไซต์", serviceZh: "网站开发", partner: "Team-4401", tier: "Corporate", date: "2026-03-01", rating: 4.9, fee: "฿600" },
   { id: "h-3", type: "professional" as ServiceType, service: "Lawyer", serviceTh: "ทนายความ", serviceZh: "律师", partner: "Pro-1100", tier: "Expert", date: "2026-02-10", rating: 5.0, fee: "฿1,000" },
   { id: "h-4", type: "household" as ServiceType, service: "AC Maintenance", serviceTh: "ซ่อมแอร์", serviceZh: "空调维护", partner: "Fixer-2200", tier: "Standard", date: "2026-01-20", rating: 4.5, fee: "฿400" },
@@ -308,7 +308,7 @@ export default function DashboardPage() {
           <h3 className="text-sm font-semibold text-gray-700 mb-3">🏠👔 {locale === "th" ? "ช่างซ่อม / มืออาชีพ" : locale === "zh" ? "技工 / 专业人士" : "Fixer / Professional"}</h3>
           <div className="grid grid-cols-5 gap-3 mb-6">
             {[
-              { name: "Economy", fee: "฿200", color: "border-green-200 bg-green-50", textColor: "text-green-700", desc: locale === "th" ? "บริการทั่วไป" : locale === "zh" ? "基础服务" : "Basic" },
+              { name: "Economy", fee: "฿100", color: "border-green-200 bg-green-50", textColor: "text-green-700", desc: locale === "th" ? "บริการทั่วไป" : locale === "zh" ? "基础服务" : "Basic" },
               { name: "Standard", fee: "฿400", color: "border-blue-200 bg-blue-50", textColor: "text-blue-700", desc: locale === "th" ? "มาตรฐาน" : locale === "zh" ? "标准" : "Standard" },
               { name: "Corporate", fee: "฿600", color: "border-purple-200 bg-purple-50", textColor: "text-purple-700", desc: locale === "th" ? "องค์กร" : locale === "zh" ? "企业" : "Corporate" },
               { name: "Specialist", fee: "฿800", color: "border-amber-200 bg-amber-50", textColor: "text-amber-700", desc: locale === "th" ? "ผู้ชำนาญ" : locale === "zh" ? "专家" : "Specialist" },
@@ -326,7 +326,7 @@ export default function DashboardPage() {
           <h3 className="text-sm font-semibold text-gray-700 mb-3">🏢 {locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房产" : "Property"}</h3>
           <div className="grid grid-cols-5 gap-3">
             {[
-              { name: "Economy", fee: "฿200", color: "border-green-200 bg-green-50", textColor: "text-green-700", desc: locale === "th" ? "ห้องเช่า" : locale === "zh" ? "房间" : "Room" },
+              { name: "Economy", fee: "฿100", color: "border-green-200 bg-green-50", textColor: "text-green-700", desc: locale === "th" ? "ห้องเช่า" : locale === "zh" ? "房间" : "Room" },
               { name: "Standard", fee: "฿400", color: "border-blue-200 bg-blue-50", textColor: "text-blue-700", desc: locale === "th" ? "คอนโด" : locale === "zh" ? "公寓" : "Condo" },
               { name: "Upper", fee: "฿600", color: "border-teal-200 bg-teal-50", textColor: "text-teal-700", desc: locale === "th" ? "บ้าน" : locale === "zh" ? "别墅" : "House" },
               { name: "Luxury", fee: "฿800", color: "border-amber-200 bg-amber-50", textColor: "text-amber-700", desc: locale === "th" ? "หรูหรา" : locale === "zh" ? "豪华" : "Luxury" },
@@ -624,7 +624,7 @@ function PropertyTab({ locale, prefix }: { locale: string; prefix: string }) {
         <h3 className="font-bold text-sky-900 mb-3">🏢 {locale === "th" ? "ระดับอสังหาริมทรัพย์" : locale === "zh" ? "房产等级" : "Property Tiers"}</h3>
         <div className="grid grid-cols-5 gap-2">
           {[
-            { tier: "Economy", fee: "฿200", icon: "🏠" },
+            { tier: "Economy", fee: "฿100", icon: "🏠" },
             { tier: "Standard", fee: "฿400", icon: "🏢" },
             { tier: "Upper", fee: "฿600", icon: "🏘️" },
             { tier: "Luxury", fee: "฿800", icon: "🏰" },

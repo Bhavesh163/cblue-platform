@@ -293,7 +293,7 @@ export default function FixerProPage() {
                 </tr></thead>
                 <tbody>
                   {[
-                    { tier: "Economy", fee: "฿200", stars: "⭐", qual: locale === "th" ? "ช่างทั่วไป ประสบการณ์เบื้องต้น" : locale === "zh" ? "普通技工，基础经验" : "General fixer, basic experience", color: "bg-green-50 text-green-700" },
+                    { tier: "Economy", fee: "฿100", stars: "⭐", qual: locale === "th" ? "ช่างทั่วไป ประสบการณ์เบื้องต้น" : locale === "zh" ? "普通技工，基础经验" : "General fixer, basic experience", color: "bg-green-50 text-green-700" },
                     { tier: "Standard", fee: "฿400", stars: "⭐⭐", qual: locale === "th" ? "ช่างมีประสบการณ์ ผลงานดี" : locale === "zh" ? "有经验，良好记录" : "Experienced, good track record", color: "bg-blue-50 text-blue-700" },
                     { tier: "Corporate", fee: "฿600", stars: "⭐⭐⭐", qual: locale === "th" ? "ช่างมืออาชีพ หรือทีมงาน" : locale === "zh" ? "专业技工或团队" : "Professional fixer or team", color: "bg-purple-50 text-purple-700" },
                     { tier: "Specialist", fee: "฿800", stars: "⭐⭐⭐⭐", qual: locale === "th" ? "ผู้เชี่ยวชาญเฉพาะทาง มีใบรับรอง" : locale === "zh" ? "认证专家" : "Certified specialist", color: "bg-amber-50 text-amber-700" },

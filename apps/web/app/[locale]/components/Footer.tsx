@@ -70,10 +70,10 @@ export function Footer() {
             <h3 className="text-base font-bold text-white mb-2">CBLUE</h3>
             <p className="text-xs text-gray-400 leading-relaxed">
               {locale === "th"
-                ? "CBLUE เชื่อมต่อคุณกับช่างที่ได้รับการรับรองสำหรับทุกงานซ่อมบ้าน จองง่าย จ่ายผ่าน PromptPay เริ่มต้นเพียง ฿200"
+                ? "CBLUE เชื่อมต่อคุณกับช่างที่ได้รับการรับรองสำหรับทุกงานซ่อมบ้าน จองง่าย จ่ายผ่าน PromptPay เริ่มต้นเพียง ฿100"
                 : locale === "zh"
-                ? "CBLUE 连接您与认证技工，满足所有家庭维修需求。轻松预约，PromptPay 支付，起价仅 ฿200"
-                : "CBLUE connects you with certified fixers for all home repairs. Easy booking, pay via PromptPay, starting from just ฿200."}
+                ? "CBLUE 连接您与认证技工，满足所有家庭维修需求。轻松预约，PromptPay 支付，起价仅 ฿100"
+                : "CBLUE connects you with certified fixers for all home repairs. Easy booking, pay via PromptPay, starting from just ฿100."}
             </p>
             {/* Mobile App Download Links */}
             <div className="mt-3 space-y-2">

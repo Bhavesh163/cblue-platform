@@ -137,10 +137,10 @@ export default function Home() {
           </h1>
           <p className="mt-6 text-lg sm:text-xl text-gray-200 leading-relaxed max-w-3xl mx-auto">
             {locale === "th"
-              ? "CBLUE เชื่อมต่อคุณกับช่างซ่อมบ้าน ทีมโครงการ มืออาชีพ และอสังหาริมทรัพย์ จองง่าย จ่ายผ่าน PromptPay เริ่มต้นเพียง ฿200"
+              ? "CBLUE เชื่อมต่อคุณกับช่างซ่อมบ้าน ทีมโครงการ มืออาชีพ และอสังหาริมทรัพย์ จองง่าย จ่ายผ่าน PromptPay เริ่มต้นเพียง ฿100"
               : locale === "zh"
-              ? "CBLUE 连接您与家庭维修技工、项目团队、专业人士和房地产服务。轻松预约，PromptPay 支付，起价仅 ฿200"
-              : "CBLUE connects you with household fixers, project teams, professionals, and real estate services. Easy booking, pay via PromptPay, starting from just ฿200."}
+              ? "CBLUE 连接您与家庭维修技工、项目团队、专业人士和房地产服务。轻松预约，PromptPay 支付，起价仅 ฿100"
+              : "CBLUE connects you with household fixers, project teams, professionals, and real estate services. Easy booking, pay via PromptPay, starting from just ฿100."}
           </p>
           <div className="mt-10 grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-3xl mx-auto">
             <Link
@@ -351,10 +351,10 @@ export default function Home() {
               <div className="p-8">
                 <p className="text-center text-gray-600 mb-6 max-w-3xl mx-auto leading-relaxed">
                   {locale === "th"
-                    ? "CBLUE ใช้ AI จับคู่อัจฉริยะเพื่อเสนอช่างซ่อมบ้าน ทีมโครงการ มืออาชีพ และอสังหาริมทรัพย์ที่ดีที่สุดในพื้นที่ของคุณ ราคาโปร่งใส 5 ระดับ จ่ายผ่าน PromptPay QR เริ่มต้นเพียง ฿200 พร้อมรับประกันคุณภาพและระบบรีวิวจริง"
+                    ? "CBLUE ใช้ AI จับคู่อัจฉริยะเพื่อเสนอช่างซ่อมบ้าน ทีมโครงการ มืออาชีพ และอสังหาริมทรัพย์ที่ดีที่สุดในพื้นที่ของคุณ ราคาโปร่งใส 5 ระดับ จ่ายผ่าน PromptPay QR เริ่มต้นเพียง ฿100 พร้อมรับประกันคุณภาพและระบบรีวิวจริง"
                     : locale === "zh"
-                    ? "CBLUE 使用 AI 智能匹配，为您推荐最优质的维修技工、项目团队、专业人士和房产。5级透明定价，PromptPay扫码支付，起价仅฿200，品质保障与真实评价"
-                    : "CBLUE uses AI smart matching to recommend the best household fixers, project teams, professionals, and properties in your area. Transparent 5-tier pricing, PromptPay QR payment starting from just ฿200, quality guarantee, and verified reviews."}
+                    ? "CBLUE 使用 AI 智能匹配，为您推荐最优质的维修技工、项目团队、专业人士和房产。5级透明定价，PromptPay扫码支付，起价仅฿100，品质保障与真实评价"
+                    : "CBLUE uses AI smart matching to recommend the best household fixers, project teams, professionals, and properties in your area. Transparent 5-tier pricing, PromptPay QR payment starting from just ฿100, quality guarantee, and verified reviews."}
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
                   <Link href={`${prefix}/booking/household`} className="bg-white rounded-xl p-5 text-center shadow-md hover:shadow-xl transition-all transform hover:-translate-y-1 border border-sky-100 group">

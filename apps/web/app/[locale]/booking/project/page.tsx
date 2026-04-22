@@ -16,8 +16,8 @@ import FixerResults from "../../components/FixerResults";
 
 const BUDGET_RANGES = [
   { value: "UNDER_50000", th: "ต่ำกว่า 50,000 บาท", en: "Under ฿50,000", zh: "低于 ฿50,000" },
-  { value: "50000_200000", th: "50,000 – 200,000 บาท", en: "฿50,000 – ฿200,000", zh: "฿50,000 – ฿200,000" },
-  { value: "200000_500000", th: "200,000 – 500,000 บาท", en: "฿200,000 – ฿500,000", zh: "฿200,000 – ฿500,000" },
+  { value: "50000_200000", th: "50,000 – 200,000 บาท", en: "฿50,000 – ฿100,000", zh: "฿50,000 – ฿100,000" },
+  { value: "200000_500000", th: "200,000 – 500,000 บาท", en: "฿100,000 – ฿500,000", zh: "฿100,000 – ฿500,000" },
   { value: "500000_1M", th: "500,000 – 1,000,000 บาท", en: "฿500,000 – ฿1,000,000", zh: "฿500,000 – ฿1,000,000" },
   { value: "1M_5M", th: "1 – 5 ล้านบาท", en: "฿1M – ฿5M", zh: "฿100万 – ฿500万" },
   { value: "OVER_5M", th: "มากกว่า 5 ล้านบาท", en: "Over ฿5M", zh: "超过 ฿500万" },
@@ -605,7 +605,7 @@ function ProjectBookingContent() {
             </p>
             <div className="grid grid-cols-5 gap-3">
               {[
-                { value: "economy", label: locale === "th" ? "ประหยัด" : locale === "zh" ? "经济型" : "Economy", deposit: "฿200", emoji: "🟢", stars: "⭐", desc: locale === "th" ? "ทีมทั่วไป" : locale === "zh" ? "普通团队" : "Basic" },
+                { value: "economy", label: locale === "th" ? "ประหยัด" : locale === "zh" ? "经济型" : "Economy", deposit: "฿100", emoji: "🟢", stars: "⭐", desc: locale === "th" ? "ทีมทั่วไป" : locale === "zh" ? "普通团队" : "Basic" },
                 { value: "standard", label: locale === "th" ? "มาตรฐาน" : locale === "zh" ? "标准型" : "Standard", deposit: "฿400", emoji: "⭐", stars: "⭐⭐", desc: locale === "th" ? "มีประสบการณ์" : locale === "zh" ? "有经验" : "Experienced" },
                 { value: "corporate", label: locale === "th" ? "องค์กร" : locale === "zh" ? "企业型" : "Corporate", deposit: "฿600", emoji: "🏢", stars: "⭐⭐⭐", desc: locale === "th" ? "มืออาชีพ" : locale === "zh" ? "专业人士" : "Professional" },
                 { value: "specialist", label: locale === "th" ? "ผู้ชำนาญ" : locale === "zh" ? "专家型" : "Specialist", deposit: "฿800", emoji: "🔶", stars: "⭐⭐⭐⭐", desc: locale === "th" ? "ผู้เชี่ยวชาญเฉพาะทาง" : locale === "zh" ? "认证专家" : "Certified specialist" },

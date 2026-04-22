@@ -624,7 +624,7 @@ function HouseholdBookingContent() {
             </p>
             <div className="grid grid-cols-5 gap-3">
               {[
-                { value: "economy", label: locale === "th" ? "ประหยัด" : locale === "zh" ? "经济型" : "Economy", deposit: "฿200", emoji: "🟢", stars: "⭐", desc: locale === "th" ? "ช่างทั่วไป" : locale === "zh" ? "普通技工" : "Basic" },
+                { value: "economy", label: locale === "th" ? "ประหยัด" : locale === "zh" ? "经济型" : "Economy", deposit: "฿100", emoji: "🟢", stars: "⭐", desc: locale === "th" ? "ช่างทั่วไป" : locale === "zh" ? "普通技工" : "Basic" },
                 { value: "standard", label: locale === "th" ? "มาตรฐาน" : locale === "zh" ? "标准型" : "Standard", deposit: "฿400", emoji: "⭐", stars: "⭐⭐", desc: locale === "th" ? "มีประสบการณ์" : locale === "zh" ? "有经验" : "Experienced" },
                 { value: "corporate", label: locale === "th" ? "องค์กร" : locale === "zh" ? "企业型" : "Corporate", deposit: "฿600", emoji: "🏢", stars: "⭐⭐⭐", desc: locale === "th" ? "มืออาชีพ" : locale === "zh" ? "专业人士" : "Professional" },
                 { value: "specialist", label: locale === "th" ? "ผู้ชำนาญ" : locale === "zh" ? "专家型" : "Specialist", deposit: "฿800", emoji: "🔶", stars: "⭐⭐⭐⭐", desc: locale === "th" ? "ผู้เชี่ยวชาญเฉพาะทาง" : locale === "zh" ? "认证专家" : "Certified specialist" },
