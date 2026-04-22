@@ -352,7 +352,16 @@ export default function FixerRegisterPage() {
   useEffect(() => {
     try {
       const stored = localStorage.getItem("subscriber");
-      if (stored) setSubscriber(JSON.parse(stored));
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setSubscriber(parsed);
+        setForm(prev => ({
+          ...prev,
+          name: parsed.name || prev.name,
+          email: parsed.email || prev.email,
+          phone: parsed.phone || prev.phone,
+        }));
+      }
     } catch { /* ignore */ }
   }, []);
 
@@ -487,6 +496,28 @@ export default function FixerRegisterPage() {
     }
     if (kycImages.length === 0) {
       setError(t("kycError"));
+      return;
+    }
+    // Added new required fields checks
+    if (!form.companyHouseNumber || !form.companyProvince || !form.companyDistrict) {
+      setError(locale === "th" ? "กรุณากรอกที่อยู่บริษัท / ที่อยู่ตามทะเบียนบ้านให้ครบถ้วน" : locale === "zh" ? "请填写完整的公司/住址" : "Please complete the company / registered address");
+      return;
+    }
+    if (!form.yearsExperience && !form.pastExperience) {
+      setError(locale === "th" ? "กรุณาระบุประสบการณ์" : locale === "zh" ? "请说明经验" : "Please specify your experience");
+      return;
+    }
+    if (!form.scheduledDate) {
+      setError(locale === "th" ? "กรุณาระบุวันที่พร้อมเริ่มงาน" : locale === "zh" ? "请指定随时可开始工作的日期" : "Please specify the date ready to start");
+      return;
+    }
+    if (form.locationType !== "gps" && (!form.province || !form.district)) {
+      setError(locale === "th" ? "กรุณาระบุสถานที่ตั้ง / พื้นที่ให้บริการ" : locale === "zh" ? "请指定服务区域" : "Please specify the service area");
+      return;
+    }
+    const validPrices = priceRows.filter((r) => r.service && r.finalPrice);
+    if (validPrices.length === 0) {
+      setError(locale === "th" ? "กรุณาระบุตารางราคาบริการอย่างน้อย 1 รายการ" : locale === "zh" ? "请至少指定一项服务价格" : "Please specified at least one price list item");
       return;
     }
     setSubmitting(true);
