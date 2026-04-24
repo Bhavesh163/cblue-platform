@@ -17,6 +17,19 @@ import { UploadKycDto } from './dto/upload-kyc.dto';
 import { firstValueFrom } from 'rxjs';
 import FormData from 'form-data';
 
+export interface SelectedFixer {
+  id: string;
+  alias: string;
+  tier: string;
+  rating: number;
+  totalJobs: number;
+  price: number;
+  satisfaction: number;
+  specialties: string[];
+  experienceYears: number;
+  selectedReason?: string;
+}
+
 @Injectable()
 export class FixerService {
   private readonly logger = new Logger(FixerService.name);
@@ -234,12 +247,12 @@ export class FixerService {
       let basePrice = 200;
       if (f.priceList && Array.isArray(f.priceList) && f.priceList.length > 0) {
         const list = f.priceList as any[];
-        const match = list.find((p) =>
-          p.service.toLowerCase().includes(service?.toLowerCase() || ''),
+        const match = list.find((item: any) =>
+          String(item.service).includes(String(service)),
         );
         basePrice = match
-          ? parseFloat(match.finalPrice)
-          : parseFloat(list[0].finalPrice);
+          ? parseFloat(match.finalPrice as string)
+          : parseFloat(list[0].finalPrice as string);
       }
 
       return {
@@ -263,15 +276,14 @@ export class FixerService {
       specialist: 3,
       expert: 4,
     };
-    const selected: any[] = [];
+    const selected: SelectedFixer[] = [];
     const used = new Set<string>();
 
-    function pick(f: any) {
-      if (!used.has(f.id)) {
-        selected.push(f);
-        used.add(f.id);
+    const pick = (f: SelectedFixer, reason?: string) => {
+      if (!selected.some((s) => String(s.id) === String(f.id))) {
+        selected.push({ ...f, selectedReason: reason });
       }
-    }
+    };
 
     const byPrice = [...formattedPool].sort((a, b) => a.price - b.price);
     const bySatisfaction = [...formattedPool].sort((a, b) => {
