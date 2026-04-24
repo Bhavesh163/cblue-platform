@@ -302,8 +302,8 @@ export default function PropertiesPage() {
             <div className="bg-gradient-to-r from-emerald-600 to-green-700 px-6 py-4 flex items-center justify-between flex-shrink-0">
               <h2 className="text-white font-bold">
                 {contactStep === "tier" ? (locale === "th" ? "เลือกระดับบริการ" : locale === "zh" ? "选择服务等级" : "Select Service Tier") :
-                 contactStep === "payment" ? (locale === "th" ? "ชำระค่าธรรมเนียม" : locale === "zh" ? "支付处理费" : "Pay Processing Fee") :
                  contactStep === "po" ? (locale === "th" ? "ใบสั่งซื้อ (PO)" : locale === "zh" ? "采购订单" : "Purchase Order") :
+                 contactStep === "payment" ? (locale === "th" ? "ชำระค่าธรรมเนียม" : locale === "zh" ? "支付处理费" : "Pay Processing Fee") :
                  contactStep === "notify" ? (locale === "th" ? "แจ้งเตือนผู้ลงประกาศ" : locale === "zh" ? "通知房源方" : "Notifying Lister") :
                  contactStep === "chat" ? (locale === "th" ? "แชทนิรนาม" : locale === "zh" ? "匿名聊天" : "Anonymous Chat") :
                  contactStep === "meeting" ? (locale === "th" ? "นัดหมายดูทรัพย์สิน" : locale === "zh" ? "预约看房" : "Schedule Viewing") :
@@ -316,9 +316,9 @@ export default function PropertiesPage() {
             {/* Step Progress */}
             <div className="px-6 pt-4 flex-shrink-0">
               <div className="flex items-center gap-1 mb-4">
-                {(["tier", "payment", "po", "notify", "chat", "meeting", "rate", "done"] as const).map((s, i) => (
+                {(["tier", "po", "payment", "notify", "chat", "meeting", "rate", "done"] as const).map((s, i) => (
                   <div key={s} className={`h-1.5 flex-1 rounded-full transition-colors ${
-                    (["tier", "payment", "po", "notify", "chat", "meeting", "rate", "done"] as const).indexOf(contactStep) >= i
+                    (["tier", "po", "payment", "notify", "chat", "meeting", "rate", "done"] as const).indexOf(contactStep) >= i
                       ? "bg-emerald-500" : "bg-gray-200"
                   }`} />
                 ))}
@@ -366,7 +366,10 @@ export default function PropertiesPage() {
                       : "CBLUE is a matching platform only. Property price is agreed directly between buyer/renter and lister. This fee covers processing only."}
                   </div>
                   <button
-                    onClick={() => selectedTier && setContactStep("payment")}
+                    onClick={() => {
+                      setPoNumber(generatePO());
+                      setContactStep("po");
+                    }}
                     disabled={!selectedTier}
                     className="mt-4 w-full py-3 bg-green-700 text-white font-bold rounded-xl disabled:opacity-40 hover:bg-green-800 transition"
                   >
@@ -375,44 +378,7 @@ export default function PropertiesPage() {
                 </>
               )}
 
-              {/* Step 2: Payment */}
-              {contactStep === "payment" && (
-                <>
-                  <div className="text-center">
-                    <p className="text-sm text-gray-600 mb-4">
-                      {locale === "th" ? "สแกน QR Code เพื่อชำระค่าธรรมเนียมดำเนินการ" : locale === "zh" ? "扫描QR码支付处理费" : "Scan QR Code to pay the processing fee"}
-                    </p>
-                    <div className="inline-block bg-white border-2 border-gray-100 rounded-2xl p-4 mb-4 shadow-sm">
-                      <div className="w-48 h-48 rounded-lg flex items-center justify-center text-gray-400">
-                        <QRCodeSVG value={generatePayload("0999999999", { amount: PROPERTY_TIERS.find((ti) => ti.name === selectedTier)?.fee || 0 })} size={192} />
-                      </div>
-                      <p className="text-lg font-extrabold text-green-700 mt-3">
-                        ฿{PROPERTY_TIERS.find((ti) => ti.name === selectedTier)?.fee || 0}
-                      </p>
-                    </div>
-                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700 mb-4">
-                      ⚠️ {locale === "th"
-                        ? "ค่าธรรมเนียมดำเนินการเท่านั้น ราคาทรัพย์สินตกลงโดยตรงระหว่างผู้ซื้อและผู้ลงประกาศ"
-                        : locale === "zh"
-                        ? "仅为处理费。房产价格由买家和发布者直接协商。"
-                        : "Processing fee only. Property price is agreed directly between buyer and lister."}
-                    </div>
-                  </div>
-                  <div className="flex gap-3">
-                    <button onClick={() => setContactStep("tier")} className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl font-semibold text-sm">
-                      ← {locale === "th" ? "กลับ" : locale === "zh" ? "返回" : "Back"}
-                    </button>
-                    <button onClick={() => {
-                      setPoNumber(generatePO());
-                      setContactStep("po");
-                    }} className="flex-1 py-2.5 bg-green-700 text-white rounded-xl font-bold text-sm hover:bg-green-800 transition">
-                      {locale === "th" ? "ยืนยันการชำระ" : locale === "zh" ? "确认付款" : "Confirm Payment"}
-                    </button>
-                  </div>
-                </>
-              )}
-
-              {/* Step 3: PO Creation */}
+              {/* Step 2: PO Creation */}
               {contactStep === "po" && (() => {
                 let custName = "";
                 let custAddr = "";
@@ -460,30 +426,57 @@ export default function PropertiesPage() {
                       ? "请保留此PO编号作为凭据。房产价格由双方直接协商。"
                       : "Keep this PO number for your records. Property pricing is negotiated directly between parties."}
                   </div>
-                  <div className="text-left bg-gray-100 border border-gray-200 rounded-xl p-3 text-[11px] text-gray-600 mb-4">
-                    <p className="font-semibold text-gray-700 mb-1">
-                      {locale === "th" ? "📎 เงื่อนไขเพิ่มเติม" : locale === "zh" ? "📎 补充条款" : "📎 Addendum Terms"}
-                    </p>
-                    <p>
-                      {locale === "th"
-                        ? "ข้อมูลราคา ข้อตกลงใหม่ หรือประเด็นสำคัญจะไม่ถูกเปิดเผยต่อบุคคลที่สามเพื่อป้องกันความเสี่ยงของทั้งสองฝ่าย"
-                        : locale === "zh"
-                        ? "价格差异、新协议或关键问题不会向第三方披露，以防范双方潜在风险。"
-                        : "Price differentials, new agreements, or crucial issues shall not be disclosed to third parties to prevent potential risks for both parties."}
-                    </p>
-                  </div>
                   <button onClick={() => {
-                    setContactStep("notify");
-                    setListerConfirmed(false);
-                    setTimeout(() => setListerConfirmed(true), 4000);
+                    setContactStep("payment");
                   }} className="w-full py-3 bg-green-700 text-white font-bold rounded-xl hover:bg-green-800 transition">
-                    {locale === "th" ? "แจ้งเตือนผู้ลงประกาศ" : locale === "zh" ? "通知房源方" : "Notify Lister"}
+                    {locale === "th" ? "ดำเนินการต่อ" : locale === "zh" ? "继续" : "Continue"}
+                  </button>
+                  <button onClick={() => setContactStep("tier")} className="w-full mt-3 py-2 text-sm text-gray-500 hover:text-gray-700">
+                    {locale === "th" ? "กลับไปแก้ไข" : locale === "zh" ? "返回修改" : "Back to edit"}
                   </button>
                 </div>
                 );
               })()}
 
-              {/* Step 4: Notify Lister */}
+              {/* Step 3: Payment */}
+              {contactStep === "payment" && (
+                <>
+                  <div className="text-center">
+                    <p className="text-sm text-gray-600 mb-4">
+                      {locale === "th" ? "สแกน QR Code เพื่อชำระค่าธรรมเนียมดำเนินการ" : locale === "zh" ? "扫描QR码支付处理费" : "Scan QR Code to pay the processing fee"}
+                    </p>
+                    <div className="inline-block bg-white border-2 border-gray-100 rounded-2xl p-4 mb-4 shadow-sm">
+                      <div className="w-48 h-48 rounded-lg flex items-center justify-center text-gray-400">
+                        <QRCodeSVG value={generatePayload("0999999999", { amount: PROPERTY_TIERS.find((ti) => ti.name === selectedTier)?.fee || 0 })} size={192} />
+                      </div>
+                      <p className="text-lg font-extrabold text-green-700 mt-3">
+                        ฿{PROPERTY_TIERS.find((ti) => ti.name === selectedTier)?.fee || 0}
+                      </p>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700 mb-4">
+                      ⚠️ {locale === "th"
+                        ? "ค่าธรรมเนียมดำเนินการเท่านั้น ราคาทรัพย์สินตกลงโดยตรงระหว่างผู้ซื้อและผู้ลงประกาศ"
+                        : locale === "zh"
+                        ? "仅为处理费。房产价格由买家和发布者直接协商。"
+                        : "Processing fee only. Property price is agreed directly between buyer and lister."}
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <button onClick={() => setContactStep("po")} className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl font-semibold text-sm">
+                      ← {locale === "th" ? "กลับ" : locale === "zh" ? "返回" : "Back"}
+                    </button>
+                    <button onClick={() => {
+                      setContactStep("notify");
+                      setListerConfirmed(false);
+                      setTimeout(() => setListerConfirmed(true), 4000);
+                    }} className="flex-1 py-2.5 bg-green-700 text-white rounded-xl font-bold text-sm hover:bg-green-800 transition">
+                      {locale === "th" ? "ชำระเงินแล้ว" : locale === "zh" ? "我已支付" : "I have paid"}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {/* Step 4: Notification */}
               {contactStep === "notify" && (
                 <div className="text-center">
                   {!listerConfirmed ? (
