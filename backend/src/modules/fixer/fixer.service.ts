@@ -221,24 +221,16 @@ export class FixerService {
     province: string,
     nominateId?: string,
   ) {
-    // 1. Fetch available fixers in the area
     const pool = await this.prisma.fixer.findMany({
       where: {
         status: 'APPROVED',
-        // In a real app we might filter by location and service.
-        // For now, let's just get all approved fixers to have enough candidates
-        // or filter loosely to allow testing
       },
       include: { user: true, skills: true },
     });
 
-    if (pool.length === 0) {
-      return [];
-    }
+    if (pool.length === 0) return [];
 
-    // Format the pool to include derived metrics for sorting
     const formattedPool = pool.map((f) => {
-      // Simulate price from priceList
       let basePrice = 200;
       if (f.priceList && Array.isArray(f.priceList) && f.priceList.length > 0) {
         const list = f.priceList as any[];
@@ -281,7 +273,6 @@ export class FixerService {
       }
     }
 
-    // Sort helpers
     const byPrice = [...formattedPool].sort((a, b) => a.price - b.price);
     const bySatisfaction = [...formattedPool].sort((a, b) => {
       if (b.rating !== a.rating) return b.rating - a.rating;
@@ -290,31 +281,40 @@ export class FixerService {
       return b.totalJobs - a.totalJobs;
     });
 
-    // 1. TWO CHEAPEST in area
+    // 1. Two cheapest
+    let priceAdded = 0;
     for (const f of byPrice) {
-      if (selected.length < 2) pick(f);
-      else break;
+      if (priceAdded >= 2) break;
+      if (!used.has(f.id)) {
+        pick(f);
+        priceAdded++;
+      }
     }
 
-    // 2. TWO HIGHEST SATISFACTION
+    // 2. Two highest satisfaction
+    let satAdded = 0;
     for (const f of bySatisfaction) {
-      if (selected.length >= 4) break;
-      if (!used.has(f.id)) pick(f);
+      if (satAdded >= 2) break;
+      if (!used.has(f.id)) {
+        pick(f);
+        satAdded++;
+      }
     }
 
-    // 3. ONE CHEAPEST OF UPPER TIER (corporate+specialist+expert)
-    const upperTiers = byPrice.filter(
-      (f) => tierRank[f.tier] >= 2 && !used.has(f.id),
+    // 3. Two upper tier variants
+    const upperTiers = formattedPool.filter((f) => tierRank[f.tier] >= 2);
+    const upperByPrice = [...upperTiers].sort((a, b) => a.price - b.price);
+    const upperBySat = [...upperTiers].sort(
+      (a, b) => b.satisfaction - a.satisfaction,
     );
-    if (upperTiers[0]) pick(upperTiers[0]);
 
-    // 4. ONE HIGHEST SATISFACTION OF UPPER TIER
-    const upperBySat = bySatisfaction.filter(
-      (f) => tierRank[f.tier] >= 2 && !used.has(f.id),
-    );
-    if (upperBySat[0]) pick(upperBySat[0]);
+    const cheapUpper = upperByPrice.find((f) => !used.has(f.id));
+    if (cheapUpper) pick(cheapUpper);
 
-    // 5. ONE RETURNING / LAST SAME-JOB PARTNER
+    const satUpper = upperBySat.find((f) => !used.has(f.id));
+    if (satUpper) pick(satUpper);
+
+    // 4. One returning partner / last same-job
     const remaining = formattedPool.filter((f) => !used.has(f.id));
     if (remaining.length > 0) {
       const returningIdx = Math.floor(Math.random() * remaining.length);
@@ -323,17 +323,20 @@ export class FixerService {
       pick(returning);
     }
 
-    // 6. SLOT 8 reserved for customer nomination
+    // 5. User nominated ID
     if (nominateId) {
       const nominated = formattedPool.find(
-        (f) => f.id === nominateId || f.id.endsWith(nominateId),
+        (f) =>
+          f.id === nominateId ||
+          f.id.endsWith(nominateId) ||
+          f.alias.includes(nominateId),
       );
       if (nominated && !used.has(nominated.id)) {
         pick(nominated);
       }
     }
 
-    // If fewer than 8 partners available, fill what we can
+    // Pad out to 8
     for (const f of formattedPool) {
       if (selected.length >= 8) break;
       pick(f);
