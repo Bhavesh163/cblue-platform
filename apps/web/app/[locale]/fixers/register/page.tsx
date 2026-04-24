@@ -1673,10 +1673,10 @@ export default function FixerRegisterPage() {
               <table className="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
                 <thead>
                   <tr className="bg-gray-50">
-                    <th className="text-left px-3 py-2 font-medium text-gray-700 border-b">{locale === "th" ? "บริการ" : locale === "zh" ? "服务" : "Service"}</th>
-                    <th className="text-center px-3 py-2 font-medium text-gray-700 border-b">{locale === "th" ? "จำนวน" : locale === "zh" ? "数量" : "Quantity"}</th>
-                    <th className="text-center px-3 py-2 font-medium text-gray-700 border-b">{locale === "th" ? "หน่วย" : locale === "zh" ? "单位" : "Unit"}</th>
-                    <th className="text-center px-3 py-2 font-medium text-sky-700 border-b bg-sky-50">{locale === "th" ? "ราคาสุดท้าย รวม VAT (บาท)" : locale === "zh" ? "最终价格 含增值税（泰铢）" : "Final Price incl. VAT (THB)"}</th>
+                    <th className="text-left px-3 py-2 font-medium text-gray-700 border-b">{locale === "th" ? "บริการ *" : locale === "zh" ? "服务 *" : "Service *"}</th>
+                    <th className="text-center px-3 py-2 font-medium text-gray-700 border-b">{locale === "th" ? "จำนวน *" : locale === "zh" ? "数量 *" : "Quantity *"}</th>
+                    <th className="text-center px-3 py-2 font-medium text-gray-700 border-b">{locale === "th" ? "หน่วย *" : locale === "zh" ? "单位 *" : "Unit *"}</th>
+                    <th className="text-center px-3 py-2 font-medium text-sky-700 border-b bg-sky-50">{locale === "th" ? "ราคาสุดท้าย รวม VAT (บาท) *" : locale === "zh" ? "最终价格 含增值税（泰铢）*" : "Final Price incl. VAT (THB) *"}</th>
                     <th className="px-2 py-2 border-b w-10" />
                   </tr>
                 </thead>
