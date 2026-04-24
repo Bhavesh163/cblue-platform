@@ -15,7 +15,7 @@ const BACKEND_URL: string = (() => {
   // 1. Wrangler vars (set in wrangler.jsonc → available on CF Workers)
   if (process.env.API_BACKEND_URL) return process.env.API_BACKEND_URL;
   // 2. Production fallback: droplet via DNS-only A record
-  if (process.env.NODE_ENV === "production") return "http://api-backend.cblue.co.th";
+  if (process.env.NODE_ENV === "production") return "http://api-backend.cblue.co.th:3002";
   // 3. Local dev
   return "http://localhost:3002";
 })();

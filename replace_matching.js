@@ -1,4 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+const fs = require('fs');
+const content = `import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { OrderStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -38,7 +39,7 @@ export class MatchingService {
     addressId: string;
     isUrgent: boolean;
   }) {
-    this.logger.log(`Matching triggered for order ${payload.orderId}`);
+    this.logger.log(\`Matching triggered for order \${payload.orderId}\`);
     await this.orderService.updateStatus(
       payload.orderId,
       { status: OrderStatus.MATCHING },
@@ -50,7 +51,7 @@ export class MatchingService {
       payload.addressId,
     );
 
-    this.logger.log(`Found ${suggestions.length} matches for order ${payload.orderId}`);
+    this.logger.log(\`Found \${suggestions.length} matches for order \${payload.orderId}\`);
     return suggestions;
   }
 
@@ -85,7 +86,7 @@ export class MatchingService {
     });
 
     if (fixers.length === 0) {
-      this.logger.warn(`No fixers found for category: ${serviceCategory}`);
+      this.logger.warn(\`No fixers found for category: \${serviceCategory}\`);
       return [];
     }
 
@@ -239,3 +240,5 @@ export class MatchingService {
     return activeSlots / 7;
   }
 }
+`;
+fs.writeFileSync('backend/src/modules/matching/matching.service.ts', content);

@@ -130,6 +130,9 @@ export default function RootLayout({
       <head>
         <meta name="theme-color" content="#0284c7" />
         <link rel="preconnect" href="https://www.cblue.co.th" />
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="icon" href="/images/favicon-c.png" type="image/png" />
+        <link rel="apple-touch-icon" href="/images/favicon-c.png" />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         {/* Organization schema */}

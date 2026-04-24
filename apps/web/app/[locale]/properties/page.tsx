@@ -180,7 +180,7 @@ export default function PropertiesPage() {
   }
 
   const PROPERTY_TIERS = [
-    { name: "Economy", fee: 200, desc: locale === "th" ? "ห้องเช่า" : locale === "zh" ? "房间" : "Room" },
+    { name: "Economy", fee: 100, desc: locale === "th" ? "ห้องเช่า" : locale === "zh" ? "房间" : "Room" },
     { name: "Standard", fee: 400, desc: locale === "th" ? "คอนโด" : locale === "zh" ? "公寓" : "Condo" },
     { name: "Upper", fee: 600, desc: locale === "th" ? "บ้าน" : locale === "zh" ? "别墅" : "House" },
     { name: "Luxury", fee: 800, desc: locale === "th" ? "หรูหรา" : locale === "zh" ? "豪华" : "Luxury" },

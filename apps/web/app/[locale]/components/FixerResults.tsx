@@ -328,20 +328,20 @@ function generateDemoFixers(service: string): Fixer[] {
 function getProcessingFee(bookingType: BookingType, tier: string): number {
   // Property uses economy/standard/upper/luxury/grandeur tiers
   if (bookingType === "property") {
-    if (tier === "economy") return 200;
+    if (tier === "economy") return 100;
     if (tier === "standard") return 400;
     if (tier === "upper") return 600;
     if (tier === "luxury") return 800;
     if (tier === "grandeur") return 1000;
-    return 200;
+    return 100;
   }
   // Fixer/Pro uses economy/standard/corporate/specialist/expert tiers
-  if (tier === "economy") return 200;
+  if (tier === "economy") return 100;
   if (tier === "standard") return 400;
   if (tier === "corporate") return 600;
   if (tier === "specialist") return 800;
   if (tier === "expert") return 1000;
-  return 200;
+  return 100;
 }
 
 function generatePONumber(): string {
@@ -476,7 +476,20 @@ export default function FixerResults({
 
   // Hydration-safe: initialize random/date-dependent values on client
   useEffect(() => {
-    setFixers(generateDemoFixers(service));
+    // Try fetching real candidates from the backend AI Top-8 algorithm
+    fetch(`/api/v1/fixers/match?service=${encodeURIComponent(service)}&district=auto&province=auto`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data && data.length > 0) {
+          setFixers(data);
+        } else {
+          setFixers(generateDemoFixers(service));
+        }
+      })
+      .catch(() => {
+        setFixers(generateDemoFixers(service));
+      });
+      
     setIssueImageUrls((issueImages || []).map(f => URL.createObjectURL(f)));
     setPoNumber(generatePONumber());
     setFixerRatingOfCustomer(3 + Math.floor(Math.random() * 3));
@@ -636,7 +649,7 @@ export default function FixerResults({
     setTimeout(() => setPartnerRateReady(true), 3000);
   };
 
-  const fee = selectedFixer ? getProcessingFee(bookingType, selectedFixer.tier) : 200;
+  const fee = selectedFixer ? getProcessingFee(bookingType, selectedFixer.tier) : 100;
   const tierLabel = selectedFixer ? t(selectedFixer.tier) : "";
 
   // Step progress bar for the 12-step flow (visible after matching)
@@ -1419,9 +1432,25 @@ export default function FixerResults({
 
   // Step: Fixer List — AI Top 8 Selection
 
-  const handleNominate = () => {
+  const handleNominate = async () => {
     if (!nominateId.trim()) return;
-    // Simulate finding a partner by ID
+    
+    try {
+      const url = `/api/v1/fixers/match?service=${encodeURIComponent(service)}&district=auto&province=auto&nominateId=${encodeURIComponent(nominateId)}`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        const nominated = data.find((f: any) => f.id === nominateId || f.id.endsWith(nominateId) || f.alias.includes(nominateId));
+        if (nominated) {
+          setNominatedFixer(nominated);
+          return;
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+    
+    // Simulate finding a partner by ID as fallback
     const found: Fixer = {
       id: `f-nom-${nominateId}`,
       alias: `Partner-${nominateId.padStart(4, "0")}`,

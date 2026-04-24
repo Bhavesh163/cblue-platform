@@ -22,7 +22,7 @@ describe('SubscriptionService', () => {
       create: jest.fn(),
       update: jest.fn(),
     },
-    $transaction: jest.fn((fn: (tx: typeof mockPrisma) => Promise<unknown>) =>
+    $transaction: jest.fn((fn: (tx: any) => Promise<unknown>) =>
       fn({
         subscriber: {
           create: mockPrisma.subscriber.create,

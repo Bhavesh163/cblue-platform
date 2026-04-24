@@ -1664,7 +1664,7 @@ export default function FixerRegisterPage() {
           {/* Price List Table */}
           <fieldset>
             <legend className="text-lg font-semibold text-gray-900 mb-4">
-              {locale === "th" ? "ตารางราคาบริการ" : locale === "zh" ? "服务价格表" : "Service Price List"}
+              {locale === "th" ? "ตารางราคาบริการ *" : locale === "zh" ? "服务价格表 *" : "Service Price List *"}
             </legend>
             <p className="text-xs text-gray-500 mb-3">
               {locale === "th" ? "กรอกบริการและราคาสุดท้ายรวม VAT (ถ้ามี) เป็นบาท" : locale === "zh" ? "填写服务名称和最终价格（含增值税，如适用），单位为泰铢" : "Enter your service and final price including VAT if applicable (THB)"}

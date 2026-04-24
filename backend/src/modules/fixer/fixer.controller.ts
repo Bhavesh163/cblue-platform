@@ -5,6 +5,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
   UseInterceptors,
   UploadedFiles,
@@ -34,6 +35,11 @@ export class FixerController {
   @UseGuards(JwtAuthGuard)
   getMyProfile(@CurrentUser('id') userId: string) {
     return this.fixerService.getMyFixerProfile(userId);
+  }
+
+  @Get('match')
+  matchFixers(@Query('service') service: string, @Query('district') district: string, @Query('province') province: string, @Query('nominateId') nominateId?: string) {
+    return this.fixerService.matchFixers(service, district, province, nominateId);
   }
 
   @Get(':fixerId')
