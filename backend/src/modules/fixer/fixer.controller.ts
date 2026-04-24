@@ -38,8 +38,18 @@ export class FixerController {
   }
 
   @Get('match')
-  matchFixers(@Query('service') service: string, @Query('district') district: string, @Query('province') province: string, @Query('nominateId') nominateId?: string) {
-    return this.fixerService.matchFixers(service, district, province, nominateId);
+  matchFixers(
+    @Query('service') service: string,
+    @Query('district') district: string,
+    @Query('province') province: string,
+    @Query('nominateId') nominateId?: string,
+  ) {
+    return this.fixerService.matchFixers(
+      service,
+      district,
+      province,
+      nominateId,
+    );
   }
 
   @Get(':fixerId')

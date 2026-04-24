@@ -3,11 +3,7 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { OrderStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrderService } from '../order/order.service';
-import {
-  MATCHING_WEIGHTS,
-  MAX_MATCHING_RESULTS,
-  TIER_MULTIPLIERS,
-} from '../../common/constants';
+import { MATCHING_WEIGHTS, TIER_MULTIPLIERS } from '../../common/constants';
 
 export interface MatchingResult {
   fixerId: string;
@@ -50,13 +46,18 @@ export class MatchingService {
       payload.addressId,
     );
 
-    this.logger.log(`Found ${suggestions.length} matches for order ${payload.orderId}`);
+    this.logger.log(
+      `Found ${suggestions.length} matches for order ${payload.orderId}`,
+    );
     return suggestions;
   }
 
   private getLowestPrice(priceList: any): number {
-    if (!priceList || !Array.isArray(priceList) || priceList.length === 0) return 999999;
-    const minPrice = Math.min(...priceList.map((p: any) => Number(p.finalPrice) || 999999));
+    if (!priceList || !Array.isArray(priceList) || priceList.length === 0)
+      return 999999;
+    const minPrice = Math.min(
+      ...priceList.map((p: any) => Number(p.finalPrice) || 999999),
+    );
     return minPrice;
   }
 
@@ -64,7 +65,7 @@ export class MatchingService {
     serviceCategory: string,
     addressId: string,
     customerNominatedId?: string,
-    returningPartnerId?: string
+    returningPartnerId?: string,
   ): Promise<MatchingResult[]> {
     const address = await this.prisma.address.findUnique({
       where: { id: addressId },
@@ -97,7 +98,9 @@ export class MatchingService {
       );
       const ratingScore = fixer.rating / 5;
       const tierScore = this.calculateTierScore(fixer.tier);
-      const availabilityScore = this.calculateAvailabilityScore(fixer.availability);
+      const availabilityScore = this.calculateAvailabilityScore(
+        fixer.availability,
+      );
 
       const totalScore =
         distanceScore * MATCHING_WEIGHTS.DISTANCE +
@@ -109,16 +112,27 @@ export class MatchingService {
         fixerId: fixer.id,
         fixerName: fixer.user.name || fixer.user.phone || 'Unknown',
         score: Math.round(totalScore * 100) / 100,
-        distance: null, 
+        distance: null,
         rating: fixer.rating,
         tier: fixer.tier,
-        tierMultiplier: TIER_MULTIPLIERS[fixer.tier as keyof typeof TIER_MULTIPLIERS] || 1,
+        tierMultiplier:
+          TIER_MULTIPLIERS[fixer.tier as keyof typeof TIER_MULTIPLIERS] || 1,
         price: this.getLowestPrice(fixer.priceList),
-        completedJobs: fixer.completedJobs || 0
+        completedJobs: fixer.completedJobs || 0,
       };
     });
 
-    const isUpperTier = (tier: string) => ['CORPORATE', 'SPECIALIST', 'EXPERT', 'MANAGER', 'DIRECTOR', 'UPPER', 'LUXURY', 'GRANDEUR'].includes(tier);
+    const isUpperTier = (tier: string) =>
+      [
+        'CORPORATE',
+        'SPECIALIST',
+        'EXPERT',
+        'MANAGER',
+        'DIRECTOR',
+        'UPPER',
+        'LUXURY',
+        'GRANDEUR',
+      ].includes(tier);
 
     // AI Top-8 Selection Algorithm Matrix (Point 9)
     // Create 15-20 random pool if available, but we sort all to grab best candidates first
@@ -142,7 +156,9 @@ export class MatchingService {
     for (const c of cheapest.slice(0, 2)) addResult(c, '💰 Cheapest');
 
     // Slots 3-4: ⭐ Two highest satisfaction (stars, tiebreak by total jobs/reviews)
-    const highestRated = [...scored].sort((a, b) => b.rating - a.rating || b.completedJobs - a.completedJobs);
+    const highestRated = [...scored].sort(
+      (a, b) => b.rating - a.rating || b.completedJobs - a.completedJobs,
+    );
     let hAdded = 0;
     for (const c of highestRated) {
       if (hAdded >= 2) break;
@@ -153,7 +169,7 @@ export class MatchingService {
     }
 
     // Slot 5: 🏆 Cheapest of upper tier
-    const upperTiers = scored.filter(c => isUpperTier(c.tier));
+    const upperTiers = scored.filter((c) => isUpperTier(c.tier));
     if (upperTiers.length > 0) {
       const upperCheapest = [...upperTiers].sort((a, b) => a.price - b.price);
       for (const c of upperCheapest) {
@@ -166,7 +182,9 @@ export class MatchingService {
 
     // Slot 6: 🏆 Highest rated of upper tier
     if (upperTiers.length > 0) {
-      const upperRated = [...upperTiers].sort((a, b) => b.rating - a.rating || b.completedJobs - a.completedJobs);
+      const upperRated = [...upperTiers].sort(
+        (a, b) => b.rating - a.rating || b.completedJobs - a.completedJobs,
+      );
       for (const c of upperRated) {
         if (!results.has(c.fixerId)) {
           addResult(c, '🏆 Highest Rated Upper Tier');
@@ -177,7 +195,7 @@ export class MatchingService {
 
     // Slot 7: 🔄 Returning partner
     if (returningPartnerId) {
-      const returning = scored.find(c => c.fixerId === returningPartnerId);
+      const returning = scored.find((c) => c.fixerId === returningPartnerId);
       if (returning && !results.has(returning.fixerId)) {
         addResult(returning, '🔄 Returning partner');
       }
@@ -185,7 +203,7 @@ export class MatchingService {
 
     // Slot 8: 👤 Customer nomination by partner ID number
     if (customerNominatedId) {
-      const nominated = scored.find(c => c.fixerId === customerNominatedId);
+      const nominated = scored.find((c) => c.fixerId === customerNominatedId);
       if (nominated && !results.has(nominated.fixerId)) {
         addResult(nominated, '👤 Customer nomination');
       }
@@ -202,9 +220,18 @@ export class MatchingService {
     return Array.from(results.values());
   }
 
-  async getSuggestions(orderId: string, customerNominatedId?: string, returningId?: string) {
+  async getSuggestions(
+    orderId: string,
+    customerNominatedId?: string,
+    returningId?: string,
+  ) {
     const order = await this.orderService.findById(orderId);
-    return this.findMatches(order.serviceCategory, order.addressId, customerNominatedId, returningId);
+    return this.findMatches(
+      order.serviceCategory,
+      order.addressId,
+      customerNominatedId,
+      returningId,
+    );
   }
 
   private calculateDistanceScore(
@@ -226,7 +253,7 @@ export class MatchingService {
       DIRECTOR: 1.0,
       UPPER: 0.7,
       LUXURY: 0.9,
-      GRANDEUR: 1.0
+      GRANDEUR: 1.0,
     };
     return scores[tier] ?? 0.5;
   }

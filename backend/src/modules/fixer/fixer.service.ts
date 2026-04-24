@@ -215,9 +215,14 @@ export class FixerService {
 
   // ── AI Top-8 Selection Algorithm Matrix ──
 
-  async matchFixers(service: string, district: string, province: string, nominateId?: string) {
+  async matchFixers(
+    service: string,
+    district: string,
+    province: string,
+    nominateId?: string,
+  ) {
     // 1. Fetch available fixers in the area
-    let pool = await this.prisma.fixer.findMany({
+    const pool = await this.prisma.fixer.findMany({
       where: {
         status: 'APPROVED',
         // In a real app we might filter by location and service.
@@ -232,13 +237,17 @@ export class FixerService {
     }
 
     // Format the pool to include derived metrics for sorting
-    const formattedPool = pool.map(f => {
+    const formattedPool = pool.map((f) => {
       // Simulate price from priceList
       let basePrice = 200;
       if (f.priceList && Array.isArray(f.priceList) && f.priceList.length > 0) {
         const list = f.priceList as any[];
-        const match = list.find(p => p.service.toLowerCase().includes(service?.toLowerCase() || ''));
-        basePrice = match ? parseFloat(match.finalPrice) : parseFloat(list[0].finalPrice);
+        const match = list.find((p) =>
+          p.service.toLowerCase().includes(service?.toLowerCase() || ''),
+        );
+        basePrice = match
+          ? parseFloat(match.finalPrice)
+          : parseFloat(list[0].finalPrice);
       }
 
       return {
@@ -248,30 +257,44 @@ export class FixerService {
         rating: f.rating,
         totalJobs: f.completedJobs,
         price: basePrice || 500,
-        satisfaction: f.rating >= 4.5 ? 90 + Math.random() * 10 : 70 + Math.random() * 20,
-        specialties: f.skills.map(s => s.name),
+        satisfaction:
+          f.rating >= 4.5 ? 90 + Math.random() * 10 : 70 + Math.random() * 20,
+        specialties: f.skills.map((s) => s.name),
         experienceYears: f.yearsExperience || 1,
       };
     });
 
-    const tierRank: Record<string, number> = { economy: 0, standard: 1, corporate: 2, specialist: 3, expert: 4 };
+    const tierRank: Record<string, number> = {
+      economy: 0,
+      standard: 1,
+      corporate: 2,
+      specialist: 3,
+      expert: 4,
+    };
     const selected: any[] = [];
     const used = new Set<string>();
 
     function pick(f: any) {
-      if (!used.has(f.id)) { selected.push(f); used.add(f.id); }
+      if (!used.has(f.id)) {
+        selected.push(f);
+        used.add(f.id);
+      }
     }
 
     // Sort helpers
     const byPrice = [...formattedPool].sort((a, b) => a.price - b.price);
     const bySatisfaction = [...formattedPool].sort((a, b) => {
       if (b.rating !== a.rating) return b.rating - a.rating;
-      if (b.satisfaction !== a.satisfaction) return b.satisfaction - a.satisfaction;
+      if (b.satisfaction !== a.satisfaction)
+        return b.satisfaction - a.satisfaction;
       return b.totalJobs - a.totalJobs;
     });
 
     // 1. TWO CHEAPEST in area
-    for (const f of byPrice) { if (selected.length < 2) pick(f); else break; }
+    for (const f of byPrice) {
+      if (selected.length < 2) pick(f);
+      else break;
+    }
 
     // 2. TWO HIGHEST SATISFACTION
     for (const f of bySatisfaction) {
@@ -280,15 +303,19 @@ export class FixerService {
     }
 
     // 3. ONE CHEAPEST OF UPPER TIER (corporate+specialist+expert)
-    const upperTiers = byPrice.filter(f => tierRank[f.tier] >= 2 && !used.has(f.id));
+    const upperTiers = byPrice.filter(
+      (f) => tierRank[f.tier] >= 2 && !used.has(f.id),
+    );
     if (upperTiers[0]) pick(upperTiers[0]);
 
     // 4. ONE HIGHEST SATISFACTION OF UPPER TIER
-    const upperBySat = bySatisfaction.filter(f => tierRank[f.tier] >= 2 && !used.has(f.id));
+    const upperBySat = bySatisfaction.filter(
+      (f) => tierRank[f.tier] >= 2 && !used.has(f.id),
+    );
     if (upperBySat[0]) pick(upperBySat[0]);
 
     // 5. ONE RETURNING / LAST SAME-JOB PARTNER
-    const remaining = formattedPool.filter(f => !used.has(f.id));
+    const remaining = formattedPool.filter((f) => !used.has(f.id));
     if (remaining.length > 0) {
       const returningIdx = Math.floor(Math.random() * remaining.length);
       const returning = remaining[returningIdx];
@@ -298,7 +325,9 @@ export class FixerService {
 
     // 6. SLOT 8 reserved for customer nomination
     if (nominateId) {
-      const nominated = formattedPool.find(f => f.id === nominateId || f.id.endsWith(nominateId));
+      const nominated = formattedPool.find(
+        (f) => f.id === nominateId || f.id.endsWith(nominateId),
+      );
       if (nominated && !used.has(nominated.id)) {
         pick(nominated);
       }

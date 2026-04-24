@@ -51,7 +51,7 @@ describe('PropertyService', () => {
       const created = { id: 'prop-1', userId: 'user-1', ...dto, images: [] };
       mockPrisma.property.create.mockResolvedValue(created);
 
-      const result = (await service.create("user-1", dto)) as any;
+      const result = (await service.create('user-1', dto)) as any;
       expect(result).toEqual(created);
       expect(mockPrisma.property.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
