@@ -8,10 +8,11 @@ import {
   Query,
   UseGuards,
   UseInterceptors,
+  UploadedFile,
   UploadedFiles,
   BadRequestException,
 } from '@nestjs/common';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import { FixerService } from './fixer.service';
 import { RegisterFixerDto } from './dto/register-fixer.dto';
@@ -114,7 +115,14 @@ export class FixerController {
     return this.fixerService.getAvailability(userId);
   }
 
-  // ── Portfolio AI Digest (no auth — called during registration before user has token) ──
+  // ── AI Digest (no auth — called during registration before user has token) ──
+
+  @Post('kyc-digest')
+  @Throttle({ default: { ttl: 30000, limit: 10 } })
+  @UseInterceptors(FileInterceptor('file'))
+  async kycDigest(@UploadedFile() file: Express.Multer.File) {
+    return this.fixerService.kycDigest(file);
+  }
 
   @Post('portfolio-digest')
   @Throttle({ default: { ttl: 60000, limit: 5 } })

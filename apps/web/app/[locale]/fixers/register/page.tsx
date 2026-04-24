@@ -279,9 +279,30 @@ export default function FixerRegisterPage() {
 
     for (let i = 0; i < files.length && currentCount + newFiles.length < 3; i++) {
       const slotIdx = currentCount + newFiles.length;
-      const result = await validateKycImage(files[i]!, slotIdx);
+      const file = files[i]!;
+      const result = await validateKycImage(file, slotIdx);
+
       if (result.valid) {
-        newFiles.push(files[i]!);
+        // Backend AI Validation
+        try {
+          const fd = new globalThis.FormData();
+          fd.append("file", file);
+          const res = await fetch("/api/v1/fixers/kyc-digest", { method: "POST", body: fd });
+          if (res.ok) {
+            const aiData = await res.json();
+            // If it's ID Front (slot 0) or ID Back (slot 1), verify text was found
+            if (slotIdx < 2 && (!aiData.has_content || aiData.text_length < 20)) {
+              newStatuses[slotIdx] = "rejected";
+              setError(locale === "th" ? "AI ไม่พบข้อความในเอกสาร — กรุณาถ่ายให้ชัดเจน" : locale === "zh" ? "AI未检测到文件上的文字 — 请拍摄清晰照片" : "AI did not detect text — please take a clearer photo");
+              setKycValidating(false);
+              return;
+            }
+          }
+        } catch {
+          // Non-blocking if AI service is down
+        }
+
+        newFiles.push(file);
         newStatuses[slotIdx] = "valid";
       } else {
         newStatuses[slotIdx] = "rejected";

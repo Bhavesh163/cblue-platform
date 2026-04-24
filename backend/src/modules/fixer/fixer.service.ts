@@ -347,6 +347,51 @@ export class FixerService {
 
   // ── Portfolio AI Digest ──
 
+  async kycDigest(file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+
+    const visionUrl =
+      this.configService.get<string>('visionService.url') ||
+      'http://localhost:8010';
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file.buffer, {
+        filename: file.originalname,
+        contentType: file.mimetype,
+      });
+
+      const response = await firstValueFrom(
+        this.httpService.post(`${visionUrl}/extract`, formData, {
+          headers: formData.getHeaders(),
+          timeout: 30000,
+        }),
+      );
+
+      return response.data as Record<string, unknown>;
+    } catch {
+      this.logger.warn(
+        `Vision service unavailable at ${visionUrl} for kycDigest, using fallback`,
+      );
+
+      return {
+        file_id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        filename: file.originalname,
+        file_type: file.mimetype,
+        raw_text: '',
+        text_length: 0,
+        extraction_method: 'none_vision_service_unavailable',
+        has_content: false,
+        verification_hints: [
+          'Vision service unavailable — document analysis deferred',
+        ],
+        timestamp: new Date().toISOString(),
+      };
+    }
+  }
+
   async digestPortfolio(files: Express.Multer.File[]) {
     if (!files || files.length === 0) {
       throw new BadRequestException('No files provided');

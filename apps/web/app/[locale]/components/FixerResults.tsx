@@ -409,6 +409,9 @@ const getTierColor = (tier: string) => tierColors[tier] ?? tierColors["standard"
 
 type Step = "matching" | "list" | "confirm" | "po" | "notify" | "payment" | "chat" | "meeting" | "variation" | "complete" | "rate" | "done";
 
+import generatePayload from "promptpay-qr";
+import { QRCodeSVG } from "qrcode.react";
+
 export default function FixerResults({
   locale,
   bookingType,
@@ -1196,6 +1199,7 @@ export default function FixerResults({
   // Step: Payment QR
   if (step === "payment" && selectedFixer) {
     const refCode = `CBLUE-${poNumber.replace("PO-", "")}`;
+    const payload = generatePayload("0999999999", { amount: fee });
     return (
       <><StepProgressBar />
       <div className="mx-auto max-w-md px-4 py-12">
@@ -1203,15 +1207,8 @@ export default function FixerResults({
           <h2 className="text-xl font-bold text-gray-800 mb-2">{t("paymentTitle")}</h2>
           <p className="text-gray-500 text-sm mb-6">{t("paymentDesc")}</p>
 
-          {/* QR Code placeholder */}
-          <div className="mx-auto w-48 h-48 bg-gray-100 rounded-xl border-2 border-dashed border-gray-300 flex items-center justify-center mb-6">
-            <div className="text-center">
-              <svg className="w-12 h-12 text-gray-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 13.5 9.375v-4.5Z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75ZM6.75 16.5h.75v.75h-.75v-.75ZM16.5 6.75h.75v.75h-.75v-.75ZM13.5 13.5h.75v.75h-.75v-.75ZM13.5 19.5h.75v.75h-.75v-.75ZM19.5 13.5h.75v.75h-.75v-.75ZM19.5 19.5h.75v.75h-.75v-.75ZM16.5 16.5h.75v.75h-.75v-.75Z" />
-              </svg>
-              <p className="text-xs text-gray-400">PromptPay QR</p>
-            </div>
+          <div className="mx-auto w-48 h-48 bg-white rounded-xl border-2 border-gray-100 flex items-center justify-center mb-6 p-2 shadow-sm">
+            <QRCodeSVG value={payload} size={160} />
           </div>
 
           <div className="bg-gray-50 rounded-xl p-4 mb-6 space-y-2 text-sm">

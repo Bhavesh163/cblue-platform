@@ -6,6 +6,8 @@ import Image from "next/image";
 import { useTranslations, useLocale } from "next-intl";
 import { THAI_PROVINCES } from "../lib/constants";
 import PdpaConsent from "../components/PdpaConsent";
+import generatePayload from "promptpay-qr";
+import { QRCodeSVG } from "qrcode.react";
 const PROPERTY_TYPES = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "APARTMENT"] as const;
 
 
@@ -380,16 +382,13 @@ export default function PropertiesPage() {
                     <p className="text-sm text-gray-600 mb-4">
                       {locale === "th" ? "สแกน QR Code เพื่อชำระค่าธรรมเนียมดำเนินการ" : locale === "zh" ? "扫描QR码支付处理费" : "Scan QR Code to pay the processing fee"}
                     </p>
-                    <div className="inline-block bg-white border-2 border-gray-200 rounded-2xl p-6 mb-4">
-                      <div className="w-48 h-48 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400">
-                        <div className="text-center">
-                          <span className="text-4xl block mb-2">📱</span>
-                          <p className="text-xs font-semibold">PromptPay QR</p>
-                          <p className="text-lg font-extrabold text-green-700 mt-1">
-                            ฿{PROPERTY_TIERS.find((ti) => ti.name === selectedTier)?.fee || 0}
-                          </p>
-                        </div>
+                    <div className="inline-block bg-white border-2 border-gray-100 rounded-2xl p-4 mb-4 shadow-sm">
+                      <div className="w-48 h-48 rounded-lg flex items-center justify-center text-gray-400">
+                        <QRCodeSVG value={generatePayload("0999999999", { amount: PROPERTY_TIERS.find((ti) => ti.name === selectedTier)?.fee || 0 })} size={192} />
                       </div>
+                      <p className="text-lg font-extrabold text-green-700 mt-3">
+                        ฿{PROPERTY_TIERS.find((ti) => ti.name === selectedTier)?.fee || 0}
+                      </p>
                     </div>
                     <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700 mb-4">
                       ⚠️ {locale === "th"
