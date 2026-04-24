@@ -257,7 +257,7 @@ export default function PropertyRegisterPage() {
       {/* Form */}
       <section className="py-10">
         <div className="mx-auto max-w-3xl px-4 sm:px-6">
-          <form onSubmit={handleSubmit} noValidate className="space-y-8">
+          <form onSubmit={handleSubmit}  className="space-y-8">
 
             {/* Account Authentication — Inline Login / Register */}
             <fieldset className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200 p-6">
@@ -405,7 +405,7 @@ export default function PropertyRegisterPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">{t("area")}</label>
                   <input
                     type="number"
-                    name="area"
+                    name="area" required
                     value={form.area}
                     onChange={handleChange}
                     min="0"
@@ -415,10 +415,10 @@ export default function PropertyRegisterPage() {
 
                 {/* Bedrooms */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t("bedrooms")}</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t("bedrooms")} <span className="text-red-500">*</span></label>
                   <input
                     type="number"
-                    name="bedrooms"
+                    name="bedrooms" required
                     value={form.bedrooms}
                     onChange={handleChange}
                     min="0"
@@ -429,10 +429,10 @@ export default function PropertyRegisterPage() {
 
                 {/* Bathrooms */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t("bathrooms")}</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t("bathrooms")} <span className="text-red-500">*</span></label>
                   <input
                     type="number"
-                    name="bathrooms"
+                    name="bathrooms" required
                     value={form.bathrooms}
                     onChange={handleChange}
                     min="0"
@@ -448,7 +448,7 @@ export default function PropertyRegisterPage() {
                   </label>
                   <input
                     type="number"
-                    name="floors"
+                    name="floors" required
                     value={form.floors}
                     onChange={handleChange}
                     min="1"
@@ -586,8 +586,8 @@ export default function PropertyRegisterPage() {
                   {/* Detailed Thai Address Fields */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "บ้านเลขที่" : locale === "zh" ? "门牌号" : "House No."}</label>
-                      <input type="text" name="houseNumber" value={form.houseNumber} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500" placeholder="123/45" />
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "บ้านเลขที่" : locale === "zh" ? "门牌号" : "House No."} <span className="text-red-500">*</span></label>
+                      <input type="text" name="houseNumber" required value={form.houseNumber} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500" placeholder="123/45" />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "อาคาร / ชั้น" : locale === "zh" ? "建筑 / 楼层" : "Building / Floor"}</label>
@@ -598,11 +598,11 @@ export default function PropertyRegisterPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "ถนน" : locale === "zh" ? "路" : "Road"}</label>
-                      <input type="text" name="road" value={form.road} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500" placeholder={locale === "th" ? "ถนนสุขุมวิท" : locale === "zh" ? "素坤逸路" : "Sukhumvit Road"} />
+                      <input type="text" name="road" required value={form.road} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500" placeholder={locale === "th" ? "ถนนสุขุมวิท" : locale === "zh" ? "素坤逸路" : "Sukhumvit Road"} />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "ซอย" : locale === "zh" ? "巷" : "Soi"}</label>
-                      <input type="text" name="soi" value={form.soi} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500" placeholder={locale === "th" ? "ซอย 21" : locale === "zh" ? "21巷" : "Soi 21"} />
+                      <input type="text" name="soi" required value={form.soi} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500" placeholder={locale === "th" ? "ซอย 21" : locale === "zh" ? "21巷" : "Soi 21"} />
                     </div>
                   </div>
                 </>)}
@@ -649,32 +649,32 @@ export default function PropertyRegisterPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t("contactName")}</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t("contactName")} <span className="text-red-500">*</span></label>
                   <input
                     type="text"
-                    name="contactName"
+                    name="contactName" required
                     value={form.contactName}
                     onChange={handleChange}
                     className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{tb("phone")}</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{tb("phone")} <span className="text-red-500">*</span></label>
                   <input
                     type="text"
                     inputMode="tel"
-                    name="contactPhone"
+                    name="contactPhone" required
                     value={form.contactPhone}
                     onChange={handleChange}
                     className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{tb("email")}</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{tb("email")} <span className="text-red-500">*</span></label>
                   <input
                     type="text"
                     inputMode="email"
-                    name="contactEmail"
+                    name="contactEmail" required
                     value={form.contactEmail}
                     onChange={handleChange}
                     className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"

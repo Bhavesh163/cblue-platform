@@ -998,7 +998,7 @@ export default function FixerRegisterPage() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} noValidate className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 sm:p-8 space-y-6">
+        <form onSubmit={handleSubmit}  className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 sm:p-8 space-y-6">
           {error && (
             <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
               {error}
@@ -1082,8 +1082,8 @@ export default function FixerRegisterPage() {
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "บ้านเลขที่" : locale === "zh" ? "门牌号" : "House No."}</label>
-                <input name="companyHouseNumber" type="text" value={form.companyHouseNumber} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="123/45" />
+                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "บ้านเลขที่" : locale === "zh" ? "门牌号" : "House No."} <span className="text-red-500">*</span></label>
+                <input name="companyHouseNumber" type="text" required value={form.companyHouseNumber} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="123/45" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "อาคาร / ชั้น" : locale === "zh" ? "建筑 / 楼层" : "Building / Floor"}</label>
@@ -1094,36 +1094,36 @@ export default function FixerRegisterPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "ถนน" : locale === "zh" ? "路" : "Road"}</label>
-                <input name="companyRoad" type="text" value={form.companyRoad} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder={locale === "th" ? "ถนนสุขุมวิท" : locale === "zh" ? "素坤逸路" : "Sukhumvit Road"} />
+                <input name="companyRoad" type="text" required value={form.companyRoad} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder={locale === "th" ? "ถนนสุขุมวิท" : locale === "zh" ? "素坤逸路" : "Sukhumvit Road"} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "ซอย" : locale === "zh" ? "巷" : "Soi"}</label>
-                <input name="companySoi" type="text" value={form.companySoi} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder={locale === "th" ? "ซอย 21" : locale === "zh" ? "21巷" : "Soi 21"} />
+                <input name="companySoi" type="text" required value={form.companySoi} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder={locale === "th" ? "ซอย 21" : locale === "zh" ? "21巷" : "Soi 21"} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "จังหวัด" : locale === "zh" ? "府" : "Province"}</label>
-                <select name="companyProvince" value={form.companyProvince} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 outline-none bg-white">
+                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "จังหวัด" : locale === "zh" ? "府" : "Province"} <span className="text-red-500">*</span></label>
+                <select name="companyProvince" required value={form.companyProvince} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 outline-none bg-white">
                   <option value="">-- {locale === "th" ? "เลือกจังหวัด" : locale === "zh" ? "选择府" : "Select Province"} --</option>
                   {THAI_PROVINCES.map((p) => (<option key={p} value={p}>{p}</option>))}
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "อำเภอ/เขต" : locale === "zh" ? "县/区" : "District"}</label>
-                <select name="companyDistrict" value={form.companyDistrict} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 outline-none bg-white">
+                <select name="companyDistrict" required value={form.companyDistrict} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 outline-none bg-white">
                   <option value="">-- {locale === "th" ? "เลือกอำเภอ/เขต" : locale === "zh" ? "选择县/区" : "Select District"} --</option>
                   {getDistrictsForProvince(form.companyProvince).map((d) => (<option key={d} value={d}>{d}</option>))}
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "ตำบล/แขวง" : locale === "zh" ? "乡/镇" : "Sub-district"}</label>
-                <select name="companySubdistrict" value={form.companySubdistrict} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 outline-none bg-white">
+                <select name="companySubdistrict" required value={form.companySubdistrict} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 outline-none bg-white">
                   <option value="">-- {locale === "th" ? "เลือกตำบล/แขวง" : locale === "zh" ? "选择乡/镇" : "Select Sub-district"} --</option>
                   {getSubdistrictsForDistrict(form.companyProvince, form.companyDistrict).map((sd) => (<option key={sd} value={sd}>{sd}</option>))}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "รหัสไปรษณีย์" : locale === "zh" ? "邮政编码" : "Postal Code"}</label>
-                <input name="companyPostalCode" type="text" maxLength={5} value={form.companyPostalCode} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="10110" />
+                <label className="block text-sm font-medium text-gray-700 mb-1">{locale === "th" ? "รหัสไปรษณีย์" : locale === "zh" ? "邮政编码" : "Postal Code"} <span className="text-red-500">*</span></label>
+                <input name="companyPostalCode" type="text" required maxLength={5} value={form.companyPostalCode} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="10110" />
               </div>
             </div>
           </fieldset>
@@ -1684,22 +1684,22 @@ export default function FixerRegisterPage() {
                   {priceRows.map((row, idx) => (
                     <tr key={idx} className="border-b border-gray-100">
                       <td className="px-2 py-1.5">
-                        <input type="text" value={row.service} placeholder={locale === "th" ? "เช่น ซ่อมท่อ" : locale === "zh" ? "例如 修水管" : "e.g. Pipe repair"}
+                        <input type="text" required value={row.service} placeholder={locale === "th" ? "เช่น ซ่อมท่อ" : locale === "zh" ? "例如 修水管" : "e.g. Pipe repair"}
                           onChange={(e) => { const nr = [...priceRows]; nr[idx] = { ...nr[idx]!, service: e.target.value }; setPriceRows(nr); }}
                           className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded focus:border-blue-500 outline-none" />
                       </td>
                       <td className="px-2 py-1.5 w-20">
-                        <input type="text" value={row.quantity} placeholder={locale === "th" ? "เช่น 1" : locale === "zh" ? "例如 1" : "e.g. 1"}
+                        <input type="text" required value={row.quantity} placeholder={locale === "th" ? "เช่น 1" : locale === "zh" ? "例如 1" : "e.g. 1"}
                           onChange={(e) => { const nr = [...priceRows]; nr[idx] = { ...nr[idx]!, quantity: e.target.value }; setPriceRows(nr); }}
                           className="w-full px-2 py-1.5 text-sm text-center border border-gray-200 rounded focus:border-blue-500 outline-none" />
                       </td>
                       <td className="px-2 py-1.5">
-                        <input type="text" value={row.unit} placeholder={locale === "th" ? "เช่น จุด, ตร.ม." : locale === "zh" ? "例如 个, 平方米" : "e.g. point, sq.m."}
+                        <input type="text" required value={row.unit} placeholder={locale === "th" ? "เช่น จุด, ตร.ม." : locale === "zh" ? "例如 个, 平方米" : "e.g. point, sq.m."}
                           onChange={(e) => { const nr = [...priceRows]; nr[idx] = { ...nr[idx]!, unit: e.target.value }; setPriceRows(nr); }}
                           className="w-full px-2 py-1.5 text-sm text-center border border-gray-200 rounded focus:border-blue-500 outline-none" />
                       </td>
                       <td className="px-2 py-1.5">
-                        <input type="number" min={0} value={row.finalPrice} placeholder="฿"
+                        <input type="number" required min={0} value={row.finalPrice} placeholder="฿"
                           onChange={(e) => { const nr = [...priceRows]; nr[idx] = { ...nr[idx]!, finalPrice: e.target.value }; setPriceRows(nr); }}
                           className="w-full px-2 py-1.5 text-sm text-center border border-gray-200 rounded focus:border-blue-500 outline-none" />
                       </td>
