@@ -281,7 +281,6 @@ export class FixerService {
       expert: 4,
     };
     const selected: SelectedFixer[] = [];
-    const used = new Set<string>();
 
     const pick = (f: SelectedFixer, reason?: string) => {
       if (!selected.some((s) => String(s.id) === String(f.id))) {

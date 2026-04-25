@@ -378,6 +378,9 @@ jobs:
             docker restart "$BACKEND_CONTAINER" 2>/dev/null || true
             sleep 10
 
+            # ── Clean up old iptables hack ──
+            docker run --rm --net=host --cap-add=NET_ADMIN alpine sh -c "apk add --no-cache iptables >/dev/null 2>&1; iptables -t nat -D PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3002 2>/dev/null || true"
+
             # ── Verify backend health ──
             HEALTH=$(curl -sf http://127.0.0.1:3002/api/v1/health 2>&1 || echo '{"status":"unreachable"}')
             echo "Backend health: $HEALTH"
@@ -395,17 +398,6 @@ jobs:
               docker logs --tail=20 "$BACKEND_CONTAINER" 2>&1 || true
             fi
 
-            # ── iptables port redirect 80 → 3002 ──
-            echo "🔧 Setting up iptables port 80 → 3002 redirect..."
-            docker run --rm --net=host --cap-add=NET_ADMIN alpine sh -c '
-              apk add --no-cache iptables >/dev/null 2>&1
-              iptables -t nat -D PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3002 2>/dev/null || true
-              iptables -t nat -I PREROUTING 1 -p tcp --dport 80 -j REDIRECT --to-port 3002
-              echo "iptables rules:"
-              iptables -t nat -L PREROUTING -n --line-numbers | head -5
-            ' 2>&1 && echo "✅ iptables redirect active" || echo "⚠️ iptables redirect failed"
-
-            # ── Final status ──
             if echo "$HEALTH" | grep -q '"ok"'; then
               echo "✅ Deploy complete: $DEPLOY_SHA"
             else
