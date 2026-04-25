@@ -173,11 +173,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
     },
     icons: {
       icon: [
-        { url: '/favicon.ico', sizes: 'any' },
-        { url: '/favicon.svg', type: 'image/svg+xml' }
-      ],
-      apple: [
-        { url: '/apple-touch-icon.png' }
+        { url: '/favicon.ico', sizes: 'any' }
       ]
     },
   };

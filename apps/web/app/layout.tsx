@@ -353,8 +353,14 @@ export const metadata: Metadata = {
     googleBot: { index: true, follow: true, "max-video-preview": -1, "max-image-preview": "large", "max-snippet": -1 },
   },
   icons: {
-    icon: [ { url: "/favicon.ico" }, { url: "/images/favicon-c.png", type: "image/png" } ],
-    apple: [ { url: "/images/favicon-c.png", type: "image/png" } ],
+    icon: [
+      { url: "/favicon.ico", type: "image/x-icon" },
+      { url: "/images/favicon-c.png", type: "image/png", sizes: "512x512" }
+    ],
+    apple: [
+      { url: "/images/favicon-c.png", sizes: "180x180", type: "image/png" }
+    ],
+    shortcut: [ { url: "/favicon.ico" } ]
   },
   other: {
     "msvalidate.01": "",

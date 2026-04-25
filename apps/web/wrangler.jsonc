@@ -18,7 +18,7 @@
   // DNS-only A record: api-backend.cblue.co.th → 168.144.39.0
   // CF Workers cannot fetch bare IPs (error 1003), so we use a real subdomain
   "vars": {
-    "API_BACKEND_URL": "http://api-backend.cblue.co.th"
+    "API_BACKEND_URL": "http://api-backend.cblue.co.th:3002"
   },
   "services": [
     {
