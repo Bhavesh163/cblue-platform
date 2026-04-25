@@ -246,13 +246,17 @@ export class FixerService {
     const formattedPool = pool.map((f) => {
       let basePrice = 200;
       if (f.priceList && Array.isArray(f.priceList) && f.priceList.length > 0) {
-        const list = f.priceList as any[];
-        const match = list.find((item: any) =>
-          String(item.service).includes(String(service)),
+        const list = f.priceList as Record<string, unknown>[];
+        const match = list.find(
+          (item: Record<string, unknown>) =>
+            typeof item.service === 'string' &&
+            item.service.toLowerCase().includes(service.toLowerCase()),
         );
-        basePrice = match
-          ? parseFloat(match.finalPrice as string)
-          : parseFloat(list[0].finalPrice as string);
+        if (list.length > 0) {
+          basePrice = match
+            ? parseFloat(match.finalPrice as string)
+            : parseFloat(list[0].finalPrice as string);
+        }
       }
 
       return {

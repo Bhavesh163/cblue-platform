@@ -18,22 +18,23 @@ describe('SubscriptionService', () => {
       update: jest.fn(),
     },
     user: {
+      findUnique: jest.fn(),
       findFirst: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
     },
-    $transaction: jest.fn((fn: (tx: any) => Promise<unknown>) =>
+    $transaction: jest.fn((fn: (tx: unknown) => Promise<unknown>) =>
       fn({
         subscriber: {
           create: mockPrisma.subscriber.create,
           update: mockPrisma.subscriber.update,
         },
         user: {
-          findFirst: mockPrisma.user.findFirst,
+          findUnique: mockPrisma.user.findUnique,
           create: mockPrisma.user.create,
           update: mockPrisma.user.update,
         },
-      } as unknown as typeof mockPrisma),
+      } as unknown),
     ),
   };
 

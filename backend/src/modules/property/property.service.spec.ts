@@ -51,13 +51,43 @@ describe('PropertyService', () => {
       const created = { id: 'prop-1', userId: 'user-1', ...dto, images: [] };
       mockPrisma.property.create.mockResolvedValue(created);
 
-      const result = (await service.create('user-1', dto)) as any;
+      const result = await service.create('user-1', dto);
       expect(result).toEqual(created);
       expect(mockPrisma.property.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           userId: 'user-1',
           title: 'Condo in Bangkok',
           price: 3500000,
+        }),
+        include: { images: true },
+      });
+    });
+
+    it('should create property successfully', async () => {
+      const dto = {
+        title: 'House A',
+        propertyType: 'House',
+        listingType: 'Sale',
+        province: 'BKK',
+        price: 5000000,
+        description: 'Test desc',
+        district: 'Test district',
+        contactName: 'Test',
+        contactPhone: '000',
+      };
+      const created = { id: 'prop-1', userId: 'user-1', ...dto, images: [] };
+      mockPrisma.property.create.mockResolvedValue(created);
+
+      const result = await service.create(
+        'user-1',
+        dto as unknown as import('./dto/create-property.dto').CreatePropertyDto,
+      );
+      expect(result).toEqual(created);
+      expect(mockPrisma.property.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          userId: 'user-1',
+          title: 'House A',
+          price: 5000000,
         }),
         include: { images: true },
       });

@@ -52,11 +52,13 @@ export class MatchingService {
     return suggestions;
   }
 
-  private getLowestPrice(priceList: any): number {
+  private getMinPrice(priceList: unknown): number {
     if (!priceList || !Array.isArray(priceList) || priceList.length === 0)
       return 999999;
     const minPrice = Math.min(
-      ...priceList.map((p: any) => Number(p.finalPrice) || 999999),
+      ...priceList.map(
+        (p: Record<string, unknown>) => Number(p.finalPrice) || 999999,
+      ),
     );
     return minPrice;
   }
@@ -117,7 +119,7 @@ export class MatchingService {
         tier: fixer.tier,
         tierMultiplier:
           TIER_MULTIPLIERS[fixer.tier as keyof typeof TIER_MULTIPLIERS] || 1,
-        price: this.getLowestPrice(fixer.priceList),
+        price: this.getMinPrice(fixer.priceList),
         completedJobs: fixer.completedJobs || 0,
       };
     });
