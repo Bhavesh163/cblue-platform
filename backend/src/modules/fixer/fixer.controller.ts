@@ -31,6 +31,55 @@ export class FixerController {
   register(@CurrentUser('id') userId: string, @Body() dto: RegisterFixerDto) {
     return this.fixerService.register(userId, dto);
   }
+  // ── AI Digest (no auth — called during registration before user has token) ──
+
+  @Post('kyc-digest')
+  @Throttle({ default: { ttl: 30000, limit: 10 } })
+  @UseInterceptors(FileInterceptor('file'))
+  async kycDigest(@UploadedFile() file: Express.Multer.File) {
+    return this.fixerService.kycDigest(file);
+  }
+
+  @Post('portfolio-digest')
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
+  @UseInterceptors(FilesInterceptor('files', 10))
+  async digestPortfolio(@UploadedFiles() files: Express.Multer.File[]) {
+    const ALLOWED_MIMES = [
+      'image/jpeg',
+
+      'image/png',
+
+      'image/webp',
+
+      'application/pdf',
+
+      'application/msword',
+
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+
+      'application/vnd.ms-excel',
+
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    ];
+
+    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+
+    for (const file of files) {
+      if (!ALLOWED_MIMES.includes(file.mimetype)) {
+        throw new BadRequestException(
+          `Unsupported file type: ${file.originalname}`,
+        );
+      }
+
+      if (file.size > MAX_FILE_SIZE) {
+        throw new BadRequestException(
+          `File too large: ${file.originalname} (max 50MB)`,
+        );
+      }
+    }
+
+    return this.fixerService.digestPortfolio(files);
+  }
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
@@ -113,44 +162,5 @@ export class FixerController {
   @UseGuards(JwtAuthGuard)
   getAvailability(@CurrentUser('id') userId: string) {
     return this.fixerService.getAvailability(userId);
-  }
-
-  // ── AI Digest (no auth — called during registration before user has token) ──
-
-  @Post('kyc-digest')
-  @Throttle({ default: { ttl: 30000, limit: 10 } })
-  @UseInterceptors(FileInterceptor('file'))
-  async kycDigest(@UploadedFile() file: Express.Multer.File) {
-    return this.fixerService.kycDigest(file);
-  }
-
-  @Post('portfolio-digest')
-  @Throttle({ default: { ttl: 60000, limit: 5 } })
-  @UseInterceptors(FilesInterceptor('files', 10))
-  async digestPortfolio(@UploadedFiles() files: Express.Multer.File[]) {
-    const ALLOWED_MIMES = [
-      'image/jpeg',
-      'image/png',
-      'image/webp',
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.ms-excel',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    ];
-    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
-    for (const file of files) {
-      if (!ALLOWED_MIMES.includes(file.mimetype)) {
-        throw new BadRequestException(
-          `Unsupported file type: ${file.originalname}`,
-        );
-      }
-      if (file.size > MAX_FILE_SIZE) {
-        throw new BadRequestException(
-          `File too large: ${file.originalname} (max 50MB)`,
-        );
-      }
-    }
-    return this.fixerService.digestPortfolio(files);
   }
 }
