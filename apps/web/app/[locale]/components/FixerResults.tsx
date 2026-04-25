@@ -483,8 +483,21 @@ export default function FixerResults({
     fetch(`/api/v1/fixers/match?service=${encodeURIComponent(service)}&district=auto&province=auto`)
       .then(res => res.ok ? res.json() : null)
       .then(data => {
-        if (data && data.length > 0) {
-          setFixers(data);
+        if (data && Array.isArray(data) && data.length > 0) {
+          // ensure data fields align with expected frontend Fixer interface
+          const mapped = data.map((d: any) => ({
+            id: d.id,
+            alias: d.alias,
+            tier: d.tier.charAt(0).toUpperCase() + d.tier.slice(1).toLowerCase(),
+            rating: d.rating,
+            totalJobs: d.totalJobs || d.completedJobs || 0,
+            price: d.price,
+            satisfaction: Math.round(d.satisfaction || 85),
+            specialties: d.specialties || [],
+            experienceYears: d.experienceYears || 1,
+            selectedReason: d.selectedReason,
+          }));
+          setFixers(mapped);
         } else {
           setFixers(generateDemoFixers(service));
         }

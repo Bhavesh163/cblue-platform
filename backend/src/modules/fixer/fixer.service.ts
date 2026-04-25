@@ -297,49 +297,44 @@ export class FixerService {
       return b.totalJobs - a.totalJobs;
     });
 
-    // 1. Two cheapest
+    // Slots 1-2: 💰 Two cheapest in area
     let priceAdded = 0;
     for (const f of byPrice) {
       if (priceAdded >= 2) break;
-      if (!used.has(f.id)) {
-        pick(f);
+      if (!selected.some((s) => s.id === f.id)) {
+        pick({ ...f, selectedReason: '💰 Cheapest in area' });
         priceAdded++;
       }
     }
 
-    // 2. Two highest satisfaction
+    // Slots 3-4: ⭐ Two highest satisfaction (stars, tiebreak by total jobs/reviews)
     let satAdded = 0;
     for (const f of bySatisfaction) {
       if (satAdded >= 2) break;
-      if (!used.has(f.id)) {
-        pick(f);
+      if (!selected.some((s) => s.id === f.id)) {
+        pick({ ...f, selectedReason: '⭐ Highest Rated' });
         satAdded++;
       }
     }
 
-    // 3. Two upper tier variants
+    // Slot 5: 🏆 Cheapest of upper tier (corporate+specialist+expert)
     const upperTiers = formattedPool.filter((f) => tierRank[f.tier] >= 2);
     const upperByPrice = [...upperTiers].sort((a, b) => a.price - b.price);
-    const upperBySat = [...upperTiers].sort(
-      (a, b) => b.satisfaction - a.satisfaction,
-    );
+    const upperBySat = [...upperTiers].sort((a, b) => b.satisfaction - a.satisfaction);
 
-    const cheapUpper = upperByPrice.find((f) => !used.has(f.id));
-    if (cheapUpper) pick(cheapUpper);
+    const cheapUpper = upperByPrice.find((f) => !selected.some((s) => s.id === f.id));
+    if (cheapUpper) pick({ ...cheapUpper, selectedReason: '🏆 Cheapest of upper tier' });
 
-    const satUpper = upperBySat.find((f) => !used.has(f.id));
-    if (satUpper) pick(satUpper);
+    // Slot 6: 🏆 Highest rated of upper tier
+    const satUpper = upperBySat.find((f) => !selected.some((s) => s.id === f.id));
+    if (satUpper) pick({ ...satUpper, selectedReason: '🏆 Highest rated of upper tier' });
 
-    // 4. One returning partner / last same-job
-    const remaining = formattedPool.filter((f) => !used.has(f.id));
-    if (remaining.length > 0) {
-      const returningIdx = Math.floor(Math.random() * remaining.length);
-      const returning = remaining[returningIdx];
-      returning.alias = `★ ${returning.alias}`;
-      pick(returning);
-    }
+    // Slot 7: 🔄 Returning partner
+    // For demo purposes, we randomly select a previously selected partner to simulate a returning partner.
+    const returning = formattedPool.find((f) => !selected.some((s) => s.id === f.id) && f.totalJobs > 0);
+    if (returning) pick({ ...returning, alias: `★ ${returning.alias}`, selectedReason: '🔄 Returning partner' });
 
-    // 5. User nominated ID
+    // Slot 8: 👤 Customer nomination by partner ID number
     if (nominateId) {
       const nominated = formattedPool.find(
         (f) =>
@@ -347,18 +342,21 @@ export class FixerService {
           f.id.endsWith(nominateId) ||
           f.alias.includes(nominateId),
       );
-      if (nominated && !used.has(nominated.id)) {
-        pick(nominated);
+      if (nominated && !selected.some((s) => s.id === nominated.id)) {
+        pick({ ...nominated, selectedReason: '👤 Customer nomination' });
       }
     }
 
-    // Pad out to 8
-    for (const f of formattedPool) {
+    // Fill the rest with random candidates if we have not reached 8
+    const shuffled = [...formattedPool].sort(() => Math.random() - 0.5);
+    for (const f of shuffled) {
       if (selected.length >= 8) break;
-      pick(f);
+      if (!selected.some((s) => s.id === f.id)) {
+        pick({ ...f, selectedReason: '💡 Suggested Candidate' });
+      }
     }
 
-    return selected;
+    return selected.slice(0, 8);
   }
 
   // ── Portfolio AI Digest ──
