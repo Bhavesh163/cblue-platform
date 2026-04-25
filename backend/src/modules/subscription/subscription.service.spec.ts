@@ -31,6 +31,7 @@ describe('SubscriptionService', () => {
         },
         user: {
           findUnique: mockPrisma.user.findUnique,
+          findFirst: mockPrisma.user.findFirst,
           create: mockPrisma.user.create,
           update: mockPrisma.user.update,
         },
