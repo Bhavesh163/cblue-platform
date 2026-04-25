@@ -320,19 +320,34 @@ export class FixerService {
     // Slot 5: 🏆 Cheapest of upper tier (corporate+specialist+expert)
     const upperTiers = formattedPool.filter((f) => tierRank[f.tier] >= 2);
     const upperByPrice = [...upperTiers].sort((a, b) => a.price - b.price);
-    const upperBySat = [...upperTiers].sort((a, b) => b.satisfaction - a.satisfaction);
+    const upperBySat = [...upperTiers].sort(
+      (a, b) => b.satisfaction - a.satisfaction,
+    );
 
-    const cheapUpper = upperByPrice.find((f) => !selected.some((s) => s.id === f.id));
-    if (cheapUpper) pick({ ...cheapUpper, selectedReason: '🏆 Cheapest of upper tier' });
+    const cheapUpper = upperByPrice.find(
+      (f) => !selected.some((s) => s.id === f.id),
+    );
+    if (cheapUpper)
+      pick({ ...cheapUpper, selectedReason: '🏆 Cheapest of upper tier' });
 
     // Slot 6: 🏆 Highest rated of upper tier
-    const satUpper = upperBySat.find((f) => !selected.some((s) => s.id === f.id));
-    if (satUpper) pick({ ...satUpper, selectedReason: '🏆 Highest rated of upper tier' });
+    const satUpper = upperBySat.find(
+      (f) => !selected.some((s) => s.id === f.id),
+    );
+    if (satUpper)
+      pick({ ...satUpper, selectedReason: '🏆 Highest rated of upper tier' });
 
     // Slot 7: 🔄 Returning partner
     // For demo purposes, we randomly select a previously selected partner to simulate a returning partner.
-    const returning = formattedPool.find((f) => !selected.some((s) => s.id === f.id) && f.totalJobs > 0);
-    if (returning) pick({ ...returning, alias: `★ ${returning.alias}`, selectedReason: '🔄 Returning partner' });
+    const returning = formattedPool.find(
+      (f) => !selected.some((s) => s.id === f.id) && f.totalJobs > 0,
+    );
+    if (returning)
+      pick({
+        ...returning,
+        alias: `★ ${returning.alias}`,
+        selectedReason: '🔄 Returning partner',
+      });
 
     // Slot 8: 👤 Customer nomination by partner ID number
     if (nominateId) {

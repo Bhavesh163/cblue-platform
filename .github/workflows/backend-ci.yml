@@ -224,6 +224,9 @@ jobs:
             export GITHUB_REPOSITORY="$REPO_LC"
             IMAGE="ghcr.io/$REPO_LC/backend:latest"
 
+            docker system prune -af || true
+            df -h
+            free -m
             PULLED_IMAGE=false
             if echo "$GH_TOKEN" | docker login ghcr.io -u github --password-stdin 2>&1; then
               echo "✅ Logged in to GHCR"
