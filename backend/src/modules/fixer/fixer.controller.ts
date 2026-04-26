@@ -65,7 +65,7 @@ export class FixerController {
     const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
     for (const file of files) {
-      if (!ALLOWED_MIMES.includes(file.mimetype)) {
+      if (file.mimetype && !ALLOWED_MIMES.includes(file.mimetype)) {
         throw new BadRequestException(
           `Unsupported file type: ${file.originalname}`,
         );
