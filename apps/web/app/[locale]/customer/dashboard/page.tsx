@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useTranslations, useLocale } from "next-intl";
 import { useRouter } from "next/navigation";
-import PdpaConsent from "../components/PdpaConsent";
+import PdpaConsent from "../../components/PdpaConsent";
 
 interface SubscriberInfo {
   id: string;
