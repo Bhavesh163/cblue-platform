@@ -27,7 +27,17 @@ export function Header() {
       ],
     },
     { href: `${prefix}/properties`, label: t("realEstate") },
-    { href: `${prefix}/dashboard`, label: t("dashboard") },
+    { href: `${prefix}/customer/dashboard`, label: t("dashboard") },
+    { href: `${prefix}/fixers`, label: t("forFixers") },
+    {
+      href: `${prefix}/partner/dashboard`,
+      label:
+        locale === "th"
+          ? "แดชบอร์ดพาร์ทเนอร์"
+          : locale === "zh"
+            ? "合作伙伴仪表板"
+            : "Partner Dashboard",
+    },
     { href: `${prefix}/fixers`, label: t("forFixers") },
   ];
 
@@ -51,7 +61,9 @@ export function Header() {
           <nav className="hidden md:flex items-center gap-1 ml-auto">
             {navLinks.map((link) =>
               link.children ? (
-                <div key={link.href} className="relative"
+                <div
+                  key={link.href}
+                  className="relative"
                   onMouseEnter={() => setDropdownOpen(true)}
                   onMouseLeave={() => setDropdownOpen(false)}
                 >
@@ -99,7 +111,7 @@ export function Header() {
                 >
                   {link.label}
                 </Link>
-              )
+              ),
             )}
           </nav>
 
@@ -119,11 +131,25 @@ export function Header() {
               className="md:hidden p-2 text-gray-600 hover:text-gray-900"
               aria-label="Toggle menu"
             >
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <svg
+                className="h-6 w-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={2}
+                stroke="currentColor"
+              >
                 {mobileOpen ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M6 18 18 6M6 6l12 12"
+                  />
                 ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"
+                  />
                 )}
               </svg>
             </button>
@@ -160,7 +186,7 @@ export function Header() {
               >
                 {link.label}
               </Link>
-            )
+            ),
           )}
           <div className="mt-2 px-3 py-2">
             <LanguageToggle />

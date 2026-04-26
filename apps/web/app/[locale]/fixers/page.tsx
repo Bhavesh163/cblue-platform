@@ -288,7 +288,7 @@ export default function FixerProPage() {
                 <thead><tr className="border-b-2 border-gray-200">
                   <th className="text-left py-3 px-4 font-semibold text-gray-700">{locale === "th" ? "ระดับ" : locale === "zh" ? "等级" : "Tier"}</th>
                   <th className="text-center py-3 px-4 font-semibold text-gray-700">{locale === "th" ? "ค่าประสานงาน" : locale === "zh" ? "费用" : "Fee"}</th>
-                  <th className="text-center py-3 px-4 font-semibold text-gray-700">{locale === "th" ? "ระดับดาว" : locale === "zh" ? "星级" : "Stars"}</th>
+                  
                   <th className="text-left py-3 px-4 font-semibold text-gray-700">{locale === "th" ? "คุณสมบัติ" : locale === "zh" ? "资质" : "Qualifications"}</th>
                 </tr></thead>
                 <tbody>
@@ -302,7 +302,7 @@ export default function FixerProPage() {
                     <tr key={r.tier} className="border-b border-gray-100 hover:bg-gray-50 transition">
                       <td className="py-3 px-4"><span className={`px-3 py-1 rounded-full text-xs font-bold ${r.color}`}>{r.tier}</span></td>
                       <td className="py-3 px-4 text-center font-bold text-gray-900">{r.fee}</td>
-                      <td className="py-3 px-4 text-center">{r.stars}</td>
+                      
                       <td className="py-3 px-4 text-gray-600">{r.qual}</td>
                     </tr>
                   ))}
