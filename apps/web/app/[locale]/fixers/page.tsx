@@ -25,45 +25,17 @@ const DEMO_PARTNER_STATS = {
   repeatClients: 12,
 };
 
-const DEMO_ACTIVE_JOBS = [
-  { id: 1, service: "Plumbing Repair", serviceTh: "ซ่อมประปา", serviceZh: "管道维修", customer: "Customer #A2X", tier: "Standard", date: "2026-04-15", status: "IN_PROGRESS", progress: 65, earnings: "฿2,500" },
-  { id: 2, service: "AC Maintenance", serviceTh: "ซ่อมแอร์", serviceZh: "空调维护", customer: "Customer #B7K", tier: "Corporate", date: "2026-04-16", status: "CONFIRMED", progress: 15, earnings: "฿4,000" },
-  { id: 3, service: "Electrical Wiring", serviceTh: "งานไฟฟ้า", serviceZh: "电气布线", customer: "Customer #C4M", tier: "Economy", date: "2026-04-17", status: "PENDING", progress: 0, earnings: "฿1,800" },
-];
+const DEMO_ACTIVE_JOBS: any[] = [];
 
-const DEMO_INCOMING = [
-  { id: 4, service: "Interior Design", serviceTh: "ออกแบบภายใน", serviceZh: "室内设计", customer: "Customer #D9P", tier: "Specialist", date: "2026-04-18", budget: "฿15,000", urgency: "normal" },
-  { id: 5, service: "Landscaping", serviceTh: "จัดสวน", serviceZh: "园林绿化", customer: "Customer #E3R", tier: "Expert", date: "2026-04-19", budget: "฿25,000", urgency: "urgent" },
-  { id: 6, service: "Smart Lock Install", serviceTh: "ติดตั้งสมาร์ทล็อค", serviceZh: "智能锁安装", customer: "Customer #F1A", tier: "Corporate", date: "2026-04-20", budget: "฿8,000", urgency: "normal" },
-];
+const DEMO_INCOMING: any[] = [];
 
-const DEMO_EARNINGS = [
-  { month: "Jan", monthTh: "ม.ค.", monthZh: "1月", amount: 12500 },
-  { month: "Feb", monthTh: "ก.พ.", monthZh: "2月", amount: 15200 },
-  { month: "Mar", monthTh: "มี.ค.", monthZh: "3月", amount: 18800 },
-  { month: "Apr", monthTh: "เม.ย.", monthZh: "4月", amount: 18500 },
-];
+const DEMO_EARNINGS: any[] = [];
 
-const DEMO_COMPLETED = [
-  { id: "c1", service: "Pipe Installation", serviceTh: "ติดตั้งท่อ", serviceZh: "管道安装", customer: "Customer #G2B", tier: "Standard", date: "2026-03-28", rating: 5.0, earnings: "฿3,200" },
-  { id: "c2", service: "Wiring Overhaul", serviceTh: "รื้อระบบไฟฟ้า", serviceZh: "线路大修", customer: "Customer #H8J", tier: "Corporate", date: "2026-03-15", rating: 4.9, earnings: "฿7,500" },
-  { id: "c3", service: "Air Duct Cleaning", serviceTh: "ล้างท่อแอร์", serviceZh: "风管清洗", customer: "Customer #I5L", tier: "Economy", date: "2026-03-01", rating: 4.7, earnings: "฿1,500" },
-  { id: "c4", service: "Full Renovation", serviceTh: "รีโนเวททั้งหมด", serviceZh: "全面装修", customer: "Customer #J3N", tier: "Expert", date: "2026-02-20", rating: 5.0, earnings: "฿45,000" },
-];
+const DEMO_COMPLETED: any[] = [];
 
-const DEMO_CHATS = [
-  { id: "ch1", name: "Customer #A2X", service: "Plumbing", lastMsg: "Thank you, waiting for you", lastMsgTh: "ขอบคุณครับ รอช่างอยู่", lastMsgZh: "谢谢，等您来", time: "2m ago", timeTh: "2 นาทีที่ผ่านมา", timeZh: "2分钟前", unread: 2, online: true },
-  { id: "ch2", name: "Customer #B7K", service: "AC", lastMsg: "Which day works for you?", lastMsgTh: "วันไหนสะดวกคะ?", lastMsgZh: "哪天方便？", time: "30m ago", timeTh: "30 นาทีที่ผ่านมา", timeZh: "30分钟前", unread: 1, online: true },
-  { id: "ch3", name: "Customer #C4M", service: "Electrical", lastMsg: "Job is done, thanks!", lastMsgTh: "งานเสร็จแล้วครับ ขอบคุณ", lastMsgZh: "工作完成，谢谢！", time: "2h ago", timeTh: "2 ชั่วโมงที่ผ่านมา", timeZh: "2小时前", unread: 0, online: false },
-];
+const DEMO_CHATS: any[] = [];
 
-const DEMO_NOTIFICATIONS = [
-  { id: "pn1", msg: "Customer #A2X sent a new message", msgTh: "ลูกค้า #A2X ส่งข้อความใหม่", msgZh: "客户#A2X发送了新消息", time: "2m ago", dot: "bg-sky-500", unread: true },
-  { id: "pn2", msg: "You have 3 new job requests", msgTh: "คุณมีคำขอใหม่ 3 รายการ", msgZh: "您有3个新工作请求", time: "15m ago", dot: "bg-amber-500", unread: true },
-  { id: "pn3", msg: "Payment of ฿3,200 received", msgTh: "ได้รับเงิน ฿3,200", msgZh: "已收到฿3,200付款", time: "1h ago", dot: "bg-green-500", unread: true },
-  { id: "pn4", msg: "Customer #H8J rated you 5 stars", msgTh: "ลูกค้า #H8J ให้คะแนน 5 ดาว", msgZh: "客户#H8J给了您5星评价", time: "1d ago", dot: "bg-purple-500", unread: false },
-  { id: "pn5", msg: "Your tier upgrade to Corporate is approved", msgTh: "อัปเกรดระดับเป็น Corporate อนุมัติแล้ว", msgZh: "您的等级升级至Corporate已获批", time: "3d ago", dot: "bg-emerald-500", unread: false },
-];
+const DEMO_NOTIFICATIONS: any[] = [];
 
 const STATUS_STYLE: Record<string, string> = {
   IN_PROGRESS: "bg-purple-100 text-purple-700",
@@ -99,28 +71,53 @@ export default function FixerProPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [showPdpa, setShowPdpa] = useState(false);
 
+
+  const [isFixer, setIsFixer] = useState(false);
+
   useEffect(() => {
-    try {
-      const sub = localStorage.getItem("subscriber");
-      if (sub) {
-        setPartner(JSON.parse(sub));
-        const consent = localStorage.getItem("pdpa_consent_partner");
-        if (!consent) setShowPdpa(true);
-      }
-    } catch { /* ignore */ }
-    setLoading(false);
+    let isMounted = true;
+    const fetchUser = async () => {
+      try {
+        const token = localStorage.getItem("subscriber_token");
+        if (!token) {
+          setLoading(false);
+          return;
+        }
+        const res = await fetch("/api/v1/users/me", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const user = await res.json();
+          if (isMounted) {
+            setIsFixer(!!user.fixer);
+            const stored = localStorage.getItem("subscriber");
+            if (stored) setPartner(JSON.parse(stored));
+            else setPartner({ id: user.id, name: user.name, email: user.email, phone: user.phone, status: "ACTIVE" });
+            const consent = localStorage.getItem("pdpa_consent_partner");
+            if (!consent) setShowPdpa(true);
+          }
+        } else {
+          localStorage.removeItem("subscriber_token");
+          localStorage.removeItem("subscriber");
+        }
+      } catch { /* ignore */ }
+      if (isMounted) setLoading(false);
+    };
+    fetchUser();
+    return () => { isMounted = false; };
   }, []);
 
   const isSubscribed = !!partner;
 
+
   const tabs: { key: TabKey; label: string; icon: string; badge?: number }[] = [
     { key: "overview", label: locale === "th" ? "ภาพรวม" : locale === "zh" ? "概览" : "Overview", icon: "📊" },
-    { key: "jobs", label: locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "当前工作" : "Active Jobs", icon: "🔧", badge: DEMO_ACTIVE_JOBS.length },
-    { key: "requests", label: locale === "th" ? "คำขอใหม่" : locale === "zh" ? "新请求" : "Requests", icon: "📋", badge: DEMO_INCOMING.length },
+    { key: "jobs", label: locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "当前工作" : "Active Jobs", icon: "🔧", badge: 0 },
+    { key: "requests", label: locale === "th" ? "คำขอใหม่" : locale === "zh" ? "新请求" : "Requests", icon: "📋", badge: 0 },
     { key: "properties", label: locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房产" : "Properties", icon: "🏢" },
     { key: "history", label: locale === "th" ? "ประวัติงาน" : locale === "zh" ? "历史" : "History", icon: "📜" },
-    { key: "chat", label: locale === "th" ? "แชท" : locale === "zh" ? "聊天" : "Chat", icon: "💬", badge: DEMO_CHATS.reduce((a, c) => a + c.unread, 0) },
-    { key: "notifications", label: locale === "th" ? "แจ้งเตือน" : locale === "zh" ? "通知" : "Alerts", icon: "🔔", badge: DEMO_NOTIFICATIONS.filter(n => n.unread).length },
+    { key: "chat", label: locale === "th" ? "แชท" : locale === "zh" ? "聊天" : "Chat", icon: "💬", badge: 0 },
+    { key: "notifications", label: locale === "th" ? "แจ้งเตือน" : locale === "zh" ? "通知" : "Alerts", icon: "🔔", badge: 0 },
     { key: "profile", label: locale === "th" ? "โปรไฟล์" : locale === "zh" ? "个人资料" : "Profile", icon: "👤" },
   ];
 
@@ -196,8 +193,25 @@ export default function FixerProPage() {
           </div>
         )}
 
-        {/* Tab Navigation - visible for all users */}
-        <div className="flex gap-1 bg-white rounded-xl shadow-sm border border-gray-200 p-1.5 mb-6 overflow-x-auto">
+        {/* Main Content Area */}
+        {isSubscribed && !isFixer && !loading && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 mb-8 text-center max-w-2xl mx-auto">
+            <div className="text-5xl mb-4">👷‍♂️</div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">
+              {locale === "th" ? "คุณยังไม่ได้ลงทะเบียนเป็นพาร์ทเนอร์" : locale === "zh" ? "您尚未注册成为合作伙伴" : "You are not yet a registered Partner"}
+            </h2>
+            <p className="text-gray-500 mb-6">
+              {locale === "th" ? "สมัครเข้าร่วมกับ CBLUE วันนี้เพื่อรับงานและเพิ่มรายได้ของคุณ" : locale === "zh" ? "立即注册CBLUE，开始接单并增加您的收入。" : "Register with CBLUE today to start receiving jobs and growing your income."}
+            </p>
+            <Link href={`${prefix}/fixers/register`} className="inline-block px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition shadow-lg">
+              {locale === "th" ? "ลงทะเบียนเลย" : locale === "zh" ? "立即注册" : "Register Now"}
+            </Link>
+          </div>
+        )}
+
+        {isSubscribed && isFixer && (
+          <>
+            <div className="flex gap-1 bg-white rounded-xl shadow-sm border border-gray-200 p-1.5 mb-6 overflow-x-auto">
           {tabs.map((tab) => (
             <button
               key={tab.key}
@@ -223,6 +237,9 @@ export default function FixerProPage() {
         {activeTab === "chat" && <PartnerChat locale={locale} />}
         {activeTab === "notifications" && <PartnerNotifications locale={locale} />}
         {activeTab === "profile" && <PartnerProfile locale={locale} prefix={prefix} partner={partner} />}
+
+                  </>
+        )}
 
         <div className="my-10 border-t border-gray-200" />
 
@@ -390,7 +407,7 @@ export default function FixerProPage() {
 
 /* ===== PARTNER OVERVIEW ===== */
 function PartnerOverview({ locale, partner }: { locale: string; partner: PartnerInfo | null }) {
-  const maxEarning = Math.max(...DEMO_EARNINGS.map(e => e.amount));
+  const maxEarning = DEMO_EARNINGS.length > 0 ? Math.max(...DEMO_EARNINGS.map(e => e.amount)) : 0;
   return (
     <div className="space-y-6">
       {/* Stats */}

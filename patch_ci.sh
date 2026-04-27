@@ -1,0 +1,1 @@
+sed -i '/# ── Verify backend health ──/i \            # ── Clean up old iptables hack ──\n            docker run --rm --net=host --cap-add=NET_ADMIN alpine sh -c "apk add --no-cache iptables >/dev/null 2>&1; iptables -t nat -D PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3002 2>/dev/null || true"\n' .github/workflows/backend-ci.yml

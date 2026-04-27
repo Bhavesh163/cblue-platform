@@ -1,0 +1,486 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { useTranslations, useLocale } from "next-intl";
+
+interface DashboardStats {
+  totalOrders: number;
+  activeOrders: number;
+  completedOrders: number;
+}
+
+interface Order {
+  id: string;
+  serviceCategory: string;
+  description: string;
+  status: string;
+  orderType: string;
+  isUrgent: boolean;
+  scheduledAt: string | null;
+  createdAt: string;
+  fixer?: { user: { name: string } } | null;
+}
+
+interface SubscriberInfo {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  company?: string;
+  status: string;
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  CREATED: "bg-gray-100 text-gray-800",
+  MATCHING: "bg-yellow-100 text-yellow-800",
+  ASSIGNED: "bg-blue-100 text-blue-800",
+  DEPOSIT_PENDING: "bg-orange-100 text-orange-800",
+  CONFIRMED: "bg-indigo-100 text-indigo-800",
+  IN_PROGRESS: "bg-purple-100 text-purple-800",
+  COMPLETED: "bg-green-100 text-green-800",
+  CANCELLED: "bg-red-100 text-red-800",
+};
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
+
+const DEMO_ACTIVE_SERVICES = [
+  { id: "as-1", type: "household", service: "Plumbing", fixerAlias: "Fixer-1042", tier: "Standard", status: "IN_PROGRESS", statusColor: "bg-purple-100 text-purple-700", date: "2026-04-10" },
+  { id: "as-2", type: "professional", service: "Architect", fixerAlias: "Pro-3087", tier: "Corporate", status: "CONFIRMED", statusColor: "bg-indigo-100 text-indigo-700", date: "2026-04-12" },
+];
+
+const DEMO_HISTORY = [
+  { id: "h-1", type: "household", service: "Electrical", fixerAlias: "Fixer-0921", tier: "Economy", date: "2026-03-15", rating: 4.8 },
+  { id: "h-2", type: "project", service: "Smart Home", fixerAlias: "Team-5512", tier: "Specialist", date: "2026-02-28", rating: 4.5 },
+  { id: "h-3", type: "professional", service: "Lawyer", fixerAlias: "Pro-1100", tier: "Expert", date: "2026-02-10", rating: 5.0 },
+];
+
+export default function DashboardPage() {
+  const t = useTranslations("dashboard");
+  const tc = useTranslations("common");
+  const locale = useLocale();
+  const prefix = `/${locale}`;
+
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [subscriber, setSubscriber] = useState<SubscriberInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Load subscriber info from localStorage
+    try {
+      const stored = localStorage.getItem("subscriber");
+      if (stored) {
+        const sub = JSON.parse(stored);
+        setSubscriber(sub);
+
+        // Fetch data only when logged in
+        const token = localStorage.getItem("token");
+        if (token) {
+          Promise.all([
+            fetch(`${API_BASE}/api/v1/admin/dashboard`, {
+              headers: { Authorization: `Bearer ${token}` },
+            }),
+            fetch(`${API_BASE}/api/v1/orders/my`, {
+              headers: { Authorization: `Bearer ${token}` },
+            }),
+          ]).then(async ([statsRes, ordersRes]) => {
+            if (statsRes.ok) setStats(await statsRes.json());
+            if (ordersRes.ok) {
+              const data = await ordersRes.json();
+              setOrders(Array.isArray(data) ? data.slice(0, 5) : data.orders?.slice(0, 5) || []);
+            }
+          }).catch(() => { /* API not available */ });
+        }
+      }
+    } catch {
+      // ignore parse errors
+    }
+
+    setLoading(false);
+  }, []);
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 py-8">
+      {/* Dashboard Header */}
+      <div className="bg-gradient-to-r from-sky-600 to-blue-700 rounded-2xl p-6 mb-8 text-white shadow-lg">
+        <h1 className="text-2xl font-bold mb-1">
+          {t("title")}
+        </h1>
+        <p className="text-sky-100 text-sm">
+          {locale === "th" ? "จัดการบริการ คำสั่ง และข้อมูลบัญชีของคุณ" : locale === "zh" ? "管理您的服务、订单和账户信息" : "Manage your services, orders, and account information"}
+        </p>
+      </div>
+
+      {/* Login / Subscription Area at Top */}
+      {subscriber ? (
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6 mb-8">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-semibold text-gray-900">
+                {t("subscriptionStatus")}
+              </h2>
+              <span
+                className={`text-xs font-medium px-3 py-1 rounded-full ${
+                  subscriber.status === "ACTIVE"
+                    ? "bg-green-100 text-green-800"
+                    : subscriber.status === "PENDING"
+                      ? "bg-yellow-100 text-yellow-800"
+                      : "bg-gray-100 text-gray-700"
+                }`}
+              >
+                {t(`subStatus.${subscriber.status}`)}
+              </span>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            <div>
+              <span className="text-gray-500">{t("subName")}:</span>{" "}
+              <span className="font-medium text-gray-900">{subscriber.name}</span>
+            </div>
+            <div>
+              <span className="text-gray-500">{t("subEmail")}:</span>{" "}
+              <span className="font-medium text-gray-900">{subscriber.email}</span>
+            </div>
+            <div>
+              <span className="text-gray-500">{t("subPhone")}:</span>{" "}
+              <span className="font-medium text-gray-900">{subscriber.phone}</span>
+            </div>
+            {subscriber.company && (
+              <div>
+                <span className="text-gray-500">{t("subCompany")}:</span>{" "}
+                <span className="font-medium text-gray-900">{subscriber.company}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : !loading ? (
+        <div className="bg-gradient-to-r from-sky-50 to-blue-50 border border-sky-200 rounded-xl p-6 mb-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-sky-900">{locale === "th" ? "สมัครสมาชิกเพื่อเข้าถึงทุกบริการ" : locale === "zh" ? "订阅以获取所有服务" : "Subscribe for All Services"}</h2>
+              <p className="text-sm text-sky-700 mt-1">{locale === "th" ? "เข้าถึงช่างซ่อมบ้าน ทีมโครงการ มืออาชีพ และอสังหาริมทรัพย์ที่ผ่านการตรวจสอบ" : locale === "zh" ? "访问维修技工、项目团队、专业人士和房产服务" : "Get access to verified fixers, project teams, professionals, and properties."}</p>
+            </div>
+            <Link
+              href={`${prefix}/subscription/login`}
+              className="px-5 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition text-sm font-semibold whitespace-nowrap"
+            >
+              {t("subscriptionLogin")}
+            </Link>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <StatCard
+          label={t("orders")}
+          value={stats?.totalOrders ?? "—"}
+          icon="📋"
+          loading={loading}
+        />
+        <StatCard
+          label={t("active")}
+          value={stats?.activeOrders ?? DEMO_ACTIVE_SERVICES.length}
+          icon="🔄"
+          color="text-blue-600"
+          loading={loading}
+        />
+        <StatCard
+          label={t("completed")}
+          value={stats?.completedOrders ?? DEMO_HISTORY.length}
+          icon="✅"
+          color="text-green-600"
+          loading={loading}
+        />
+        <StatCard
+          label={locale === "th" ? "ความพึงพอใจ" : "Satisfaction"}
+          value="4.8 ⭐"
+          icon="🏆"
+          color="text-amber-600"
+          loading={loading}
+        />
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <Link
+          href={`${prefix}/booking/household`}
+          className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 transition"
+        >
+          <span className="text-2xl">🏠</span>
+          <div>
+            <p className="font-semibold text-blue-900">{t("bookHousehold")}</p>
+            <p className="text-xs text-blue-700">{t("bookHouseholdDesc")}</p>
+          </div>
+        </Link>
+        <Link
+          href={`${prefix}/booking/project`}
+          className="flex items-center gap-3 p-4 bg-indigo-50 border border-indigo-200 rounded-xl hover:bg-indigo-100 transition"
+        >
+          <span className="text-2xl">💼</span>
+          <div>
+            <p className="font-semibold text-indigo-900">{t("bookProject")}</p>
+            <p className="text-xs text-indigo-700">{t("bookProjectDesc")}</p>
+          </div>
+        </Link>
+        <Link
+          href={`${prefix}/booking/professional`}
+          className="flex items-center gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-xl hover:bg-emerald-100 transition"
+        >
+          <span className="text-2xl">👔</span>
+          <div>
+            <p className="font-semibold text-emerald-900">{t("bookProfessional")}</p>
+            <p className="text-xs text-emerald-700">{t("bookProfessionalDesc")}</p>
+          </div>
+        </Link>
+        <Link
+          href={`${prefix}/properties`}
+          className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl hover:bg-amber-100 transition"
+        >
+          <span className="text-2xl">🏢</span>
+          <div>
+            <p className="font-semibold text-amber-900">{locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房地产" : "Properties"}</p>
+            <p className="text-xs text-amber-700">{locale === "th" ? "ค้นหาหรือลงประกาศ" : locale === "zh" ? "搜索或发布" : "Search or list"}</p>
+          </div>
+        </Link>
+      </div>
+
+      {/* Active Services */}
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden mb-8">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+            <span>⚡</span> {locale === "th" ? "บริการที่กำลังดำเนินการ" : locale === "zh" ? "进行中的服务" : "Active Services"}
+          </h2>
+          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">{DEMO_ACTIVE_SERVICES.length}</span>
+        </div>
+        {DEMO_ACTIVE_SERVICES.length === 0 ? (
+          <div className="p-8 text-center text-gray-500 text-sm">{locale === "th" ? "ยังไม่มีบริการที่กำลังดำเนินการ" : "No active services"}</div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {DEMO_ACTIVE_SERVICES.map((svc) => (
+              <div key={svc.id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-lg bg-sky-100 flex items-center justify-center text-lg">
+                    {svc.type === "household" ? "🏠" : svc.type === "project" ? "💼" : svc.type === "professional" ? "👔" : "🏢"}
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900 text-sm">{svc.service}</p>
+                    <p className="text-xs text-gray-500">{svc.fixerAlias} · {svc.tier} · {svc.date}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${svc.statusColor}`}>{svc.status.replace("_", " ")}</span>
+                  <button className="p-2 text-sky-600 hover:bg-sky-50 rounded-lg transition" title="Chat">💬</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Notifications & Chat & History */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-2xl">🔔</span>
+            <h3 className="text-lg font-semibold text-gray-900">{locale === "th" ? "การแจ้งเตือน" : locale === "zh" ? "通知" : "Notifications"}</h3>
+          </div>
+          <div className="space-y-3">
+            <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg">
+              <span className="text-blue-500 mt-0.5">●</span>
+              <div>
+                <p className="text-sm font-medium text-gray-800">{locale === "th" ? "ยินดีต้อนรับสู่ CBLUE!" : locale === "zh" ? "欢迎来到 CBLUE！" : "Welcome to CBLUE!"}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "เริ่มจองบริการแรกของคุณ" : locale === "zh" ? "开始预约您的第一个服务" : "Start booking your first service"}</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+              <span className="text-gray-400 mt-0.5">●</span>
+              <div>
+                <p className="text-sm font-medium text-gray-800">{locale === "th" ? "ระบบพร้อมใช้งาน" : locale === "zh" ? "系统就绪" : "System Ready"}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "ทุกบริการพร้อมให้จอง" : locale === "zh" ? "所有服务已准备就绪" : "All services are available for booking"}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-2xl">💬</span>
+            <h3 className="text-lg font-semibold text-gray-900">{locale === "th" ? "แชทกับช่าง" : locale === "zh" ? "与技工聊天" : "Chat with Fixers"}</h3>
+          </div>
+          <div className="text-center py-6">
+            <p className="text-gray-500 text-sm mb-3">{locale === "th" ? "แชทจะเปิดหลังยืนยันการจอง" : locale === "zh" ? "确认预约后聊天将开放" : "Chat opens after booking confirmation"}</p>
+            <p className="text-xs text-gray-400">{locale === "th" ? "แชทแบบไม่เปิดเผยตัวตนเพื่อความปลอดภัย" : locale === "zh" ? "匿名聊天确保安全" : "Anonymous chat for your safety"}</p>
+          </div>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-2xl">📜</span>
+            <h3 className="text-lg font-semibold text-gray-900">{locale === "th" ? "ประวัติการใช้บริการ" : locale === "zh" ? "服务历史" : "Service History"}</h3>
+          </div>
+          <div className="text-center py-6">
+            <p className="text-gray-500 text-sm mb-3">{locale === "th" ? "ยังไม่มีประวัติการใช้บริการ" : locale === "zh" ? "暂无服务历史" : "No service history yet"}</p>
+            <Link
+              href={`${prefix}/services`}
+              className="text-sm text-blue-600 hover:underline font-medium"
+            >
+              {locale === "th" ? "เริ่มจองบริการ →" : locale === "zh" ? "开始预约 →" : "Start booking →"}
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Orders */}
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h2 className="text-lg font-semibold text-gray-900">
+            {t("recentOrders")}
+          </h2>
+          <Link
+            href={`${prefix}/dashboard/orders`}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            {t("viewAll")}
+          </Link>
+        </div>
+
+        {loading ? (
+          <div className="p-8 text-center text-gray-500">{tc("loading")}</div>
+        ) : orders.length === 0 ? (
+          <div className="p-8 text-center">
+            <p className="text-gray-500 mb-4">{t("noOrders")}</p>
+            <Link
+              href={`${prefix}/services`}
+              className="inline-block px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+            >
+              {t("viewServices")}
+            </Link>
+          </div>
+        ) : (
+          <ul className="divide-y divide-gray-100">
+            {orders.map((order) => (
+              <li key={order.id} className="px-6 py-4 hover:bg-gray-50">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-gray-900">
+                      {order.serviceCategory}
+                      {order.isUrgent && (
+                        <span className="ml-2 text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
+                          {t("urgent")}
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-sm text-gray-500 mt-0.5 line-clamp-1">
+                      {order.description}
+                    </p>
+                    {order.fixer?.user?.name && (
+                      <p className="text-xs text-gray-400 mt-1">
+                        {t("fixer")}: {order.fixer.user.name}
+                      </p>
+                    )}
+                  </div>
+                  <span
+                    className={`text-xs font-medium px-3 py-1 rounded-full ${STATUS_COLORS[order.status] || "bg-gray-100 text-gray-700"}`}
+                  >
+                    {t(`statusLabels.${order.status}`)}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Service History */}
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden mb-8">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+            <span>📜</span> {locale === "th" ? "ประวัติการใช้บริการ" : locale === "zh" ? "服务历史" : "Service History"}
+          </h2>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b-2 border-gray-200 bg-gray-50">
+                <th className="text-left py-3 px-4 font-semibold text-gray-700">{locale === "th" ? "บริการ" : "Service"}</th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-700">{locale === "th" ? "ช่าง/มืออาชีพ" : "Fixer / Pro"}</th>
+                <th className="text-center py-3 px-4 font-semibold text-gray-700">{locale === "th" ? "ระดับ" : "Tier"}</th>
+                <th className="text-center py-3 px-4 font-semibold text-gray-700">{locale === "th" ? "คะแนน" : "Rating"}</th>
+                <th className="text-center py-3 px-4 font-semibold text-gray-700">{locale === "th" ? "วันที่" : "Date"}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {DEMO_HISTORY.map((h) => (
+                <tr key={h.id} className="border-b border-gray-100 hover:bg-gray-50 transition">
+                  <td className="py-3 px-4">
+                    <div className="flex items-center gap-2">
+                      <span>{h.type === "household" ? "🏠" : h.type === "project" ? "💼" : "👔"}</span>
+                      <span className="font-medium text-gray-900">{h.service}</span>
+                    </div>
+                  </td>
+                  <td className="py-3 px-4 text-gray-600">{h.fixerAlias}</td>
+                  <td className="py-3 px-4 text-center"><span className="px-2 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700">{h.tier}</span></td>
+                  <td className="py-3 px-4 text-center text-amber-600 font-semibold">{h.rating} ⭐</td>
+                  <td className="py-3 px-4 text-center text-gray-500">{h.date}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Tier Comparison */}
+      <div className="mt-8 bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-2">
+          {locale === "th" ? "เปรียบเทียบระดับบริการ" : locale === "zh" ? "服务等级比较" : "Tier Comparison"}
+        </h2>
+        <p className="text-sm text-gray-500 mb-6">
+          {locale === "th" ? "ค่าธรรมเนียมดำเนินการ" : locale === "zh" ? "处理费" : "Processing Fee"}
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+          {([
+            { tier: "Economy", fee: "฿200", color: "green", desc: locale === "th" ? "บริการทั่วไป" : locale === "zh" ? "基础服务" : "Basic service" },
+            { tier: "Standard", fee: "฿400", color: "blue", desc: locale === "th" ? "มาตรฐาน" : locale === "zh" ? "标准" : "Standard quality" },
+            { tier: "Corporate / Upper", fee: "฿600", color: "purple", desc: locale === "th" ? "องค์กร / ระดับสูง" : locale === "zh" ? "企业/高级" : "Corporate / Upper" },
+            { tier: "Specialist / Manager / Luxury", fee: "฿800", color: "rose", desc: locale === "th" ? "ผู้ชำนาญ / ผู้จัดการ / หรู" : locale === "zh" ? "专员/经理/豪华" : "Specialist / Manager" },
+            { tier: "Expert / Director / Grandeur", fee: "฿1,000", color: "amber", desc: locale === "th" ? "ผู้เชี่ยวชาญ / ผู้อำนวยการ / อลังการ" : locale === "zh" ? "专家/总监/尊贵" : "Expert / Director" },
+          ] as const).map((item) => (
+            <div key={item.tier} className={`rounded-xl border-2 p-4 text-center border-${item.color}-200 bg-${item.color}-50`}>
+              <h3 className={`font-bold text-${item.color}-700 text-sm`}>{item.tier}</h3>
+              <p className={`text-2xl font-extrabold text-${item.color}-800 mt-2`}>{item.fee}</p>
+              <p className="text-xs text-gray-600 mt-2">{item.desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  icon,
+  color = "text-gray-900",
+  loading,
+}: {
+  label: string;
+  value: number | string;
+  icon: string;
+  color?: string;
+  loading: boolean;
+}) {
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm font-medium text-gray-500">{label}</span>
+        <span className="text-xl">{icon}</span>
+      </div>
+      <p className={`text-3xl font-bold ${color}`}>
+        {loading ? "…" : value}
+      </p>
+    </div>
+  );
+}

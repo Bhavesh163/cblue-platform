@@ -27,17 +27,7 @@ export function Header() {
       ],
     },
     { href: `${prefix}/properties`, label: t("realEstate") },
-    { href: `${prefix}/customer/dashboard`, label: t("dashboard") },
-    { href: `${prefix}/fixers`, label: t("forFixers") },
-    {
-      href: `${prefix}/partner/dashboard`,
-      label:
-        locale === "th"
-          ? "แดชบอร์ดพาร์ทเนอร์"
-          : locale === "zh"
-            ? "合作伙伴仪表板"
-            : "Partner Dashboard",
-    },
+    { href: `${prefix}/dashboard`, label: t("dashboard") },
     { href: `${prefix}/fixers`, label: t("forFixers") },
   ];
 

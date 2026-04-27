@@ -122,7 +122,11 @@ export default function FixerRegisterPage() {
     name: string;
     email?: string;
   } | null>(null);
+
   const [authMode, setAuthMode] = useState<"login" | "register">("register");
+  const [isRegisteredFixer, setIsRegisteredFixer] = useState(false);
+  const [checkingStatus, setCheckingStatus] = useState(true);
+
   const prefix = `/${locale}`;
 
   // AI Portfolio Digest state
