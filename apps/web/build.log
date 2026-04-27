@@ -1,0 +1,29 @@
+ ⚠ Invalid next.config.js options detected: 
+ ⚠     Unrecognized key(s) in object: 'turbopack'
+ ⚠ See more info here: https://nextjs.org/docs/messages/invalid-next-config
+   ▲ Next.js 15.2.2
+
+   Creating an optimized production build ...
+Failed to compile.
+
+./app/[locale]/dashboard/page.tsx
+Error:   [31mx[0m Unexpected token `div`. Expected jsx identifier
+     ,-[[36;1;4m/home/ballhog/cblue-platform/apps/web/app/[locale]/dashboard/page.tsx[0m:131:1]
+ [2m128[0m |   ];
+ [2m129[0m | 
+ [2m130[0m |   return (
+ [2m131[0m |     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50/30">
+     : [35;1m     ^^^[0m
+ [2m132[0m |       {/* PDPA Consent Modal */}
+ [2m133[0m |       {showPdpa && (
+ [2m134[0m |         <PdpaConsent
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./app/[locale]/dashboard/page.tsx
+
+
+> Build failed because of webpack errors

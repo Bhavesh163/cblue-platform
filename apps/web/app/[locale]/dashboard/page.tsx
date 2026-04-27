@@ -365,6 +365,8 @@ export default function DashboardPage() {
             : "Consent: 3 years | Service history: 18 months | Inactive accounts: deleted after 12 months"
           }</p>
         </div>
+          </>
+        )}
       </div>
     </div>
   );
