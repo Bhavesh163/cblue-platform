@@ -124,6 +124,7 @@ export default function FixerRegisterPage() {
   } | null>(null);
 
   const [authMode, setAuthMode] = useState<"login" | "register">("register");
+  const [isAlreadyFixer, setIsAlreadyFixer] = useState(false);
   const [isRegisteredFixer, setIsRegisteredFixer] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(true);
 

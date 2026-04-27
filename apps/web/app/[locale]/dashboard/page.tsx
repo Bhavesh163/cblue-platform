@@ -294,6 +294,9 @@ export default function DashboardPage() {
           </div>
         )}
 
+          </>
+        )}
+
         {/* Tier Comparison */}
         <div className="mt-8 bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
           <h2 className="text-lg font-bold text-gray-900 mb-2">
@@ -365,8 +368,6 @@ export default function DashboardPage() {
             : "Consent: 3 years | Service history: 18 months | Inactive accounts: deleted after 12 months"
           }</p>
         </div>
-          </>
-        )}
       </div>
     </div>
   );
