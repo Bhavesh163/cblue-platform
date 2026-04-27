@@ -18,15 +18,13 @@ interface SubscriberInfo {
 
 type ServiceType = "household" | "project" | "professional" | "property";
 
-const DEMO_ACTIVE: any[] = [];
 
-const DEMO_HISTORY: any[] = [];
 
 const DEMO_PROPERTY_INQUIRIES: any[] = [];
 
-const DEMO_NOTIFICATIONS: any[] = [];
+const notifications: any[] = [];
 
-const DEMO_CHATS: any[] = [];
+const chats: any[] = [];
 
 const ICON_MAP: Record<string, string> = { household: "🏠", project: "💼", professional: "👔", property: "🏢" };
 const STATUS_STYLE: Record<string, string> = {
@@ -50,7 +48,6 @@ const TIER_STYLE: Record<string, string> = {
   Grandeur: "bg-purple-50 text-purple-700",
 };
 
-const DEMO_REQUESTS: any[] = [];
 
 const STATUS_LABEL: Record<string, Record<string, string>> = {
   IN_PROGRESS: { en: "In Progress", th: "กำลังดำเนินการ", zh: "进行中" },
@@ -78,6 +75,9 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [showPdpa, setShowPdpa] = useState(false);
 
+  const [orders, setOrders] = useState<any[]>([]);
+
+
 
   useEffect(() => {
     let isMounted = true;
@@ -104,6 +104,10 @@ export default function DashboardPage() {
             const consent = localStorage.getItem("pdpa_consent_customer");
             if (!consent) setShowPdpa(true);
           }
+
+            const ordersRes = await fetch("/api/v1/orders/my", { headers: { Authorization: `Bearer ${token}` } });
+            if (ordersRes.ok && isMounted) setOrders(await ordersRes.json());
+
         } else {
           localStorage.removeItem("subscriber_token");
           localStorage.removeItem("subscriber");
@@ -116,10 +120,30 @@ export default function DashboardPage() {
   }, [router, prefix]);
 
 
+  
+  const mappedOrders = orders.map(o => ({
+    id: o.id,
+    type: o.orderType?.toLowerCase() || "household",
+    service: (o.serviceCategory || "").replace(/_/g, " "),
+    serviceTh: (o.serviceCategory || "").replace(/_/g, " "),
+    serviceZh: (o.serviceCategory || "").replace(/_/g, " "),
+    partner: o.fixer?.user?.name || "Pending matching",
+    date: new Date(o.createdAt).toLocaleDateString(),
+    progress: o.status === 'COMPLETED' ? 100 : o.status === 'IN_PROGRESS' ? 50 : 20,
+    tier: "Standard",
+    status: o.status,
+    rating: 0,
+    fee: o.estimatedPrice ? `฿${o.estimatedPrice}` : "TBD"
+  }));
+
+  const activeOrders = mappedOrders.filter(o => !['COMPLETED', 'CANCELLED'].includes(o.status));
+  const historyOrders = mappedOrders.filter(o => ['COMPLETED', 'CANCELLED'].includes(o.status));
+  const requests = activeOrders.filter(o => ['CREATED', 'MATCHING', 'PENDING'].includes(o.status));
+
   const tabs: { key: TabKey; label: string; icon: string; badge?: number }[] = [
     { key: "overview", label: locale === "th" ? "ภาพรวม" : locale === "zh" ? "概览" : "Overview", icon: "📊" },
-    { key: "bookings", label: locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "当前工作" : "Active Jobs", icon: "🔧", badge: 0 },
-    { key: "requests", label: locale === "th" ? "คำขอ" : locale === "zh" ? "请求" : "Requests", icon: "📋", badge: 0 },
+    { key: "bookings", label: locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "当前工作" : "Active Jobs", icon: "🔧", badge: activeOrders.length },
+    { key: "requests", label: locale === "th" ? "คำขอ" : locale === "zh" ? "请求" : "Requests", icon: "📋", badge: requests.length },
     { key: "property", label: locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房产" : "Properties", icon: "🏢", badge: 0 },
     { key: "history", label: locale === "th" ? "ประวัติ" : locale === "zh" ? "历史" : "History", icon: "📜" },
     { key: "chat", label: locale === "th" ? "แชท" : locale === "zh" ? "聊天" : "Chat", icon: "💬", badge: 0 },
@@ -237,14 +261,14 @@ export default function DashboardPage() {
         </div>
 
         {/* Tab Content */}
-        {activeTab === "overview" && <OverviewTab locale={locale} subscriber={subscriber} />}
-        {activeTab === "bookings" && <BookingsTab locale={locale} />}
-        {activeTab === "requests" && <RequestsTab locale={locale} />}
+        {activeTab === "overview" && <OverviewTab locale={locale} subscriber={subscriber} activeOrders={activeOrders} historyOrders={historyOrders} chats={chats} notifications={notifications} />}
+        {activeTab === "bookings" && <BookingsTab locale={locale} activeOrders={activeOrders} />}
+        {activeTab === "requests" && <RequestsTab locale={locale} requests={requests} />}
         {activeTab === "property" && <PropertyTab locale={locale} prefix={prefix} />}
-        {activeTab === "history" && <HistoryTab locale={locale} />}
-        {activeTab === "chat" && <ChatTab locale={locale} />}
-        {activeTab === "notifications" && <NotificationsTab locale={locale} />}
-        {activeTab === "profile" && <ProfileTab locale={locale} prefix={prefix} subscriber={subscriber} />}
+        {activeTab === "history" && <HistoryTab locale={locale} historyOrders={historyOrders} />}
+        {activeTab === "chat" && <ChatTab locale={locale} chats={chats} />}
+        {activeTab === "notifications" && <NotificationsTab locale={locale} notifications={notifications} />}
+        {activeTab === "profile" && <ProfileTab locale={locale} prefix={prefix} subscriber={subscriber} activeOrders={activeOrders} historyOrders={historyOrders} />}
 
         {/* Meeting Reminders */}
         {subscriber && (
@@ -374,15 +398,15 @@ export default function DashboardPage() {
 }
 
 /* ===== OVERVIEW TAB ===== */
-function OverviewTab({ locale, subscriber }: { locale: string; subscriber: SubscriberInfo | null }) {
+function OverviewTab({ locale, subscriber, activeOrders, historyOrders, chats, notifications }: { locale: string; subscriber: SubscriberInfo | null; activeOrders: any[]; historyOrders: any[]; chats: any[]; notifications: any[] }) {
   return (
     <div className="space-y-6">
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: locale === "th" ? "บริการปัจจุบัน" : locale === "zh" ? "进行中" : "Active", value: DEMO_ACTIVE.length, icon: "⚡", color: "text-sky-600" },
-          { label: locale === "th" ? "เสร็จสิ้น" : locale === "zh" ? "已完成" : "Completed", value: DEMO_HISTORY.length, icon: "✅", color: "text-green-600" },
-          { label: locale === "th" ? "ข้อความใหม่" : locale === "zh" ? "消息" : "Messages", value: DEMO_CHATS.reduce((a, c) => a + c.unread, 0), icon: "💬", color: "text-indigo-600" },
+          { label: locale === "th" ? "บริการปัจจุบัน" : locale === "zh" ? "进行中" : "Active", value: activeOrders.length, icon: "⚡", color: "text-sky-600" },
+          { label: locale === "th" ? "เสร็จสิ้น" : locale === "zh" ? "已完成" : "Completed", value: historyOrders.length, icon: "✅", color: "text-green-600" },
+          { label: locale === "th" ? "ข้อความใหม่" : locale === "zh" ? "消息" : "Messages", value: chats.reduce((a, c) => a + c.unread, 0), icon: "💬", color: "text-indigo-600" },
           { label: locale === "th" ? "ความพึงพอใจ" : locale === "zh" ? "满意度" : "Satisfaction", value: "4.8 ⭐", icon: "🏆", color: "text-amber-600" },
         ].map((s) => (
           <div key={s.label} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
@@ -414,10 +438,10 @@ function OverviewTab({ locale, subscriber }: { locale: string; subscriber: Subsc
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="font-bold text-gray-900 flex items-center gap-2">⚡ {locale === "th" ? "บริการที่กำลังดำเนินการ" : locale === "zh" ? "进行中的服务" : "Active Services"}</h2>
-          <span className="text-xs bg-sky-100 text-sky-700 px-2.5 py-1 rounded-full font-bold">{DEMO_ACTIVE.length}</span>
+          <span className="text-xs bg-sky-100 text-sky-700 px-2.5 py-1 rounded-full font-bold">{activeOrders.length}</span>
         </div>
         <div className="divide-y divide-gray-50">
-          {DEMO_ACTIVE.map((s) => (
+          {activeOrders.map((s) => (
             <div key={s.id} className="px-6 py-4 flex items-center gap-4 hover:bg-gray-50/50 transition">
               <div className="w-10 h-10 rounded-lg bg-sky-50 flex items-center justify-center text-lg">{ICON_MAP[s.type]}</div>
               <div className="flex-1 min-w-0">
@@ -443,7 +467,7 @@ function OverviewTab({ locale, subscriber }: { locale: string; subscriber: Subsc
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
           <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">🔔 {locale === "th" ? "การแจ้งเตือนล่าสุด" : locale === "zh" ? "最近通知" : "Recent Alerts"}</h3>
           <div className="space-y-2">
-            {DEMO_NOTIFICATIONS.slice(0, 3).map((n) => (
+            {notifications.slice(0, 3).map((n) => (
               <div key={n.id} className={`flex items-center gap-3 p-3 rounded-lg ${n.unread ? "bg-sky-50 border border-sky-100" : "bg-gray-50"}`}>
                 <span className={`w-2 h-2 rounded-full ${n.dot} flex-shrink-0`} />
                 <p className="text-sm text-gray-700 flex-1">{locale === "th" ? n.msgTh : locale === "zh" ? n.msgZh : n.msg}</p>
@@ -455,7 +479,7 @@ function OverviewTab({ locale, subscriber }: { locale: string; subscriber: Subsc
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
           <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">💬 {locale === "th" ? "แชทล่าสุด" : locale === "zh" ? "最近聊天" : "Recent Chats"}</h3>
           <div className="space-y-2">
-            {DEMO_CHATS.map((c) => (
+            {chats.map((c) => (
               <div key={c.id} className={`flex items-center gap-3 p-3 rounded-lg ${c.unread > 0 ? "bg-sky-50 border border-sky-100" : "bg-gray-50"}`}>
                 <div className="relative">
                   <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600">{c.name.slice(-4)}</div>
@@ -491,7 +515,7 @@ function OverviewTab({ locale, subscriber }: { locale: string; subscriber: Subsc
               <th className="text-center py-3 px-4 font-semibold text-gray-600">{locale === "th" ? "วันที่" : locale === "zh" ? "日期" : "Date"}</th>
             </tr></thead>
             <tbody>
-              {DEMO_HISTORY.slice(0, 3).map((h) => (
+              {historyOrders.slice(0, 3).map((h) => (
                 <tr key={h.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition">
                   <td className="py-3 px-4"><span className="mr-2">{ICON_MAP[h.type]}</span><span className="font-medium text-gray-900">{locale === "th" ? h.serviceTh : locale === "zh" ? h.serviceZh : h.service}</span></td>
                   <td className="py-3 px-4 text-gray-600">{h.partner}</td>
@@ -510,14 +534,14 @@ function OverviewTab({ locale, subscriber }: { locale: string; subscriber: Subsc
 }
 
 /* ===== BOOKINGS TAB ===== */
-function BookingsTab({ locale }: { locale: string }) {
+function BookingsTab({ locale, activeOrders }: { locale: string; activeOrders: any[] }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100">
         <h2 className="font-bold text-gray-900 flex items-center gap-2">⚡ {locale === "th" ? "บริการที่กำลังดำเนินการ" : locale === "zh" ? "进行中的服务" : "Active Services"}</h2>
       </div>
       <div className="divide-y divide-gray-50">
-        {DEMO_ACTIVE.map((s) => (
+        {activeOrders.map((s) => (
           <div key={s.id} className="p-6 hover:bg-gray-50/50 transition">
             <div className="flex items-center gap-4 mb-3">
               <div className="w-12 h-12 rounded-xl bg-sky-100 flex items-center justify-center text-2xl">{ICON_MAP[s.type]}</div>
@@ -548,14 +572,14 @@ function BookingsTab({ locale }: { locale: string }) {
 }
 
 /* ===== REQUESTS TAB ===== */
-function RequestsTab({ locale }: { locale: string }) {
+function RequestsTab({ locale, requests }: { locale: string; requests: any[] }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100">
         <h2 className="font-bold text-gray-900 flex items-center gap-2">📋 {locale === "th" ? "คำขอบริการทั้งหมด" : locale === "zh" ? "所有服务请求" : "All Service Requests"}</h2>
       </div>
       <div className="divide-y divide-gray-50">
-        {DEMO_REQUESTS.map((r) => (
+        {requests.map((r) => (
           <div key={r.id} className="p-6 hover:bg-gray-50/50 transition">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center text-2xl">{ICON_MAP[r.type]}</div>
@@ -650,7 +674,7 @@ function PropertyTab({ locale, prefix }: { locale: string; prefix: string }) {
 }
 
 /* ===== HISTORY TAB ===== */
-function HistoryTab({ locale }: { locale: string }) {
+function HistoryTab({ locale, historyOrders }: { locale: string; historyOrders: any[] }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100">
@@ -667,7 +691,7 @@ function HistoryTab({ locale }: { locale: string }) {
             <th className="text-center py-3 px-4 font-semibold text-gray-600">{locale === "th" ? "วันที่" : locale === "zh" ? "日期" : "Date"}</th>
           </tr></thead>
           <tbody>
-            {DEMO_HISTORY.map((h) => (
+            {historyOrders.map((h) => (
               <tr key={h.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition">
                 <td className="py-3 px-4"><span className="mr-2">{ICON_MAP[h.type]}</span><span className="font-medium text-gray-900">{locale === "th" ? h.serviceTh : locale === "zh" ? h.serviceZh : h.service}</span></td>
                 <td className="py-3 px-4 text-gray-600">{h.partner}</td>
@@ -685,7 +709,7 @@ function HistoryTab({ locale }: { locale: string }) {
 }
 
 /* ===== CHAT TAB ===== */
-function ChatTab({ locale }: { locale: string }) {
+function ChatTab({ locale, chats }: { locale: string; chats: any[] }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100">
@@ -693,7 +717,7 @@ function ChatTab({ locale }: { locale: string }) {
         <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "แชทแบบไม่เปิดเผยตัวตนเพื่อความปลอดภัย" : locale === "zh" ? "匿名聊天保障您的安全" : "Anonymous chat for your safety"}</p>
       </div>
       <div className="divide-y divide-gray-50">
-        {DEMO_CHATS.map((c) => (
+        {chats.map((c) => (
           <div key={c.id} className={`flex items-center gap-4 px-6 py-4 cursor-pointer transition ${c.unread > 0 ? "bg-sky-50/50 hover:bg-sky-50" : "hover:bg-gray-50"}`}>
             <div className="relative">
               <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-sm font-bold text-gray-600">{c.name.slice(-4)}</div>
@@ -720,14 +744,14 @@ function ChatTab({ locale }: { locale: string }) {
 }
 
 /* ===== NOTIFICATIONS TAB ===== */
-function NotificationsTab({ locale }: { locale: string }) {
+function NotificationsTab({ locale, notifications }: { locale: string; notifications: any[] }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100">
         <h2 className="font-bold text-gray-900 flex items-center gap-2">🔔 {locale === "th" ? "การแจ้งเตือนทั้งหมด" : locale === "zh" ? "所有通知" : "All Notifications"}</h2>
       </div>
       <div className="divide-y divide-gray-50">
-        {DEMO_NOTIFICATIONS.map((n) => (
+        {notifications.map((n) => (
           <div key={n.id} className={`flex items-center gap-4 px-6 py-4 transition ${n.unread ? "bg-sky-50/50" : "hover:bg-gray-50"}`}>
             <span className={`w-3 h-3 rounded-full ${n.dot} flex-shrink-0`} />
             <p className="text-sm text-gray-800 flex-1">{locale === "th" ? n.msgTh : locale === "zh" ? n.msgZh : n.msg}</p>
@@ -741,7 +765,7 @@ function NotificationsTab({ locale }: { locale: string }) {
 }
 
 /* ===== PROFILE TAB ===== */
-function ProfileTab({ locale, prefix, subscriber }: { locale: string; prefix: string; subscriber: SubscriberInfo | null }) {
+function ProfileTab({ locale, prefix, subscriber, activeOrders, historyOrders }: { locale: string; prefix: string; subscriber: SubscriberInfo | null; activeOrders: any[]; historyOrders: any[] }) {
   const router = useRouter();
   if (!subscriber) {
     return (
@@ -772,8 +796,8 @@ function ProfileTab({ locale, prefix, subscriber }: { locale: string; prefix: st
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: locale === "th" ? "บริการทั้งหมด" : locale === "zh" ? "总预约" : "Total Bookings", value: DEMO_HISTORY.length + DEMO_ACTIVE.length, icon: "📋" },
-            { label: locale === "th" ? "กำลังดำเนินการ" : locale === "zh" ? "进行中" : "Active", value: DEMO_ACTIVE.length, icon: "⚡" },
+            { label: locale === "th" ? "บริการทั้งหมด" : locale === "zh" ? "总预约" : "Total Bookings", value: historyOrders.length + activeOrders.length, icon: "📋" },
+            { label: locale === "th" ? "กำลังดำเนินการ" : locale === "zh" ? "进行中" : "Active", value: activeOrders.length, icon: "⚡" },
             { label: locale === "th" ? "ความพึงพอใจ" : locale === "zh" ? "平均评分" : "Avg Rating", value: "4.8 ⭐", icon: "🏆" },
             { label: locale === "th" ? "สมาชิกตั้งแต่" : locale === "zh" ? "注册时间" : "Member Since", value: "Mar 2026", icon: "📅" },
           ].map((s) => (

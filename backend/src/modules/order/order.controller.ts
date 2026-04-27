@@ -26,6 +26,20 @@ export class OrderController {
     return this.orderService.create(userId, dto);
   }
 
+  @Get('fixer')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.FIXER)
+  async findMyFixerOrders(@CurrentUser('id') userId: string) {
+    const user = await this.orderService['prisma'].user.findUnique({
+      where: { id: userId },
+      include: { fixer: true },
+    });
+    if (!user || !user.fixer) {
+      return [];
+    }
+    return this.orderService.findByFixer(user.fixer.id);
+  }
+
   @Get('my')
   findMyOrders(@CurrentUser('id') userId: string) {
     return this.orderService.findByUser(userId);

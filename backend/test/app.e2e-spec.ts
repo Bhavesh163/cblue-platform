@@ -8,12 +8,26 @@ describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
 
   beforeEach(async () => {
+    process.env.DATABASE_URL =
+      'postgresql://admin:testpassword@localhost:5432/cblue_test';
+    process.env.JWT_SECRET = 'test_secret';
+    process.env.JWT_EXPIRATION = '1h';
+    process.env.RABBITMQ_URL = 'amqp://localhost';
+    process.env.REDIS_HOST = 'localhost';
+    process.env.REDIS_PORT = '6379';
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
 
     app = moduleFixture.createNestApplication();
     await app.init();
+  });
+
+  afterEach(async () => {
+    if (app) {
+      await app.close();
+    }
   });
 
   it('/ (GET)', () => {

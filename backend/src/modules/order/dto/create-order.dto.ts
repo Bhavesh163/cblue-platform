@@ -8,7 +8,7 @@ import {
   IsIn,
   IsEnum,
 } from 'class-validator';
-import { ALL_SERVICE_CATEGORIES } from '../../../common/constants/index.js';
+import { ALL_SERVICE_CATEGORIES } from '../../../common/constants';
 
 export enum OrderType {
   HOUSEHOLD = 'HOUSEHOLD',

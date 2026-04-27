@@ -16,7 +16,7 @@ interface PartnerInfo {
   status: string;
 }
 
-const DEMO_PARTNER_STATS = {
+const stats = {
   activeJobs: 0,
   completedJobs: 0,
   monthlyEarnings: "฿0",
@@ -25,17 +25,13 @@ const DEMO_PARTNER_STATS = {
   repeatClients: 0,
 };
 
-const DEMO_ACTIVE_JOBS: any[] = [];
 
-const DEMO_INCOMING: any[] = [];
 
-const DEMO_EARNINGS: any[] = [];
 
-const DEMO_COMPLETED: any[] = [];
 
 const DEMO_CHATS: any[] = [];
 
-const DEMO_NOTIFICATIONS: any[] = [];
+const notifications: any[] = [];
 
 const STATUS_STYLE: Record<string, string> = {
   IN_PROGRESS: "bg-purple-100 text-purple-700",
@@ -71,6 +67,9 @@ export default function FixerProPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [showPdpa, setShowPdpa] = useState(false);
 
+  const [orders, setOrders] = useState<any[]>([]);
+
+
 
   const [isFixer, setIsFixer] = useState(false);
 
@@ -96,6 +95,10 @@ export default function FixerProPage() {
             const consent = localStorage.getItem("pdpa_consent_partner");
             if (!consent) setShowPdpa(true);
           }
+
+            const ordersRes = await fetch("/api/v1/orders/fixer", { headers: { Authorization: `Bearer ${token}` } });
+            if (ordersRes.ok && isMounted) setOrders(await ordersRes.json());
+
         } else {
           localStorage.removeItem("subscriber_token");
           localStorage.removeItem("subscriber");
@@ -109,6 +112,25 @@ export default function FixerProPage() {
 
   const isSubscribed = !!partner;
 
+
+  
+  const mappedOrders = orders.map(o => ({
+    id: o.id,
+    customer: o.user?.name || "Customer",
+    phone: o.user?.phone || "",
+    service: (o.serviceCategory || "").replace(/_/g, " "),
+    serviceTh: (o.serviceCategory || "").replace(/_/g, " "),
+    serviceZh: (o.serviceCategory || "").replace(/_/g, " "),
+    date: new Date(o.createdAt).toLocaleDateString(),
+    tier: "Standard",
+    status: o.status,
+    progress: o.status === 'COMPLETED' ? 100 : o.status === 'IN_PROGRESS' ? 50 : 20,
+    fee: o.estimatedPrice ? `฿${o.estimatedPrice}` : "TBD"
+  }));
+
+  const activeJobs = mappedOrders.filter(o => !['COMPLETED', 'CANCELLED', 'CREATED', 'PENDING'].includes(o.status));
+  const completedJobs = mappedOrders.filter(o => o.status === 'COMPLETED');
+  const incomingJobs = mappedOrders.filter(o => ['CREATED', 'PENDING', 'MATCHING'].includes(o.status));
 
   const tabs: { key: TabKey; label: string; icon: string; badge?: number }[] = [
     { key: "overview", label: locale === "th" ? "ภาพรวม" : locale === "zh" ? "概览" : "Overview", icon: "📊" },
@@ -229,11 +251,11 @@ export default function FixerProPage() {
         </div>
 
         {/* Tab Content */}
-        {activeTab === "overview" && <PartnerOverview locale={locale} partner={partner} />}
-        {activeTab === "jobs" && <PartnerJobs locale={locale} />}
-        {activeTab === "requests" && <PartnerRequests locale={locale} />}
+        {activeTab === "overview" && <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={incomingJobs} completedJobs={completedJobs} earnings={[]} stats={{activeJobs: 0, completedJobs: 0, monthlyEarnings: "฿0", rating: 0, responseRate: "0%", repeatClients: 0}} notifications={[]} />}
+        {activeTab === "jobs" && <PartnerJobs locale={locale} activeJobs={activeJobs} />}
+        {activeTab === "requests" && <PartnerRequests locale={locale} incomingJobs={incomingJobs} />}
         {activeTab === "properties" && <PartnerProperties locale={locale} prefix={prefix} />}
-        {activeTab === "history" && <PartnerHistory locale={locale} />}
+        {activeTab === "history" && <PartnerHistory locale={locale} completedJobs={completedJobs} />}
         {activeTab === "chat" && <PartnerChat locale={locale} />}
         {activeTab === "notifications" && <PartnerNotifications locale={locale} />}
         {activeTab === "profile" && <PartnerProfile locale={locale} prefix={prefix} partner={partner} />}
@@ -406,19 +428,19 @@ export default function FixerProPage() {
 }
 
 /* ===== PARTNER OVERVIEW ===== */
-function PartnerOverview({ locale, partner }: { locale: string; partner: PartnerInfo | null }) {
-  const maxEarning = DEMO_EARNINGS.length > 0 ? Math.max(...DEMO_EARNINGS.map(e => e.amount)) : 0;
+function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJobs, earnings, stats, notifications }: { locale: string; partner: PartnerInfo | null; activeJobs: any[]; incomingJobs: any[]; completedJobs: any[]; earnings: any[]; stats: any; notifications: any[] }) {
+  const maxEarning = earnings.length > 0 ? Math.max(...earnings.map(e => e.amount)) : 0;
   return (
     <div className="space-y-6">
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
-          { label: locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "进行中" : "Active Jobs", value: DEMO_PARTNER_STATS.activeJobs, icon: "🔧", color: "text-sky-600" },
-          { label: locale === "th" ? "เสร็จสิ้น" : locale === "zh" ? "已完成" : "Completed", value: DEMO_PARTNER_STATS.completedJobs, icon: "✅", color: "text-green-600" },
-          { label: locale === "th" ? "รายได้เดือนนี้" : locale === "zh" ? "本月收入" : "Monthly Earn", value: DEMO_PARTNER_STATS.monthlyEarnings, icon: "💰", color: "text-amber-600" },
-          { label: locale === "th" ? "คะแนน" : locale === "zh" ? "评分" : "Rating", value: `${DEMO_PARTNER_STATS.rating} ⭐`, icon: "🏆", color: "text-purple-600" },
-          { label: locale === "th" ? "อัตราตอบรับ" : locale === "zh" ? "响应率" : "Response", value: DEMO_PARTNER_STATS.responseRate, icon: "⚡", color: "text-indigo-600" },
-          { label: locale === "th" ? "ลูกค้าประจำ" : locale === "zh" ? "回头客" : "Repeat", value: DEMO_PARTNER_STATS.repeatClients, icon: "🤝", color: "text-teal-600" },
+          { label: locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "进行中" : "Active Jobs", value: stats.activeJobs, icon: "🔧", color: "text-sky-600" },
+          { label: locale === "th" ? "เสร็จสิ้น" : locale === "zh" ? "已完成" : "Completed", value: stats.completedJobs, icon: "✅", color: "text-green-600" },
+          { label: locale === "th" ? "รายได้เดือนนี้" : locale === "zh" ? "本月收入" : "Monthly Earn", value: stats.monthlyEarnings, icon: "💰", color: "text-amber-600" },
+          { label: locale === "th" ? "คะแนน" : locale === "zh" ? "评分" : "Rating", value: `${stats.rating} ⭐`, icon: "🏆", color: "text-purple-600" },
+          { label: locale === "th" ? "อัตราตอบรับ" : locale === "zh" ? "响应率" : "Response", value: stats.responseRate, icon: "⚡", color: "text-indigo-600" },
+          { label: locale === "th" ? "ลูกค้าประจำ" : locale === "zh" ? "回头客" : "Repeat", value: stats.repeatClients, icon: "🤝", color: "text-teal-600" },
         ].map((s) => (
           <div key={s.label} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
             <p className="text-xs text-gray-500 mb-1">{s.label}</p>
@@ -453,7 +475,7 @@ function PartnerOverview({ locale, partner }: { locale: string; partner: Partner
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
           <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">💰 {locale === "th" ? "รายได้รายเดือน" : locale === "zh" ? "月收入" : "Monthly Earnings"}</h3>
           <div className="flex items-end gap-4 h-32">
-            {DEMO_EARNINGS.map((e) => (
+            {earnings.map((e) => (
               <div key={e.month} className="flex-1 flex flex-col items-center">
                 <span className="text-xs font-bold text-gray-700 mb-1">฿{(e.amount / 1000).toFixed(1)}k</span>
                 <div className="w-full bg-purple-100 rounded-t-lg relative" style={{ height: `${(e.amount / maxEarning) * 100}%` }}>
@@ -470,10 +492,10 @@ function PartnerOverview({ locale, partner }: { locale: string; partner: Partner
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="font-bold text-gray-900 flex items-center gap-2">🔧 {locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "进行中的工作" : "Active Jobs"}</h2>
-          <span className="text-xs bg-sky-100 text-sky-700 px-2.5 py-1 rounded-full font-bold">{DEMO_ACTIVE_JOBS.length}</span>
+          <span className="text-xs bg-sky-100 text-sky-700 px-2.5 py-1 rounded-full font-bold">{activeJobs.length}</span>
         </div>
         <div className="divide-y divide-gray-50">
-          {DEMO_ACTIVE_JOBS.map((job) => (
+          {activeJobs.map((job) => (
             <div key={job.id} className="px-6 py-4 flex items-center gap-4 hover:bg-gray-50/50 transition">
               <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center text-lg">🔧</div>
               <div className="flex-1 min-w-0">
@@ -497,10 +519,10 @@ function PartnerOverview({ locale, partner }: { locale: string; partner: Partner
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="font-bold text-gray-900 flex items-center gap-2">📋 {locale === "th" ? "คำขอใหม่" : locale === "zh" ? "新订单" : "Incoming Requests"}</h2>
-          <span className="text-xs bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full font-bold">{DEMO_INCOMING.length}</span>
+          <span className="text-xs bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full font-bold">{incomingJobs.length}</span>
         </div>
         <div className="divide-y divide-gray-50">
-          {DEMO_INCOMING.slice(0, 2).map((req) => (
+          {incomingJobs.slice(0, 2).map((req) => (
             <div key={req.id} className="px-6 py-4 flex items-center gap-4 hover:bg-amber-50/30 transition">
               <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center text-lg">📋</div>
               <div className="flex-1 min-w-0">
@@ -523,7 +545,7 @@ function PartnerOverview({ locale, partner }: { locale: string; partner: Partner
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
           <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">🔔 {locale === "th" ? "การแจ้งเตือนล่าสุด" : locale === "zh" ? "最近通知" : "Recent Alerts"}</h3>
           <div className="space-y-2">
-            {DEMO_NOTIFICATIONS.slice(0, 3).map((n) => (
+            {notifications.slice(0, 3).map((n) => (
               <div key={n.id} className={`flex items-center gap-3 p-3 rounded-lg ${n.unread ? "bg-purple-50 border border-purple-100" : "bg-gray-50"}`}>
                 <span className={`w-2 h-2 rounded-full ${n.dot} flex-shrink-0`} />
                 <p className="text-sm text-gray-700 flex-1">{locale === "th" ? n.msgTh : locale === "zh" ? n.msgZh : n.msg}</p>
@@ -559,14 +581,14 @@ function PartnerOverview({ locale, partner }: { locale: string; partner: Partner
 }
 
 /* ===== PARTNER JOBS (Active) ===== */
-function PartnerJobs({ locale }: { locale: string }) {
+function PartnerJobs({ locale, activeJobs }: { locale: string; activeJobs: any[] }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100">
         <h2 className="font-bold text-gray-900 flex items-center gap-2">🔧 {locale === "th" ? "งานที่กำลังดำเนินการ" : locale === "zh" ? "进行中的工作" : "Active Jobs"}</h2>
       </div>
       <div className="divide-y divide-gray-50">
-        {DEMO_ACTIVE_JOBS.map((job) => (
+        {activeJobs.map((job) => (
           <div key={job.id} className="p-6 hover:bg-gray-50/50 transition">
             <div className="flex items-center gap-4 mb-3">
               <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center text-2xl">🔧</div>
@@ -596,14 +618,14 @@ function PartnerJobs({ locale }: { locale: string }) {
 }
 
 /* ===== PARTNER REQUESTS ===== */
-function PartnerRequests({ locale }: { locale: string }) {
+function PartnerRequests({ locale, incomingJobs }: { locale: string; incomingJobs: any[] }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100">
         <h2 className="font-bold text-gray-900 flex items-center gap-2">📋 {locale === "th" ? "คำขอใหม่ทั้งหมด" : locale === "zh" ? "所有新请求" : "All Incoming Requests"}</h2>
       </div>
       <div className="divide-y divide-gray-50">
-        {DEMO_INCOMING.map((req) => (
+        {incomingJobs.map((req) => (
           <div key={req.id} className={`p-6 transition ${req.urgency === "urgent" ? "bg-red-50/30 hover:bg-red-50/50" : "hover:bg-gray-50/50"}`}>
             <div className="flex items-center gap-4">
               <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${req.urgency === "urgent" ? "bg-red-100" : "bg-amber-100"}`}>📋</div>
@@ -631,7 +653,7 @@ function PartnerRequests({ locale }: { locale: string }) {
 }
 
 /* ===== PARTNER HISTORY ===== */
-function PartnerHistory({ locale }: { locale: string }) {
+function PartnerHistory({ locale, completedJobs }: { locale: string; completedJobs: any[] }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100">
@@ -648,7 +670,7 @@ function PartnerHistory({ locale }: { locale: string }) {
             <th className="text-center py-3 px-4 font-semibold text-gray-600">{locale === "th" ? "วันที่" : locale === "zh" ? "日期" : "Date"}</th>
           </tr></thead>
           <tbody>
-            {DEMO_COMPLETED.map((h) => (
+            {completedJobs.map((h) => (
               <tr key={h.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition">
                 <td className="py-3 px-4 font-medium text-gray-900">{locale === "th" ? h.serviceTh : locale === "zh" ? h.serviceZh : h.service}</td>
                 <td className="py-3 px-4 text-gray-600">{h.customer}</td>
@@ -706,7 +728,7 @@ function PartnerNotifications({ locale }: { locale: string }) {
         <h2 className="font-bold text-gray-900 flex items-center gap-2">🔔 {locale === "th" ? "การแจ้งเตือนทั้งหมด" : locale === "zh" ? "所有通知" : "All Notifications"}</h2>
       </div>
       <div className="divide-y divide-gray-50">
-        {DEMO_NOTIFICATIONS.map((n) => (
+        {notifications.map((n) => (
           <div key={n.id} className={`flex items-center gap-4 px-6 py-4 transition ${n.unread ? "bg-purple-50/50" : "hover:bg-gray-50"}`}>
             <span className={`w-3 h-3 rounded-full ${n.dot} flex-shrink-0`} />
             <p className="text-sm text-gray-800 flex-1">{locale === "th" ? n.msgTh : locale === "zh" ? n.msgZh : n.msg}</p>
@@ -762,10 +784,10 @@ function PartnerProfile({ locale, prefix, partner }: { locale: string; prefix: s
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: locale === "th" ? "งานทั้งหมด" : locale === "zh" ? "总工作" : "Total Jobs", value: DEMO_PARTNER_STATS.completedJobs + DEMO_PARTNER_STATS.activeJobs, icon: "📋" },
-            { label: locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "进行中" : "Active", value: DEMO_PARTNER_STATS.activeJobs, icon: "🔧" },
-            { label: locale === "th" ? "คะแนน" : locale === "zh" ? "评分" : "Rating", value: `${DEMO_PARTNER_STATS.rating} ⭐`, icon: "🏆" },
-            { label: locale === "th" ? "ลูกค้าประจำ" : locale === "zh" ? "回头客" : "Repeat Clients", value: DEMO_PARTNER_STATS.repeatClients, icon: "🤝" },
+            { label: locale === "th" ? "งานทั้งหมด" : locale === "zh" ? "总工作" : "Total Jobs", value: stats.completedJobs + stats.activeJobs, icon: "📋" },
+            { label: locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "进行中" : "Active", value: stats.activeJobs, icon: "🔧" },
+            { label: locale === "th" ? "คะแนน" : locale === "zh" ? "评分" : "Rating", value: `${stats.rating} ⭐`, icon: "🏆" },
+            { label: locale === "th" ? "ลูกค้าประจำ" : locale === "zh" ? "回头客" : "Repeat Clients", value: stats.repeatClients, icon: "🤝" },
           ].map((s) => (
             <div key={s.label} className="bg-gray-50 rounded-xl p-4 text-center">
               <span className="text-xl block mb-1">{s.icon}</span>
