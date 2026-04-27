@@ -266,6 +266,7 @@ export default function FixerProPage() {
         <div className="my-10 border-t border-gray-200" />
 
         {/* Registration Cards */}
+        {(!isSubscribed || !isFixer) && !loading && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           {/* Register as Fixer & Pro */}
           <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition">
@@ -311,6 +312,8 @@ export default function FixerProPage() {
             </div>
           </div>
         </div>
+
+        )}
 
         {/* Price List Table */}
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden mb-8">
