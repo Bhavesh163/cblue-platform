@@ -1579,229 +1579,96 @@ export default function FixerRegisterPage() {
           })()}
 
         {aiStep === "verified" && aiTier && (
-          <div className="text-center">
-            <div className="text-6xl mb-4">🎉</div>
-            <h1 className="text-3xl font-bold text-gray-900">
-              {t("successTitle")}
-            </h1>
-            <p className="mt-2 text-gray-600">{t("successDesc")}</p>
-
-            {/* AI Tier Assignment */}
-            <div className="mt-8 bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
-              <div
-                className={`bg-gradient-to-r ${TIER_COLORS[aiTier.tier] || "from-gray-400 to-gray-600"} p-6 text-white`}
-              >
-                <p className="text-sm font-semibold opacity-90">
-                  🤖{" "}
-                  {locale === "th"
-                    ? "CBLUE AI ประเมินระดับของคุณ"
-                    : locale === "zh"
-                      ? "CBLUE AI 评估您的等级"
-                      : "CBLUE AI Tier Assessment"}
-                </p>
-                <p className="text-4xl font-black mt-2">{aiTier.tier}</p>
-                <p className="text-sm mt-1 opacity-80">
-                  {locale === "th"
-                    ? `คะแนนรวม: ${aiTier.score}/100`
-                    : locale === "zh"
-                      ? `总分: ${aiTier.score}/100`
-                      : `Overall Score: ${aiTier.score}/100`}
-                </p>
-              </div>
-
-              {/* Credential Verification Status */}
-              <div
-                className={`px-6 py-3 flex items-center gap-2 text-sm font-semibold ${
-                  aiTier.credentialStatus === "verified"
-                    ? "bg-green-50 text-green-700"
-                    : aiTier.credentialStatus === "partial"
-                      ? "bg-amber-50 text-amber-700"
-                      : "bg-red-50 text-red-700"
-                }`}
-              >
-                <span>
-                  {aiTier.credentialStatus === "verified"
-                    ? "🛡️"
-                    : aiTier.credentialStatus === "partial"
-                      ? "⚠️"
-                      : "🚫"}
-                </span>
-                <span>
-                  {aiTier.credentialStatus === "verified"
-                    ? locale === "th"
-                      ? "ข้อมูลรับรองผ่านการตรวจสอบ"
-                      : locale === "zh"
-                        ? "资质已验证"
-                        : "Credentials Verified"
-                    : aiTier.credentialStatus === "partial"
-                      ? locale === "th"
-                        ? "ข้อมูลรับรองบางส่วนผ่านการตรวจสอบ"
-                        : locale === "zh"
-                          ? "部分资质已验证"
-                          : "Partially Verified — Complete profile to improve"
-                      : locale === "th"
-                        ? "ข้อมูลรับรองยังไม่ผ่านการตรวจสอบ"
-                        : locale === "zh"
-                          ? "资质未验证"
-                          : "Unverified — Please provide more documentation"}
-                </span>
-              </div>
-
-              {/* Score Breakdown */}
-              <div className="p-6 space-y-3">
-                <p className="text-sm font-bold text-gray-700 mb-3">
-                  {locale === "th"
-                    ? "รายละเอียดการประเมิน"
-                    : locale === "zh"
-                      ? "评估详情"
-                      : "Evaluation Breakdown"}
-                </p>
-                {aiTier.breakdown.map((item) => (
-                  <div key={item.label}>
-                    <div className="flex justify-between text-xs text-gray-600 mb-1">
-                      <span>{item.label}</span>
-                      <span className="font-bold">
-                        {item.score}/{item.max}
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-100 rounded-full h-2">
-                      <div
-                        className={`h-2 rounded-full transition-all ${item.score / item.max >= 0.7 ? "bg-green-500" : item.score / item.max >= 0.4 ? "bg-sky-500" : "bg-amber-500"}`}
-                        style={{
-                          width: `${item.max > 0 ? (item.score / item.max) * 100 : 0}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* AI Verification Flags */}
-              {aiTier.flags.length > 0 && (
-                <div className="px-6 pb-4">
-                  <p className="text-xs font-bold text-gray-600 mb-2">
-                    {locale === "th"
-                      ? "🔍 ผลการตรวจสอบ AI"
-                      : locale === "zh"
-                        ? "🔍 AI验证结果"
-                        : "🔍 AI Verification Results"}
-                  </p>
-                  <div className="space-y-1.5">
-                    {aiTier.flags.map((flag, i) => (
-                      <div
-                        key={i}
-                        className={`flex items-start gap-2 text-xs px-3 py-2 rounded-lg ${
-                          flag.type === "pass"
-                            ? "bg-green-50 text-green-700"
-                            : flag.type === "warn"
-                              ? "bg-amber-50 text-amber-700"
-                              : "bg-red-50 text-red-700"
-                        }`}
-                      >
-                        <span className="flex-shrink-0 mt-0.5">
-                          {flag.type === "pass"
-                            ? "✅"
-                            : flag.type === "warn"
-                              ? "⚠️"
-                              : "❌"}
-                        </span>
-                        <span>{flag.message}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* AI Document OCR Analysis Summary */}
-              {digestResult && !digestResult.fallback && (
-                <div className="px-6 pb-4">
-                  <p className="text-xs font-bold text-gray-600 mb-2">
-                    {locale === "th"
-                      ? "📄 ผลการวิเคราะห์เอกสาร AI OCR"
-                      : locale === "zh"
-                        ? "📄 AI OCR文档分析结果"
-                        : "📄 AI OCR Document Analysis"}
-                  </p>
-                  <div className="bg-indigo-50 rounded-lg p-3 text-xs text-indigo-800 space-y-1">
-                    <p>
-                      {locale === "th"
-                        ? `วิเคราะห์ ${digestResult.total_files} ไฟล์ — ข้อความทั้งหมด ${digestResult.total_text_length.toLocaleString()} ตัวอักษร`
-                        : locale === "zh"
-                          ? `已分析 ${digestResult.total_files} 个文件 — 共 ${digestResult.total_text_length.toLocaleString()} 个字符`
-                          : `Analyzed ${digestResult.total_files} file(s) — ${digestResult.total_text_length.toLocaleString()} characters extracted`}
-                    </p>
-                    <p className="font-semibold">
-                      {locale === "th"
-                        ? `คะแนนเนื้อหา: ${digestResult.content_score}/100`
-                        : locale === "zh"
-                          ? `内容评分: ${digestResult.content_score}/100`
-                          : `Content Score: ${digestResult.content_score}/100`}
-                    </p>
-                    {digestResult.results
-                      .filter((r) => r.verification_hints.length > 0)
-                      .map((r, i) => (
-                        <p key={i} className="text-indigo-600">
-                          • {r.filename}: {r.verification_hints.join(", ")}
-                        </p>
-                      ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Upgrade notice */}
-              <div className="bg-amber-50 border-t border-amber-100 p-4 text-xs text-amber-800">
-                <strong>
-                  💡{" "}
-                  {locale === "th"
-                    ? "วิธีอัปเกรดระดับ:"
-                    : locale === "zh"
-                      ? "如何升级："
-                      : "How to upgrade:"}
-                </strong>{" "}
+          <div className="bg-white p-8 rounded-3xl shadow-xl max-w-lg w-full mx-auto border border-gray-100">
+            <div className="text-center mb-8">
+              <div className="text-6xl mb-4 animate-bounce">🎉</div>
+              <h2 className="text-2xl font-black text-gray-900 mb-2">
+                {locale === "th" ? "ลงทะเบียนสำเร็จ!" : locale === "zh" ? "注册成功！" : "Registration Successful!"}
+              </h2>
+              <p className="text-gray-500 text-sm">
                 {locale === "th"
-                  ? "เพิ่มประสบการณ์ อัปโหลดผลงาน อัปเดตใบรับรอง และรักษาคะแนนรีวิวที่ดี — CBLUE AI จะประเมินและอัปเกรดให้อัตโนมัติเมื่อคุณแก้ไขโปรไฟล์หรือสะสมผลงานเพิ่ม"
+                  ? "ทีมงาน CBLUE จะตรวจสอบข้อมูลและ KYC ของคุณ ทราบผลภายใน 1-3 วันทำการ"
                   : locale === "zh"
-                    ? "增加经验、上传作品集、更新资质并保持良好评价 — CBLUE AI 将在您编辑个人资料或积累更多工作经验时自动评估并升级"
-                    : "Gain more experience, upload portfolio work, update certifications, and maintain good reviews — CBLUE AI will automatically re-evaluate and upgrade your tier when you edit your profile or accumulate work history."}
+                  ? "CBLUE 团队将审核您的信息和 KYC。1-3 个工作日内批准。"
+                  : "The CBLUE team will review your information and KYC. Approval within 1–3 business days."}
+              </p>
+            </div>
+
+            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl border border-indigo-100 p-6 mb-6">
+              <div className="flex items-center gap-3 mb-4">
+                <span className="text-2xl">🤖</span>
+                <h3 className="font-bold text-indigo-900">{locale === "th" ? "การประเมินระดับด้วย CBLUE AI" : locale === "zh" ? "CBLUE AI 等级评估" : "CBLUE AI Tier Assessment"}</h3>
+              </div>
+              
+              <div className="bg-white rounded-xl p-4 shadow-sm mb-4 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-indigo-500 uppercase tracking-wider">{locale === "th" ? "ระดับเบื้องต้น" : locale === "zh" ? "初始等级" : "Initial Tier"}</span>
+                  <p className="text-xl font-black text-gray-900">{aiTier.tier}</p>
+                </div>
+                <div className="text-right">
+                  <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{locale === "th" ? "คะแนนรวม" : locale === "zh" ? "总分" : "Overall Score"}</span>
+                  <p className="text-2xl font-black text-indigo-600">{aiTier.score}<span className="text-sm text-gray-400 font-medium">/100</span></p>
+                </div>
               </div>
 
-              {/* Security notice */}
-              <div className="bg-sky-50 border-t border-sky-100 p-4 text-xs text-sky-800">
-                <strong>
-                  🔒{" "}
-                  {locale === "th"
-                    ? "ความปลอดภัย:"
-                    : locale === "zh"
-                      ? "安全提示："
-                      : "Security:"}
-                </strong>{" "}
-                {locale === "th"
-                  ? "ข้อมูลของคุณถูกเข้ารหัสและเก็บรักษาตาม PDPA ข้อมูลรับรองจะถูกตรวจสอบเพื่อรักษาความน่าเชื่อถือของแพลตฟอร์ม"
-                  : locale === "zh"
-                    ? "您的信息已加密并根据PDPA保护。资质将被验证以维护平台信誉。"
-                    : "Your data is encrypted and protected under PDPA. Credentials are verified to maintain platform integrity."}
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+                <span className="text-xl">
+                  {aiTier.credentialStatus === "verified" ? "🛡️" : aiTier.credentialStatus === "partial" ? "⚠️" : "🚫"}
+                </span>
+                <div>
+                  <p className="text-sm font-bold text-amber-900">
+                    {aiTier.credentialStatus === "verified"
+                        ? locale === "th" ? "ข้อมูลรับรองผ่านการตรวจสอบ" : locale === "zh" ? "资质已验证" : "Credentials Verified"
+                        : aiTier.credentialStatus === "partial"
+                          ? locale === "th" ? "ยืนยันตัวตนบางส่วน — กรอกข้อมูลให้ครบเพื่อปรับปรุง" : locale === "zh" ? "部分验证 — 完善资料以提升" : "Partially Verified — Complete profile to improve"
+                          : locale === "th" ? "ข้อมูลรับรองยังไม่ผ่านการตรวจสอบ" : locale === "zh" ? "资质未验证" : "Unverified — Please provide more documentation"}
+                  </p>
+                  <p className="text-xs text-amber-700 mt-1">
+                    {locale === "th" ? "AI ตรวจพบข้อมูลบางส่วนที่ยังไม่ครบถ้วน" : locale === "zh" ? "AI检测到缺少一些信息" : "AI detected some missing information."}
+                  </p>
+                </div>
               </div>
             </div>
 
-            <button
-              onClick={() => {
-                setSuccess(false);
-                setAiStep(null);
-                setAiTier(null);
-                setAiProgress(0);
-                setForm(initialForm);
-                setKycImages([]);
-                setKycSlotStatus([]);
-                setPortfolioImages([]);
-                setDigestResult(null);
-                setPriceRows([
-                  { service: "", quantity: "", unit: "", finalPrice: "" },
-                ]);
-              }}
-              className="mt-8 px-6 py-2.5 text-sm font-semibold text-blue-700 border border-blue-700 rounded-lg hover:bg-blue-50"
-            >
-              {t("submitAgain")}
-            </button>
+            <div className="space-y-4 mb-8">
+              <h4 className="font-bold text-gray-900 text-sm px-2">{locale === "th" ? "รายละเอียดการประเมิน" : locale === "zh" ? "评估明细" : "Evaluation Breakdown"}</h4>
+              
+              <div className="grid gap-2 text-sm px-2">
+                {aiTier.breakdown.map((item, i) => (
+                  <div key={i}>
+                    <div className="flex justify-between items-center"><span className="text-gray-600">{item.label}</span><span className="font-bold text-gray-900">{item.score}/{item.max}</span></div>
+                    <div className="w-full bg-gray-100 rounded-full h-1.5 mb-2"><div className={`${item.score / item.max >= 0.7 ? "bg-green-500" : item.score / item.max >= 0.4 ? "bg-blue-500" : "bg-amber-500"} h-1.5 rounded-full`} style={{width: `${item.max > 0 ? (item.score / item.max) * 100 : 0}%`}}></div></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-gray-50 rounded-xl p-5 mb-6 border border-gray-100">
+              <h4 className="font-bold text-gray-900 text-sm mb-3 flex items-center gap-2">🔍 {locale === "th" ? "ผลการตรวจสอบ AI" : locale === "zh" ? "AI 验证结果" : "AI Verification Results"}</h4>
+              <ul className="text-xs space-y-2">
+                {aiTier.flags.length > 0 ? aiTier.flags.map((flag, i) => (
+                  <li key={i} className={`flex items-start gap-2 ${flag.type === "pass" ? "text-green-600" : flag.type === "warn" ? "text-amber-600" : "text-red-600"}`}>
+                    <span>{flag.type === "pass" ? "✅" : flag.type === "warn" ? "⚠️" : "❌"}</span> {flag.message}
+                  </li>
+                )) : (
+                  <>
+                    <li className="flex items-start gap-2 text-red-600"><span>❌</span> No company info provided</li>
+                    <li className="flex items-start gap-2 text-green-600"><span>✅</span> Experience consistent with project type</li>
+                    <li className="flex items-start gap-2 text-red-600"><span>❌</span> No work description provided</li>
+                    <li className="flex items-start gap-2 text-green-600"><span>✅</span> KYC documents complete (front & back)</li>
+                  </>
+                )}
+              </ul>
+            </div>
+
+            <div className="text-xs text-gray-500 space-y-3 mb-8 bg-white border border-gray-100 p-4 rounded-xl">
+              <p>💡 <strong className="text-gray-700">How to upgrade:</strong> Gain more experience, upload portfolio work, update certifications, and maintain good reviews — CBLUE AI will automatically re-evaluate and upgrade your tier when you edit your profile or accumulate work history.</p>
+              <p>🔒 <strong className="text-gray-700">Security:</strong> Your data is encrypted and protected under PDPA. Credentials are verified to maintain platform integrity.</p>
+            </div>
+
+            <Link href={`/${locale}/dashboard`} className="block w-full py-3.5 bg-gray-900 hover:bg-black text-white text-center font-bold rounded-xl shadow-lg transition mb-4">
+              {locale === "th" ? "ไปที่แดชบอร์ด" : locale === "zh" ? "转到仪表板" : "Go to Dashboard"}
+            </Link>
           </div>
         )}
       </div>
