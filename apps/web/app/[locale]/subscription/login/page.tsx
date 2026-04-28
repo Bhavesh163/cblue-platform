@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useTranslations, useLocale } from "next-intl";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 
@@ -11,6 +11,7 @@ export default function SubscriptionLoginPage() {
   const t = useTranslations("subscription");
   const locale = useLocale();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const prefix = `/${locale}`;
 
   const [email, setEmail] = useState("");
@@ -69,7 +70,8 @@ export default function SubscriptionLoginPage() {
       if (!data || !data.accessToken) throw new Error(t("loginError"));
       localStorage.setItem("subscriber_token", data.accessToken);
       localStorage.setItem("subscriber", JSON.stringify(data.subscriber));
-      router.push(`${prefix}/dashboard`);
+      const redir = searchParams.get("redirect") || "/dashboard";
+      router.push(redir.startsWith("/") ? `${prefix}${redir}` : `${prefix}/dashboard`);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("loginError"));
     } finally {

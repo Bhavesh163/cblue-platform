@@ -11,14 +11,13 @@ import { NextRequest } from "next/server";
  * pointing to 168.144.39.0; iptables on droplet redirects port 80 → 3002).
  * CF Workers cannot fetch bare IP addresses (error 1003).
  */
-const BACKEND_URL: string = (() => {
-  // 1. Wrangler vars (set in wrangler.jsonc → available on CF Workers)
+
+function getBackendUrl() {
   if (process.env.API_BACKEND_URL) return process.env.API_BACKEND_URL;
-  // 2. Production fallback: droplet via DNS-only A record
-  if (process.env.NODE_ENV === "production") return "http://api-backend.cblue.co.th";
-  // 3. Local dev
-  return "http://localhost:3002";
-})();
+  if (process.env.NODE_ENV === "development") return "http://localhost:3002";
+  return "http://api-backend.cblue.co.th";
+}
+
 
 const SKIP_REQ = new Set([
   "host", "connection", "keep-alive", "transfer-encoding",
@@ -33,7 +32,7 @@ async function handler(
   let target = "";
   try {
     const { path } = await context.params;
-    const url = new URL(`/api/v1/${path.join("/")}`, BACKEND_URL);
+    const url = new URL(`/api/v1/${path.join("/")}`, getBackendUrl());
 
     // Forward query string
     request.nextUrl.searchParams.forEach((v, k) => url.searchParams.set(k, v));
@@ -51,7 +50,7 @@ async function handler(
       headers,
     };
 
-    if (!["GET", "HEAD"].includes(request.method)) {
+    if (!["GET", "HEAD", "OPTIONS"].includes(request.method.toUpperCase())) {
       init.body = request.body;
       init.duplex = "half"; // required for streaming body on edge
     }
@@ -88,7 +87,7 @@ async function handler(
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[api-proxy]", request.method, target, msg);
     return Response.json(
-      { error: "proxy_error", message: msg, backend: BACKEND_URL },
+      { error: "proxy_error", message: msg, backend: getBackendUrl() },
       { status: 502 },
     );
   }

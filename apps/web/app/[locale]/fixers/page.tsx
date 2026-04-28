@@ -191,10 +191,6 @@ export default function FixerProPage() {
                   {locale === "th" ? "ออกจากระบบ" : locale === "zh" ? "退出登录" : "Logout"}
                 </button>
               </div>
-            ) : !loading ? (
-              <Link href={`${prefix}/subscription/login`} className="px-5 py-2.5 bg-white text-purple-700 rounded-xl font-semibold text-sm hover:bg-purple-50 transition shadow">
-                {locale === "th" ? "เข้าสู่ระบบ / สมัคร" : locale === "zh" ? "登录 / 注册" : "Log In / Register"}
-              </Link>
             ) : null}
           </div>
         </div>
@@ -757,6 +753,7 @@ function PartnerNotifications({ locale, notifications }: { locale: string; notif
   );
 }
 
+
 /* ===== PARTNER PROFILE ===== */
 function PartnerProfile({ locale, prefix, partner }: { locale: string; prefix: string; partner: PartnerInfo | null }) {
   const router = useRouter();
@@ -766,163 +763,139 @@ function PartnerProfile({ locale, prefix, partner }: { locale: string; prefix: s
         <div className="text-5xl mb-4">👤</div>
         <h2 className="text-xl font-bold text-gray-900 mb-2">{locale === "th" ? "เข้าสู่ระบบเพื่อดูโปรไฟล์" : locale === "zh" ? "登录查看个人资料" : "Log in to view profile"}</h2>
         <p className="text-sm text-gray-500 mb-6">{locale === "th" ? "เข้าสู่ระบบเพื่อจัดการข้อมูลและการตั้งค่า" : locale === "zh" ? "登录管理您的合作伙伴账户" : "Sign in to manage your partner account"}</p>
-        <Link href={`${prefix}/subscription/login`} className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm rounded-xl transition inline-block">
+        <Link href={`${prefix}/subscription/login?redirect=/fixers`} className="px-6 py-2.5 bg-sky-600 text-white rounded-lg font-bold hover:bg-sky-700 transition inline-block">
           {locale === "th" ? "เข้าสู่ระบบ" : locale === "zh" ? "登录" : "Log In"}
         </Link>
       </div>
     );
   }
 
-  const SKILLS = [
-    { en: "Plumbing", th: "ประปา", zh: "管道" },
-    { en: "Electrical", th: "ไฟฟ้า", zh: "电气" },
-    { en: "AC", th: "แอร์", zh: "空调" },
-    { en: "Interior", th: "ตกแต่งภายใน", zh: "室内" },
-    { en: "Smart Home", th: "สมาร์ทโฮม", zh: "智能家居" },
-  ];
-
   return (
     <div className="space-y-6">
-      {/* Profile Card */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center gap-5 mb-6">
-          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white text-3xl font-bold shadow-lg">{partner.name?.charAt(0) || "P"}</div>
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">{partner.name}</h2>
-            <p className="text-sm text-gray-500">{partner.email}</p>
-            <p className="text-sm text-gray-400">{partner.phone}</p>
-          </div>
-          <div className="ml-auto flex flex-col gap-1.5 items-end">
-            <span className="px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">{locale === "th" ? "ใช้งานอยู่" : locale === "zh" ? "活跃" : "Active"}</span>
-            <span className="px-3 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-700">{locale === "th" ? "ระดับ Corporate" : locale === "zh" ? "企业级" : "Corporate Tier"}</span>
-            <span className="px-3 py-1 rounded-full text-xs font-bold bg-sky-100 text-sky-700">{locale === "th" ? "KYC ✓ ยืนยันแล้ว" : locale === "zh" ? "KYC ✓ 已验证" : "KYC ✓ Verified"}</span>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[
-            { label: locale === "th" ? "งานทั้งหมด" : locale === "zh" ? "总工作" : "Total Jobs", value: stats.completedJobs + stats.activeJobs, icon: "📋" },
-            { label: locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "进行中" : "Active", value: stats.activeJobs, icon: "🔧" },
-            { label: locale === "th" ? "คะแนน" : locale === "zh" ? "评分" : "Rating", value: `${stats.rating} ⭐`, icon: "🏆" },
-            { label: locale === "th" ? "ลูกค้าประจำ" : locale === "zh" ? "回头客" : "Repeat Clients", value: stats.repeatClients, icon: "🤝" },
-          ].map((s) => (
-            <div key={s.label} className="bg-gray-50 rounded-xl p-4 text-center">
-              <span className="text-xl block mb-1">{s.icon}</span>
-              <p className="text-lg font-bold text-gray-900">{s.value}</p>
-              <p className="text-xs text-gray-500">{s.label}</p>
+      {/* Profile Overview Card */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+        <div className="flex flex-col md:flex-row gap-8 items-start">
+          <div className="w-32 h-32 rounded-2xl bg-gradient-to-br from-purple-100 to-indigo-50 flex items-center justify-center shadow-inner flex-shrink-0 relative">
+            <span className="text-5xl">👤</span>
+            <div className="absolute -bottom-2 -right-2 bg-white rounded-full p-1 shadow">
+              <span className="w-8 h-8 flex items-center justify-center bg-green-100 text-green-600 rounded-full text-xs font-bold">✓</span>
             </div>
-          ))}
-        </div>
-      </div>
-
-      
-      {/* AI Assessment & Profile Completion */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">🤖 {locale === "th" ? "การประเมินระดับ CBLUE AI" : locale === "zh" ? "CBLUE AI 等级评估" : "CBLUE AI Tier Assessment"}</h3>
-        <div className="flex flex-col md:flex-row gap-6">
-          <div className="flex-1 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-5 border border-indigo-100">
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <span className="text-sm font-bold text-indigo-600 uppercase tracking-wider">{locale === "th" ? "ระดับปัจจุบัน" : locale === "zh" ? "当前等级" : "Current Tier"}</span>
-                <div className="text-3xl font-extrabold text-gray-900 mt-1">Specialist</div>
-              </div>
-              <div className="text-right">
-                <span className="text-sm text-gray-500">{locale === "th" ? "คะแนนรวม" : locale === "zh" ? "总分" : "Overall Score"}</span>
-                <div className="text-2xl font-bold text-indigo-700">69<span className="text-sm text-gray-400">/100</span></div>
-              </div>
-            </div>
-            
-            <div className="w-full bg-indigo-200/50 rounded-full h-2.5 mb-2">
-              <div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: "69%" }}></div>
-            </div>
-            <p className="text-xs text-indigo-800 flex items-center gap-1.5 font-medium mt-3">
-              <span>⚠️</span> {locale === "th" ? "ยืนยันบางส่วน — เติมโปรไฟล์ให้สมบูรณ์เพื่อเลื่อนระดับ" : locale === "zh" ? "部分验证 — 完善个人资料以提升等级" : "Partially Verified — Complete profile to improve"}
-            </p>
-          </div>
-
-          <div className="flex-[2] grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
-            <div className="flex justify-between items-center"><span className="text-gray-600">{locale === "th" ? "ประสบการณ์" : locale === "zh" ? "经验" : "Experience"}</span><span className="font-medium text-green-600">25/25</span></div>
-            <div className="flex justify-between items-center"><span className="text-gray-600">{locale === "th" ? "ความหลากหลายของทักษะ" : locale === "zh" ? "技能广度" : "Skills Breadth"}</span><span className="font-medium text-green-600">12/15</span></div>
-            <div className="flex justify-between items-center"><span className="text-gray-600">{locale === "th" ? "การยืนยันตัวตน KYC" : locale === "zh" ? "KYC身份验证" : "KYC Verification"}</span><span className="font-medium text-green-600">15/15</span></div>
-            <div className="flex justify-between items-center"><span className="text-gray-600">{locale === "th" ? "ผลงานและหลักฐาน" : locale === "zh" ? "作品集与证据" : "Portfolio & Evidence"}</span><span className="font-medium text-red-500">0/15</span></div>
-            <div className="flex justify-between items-center"><span className="text-gray-600">{locale === "th" ? "ความสมบูรณ์ของโปรไฟล์" : locale === "zh" ? "个人资料完整度" : "Profile Completeness"}</span><span className="font-medium text-amber-500">7/10</span></div>
-            <div className="flex justify-between items-center"><span className="text-gray-600">{locale === "th" ? "ตารางราคา" : locale === "zh" ? "价格表" : "Price List"}</span><span className="font-medium text-amber-500">6/10</span></div>
-            <div className="flex justify-between items-center"><span className="text-gray-600">{locale === "th" ? "การตรวจสอบใบรับรอง" : locale === "zh" ? "凭证验证" : "Credential Verification"}</span><span className="font-medium text-amber-500">4/10</span></div>
-          </div>
-        </div>
-
-        <div className="mt-6 pt-5 border-t border-gray-100">
-          <h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">🔍 {locale === "th" ? "ผลการตรวจสอบ AI" : locale === "zh" ? "AI验证结果" : "AI Verification Results"}</h4>
-          <ul className="text-sm space-y-2 mb-5">
-            <li className="flex items-start gap-2 text-gray-600"><span className="text-red-500 mt-0.5">❌</span> {locale === "th" ? "ไม่ได้ระบุข้อมูลบริษัท" : locale === "zh" ? "未提供公司信息" : "No company info provided"}</li>
-            <li className="flex items-start gap-2 text-gray-600"><span className="text-green-500 mt-0.5">✅</span> {locale === "th" ? "ประสบการณ์สอดคล้องกับประเภทงาน" : locale === "zh" ? "经验与项目类型一致" : "Experience consistent with project type"}</li>
-            <li className="flex items-start gap-2 text-gray-600"><span className="text-red-500 mt-0.5">❌</span> {locale === "th" ? "ไม่ได้ระบุรายละเอียดงาน" : locale === "zh" ? "未提供工作描述" : "No work description provided"}</li>
-            <li className="flex items-start gap-2 text-gray-600"><span className="text-green-500 mt-0.5">✅</span> {locale === "th" ? "เอกสาร KYC ครบถ้วน (หน้า-หลัง)" : locale === "zh" ? "KYC文件齐全（正反面）" : "KYC documents complete (front & back)"}</li>
-          </ul>
-
-          <div className="bg-blue-50 rounded-xl p-4 mb-4">
-            <h4 className="text-sm font-bold text-blue-900 flex items-center gap-2 mb-1">💡 {locale === "th" ? "วิธีเลื่อนระดับ" : locale === "zh" ? "如何升级" : "How to upgrade"}</h4>
-            <p className="text-xs text-blue-800 leading-relaxed">
-              {locale === "th" ? "รับประสบการณ์เพิ่ม อัปโหลดผลงาน อัปเดตใบรับรอง และรักษาคะแนนรีวิวที่ดี — CBLUE AI จะประเมินและเลื่อนระดับคุณอัตโนมัติเมื่อคุณแก้ไขโปรไฟล์หรือสะสมประวัติการทำงาน" : locale === "zh" ? "积累更多经验、上传作品集、更新认证并保持良好的评价 —— 当您编辑个人资料或积累工作历史时，CBLUE AI 将自动重新评估并提升您的等级。" : "Gain more experience, upload portfolio work, update certifications, and maintain good reviews — CBLUE AI will automatically re-evaluate and upgrade your tier when you edit your profile or accumulate work history."}
-            </p>
           </div>
           
-          <div className="bg-gray-50 rounded-xl p-4 flex items-start gap-3">
-            <span className="text-xl">🔒</span>
-            <p className="text-xs text-gray-500 leading-relaxed">
-              <strong className="text-gray-700">{locale === "th" ? "ความปลอดภัย:" : locale === "zh" ? "安全:" : "Security:"}</strong> {locale === "th" ? "ข้อมูลของคุณถูกเข้ารหัสและปกป้องภายใต้ PDPA มีการตรวจสอบใบรับรองเพื่อรักษามาตรฐานของแพลตฟอร์ม" : locale === "zh" ? "您的数据已加密并受PDPA保护。验证凭据以维护平台完整性。" : "Your data is encrypted and protected under PDPA. Credentials are verified to maintain platform integrity."}
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-6 flex gap-3">
-          <Link href={`${prefix}/fixers/register`} className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-center font-bold text-sm rounded-xl transition shadow">
-            {locale === "th" ? "แก้ไขโปรไฟล์" : locale === "zh" ? "编辑个人资料" : "Edit Profile"}
-          </Link>
-        </div>
-      </div>
-
-      {/* Skills & Settings */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">🛠️ {locale === "th" ? "ทักษะและบริการ" : locale === "zh" ? "技能与服务" : "Skills & Services"}</h3>
-          <div className="flex flex-wrap gap-2">
-            {SKILLS.map((skill) => (
-              <span key={skill.en} className="px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg text-xs font-semibold border border-purple-200">{locale === "th" ? skill.th : locale === "zh" ? skill.zh : skill.en}</span>
-            ))}
-          </div>
-          <p className="text-xs text-gray-400 mt-3">{locale === "th" ? "ติดต่อแอดมินเพื่อเพิ่มทักษะ" : locale === "zh" ? "联系管理员添加更多技能" : "Contact admin to add more skills"}</p>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">⚙️ {locale === "th" ? "การตั้งค่า" : locale === "zh" ? "设置" : "Settings"}</h3>
-          <div className="space-y-3">
-            {[
-              { label: locale === "th" ? "แก้ไขโปรไฟล์" : locale === "zh" ? "编辑资料" : "Edit Profile", icon: "✏️" },
-              { label: locale === "th" ? "เปลี่ยนรหัสผ่าน" : locale === "zh" ? "修改密码" : "Change Password", icon: "🔒" },
-              { label: locale === "th" ? "ปฏิทินว่าง" : locale === "zh" ? "空闲日历" : "Availability Calendar", icon: "📅" },
-              { label: locale === "th" ? "รัศมีพื้นที่ให้บริการ" : locale === "zh" ? "服务区域半径" : "Service Area Radius", icon: "📍" },
-            ].map((item) => (
-              <button key={item.label} className="flex items-center gap-3 p-3 rounded-xl border border-gray-200 hover:border-purple-300 hover:bg-purple-50/50 transition text-left w-full">
-                <span className="text-lg">{item.icon}</span>
-                <span className="font-medium text-gray-900 text-sm">{item.label}</span>
+          <div className="flex-1 w-full">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">{partner.name}</h2>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-sm font-semibold text-purple-700 bg-purple-100 px-2 py-0.5 rounded">Specialist Tier</span>
+                  <span className="text-xs text-gray-500 flex items-center gap-1"><span className="text-green-500">✓</span> {locale === "th" ? "ยืนยันตัวตนแล้ว (KYC)" : "Verified (KYC)"}</span>
+                </div>
+              </div>
+              <button className="px-5 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition text-sm font-semibold shadow-sm">
+                {locale === "th" ? "แก้ไขโปรไฟล์" : locale === "zh" ? "编辑资料" : "Edit Profile"}
               </button>
-            ))}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-8 gap-y-4 pt-4 border-t border-gray-100">
+              <div>
+                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">{locale === "th" ? "อีเมล" : "Email"}</h3>
+                <p className="text-gray-900 font-medium text-sm truncate">{partner.email}</p>
+              </div>
+              <div>
+                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">{locale === "th" ? "เบอร์โทรศัพท์" : "Phone"}</h3>
+                <p className="text-gray-900 font-medium text-sm">{partner.phone || "-"}</p>
+              </div>
+              <div>
+                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">{locale === "th" ? "เข้าร่วมเมื่อ" : "Member Since"}</h3>
+                <p className="text-gray-900 font-medium text-sm">{new Date().toLocaleDateString()}</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Logout */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <button
-          onClick={() => { localStorage.removeItem("subscriber"); localStorage.removeItem("subscriber_token"); localStorage.removeItem("pdpa_consent_partner"); router.push(prefix); }}
-          className="w-full py-3 bg-red-50 hover:bg-red-100 text-red-700 font-bold text-sm rounded-xl border border-red-200 transition"
-        >
-          🚪 {locale === "th" ? "ออกจากระบบ" : locale === "zh" ? "退出登录" : "Logout"}
-        </button>
+      {/* Enterprise AI Assessment Card */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="px-6 py-5 border-b border-gray-100 bg-gradient-to-r from-slate-50 to-white flex justify-between items-center">
+          <h2 className="font-bold text-gray-900 flex items-center gap-2">🤖 CBLUE AI Tier Assessment</h2>
+          <span className="text-xs text-gray-500 px-2 py-1 bg-white rounded border border-gray-200">Overall Score: <strong className="text-gray-900">69/100</strong></span>
+        </div>
+        
+        <div className="p-6">
+          <div className="flex items-center gap-3 mb-6 p-4 bg-amber-50 rounded-xl border border-amber-100">
+            <span className="text-2xl">⚠️</span>
+            <div className="flex-1">
+              <h4 className="font-bold text-amber-900 text-sm">Partially Verified — Complete profile to improve</h4>
+              <p className="text-xs text-amber-700 mt-1">
+                Gain more experience, upload portfolio work, update certifications, and maintain good reviews — CBLUE AI will automatically re-evaluate and upgrade your tier.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Evaluation Breakdown */}
+            <div>
+              <h3 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wider">Evaluation Breakdown</h3>
+              <div className="space-y-4">
+                {[
+                  { label: "Experience", score: 25, max: 25, color: "bg-green-500" },
+                  { label: "Skills Breadth", score: 12, max: 15, color: "bg-green-500" },
+                  { label: "KYC Verification", score: 15, max: 15, color: "bg-green-500" },
+                  { label: "Portfolio & Evidence", score: 0, max: 15, color: "bg-gray-200" },
+                  { label: "Profile Completeness", score: 7, max: 10, color: "bg-amber-400" },
+                  { label: "Price List", score: 6, max: 10, color: "bg-amber-400" },
+                  { label: "Credential Verification", score: 4, max: 10, color: "bg-red-400" },
+                ].map(item => (
+                  <div key={item.label}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="font-medium text-gray-700">{item.label}</span>
+                      <span className="text-gray-500 font-bold">{item.score}/{item.max}</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                      <div className={`h-full ${item.color}`} style={{ width: `${(item.score / item.max) * 100}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* AI Verification Results */}
+            <div>
+              <h3 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wider">🔍 AI Verification Results</h3>
+              <ul className="space-y-3 text-sm">
+                <li className="flex items-start gap-2 text-gray-600">
+                  <span className="text-red-500 mt-0.5">❌</span>
+                  <span>No company info provided</span>
+                </li>
+                <li className="flex items-start gap-2 text-gray-600">
+                  <span className="text-green-500 mt-0.5">✅</span>
+                  <span>Experience consistent with project type</span>
+                </li>
+                <li className="flex items-start gap-2 text-gray-600">
+                  <span className="text-red-500 mt-0.5">❌</span>
+                  <span>No work description provided</span>
+                </li>
+                <li className="flex items-start gap-2 text-gray-600">
+                  <span className="text-green-500 mt-0.5">✅</span>
+                  <span>KYC documents complete (front & back)</span>
+                </li>
+              </ul>
+
+              <div className="mt-8 p-4 bg-gray-50 rounded-xl text-xs text-gray-500 border border-gray-100">
+                <p className="flex items-center gap-2 font-medium text-gray-700 mb-1">
+                  <span className="text-lg">🔒</span> Security Notice
+                </p>
+                Your data is encrypted and protected under PDPA. Credentials are verified to maintain platform integrity.
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
+
+
 
 
 /* ===== PARTNER PROPERTIES ===== */
@@ -963,3 +936,287 @@ function PartnerProperties({ locale, prefix, properties }: { locale: string; pre
     </div>
   );
 }
+
+
+
+/* ===== DASHBOARD LOGGED IN STATE ===== */
+function PartnerDashboard({ locale, partner, prefix, onLogout }: { locale: string; partner: any; prefix: string; onLogout: () => void }) {
+  return (
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 relative z-10 pb-12 -mt-6">
+      
+      {/* Top Navigation Pills */}
+      <div className="flex gap-2 bg-white rounded-xl shadow-sm border border-gray-200 p-2 mb-6 overflow-x-auto no-scrollbar">
+        {[
+          { icon: "📊", label: "Overview", count: null, active: true },
+          { icon: "🔧", label: "Active Jobs", count: 3, active: false },
+          { icon: "📋", label: "Requests", count: 3, active: false },
+          { icon: "🏢", label: "Properties", count: null, active: false },
+          { icon: "📜", label: "History", count: null, active: false },
+          { icon: "💬", label: "Chat", count: 3, active: false },
+          { icon: "🔔", label: "Alerts", count: 3, active: false },
+          { icon: "👤", label: "Profile", count: null, active: false },
+        ].map((tab, i) => (
+          <button key={i} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition whitespace-nowrap ${tab.active ? 'bg-purple-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'}`}>
+            <span>{tab.icon}</span> {tab.label}
+            {tab.count && <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${tab.active ? 'bg-white/30 text-white' : 'bg-red-100 text-red-700'}`}>{tab.count}</span>}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* LEFT COLUMN: Profile & Stats */}
+        <div className="space-y-6">
+          
+          {/* Profile Card */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-purple-50 rounded-bl-full -z-0 opacity-50"></div>
+            <div className="relative z-10 flex items-center gap-4 mb-6">
+              <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 text-2xl font-bold shadow-inner">
+                {partner.name.charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">{partner.name}</h2>
+                <p className="text-sm text-gray-500">{partner.email} &middot; {partner.phone || "0819852846"}</p>
+                <div className="flex gap-2 mt-1">
+                  <span className="text-xs bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded">Active</span>
+                  <span className="text-xs bg-purple-100 text-purple-700 font-bold px-2 py-0.5 rounded">Corporate Tier</span>
+                  <span className="text-xs bg-sky-100 text-sky-700 font-bold px-2 py-0.5 rounded">KYC ✓</span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
+                <p className="text-xs text-gray-500 font-medium mb-1">Active Jobs</p>
+                <p className="text-lg font-bold text-gray-900">3</p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
+                <p className="text-xs text-gray-500 font-medium mb-1">Completed</p>
+                <p className="text-lg font-bold text-gray-900">47</p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
+                <p className="text-xs text-gray-500 font-medium mb-1">Rating</p>
+                <p className="text-lg font-bold text-gray-900 text-amber-500">4.8 ⭐</p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
+                <p className="text-xs text-gray-500 font-medium mb-1">Response</p>
+                <p className="text-lg font-bold text-green-600">96%</p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
+                <p className="text-xs text-gray-500 font-medium mb-1">Repeat Clients</p>
+                <p className="text-lg font-bold text-gray-900">12</p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
+                <p className="text-xs text-gray-500 font-medium mb-1">Monthly Earn</p>
+                <p className="text-lg font-bold text-sky-600">฿18,500</p>
+              </div>
+            </div>
+            <button onClick={onLogout} className="w-full py-2 bg-gray-100 text-gray-600 hover:bg-gray-200 text-sm font-bold rounded-lg transition">
+              {locale === "th" ? "ออกจากระบบ" : locale === "zh" ? "退出登录" : "Logout"}
+            </button>
+          </div>
+
+          {/* Monthly Earnings Chart (Simplified UI) */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2">💰 Monthly Earnings</h3>
+              <span className="text-sky-600 font-bold text-sm">฿18,500 (Apr)</span>
+            </div>
+            <div className="p-5 flex items-end justify-between h-32">
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-8 bg-sky-200 rounded-t-sm h-12 relative group"><span className="absolute -top-6 text-xs text-gray-400 font-medium hidden group-hover:block whitespace-nowrap bg-white px-1 shadow border rounded">฿12.5k</span></div>
+                <span className="text-xs font-bold text-gray-500">Jan</span>
+              </div>
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-8 bg-sky-300 rounded-t-sm h-16 relative group"><span className="absolute -top-6 text-xs text-gray-400 font-medium hidden group-hover:block whitespace-nowrap bg-white px-1 shadow border rounded">฿15.2k</span></div>
+                <span className="text-xs font-bold text-gray-500">Feb</span>
+              </div>
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-8 bg-sky-400 rounded-t-sm h-20 relative group"><span className="absolute -top-6 text-xs text-gray-400 font-medium hidden group-hover:block whitespace-nowrap bg-white px-1 shadow border rounded">฿18.8k</span></div>
+                <span className="text-xs font-bold text-gray-500">Mar</span>
+              </div>
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-8 bg-sky-500 rounded-t-sm h-16 relative group"><span className="absolute -top-6 text-xs text-gray-400 font-medium hidden group-hover:block whitespace-nowrap bg-white px-1 shadow border rounded">฿18.5k</span></div>
+                <span className="text-xs font-bold text-gray-900">Apr</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Recent Alerts */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2">🔔 Recent Alerts</h3>
+            </div>
+            <div className="p-4 space-y-4">
+              <div className="flex gap-3">
+                <span className="w-2 h-2 mt-1.5 rounded-full bg-purple-500 flex-shrink-0"></span>
+                <div>
+                  <p className="text-sm text-gray-800 font-medium">Customer #A2X sent a new message</p>
+                  <p className="text-xs text-gray-400 mt-1">2m ago</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <span className="w-2 h-2 mt-1.5 rounded-full bg-amber-500 flex-shrink-0"></span>
+                <div>
+                  <p className="text-sm text-gray-800">You have 3 new job requests</p>
+                  <p className="text-xs text-gray-400 mt-1">15m ago</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <span className="w-2 h-2 mt-1.5 rounded-full bg-green-500 flex-shrink-0"></span>
+                <div>
+                  <p className="text-sm text-gray-800">Payment of ฿3,200 received</p>
+                  <p className="text-xs text-gray-400 mt-1">1h ago</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN: Jobs & Requests */}
+        <div className="lg:col-span-2 space-y-6">
+          
+          {/* Active Jobs */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+              <h2 className="font-bold text-gray-900 flex items-center gap-2">🔧 Active Jobs</h2>
+              <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full">3</span>
+            </div>
+            <div className="divide-y divide-gray-50">
+              
+              <div className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer border-l-4 border-sky-500">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center text-2xl shadow-sm">🔧</div>
+                  <div>
+                    <h3 className="font-bold text-gray-900">Plumbing Repair <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">Standard</span></h3>
+                    <p className="text-sm text-gray-500 mt-1">Customer #A2X &middot; 2026-04-15</p>
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-2">
+                  <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">In Progress</span>
+                  <span className="font-bold text-gray-900">฿2,500</span>
+                </div>
+              </div>
+
+              <div className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer border-l-4 border-emerald-500">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center text-2xl shadow-sm">🔧</div>
+                  <div>
+                    <h3 className="font-bold text-gray-900">AC Maintenance <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">Corporate</span></h3>
+                    <p className="text-sm text-gray-500 mt-1">Customer #B7K &middot; 2026-04-16</p>
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-2">
+                  <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full">Confirmed</span>
+                  <span className="font-bold text-gray-900">฿4,000</span>
+                </div>
+              </div>
+
+              <div className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer border-l-4 border-amber-500">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center text-2xl shadow-sm">🔧</div>
+                  <div>
+                    <h3 className="font-bold text-gray-900">Electrical Wiring <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">Economy</span></h3>
+                    <p className="text-sm text-gray-500 mt-1">Customer #C4M &middot; 2026-04-17</p>
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-2">
+                  <span className="px-3 py-1 bg-amber-100 text-amber-700 text-xs font-bold rounded-full">Pending</span>
+                  <span className="font-bold text-gray-900">฿1,800</span>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          {/* Incoming Requests */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-amber-50/30">
+              <h2 className="font-bold text-amber-900 flex items-center gap-2">📋 Incoming Requests</h2>
+              <span className="bg-amber-100 text-amber-700 text-xs font-bold px-2.5 py-1 rounded-full animate-pulse">3</span>
+            </div>
+            <div className="divide-y divide-gray-50">
+              
+              <div className="p-6 hover:bg-gray-50 transition cursor-pointer">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-2xl shadow-sm">📋</div>
+                    <div>
+                      <h3 className="font-bold text-gray-900">Interior Design <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">Specialist</span></h3>
+                      <p className="text-sm text-gray-500 mt-1">Customer #D9P &middot; 2026-04-18</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-500">Budget</p>
+                    <p className="font-bold text-gray-900">฿15,000</p>
+                  </div>
+                </div>
+                <div className="flex gap-3 justify-end border-t border-gray-100 pt-4">
+                  <button className="px-6 py-2 bg-gray-100 text-gray-600 text-sm font-bold rounded-lg hover:bg-gray-200 transition">Decline</button>
+                  <button className="px-6 py-2 bg-purple-600 text-white text-sm font-bold rounded-lg hover:bg-purple-700 transition">Accept</button>
+                </div>
+              </div>
+
+              <div className="p-6 hover:bg-gray-50 transition cursor-pointer">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-2xl shadow-sm relative">
+                      📋
+                      <span className="absolute -top-2 -right-2 px-1.5 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full">Urgent</span>
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-gray-900">Landscaping <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">Expert</span></h3>
+                      <p className="text-sm text-gray-500 mt-1">Customer #E3R &middot; 2026-04-19</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-500">Budget</p>
+                    <p className="font-bold text-gray-900">฿25,000</p>
+                  </div>
+                </div>
+                <div className="flex gap-3 justify-end border-t border-gray-100 pt-4">
+                  <button className="px-6 py-2 bg-gray-100 text-gray-600 text-sm font-bold rounded-lg hover:bg-gray-200 transition">Decline</button>
+                  <button className="px-6 py-2 bg-purple-600 text-white text-sm font-bold rounded-lg hover:bg-purple-700 transition">Accept</button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          {/* Recent Chats */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100">
+              <h2 className="font-bold text-gray-900 flex items-center gap-2">💬 Recent Chats</h2>
+            </div>
+            <div className="divide-y divide-gray-50">
+              {[
+                { id: "A2X", svc: "Plumbing", msg: "Thank you, waiting for you", time: "2m ago", unread: 2 },
+                { id: "B7K", svc: "AC", msg: "Which day works for you?", time: "30m ago", unread: 1 },
+                { id: "C4M", svc: "Electrical", msg: "Job is done, thanks!", time: "2h ago", unread: 0 },
+              ].map(c => (
+                <div key={c.id} className={`p-4 flex items-center gap-4 cursor-pointer transition ${c.unread ? 'bg-purple-50/30 hover:bg-purple-50' : 'hover:bg-gray-50'}`}>
+                  <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center font-bold text-gray-600">
+                    {c.id}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex justify-between mb-1">
+                      <p className="font-bold text-gray-900 text-sm">Customer #{c.id} <span className="text-gray-400 font-normal">&middot; {c.svc}</span></p>
+                      <span className="text-xs text-gray-400">{c.time}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <p className={`text-sm ${c.unread ? 'font-semibold text-gray-900' : 'text-gray-500'}`}>{c.msg}</p>
+                      {c.unread > 0 && <span className="w-5 h-5 rounded-full bg-purple-600 text-white text-[10px] font-bold flex items-center justify-center">{c.unread}</span>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
