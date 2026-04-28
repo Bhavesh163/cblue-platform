@@ -29,7 +29,7 @@ const stats = {
 
 
 
-const DEMO_CHATS: any[] = [];
+const chats: any[] = [];
 
 const notifications: any[] = [];
 
@@ -99,7 +99,7 @@ export default function FixerProPage() {
             const ordersRes = await fetch("/api/v1/orders/fixer", { headers: { Authorization: `Bearer ${token}` } });
             if (ordersRes.ok && isMounted) setOrders(await ordersRes.json());
 
-        } else {
+        } else if (res.status === 401 || res.status === 403) {
           localStorage.removeItem("subscriber_token");
           localStorage.removeItem("subscriber");
         }
@@ -115,8 +115,9 @@ export default function FixerProPage() {
 
   
   const mappedOrders = orders.map(o => ({
-    id: o.id,
+        id: o.id,
     customer: o.user?.name || "Customer",
+    type: o.orderType?.toLowerCase() || "household",
     phone: o.user?.phone || "",
     service: (o.serviceCategory || "").replace(/_/g, " "),
     serviceTh: (o.serviceCategory || "").replace(/_/g, " "),
@@ -127,6 +128,11 @@ export default function FixerProPage() {
     progress: o.status === 'COMPLETED' ? 100 : o.status === 'IN_PROGRESS' ? 50 : 20,
     fee: o.estimatedPrice ? `฿${o.estimatedPrice}` : "TBD"
   }));
+
+  
+  const properties = mappedOrders.filter(o => o.type === 'property');
+  const chats: any[] = [];
+  const notifications: any[] = [];
 
   const activeJobs = mappedOrders.filter(o => !['COMPLETED', 'CANCELLED', 'CREATED', 'PENDING'].includes(o.status));
   const completedJobs = mappedOrders.filter(o => o.status === 'COMPLETED');
@@ -251,13 +257,13 @@ export default function FixerProPage() {
         </div>
 
         {/* Tab Content */}
-        {activeTab === "overview" && <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={incomingJobs} completedJobs={completedJobs} earnings={[]} stats={{activeJobs: 0, completedJobs: 0, monthlyEarnings: "฿0", rating: 0, responseRate: "0%", repeatClients: 0}} notifications={[]} />}
+        {activeTab === "overview" && <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={incomingJobs} completedJobs={completedJobs} earnings={[]} stats={stats} notifications={notifications} />}
         {activeTab === "jobs" && <PartnerJobs locale={locale} activeJobs={activeJobs} />}
         {activeTab === "requests" && <PartnerRequests locale={locale} incomingJobs={incomingJobs} />}
-        {activeTab === "properties" && <PartnerProperties locale={locale} prefix={prefix} />}
+        {activeTab === "properties" && <PartnerProperties locale={locale} prefix={prefix} properties={properties} />}
         {activeTab === "history" && <PartnerHistory locale={locale} completedJobs={completedJobs} />}
-        {activeTab === "chat" && <PartnerChat locale={locale} />}
-        {activeTab === "notifications" && <PartnerNotifications locale={locale} />}
+        {activeTab === "chat" && <PartnerChats locale={locale} chats={chats} />}
+        {activeTab === "notifications" && <PartnerNotifications locale={locale} notifications={notifications} />}
         {activeTab === "profile" && <PartnerProfile locale={locale} prefix={prefix} partner={partner} />}
 
                   </>
@@ -560,7 +566,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
           <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">💬 {locale === "th" ? "แชทล่าสุด" : locale === "zh" ? "最近聊天" : "Recent Chats"}</h3>
           <div className="space-y-2">
-            {DEMO_CHATS.map((c) => (
+            {chats && chats.length > 0 ? chats.map((c: any) => (
               <div key={c.id} className={`flex items-center gap-3 p-3 rounded-lg ${c.unread > 0 ? "bg-purple-50 border border-purple-100" : "bg-gray-50"}`}>
                 <div className="relative">
                   <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600">{c.name.slice(-3)}</div>
@@ -575,7 +581,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
                   {c.unread > 0 && <span className="block mt-0.5 ml-auto w-5 h-5 bg-purple-600 text-white text-[10px] rounded-full flex items-center justify-center font-bold">{c.unread}</span>}
                 </div>
               </div>
-            ))}
+            )) : <p className="text-sm text-gray-500 py-4 text-center">{locale === "th" ? "ไม่มีแชทล่าสุด" : locale === "zh" ? "没有最近的聊天" : "No recent chats"}</p>}
           </div>
         </div>
       </div>
@@ -691,40 +697,47 @@ function PartnerHistory({ locale, completedJobs }: { locale: string; completedJo
 }
 
 /* ===== PARTNER CHAT ===== */
-function PartnerChat({ locale }: { locale: string }) {
+
+/* ===== PARTNER CHATS ===== */
+function PartnerChats({ locale, chats }: { locale: string; chats: any[] }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100">
-        <h2 className="font-bold text-gray-900 flex items-center gap-2">💬 {locale === "th" ? "แชทกับลูกค้า" : locale === "zh" ? "与客户聊天" : "Chat with Customers"}</h2>
-        <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "แชทแบบไม่เปิดเผยตัวตนเพื่อความปลอดภัย" : locale === "zh" ? "匿名聊天保障安全" : "Anonymous chat for safety"}</p>
+        <h2 className="font-bold text-gray-900 flex items-center gap-2">💬 {locale === "th" ? "แชท" : locale === "zh" ? "聊天" : "Chats"}</h2>
       </div>
       <div className="divide-y divide-gray-50">
-        {DEMO_CHATS.map((c) => (
+        {chats && chats.length > 0 ? chats.map((c: any) => (
           <div key={c.id} className={`flex items-center gap-4 px-6 py-4 cursor-pointer transition ${c.unread > 0 ? "bg-purple-50/50 hover:bg-purple-50" : "hover:bg-gray-50"}`}>
             <div className="relative">
-              <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-sm font-bold text-gray-600">{c.name.slice(-3)}</div>
+              <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-sm font-bold text-gray-600">{c.name.slice(-4)}</div>
               {c.online && <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-400 rounded-full border-2 border-white" />}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-bold text-gray-900">{c.name}</p>
-                <span className="text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-500">{c.service}</span>
+              <div className="flex justify-between items-baseline mb-1">
+                <div className="flex items-center gap-2">
+                  <p className="font-bold text-gray-900 truncate">{c.name}</p>
+                  <span className="text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-500">{c.service}</span>
+                </div>
+                <span className="text-xs text-gray-400 whitespace-nowrap ml-2">{locale === "th" ? c.timeTh : locale === "zh" ? c.timeZh : c.time}</span>
               </div>
-              <p className="text-sm text-gray-500 truncate mt-0.5">{locale === "th" ? c.lastMsgTh : locale === "zh" ? c.lastMsgZh : c.lastMsg}</p>
-            </div>
-            <div className="text-right flex-shrink-0">
-              <p className="text-xs text-gray-400">{locale === "th" ? c.timeTh : locale === "zh" ? c.timeZh : c.time}</p>
-              {c.unread > 0 && <span className="inline-flex items-center justify-center mt-1 w-5 h-5 bg-purple-600 text-white text-[10px] font-bold rounded-full">{c.unread}</span>}
+              <div className="flex justify-between items-center mt-1">
+                <p className={`text-sm truncate ${c.unread > 0 ? "font-semibold text-gray-900" : "text-gray-500"}`}>
+                  {locale === "th" ? c.lastMsgTh : locale === "zh" ? c.lastMsgZh : c.lastMsg}
+                </p>
+                {c.unread > 0 && <span className="flex-shrink-0 ml-2 w-5 h-5 bg-purple-600 text-white text-[10px] rounded-full flex items-center justify-center font-bold">{c.unread}</span>}
+              </div>
             </div>
           </div>
-        ))}
+        )) : (
+          <p className="text-sm text-gray-500 p-6 text-center">{locale === "th" ? "ไม่มีแชทล่าสุด" : locale === "zh" ? "没有最近的聊天" : "No recent chats"}</p>
+        )}
       </div>
     </div>
   );
 }
 
 /* ===== PARTNER NOTIFICATIONS ===== */
-function PartnerNotifications({ locale }: { locale: string }) {
+function PartnerNotifications({ locale, notifications }: { locale: string; notifications: any[] }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100">
@@ -911,181 +924,41 @@ function PartnerProfile({ locale, prefix, partner }: { locale: string; prefix: s
   );
 }
 
+
 /* ===== PARTNER PROPERTIES ===== */
-const DEMO_PROPERTY_LISTINGS: any[] = [];
-
-const PROP_STATUS: Record<string, string> = { active: "bg-green-100 text-green-700", pending: "bg-yellow-100 text-yellow-700", sold: "bg-gray-100 text-gray-600" };
-
-function PartnerProperties({ locale, prefix }: { locale: string; prefix: string }) {
-  const [listings, setListings] = useState(DEMO_PROPERTY_LISTINGS);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ title: "", description: "", price: "", status: "", images: [] as string[] });
-
-  const startEdit = (p: typeof DEMO_PROPERTY_LISTINGS[0]) => {
-    setEditingId(p.id);
-    setEditForm({
-      title: locale === "th" ? p.titleTh : locale === "zh" ? p.titleZh : p.title,
-      description: locale === "th" ? p.descriptionTh : locale === "zh" ? p.descriptionZh : p.description,
-      price: p.price,
-      status: p.status,
-      images: [...p.images],
-    });
-  };
-
-  const saveEdit = () => {
-    setListings(listings.map(l => l.id === editingId ? {
-      ...l,
-      ...(locale === "th" ? { titleTh: editForm.title } : locale === "zh" ? { titleZh: editForm.title } : { title: editForm.title }),
-      ...(locale === "th" ? { descriptionTh: editForm.description } : locale === "zh" ? { descriptionZh: editForm.description } : { description: editForm.description }),
-      price: editForm.price,
-      status: editForm.status as "active" | "pending" | "sold",
-      images: editForm.images,
-    } : l));
-    setEditingId(null);
-  };
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const newImages = Array.from(e.target.files).map(f => URL.createObjectURL(f));
-      setEditForm(prev => ({ ...prev, images: [...prev.images, ...newImages].slice(0, 10) }));
-    }
-  };
-
-  const removeImage = (idx: number) => {
-    setEditForm(prev => ({ ...prev, images: prev.images.filter((_, i) => i !== idx) }));
-  };
-
+function PartnerProperties({ locale, prefix, properties }: { locale: string; prefix: string; properties: any[] }) {
   return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-          <div>
-            <h2 className="font-bold text-gray-900 flex items-center gap-2">🏢 {locale === "th" ? "รายการอสังหาริมทรัพย์ของฉัน" : locale === "zh" ? "我的房产列表" : "My Property Listings"}</h2>
-            <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "จัดการรายการประกาศอสังหาริมทรัพย์ของคุณ" : locale === "zh" ? "管理您的房产发布" : "Manage your property listings"}</p>
-          </div>
-          <Link href={`${prefix}/properties/register`} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-semibold transition shadow-sm">
-            + {locale === "th" ? "ลงประกาศใหม่" : locale === "zh" ? "添加新列表" : "Add Listing"}
-          </Link>
-        </div>
-
-        {listings.length === 0 ? (
-          <div className="p-10 text-center">
-            <div className="text-5xl mb-4">🏢</div>
-            <p className="text-gray-500">{locale === "th" ? "ยังไม่มีรายการอสังหาริมทรัพย์" : locale === "zh" ? "暂无房产列表" : "No property listings yet"}</p>
-            <Link href={`${prefix}/properties/register`} className="mt-4 inline-block px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-semibold transition">
-              {locale === "th" ? "ลงประกาศแรก" : locale === "zh" ? "发布第一个列表" : "Create Your First Listing"}
-            </Link>
-          </div>
-        ) : (
-          <div className="divide-y divide-gray-50">
-            {listings.map((p) => (
-              <div key={p.id} className="px-6 py-4 hover:bg-gray-50/50 transition">
-                {editingId === p.id ? (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <input value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})} placeholder={locale === "th" ? "ชื่อรายการ" : locale === "zh" ? "标题" : "Title"} className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-purple-500 outline-none" />
-                      <input value={editForm.price} onChange={e => setEditForm({...editForm, price: e.target.value})} placeholder={locale === "th" ? "ราคา" : locale === "zh" ? "价格" : "Price"} className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-purple-500 outline-none" />
-                      <select value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-purple-500 outline-none">
-                        <option value="active">{locale === "th" ? "เผยแพร่" : locale === "zh" ? "已发布" : "Active"}</option>
-                        <option value="pending">{locale === "th" ? "รอตรวจสอบ" : locale === "zh" ? "待审核" : "Pending"}</option>
-                        <option value="sold">{locale === "th" ? "ขายแล้ว" : locale === "zh" ? "已售出" : "Sold"}</option>
-                      </select>
-                    </div>
-                    {/* Description */}
-                    <textarea
-                      value={editForm.description}
-                      onChange={e => setEditForm({...editForm, description: e.target.value})}
-                      placeholder={locale === "th" ? "รายละเอียดอสังหาริมทรัพย์..." : locale === "zh" ? "房产描述..." : "Property description..."}
-                      rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-purple-500 outline-none resize-none"
-                    />
-                    {/* Image Management */}
-                    <div>
-                      <p className="text-xs font-semibold text-gray-700 mb-2">📷 {locale === "th" ? "รูปภาพ" : locale === "zh" ? "图片" : "Images"} ({editForm.images.length}/10)</p>
-                      <div className="flex flex-wrap gap-2 mb-2">
-                        {editForm.images.map((img, idx) => (
-                          <div key={idx} className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-200 group">
-                            <Image src={img} alt={`img-${idx}`} fill className="object-cover" sizes="80px" />
-                            <button
-                              onClick={() => removeImage(idx)}
-                              className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
-                            >
-                              <span className="text-white text-lg">✕</span>
-                            </button>
-                          </div>
-                        ))}
-                        {editForm.images.length < 10 && (
-                          <label className="w-20 h-20 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center cursor-pointer hover:border-purple-400 hover:bg-purple-50/50 transition">
-                            <span className="text-2xl text-gray-400">+</span>
-                            <input type="file" accept="image/*" multiple onChange={handleImageUpload} className="hidden" />
-                          </label>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <button onClick={saveEdit} className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-semibold hover:bg-purple-700 transition">{locale === "th" ? "บันทึก" : locale === "zh" ? "保存" : "Save"}</button>
-                      <button onClick={() => setEditingId(null)} className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-300 transition">{locale === "th" ? "ยกเลิก" : locale === "zh" ? "取消" : "Cancel"}</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-start gap-4">
-                    {/* Thumbnail */}
-                    {p.images.length > 0 && (
-                      <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200 flex-shrink-0">
-                        <Image src={p.images[0] ?? ""} alt={p.title} fill className="object-cover" sizes="64px" />
-                        {p.images.length > 1 && (
-                          <span className="absolute bottom-0 right-0 bg-black/60 text-white text-[9px] px-1 rounded-tl">+{p.images.length - 1}</span>
-                        )}
-                      </div>
-                    )}
-                    {p.images.length === 0 && (
-                      <div className="w-16 h-16 rounded-lg bg-green-100 flex items-center justify-center text-2xl flex-shrink-0">🏢</div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-bold text-gray-900 text-sm">{locale === "th" ? p.titleTh : locale === "zh" ? p.titleZh : p.title}</h3>
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${PROP_STATUS[p.status] || ""}`}>
-                          {p.status === "active" ? (locale === "th" ? "เผยแพร่" : locale === "zh" ? "已发布" : "Active") : p.status === "pending" ? (locale === "th" ? "รอตรวจสอบ" : locale === "zh" ? "待审核" : "Pending") : (locale === "th" ? "ขายแล้ว" : locale === "zh" ? "已售出" : "Sold")}
-                        </span>
-                        <span className="text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-500">{p.type}</span>
-                        <span className="text-xs bg-blue-50 px-2 py-0.5 rounded text-blue-600">{p.listingType}</span>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? p.descriptionTh : locale === "zh" ? p.descriptionZh : p.description}</p>
-                      <div className="flex items-center gap-4 text-xs text-gray-500 mt-1">
-                        <span>{p.province}</span>
-                        <span>📷 {p.images.length} {locale === "th" ? "รูป" : locale === "zh" ? "张照片" : "photos"}</span>
-                        <span>👁 {p.views} {locale === "th" ? "ชม" : locale === "zh" ? "次浏览" : "views"}</span>
-                        <span>💬 {p.inquiries} {locale === "th" ? "สอบถาม" : locale === "zh" ? "次咨询" : "inquiries"}</span>
-                        <span>{locale === "th" ? "อัปเดต" : locale === "zh" ? "更新" : "Updated"}: {p.updatedAt}</span>
-                      </div>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <p className="font-bold text-green-700 text-sm">{p.price}</p>
-                      <div className="flex gap-1 mt-1">
-                        <button onClick={() => startEdit(p)} className="px-3 py-1 text-xs bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 font-semibold transition">
-                          ✏️ {locale === "th" ? "แก้ไข" : locale === "zh" ? "编辑" : "Edit"}
-                        </button>
-                        <button onClick={() => setListings(listings.filter(l => l.id !== p.id))} className="px-3 py-1 text-xs bg-red-100 text-red-700 rounded-lg hover:bg-red-200 font-semibold transition">
-                          🗑️ {locale === "th" ? "ลบ" : locale === "zh" ? "删除" : "Delete"}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-100">
+        <h2 className="font-bold text-gray-900 flex items-center gap-2">🏢 {locale === "th" ? "อสังหาริมทรัพย์ของคุณ" : locale === "zh" ? "您的房产" : "Your Properties"}</h2>
       </div>
-
-      {/* Tip */}
-      <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-sm text-green-800">
-        <strong>💡 {locale === "th" ? "เคล็ดลับ:" : locale === "zh" ? "提示：" : "Tip:"}</strong>{" "}
-        {locale === "th"
-          ? "คลิก \"แก้ไข\" เพื่ออัปเดตชื่อ ราคา รายละเอียด รูปภาพ หรือสถานะของรายการ หรือคลิก \"ลงประกาศใหม่\" เพื่อเพิ่มอสังหาริมทรัพย์"
-          : locale === "zh"
-            ? "点击「编辑」更新标题、价格、描述、图片或状态，或点击「添加新列表」发布新房产"
-            : "Click \"Edit\" to update title, price, description, images or status. Click \"Add Listing\" to register a new property."}
+      <div className="divide-y divide-gray-50">
+        {properties && properties.length > 0 ? properties.map((p: any) => (
+          <div key={p.id} className="p-6 hover:bg-gray-50/50 transition">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-16 h-16 rounded-xl bg-teal-100 flex items-center justify-center text-3xl">🏢</div>
+              <div className="flex-1">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="font-bold text-gray-900">{locale === "th" ? p.serviceTh : locale === "zh" ? p.serviceZh : p.service}</h3>
+                    <p className="text-sm text-gray-500 mt-1">{p.location || "-"} &middot; {p.fee}</p>
+                  </div>
+                  <span className={`text-xs px-3 py-1 rounded-full font-bold ${p.status === 'AVAILABLE' || p.status === 'CREATED' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                    {p.status}
+                  </span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-4 text-sm mt-4 pt-4 border-t border-gray-100">
+              <Link href={`${prefix}/properties/${p.id}/edit`} className="ml-auto px-4 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-lg transition">
+                {locale === "th" ? "แก้ไข" : locale === "zh" ? "编辑" : "Edit"}
+              </Link>
+            </div>
+          </div>
+        )) : (
+          <p className="text-sm text-gray-500 p-6 text-center">{locale === "th" ? "ไม่มีประกาศอสังหาริมทรัพย์" : locale === "zh" ? "没有房产列表" : "No properties listed"}</p>
+        )}
       </div>
     </div>
   );
