@@ -941,29 +941,36 @@ function PartnerProperties({ locale, prefix, properties }: { locale: string; pre
 
 /* ===== DASHBOARD LOGGED IN STATE ===== */
 function PartnerDashboard({ locale, partner, prefix, onLogout }: { locale: string; partner: any; prefix: string; onLogout: () => void }) {
+  const [activeTab, setActiveTab] = useState<"overview"|"profile">("overview");
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 relative z-10 pb-12 -mt-6">
       
       {/* Top Navigation Pills */}
+      
       <div className="flex gap-2 bg-white rounded-xl shadow-sm border border-gray-200 p-2 mb-6 overflow-x-auto no-scrollbar">
         {[
-          { icon: "📊", label: "Overview", count: null, active: true },
-          { icon: "🔧", label: "Active Jobs", count: 3, active: false },
-          { icon: "📋", label: "Requests", count: 3, active: false },
-          { icon: "🏢", label: "Properties", count: null, active: false },
-          { icon: "📜", label: "History", count: null, active: false },
-          { icon: "💬", label: "Chat", count: 3, active: false },
-          { icon: "🔔", label: "Alerts", count: 3, active: false },
-          { icon: "👤", label: "Profile", count: null, active: false },
+          { key: "overview", icon: "📊", label: "Overview", count: null },
+          { key: "active", icon: "🔧", label: "Active Jobs", count: 3 },
+          { key: "requests", icon: "📋", label: "Requests", count: 3 },
+          { key: "properties", icon: "🏢", label: "Properties", count: null },
+          { key: "history", icon: "📜", label: "History", count: null },
+          { key: "chat", icon: "💬", label: "Chat", count: 3 },
+          { key: "alerts", icon: "🔔", label: "Alerts", count: 3 },
+          { key: "profile", icon: "👤", label: "Profile", count: null },
         ].map((tab, i) => (
-          <button key={i} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition whitespace-nowrap ${tab.active ? 'bg-purple-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'}`}>
+          <button key={tab.key} onClick={() => setActiveTab(tab.key as any)} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition whitespace-nowrap ${activeTab === tab.key ? 'bg-purple-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'}`}>
             <span>{tab.icon}</span> {tab.label}
-            {tab.count && <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${tab.active ? 'bg-white/30 text-white' : 'bg-red-100 text-red-700'}`}>{tab.count}</span>}
+            {tab.count && <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${activeTab === tab.key ? 'bg-white/30 text-white' : 'bg-red-100 text-red-700'}`}>{tab.count}</span>}
           </button>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {activeTab === "profile" && <PartnerProfile locale={locale} prefix={prefix} partner={partner} />}
+      
+      <div className={`grid grid-cols-1 lg:grid-cols-3 gap-6 ${activeTab !== 'overview' ? 'hidden' : ''}`}>
+
+
+      
         
         {/* LEFT COLUMN: Profile & Stats */}
         <div className="space-y-6">
