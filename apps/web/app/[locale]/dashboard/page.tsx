@@ -288,7 +288,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      </div>
+            </div>
     </div>
   );
 }
@@ -641,29 +641,37 @@ function PropertyTab({ locale, prefix, properties }: { locale: string; prefix: s
 
 /* ===== DASHBOARD LOGGED IN STATE ===== */
 function CustomerDashboard({ locale, subscriber, prefix, onLogout }: { locale: string; subscriber: any; prefix: string; onLogout: () => void }) {
+  const [activeTab, setActiveTab] = useState<"overview"|"profile">("overview");
+  const stats = { active: 4, completed: 5, messages: 4, rating: "4.8" };
+
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 relative z-10 pb-12 -mt-6">
       
       {/* Top Navigation Pills */}
+      
       <div className="flex gap-2 bg-white rounded-xl shadow-sm border border-gray-200 p-2 mb-6 overflow-x-auto no-scrollbar">
         {[
-          { icon: "📊", label: "Overview", count: null, active: true },
-          { icon: "🔧", label: "Active Jobs", count: 4, active: false },
-          { icon: "📋", label: "Requests", count: 3, active: false },
-          { icon: "🏢", label: "Properties", count: 3, active: false },
-          { icon: "📜", label: "History", count: null, active: false },
-          { icon: "💬", label: "Chat", count: 4, active: false },
-          { icon: "🔔", label: "Alerts", count: 4, active: false },
-          { icon: "👤", label: "Profile", count: null, active: false },
+          { key: "overview", icon: "📊", label: locale === "th" ? "ภาพรวม" : "Overview", count: null },
+          { key: "active", icon: "🔧", label: locale === "th" ? "งานที่ใช้งานอยู่" : "Active Jobs", count: 4 },
+          { key: "requests", icon: "📋", label: locale === "th" ? "คำขอ" : "Requests", count: 3 },
+          { key: "properties", icon: "🏢", label: locale === "th" ? "อสังหาฯ" : "Properties", count: 3 },
+          { key: "history", icon: "📜", label: locale === "th" ? "ประวัติ" : "History", count: null },
+          { key: "chat", icon: "💬", label: locale === "th" ? "แชท" : "Chat", count: 4 },
+          { key: "alerts", icon: "🔔", label: locale === "th" ? "การแจ้งเตือน" : "Alerts", count: 4 },
+          { key: "profile", icon: "👤", label: locale === "th" ? "โปรไฟล์" : "Profile", count: null },
         ].map((tab, i) => (
-          <button key={i} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition whitespace-nowrap ${tab.active ? 'bg-sky-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'}`}>
+          <button key={tab.key} onClick={() => setActiveTab(tab.key as any)} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition whitespace-nowrap ${activeTab === tab.key ? 'bg-sky-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'}`}>
             <span>{tab.icon}</span> {tab.label}
-            {tab.count && <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${tab.active ? 'bg-white/30 text-white' : 'bg-red-100 text-red-700'}`}>{tab.count}</span>}
+            {tab.count && <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${activeTab === tab.key ? 'bg-white/30 text-white' : 'bg-red-100 text-red-700'}`}>{tab.count}</span>}
           </button>
         ))}
       </div>
+      
+      {activeTab === "profile" && <ProfileTab locale={locale} prefix={prefix} subscriber={subscriber} activeOrders={[]} historyOrders={[]} />}
+      
+      
+      <div className={`grid grid-cols-1 lg:grid-cols-3 gap-6 ${activeTab !== 'overview' ? 'hidden' : ''}`}>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* LEFT COLUMN: Profile & Alerts */}
         <div className="space-y-6">
