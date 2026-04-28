@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, Suspense } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 
 
-export default function SubscriptionRegisterPage() {
+function SubscriptionRegisterPageContent() {
   const t = useTranslations("subscription");
   const locale = useLocale();
   const router = useRouter();
@@ -121,6 +121,7 @@ export default function SubscriptionRegisterPage() {
   }
 
   return (
+    
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
         <h1 className="text-2xl font-bold text-gray-900 text-center mb-2">
@@ -221,5 +222,13 @@ export default function SubscriptionRegisterPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function SubscriptionRegisterPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center">Loading...</div>}>
+      <SubscriptionRegisterPageContent />
+    </Suspense>
   );
 }
