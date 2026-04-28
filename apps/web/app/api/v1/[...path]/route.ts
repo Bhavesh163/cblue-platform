@@ -12,11 +12,13 @@ import { NextRequest } from "next/server";
  * CF Workers cannot fetch bare IP addresses (error 1003).
  */
 
+
 function getBackendUrl() {
   if (process.env.API_BACKEND_URL) return process.env.API_BACKEND_URL;
   if (process.env.NODE_ENV === "development") return "http://localhost:3002";
   return "http://api-backend.cblue.co.th";
 }
+
 
 
 const SKIP_REQ = new Set([
