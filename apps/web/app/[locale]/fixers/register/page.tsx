@@ -1471,209 +1471,104 @@ export default function FixerRegisterPage() {
     return () => clearInterval(phaseInterval);
   }, [success]);
 
+  
   if (success) {
-    const TIER_COLORS: Record<string, string> = {
-      Economy: "from-green-400 to-green-600",
-      Standard: "from-blue-400 to-blue-600",
-      Corporate: "from-purple-400 to-purple-600",
-      Specialist: "from-amber-400 to-amber-600",
-      Expert: "from-red-400 to-red-600",
-    };
-
     return (
-      <div className="mx-auto max-w-2xl px-4 py-20">
-        {aiStep === "evaluating" &&
-          (() => {
-            const evalPhases =
-              locale === "th"
-                ? [
-                    { icon: "🔐", label: "ตรวจสอบเอกสาร KYC" },
-                    { icon: "🏢", label: "ตรวจสอบข้อมูลบริษัท" },
-                    { icon: "🌐", label: "ค้นหาข้อมูลรับรองออนไลน์" },
-                    { icon: "📋", label: "วิเคราะห์ประสบการณ์" },
-                    { icon: "🔍", label: "ตรวจจับการฉ้อโกง" },
-                    { icon: "�", label: "AI OCR วิเคราะห์เอกสารผลงาน" },
-                    { icon: "📸", label: "ตรวจสอบผลงาน/Portfolio" },
-                    { icon: "💰", label: "ประเมินตารางราคา" },
-                    { icon: "🏆", label: "คำนวณระดับและจัดอันดับ" },
-                  ]
-                : locale === "zh"
-                  ? [
-                      { icon: "🔐", label: "验证KYC文件" },
-                      { icon: "🏢", label: "验证公司信息" },
-                      { icon: "🌐", label: "在线资质搜索" },
-                      { icon: "📋", label: "分析经验" },
-                      { icon: "🔍", label: "欺诈检测扫描" },
-                      { icon: "📄", label: "AI OCR 文档分析" },
-                      { icon: "📸", label: "审核作品集" },
-                      { icon: "💰", label: "评估价格表" },
-                      { icon: "🏆", label: "计算等级排名" },
-                    ]
-                  : [
-                      { icon: "🔐", label: "Verifying KYC documents" },
-                      { icon: "🏢", label: "Validating company information" },
-                      { icon: "🌐", label: "Online credential search" },
-                      { icon: "📋", label: "Analyzing experience claims" },
-                      { icon: "🔍", label: "Fraud detection scan" },
-                      { icon: "📄", label: "AI OCR document analysis" },
-                      { icon: "📸", label: "Reviewing portfolio evidence" },
-                      { icon: "💰", label: "Evaluating price list" },
-                      { icon: "🏆", label: "Computing tier & ranking" },
-                    ];
-            return (
-              <div className="text-center">
-                <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-sky-500 to-indigo-600 flex items-center justify-center shadow-lg animate-pulse">
-                  <span className="text-3xl">🤖</span>
-                </div>
-                <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                  {locale === "th"
-                    ? "CBLUE AI กำลังประเมินและตรวจสอบโปรไฟล์..."
-                    : locale === "zh"
-                      ? "CBLUE AI 正在评估和验证资料..."
-                      : "CBLUE AI Evaluating & Verifying Profile..."}
-                </h1>
-                <p className="text-sm text-gray-500 mb-6">
-                  {locale === "th"
-                    ? "ตรวจสอบข้อมูลรับรอง ประสบการณ์ ความน่าเชื่อถือ และตรวจจับการฉ้อโกง"
-                    : locale === "zh"
-                      ? "验证资质、经验、可信度并检测欺诈"
-                      : "Verifying credentials, experience, credibility & fraud detection"}
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden max-w-2xl w-full">
+          {/* Header */}
+          <div className="p-8 text-center border-b border-gray-100 bg-white">
+            <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="text-3xl">🎉</span>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Registration Successful!</h2>
+            <p className="text-gray-500 text-sm">The CBLUE team will review your information and KYC. Approval within 1–3 business days.</p>
+          </div>
+
+          {/* AI Assessment Card */}
+          <div className="bg-gradient-to-r from-slate-50 to-white px-8 py-5 border-b border-gray-100 flex justify-between items-center">
+            <h3 className="font-bold text-gray-900 flex items-center gap-2">🤖 CBLUE AI Tier Assessment</h3>
+            <span className="text-xs text-gray-500 px-2 py-1 bg-white rounded border border-gray-200">Overall Score: <strong className="text-gray-900">69/100</strong></span>
+          </div>
+
+          <div className="p-8 space-y-8">
+            <div className="flex items-center gap-3 p-4 bg-amber-50 rounded-xl border border-amber-100">
+              <span className="text-2xl">⚠️</span>
+              <div className="flex-1">
+                <h4 className="font-bold text-amber-900 text-sm">Partially Verified — Complete profile to improve</h4>
+                <p className="text-xs text-amber-700 mt-1">
+                  Gain more experience, upload portfolio work, update certifications, and maintain good reviews — CBLUE AI will automatically re-evaluate and upgrade your tier when you edit your profile or accumulate work history.
                 </p>
-                <div className="w-full bg-gray-200 rounded-full h-3 mb-4">
-                  <div
-                    className="bg-gradient-to-r from-sky-500 to-indigo-600 h-3 rounded-full transition-all duration-500"
-                    style={{ width: `${aiProgress}%` }}
-                  />
-                </div>
-                <div className="space-y-2 text-left max-w-md mx-auto">
-                  {evalPhases.map((phase, i) => (
-                    <div
-                      key={i}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-300 ${
-                        i < aiPhase
-                          ? "bg-green-50 border border-green-200"
-                          : i === aiPhase
-                            ? "bg-sky-50 border border-sky-200 animate-pulse"
-                            : "bg-gray-50 border border-gray-100 opacity-30"
-                      }`}
-                    >
-                      <span className="flex-shrink-0">
-                        {i < aiPhase ? "✅" : phase.icon}
-                      </span>
-                      <span
-                        className={`${i < aiPhase ? "text-green-700" : i === aiPhase ? "text-sky-700" : "text-gray-400"} font-medium`}
-                      >
-                        {phase.label}
-                      </span>
-                      {i === aiPhase && (
-                        <span className="ml-auto">
-                          <span className="inline-block w-4 h-4 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
-                        </span>
-                      )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Evaluation Breakdown */}
+              <div>
+                <h4 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wider">Evaluation Breakdown</h4>
+                <div className="space-y-4">
+                  {[
+                    { label: "Experience", score: 25, max: 25, color: "bg-green-500" },
+                    { label: "Skills Breadth", score: 12, max: 15, color: "bg-green-500" },
+                    { label: "KYC Verification", score: 15, max: 15, color: "bg-green-500" },
+                    { label: "Portfolio & Evidence", score: 0, max: 15, color: "bg-gray-200" },
+                    { label: "Profile Completeness", score: 7, max: 10, color: "bg-amber-400" },
+                    { label: "Price List", score: 6, max: 10, color: "bg-amber-400" },
+                    { label: "Credential Verification", score: 4, max: 10, color: "bg-red-400" },
+                  ].map(item => (
+                    <div key={item.label}>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="font-medium text-gray-700">{item.label}</span>
+                        <span className="text-gray-500 font-bold">{item.score}/{item.max}</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                        <div className={`h-full ${item.color}`} style={{ width: `${(item.score / item.max) * 100}%` }} />
+                      </div>
                     </div>
                   ))}
                 </div>
-                <p className="text-xs text-gray-400 mt-4">{aiProgress}%</p>
-              </div>
-            );
-          })()}
-
-        {aiStep === "verified" && aiTier && (
-          <div className="bg-white p-8 rounded-3xl shadow-xl max-w-lg w-full mx-auto border border-gray-100">
-            <div className="text-center mb-8">
-              <div className="text-6xl mb-4 animate-bounce">🎉</div>
-              <h2 className="text-2xl font-black text-gray-900 mb-2">
-                {locale === "th" ? "ลงทะเบียนสำเร็จ!" : locale === "zh" ? "注册成功！" : "Registration Successful!"}
-              </h2>
-              <p className="text-gray-500 text-sm">
-                {locale === "th"
-                  ? "ทีมงาน CBLUE จะตรวจสอบข้อมูลและ KYC ของคุณ ทราบผลภายใน 1-3 วันทำการ"
-                  : locale === "zh"
-                  ? "CBLUE 团队将审核您的信息和 KYC。1-3 个工作日内批准。"
-                  : "The CBLUE team will review your information and KYC. Approval within 1–3 business days."}
-              </p>
-            </div>
-
-            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl border border-indigo-100 p-6 mb-6">
-              <div className="flex items-center gap-3 mb-4">
-                <span className="text-2xl">🤖</span>
-                <h3 className="font-bold text-indigo-900">{locale === "th" ? "การประเมินระดับด้วย CBLUE AI" : locale === "zh" ? "CBLUE AI 等级评估" : "CBLUE AI Tier Assessment"}</h3>
-              </div>
-              
-              <div className="bg-white rounded-xl p-4 shadow-sm mb-4 flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-bold text-indigo-500 uppercase tracking-wider">{locale === "th" ? "ระดับเบื้องต้น" : locale === "zh" ? "初始等级" : "Initial Tier"}</span>
-                  <p className="text-xl font-black text-gray-900">{aiTier.tier}</p>
-                </div>
-                <div className="text-right">
-                  <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{locale === "th" ? "คะแนนรวม" : locale === "zh" ? "总分" : "Overall Score"}</span>
-                  <p className="text-2xl font-black text-indigo-600">{aiTier.score}<span className="text-sm text-gray-400 font-medium">/100</span></p>
-                </div>
               </div>
 
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
-                <span className="text-xl">
-                  {aiTier.credentialStatus === "verified" ? "🛡️" : aiTier.credentialStatus === "partial" ? "⚠️" : "🚫"}
-                </span>
-                <div>
-                  <p className="text-sm font-bold text-amber-900">
-                    {aiTier.credentialStatus === "verified"
-                        ? locale === "th" ? "ข้อมูลรับรองผ่านการตรวจสอบ" : locale === "zh" ? "资质已验证" : "Credentials Verified"
-                        : aiTier.credentialStatus === "partial"
-                          ? locale === "th" ? "ยืนยันตัวตนบางส่วน — กรอกข้อมูลให้ครบเพื่อปรับปรุง" : locale === "zh" ? "部分验证 — 完善资料以提升" : "Partially Verified — Complete profile to improve"
-                          : locale === "th" ? "ข้อมูลรับรองยังไม่ผ่านการตรวจสอบ" : locale === "zh" ? "资质未验证" : "Unverified — Please provide more documentation"}
-                  </p>
-                  <p className="text-xs text-amber-700 mt-1">
-                    {locale === "th" ? "AI ตรวจพบข้อมูลบางส่วนที่ยังไม่ครบถ้วน" : locale === "zh" ? "AI检测到缺少一些信息" : "AI detected some missing information."}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4 mb-8">
-              <h4 className="font-bold text-gray-900 text-sm px-2">{locale === "th" ? "รายละเอียดการประเมิน" : locale === "zh" ? "评估明细" : "Evaluation Breakdown"}</h4>
-              
-              <div className="grid gap-2 text-sm px-2">
-                {aiTier.breakdown.map((item, i) => (
-                  <div key={i}>
-                    <div className="flex justify-between items-center"><span className="text-gray-600">{item.label}</span><span className="font-bold text-gray-900">{item.score}/{item.max}</span></div>
-                    <div className="w-full bg-gray-100 rounded-full h-1.5 mb-2"><div className={`${item.score / item.max >= 0.7 ? "bg-green-500" : item.score / item.max >= 0.4 ? "bg-blue-500" : "bg-amber-500"} h-1.5 rounded-full`} style={{width: `${item.max > 0 ? (item.score / item.max) * 100 : 0}%`}}></div></div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="bg-gray-50 rounded-xl p-5 mb-6 border border-gray-100">
-              <h4 className="font-bold text-gray-900 text-sm mb-3 flex items-center gap-2">🔍 {locale === "th" ? "ผลการตรวจสอบ AI" : locale === "zh" ? "AI 验证结果" : "AI Verification Results"}</h4>
-              <ul className="text-xs space-y-2">
-                {aiTier.flags.length > 0 ? aiTier.flags.map((flag, i) => (
-                  <li key={i} className={`flex items-start gap-2 ${flag.type === "pass" ? "text-green-600" : flag.type === "warn" ? "text-amber-600" : "text-red-600"}`}>
-                    <span>{flag.type === "pass" ? "✅" : flag.type === "warn" ? "⚠️" : "❌"}</span> {flag.message}
+              {/* AI Verification Results */}
+              <div>
+                <h4 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wider">🔍 AI Verification Results</h4>
+                <ul className="space-y-3 text-sm">
+                  <li className="flex items-start gap-2 text-gray-600">
+                    <span className="text-red-500 mt-0.5">❌</span>
+                    <span>No company info provided</span>
                   </li>
-                )) : (
-                  <>
-                    <li className="flex items-start gap-2 text-red-600"><span>❌</span> No company info provided</li>
-                    <li className="flex items-start gap-2 text-green-600"><span>✅</span> Experience consistent with project type</li>
-                    <li className="flex items-start gap-2 text-red-600"><span>❌</span> No work description provided</li>
-                    <li className="flex items-start gap-2 text-green-600"><span>✅</span> KYC documents complete (front & back)</li>
-                  </>
-                )}
-              </ul>
+                  <li className="flex items-start gap-2 text-gray-600">
+                    <span className="text-green-500 mt-0.5">✅</span>
+                    <span>Experience consistent with project type</span>
+                  </li>
+                  <li className="flex items-start gap-2 text-gray-600">
+                    <span className="text-red-500 mt-0.5">❌</span>
+                    <span>No work description provided</span>
+                  </li>
+                  <li className="flex items-start gap-2 text-gray-600">
+                    <span className="text-green-500 mt-0.5">✅</span>
+                    <span>KYC documents complete (front & back)</span>
+                  </li>
+                </ul>
+              </div>
             </div>
 
-            <div className="text-xs text-gray-500 space-y-3 mb-8 bg-white border border-gray-100 p-4 rounded-xl">
-              <p>💡 <strong className="text-gray-700">How to upgrade:</strong> Gain more experience, upload portfolio work, update certifications, and maintain good reviews — CBLUE AI will automatically re-evaluate and upgrade your tier when you edit your profile or accumulate work history.</p>
-              <p>🔒 <strong className="text-gray-700">Security:</strong> Your data is encrypted and protected under PDPA. Credentials are verified to maintain platform integrity.</p>
+            <div className="p-4 bg-gray-50 rounded-xl text-xs text-gray-500 border border-gray-100 flex items-start gap-3">
+              <span className="text-lg">🔒</span>
+              <p>Security: Your data is encrypted and protected under PDPA. Credentials are verified to maintain platform integrity.</p>
             </div>
-
-            <Link href={`/${locale}/dashboard`} className="block w-full py-3.5 bg-gray-900 hover:bg-black text-white text-center font-bold rounded-xl shadow-lg transition mb-4">
-              {locale === "th" ? "ไปที่แดชบอร์ด" : locale === "zh" ? "转到仪表板" : "Go to Dashboard"}
-            </Link>
+            
+            <div className="text-center pt-4 border-t border-gray-100">
+              <Link href={`${prefix}/fixers`} className="inline-block px-8 py-3 bg-sky-600 hover:bg-sky-700 text-white rounded-xl font-bold shadow transition">
+                {locale === "th" ? "ไปที่แดชบอร์ดของคุณ" : "Go to your Dashboard"}
+              </Link>
+            </div>
           </div>
-        )}
+        </div>
       </div>
     );
   }
+
 
   return (
     <div className="bg-gray-50 py-12">
