@@ -1,29 +1,307 @@
+
+> web@0.1.0 build
+> next build
+
  ⚠ Invalid next.config.js options detected: 
  ⚠     Unrecognized key(s) in object: 'turbopack'
  ⚠ See more info here: https://nextjs.org/docs/messages/invalid-next-config
    ▲ Next.js 15.2.2
 
    Creating an optimized production build ...
-Failed to compile.
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+
+./app/[locale]/booking/household/page.tsx
+146:6  Warning: React Hook useEffect has a missing dependency: 'prefilledService'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+883:84  Warning: Do not use an `<a>` element to navigate to `/terms/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+883:84  Warning: Do not use an `<a>` element to navigate to `/terms/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+883:177  Warning: Do not use an `<a>` element to navigate to `/privacy/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+883:177  Warning: Do not use an `<a>` element to navigate to `/privacy/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+885:48  Warning: Do not use an `<a>` element to navigate to `/terms/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+885:48  Warning: Do not use an `<a>` element to navigate to `/terms/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+885:126  Warning: Do not use an `<a>` element to navigate to `/privacy/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+885:126  Warning: Do not use an `<a>` element to navigate to `/privacy/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+887:93  Warning: Do not use an `<a>` element to navigate to `/terms/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+887:93  Warning: Do not use an `<a>` element to navigate to `/terms/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+887:185  Warning: Do not use an `<a>` element to navigate to `/privacy/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+887:185  Warning: Do not use an `<a>` element to navigate to `/privacy/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+
+./app/[locale]/booking/professional/page.tsx
+161:13  Warning: Empty block statement.  no-empty
+162:6  Warning: React Hook useEffect has a missing dependency: 'prefilledService'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./app/[locale]/booking/project/page.tsx
+144:6  Warning: React Hook useEffect has a missing dependency: 'prefilledService'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+862:90  Warning: Do not use an `<a>` element to navigate to `/terms/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+862:90  Warning: Do not use an `<a>` element to navigate to `/terms/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+862:183  Warning: Do not use an `<a>` element to navigate to `/privacy/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+862:183  Warning: Do not use an `<a>` element to navigate to `/privacy/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+864:48  Warning: Do not use an `<a>` element to navigate to `/terms/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+864:48  Warning: Do not use an `<a>` element to navigate to `/terms/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+864:126  Warning: Do not use an `<a>` element to navigate to `/privacy/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+864:126  Warning: Do not use an `<a>` element to navigate to `/privacy/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+866:97  Warning: Do not use an `<a>` element to navigate to `/terms/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+866:97  Warning: Do not use an `<a>` element to navigate to `/terms/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+866:189  Warning: Do not use an `<a>` element to navigate to `/privacy/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+866:189  Warning: Do not use an `<a>` element to navigate to `/privacy/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+
+./app/[locale]/components/FixerResults.tsx
+488:39  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+519:6  Warning: React Hook useEffect has missing dependencies: 'issueImages' and 'service'. Either include them or remove the dependency array. If 'setFixers' needs the current value of 'service', you can also switch to useReducer instead of useState and read 'service' in the reducer.  react-hooks/exhaustive-deps
+1090:21  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+1453:41  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
 
 ./app/[locale]/dashboard/page.tsx
-Error:   [31mx[0m Unexpected token `div`. Expected jsx identifier
-     ,-[[36;1;4m/home/ballhog/cblue-platform/apps/web/app/[locale]/dashboard/page.tsx[0m:131:1]
- [2m128[0m |   ];
- [2m129[0m | 
- [2m130[0m |   return (
- [2m131[0m |     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50/30">
-     : [35;1m     ^^^[0m
- [2m132[0m |       {/* PDPA Consent Modal */}
- [2m133[0m |       {showPdpa && (
- [2m134[0m |         <PdpaConsent
-     `----
+19:6  Warning: 'ServiceType' is defined but never used.  @typescript-eslint/no-unused-vars
+25:7  Warning: 'notifications' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+25:22  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+27:7  Warning: 'chats' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+27:14  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+29:7  Warning: 'ICON_MAP' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+30:7  Warning: 'STATUS_STYLE' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+40:7  Warning: 'TIER_STYLE' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+63:7  Warning: 'getStatusLabel' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+75:10  Warning: 'activeTab' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+75:21  Warning: 'setActiveTab' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+78:40  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+169:9  Warning: 'historyOrders' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+173:9  Warning: 'tabs' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+332:10  Warning: 'OverviewTab' is defined but never used.  @typescript-eslint/no-unused-vars
+332:32  Warning: 'subscriber' is defined but never used.  @typescript-eslint/no-unused-vars
+332:58  Warning: 'historyOrders' is defined but never used.  @typescript-eslint/no-unused-vars
+332:73  Warning: 'chats' is defined but never used.  @typescript-eslint/no-unused-vars
+332:80  Warning: 'notifications' is defined but never used.  @typescript-eslint/no-unused-vars
+332:127  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+332:146  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+332:168  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+332:182  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+332:204  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+333:23  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+342:19  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+360:73  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+383:10  Warning: 'BookingsTab' is defined but never used.  @typescript-eslint/no-unused-vars
+383:80  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+384:23  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+391:19  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+405:57  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+431:10  Warning: 'RequestsTab' is defined but never used.  @typescript-eslint/no-unused-vars
+431:72  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+432:23  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+439:19  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+453:61  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+477:10  Warning: 'HistoryTab' is defined but never used.  @typescript-eslint/no-unused-vars
+477:81  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+479:19  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+492:76  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+518:31  Warning: 'prefix' is defined but never used.  @typescript-eslint/no-unused-vars
+518:51  Warning: 'activeOrders' is defined but never used.  @typescript-eslint/no-unused-vars
+518:65  Warning: 'historyOrders' is defined but never used.  @typescript-eslint/no-unused-vars
+518:128  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+518:147  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+518:169  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+560:10  Warning: 'ChatTab' is defined but never used.  @typescript-eslint/no-unused-vars
+560:62  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+567:52  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+595:10  Warning: 'NotificationsTab' is defined but never used.  @typescript-eslint/no-unused-vars
+595:87  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+602:76  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+618:10  Warning: 'PropertyTab' is defined but never used.  @typescript-eslint/no-unused-vars
+618:100  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+619:23  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+628:19  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+644:67  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+676:100  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+678:9  Warning: 'stats' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+695:21  Warning: 'i' is defined but never used.  @typescript-eslint/no-unused-vars
+696:72  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
 
-Caused by:
-    Syntax Error
+./app/[locale]/fixers/page.tsx
+32:14  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+34:7  Warning: 'notifications' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+34:22  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+70:40  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+71:52  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+181:16  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+182:24  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+483:71  Warning: 'completedJobs' is defined but never used.  @typescript-eslint/no-unused-vars
+483:179  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+483:200  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+483:222  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+483:239  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+483:253  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+483:273  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+612:56  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+636:76  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+673:84  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+708:85  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+745:67  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+752:52  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+783:91  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+806:9  Warning: 'router' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+942:106  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+949:67  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+983:10  Warning: 'PartnerDashboard' is defined but never used.  @typescript-eslint/no-unused-vars
+983:93  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+1000:21  Warning: 'i' is defined but never used.  @typescript-eslint/no-unused-vars
+1001:72  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
 
-Import trace for requested module:
-./app/[locale]/dashboard/page.tsx
+./app/[locale]/fixers/register/page.tsx
+128:10  Warning: 'isRegisteredFixer' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+128:29  Warning: 'setIsRegisteredFixer' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+165:16  Warning: 'e' is defined but never used.  @typescript-eslint/no-unused-vars
+165:19  Warning: Empty block statement.  no-empty
+192:3  Warning: React Hook "useEffect" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?  react-hooks/rules-of-hooks
+205:16  Warning: 'e' is defined but never used.  @typescript-eslint/no-unused-vars
+205:19  Warning: Empty block statement.  no-empty
+232:32  Warning: React Hook "useCallback" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?  react-hooks/rules-of-hooks
+290:45  Warning: React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?  react-hooks/rules-of-hooks
+293:45  Warning: React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?  react-hooks/rules-of-hooks
+295:28  Warning: React Hook "useCallback" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?  react-hooks/rules-of-hooks
+542:38  Warning: React Hook "useCallback" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?  react-hooks/rules-of-hooks
+617:5  Warning: React Hook useCallback has a missing dependency: 'locale'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+716:27  Warning: React Hook "useCallback" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?  react-hooks/rules-of-hooks
+720:33  Warning: React Hook "useCallback" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?  react-hooks/rules-of-hooks
+722:3  Warning: React Hook "useEffect" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?  react-hooks/rules-of-hooks
+1154:31  Warning: React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?  react-hooks/rules-of-hooks
+1155:10  Warning: 'aiProgress' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+1155:39  Warning: React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?  react-hooks/rules-of-hooks
+1156:10  Warning: 'aiPhase' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+1156:33  Warning: React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?  react-hooks/rules-of-hooks
+1157:10  Warning: 'aiTier' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+1157:31  Warning: React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?  react-hooks/rules-of-hooks
+1166:3  Warning: React Hook "useEffect" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?  react-hooks/rules-of-hooks
+1552:6  Warning: React Hook useEffect has missing dependencies: 'aiStep', 'digestResult', 'form.bio', 'form.company', 'form.companyDistrict', 'form.companyHouseNumber', 'form.companyProvince', 'form.district', 'form.email', 'form.name', 'form.pastExperience', 'form.pastProjectType', 'form.phone', 'form.province', 'form.selectedSkills.length', 'form.yearsExperience', 'kycImages.length', 'locale', 'portfolioImages.length', and 'priceRows'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+2342:27  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+3274:21  Warning: Do not use an `<a>` element to navigate to `/terms/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+3274:21  Warning: Do not use an `<a>` element to navigate to `/terms/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+3278:21  Warning: Do not use an `<a>` element to navigate to `/privacy/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+3278:21  Warning: Do not use an `<a>` element to navigate to `/privacy/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+3288:21  Warning: Do not use an `<a>` element to navigate to `/terms/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+3288:21  Warning: Do not use an `<a>` element to navigate to `/terms/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+3292:21  Warning: Do not use an `<a>` element to navigate to `/privacy/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+3292:21  Warning: Do not use an `<a>` element to navigate to `/privacy/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+3302:21  Warning: Do not use an `<a>` element to navigate to `/terms/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+3302:21  Warning: Do not use an `<a>` element to navigate to `/terms/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+3306:21  Warning: Do not use an `<a>` element to navigate to `/privacy/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+3306:21  Warning: Do not use an `<a>` element to navigate to `/privacy/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+
+./app/[locale]/properties/[id]/page.tsx
+104:17  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./app/[locale]/properties/page.tsx
+917:25  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+1005:29  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/app/api-reference/config/eslint#disabling-rules
+   Collecting page data ...
+   Generating static pages (0/70) ...
+   Generating static pages (17/70) 
+   Generating static pages (34/70) 
+   Generating static pages (52/70) 
+ ✓ Generating static pages (70/70)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                    Size  First Load JS
+┌ ○ /                                         147 B         101 kB
+├ ○ /_not-found                               976 B         101 kB
+├ ● /[locale]                                 580 B         122 kB
+├   ├ /th
+├   ├ /en
+├   └ /zh
+├ ● /[locale]/about                          7.5 kB         126 kB
+├   ├ /th/about
+├   ├ /en/about
+├   └ /zh/about
+├ ● /[locale]/booking                         147 B         101 kB
+├   ├ /th/booking
+├   ├ /en/booking
+├   └ /zh/booking
+├ ● /[locale]/booking/household             8.44 kB         174 kB
+├   ├ /th/booking/household
+├   ├ /en/booking/household
+├   └ /zh/booking/household
+├ ● /[locale]/booking/professional          10.4 kB         176 kB
+├   ├ /th/booking/professional
+├   ├ /en/booking/professional
+├   └ /zh/booking/professional
+├ ● /[locale]/booking/project               8.42 kB         174 kB
+├   ├ /th/booking/project
+├   ├ /en/booking/project
+├   └ /zh/booking/project
+├ ● /[locale]/dashboard                     7.15 kB         134 kB
+├   ├ /th/dashboard
+├   ├ /en/dashboard
+├   └ /zh/dashboard
+├ ● /[locale]/fixers                        12.6 kB         139 kB
+├   ├ /th/fixers
+├   ├ /en/fixers
+├   └ /zh/fixers
+├ ● /[locale]/fixers/register               19.3 kB         148 kB
+├   ├ /th/fixers/register
+├   ├ /en/fixers/register
+├   └ /zh/fixers/register
+├ ● /[locale]/get-support                    5.1 kB         123 kB
+├   ├ /th/get-support
+├   ├ /en/get-support
+├   └ /zh/get-support
+├ ● /[locale]/partner-zone                    12 kB         133 kB
+├   ├ /th/partner-zone
+├   ├ /en/partner-zone
+├   └ /zh/partner-zone
+├ ● /[locale]/privacy                       7.33 kB         123 kB
+├   ├ /th/privacy
+├   ├ /en/privacy
+├   └ /zh/privacy
+├ ● /[locale]/properties                    13.6 kB         161 kB
+├   ├ /th/properties
+├   ├ /en/properties
+├   └ /zh/properties
+├ ƒ /[locale]/properties/[id]               2.15 kB         118 kB
+├ ● /[locale]/properties/register           6.53 kB         141 kB
+├   ├ /th/properties/register
+├   ├ /en/properties/register
+├   └ /zh/properties/register
+├ ● /[locale]/services                        305 B         121 kB
+├   ├ /th/services
+├   ├ /en/services
+├   └ /zh/services
+├ ● /[locale]/subscription/forgot-password  1.94 kB         118 kB
+├   ├ /th/subscription/forgot-password
+├   ├ /en/subscription/forgot-password
+├   └ /zh/subscription/forgot-password
+├ ● /[locale]/subscription/login            2.25 kB         118 kB
+├   ├ /th/subscription/login
+├   ├ /en/subscription/login
+├   └ /zh/subscription/login
+├ ● /[locale]/subscription/register         3.17 kB         119 kB
+├   ├ /th/subscription/register
+├   ├ /en/subscription/register
+├   └ /zh/subscription/register
+├ ● /[locale]/subscription/reset-password   2.35 kB         118 kB
+├   ├ /th/subscription/reset-password
+├   ├ /en/subscription/reset-password
+├   └ /zh/subscription/reset-password
+├ ● /[locale]/support-us                    3.41 kB         122 kB
+├   ├ /th/support-us
+├   ├ /en/support-us
+├   └ /zh/support-us
+├ ● /[locale]/terms                         6.57 kB         122 kB
+├   ├ /th/terms
+├   ├ /en/terms
+├   └ /zh/terms
+├ ƒ /api/v1/[...path]                         147 B         101 kB
+├ ○ /robots.txt                               147 B         101 kB
+└ ○ /sitemap.xml                              147 B         101 kB
++ First Load JS shared by all                100 kB
+  ├ chunks/4bd1b696-9f3a8e54df620aaf.js     53.2 kB
+  ├ chunks/684-384b2b990f4154ec.js          45.3 kB
+  └ other shared chunks (total)             1.91 kB
 
 
-> Build failed because of webpack errors
+ƒ Middleware                                  44 kB
+
+○  (Static)   prerendered as static content
+●  (SSG)      prerendered as static HTML (uses generateStaticParams)
+ƒ  (Dynamic)  server-rendered on demand
+
