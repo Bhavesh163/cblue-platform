@@ -269,7 +269,7 @@ export default function DashboardPage() {
         
         {/* Main Content */}
         {subscriber && !loading && (
-          <CustomerDashboard locale={locale} subscriber={subscriber} prefix={prefix} onLogout={() => {
+          <CustomerDashboard locale={locale} subscriber={subscriber} prefix={prefix} orders={orders} onLogout={() => {
             localStorage.removeItem("subscriber"); 
             localStorage.removeItem("subscriber_token"); 
             localStorage.removeItem("pdpa_consent_customer"); 
@@ -673,24 +673,26 @@ function PropertyTab({ locale, prefix, properties }: { locale: string; prefix: s
 
 
 /* ===== DASHBOARD LOGGED IN STATE ===== */
-function CustomerDashboard({ locale, subscriber, prefix, onLogout }: { locale: string; subscriber: any; prefix: string; onLogout: () => void }) {
-  const [activeTab, setActiveTab] = useState<"overview"|"profile">("overview");
-  const stats = { active: 4, completed: 5, messages: 4, rating: "4.8" };
+function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { locale: string; subscriber: any; prefix: string; onLogout: () => void, orders: any[] }) {
+  const [activeTab, setActiveTab] = useState<"overview"|"profile"|"active"|"requests"|"properties"|"history"|"chat"|"alerts">("overview");
+  const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLED', 'DONE'].includes(o.status)) : [];
+  const historyOrders = orders ? orders.filter((o: any) => ['COMPLETED', 'CANCELLED', 'DONE'].includes(o.status)) : [];
+  const propertiesCount = orders ? orders.filter((o: any) => o.type === "property").length : 0;
+  const stats = { active: activeOrders.length, completed: historyOrders.length, messages: 0, rating: "4.8" };
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 relative z-10 pb-12 -mt-6">
       
       {/* Top Navigation Pills */}
-      
       <div className="flex gap-2 bg-white rounded-xl shadow-sm border border-gray-200 p-2 mb-6 overflow-x-auto no-scrollbar">
         {[
           { key: "overview", icon: "📊", label: locale === "th" ? "ภาพรวม" : "Overview", count: null },
-          { key: "active", icon: "🔧", label: locale === "th" ? "งานที่ใช้งานอยู่" : "Active Jobs", count: 4 },
-          { key: "requests", icon: "📋", label: locale === "th" ? "คำขอ" : "Requests", count: 3 },
-          { key: "properties", icon: "🏢", label: locale === "th" ? "อสังหาฯ" : "Properties", count: 3 },
-          { key: "history", icon: "📜", label: locale === "th" ? "ประวัติ" : "History", count: null },
-          { key: "chat", icon: "💬", label: locale === "th" ? "แชท" : "Chat", count: 4 },
-          { key: "alerts", icon: "🔔", label: locale === "th" ? "การแจ้งเตือน" : "Alerts", count: 4 },
+          { key: "active", icon: "🔧", label: locale === "th" ? "งานที่ใช้งานอยู่" : "Active Jobs", count: activeOrders.length || null },
+          { key: "requests", icon: "📋", label: locale === "th" ? "คำขอ" : "Requests", count: null },
+          { key: "properties", icon: "🏢", label: locale === "th" ? "อสังหาฯ" : "Properties", count: propertiesCount || null },
+          { key: "history", icon: "📜", label: locale === "th" ? "ประวัติ" : "History", count: historyOrders.length || null },
+          { key: "chat", icon: "💬", label: locale === "th" ? "แชท" : "Chat", count: null },
+          { key: "alerts", icon: "🔔", label: locale === "th" ? "การแจ้งเตือน" : "Alerts", count: null },
           { key: "profile", icon: "👤", label: locale === "th" ? "โปรไฟล์" : "Profile", count: null },
         ].map((tab, i) => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key as any)} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition whitespace-nowrap ${activeTab === tab.key ? 'bg-sky-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'}`}>
@@ -700,12 +702,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout }: { locale: s
         ))}
       </div>
       
-      {activeTab === "profile" && <ProfileTab locale={locale} prefix={prefix} subscriber={subscriber} activeOrders={[]} historyOrders={[]} />}
-      
+      {activeTab === "profile" && <ProfileTab locale={locale} prefix={prefix} subscriber={subscriber} activeOrders={activeOrders} historyOrders={historyOrders} />}
       
       <div className={`grid grid-cols-1 lg:grid-cols-3 gap-6 ${activeTab !== 'overview' ? 'hidden' : ''}`}>
 
-        
         {/* LEFT COLUMN: Profile & Alerts */}
         <div className="space-y-6">
           
@@ -725,15 +725,15 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout }: { locale: s
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                 <p className="text-xs text-gray-500 font-medium mb-1">Active</p>
-                <p className="text-lg font-bold text-gray-900 flex items-center gap-1">⚡ 4</p>
+                <p className="text-lg font-bold text-gray-900 flex items-center gap-1">⚡ {stats.active}</p>
               </div>
               <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                 <p className="text-xs text-gray-500 font-medium mb-1">Completed</p>
-                <p className="text-lg font-bold text-gray-900 flex items-center gap-1">✅ 5</p>
+                <p className="text-lg font-bold text-gray-900 flex items-center gap-1">✅ {stats.completed}</p>
               </div>
               <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                 <p className="text-xs text-gray-500 font-medium mb-1">Messages</p>
-                <p className="text-lg font-bold text-gray-900 flex items-center gap-1">💬 4</p>
+                <p className="text-lg font-bold text-gray-900 flex items-center gap-1">💬 {stats.messages}</p>
               </div>
               <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                 <p className="text-xs text-gray-500 font-medium mb-1">Satisfaction</p>
@@ -751,26 +751,21 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout }: { locale: s
               <h3 className="font-bold text-gray-900 flex items-center gap-2">⏰ Upcoming Meetings</h3>
             </div>
             <div className="divide-y divide-gray-50">
-              <div className="p-4 flex items-center justify-between hover:bg-gray-50 transition">
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">🏠</span>
-                  <div>
-                    <p className="font-bold text-sm text-gray-900">Fixer-1042 &middot; Plumbing Repair</p>
-                    <p className="text-xs text-sky-600 font-medium mt-0.5">Today at 2:00 PM</p>
+              {activeOrders.filter((o: any) => o.status === 'CONFIRMED' || o.status === 'IN_PROGRESS').slice(0, 2).map((o: any, i: number) => (
+                <div key={i} className="p-4 flex items-center justify-between hover:bg-gray-50 transition">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">{o.type === 'property' ? '🏢' : '🏠'}</span>
+                    <div>
+                      <p className="font-bold text-sm text-gray-900">{o.fixerName || 'Partner'} &middot; {o.service}</p>
+                      <p className="text-xs text-sky-600 font-medium mt-0.5">Soon</p>
+                    </div>
                   </div>
+                  <button className="px-3 py-1 bg-sky-100 text-sky-700 text-xs font-bold rounded-md hover:bg-sky-200">Confirm</button>
                 </div>
-                <button className="px-3 py-1 bg-sky-100 text-sky-700 text-xs font-bold rounded-md hover:bg-sky-200">Confirm</button>
-              </div>
-              <div className="p-4 flex items-center justify-between hover:bg-gray-50 transition">
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">🏢</span>
-                  <div>
-                    <p className="font-bold text-sm text-gray-900">Lister-7890 &middot; Condo Viewing</p>
-                    <p className="text-xs text-sky-600 font-medium mt-0.5">Apr 14, 2026 at 10:00 AM</p>
-                  </div>
-                </div>
-                <button className="px-3 py-1 bg-sky-100 text-sky-700 text-xs font-bold rounded-md hover:bg-sky-200">Confirm</button>
-              </div>
+              ))}
+              {activeOrders.filter((o: any) => o.status === 'CONFIRMED' || o.status === 'IN_PROGRESS').length === 0 && (
+                <div className="p-4 text-sm text-gray-500">No upcoming meetings.</div>
+              )}
             </div>
           </div>
 
@@ -780,27 +775,16 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout }: { locale: s
               <h3 className="font-bold text-gray-900 flex items-center gap-2">🔔 Recent Alerts</h3>
             </div>
             <div className="p-4 space-y-4">
-              <div className="flex gap-3">
-                <span className="w-2 h-2 mt-1.5 rounded-full bg-sky-500 flex-shrink-0"></span>
-                <div>
-                  <p className="text-sm text-gray-800">Fixer-1042 is on the way to your location</p>
-                  <p className="text-xs text-gray-400 mt-1">5m ago</p>
+              {activeOrders.slice(0, 3).map((o: any, i: number) => (
+                <div key={i} className="flex gap-3">
+                  <span className={`w-2 h-2 mt-1.5 rounded-full flex-shrink-0 ${o.status === 'CONFIRMED' ? 'bg-green-500' : o.status === 'PENDING' ? 'bg-amber-500' : 'bg-sky-500'}`}></span>
+                  <div>
+                    <p className="text-sm text-gray-800">Your {o.service} order is {o.status.toLowerCase()}</p>
+                    <p className="text-xs text-gray-400 mt-1">Recently</p>
+                  </div>
                 </div>
-              </div>
-              <div className="flex gap-3">
-                <span className="w-2 h-2 mt-1.5 rounded-full bg-green-500 flex-shrink-0"></span>
-                <div>
-                  <p className="text-sm text-gray-800">Payment for Architect Consult confirmed</p>
-                  <p className="text-xs text-gray-400 mt-1">1h ago</p>
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <span className="w-2 h-2 mt-1.5 rounded-full bg-purple-500 flex-shrink-0"></span>
-                <div>
-                  <p className="text-sm text-gray-800">Property viewing confirmed for Apr 14</p>
-                  <p className="text-xs text-gray-400 mt-1">3h ago</p>
-                </div>
-              </div>
+              ))}
+              {activeOrders.length === 0 && <p className="text-sm text-gray-500">No recent alerts.</p>}
             </div>
           </div>
 
@@ -810,131 +794,88 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout }: { locale: s
               <h3 className="font-bold text-amber-900 flex items-center gap-2">⭐ Pending Ratings</h3>
             </div>
             <div className="p-5">
-              <div className="flex items-start gap-3">
-                <span className="text-2xl">⚡</span>
-                <div className="flex-1">
-                  <p className="font-bold text-sm text-gray-900">Fixer-0921 &middot; Electrical Service</p>
-                  <p className="text-xs text-gray-500 mt-0.5 mb-2">Completed Mar 15, 2026</p>
-                  <div className="flex gap-1 text-2xl text-gray-300 hover:text-amber-400 cursor-pointer transition-colors">
-                    <span>★</span><span>★</span><span>★</span><span>★</span><span>★</span>
+              {historyOrders.slice(0, 1).map((o: any, i: number) => (
+                <div key={i} className="flex items-start gap-3">
+                  <span className="text-2xl">⚡</span>
+                  <div className="flex-1">
+                    <p className="font-bold text-sm text-gray-900">{o.fixerName || 'Partner'} &middot; {o.service}</p>
+                    <p className="text-xs text-gray-500 mt-0.5 mb-2">Completed Recently</p>
+                    <div className="flex gap-1 text-2xl text-gray-300 hover:text-amber-400 cursor-pointer transition-colors">
+                      <span>★</span><span>★</span><span>★</span><span>★</span><span>★</span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              ))}
+              {historyOrders.length === 0 && <p className="text-sm text-gray-500">No pending ratings.</p>}
             </div>
           </div>
-
         </div>
 
         {/* RIGHT COLUMN: Main content feeds */}
         <div className="lg:col-span-2 space-y-6">
           
           {/* Active Services */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-              <h2 className="font-bold text-gray-900 flex items-center gap-2">ACTIVE ⚡ Active Services</h2>
-              <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full">4</span>
+              <h2 className="font-bold text-gray-900 flex items-center gap-2">⚡ Active Services</h2>
+              <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full">{activeOrders.length}</span>
             </div>
             <div className="divide-y divide-gray-50">
-              
-              <div className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl shadow-sm">🏠</div>
-                  <div>
-                    <h3 className="font-bold text-gray-900">Plumbing Repair <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">Standard</span></h3>
-                    <p className="text-sm text-gray-500 mt-1">Fixer-1042 &middot; 2026-04-10</p>
+              {activeOrders.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">No active services currently.</div>
+              ) : (
+                activeOrders.map((o: any, i: number) => (
+                  <div key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl shadow-sm">{o.type === 'property' ? '🏢' : o.type === 'project' ? '💼' : o.type === 'professional' ? '👔' : '🏠'}</div>
+                      <div>
+                        <h3 className="font-bold text-gray-900">{o.service} <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">{o.tier || 'Standard'}</span></h3>
+                        <p className="text-sm text-gray-500 mt-1">{o.fixerName || 'Awaiting Partner'} &middot; {new Date(o.createdAt || Date.now()).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">{o.status}</span>
+                      {o.status !== 'PENDING' && o.status !== 'CREATED' && <Link href={`${prefix}/chat/${o.id}`} className="text-gray-400 hover:text-sky-600 transition"><span className="text-xl">💬</span></Link>}
+                    </div>
                   </div>
-                </div>
-                <div className="flex flex-col items-end gap-2">
-                  <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">In Progress</span>
-                  <button className="text-gray-400 hover:text-sky-600 transition"><span className="text-xl">💬</span></button>
-                </div>
-              </div>
-
-              <div className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-2xl shadow-sm">👔</div>
-                  <div>
-                    <h3 className="font-bold text-gray-900">Architect Consult <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">Corporate</span></h3>
-                    <p className="text-sm text-gray-500 mt-1">Pro-3087 &middot; 2026-04-12</p>
-                  </div>
-                </div>
-                <div className="flex flex-col items-end gap-2">
-                  <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full">Confirmed</span>
-                  <button className="text-gray-400 hover:text-sky-600 transition"><span className="text-xl">💬</span></button>
-                </div>
-              </div>
-
-              <div className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center text-2xl shadow-sm">💼</div>
-                  <div>
-                    <h3 className="font-bold text-gray-900">Smart Home Setup <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">Specialist</span></h3>
-                    <p className="text-sm text-gray-500 mt-1">Team-5512 &middot; 2026-04-15</p>
-                  </div>
-                </div>
-                <div className="flex flex-col items-end gap-2">
-                  <span className="px-3 py-1 bg-amber-100 text-amber-700 text-xs font-bold rounded-full">Deposit Pending</span>
-                  <button className="text-gray-400 hover:text-sky-600 transition"><span className="text-xl">💬</span></button>
-                </div>
-              </div>
-
-              <div className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center text-2xl shadow-sm">🏢</div>
-                  <div>
-                    <h3 className="font-bold text-gray-900">Condo Viewing <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">Upper</span></h3>
-                    <p className="text-sm text-gray-500 mt-1">Lister-7890 &middot; 2026-04-14</p>
-                  </div>
-                </div>
-                <div className="flex flex-col items-end gap-2">
-                  <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full">Confirmed</span>
-                  <button className="text-gray-400 hover:text-sky-600 transition"><span className="text-xl">💬</span></button>
-                </div>
-              </div>
-
+                ))
+              )}
             </div>
           </div>
 
           {/* Recent Chats */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100">
-              <h2 className="font-bold text-gray-900 flex items-center gap-2">💬 Recent Chats</h2>
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2">💬 Recent Chats</h3>
             </div>
             <div className="divide-y divide-gray-50">
-              {[
-                { id: "1042", name: "Fixer-1042", svc: "Plumbing", msg: "On my way, ETA 15 min", time: "5m ago", unread: 2 },
-                { id: "3087", name: "Pro-3087", svc: "Architect", msg: "I've prepared the design draft", time: "2h ago", unread: 0 },
-                { id: "5512", name: "Team-5512", svc: "Smart Home", msg: "Waiting for your confirmation", time: "1d ago", unread: 1 },
-                { id: "7890", name: "Lister-7890", svc: "Property", msg: "Condo available for viewing Saturday", time: "3h ago", unread: 1 },
-              ].map(c => (
-                <div key={c.id} className={`p-4 flex items-center gap-4 cursor-pointer transition ${c.unread ? 'bg-sky-50/30 hover:bg-sky-50' : 'hover:bg-gray-50'}`}>
-                  <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center font-bold text-gray-600 relative">
-                    {c.id}
-                    <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></span>
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex justify-between mb-1">
-                      <p className="font-bold text-gray-900 text-sm">{c.name} <span className="text-gray-400 font-normal">&middot; {c.svc}</span></p>
-                      <span className="text-xs text-gray-400">{c.time}</span>
+              {activeOrders.filter((o: any) => o.status !== 'PENDING' && o.status !== 'CREATED').slice(0, 3).map((o: any, i: number) => (
+                <Link key={i} href={`${prefix}/chat/${o.id}`} className="p-4 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer block">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center font-bold text-gray-600 text-sm">
+                      {(o.fixerName || 'P').charAt(0)}
                     </div>
-                    <div className="flex justify-between items-center">
-                      <p className={`text-sm ${c.unread ? 'font-semibold text-gray-900' : 'text-gray-500'}`}>{c.msg}</p>
-                      {c.unread > 0 && <span className="w-5 h-5 rounded-full bg-sky-500 text-white text-[10px] font-bold flex items-center justify-center">{c.unread}</span>}
+                    <div>
+                      <p className="font-bold text-sm text-gray-900">{o.fixerName || 'Partner'} &middot; <span className="font-normal text-gray-500">{o.service}</span></p>
+                      <p className="text-xs text-gray-600 mt-0.5 truncate max-w-[200px]">Check chat for updates</p>
                     </div>
                   </div>
-                </div>
+                </Link>
               ))}
+              {activeOrders.filter((o: any) => o.status !== 'PENDING' && o.status !== 'CREATED').length === 0 && (
+                <div className="p-4 text-sm text-gray-500">No active chats.</div>
+              )}
             </div>
           </div>
 
           {/* Recent History */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
             <div className="px-6 py-4 border-b border-gray-100">
               <h2 className="font-bold text-gray-900 flex items-center gap-2">📜 Recent History</h2>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm whitespace-nowrap">
-                <thead className="bg-gray-50 text-gray-500">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs text-gray-400 bg-gray-50/50 uppercase border-b border-gray-100">
                   <tr>
                     <th className="px-6 py-3 font-semibold">Service</th>
                     <th className="px-6 py-3 font-semibold">Fixer / Pro</th>
@@ -944,39 +885,28 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout }: { locale: s
                     <th className="px-6 py-3 font-semibold">Date</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50 text-gray-900">
-                  <tr className="hover:bg-gray-50">
-                    <td className="px-6 py-4 font-medium flex items-center gap-2">🏠 Electrical</td>
-                    <td className="px-6 py-4">Fixer-0921</td>
-                    <td className="px-6 py-4"><span className="bg-gray-100 px-2 py-1 rounded text-xs">Economy</span></td>
-                    <td className="px-6 py-4 font-bold text-amber-500">4.8 ⭐</td>
-                    <td className="px-6 py-4">฿100</td>
-                    <td className="px-6 py-4 text-gray-500">2026-03-15</td>
-                  </tr>
-                  <tr className="hover:bg-gray-50">
-                    <td className="px-6 py-4 font-medium flex items-center gap-2">💼 Website Dev</td>
-                    <td className="px-6 py-4">Team-4401</td>
-                    <td className="px-6 py-4"><span className="bg-gray-100 px-2 py-1 rounded text-xs">Corporate</span></td>
-                    <td className="px-6 py-4 font-bold text-amber-500">4.9 ⭐</td>
-                    <td className="px-6 py-4">฿600</td>
-                    <td className="px-6 py-4 text-gray-500">2026-03-01</td>
-                  </tr>
-                  <tr className="hover:bg-gray-50">
-                    <td className="px-6 py-4 font-medium flex items-center gap-2">👔 Lawyer</td>
-                    <td className="px-6 py-4">Pro-1100</td>
-                    <td className="px-6 py-4"><span className="bg-gray-100 px-2 py-1 rounded text-xs">Expert</span></td>
-                    <td className="px-6 py-4 font-bold text-amber-500">5 ⭐</td>
-                    <td className="px-6 py-4">฿1,000</td>
-                    <td className="px-6 py-4 text-gray-500">2026-02-10</td>
-                  </tr>
+                <tbody className="divide-y divide-gray-50">
+                  {historyOrders.slice(0, 3).map((o: any, i: number) => (
+                    <tr key={i} className="hover:bg-gray-50 transition cursor-pointer">
+                      <td className="px-6 py-4 font-bold text-gray-900 flex items-center gap-2">
+                        <span className="text-lg">{o.type === 'property' ? '🏢' : '🏠'}</span> {o.service}
+                      </td>
+                      <td className="px-6 py-4 text-gray-600">{o.fixerName || 'Partner'}</td>
+                      <td className="px-6 py-4"><span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded font-medium">{o.tier || 'Standard'}</span></td>
+                      <td className="px-6 py-4 text-amber-500 font-bold">5 ⭐</td>
+                      <td className="px-6 py-4 font-bold text-gray-900">฿{o.finalPrice || o.estimatedPrice || '0'}</td>
+                      <td className="px-6 py-4 text-gray-500">{new Date(o.updatedAt || Date.now()).toLocaleDateString()}</td>
+                    </tr>
+                  ))}
+                  {historyOrders.length === 0 && (
+                    <tr><td colSpan={6} className="px-6 py-8 text-center text-gray-500">No completed orders yet.</td></tr>
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
-
         </div>
       </div>
     </div>
   );
 }
-

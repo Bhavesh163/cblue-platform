@@ -55,7 +55,7 @@ const STATUS_LABEL: Record<string, Record<string, string>> = {
 };
 const getStatusLabel = (status: string, locale: string) => STATUS_LABEL[status]?.[locale] || status.replace(/_/g, " ");
 
-type TabKey = "overview" | "jobs" | "requests" | "properties" | "history" | "chat" | "notifications" | "profile";
+type TabKey = "overview" | "active" | "requests" | "properties" | "history" | "chat" | "notifications" | "profile";
 
 export default function FixerProPage() {
   const locale = useLocale();
@@ -187,7 +187,7 @@ export default function FixerProPage() {
 
   const tabs: { key: TabKey; label: string; icon: string; badge?: number }[] = [
     { key: "overview", label: locale === "th" ? "ภาพรวม" : locale === "zh" ? "概览" : "Overview", icon: "📊" },
-    { key: "jobs", label: locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "当前工作" : "Active Jobs", icon: "🔧", badge: 0 },
+    { key: "active", label: locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "当前工作" : "Active Jobs", icon: "🔧", badge: 0 },
     { key: "requests", label: locale === "th" ? "คำขอใหม่" : locale === "zh" ? "新请求" : "Requests", icon: "📋", badge: 0 },
     { key: "properties", label: locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房产" : "Properties", icon: "🏢" },
     { key: "history", label: locale === "th" ? "ประวัติงาน" : locale === "zh" ? "历史" : "History", icon: "📜" },
@@ -301,15 +301,14 @@ export default function FixerProPage() {
 
         {/* Tab Content */}
         {activeTab === "overview" && <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={incomingJobs} completedJobs={completedJobs} earnings={[]} stats={stats} notifications={notifications} />}
-        {activeTab === "jobs" && <PartnerJobs locale={locale} activeJobs={activeJobs} />}
+        {activeTab === "active" && <PartnerJobs locale={locale} activeJobs={activeJobs} />}
         {activeTab === "requests" && <PartnerRequests locale={locale} incomingJobs={incomingJobs} />}
         {activeTab === "properties" && <PartnerProperties locale={locale} prefix={prefix} properties={properties} />}
         {activeTab === "history" && <PartnerHistory locale={locale} completedJobs={completedJobs} />}
         {activeTab === "chat" && <PartnerChats locale={locale} chats={chats} />}
         {activeTab === "notifications" && <PartnerNotifications locale={locale} notifications={notifications} />}
         {activeTab === "profile" && <PartnerProfile locale={locale} prefix={prefix} partner={partner} />}
-
-                  </>
+          </>
         )}
 
         <div className="my-10 border-t border-gray-200" />
@@ -980,8 +979,11 @@ function PartnerProperties({ locale, prefix, properties }: { locale: string; pre
 
 
 /* ===== DASHBOARD LOGGED IN STATE ===== */
-function PartnerDashboard({ locale, partner, prefix, onLogout }: { locale: string; partner: any; prefix: string; onLogout: () => void }) {
-  const [activeTab, setActiveTab] = useState<"overview"|"profile">("overview");
+function PartnerDashboard({ locale, partner, prefix, onLogout, orders }: { locale: string; partner: any; prefix: string; onLogout: () => void, orders?: any[] }) {
+  const activeOrders = orders ? orders.filter((o: any) => o.status === 'IN_PROGRESS' || o.status === 'CONFIRMED') : [];
+  const requestOrders = orders ? orders.filter((o: any) => o.status === 'PENDING' || o.status === 'CREATED') : [];
+
+  const [activeTab, setActiveTab] = useState<"overview"|"profile"|"active"|"requests"|"properties"|"history"|"chat"|"notifications">("overview");
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 relative z-10 pb-12 -mt-6">
       
@@ -1006,6 +1008,9 @@ function PartnerDashboard({ locale, partner, prefix, onLogout }: { locale: strin
       </div>
 
       {activeTab === "profile" && <PartnerProfile locale={locale} prefix={prefix} partner={partner} />}
+   {activeTab === "active" && <PartnerJobs locale={locale} activeJobs={activeOrders} />}
+   {activeTab === "requests" && <PartnerRequests locale={locale} incomingJobs={requestOrders} />}
+  
       
       <div className={`grid grid-cols-1 lg:grid-cols-3 gap-6 ${activeTab !== 'overview' ? 'hidden' : ''}`}>
 
@@ -1124,56 +1129,29 @@ function PartnerDashboard({ locale, partner, prefix, onLogout }: { locale: strin
         {/* RIGHT COLUMN: Jobs & Requests */}
         <div className="lg:col-span-2 space-y-6">
           
-          {/* Active Jobs */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    {/* Active Jobs */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
               <h2 className="font-bold text-gray-900 flex items-center gap-2">🔧 Active Jobs</h2>
-              <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full">3</span>
+              <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full">{activeOrders.length}</span>
             </div>
             <div className="divide-y divide-gray-50">
-              
-              <div className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer border-l-4 border-sky-500">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center text-2xl shadow-sm">🔧</div>
-                  <div>
-                    <h3 className="font-bold text-gray-900">Plumbing Repair <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">Standard</span></h3>
-                    <p className="text-sm text-gray-500 mt-1">Customer #A2X &middot; 2026-04-15</p>
+              {activeOrders.slice(0, 3).map((o: any, i: number) => (
+                <div key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl shadow-sm">🔧</div>
+                    <div>
+                      <h3 className="font-bold text-gray-900">{o.service}</h3>
+                      <p className="text-sm text-gray-500 mt-1">Customer #{o.id.slice(-4)} &middot; {new Date(o.createdAt).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-2">
+                    <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">{o.status}</span>
+                    <span className="font-bold text-gray-900 mt-1">฿{o.finalPrice || o.estimatedPrice || 0}</span>
                   </div>
                 </div>
-                <div className="flex flex-col items-end gap-2">
-                  <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">In Progress</span>
-                  <span className="font-bold text-gray-900">฿2,500</span>
-                </div>
-              </div>
-
-              <div className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer border-l-4 border-emerald-500">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center text-2xl shadow-sm">🔧</div>
-                  <div>
-                    <h3 className="font-bold text-gray-900">AC Maintenance <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">Corporate</span></h3>
-                    <p className="text-sm text-gray-500 mt-1">Customer #B7K &middot; 2026-04-16</p>
-                  </div>
-                </div>
-                <div className="flex flex-col items-end gap-2">
-                  <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full">Confirmed</span>
-                  <span className="font-bold text-gray-900">฿4,000</span>
-                </div>
-              </div>
-
-              <div className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer border-l-4 border-amber-500">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center text-2xl shadow-sm">🔧</div>
-                  <div>
-                    <h3 className="font-bold text-gray-900">Electrical Wiring <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">Economy</span></h3>
-                    <p className="text-sm text-gray-500 mt-1">Customer #C4M &middot; 2026-04-17</p>
-                  </div>
-                </div>
-                <div className="flex flex-col items-end gap-2">
-                  <span className="px-3 py-1 bg-amber-100 text-amber-700 text-xs font-bold rounded-full">Pending</span>
-                  <span className="font-bold text-gray-900">฿1,800</span>
-                </div>
-              </div>
-
+              ))}
+              {activeOrders.length === 0 && <div className="p-8 text-center text-gray-500">No active jobs.</div>}
             </div>
           </div>
 
@@ -1267,3 +1245,64 @@ function PartnerDashboard({ locale, partner, prefix, onLogout }: { locale: strin
   );
 }
 
+
+
+function PartnerActiveJobs({ locale, prefix, orders }: { locale: string; prefix: string; orders: any[] }) {
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8">
+      <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+        <h2 className="font-bold text-gray-900 flex items-center gap-2">🔧 Active Jobs</h2>
+        <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full">{orders.length}</span>
+      </div>
+      <div className="divide-y divide-gray-50">
+        {orders.map((o: any, i: number) => (
+          <div key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl shadow-sm">🔧</div>
+              <div>
+                <h3 className="font-bold text-gray-900">{o.service} <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">{o.tier || 'Standard'}</span></h3>
+                <p className="text-sm text-gray-500 mt-1">Customer #{o.id.slice(-4)} &middot; {new Date(o.createdAt).toLocaleDateString()}</p>
+              </div>
+            </div>
+            <div className="flex flex-col items-end gap-2">
+              <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">{o.status}</span>
+              <span className="font-bold text-gray-900 mt-1">฿{o.finalPrice || o.estimatedPrice || 0}</span>
+              <Link href={`${prefix}/chat/${o.id}`} className="text-gray-400 hover:text-sky-600 transition mt-2"><span className="text-xl">💬 Chat</span></Link>
+            </div>
+          </div>
+        ))}
+        {orders.length === 0 && <div className="p-8 text-center text-gray-500">No active jobs.</div>}
+      </div>
+    </div>
+  );
+}
+
+function PartnerIncomingRequests({ locale, prefix, orders }: { locale: string; prefix: string; orders: any[] }) {
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8">
+      <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+        <h2 className="font-bold text-gray-900 flex items-center gap-2">📋 Incoming Requests</h2>
+        <span className="bg-amber-100 text-amber-700 text-xs font-bold px-2.5 py-1 rounded-full">{orders.length}</span>
+      </div>
+      <div className="divide-y divide-gray-50">
+        {orders.map((o: any, i: number) => (
+          <div key={i} className="p-6 flex items-center justify-between hover:bg-amber-50/30 transition">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center text-2xl shadow-sm">📋</div>
+              <div>
+                <h3 className="font-bold text-gray-900">{o.service} <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">{o.tier || 'Standard'}</span></h3>
+                <p className="text-sm text-gray-500 mt-1">Customer #{o.id.slice(-4)} &middot; {new Date(o.createdAt).toLocaleDateString()} &middot; Est: ฿{o.estimatedPrice || 0}</p>
+                <p className="text-xs text-gray-400 mt-1">Status: {o.status}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <button className="px-6 py-2 bg-amber-500 text-white text-sm font-bold rounded-lg hover:bg-amber-600 transition shadow-sm">Accept</button>
+              <button className="px-6 py-2 bg-gray-100 text-gray-600 text-sm font-bold rounded-lg hover:bg-gray-200 transition">Decline</button>
+            </div>
+          </div>
+        ))}
+        {orders.length === 0 && <div className="p-8 text-center text-gray-500">No incoming requests right now.</div>}
+      </div>
+    </div>
+  );
+}
