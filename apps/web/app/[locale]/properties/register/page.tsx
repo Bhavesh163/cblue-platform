@@ -221,7 +221,7 @@ export default function PropertyRegisterPage() {
     }); window.scrollTo(0,0); }} className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition shadow-sm">
               {locale === "th" ? "ลงประกาศเพิ่ม" : "List Another"}
             </button>
-            <Link href={`${prefix}/dashboard`} className="px-6 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl shadow-lg transition">
+            <Link href={`${prefix}/fixers`} className="px-6 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl shadow-lg transition">
               {locale === "th" ? "ไปที่หน้าแดชบอร์ด" : "Go to Dashboard"}
             </Link>
           </div>
