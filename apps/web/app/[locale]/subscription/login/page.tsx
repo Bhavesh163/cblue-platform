@@ -71,6 +71,8 @@ function SubscriptionLoginPageContent() {
       localStorage.setItem("subscriber_token", data.accessToken);
       localStorage.setItem("subscriber", JSON.stringify(data.subscriber));
       const redir = searchParams.get("redirect") || "/dashboard";
+      // dispatch a storage event manually to update other tabs immediately
+      window.dispatchEvent(new Event("storage"));
       router.push(redir.startsWith("/") ? `${prefix}${redir}` : `${prefix}/dashboard`);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("loginError"));

@@ -73,6 +73,22 @@ export default function FixerProPage() {
 
   const [isFixer, setIsFixer] = useState(false);
 
+  
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const token = localStorage.getItem("subscriber_token");
+      if (!token) {
+        setPartner(null);
+        setIsFixer(false);
+      } else {
+        const stored = localStorage.getItem("subscriber");
+        if (stored) setPartner(JSON.parse(stored));
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, []);
+
   useEffect(() => {
     let isMounted = true;
     const fetchUser = async () => {
@@ -185,7 +201,7 @@ export default function FixerProPage() {
                   <p className="text-purple-200 text-xs">{partner.email}</p>
                 </div>
                 <button
-                  onClick={() => { localStorage.removeItem("subscriber"); localStorage.removeItem("subscriber_token"); localStorage.removeItem("pdpa_consent_partner"); router.push(prefix); }}
+                  onClick={() => { localStorage.removeItem("subscriber"); localStorage.removeItem("subscriber_token"); localStorage.removeItem("pdpa_consent_partner"); window.dispatchEvent(new Event("storage")); router.push(prefix); }}
                   className="ml-2 px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold rounded-lg transition"
                 >
                   {locale === "th" ? "ออกจากระบบ" : locale === "zh" ? "退出登录" : "Logout"}

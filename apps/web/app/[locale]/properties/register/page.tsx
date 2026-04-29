@@ -147,6 +147,7 @@ export default function PropertyRegisterPage() {
         localStorage.setItem("subscriber_token", authData.accessToken);
         localStorage.setItem("subscriber", JSON.stringify(authData.subscriber));
         setSubscriber(authData.subscriber);
+        window.dispatchEvent(new Event("storage"));
       } catch {
         setError(locale === "th" ? "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้" : locale === "zh" ? "无法连接服务器" : "Cannot connect to server");
         return;

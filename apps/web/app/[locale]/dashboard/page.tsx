@@ -79,6 +79,21 @@ export default function DashboardPage() {
 
 
 
+  
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const token = localStorage.getItem("subscriber_token");
+      if (!token) {
+        setSubscriber(null);
+      } else {
+        const stored = localStorage.getItem("subscriber");
+        if (stored) setSubscriber(JSON.parse(stored));
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, []);
+
   useEffect(() => {
     let isMounted = true;
     const fetchUser = async () => {
@@ -183,7 +198,7 @@ export default function DashboardPage() {
                   <p className="text-sky-200 text-xs">{subscriber.email}</p>
                 </div>
                 <button
-                  onClick={() => { localStorage.removeItem("subscriber"); localStorage.removeItem("subscriber_token"); localStorage.removeItem("pdpa_consent_customer"); router.push(prefix); }}
+                  onClick={() => { localStorage.removeItem("subscriber"); localStorage.removeItem("subscriber_token"); localStorage.removeItem("pdpa_consent_customer"); window.dispatchEvent(new Event("storage")); router.push(prefix); }}
                   className="ml-2 px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold rounded-lg transition"
                 >
                   {locale === "th" ? "ออกจากระบบ" : locale === "zh" ? "退出登录" : "Logout"}
@@ -241,6 +256,7 @@ export default function DashboardPage() {
             localStorage.removeItem("subscriber"); 
             localStorage.removeItem("subscriber_token"); 
             localStorage.removeItem("pdpa_consent_customer"); 
+            window.dispatchEvent(new Event("storage"));
             router.push(prefix);
           }} />
         )}

@@ -71,6 +71,20 @@ export default function PropertiesPage() {
     keyword: "",
   });
 
+  
+  useEffect(() => {
+    const handleStorage = () => {
+      const stored = localStorage.getItem("subscriber");
+      if (stored) {
+        setSubscriber(JSON.parse(stored));
+      } else {
+        setSubscriber(null);
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
   useEffect(() => {
     // Check login
     try {
@@ -274,6 +288,7 @@ export default function PropertiesPage() {
                   localStorage.setItem("subscriber_token", authData.accessToken);
                   localStorage.setItem("subscriber", JSON.stringify(authData.subscriber));
                   setSubscriber(authData.subscriber);
+                  window.dispatchEvent(new Event("storage"));
                   setShowLoginGate(false);
                 } catch {
                   setAuthError(locale === "th" ? "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้" : locale === "zh" ? "无法连接服务器" : "Cannot connect to server");
