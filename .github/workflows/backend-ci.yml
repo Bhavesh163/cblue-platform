@@ -290,6 +290,9 @@ jobs:
             # Remove old dangling images
             docker image prune -f 2>/dev/null || true
 
+            # Force remove old backend containers to prevent 'ContainerConfig' or 'Conflict' errors
+            docker rm -f $(docker ps -aq -f name="backend") 2>/dev/null || true
+            
             # Start backend (depends_on uses service_started now, so this won't block on health)
             docker compose -f infrastructure/docker/docker-compose.yml up -d backend --force-recreate 2>&1 || {
               echo "⚠️ docker-compose up backend failed — trying docker run fallback..."

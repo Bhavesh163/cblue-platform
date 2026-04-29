@@ -26,7 +26,7 @@ export async function generateMetadata({
     title: { default: titles[locale] ?? titles.en!, template: `%s | CBLUE` },
     description: descriptions[locale] ?? descriptions.en!,
     keywords: [
-    "专业人士", "办公室", "วิศวกรกรควบคุมงาน", "ซื้อทาวน์เฮ้าส์", "二手工厂", "คอนโดให้เช่า", "วิศวกรเครื่องกลควบคุมงาน", "โกดัง", "accountant  search", "ช่างซ่อมบ้าน", "วิศวกรโยธาควบคุมงาน", "Design Mechanical Engineer", "Safety manager search", "ความปลอดภัยจากอัคคีภัย", "Lawyer search", "房屋出租", "Digital Marketing search", "เช่าโรงงาน", "เช่าออฟฟิศ", "หาวิศวกรกรควบคุมงาน", "找设计师", "办公室出租", "เช่าคอนโด", "卖工厂", "Design Civil Engineer search", "ขายโกดัง", "Design Electrical Engineer", "อาคารมื่อสอง", "仓库出租", "ออฟฟิศ", "ค้นหาผู้จัดการ HSE", "仓库", "Construction Electrical Engineer", "ขายคอนโด", "โกดังมื่อสอง", "โปรแกรมเมอร์", "ค้นหานักบัญชี", "工厂", "สถาปนิก", "Design Civil Engineer", "มืออาชีพ", "找维修工", "找安全员", "建筑", "เช่าโกดัง", "โกดังให้เช่า", "买联排别墅", "HSE manager search", "firelifesafety search", "ผู้สอบบัญชี", "วิศวกรโยธาออกแบบ", "เจ้าหน้าที่ความปลอดภัย", "找监理工程师", "二手土地", "ที่ดินมื่อสอง", "设计师", "FLS", "HSE manager", "ขายที่ดิน", "Digital Marketing", "ทนายความ", "ขายบ้าน", "บ้านให้เช่า", "หาช่างซ่อมบ้าน", "โรงงาน", "เช่าบ้าน", "土地", "Interior Designer search", "公寓出租", "房屋维修", "二手仓库", "ที่ดิน", "二手建筑", "CPA search", "ขายทาวน์เฮ้าส์", "卖土地", "二手联排别墅", "Architect", "อาคารให้เช่า", "Software Programer", "二手公寓", "公寓", "มัณฑนากร", "บ้านมื่อสอง", "หาผู้ออกแบบ", "卖联排别墅", "Architect search", "ผู้จัดการ HSE", "อาคาร", "วิศวกรเครื่องกลออกแบบ", "ที่ดินให้เช่า", "โรงงานมื่อสอง", "卖房", "工厂出租", "联排别墅出租", "找审计师", "卖公寓", "นักบัญชี", "โรงงานให้เช่า", "卖仓库", "Lawyer", "ค้นหาสถาปนิก", "ค้นหาผู้จัดการความปลอดภัย", "Construction Mechanical Engineer", "ทาวน์เฮ้าส์มื่อสอง", "找专业人士", "accountant", "ค้นหาการตลาดดิจิทัล", "ค้นหาผู้สอบบัญชี", "บ้าน", "หาทาวน์เฮ้าส์", "ทาวน์เฮ้าส์ให้เช่า", "ค้นหาวิศวกรโยธาออกแบบ", "建筑出租", "หามืออาชีพ", "找联排别墅", "Interior Designer", "审计师", "คอนโด", "ผู้จัดการความปลอดภัย", "ค้นหาโปรแกรมเมอร์", "คอนโดมื่อสอง", "วิศวกรไฟฟ้าควบคุมงาน", "卖建筑", "年度检查", "ค้นหามัณฑนากร", "ค้นหาทนายความ", "ผู้ออกแบบ", "安全员", "Safety manager", "CPA", "ขายโรงงาน", "监理工程师", "เช่าอาคาร", "二手房", "ขายอาคาร", "土地出租", "ตรวจประจำปี", "เช่าที่ดิน", "房子", "Construction Civil Engineer search", "firelifesafety", "Construction Civil Engineer", "การตลาดดิจิทัล", "ค้นหาวิศวกรโยธาควบคุมงาน", "วิศวกรไฟฟ้าออกแบบ", "FLS search", "หาเจ้าหน้าที่ความปลอดภัย", "หาผู้ตรวจสอบบัญชี", "ผู้ตรวจสอบบัญชี",
+      "专业人士", "办公室", "วิศวกรกรควบคุมงาน", "ซื้อทาวน์เฮ้าส์", "二手工厂", "คอนโดให้เช่า", "วิศวกรเครื่องกลควบคุมงาน", "โกดัง", "accountant  search", "ช่างซ่อมบ้าน", "วิศวกรโยธาควบคุมงาน", "Design Mechanical Engineer", "Safety manager search", "ความปลอดภัยจากอัคคีภัย", "Lawyer search", "房屋出租", "Digital Marketing search", "เช่าโรงงาน", "เช่าออฟฟิศ", "หาวิศวกรกรควบคุมงาน", "找设计师", "办公室出租", "เช่าคอนโด", "卖工厂", "Design Civil Engineer search", "ขายโกดัง", "Design Electrical Engineer", "อาคารมื่อสอง", "仓库出租", "ออฟฟิศ", "ค้นหาผู้จัดการ HSE", "仓库", "Construction Electrical Engineer", "ขายคอนโด", "โกดังมื่อสอง", "โปรแกรมเมอร์", "ค้นหานักบัญชี", "工厂", "สถาปนิก", "Design Civil Engineer", "มืออาชีพ", "找维修工", "找安全员", "建筑", "เช่าโกดัง", "โกดังให้เช่า", "买联排别墅", "HSE manager search", "firelifesafety search", "ผู้สอบบัญชี", "วิศวกรโยธาออกแบบ", "เจ้าหน้าที่ความปลอดภัย", "找监理工程师", "二手土地", "ที่ดินมื่อสอง", "设计师", "FLS", "HSE manager", "ขายที่ดิน", "Digital Marketing", "ทนายความ", "ขายบ้าน", "บ้านให้เช่า", "หาช่างซ่อมบ้าน", "โรงงาน", "เช่าบ้าน", "土地", "Interior Designer search", "公寓出租", "房屋维修", "二手仓库", "ที่ดิน", "二手建筑", "CPA search", "ขายทาวน์เฮ้าส์", "卖土地", "二手联排别墅", "Architect", "อาคารให้เช่า", "Software Programer", "二手公寓", "公寓", "มัณฑนากร", "บ้านมื่อสอง", "หาผู้ออกแบบ", "卖联排别墅", "Architect search", "ผู้จัดการ HSE", "อาคาร", "วิศวกรเครื่องกลออกแบบ", "ที่ดินให้เช่า", "โรงงานมื่อสอง", "卖房", "工厂出租", "联排别墅出租", "找审计师", "卖公寓", "นักบัญชี", "โรงงานให้เช่า", "卖仓库", "Lawyer", "ค้นหาสถาปนิก", "ค้นหาผู้จัดการความปลอดภัย", "Construction Mechanical Engineer", "ทาวน์เฮ้าส์มื่อสอง", "找专业人士", "accountant", "ค้นหาการตลาดดิจิทัล", "ค้นหาผู้สอบบัญชี", "บ้าน", "หาทาวน์เฮ้าส์", "ทาวน์เฮ้าส์ให้เช่า", "ค้นหาวิศวกรโยธาออกแบบ", "建筑出租", "หามืออาชีพ", "找联排别墅", "Interior Designer", "审计师", "คอนโด", "ผู้จัดการความปลอดภัย", "ค้นหาโปรแกรมเมอร์", "คอนโดมื่อสอง", "วิศวกรไฟฟ้าควบคุมงาน", "卖建筑", "年度检查", "ค้นหามัณฑนากร", "ค้นหาทนายความ", "ผู้ออกแบบ", "安全员", "Safety manager", "CPA", "ขายโรงงาน", "监理工程师", "เช่าอาคาร", "二手房", "ขายอาคาร", "土地出租", "ตรวจประจำปี", "เช่าที่ดิน", "房子", "Construction Civil Engineer search", "firelifesafety", "Construction Civil Engineer", "การตลาดดิจิทัล", "ค้นหาวิศวกรโยธาควบคุมงาน", "วิศวกรไฟฟ้าออกแบบ", "FLS search", "หาเจ้าหน้าที่ความปลอดภัย", "หาผู้ตรวจสอบบัญชี", "ผู้ตรวจสอบบัญชี",
       // Brand
       "ช่างซ่อมบ้าน",
       "หาช่างซ่อมบ้าน",
@@ -593,7 +593,25 @@ export async function generateMetadata({
       "联排别墅出租",
       "二手联排别墅",
       "买联排别墅",
-      "卖联排别墅",
+      "卖联排别墅",,
+      
+    "ช่างซ่อมบ้าน", "หาช่างซ่อมบ้าน", "มืออาชีพ", "หามืออาชีพ", "เจ้าหน้าที่ความปลอดภัย", "หาเจ้าหน้าที่ความปลอดภัย", 
+    "ตรวจประจำปี", "วิศวกรกรควบคุมงาน", "หาวิศวกรกรควบคุมงาน", "ผู้ตรวจสอบบัญชี", "หาผู้ตรวจสอบบัญชี", 
+    "ผู้ออกแบบ", "หาผู้ออกแบบ", "ขายบ้าน", "ขายคอนโด", "ขายโกดัง", "ขายที่ดิน", "ขายโรงงาน", "ขายอาคาร", 
+    "บ้าน", "คอนโด", "โกดัง", "ที่ดิน", "โรงงาน", "อาคาร", "ออฟฟิศ", "บ้านให้เช่า", "คอนโดให้เช่า", 
+    "โกดังให้เช่า", "ที่ดินให้เช่า", "โรงงานให้เช่า", "อาคารให้เช่า", "บ้านมื่อสอง", "คอนโดมื่อสอง", 
+    "โกดังมื่อสอง", "ที่ดินมื่อสอง", "โรงงานมื่อสอง", "อาคารมื่อสอง", "เช่าบ้าน", "เช่าคอนโด", "เช่าโกดัง", 
+    "เช่าที่ดิน", "เช่าโรงงาน", "เช่าอาคาร", "เช่าออฟฟิศ", "หาทาวน์เฮ้าส์", "ทาวน์เฮ้าส์ให้เช่า", 
+    "ทาวน์เฮ้าส์มื่อสอง", "ซื้อทาวน์เฮ้าส์", "ขายทาวน์เฮ้าส์", "Lawyer", "accountant", "CPA", "Architect", 
+    "Interior Designer", "Design Civil Engineer", "Construction Civil Engineer", "Design Mechanical Engineer", 
+    "Construction Mechanical Engineer", "Design Electrical Engineer", "Construction Electrical Engineer", 
+    "Software Programer", "Digital Marketing", "Safety manager", "HSE manager", "firelifesafety", "FLS", 
+    "Lawyer search", "accountant search", "CPA search", "Architect search", "Interior Designer search", 
+    "Design Civil Engineer search", "Construction Civil Engineer search", "Design Mechanical Engineer search", 
+    "Construction Mechanical Engineer search", "Design Electrical Engineer search", "Construction Electrical Engineer search", 
+    "Software Programer search", "Digital Marketing search", "Safety manager search", "HSE manager search", 
+    "firelifesafety search", "FLS search", "CBLUE", "cblue", "cblue.co.th", "cblue หาช่าง"
+
     ],
     openGraph: {
       locale: locale === "th" ? "th_TH" : locale === "zh" ? "zh_CN" : "en_US",

@@ -27,8 +27,11 @@ describe('SubscriptionService', () => {
       $transaction: jest.fn((callback) => {
         // mock the transaction object (tx)
         const tx = {
-          user: prismaService.user,
-          subscriber: prismaService.subscriber,
+          user: prismaService.user || {
+            findFirst: jest.fn(),
+            create: jest.fn(),
+          },
+          subscriber: prismaService.subscriber || { create: jest.fn() },
         };
         return Promise.resolve(callback(tx));
       }),

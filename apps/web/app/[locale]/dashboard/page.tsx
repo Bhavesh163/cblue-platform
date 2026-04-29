@@ -103,31 +103,48 @@ export default function DashboardPage() {
           setLoading(false);
           return;
         }
+
+        // Eagerly set state from localStorage to prevent flash of logged-out state
+        if (isMounted) {
+          const stored = localStorage.getItem("subscriber");
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            setSubscriber(parsed);
+          }
+          const consent = localStorage.getItem("pdpa_consent_customer");
+          if (!consent) setShowPdpa(true);
+        }
+
         const res = await fetch("/api/v1/users/me", {
           headers: { Authorization: `Bearer ${token}` }
         });
+        
         if (res.ok) {
           const user = await res.json();
-          
           if (isMounted) {
+            
             const stored = localStorage.getItem("subscriber");
-            if (stored) setSubscriber(JSON.parse(stored));
-            else setSubscriber({ id: user.id, name: user.name, email: user.email, phone: user.phone, status: "ACTIVE" });
-            const consent = localStorage.getItem("pdpa_consent_customer");
-            if (!consent) setShowPdpa(true);
+            if (stored) {
+               setSubscriber(JSON.parse(stored));
+            } else {
+               setSubscriber({ id: user.id, name: user.name, email: user.email, phone: user.phone, status: "ACTIVE" });
+            }
           }
 
-            const ordersRes = await fetch("/api/v1/orders/my", { headers: { Authorization: `Bearer ${token}` } });
-            if (ordersRes.ok && isMounted) setOrders(await ordersRes.json());
+          const ordersRes = await fetch("/api/v1/orders/my", { headers: { Authorization: `Bearer ${token}` } });
+          if (ordersRes.ok && isMounted) setOrders(await ordersRes.json());
 
         } else if (res.status === 401 || res.status === 403) {
           localStorage.removeItem("subscriber_token");
           localStorage.removeItem("subscriber");
+          if (isMounted) {
+            setSubscriber(null);
+          }
         }
       } catch { /* ignore */ }
       if (isMounted) setLoading(false);
     };
-    fetchUser();
+        fetchUser();
     return () => { isMounted = false; };
   }, [router, prefix]);
 

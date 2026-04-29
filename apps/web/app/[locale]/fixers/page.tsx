@@ -68,6 +68,7 @@ export default function FixerProPage() {
   const [showPdpa, setShowPdpa] = useState(false);
 
   const [orders, setOrders] = useState<any[]>([]);
+  const [myProperties, setMyProperties] = useState<any[]>([]);
 
 
 
@@ -98,31 +99,52 @@ export default function FixerProPage() {
           setLoading(false);
           return;
         }
+
+        // Eagerly set state from localStorage to prevent flash of logged-out state
+        if (isMounted) {
+          const stored = localStorage.getItem("subscriber");
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            setPartner(parsed);
+            setIsFixer(true);
+          }
+          const consent = localStorage.getItem("pdpa_consent_partner");
+          if (!consent) setShowPdpa(true);
+        }
+
         const res = await fetch("/api/v1/users/me", {
           headers: { Authorization: `Bearer ${token}` }
         });
+        
         if (res.ok) {
           const user = await res.json();
           if (isMounted) {
             setIsFixer(!!user.fixer);
             const stored = localStorage.getItem("subscriber");
-            if (stored) setPartner(JSON.parse(stored));
-            else setPartner({ id: user.id, name: user.name, email: user.email, phone: user.phone, status: "ACTIVE" });
-            const consent = localStorage.getItem("pdpa_consent_partner");
-            if (!consent) setShowPdpa(true);
+            if (stored) {
+               setPartner(JSON.parse(stored));
+            } else {
+               setPartner({ id: user.id, name: user.name, email: user.email, phone: user.phone, status: "ACTIVE" });
+            }
           }
 
-            const ordersRes = await fetch("/api/v1/orders/fixer", { headers: { Authorization: `Bearer ${token}` } });
-            if (ordersRes.ok && isMounted) setOrders(await ordersRes.json());
+          const ordersRes = await fetch("/api/v1/orders/fixer", { headers: { Authorization: `Bearer ${token}` } });
+          if (ordersRes.ok && isMounted) setOrders(await ordersRes.json());
+          
+          const propRes = await fetch("/api/v1/properties/my", { headers: { Authorization: `Bearer ${token}` } });
+          if (propRes.ok && isMounted) setMyProperties(await propRes.json());
 
         } else if (res.status === 401 || res.status === 403) {
           localStorage.removeItem("subscriber_token");
           localStorage.removeItem("subscriber");
+          if (isMounted) {
+            setPartner(null); setIsFixer(false);
+          }
         }
       } catch { /* ignore */ }
       if (isMounted) setLoading(false);
     };
-    fetchUser();
+        fetchUser();
     return () => { isMounted = false; };
   }, []);
 
@@ -146,7 +168,16 @@ export default function FixerProPage() {
   }));
 
   
-  const properties = mappedOrders.filter(o => o.type === 'property');
+  const properties = myProperties.map(p => ({
+    id: p.id,
+    type: 'property',
+    service: p.title,
+    serviceTh: p.titleTh || p.title,
+    serviceZh: p.titleZh || p.title,
+    location: p.address?.province || "Bangkok",
+    status: p.status,
+    fee: p.price ? `฿${p.price.toLocaleString()}` : "N/A"
+  }));
   const chats: any[] = [];
   const notifications: any[] = [];
 
@@ -798,6 +829,7 @@ function PartnerProfile({ locale, prefix, partner }: { locale: string; prefix: s
             </div>
           </div>
           
+          
           <div className="flex-1 w-full">
             <div className="flex justify-between items-start mb-4">
               <div>
@@ -811,97 +843,89 @@ function PartnerProfile({ locale, prefix, partner }: { locale: string; prefix: s
                 {locale === "th" ? "แก้ไขโปรไฟล์" : locale === "zh" ? "编辑资料" : "Edit Profile"}
               </button>
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-8 gap-y-4 pt-4 border-t border-gray-100">
+            
+            {/* Contact Info */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-6 pt-6 border-t border-gray-100">
               <div>
-                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">{locale === "th" ? "อีเมล" : "Email"}</h3>
-                <p className="text-gray-900 font-medium text-sm truncate">{partner.email}</p>
+                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-1">{locale === "th" ? "อีเมล" : "Email"}</h3>
+                <p className="text-sm font-medium text-gray-900">{partner.email}</p>
               </div>
               <div>
-                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">{locale === "th" ? "เบอร์โทรศัพท์" : "Phone"}</h3>
-                <p className="text-gray-900 font-medium text-sm">{partner.phone || "-"}</p>
+                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-1">{locale === "th" ? "เบอร์โทรศัพท์" : "Phone"}</h3>
+                <p className="text-sm font-medium text-gray-900">{partner.phone || "-"}</p>
               </div>
               <div>
-                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">{locale === "th" ? "เข้าร่วมเมื่อ" : "Member Since"}</h3>
-                <p className="text-gray-900 font-medium text-sm">{new Date().toLocaleDateString()}</p>
+                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-1">{locale === "th" ? "บริษัท/นิติบุคคล" : "Company"}</h3>
+                <p className="text-sm font-medium text-gray-900">{partner.company || "-"}</p>
+              </div>
+              <div>
+                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-1">{locale === "th" ? "วันที่สมัคร" : "Member Since"}</h3>
+                <p className="text-sm font-medium text-gray-900">{new Date().toLocaleDateString()}</p>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Enterprise AI Assessment Card */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="px-6 py-5 border-b border-gray-100 bg-gradient-to-r from-slate-50 to-white flex justify-between items-center">
-          <h2 className="font-bold text-gray-900 flex items-center gap-2">🤖 CBLUE AI Tier Assessment</h2>
-          <span className="text-xs text-gray-500 px-2 py-1 bg-white rounded border border-gray-200">Overall Score: <strong className="text-gray-900">69/100</strong></span>
+      {/* AI Assessment & Upgrade Path */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden mb-8">
+        <div className="bg-sky-50 px-6 py-4 border-b border-sky-100 flex items-center justify-between">
+          <h3 className="font-bold text-sky-900 flex items-center gap-2">
+            <span className="text-xl">🤖</span> CBLUE AI Tier Assessment
+          </h3>
+          <span className="text-sm text-sky-700 font-semibold bg-white px-3 py-1 rounded-full shadow-sm">Overall Score: 69/100</span>
         </div>
         
         <div className="p-6">
-          <div className="flex items-center gap-3 mb-6 p-4 bg-amber-50 rounded-xl border border-amber-100">
-            <span className="text-2xl">⚠️</span>
-            <div className="flex-1">
-              <h4 className="font-bold text-amber-900 text-sm">Partially Verified — Complete profile to improve</h4>
-              <p className="text-xs text-amber-700 mt-1">
-                Gain more experience, upload portfolio work, update certifications, and maintain good reviews — CBLUE AI will automatically re-evaluate and upgrade your tier.
-              </p>
+          <div className="flex items-center gap-4 mb-6 p-4 bg-amber-50 rounded-xl border border-amber-100">
+            <div className="text-2xl">⚠️</div>
+            <div>
+              <p className="text-amber-800 font-bold">Partially Verified — Complete profile to improve</p>
+              <p className="text-amber-600 text-sm">The CBLUE team is reviewing your information and KYC. Approval within 1–3 business days.</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Evaluation Breakdown */}
-            <div>
-              <h3 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wider">Evaluation Breakdown</h3>
-              <div className="space-y-4">
-                {[
-                  { label: "Experience", score: 25, max: 25, color: "bg-green-500" },
-                  { label: "Skills Breadth", score: 12, max: 15, color: "bg-green-500" },
-                  { label: "KYC Verification", score: 15, max: 15, color: "bg-green-500" },
-                  { label: "Portfolio & Evidence", score: 0, max: 15, color: "bg-gray-200" },
-                  { label: "Profile Completeness", score: 7, max: 10, color: "bg-amber-400" },
-                  { label: "Price List", score: 6, max: 10, color: "bg-amber-400" },
-                  { label: "Credential Verification", score: 4, max: 10, color: "bg-red-400" },
-                ].map(item => (
-                  <div key={item.label}>
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className="font-medium text-gray-700">{item.label}</span>
-                      <span className="text-gray-500 font-bold">{item.score}/{item.max}</span>
-                    </div>
-                    <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
-                      <div className={`h-full ${item.color}`} style={{ width: `${(item.score / item.max) * 100}%` }} />
-                    </div>
-                  </div>
-                ))}
+          <h4 className="font-bold text-gray-800 mb-4">Evaluation Breakdown</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+            {[
+              { label: "Experience", score: 25, max: 25 },
+              { label: "Skills Breadth", score: 12, max: 15 },
+              { label: "KYC Verification", score: 15, max: 15 },
+              { label: "Portfolio & Evidence", score: 0, max: 15 },
+              { label: "Profile Completeness", score: 7, max: 10 },
+              { label: "Price List", score: 6, max: 10 },
+              { label: "Credential Verification", score: 4, max: 10 }
+            ].map((item, i) => (
+              <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
+                <span className="text-gray-700 font-medium text-sm">{item.label}</span>
+                <span className={`font-bold ${item.score === item.max ? 'text-green-600' : item.score === 0 ? 'text-red-500' : 'text-amber-600'}`}>
+                  {item.score}/{item.max}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><span className="text-lg">🔍</span> AI Verification Results</h4>
+          <ul className="space-y-3 mb-8 bg-gray-50 p-5 rounded-xl border border-gray-100">
+            <li className="flex gap-3"><span className="text-red-500 font-bold">❌</span><span className="text-gray-700 text-sm">No company info provided</span></li>
+            <li className="flex gap-3"><span className="text-green-500 font-bold">✅</span><span className="text-gray-700 text-sm">Experience consistent with project type</span></li>
+            <li className="flex gap-3"><span className="text-red-500 font-bold">❌</span><span className="text-gray-700 text-sm">No work description provided</span></li>
+            <li className="flex gap-3"><span className="text-green-500 font-bold">✅</span><span className="text-gray-700 text-sm">KYC documents complete (front & back)</span></li>
+          </ul>
+
+          <div className="bg-sky-50 rounded-xl p-5 border border-sky-100 space-y-4">
+            <div className="flex gap-3">
+              <span className="text-sky-600 text-xl mt-0.5">💡</span>
+              <div>
+                <p className="font-bold text-sky-900 mb-1">How to upgrade</p>
+                <p className="text-sky-800 text-sm leading-relaxed">Gain more experience, upload portfolio work, update certifications, and maintain good reviews — CBLUE AI will automatically re-evaluate and upgrade your tier when you edit your profile or accumulate work history.</p>
               </div>
             </div>
-
-            {/* AI Verification Results */}
-            <div>
-              <h3 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wider">🔍 AI Verification Results</h3>
-              <ul className="space-y-3 text-sm">
-                <li className="flex items-start gap-2 text-gray-600">
-                  <span className="text-red-500 mt-0.5">❌</span>
-                  <span>No company info provided</span>
-                </li>
-                <li className="flex items-start gap-2 text-gray-600">
-                  <span className="text-green-500 mt-0.5">✅</span>
-                  <span>Experience consistent with project type</span>
-                </li>
-                <li className="flex items-start gap-2 text-gray-600">
-                  <span className="text-red-500 mt-0.5">❌</span>
-                  <span>No work description provided</span>
-                </li>
-                <li className="flex items-start gap-2 text-gray-600">
-                  <span className="text-green-500 mt-0.5">✅</span>
-                  <span>KYC documents complete (front & back)</span>
-                </li>
-              </ul>
-
-              <div className="mt-8 p-4 bg-gray-50 rounded-xl text-xs text-gray-500 border border-gray-100">
-                <p className="flex items-center gap-2 font-medium text-gray-700 mb-1">
-                  <span className="text-lg">🔒</span> Security Notice
-                </p>
-                Your data is encrypted and protected under PDPA. Credentials are verified to maintain platform integrity.
+            <div className="flex gap-3">
+              <span className="text-sky-600 text-xl mt-0.5">🔒</span>
+              <div>
+                <p className="font-bold text-sky-900 mb-1">Security</p>
+                <p className="text-sky-800 text-sm leading-relaxed">Your data is encrypted and protected under PDPA. Credentials are verified to maintain platform integrity.</p>
               </div>
             </div>
           </div>
