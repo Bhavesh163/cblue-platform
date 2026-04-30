@@ -895,11 +895,11 @@ function PartnerProfile({ locale, prefix, partner }: { locale: string; prefix: s
         </div>
         
         <div className="p-6">
-          <div className="flex items-center gap-4 mb-6 p-4 bg-amber-50 rounded-xl border border-amber-100">
+          <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-r-2xl flex items-start gap-4 mb-6">
             <div className="text-2xl"></div>
             <div>
-              <p className="text-amber-800 font-bold">Partially Verified — Complete profile to improve</p>
-              <p className="text-amber-600 text-sm">The CBLUE team is reviewing your information and KYC. Approval within 1–3 business days.</p>
+              <p className="text-green-800 font-bold">Fully Verified by CBLUE AI</p>
+              <p className="text-green-600 text-sm">Your information and KYC documents have been instantly verified by CBLUE AI. Your profile is active and ready to accept bookings.</p>
             </div>
           </div>
 

@@ -61,7 +61,7 @@ const professionalServices = [
   { id: "lawyer", value: "LAWYER", emoji: "⚖️", name: "Lawyer", nameTh: "ทนายความ", nameZh: "律师" },
   { id: "architect", value: "ARCHITECT", emoji: "📐", name: "Architect", nameTh: "สถาปนิก", nameZh: "建筑师" },
   { id: "interior-designer", value: "INTERIOR_DESIGNER", emoji: "🎨", name: "Interior Designer", nameTh: "มัณฑนากร", nameZh: "室内设计师" },
-  { id: "cpa", value: "CPA", emoji: "📊", name: "CPA", nameTh: "ผู้สอบบัญชี", nameZh: "注册会计师" },
+  { id: "cpa", value: "CPA", emoji: "", name: "CPA", nameTh: "ผู้สอบบัญชี", nameZh: "注册会计师" },
   { id: "engineer", value: "ENGINEER", emoji: "🏗️", name: "Engineer", nameTh: "วิศวกร", nameZh: "工程师" },
   { id: "software-programmer", value: "SOFTWARE_PROGRAMMER", emoji: "💻", name: "Software Programmer", nameTh: "โปรแกรมเมอร์", nameZh: "程序员" },
   { id: "digital-marketing", value: "DIGITAL_MARKETING", emoji: "📣", name: "Digital Marketing", nameTh: "การตลาดดิจิทัล", nameZh: "数字营销" },
@@ -168,10 +168,10 @@ export default function ServicesPage() {
           {/* 4-service quick nav */}
           <div className="mt-10 grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-3xl mx-auto">
             {[
-              { href: "#household", icon: "🏠", label: locale === "th" ? "ช่างซ่อมบ้าน" : locale === "zh" ? "家庭维修" : "Household Fixer", color: "hover:bg-sky-50" },
-              { href: "#project", icon: "💼", label: locale === "th" ? "ทีมโครงการ" : locale === "zh" ? "项目团队" : "Project Team", color: "hover:bg-indigo-50" },
-              { href: "#professional", icon: "👔", label: locale === "th" ? "มืออาชีพ" : locale === "zh" ? "专业人士" : "Professionals", color: "hover:bg-emerald-50" },
-              { href: `${prefix}/properties`, icon: "🏢", label: locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房地产" : "Property", color: "hover:bg-amber-50" },
+              { href: "#household", icon: "", label: locale === "th" ? "ช่างซ่อมบ้าน" : locale === "zh" ? "家庭维修" : "Household Fixer", color: "hover:bg-sky-50" },
+              { href: "#project", icon: "", label: locale === "th" ? "ทีมโครงการ" : locale === "zh" ? "项目团队" : "Project Team", color: "hover:bg-indigo-50" },
+              { href: "#professional", icon: "", label: locale === "th" ? "มืออาชีพ" : locale === "zh" ? "专业人士" : "Professionals", color: "hover:bg-emerald-50" },
+              { href: `${prefix}/properties`, icon: "", label: locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房地产" : "Property", color: "hover:bg-amber-50" },
             ].map((nav) => (
               <a key={nav.href} href={nav.href} className={`inline-flex items-center justify-center px-4 py-3 text-sm font-semibold text-slate-900 bg-white ${nav.color} rounded-xl shadow-lg transition-all gap-2`}>
                 <span>{nav.icon}</span> {nav.label}
@@ -185,7 +185,7 @@ export default function ServicesPage() {
       <section id="household" className="py-20 scroll-mt-4">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-12">
-            <span className="inline-block px-3 py-1 bg-sky-100 text-sky-700 rounded-full text-xs font-bold mb-3">🏠 {locale === "th" ? "6 บริการ" : locale === "zh" ? "6项服务" : "6 Services"}</span>
+            <span className="inline-block px-3 py-1 bg-sky-100 text-sky-700 rounded-full text-xs font-bold mb-3"> {locale === "th" ? "6 บริการ" : locale === "zh" ? "6项服务" : "6 Services"}</span>
             <h2 className="text-3xl font-bold text-gray-900 border-l-4 border-sky-500 pl-4">
               {t("services.householdTitle")}
             </h2>
@@ -235,7 +235,7 @@ export default function ServicesPage() {
       <section id="project" className="py-20 bg-white/60 scroll-mt-4">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-12">
-            <span className="inline-block px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-bold mb-3">💼 {locale === "th" ? "20 บริการ" : locale === "zh" ? "20项服务" : "20 Services"}</span>
+            <span className="inline-block px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-bold mb-3"> {locale === "th" ? "20 บริการ" : locale === "zh" ? "20项服务" : "20 Services"}</span>
             <h2 className="text-3xl font-bold text-gray-900 border-l-4 border-indigo-500 pl-4">
               {t("services.projectTitle")}
             </h2>
@@ -274,7 +274,7 @@ export default function ServicesPage() {
       <section id="professional" className="py-20 scroll-mt-4">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-12">
-            <span className="inline-block px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold mb-3">👔 {locale === "th" ? "10 บริการ" : locale === "zh" ? "10项服务" : "10 Services"}</span>
+            <span className="inline-block px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold mb-3"> {locale === "th" ? "10 บริการ" : locale === "zh" ? "10项服务" : "10 Services"}</span>
             <h2 className="text-3xl font-bold text-gray-900 border-l-4 border-purple-500 pl-4">
               {t("services.professionalTitle")}
             </h2>
@@ -303,7 +303,7 @@ export default function ServicesPage() {
       <section id="real-estate" className="py-20 bg-white/60 scroll-mt-4">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-12">
-            <span className="inline-block px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-bold mb-3">🏢 {locale === "th" ? "6 ประเภท" : locale === "zh" ? "6 类型" : "6 Types"}</span>
+            <span className="inline-block px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-bold mb-3"> {locale === "th" ? "6 ประเภท" : locale === "zh" ? "6 类型" : "6 Types"}</span>
             <h2 className="text-3xl font-bold text-gray-900 border-l-4 border-amber-500 pl-4">
               {locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房地产服务" : "Real Estate Services"}
             </h2>
@@ -359,7 +359,7 @@ export default function ServicesPage() {
                 href={`${prefix}/properties`}
                 className="px-8 py-3 bg-amber-600 text-white rounded-xl font-semibold hover:bg-amber-700 transition shadow-lg"
               >
-                {locale === "th" ? "🔍 ค้นหาอสังหาริมทรัพย์ทั้งหมด" : locale === "zh" ? "🔍 搜索所有房产" : "🔍 Browse All Properties"}
+                {locale === "th" ? " ค้นหาอสังหาริมทรัพย์ทั้งหมด" : locale === "zh" ? " 搜索所有房产" : " Browse All Properties"}
               </Link>
               <Link
                 href={`${prefix}/dashboard?tab=property`}
@@ -385,16 +385,16 @@ export default function ServicesPage() {
           </p>
           <div className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-3xl mx-auto">
             <Link href={`${prefix}/booking/household`} className="inline-flex items-center justify-center px-4 py-3 text-sm font-semibold text-slate-900 bg-white hover:bg-sky-50 rounded-xl shadow-lg transition-all gap-2">
-              🏠 {locale === "th" ? "จองช่าง" : locale === "zh" ? "预约维修" : "Book Fixer"}
+               {locale === "th" ? "จองช่าง" : locale === "zh" ? "预约维修" : "Book Fixer"}
             </Link>
             <Link href={`${prefix}/booking/project`} className="inline-flex items-center justify-center px-4 py-3 text-sm font-semibold text-white border-2 border-white/30 hover:bg-white/10 rounded-xl transition-all gap-2">
-              💼 {locale === "th" ? "จองทีม" : locale === "zh" ? "预约团队" : "Book Project"}
+               {locale === "th" ? "จองทีม" : locale === "zh" ? "预约团队" : "Book Project"}
             </Link>
             <Link href={`${prefix}/booking/professional`} className="inline-flex items-center justify-center px-4 py-3 text-sm font-semibold text-white border-2 border-white/30 hover:bg-white/10 rounded-xl transition-all gap-2">
-              👔 {locale === "th" ? "จองมืออาชีพ" : locale === "zh" ? "预约专业" : "Book Pro"}
+               {locale === "th" ? "จองมืออาชีพ" : locale === "zh" ? "预约专业" : "Book Pro"}
             </Link>
             <Link href={`${prefix}/properties`} className="inline-flex items-center justify-center px-4 py-3 text-sm font-semibold text-white border-2 border-white/30 hover:bg-white/10 rounded-xl transition-all gap-2">
-              🏢 {locale === "th" ? "อสังหาฯ" : locale === "zh" ? "房产" : "Property"}
+               {locale === "th" ? "อสังหาฯ" : locale === "zh" ? "房产" : "Property"}
             </Link>
           </div>
         </div>

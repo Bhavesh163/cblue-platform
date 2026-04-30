@@ -147,25 +147,25 @@ export default function Home() {
               href={`${prefix}/booking/household`}
               className="inline-flex items-center justify-center px-4 py-3 text-sm font-semibold text-slate-900 bg-white hover:bg-sky-50 rounded-xl shadow-lg transition-all gap-2"
             >
-              <span>🏠</span> {locale === "th" ? "จองช่าง" : locale === "zh" ? "预约技工" : "Book Fixer"}
+              <span></span> {locale === "th" ? "จองช่าง" : locale === "zh" ? "预约技工" : "Book Fixer"}
             </Link>
             <Link
               href={`${prefix}/booking/project`}
               className="inline-flex items-center justify-center px-4 py-3 text-sm font-semibold text-white border-2 border-white/30 hover:bg-white/10 rounded-xl transition-all gap-2"
             >
-              <span>💼</span> {locale === "th" ? "จองทีมโครงการ" : locale === "zh" ? "预约项目团队" : "Book Project"}
+              <span></span> {locale === "th" ? "จองทีมโครงการ" : locale === "zh" ? "预约项目团队" : "Book Project"}
             </Link>
             <Link
               href={`${prefix}/booking/professional`}
               className="inline-flex items-center justify-center px-4 py-3 text-sm font-semibold text-white border-2 border-white/30 hover:bg-white/10 rounded-xl transition-all gap-2"
             >
-              <span>👔</span> {locale === "th" ? "จองมืออาชีพ" : locale === "zh" ? "预约专业人士" : "Book Pro"}
+              <span></span> {locale === "th" ? "จองมืออาชีพ" : locale === "zh" ? "预约专业人士" : "Book Pro"}
             </Link>
             <Link
               href={`${prefix}/properties`}
               className="inline-flex items-center justify-center px-4 py-3 text-sm font-semibold text-white border-2 border-white/30 hover:bg-white/10 rounded-xl transition-all gap-2"
             >
-              <span>🏢</span> {locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房地产" : "Property"}
+              <span></span> {locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房地产" : "Property"}
             </Link>
           </div>
         </div>
@@ -216,25 +216,25 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {[
               {
-                href: `${prefix}/booking/household`, icon: "🏠", image: "/images/hvac.png",
+                href: `${prefix}/booking/household`, icon: "", image: "/images/hvac.png",
                 title: locale === "th" ? "จองช่างซ่อมบ้าน" : locale === "zh" ? "预约家庭维修" : "Book Household Fixer",
                 desc: locale === "th" ? "ประปา ไฟฟ้า แอร์ ตกแต่งภายใน จัดสวน และอื่นๆ" : locale === "zh" ? "水电、空调、室内装修、園艺等" : "Plumbing, electrical, AC, interior, landscaping, and more",
                 color: "from-sky-500 to-blue-600", items: locale === "th" ? ["ช่างประปา", "ช่างไฟฟ้า", "ช่างแอร์", "ตกแต่งภายใน", "จัดสวน", "Cladding"] : locale === "zh" ? ["水管", "电气", "空调", "室内", "園艺", "幕墙"] : ["Plumbing", "Electrical", "AC & HVAC", "Interior", "Landscaping", "Cladding"],
               },
               {
-                href: `${prefix}/booking/project`, icon: "💼", image: "/images/smart-home.jpg",
+                href: `${prefix}/booking/project`, icon: "", image: "/images/smart-home.jpg",
                 title: locale === "th" ? "จองทีมโครงการ" : locale === "zh" ? "预约项目团队" : "Book Project Team",
                 desc: locale === "th" ? "เว็บไซต์ AI สมาร์ทโฮม พลังงานแสงอาทิตย์ และ 20+ บริการ" : locale === "zh" ? "网站、AI、智能家居、太阳能等20+服务" : "Website, AI, smart home, solar, and 20+ project services",
                 color: "from-indigo-500 to-purple-600", items: locale === "th" ? ["เว็บไซต์", "AI/ML", "สมาร์ทโฮม", "โซลาร์", "EV Charger", "20+ บริการ"] : locale === "zh" ? ["网站", "AI/ML", "智能家居", "太阳能", "EV充电", "20+服务"] : ["Website", "AI/ML", "Smart Home", "Solar", "EV Charger", "20+ Services"],
               },
               {
-                href: `${prefix}/booking/professional`, icon: "👔", image: "/images/scenic-building.jpg",
+                href: `${prefix}/booking/professional`, icon: "", image: "/images/scenic-building.jpg",
                 title: locale === "th" ? "จองมืออาชีพ" : locale === "zh" ? "预约专业人士" : "Book Professional",
                 desc: locale === "th" ? "ทนายความ สถาปนิก วิศวกร นักบัญชี โปรแกรมเมอร์" : locale === "zh" ? "律师、建筑师、工程师、会计、程序员" : "Lawyer, architect, engineer, accountant, programmer",
                 color: "from-emerald-500 to-teal-600", items: locale === "th" ? ["ทนายความ", "สถาปนิก", "วิศวกร", "นักบัญชี", "IT/Dev", "การตลาด"] : locale === "zh" ? ["律师", "建筑师", "工程师", "会计", "IT/Dev", "营销"] : ["Lawyer", "Architect", "Engineer", "CPA", "IT/Dev", "Marketing"],
               },
               {
-                href: `${prefix}/properties`, icon: "🏢", image: "/images/scenic-house.jpg",
+                href: `${prefix}/properties`, icon: "", image: "/images/scenic-house.jpg",
                 title: locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房地产" : "Book Property",
                 desc: locale === "th" ? "ซื้อ ขาย เช่า คอนโด บ้าน ทาวน์เฮาส์ ที่ดิน" : locale === "zh" ? "买卖租 — 公寓、别墅、联排别墅、土地" : "Buy, sell, rent — condos, houses, townhouses, land",
                 color: "from-amber-500 to-orange-600", items: locale === "th" ? ["คอนโด", "บ้านเดี่ยว", "ทาวน์เฮาส์", "ที่ดิน", "ออฟฟิศ", "พาณิชย์"] : locale === "zh" ? ["公寓", "别墅", "联排", "土地", "办公", "商业"] : ["Condo", "House", "Townhouse", "Land", "Office", "Commercial"],
@@ -276,7 +276,7 @@ export default function Home() {
               href={`${prefix}/about`}
               className="group bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl px-8 py-5 flex items-center gap-6 shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 border border-sky-100"
             >
-              <span className="text-3xl flex-shrink-0">🏢</span>
+              <span className="text-3xl flex-shrink-0"></span>
               <div className="flex-1 min-w-0">
                 <h3 className="text-lg font-bold text-gray-900 group-hover:text-sky-600 transition-colors">
                   {locale === "th" ? "เกี่ยวกับเรา" : locale === "zh" ? "关于我们" : "About Us"}
@@ -297,7 +297,7 @@ export default function Home() {
               href={`${prefix}/get-support`}
               className="group bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl px-8 py-5 flex items-center gap-6 shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 border border-emerald-100"
             >
-              <span className="text-3xl flex-shrink-0">💬</span>
+              <span className="text-3xl flex-shrink-0"></span>
               <div className="flex-1 min-w-0">
                 <h3 className="text-lg font-bold text-gray-900 group-hover:text-emerald-600 transition-colors">
                   {locale === "th" ? "ติดต่อเรา" : locale === "zh" ? "联系我们" : "Contact Us"}
@@ -345,7 +345,7 @@ export default function Home() {
             <div className="bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl overflow-hidden shadow-xl border border-sky-100">
               <div className="bg-gradient-to-r from-sky-600 to-blue-600 px-8 py-5">
                 <h3 className="text-xl font-bold text-white text-center">
-                  {locale === "th" ? "🏠 สำหรับลูกค้า — จองง่าย จ่ายสะดวก ช่างมืออาชีพถึงบ้าน" : locale === "zh" ? "🏠 客户专区 — 轻松预约，专业上门服务" : "🏠 For Customers — Easy Booking, Verified Pros at Your Door"}
+                  {locale === "th" ? " สำหรับลูกค้า — จองง่าย จ่ายสะดวก ช่างมืออาชีพถึงบ้าน" : locale === "zh" ? " 客户专区 — 轻松预约，专业上门服务" : " For Customers — Easy Booking, Verified Pros at Your Door"}
                 </h3>
               </div>
               <div className="p-8">
@@ -358,22 +358,22 @@ export default function Home() {
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
                   <Link href={`${prefix}/booking/household`} className="bg-white rounded-xl p-5 text-center shadow-md hover:shadow-xl transition-all transform hover:-translate-y-1 border border-sky-100 group">
-                    <span className="text-3xl block mb-2">🏠</span>
+                    <span className="text-3xl block mb-2"></span>
                     <span className="text-sm font-bold text-gray-800 group-hover:text-sky-600">{locale === "th" ? "ช่างซ่อมบ้าน" : locale === "zh" ? "家庭维修" : "Household Fixer"}</span>
                     <p className="text-xs text-gray-400 mt-1">{locale === "th" ? "ประปา ไฟฟ้า แอร์" : locale === "zh" ? "水电、空调" : "Plumbing, Electrical, AC"}</p>
                   </Link>
                   <Link href={`${prefix}/booking/project`} className="bg-white rounded-xl p-5 text-center shadow-md hover:shadow-xl transition-all transform hover:-translate-y-1 border border-sky-100 group">
-                    <span className="text-3xl block mb-2">💼</span>
+                    <span className="text-3xl block mb-2"></span>
                     <span className="text-sm font-bold text-gray-800 group-hover:text-sky-600">{locale === "th" ? "ทีมโครงการ" : locale === "zh" ? "项目团队" : "Project Team"}</span>
                     <p className="text-xs text-gray-400 mt-1">{locale === "th" ? "IT สมาร์ทโฮม โซลาร์" : locale === "zh" ? "IT、智能家居、太阳能" : "IT, Smart Home, Solar"}</p>
                   </Link>
                   <Link href={`${prefix}/booking/professional`} className="bg-white rounded-xl p-5 text-center shadow-md hover:shadow-xl transition-all transform hover:-translate-y-1 border border-sky-100 group">
-                    <span className="text-3xl block mb-2">👔</span>
+                    <span className="text-3xl block mb-2"></span>
                     <span className="text-sm font-bold text-gray-800 group-hover:text-sky-600">{locale === "th" ? "มืออาชีพ" : locale === "zh" ? "专业人士" : "Professional"}</span>
                     <p className="text-xs text-gray-400 mt-1">{locale === "th" ? "ทนาย สถาปนิก วิศวกร" : locale === "zh" ? "律师、建筑师、工程师" : "Lawyer, Architect, Engineer"}</p>
                   </Link>
                   <Link href={`${prefix}/properties`} className="bg-white rounded-xl p-5 text-center shadow-md hover:shadow-xl transition-all transform hover:-translate-y-1 border border-sky-100 group">
-                    <span className="text-3xl block mb-2">🏢</span>
+                    <span className="text-3xl block mb-2"></span>
                     <span className="text-sm font-bold text-gray-800 group-hover:text-sky-600">{locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房地产" : "Real Estate"}</span>
                     <p className="text-xs text-gray-400 mt-1">{locale === "th" ? "คอนโด บ้าน ที่ดิน" : locale === "zh" ? "公寓、别墅、土地" : "Condo, House, Land"}</p>
                   </Link>
@@ -410,22 +410,22 @@ export default function Home() {
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
                   <Link href={`${prefix}/fixers`} className="bg-white rounded-xl p-5 text-center shadow-md hover:shadow-xl transition-all transform hover:-translate-y-1 border border-emerald-100 group">
-                    <span className="text-3xl block mb-2">🔧</span>
+                    <span className="text-3xl block mb-2"></span>
                     <span className="text-sm font-bold text-gray-800 group-hover:text-emerald-600">{locale === "th" ? "ช่างซ่อมบ้าน" : locale === "zh" ? "维修师" : "Fixer"}</span>
                     <p className="text-xs text-gray-400 mt-1">{locale === "th" ? "รับงานซ่อมบำรุงทั่วไทย" : locale === "zh" ? "全国家庭维修" : "Home repair jobs nationwide"}</p>
                   </Link>
                   <Link href={`${prefix}/fixers`} className="bg-white rounded-xl p-5 text-center shadow-md hover:shadow-xl transition-all transform hover:-translate-y-1 border border-emerald-100 group">
-                    <span className="text-3xl block mb-2">💼</span>
+                    <span className="text-3xl block mb-2"></span>
                     <span className="text-sm font-bold text-gray-800 group-hover:text-emerald-600">{locale === "th" ? "ทีมโครงการ" : locale === "zh" ? "项目团队" : "Project Team"}</span>
                     <p className="text-xs text-gray-400 mt-1">{locale === "th" ? "รับโปรเจกต์ IT โซลาร์" : locale === "zh" ? "IT、太阳能、智能项目" : "IT, solar, smart projects"}</p>
                   </Link>
                   <Link href={`${prefix}/fixers`} className="bg-white rounded-xl p-5 text-center shadow-md hover:shadow-xl transition-all transform hover:-translate-y-1 border border-emerald-100 group">
-                    <span className="text-3xl block mb-2">👔</span>
+                    <span className="text-3xl block mb-2"></span>
                     <span className="text-sm font-bold text-gray-800 group-hover:text-emerald-600">{locale === "th" ? "มืออาชีพ" : locale === "zh" ? "专业人士" : "Professional"}</span>
                     <p className="text-xs text-gray-400 mt-1">{locale === "th" ? "ทนาย สถาปนิก วิศวกร" : locale === "zh" ? "律师、建筑师、工程师" : "Lawyers, architects, engineers"}</p>
                   </Link>
                   <Link href={`${prefix}/fixers`} className="bg-white rounded-xl p-5 text-center shadow-md hover:shadow-xl transition-all transform hover:-translate-y-1 border border-emerald-100 group">
-                    <span className="text-3xl block mb-2">🏢</span>
+                    <span className="text-3xl block mb-2"></span>
                     <span className="text-sm font-bold text-gray-800 group-hover:text-emerald-600">{locale === "th" ? "ตัวแทนอสังหาฯ" : locale === "zh" ? "房产发布者" : "Property Lister"}</span>
                     <p className="text-xs text-gray-400 mt-1">{locale === "th" ? "ลงประกาศขาย/เช่า" : locale === "zh" ? "发布出售/出租房产" : "List properties for sale/rent"}</p>
                   </Link>
@@ -491,25 +491,25 @@ export default function Home() {
               href={`${prefix}/booking/household`}
               className="inline-flex items-center justify-center px-4 py-3 text-sm font-semibold text-slate-900 bg-white hover:bg-sky-50 rounded-xl shadow-lg transition-all gap-2"
             >
-              🏠 {locale === "th" ? "จองช่าง" : locale === "zh" ? "预约技工" : "Book Fixer"}
+               {locale === "th" ? "จองช่าง" : locale === "zh" ? "预约技工" : "Book Fixer"}
             </Link>
             <Link
               href={`${prefix}/booking/project`}
               className="inline-flex items-center justify-center px-4 py-3 text-sm font-semibold text-white border-2 border-white/30 hover:bg-white/10 rounded-xl transition-all gap-2"
             >
-              💼 {locale === "th" ? "จองทีม" : locale === "zh" ? "项目团队" : "Book Project"}
+               {locale === "th" ? "จองทีม" : locale === "zh" ? "项目团队" : "Book Project"}
             </Link>
             <Link
               href={`${prefix}/booking/professional`}
               className="inline-flex items-center justify-center px-4 py-3 text-sm font-semibold text-white border-2 border-white/30 hover:bg-white/10 rounded-xl transition-all gap-2"
             >
-              👔 {locale === "th" ? "จองมืออาชีพ" : locale === "zh" ? "预约专业人士" : "Book Pro"}
+               {locale === "th" ? "จองมืออาชีพ" : locale === "zh" ? "预约专业人士" : "Book Pro"}
             </Link>
             <Link
               href={`${prefix}/properties`}
               className="inline-flex items-center justify-center px-4 py-3 text-sm font-semibold text-white border-2 border-white/30 hover:bg-white/10 rounded-xl transition-all gap-2"
             >
-              🏢 {locale === "th" ? "อสังหาฯ" : locale === "zh" ? "房产" : "Property"}
+               {locale === "th" ? "อสังหาฯ" : locale === "zh" ? "房产" : "Property"}
             </Link>
           </div>
         </div>

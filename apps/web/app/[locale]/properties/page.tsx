@@ -232,7 +232,7 @@ export default function PropertiesPage() {
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-8 shadow-2xl">
             <div className="text-center mb-6">
-              <div className="text-5xl mb-4">🔒</div>
+              <div className="text-5xl mb-4"></div>
               <h2 className="text-xl font-bold text-gray-900 mb-2">
                 {locale === "th" ? "กรุณาเข้าสู่ระบบก่อน" : locale === "zh" ? "请先登录" : "Login Required"}
               </h2>
@@ -343,7 +343,7 @@ export default function PropertiesPage() {
             <div className="p-6 pt-2 overflow-y-auto flex-1">
               {/* Property info */}
               <div className="flex items-center gap-3 bg-gray-50 rounded-xl p-3 mb-5">
-                <span className="text-3xl">🏢</span>
+                <span className="text-3xl"></span>
                 <div>
                   <p className="font-bold text-gray-900">{showContactFlow.title}</p>
                   <p className="text-sm text-green-700 font-semibold">฿{formatPrice(showContactFlow.price)}{showContactFlow.listingType === "RENT" ? "/mo" : ""}</p>
@@ -374,7 +374,7 @@ export default function PropertiesPage() {
                     ))}
                   </div>
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700 mt-4">
-                    ⚠️ {locale === "th"
+                     {locale === "th"
                       ? "CBLUE เป็นแพลตฟอร์มจับคู่เท่านั้น ราคาทรัพย์สินตกลงโดยตรงระหว่างผู้ซื้อ/ผู้เช่าและผู้ลงประกาศ ค่าธรรมเนียมนี้เป็นค่าดำเนินการเท่านั้น"
                       : locale === "zh"
                       ? "CBLUE仅为匹配平台。房产价格由买家/租客和发布者直接协商。此费用仅用于处理。"
@@ -404,7 +404,7 @@ export default function PropertiesPage() {
                 } catch { /* safe fallback */ }
                 return (
                 <div className="text-center">
-                  <div className="text-5xl mb-4">📋</div>
+                  <div className="text-5xl mb-4"></div>
                   <h3 className="text-lg font-bold text-gray-900 mb-2">
                     {locale === "th" ? "สร้างใบสั่งซื้อสำเร็จ" : locale === "zh" ? "采购订单已创建" : "Purchase Order Created"}
                   </h3>
@@ -435,7 +435,7 @@ export default function PropertiesPage() {
                     <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "วันที่" : locale === "zh" ? "日期" : "Date"}</span><span className="font-semibold">{todayStr}</span></div>
                   </div>
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700 mb-3">
-                    ⚠️ {locale === "th"
+                     {locale === "th"
                       ? "เก็บเลขที่ PO ไว้เป็นหลักฐาน ราคาทรัพย์สินเป็นการเจรจาระหว่างคู่สัญญาโดยตรง"
                       : locale === "zh"
                       ? "请保留此PO编号作为凭据。房产价格由双方直接协商。"
@@ -469,7 +469,7 @@ export default function PropertiesPage() {
                       </p>
                     </div>
                     <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700 mb-4">
-                      ⚠️ {locale === "th"
+                       {locale === "th"
                         ? "ค่าธรรมเนียมดำเนินการเท่านั้น ราคาทรัพย์สินตกลงโดยตรงระหว่างผู้ซื้อและผู้ลงประกาศ"
                         : locale === "zh"
                         ? "仅为处理费。房产价格由买家和发布者直接协商。"
@@ -512,7 +512,7 @@ export default function PropertiesPage() {
                     </>
                   ) : (
                     <>
-                      <div className="text-5xl mb-4">✅</div>
+                      <div className="text-5xl mb-4"></div>
                       <h3 className="text-lg font-bold text-gray-900 mb-2">
                         {locale === "th" ? "ผู้ลงประกาศยืนยันแล้ว!" : locale === "zh" ? "房源方已确认！" : "Lister Confirmed!"}
                       </h3>
@@ -520,7 +520,7 @@ export default function PropertiesPage() {
                         {locale === "th" ? "คุณสามารถเริ่มแชทนิรนามกับผู้ลงประกาศได้แล้ว" : locale === "zh" ? "您现在可以与发布者开始匿名聊天" : "You can now start an anonymous chat with the lister"}
                       </p>
                       <button onClick={() => setContactStep("chat")} className="w-full py-3 bg-green-700 text-white font-bold rounded-xl hover:bg-green-800 transition">
-                        {locale === "th" ? "เริ่มแชท" : locale === "zh" ? "开始聊天" : "Start Chat"} 💬
+                        {locale === "th" ? "เริ่มแชท" : locale === "zh" ? "开始聊天" : "Start Chat"} 
                       </button>
                     </>
                   )}
@@ -531,7 +531,7 @@ export default function PropertiesPage() {
               {contactStep === "chat" && (
                 <>
                   <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-700 mb-4">
-                    🔒 {locale === "th" ? "แชทนิรนาม — ชื่อจริงไม่ถูกเปิดเผยเพื่อความปลอดภัย" : locale === "zh" ? "匿名聊天 — 真实姓名已隐藏以保护隐私和安全" : "Anonymous chat — real names are hidden for privacy and safety"}
+                     {locale === "th" ? "แชทนิรนาม — ชื่อจริงไม่ถูกเปิดเผยเพื่อความปลอดภัย" : locale === "zh" ? "匿名聊天 — 真实姓名已隐藏以保护隐私和安全" : "Anonymous chat — real names are hidden for privacy and safety"}
                   </div>
                   <div className="bg-gray-50 rounded-xl p-4 h-60 overflow-y-auto mb-4 space-y-3">
                     {chatMessages.length === 0 && (
@@ -596,7 +596,7 @@ export default function PropertiesPage() {
                     </div>
                   </div>
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700 mt-4">
-                    ⚠️ {locale === "th"
+                     {locale === "th"
                       ? "การนัดหมายเป็นไปตามความสะดวกของทั้งสองฝ่าย ผู้ลงประกาศจะยืนยันอีกครั้ง"
                       : locale === "zh" ? "看房安排取决于双方的方便程度，发布者将再次确认"
                       : "Viewing is subject to both parties' availability. Lister will confirm."}
@@ -616,7 +616,7 @@ export default function PropertiesPage() {
               {/* Step 7: Both-Party Star Rating & Comment (+1 step) */}
               {contactStep === "rate" && (
                 <div className="text-center">
-                  <div className="text-5xl mb-4">⭐</div>
+                  <div className="text-5xl mb-4"></div>
                   <h3 className="text-lg font-bold text-gray-900 mb-2">
                     {locale === "th" ? "ให้คะแนนและรีวิว" : locale === "zh" ? "评分与评论" : "Rate & Review"}
                   </h3>
@@ -716,7 +716,7 @@ export default function PropertiesPage() {
                     </div>
                   </div>
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700 mb-4">
-                    ⚠️ {locale === "th"
+                     {locale === "th"
                       ? "ราคาทรัพย์สินและเงื่อนไขเป็นการเจรจาระหว่างคู่สัญญาโดยตรง CBLUE เป็นแพลตฟอร์มจับคู่เท่านั้น"
                       : locale === "zh"
                       ? "房产价格和条款由双方直接协商。CBLUE 仅为匹配平台。"
@@ -742,7 +742,7 @@ export default function PropertiesPage() {
         <div className="absolute inset-0 bg-gradient-to-r from-emerald-900/90 to-green-800/70" />
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center py-16">
           <span className="inline-block px-4 py-1.5 bg-white/10 backdrop-blur text-emerald-200 rounded-full text-sm font-bold mb-4 border border-white/20">
-            🏢 {locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房地产" : "Real Estate"}
+             {locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房地产" : "Real Estate"}
           </span>
           <h1 className="text-4xl font-bold">{t("title")}</h1>
           <p className="mt-4 text-lg text-emerald-100 max-w-2xl mx-auto">{t("desc")}</p>
@@ -870,7 +870,7 @@ export default function PropertiesPage() {
             <div className="text-center py-12 text-gray-500">{tc("loading")}</div>
           ) : searched && properties.length === 0 ? (
             <div className="text-center py-12">
-              <div className="text-5xl mb-4">🔍</div>
+              <div className="text-5xl mb-4"></div>
               <p className="text-gray-500 mb-2">
                 {locale === "th" ? "ไม่พบประกาศในขณะนี้" : locale === "zh" ? "暂无相关房源" : "No properties found for this search"}
               </p>
@@ -916,7 +916,7 @@ export default function PropertiesPage() {
                       {prop.images[0] ? (
                         <img src={prop.images[0].url} alt={prop.title} className="w-full h-full object-cover" />
                       ) : (
-                        <span className="text-4xl">🏠</span>
+                        <span className="text-4xl"></span>
                       )}
                     </div>
                   </Link>
@@ -966,7 +966,7 @@ export default function PropertiesPage() {
                     className="bg-white rounded-xl p-6 border border-gray-200 text-center hover:border-green-500 hover:shadow-md transition cursor-pointer"
                   >
                     <div className="text-4xl mb-3">
-                      {type === "CONDO" ? "🏢" : type === "HOUSE" ? "🏠" : "🌳"}
+                      {type === "CONDO" ? "" : type === "HOUSE" ? "" : "🌳"}
                     </div>
                     <h3 className="font-semibold text-gray-900">{t(`types.${typeKeys[type]}`)}</h3>
                   </button>
@@ -1004,7 +1004,7 @@ export default function PropertiesPage() {
                           {prop.images[0] ? (
                             <img src={prop.images[0].url} alt={prop.title} className="w-full h-full object-cover" />
                           ) : (
-                            <span className="text-4xl">🏠</span>
+                            <span className="text-4xl"></span>
                           )}
                         </div>
                         <div className="p-3">

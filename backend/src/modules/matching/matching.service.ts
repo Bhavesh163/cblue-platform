@@ -3,7 +3,7 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { OrderStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrderService } from '../order/order.service';
-import { MATCHING_WEIGHTS, TIER_MULTIPLIERS } from '../../common/constants';
+import { TIER_MULTIPLIERS, MATCHING_WEIGHTS } from '../../common/constants';
 
 export interface MatchingResult {
   fixerId: string;

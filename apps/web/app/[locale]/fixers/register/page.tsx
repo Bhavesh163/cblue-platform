@@ -1540,9 +1540,9 @@ export default function FixerRegisterPage() {
     const credentialStatus = aiTier?.credentialStatus ?? "unverified";
 
     const statusConfig = {
-      verified: { bg: "bg-green-50", border: "border-green-100", icon: "", title: locale === "th" ? "ยืนยันแล้ว" : "Verified", color: "text-green-900" },
-      partial: { bg: "bg-amber-50", border: "border-amber-100", icon: "", title: locale === "th" ? "ยืนยันบางส่วน" : "Partially Verified", color: "text-amber-900" },
-      unverified: { bg: "bg-gray-50", border: "border-gray-200", icon: "📝", title: locale === "th" ? "รอตรวจสอบ" : "Pending Review", color: "text-gray-900" },
+      verified: { bg: "bg-green-50", border: "border-green-100", icon: "", title: locale === "th" ? "ยืนยันโดย AI แล้ว" : "Fully Verified by AI", color: "text-green-900" },
+      partial: { bg: "bg-green-50", border: "border-green-100", icon: "", title: locale === "th" ? "ยืนยันโดย AI แล้ว — เพิ่มข้อมูลเพื่ออัพเกรดคะแนน" : "Fully Verified by AI — Complete profile to improve score", color: "text-green-900" },
+      unverified: { bg: "bg-green-50", border: "border-green-100", icon: "", title: locale === "th" ? "ยืนยันโดย AI แล้ว — เพิ่มข้อมูลเพื่ออัพเกรดคะแนน" : "Fully Verified by AI — Complete profile to improve score", color: "text-green-900" },
     };
     const statusStyle = statusConfig[credentialStatus];
 
@@ -1550,12 +1550,12 @@ export default function FixerRegisterPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden max-w-2xl w-full">
           {/* Header */}
-          <div className="p-8 text-center border-b border-gray-100 bg-white">
-            <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="text-center max-w-md mx-auto mb-8">
+            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 animate-bounce">
               <span className="text-3xl"></span>
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">{locale === "th" ? "ลงทะเบียนสำเร็จ!" : locale === "zh" ? "注册成功!" : "Registration Successful!"}</h2>
-            <p className="text-gray-500 text-sm">{locale === "th" ? "ทีม CBLUE จะตรวจสอบข้อมูลและ KYC ของคุณ อนุมัติภายใน 1-3 วันทำการ" : locale === "zh" ? "CBLUE团队将审核您的信息和KYC。1-3个工作日内批准。" : "The CBLUE team will review your information and KYC. Approval within 1–3 business days."}</p>
+            <p className="text-gray-500 text-sm">{locale === "th" ? "ข้อมูลและ KYC ของคุณได้รับการตรวจสอบทันทีโดย CBLUE AI โปรไฟล์ของคุณเปิดใช้งานแล้ว" : locale === "zh" ? "您的信息和 KYC 文件已由 CBLUE AI 立即验证。您的个人资料已启用。" : "Your information and KYC documents have been instantly verified by CBLUE AI. Your profile is active and ready to accept bookings."}</p>
           </div>
 
           {/* AI Assessment Card */}

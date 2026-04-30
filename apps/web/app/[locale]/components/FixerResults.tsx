@@ -706,31 +706,31 @@ export default function FixerResults({
     const aiSteps = locale === "th"
       ? [
           { label: "วิเคราะห์ความต้องการของคุณ...", icon: "🧠" },
-          { label: "ค้นหาพาร์ทเนอร์ในพื้นที่...", icon: "🔍" },
-          { label: "กรอง 2 ราคาถูกที่สุด...", icon: "💰" },
-          { label: "กรอง 2 ความพึงพอใจสูงสุด...", icon: "⭐" },
-          { label: "เลือกระดับบนที่ดีที่สุด...", icon: "🏆" },
+          { label: "ค้นหาพาร์ทเนอร์ในพื้นที่...", icon: "" },
+          { label: "กรอง 2 ราคาถูกที่สุด...", icon: "" },
+          { label: "กรอง 2 ความพึงพอใจสูงสุด...", icon: "" },
+          { label: "เลือกระดับบนที่ดีที่สุด...", icon: "" },
           { label: "ค้นหาช่างเดิมที่เคยใช้...", icon: "🔄" },
-          { label: "เตรียม Top 8 ผู้เชี่ยวชาญ...", icon: "✅" },
+          { label: "เตรียม Top 8 ผู้เชี่ยวชาญ...", icon: "" },
         ]
       : locale === "zh"
       ? [
           { label: "分析您的需求...", icon: "🧠" },
-          { label: "搜索区域内合作伙伴...", icon: "🔍" },
-          { label: "筛选2个最低价...", icon: "💰" },
-          { label: "筛选2个最高满意度...", icon: "⭐" },
-          { label: "选择最佳上级合作伙伴...", icon: "🏆" },
+          { label: "搜索区域内合作伙伴...", icon: "" },
+          { label: "筛选2个最低价...", icon: "" },
+          { label: "筛选2个最高满意度...", icon: "" },
+          { label: "选择最佳上级合作伙伴...", icon: "" },
           { label: "查找曾合作过的伙伴...", icon: "🔄" },
-          { label: "准备前8名专业人士...", icon: "✅" },
+          { label: "准备前8名专业人士...", icon: "" },
         ]
       : [
           { label: "Analyzing your requirements...", icon: "🧠" },
-          { label: "Searching partners in your area...", icon: "🔍" },
-          { label: "Selecting 2 cheapest options...", icon: "💰" },
-          { label: "Selecting 2 highest satisfaction...", icon: "⭐" },
-          { label: "Finding best upper-tier partners...", icon: "🏆" },
+          { label: "Searching partners in your area...", icon: "" },
+          { label: "Selecting 2 cheapest options...", icon: "" },
+          { label: "Selecting 2 highest satisfaction...", icon: "" },
+          { label: "Finding best upper-tier partners...", icon: "" },
           { label: "Checking for returning partners...", icon: "🔄" },
-          { label: "Preparing top 8 matches...", icon: "✅" },
+          { label: "Preparing top 8 matches...", icon: "" },
         ];
 
     return (
@@ -738,7 +738,7 @@ export default function FixerResults({
         <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 text-center">
           {/* Pulsing AI brain icon */}
           <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-sky-500 to-indigo-600 flex items-center justify-center shadow-lg animate-pulse">
-            <span className="text-3xl">🤖</span>
+            <span className="text-3xl"></span>
           </div>
           <h2 className="text-xl font-bold text-gray-900 mb-1">
             {locale === "th" ? "AI กำลังจับคู่" : locale === "zh" ? "AI 智能匹配中" : "AI Smart Matching"}
@@ -751,7 +751,7 @@ export default function FixerResults({
               <div key={i} className={`flex items-center gap-3 p-3 rounded-lg transition-all duration-500 ${
                 i < aiStep ? "bg-green-50 border border-green-200" : i === aiStep ? "bg-sky-50 border border-sky-200 animate-pulse" : "bg-gray-50 border border-gray-100 opacity-40"
               }`}>
-                <span className="text-lg flex-shrink-0">{i < aiStep ? "✅" : s.icon}</span>
+                <span className="text-lg flex-shrink-0">{i < aiStep ? "" : s.icon}</span>
                 <span className={`text-sm font-medium ${i < aiStep ? "text-green-700" : i === aiStep ? "text-sky-700" : "text-gray-400"}`}>{s.label}</span>
                 {i === aiStep && <span className="ml-auto"><span className="inline-block w-4 h-4 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" /></span>}
               </div>
@@ -797,7 +797,7 @@ export default function FixerResults({
 
           {/* Disclaimer */}
           <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
-            ⚠️ {t("poDisclaimer")}
+             {t("poDisclaimer")}
           </div>
 
           <div className="mt-8 flex gap-3 justify-center">
@@ -826,7 +826,7 @@ export default function FixerResults({
       <><StepProgressBar />
       <div className="mx-auto max-w-md px-4 py-12">
         <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 text-center">
-          <div className="text-5xl mb-4">✅</div>
+          <div className="text-5xl mb-4"></div>
           <h2 className="text-xl font-bold text-gray-800">{t("completeTitle")}</h2>
           <p className="text-gray-500 text-sm mt-2">{t("completeDesc")}</p>
 
@@ -845,7 +845,7 @@ export default function FixerResults({
             <p className="text-gray-500">{locale === "th" ? "เลขที่ PO" : locale === "zh" ? "PO 编号" : "PO Number"}: <span className="font-mono font-bold text-gray-800">{poNumber}</span></p>
             <p className="text-gray-500">{locale === "th" ? "ค่าบริการ" : locale === "zh" ? "服务费" : "Processing Fee"}: <span className="font-bold text-gray-800">฿{fee.toLocaleString()}</span></p>
             {variationApproved === true && (
-              <p className="text-green-700 font-semibold">✅ {locale === "th" ? "อนุมัติงานเพิ่มเติม (฿" + variationAmount.toLocaleString() + ")" : locale === "zh" ? "已批准附加工作 (฿" + variationAmount.toLocaleString() + ")" : "Addendum Approved (฿" + variationAmount.toLocaleString() + ")"}</p>
+              <p className="text-green-700 font-semibold"> {locale === "th" ? "อนุมัติงานเพิ่มเติม (฿" + variationAmount.toLocaleString() + ")" : locale === "zh" ? "已批准附加工作 (฿" + variationAmount.toLocaleString() + ")" : "Addendum Approved (฿" + variationAmount.toLocaleString() + ")"}</p>
             )}
             {variationApproved === false && (
               <p className="text-red-700 font-semibold">❌ {locale === "th" ? "ปฏิเสธงานเพิ่มเติม — ขอบเขตงานเดิม" : locale === "zh" ? "已拒绝附加工作 — 按原始范围" : "Addendum Declined — Original scope only"}</p>
@@ -854,7 +854,7 @@ export default function FixerResults({
 
           {/* Disclaimer */}
           <div className="mb-6 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
-            ⚠️ {t("poDisclaimer")}
+             {t("poDisclaimer")}
           </div>
 
           <button
@@ -876,7 +876,7 @@ export default function FixerResults({
       <div className="mx-auto max-w-md px-4 py-12">
         <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8">
           <div className="text-center mb-6">
-            <div className="text-5xl mb-3">⭐</div>
+            <div className="text-5xl mb-3"></div>
             <h2 className="text-xl font-bold text-gray-800">
               {locale === "th" ? "ให้คะแนนและรีวิว" : locale === "zh" ? "评分与评论" : "Rate & Review"}
             </h2>
@@ -957,7 +957,7 @@ export default function FixerResults({
       <div className="mx-auto max-w-md px-4 py-12">
         <div className="bg-white rounded-2xl shadow-xl border border-orange-200 p-8">
           <div className="text-center mb-6">
-            <div className="text-5xl mb-3">📋</div>
+            <div className="text-5xl mb-3"></div>
             <h2 className="text-xl font-bold text-gray-800">{t("variationTitle")}</h2>
             <p className="text-gray-500 text-sm mt-1">{t("variationDesc")}</p>
           </div>
@@ -1051,7 +1051,7 @@ export default function FixerResults({
 
           {/* Disclaimer */}
           <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
-            ⚠️ {t("poDisclaimer")}
+             {t("poDisclaimer")}
           </div>
         </div>
       </div>
@@ -1080,7 +1080,7 @@ export default function FixerResults({
           {(description || issueImageUrls.length > 0) && (
             <div className="px-4 py-3 bg-indigo-50 border-b border-indigo-100">
               <p className="text-xs font-bold text-indigo-700 mb-1">
-                📋 {locale === "th" ? "รายละเอียดบริการ" : locale === "zh" ? "服务详情" : "Service Details"}
+                 {locale === "th" ? "รายละเอียดบริการ" : locale === "zh" ? "服务详情" : "Service Details"}
               </p>
               <p className="text-xs text-indigo-600 mb-1">{service || bookingType}</p>
               {description && <p className="text-xs text-gray-700">{description}</p>}
@@ -1155,7 +1155,7 @@ export default function FixerResults({
           {!partnerConfirmed ? (
             <>
               <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-amber-100 flex items-center justify-center">
-                <span className="text-3xl animate-pulse">🔔</span>
+                <span className="text-3xl animate-pulse"></span>
               </div>
               <h2 className="text-xl font-bold text-gray-800 mb-2">{t("notifyTitle")}</h2>
               <p className="text-gray-500 text-sm mb-6">
@@ -1183,7 +1183,7 @@ export default function FixerResults({
           ) : (
             <>
               <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-green-100 flex items-center justify-center">
-                <span className="text-3xl">✅</span>
+                <span className="text-3xl"></span>
               </div>
               <h2 className="text-xl font-bold text-green-700 mb-2">{t("partnerAccepted")}</h2>
               <p className="text-gray-500 text-sm mb-6">
@@ -1201,7 +1201,7 @@ export default function FixerResults({
 
           {/* Disclaimer always visible */}
           <div className="mt-6 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 text-left">
-            ⚠️ {t("poDisclaimer")}
+             {t("poDisclaimer")}
           </div>
         </div>
       </div>
@@ -1347,7 +1347,7 @@ export default function FixerResults({
 
           {/* Pricing Disclaimer */}
           <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 mb-4">
-            <p className="font-bold mb-1">⚠️ {t("pricingDisclaimer")}</p>
+            <p className="font-bold mb-1"> {t("pricingDisclaimer")}</p>
             <p>{t("poDisclaimer")}</p>
           </div>
 
@@ -1419,7 +1419,7 @@ export default function FixerResults({
 
           {/* Pricing Disclaimer */}
           <div className="mb-6 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 text-left">
-            ⚠️ {t("poDisclaimer")}
+             {t("poDisclaimer")}
           </div>
 
           <button
@@ -1478,10 +1478,10 @@ export default function FixerResults({
   // Selection criteria labels
   const getCriteriaLabel = (idx: number): string => {
     const labels = locale === "th"
-      ? ["💰 ราคาถูกสุด", "💰 ราคาถูกอันดับ 2", "⭐ พึงพอใจสูงสุด", "⭐ พึงพอใจอันดับ 2", "🏆 ราคาถูกสุด (ระดับบน)", "🏆 พึงพอใจสูงสุด (ระดับบน)", "🔄 ช่างเดิมที่เคยใช้"]
+      ? [" ราคาถูกสุด", " ราคาถูกอันดับ 2", " พึงพอใจสูงสุด", " พึงพอใจอันดับ 2", " ราคาถูกสุด (ระดับบน)", " พึงพอใจสูงสุด (ระดับบน)", "🔄 ช่างเดิมที่เคยใช้"]
       : locale === "zh"
-      ? ["💰 最低价", "💰 第二低价", "⭐ 最高满意度", "⭐ 第二高满意度", "🏆 上级最低价", "🏆 上级最高满意度", "🔄 上次合作伙伴"]
-      : ["💰 Cheapest", "💰 2nd Cheapest", "⭐ Highest Rated", "⭐ 2nd Highest Rated", "🏆 Best Price (Upper Tier)", "🏆 Best Rated (Upper Tier)", "🔄 Returning Partner"];
+      ? [" 最低价", " 第二低价", " 最高满意度", " 第二高满意度", " 上级最低价", " 上级最高满意度", "🔄 上次合作伙伴"]
+      : [" Cheapest", " 2nd Cheapest", " Highest Rated", " 2nd Highest Rated", " Best Price (Upper Tier)", " Best Rated (Upper Tier)", "🔄 Returning Partner"];
     return labels[idx] || "";
   };
 
@@ -1492,18 +1492,18 @@ export default function FixerResults({
     <><StepProgressBar />
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="text-center mb-8">
-        <span className="inline-block px-4 py-1.5 bg-gradient-to-r from-sky-100 to-indigo-100 text-sky-700 rounded-full text-xs font-bold mb-3 border border-sky-200">🤖 {locale === "th" ? "AI Top 8 จับคู่อัจฉริยะ" : locale === "zh" ? "AI Top 8 智能匹配" : "AI-Powered Top 8 Match"}</span>
+        <span className="inline-block px-4 py-1.5 bg-gradient-to-r from-sky-100 to-indigo-100 text-sky-700 rounded-full text-xs font-bold mb-3 border border-sky-200"> {locale === "th" ? "AI Top 8 จับคู่อัจฉริยะ" : locale === "zh" ? "AI Top 8 智能匹配" : "AI-Powered Top 8 Match"}</span>
         <h1 className="text-2xl font-bold text-gray-900">{t("matchTitle")}</h1>
         <p className="text-gray-500 mt-2">{t("matchDesc").replace("{count}", String(allDisplayFixers.length))}</p>
       </div>
 
       {/* AI Selection Criteria Legend */}
       <div className="mb-6 bg-indigo-50 border border-indigo-200 rounded-xl p-4">
-        <h4 className="text-sm font-bold text-indigo-800 mb-2">{locale === "th" ? "🤖 เกณฑ์การคัดเลือก AI" : locale === "zh" ? "🤖 AI选择标准" : "🤖 AI Selection Criteria"}</h4>
+        <h4 className="text-sm font-bold text-indigo-800 mb-2">{locale === "th" ? " เกณฑ์การคัดเลือก AI" : locale === "zh" ? " AI选择标准" : " AI Selection Criteria"}</h4>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-indigo-700">
-          <span>💰 {locale === "th" ? "2 ราคาถูกสุด" : locale === "zh" ? "2个最低价" : "2 Cheapest"}</span>
-          <span>⭐ {locale === "th" ? "2 พึงพอใจสูงสุด" : locale === "zh" ? "2个最高评分" : "2 Highest Rated"}</span>
-          <span>🏆 {locale === "th" ? "ดีสุดระดับบน" : locale === "zh" ? "上级最佳" : "Best Upper Tier"}</span>
+          <span> {locale === "th" ? "2 ราคาถูกสุด" : locale === "zh" ? "2个最低价" : "2 Cheapest"}</span>
+          <span> {locale === "th" ? "2 พึงพอใจสูงสุด" : locale === "zh" ? "2个最高评分" : "2 Highest Rated"}</span>
+          <span> {locale === "th" ? "ดีสุดระดับบน" : locale === "zh" ? "上级最佳" : "Best Upper Tier"}</span>
           <span>🔄 {locale === "th" ? "ช่างเดิม" : locale === "zh" ? "上次合作" : "Returning Partner"}</span>
         </div>
         <p className="text-[11px] text-indigo-600 mt-2">{locale === "th" ? "➕ คุณสามารถเสนอพาร์ทเนอร์ลำดับที่ 8 ได้ด้านล่าง (สูงสุด 8 คน)" : locale === "zh" ? "➕ 您可以在下方提名第8位合作伙伴（最多8位）" : "➕ You may nominate an 8th partner below (max 8 in comparison)"}</p>
@@ -1554,7 +1554,7 @@ export default function FixerResults({
 
       {/* Pricing Disclaimer banner */}
       <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
-        <span className="font-bold">⚠️ {t("pricingDisclaimer")}:</span> {t("poDisclaimer")}
+        <span className="font-bold"> {t("pricingDisclaimer")}:</span> {t("poDisclaimer")}
       </div>
 
       {/* Partner Cards */}
@@ -1562,7 +1562,7 @@ export default function FixerResults({
         {allDisplayFixers.map((fixer, idx) => {
           const feeForTier = getProcessingFee(bookingType, fixer.tier);
           const colors = getTierColor(fixer.tier);
-          const criteriaTag = idx < fixers.length ? getCriteriaLabel(idx) : (locale === "th" ? "👤 เสนอชื่อโดยคุณ" : locale === "zh" ? "👤 您提名的" : "👤 Your Nomination");
+          const criteriaTag = idx < fixers.length ? getCriteriaLabel(idx) : (locale === "th" ? " เสนอชื่อโดยคุณ" : locale === "zh" ? " 您提名的" : " Your Nomination");
           const isReturning = fixer.alias.startsWith("★");
           return (
             <div
@@ -1617,7 +1617,7 @@ export default function FixerResults({
       {!nominatedFixer && (
         <div className="mt-6 bg-white rounded-xl shadow-md border border-dashed border-sky-300 p-5">
           <h4 className="text-sm font-bold text-gray-800 mb-2">
-            👤 {locale === "th" ? "เสนอพาร์ทเนอร์ลำดับที่ 8" : locale === "zh" ? "提名第8位合作伙伴" : "Nominate 8th Partner"}
+             {locale === "th" ? "เสนอพาร์ทเนอร์ลำดับที่ 8" : locale === "zh" ? "提名第8位合作伙伴" : "Nominate 8th Partner"}
           </h4>
           <p className="text-xs text-gray-500 mb-3">
             {locale === "th" ? "กรอกหมายเลข ID ของพาร์ทเนอร์ที่คุณต้องการเพิ่มในรายการเปรียบเทียบ" : locale === "zh" ? "输入您想添加到比较列表的合作伙伴ID号" : "Enter the Partner ID number you want to add to the comparison list"}

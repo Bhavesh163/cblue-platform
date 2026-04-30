@@ -471,7 +471,7 @@ function ProfessionalBookingContent() {
           {/* Company / Personal Formal Address */}
           <fieldset>
             <legend className="text-lg font-semibold text-gray-900 mb-4">
-              🏢 {locale === "th" ? "ที่อยู่บริษัท / ที่อยู่ตามทะเบียนบ้าน" : locale === "zh" ? "公司地址 / 户籍地址" : "Company / Personal Formal Address"} <span className="text-red-500">*</span>
+               {locale === "th" ? "ที่อยู่บริษัท / ที่อยู่ตามทะเบียนบ้าน" : locale === "zh" ? "公司地址 / 户籍地址" : "Company / Personal Formal Address"} <span className="text-red-500">*</span>
             </legend>
             <p className="text-xs text-gray-500 mb-4">
               {locale === "th" ? "ที่อยู่สำหรับออกใบสั่งซื้อ (PO) และเอกสารทางการ" : locale === "zh" ? "用于采购订单(PO)和正式文件的地址" : "Address for Purchase Order (PO) and official documents"}
@@ -607,18 +607,18 @@ function ProfessionalBookingContent() {
           {/* Tier Selection - PROMINENT */}
           <fieldset className="bg-gradient-to-r from-sky-50 to-blue-50 border-2 border-sky-200 rounded-2xl p-6">
             <legend className="text-lg font-bold text-sky-900 mb-2 flex items-center gap-2">
-              ⭐ {locale === "th" ? "เลือกระดับบริการ" : locale === "zh" ? "选择服务等级" : "Select Service Tier"} <span className="text-red-500">*</span>
+               {locale === "th" ? "เลือกระดับบริการ" : locale === "zh" ? "选择服务等级" : "Select Service Tier"} <span className="text-red-500">*</span>
             </legend>
             <p className="text-sm text-sky-700 mb-4">
               {locale === "th" ? "ค่าประสานงานที่จ่ายครั้งเดียวต่อการจับคู่มืออาชีพ" : locale === "zh" ? "每次匹配专业人士支付的一次性服务费" : "One-time processing fee per professional matching"}
             </p>
             <div className="grid grid-cols-5 gap-3">
               {[
-                { value: "economy", label: locale === "th" ? "ประหยัด" : locale === "zh" ? "经济型" : "Economy", deposit: "฿100", emoji: "🟢", stars: "⭐", desc: locale === "th" ? "ทั่วไป" : locale === "zh" ? "普通" : "Basic" },
-                { value: "standard", label: locale === "th" ? "มาตรฐาน" : locale === "zh" ? "标准型" : "Standard", deposit: "฿400", emoji: "⭐", stars: "⭐⭐", desc: locale === "th" ? "มีประสบการณ์" : locale === "zh" ? "有经验" : "Experienced" },
-                { value: "corporate", label: locale === "th" ? "องค์กร" : locale === "zh" ? "企业型" : "Corporate", deposit: "฿600", emoji: "🏢", stars: "⭐⭐⭐", desc: locale === "th" ? "มืออาชีพ/ผู้จัดการ" : locale === "zh" ? "专业/经理" : "Professional / Manager" },
-                { value: "specialist", label: locale === "th" ? "ผู้ชำนาญ" : locale === "zh" ? "专家型" : "Specialist", deposit: "฿800", emoji: "🔶", stars: "⭐⭐⭐⭐", desc: locale === "th" ? "ผู้เชี่ยวชาญ/ผู้อำนวยการ" : locale === "zh" ? "经理/总监" : "Manager / Director" },
-                { value: "expert", label: locale === "th" ? "ผู้เชี่ยวชาญ" : locale === "zh" ? "大师型" : "Expert", deposit: "฿1,000", emoji: "👑", stars: "⭐⭐⭐⭐⭐", desc: locale === "th" ? "ผู้อำนวยการ/ชั้นนำ" : locale === "zh" ? "总监/高管" : "Director / Executive" },
+                { value: "economy", label: locale === "th" ? "ประหยัด" : locale === "zh" ? "经济型" : "Economy", deposit: "฿100", emoji: "🟢", stars: "", desc: locale === "th" ? "ทั่วไป" : locale === "zh" ? "普通" : "Basic" },
+                { value: "standard", label: locale === "th" ? "มาตรฐาน" : locale === "zh" ? "标准型" : "Standard", deposit: "฿400", emoji: "", stars: "", desc: locale === "th" ? "มีประสบการณ์" : locale === "zh" ? "有经验" : "Experienced" },
+                { value: "corporate", label: locale === "th" ? "องค์กร" : locale === "zh" ? "企业型" : "Corporate", deposit: "฿600", emoji: "", stars: "", desc: locale === "th" ? "มืออาชีพ/ผู้จัดการ" : locale === "zh" ? "专业/经理" : "Professional / Manager" },
+                { value: "specialist", label: locale === "th" ? "ผู้ชำนาญ" : locale === "zh" ? "专家型" : "Specialist", deposit: "฿800", emoji: "🔶", stars: "", desc: locale === "th" ? "ผู้เชี่ยวชาญ/ผู้อำนวยการ" : locale === "zh" ? "经理/总监" : "Manager / Director" },
+                { value: "expert", label: locale === "th" ? "ผู้เชี่ยวชาญ" : locale === "zh" ? "大师型" : "Expert", deposit: "฿1,000", emoji: "👑", stars: "", desc: locale === "th" ? "ผู้อำนวยการ/ชั้นนำ" : locale === "zh" ? "总监/高管" : "Director / Executive" },
               ].map((tier) => (
                 <button
                   key={tier.value}
@@ -668,7 +668,7 @@ function ProfessionalBookingContent() {
                   <GpsDetectButton onDetected={(coords) => setGpsCoords(coords)} />
                   {gpsCoords ? (
                     <p className="text-sm text-green-600 font-medium">
-                      ✅ 📍 {locale === "th" ? "ตำแหน่ง" : locale === "zh" ? "位置" : "Location"}: {gpsCoords.lat.toFixed(6)}, {gpsCoords.lng.toFixed(6)}
+                       📍 {locale === "th" ? "ตำแหน่ง" : locale === "zh" ? "位置" : "Location"}: {gpsCoords.lat.toFixed(6)}, {gpsCoords.lng.toFixed(6)}
                     </p>
                   ) : (
                     <p className="text-xs text-gray-500">
