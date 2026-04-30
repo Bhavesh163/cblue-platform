@@ -26,7 +26,7 @@ const notifications: any[] = [];
 
 const chats: any[] = [];
 
-const ICON_MAP: Record<string, string> = { household: "🏠", project: "💼", professional: "👔", property: "🏢" };
+const ICON_MAP: Record<string, string> = { household: "", project: "", professional: "", property: "" };
 const STATUS_STYLE: Record<string, string> = {
   IN_PROGRESS: "bg-purple-100 text-purple-700",
   CONFIRMED: "bg-green-100 text-green-700",
@@ -181,14 +181,14 @@ export default function DashboardPage() {
   const properties = mappedOrders.filter(o => o.type === 'property');
 
   const tabs: { key: TabKey; label: string; icon: string; badge?: number }[] = [
-    { key: "overview", label: locale === "th" ? "ภาพรวม" : locale === "zh" ? "概览" : "Overview", icon: "📊" },
-    { key: "bookings", label: locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "当前工作" : "Active Jobs", icon: "🔧", badge: activeOrders.length },
-    { key: "requests", label: locale === "th" ? "คำขอ" : locale === "zh" ? "请求" : "Requests", icon: "📋", badge: requests.length },
-    { key: "property", label: locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房产" : "Properties", icon: "🏢", badge: properties.length > 0 ? properties.length : undefined },
-    { key: "history", label: locale === "th" ? "ประวัติ" : locale === "zh" ? "历史" : "History", icon: "📜" },
-    { key: "chat", label: locale === "th" ? "แชท" : locale === "zh" ? "聊天" : "Chat", icon: "💬", badge: undefined },
-    { key: "notifications", label: locale === "th" ? "แจ้งเตือน" : locale === "zh" ? "通知" : "Alerts", icon: "🔔", badge: undefined },
-    { key: "profile", label: locale === "th" ? "โปรไฟล์" : locale === "zh" ? "个人资料" : "Profile", icon: "👤" },
+    { key: "overview", label: locale === "th" ? "ภาพรวม" : locale === "zh" ? "概览" : "Overview", icon: "" },
+    { key: "bookings", label: locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "当前工作" : "Active Jobs", icon: "", badge: activeOrders.length },
+    { key: "requests", label: locale === "th" ? "คำขอ" : locale === "zh" ? "请求" : "Requests", icon: "", badge: requests.length },
+    { key: "property", label: locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房产" : "Properties", icon: "", badge: properties.length > 0 ? properties.length : undefined },
+    { key: "history", label: locale === "th" ? "ประวัติ" : locale === "zh" ? "历史" : "History", icon: "" },
+    { key: "chat", label: locale === "th" ? "แชท" : locale === "zh" ? "聊天" : "Chat", icon: "", badge: undefined },
+    { key: "notifications", label: locale === "th" ? "แจ้งเตือน" : locale === "zh" ? "通知" : "Alerts", icon: "", badge: undefined },
+    { key: "profile", label: locale === "th" ? "โปรไฟล์" : locale === "zh" ? "个人资料" : "Profile", icon: "" },
   ];
 
   return (
@@ -260,10 +260,10 @@ export default function DashboardPage() {
         {/* Quick Book - 4 Services */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {[
-            { href: `${prefix}/booking/household`, icon: "🏠", label: locale === "th" ? "จองช่างซ่อมบ้าน" : locale === "zh" ? "预约技工" : "Book Fixer", desc: locale === "th" ? "ประปา ไฟฟ้า แอร์" : locale === "zh" ? "管道、电气、空调" : "Plumbing, Electrical, AC", color: "from-sky-500 to-blue-600" },
-            { href: `${prefix}/booking/project`, icon: "💼", label: locale === "th" ? "จองทีมโครงการ" : locale === "zh" ? "预约项目团队" : "Book Project Team", desc: locale === "th" ? "เว็บ AI สมาร์ทโฮม" : locale === "zh" ? "网站、AI、智能家居" : "Web, AI, Smart Home", color: "from-indigo-500 to-purple-600" },
-            { href: `${prefix}/booking/professional`, icon: "👔", label: locale === "th" ? "จองมืออาชีพ" : locale === "zh" ? "预约专业人士" : "Book Professional", desc: locale === "th" ? "ทนาย สถาปนิก วิศวกร" : locale === "zh" ? "律师、建筑师、工程师" : "Lawyer, Architect, Engineer", color: "from-emerald-500 to-teal-600" },
-            { href: `${prefix}/properties`, icon: "🏢", label: locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房产" : "Book Property", desc: locale === "th" ? "ซื้อ ขาย เช่า" : locale === "zh" ? "买、卖、租" : "Buy, Sell, Rent", color: "from-amber-500 to-orange-600" },
+            { href: `${prefix}/booking/household`, icon: "", label: locale === "th" ? "จองช่างซ่อมบ้าน" : locale === "zh" ? "预约技工" : "Book Fixer", desc: locale === "th" ? "ประปา ไฟฟ้า แอร์" : locale === "zh" ? "管道、电气、空调" : "Plumbing, Electrical, AC", color: "from-sky-500 to-blue-600" },
+            { href: `${prefix}/booking/project`, icon: "", label: locale === "th" ? "จองทีมโครงการ" : locale === "zh" ? "预约项目团队" : "Book Project Team", desc: locale === "th" ? "เว็บ AI สมาร์ทโฮม" : locale === "zh" ? "网站、AI、智能家居" : "Web, AI, Smart Home", color: "from-indigo-500 to-purple-600" },
+            { href: `${prefix}/booking/professional`, icon: "", label: locale === "th" ? "จองมืออาชีพ" : locale === "zh" ? "预约专业人士" : "Book Professional", desc: locale === "th" ? "ทนาย สถาปนิก วิศวกร" : locale === "zh" ? "律师、建筑师、工程师" : "Lawyer, Architect, Engineer", color: "from-emerald-500 to-teal-600" },
+            { href: `${prefix}/properties`, icon: "", label: locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房产" : "Book Property", desc: locale === "th" ? "ซื้อ ขาย เช่า" : locale === "zh" ? "买、卖、租" : "Buy, Sell, Rent", color: "from-amber-500 to-orange-600" },
           ].map((s) => (
             <Link key={s.href} href={s.href} className="group relative bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition-all hover:-translate-y-1">
               <div className={`h-2 bg-gradient-to-r ${s.color}`} />
@@ -295,7 +295,7 @@ export default function DashboardPage() {
         <p className="text-sm text-gray-500 mb-5">{locale === "th" ? "ค่าธรรมเนียมดำเนินการต่อการจับคู่" : locale === "zh" ? "每次匹配的处理费" : "Processing fee per matching"}</p>
 
         {/* Fixer & Professional Tiers */}
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">🏠👔 {locale === "th" ? "ช่างซ่อม / มืออาชีพ" : locale === "zh" ? "技工 / 专业人士" : "Fixer / Professional"}</h3>
+        <h3 className="text-sm font-semibold text-gray-700 mb-3"> {locale === "th" ? "ช่างซ่อม / มืออาชีพ" : locale === "zh" ? "技工 / 专业人士" : "Fixer / Professional"}</h3>
         <div className="grid grid-cols-5 gap-3 mb-6">
           {[
             { name: "Economy", fee: "฿100", color: "border-green-200 bg-green-50", textColor: "text-green-700", desc: locale === "th" ? "บริการทั่วไป" : locale === "zh" ? "基础服务" : "Basic" },
@@ -313,7 +313,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Property Tiers */}
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">🏢 {locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房产" : "Property"}</h3>
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">{locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房产" : "Property"}</h3>
         <div className="grid grid-cols-5 gap-3">
           {[
             { name: "Economy", fee: "฿100", color: "border-green-200 bg-green-50", textColor: "text-green-700", desc: locale === "th" ? "ห้องเช่า" : locale === "zh" ? "房间" : "Room" },
@@ -364,12 +364,12 @@ function OverviewTab({ locale, subscriber, activeOrders, historyOrders, chats, n
       {/* Pending Tasks */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-          <h2 className="font-bold text-gray-900 flex items-center gap-2">⏱️ {locale === "th" ? "งานที่กำลังดำเนินการ" : locale === "zh" ? "进行中的任务" : "Active Tasks"}</h2>
+          <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "งานที่กำลังดำเนินการ" : locale === "zh" ? "进行中的任务" : "Active Tasks"}</h2>
         </div>
         <div className="divide-y divide-gray-50">
           {activeOrders.length > 0 ? activeOrders.slice(0, 3).map((job: any) => (
             <div key={job.id} className="p-6 flex items-center gap-4 hover:bg-gray-50 transition">
-              <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl">{job.type === 'household' ? '🏠' : job.type === 'project' ? '💼' : job.type === 'professional' ? '👔' : '🏢'}</div>
+              <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl">{job.type === 'household' ? '' : job.type === 'project' ? '' : job.type === 'professional' ? '' : ''}</div>
               <div className="flex-1">
                 <div className="flex justify-between items-start">
                   <div>
@@ -416,7 +416,7 @@ function BookingsTab({ locale, activeOrders }: { locale: string; activeOrders: a
           <div key={b.id} className="p-6 hover:bg-gray-50/50 transition">
             <div className="flex items-center gap-4 mb-4">
               <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl">
-                {b.type === 'household' ? '🏠' : b.type === 'project' ? '💼' : b.type === 'professional' ? '👔' : '🏢'}
+                {b.type === 'household' ? '' : b.type === 'project' ? '' : b.type === 'professional' ? '' : ''}
               </div>
               <div className="flex-1">
                 <div className="flex justify-between items-start">
@@ -496,14 +496,14 @@ function HistoryTab({ locale, historyOrders }: { locale: string; historyOrders: 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100">
-        <h2 className="font-bold text-gray-900 flex items-center gap-2">✅ {locale === "th" ? "ประวัติการใช้บริการ" : locale === "zh" ? "服务历史" : "Service History"}</h2>
+        <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "ประวัติการใช้บริการ" : locale === "zh" ? "服务历史" : "Service History"}</h2>
       </div>
       <div className="divide-y divide-gray-50">
         {historyOrders && historyOrders.length > 0 ? historyOrders.map((h: any) => (
           <div key={h.id} className="p-6 hover:bg-gray-50/50 transition">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-2xl">
-                {h.type === 'household' ? '🏠' : h.type === 'project' ? '💼' : h.type === 'professional' ? '👔' : '🏢'}
+                {h.type === 'household' ? '' : h.type === 'project' ? '' : h.type === 'professional' ? '' : ''}
               </div>
               <div className="flex-1">
                 <div className="flex justify-between items-start">
@@ -530,7 +530,7 @@ function ProfileTab({ locale, prefix, subscriber, activeOrders, historyOrders }:
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
       <div className="flex flex-col md:flex-row gap-8 items-start">
         <div className="w-32 h-32 rounded-2xl bg-gradient-to-br from-sky-100 to-blue-50 flex items-center justify-center shadow-inner flex-shrink-0 relative group cursor-pointer overflow-hidden">
-          <span className="text-5xl">👤</span>
+          <span className="text-5xl"></span>
         </div>
         
         <div className="flex-1 w-full">
@@ -571,7 +571,7 @@ function ChatTab({ locale, chats }: { locale: string; chats: any[] }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100">
-        <h2 className="font-bold text-gray-900 flex items-center gap-2">💬 {locale === "th" ? "แชท" : locale === "zh" ? "聊天" : "Chats"}</h2>
+        <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "แชท" : locale === "zh" ? "聊天" : "Chats"}</h2>
       </div>
       <div className="divide-y divide-gray-50">
         {chats && chats.length > 0 ? chats.map((c: any) => (
@@ -606,7 +606,7 @@ function NotificationsTab({ locale, notifications }: { locale: string; notificat
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-        <h2 className="font-bold text-gray-900 flex items-center gap-2">🔔 {locale === "th" ? "การแจ้งเตือน" : locale === "zh" ? "通知" : "Notifications"}</h2>
+        <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "การแจ้งเตือน" : locale === "zh" ? "通知" : "Notifications"}</h2>
       </div>
       <div className="divide-y divide-gray-50">
         {notifications && notifications.length > 0 ? notifications.map((n: any) => (
@@ -648,13 +648,13 @@ function PropertyTab({ locale, prefix, properties }: { locale: string; prefix: s
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100">
-        <h2 className="font-bold text-gray-900 flex items-center gap-2">🏢 {locale === "th" ? "การนัดหมายดูอสังหาริมทรัพย์" : locale === "zh" ? "房产查询" : "Property Inquiries"}</h2>
+        <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "การนัดหมายดูอสังหาริมทรัพย์" : locale === "zh" ? "房产查询" : "Property Inquiries"}</h2>
       </div>
       <div className="divide-y divide-gray-50">
         {properties && properties.length > 0 ? properties.map((p: any) => (
           <div key={p.id} className="p-6 hover:bg-gray-50/50 transition">
             <div className="flex items-center gap-4 mb-4">
-              <div className="w-12 h-12 rounded-xl bg-teal-100 flex items-center justify-center text-2xl">🏢</div>
+              <div className="w-12 h-12 rounded-xl bg-teal-100 flex items-center justify-center text-2xl"></div>
               <div className="flex-1">
                 <div className="flex justify-between items-start">
                   <div>
@@ -696,14 +696,14 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       {/* Top Navigation Pills */}
       <div className="flex gap-2 bg-white rounded-xl shadow-sm border border-gray-200 p-2 mb-6 overflow-x-auto no-scrollbar">
         {[
-          { key: "overview", icon: "📊", label: locale === "th" ? "ภาพรวม" : "Overview", count: null },
-          { key: "active", icon: "🔧", label: locale === "th" ? "งานที่ใช้งานอยู่" : "Active Jobs", count: activeOrders.length || null },
-          { key: "requests", icon: "📋", label: locale === "th" ? "คำขอ" : "Requests", count: null },
-          { key: "properties", icon: "🏢", label: locale === "th" ? "อสังหาฯ" : "Properties", count: propertiesCount || null },
-          { key: "history", icon: "📜", label: locale === "th" ? "ประวัติ" : "History", count: historyOrders.length || null },
-          { key: "chat", icon: "💬", label: locale === "th" ? "แชท" : "Chat", count: null },
-          { key: "alerts", icon: "🔔", label: locale === "th" ? "การแจ้งเตือน" : "Alerts", count: null },
-          { key: "profile", icon: "👤", label: locale === "th" ? "โปรไฟล์" : "Profile", count: null },
+          { key: "overview", icon: "", label: locale === "th" ? "ภาพรวม" : "Overview", count: null },
+          { key: "active", icon: "", label: locale === "th" ? "งานที่ใช้งานอยู่" : "Active Jobs", count: activeOrders.length || null },
+          { key: "requests", icon: "", label: locale === "th" ? "คำขอ" : "Requests", count: null },
+          { key: "properties", icon: "", label: locale === "th" ? "อสังหาฯ" : "Properties", count: propertiesCount || null },
+          { key: "history", icon: "", label: locale === "th" ? "ประวัติ" : "History", count: historyOrders.length || null },
+          { key: "chat", icon: "", label: locale === "th" ? "แชท" : "Chat", count: null },
+          { key: "alerts", icon: "", label: locale === "th" ? "การแจ้งเตือน" : "Alerts", count: null },
+          { key: "profile", icon: "", label: locale === "th" ? "โปรไฟล์" : "Profile", count: null },
         ].map((tab, i) => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key as any)} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition whitespace-nowrap ${activeTab === tab.key ? 'bg-sky-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'}`}>
             <span>{tab.icon}</span> {tab.label}
@@ -717,7 +717,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       {activeTab === "active" && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
           <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-            <h2 className="font-bold text-gray-900 flex items-center gap-2">⚡ Active Services</h2>
+            <h2 className="font-bold text-gray-900 flex items-center gap-2">Active Services</h2>
             <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full">{activeOrders.length}</span>
           </div>
           <div className="divide-y divide-gray-50">
@@ -727,7 +727,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               activeOrders.map((o: any, i: number) => (
                 <div key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl shadow-sm">{o.type === 'property' ? '🏢' : o.type === 'project' ? '💼' : o.type === 'professional' ? '👔' : '🏠'}</div>
+                    <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl shadow-sm">{o.type === 'property' ? '' : o.type === 'project' ? '' : o.type === 'professional' ? '' : ''}</div>
                     <div>
                       <h3 className="font-bold text-gray-900">{o.service} <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">{o.tier || 'Standard'}</span></h3>
                       <p className="text-sm text-gray-500 mt-1">{o.fixerName || 'Awaiting Partner'} &middot; {new Date(o.createdAt || Date.now()).toLocaleDateString()}</p>
@@ -735,7 +735,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   </div>
                   <div className="flex flex-col items-end gap-2">
                     <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">{o.status}</span>
-                    {o.status !== 'PENDING' && o.status !== 'CREATED' && <Link href={`${prefix}/chat/${o.id}`} className="text-gray-400 hover:text-sky-600 transition"><span className="text-xl">💬</span></Link>}
+                    {o.status !== 'PENDING' && o.status !== 'CREATED' && <Link href={`${prefix}/chat/${o.id}`} className="text-gray-400 hover:text-sky-600 transition"><span className="text-xl"></span></Link>}
                   </div>
                 </div>
               ))
@@ -747,7 +747,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       {activeTab === "requests" && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
           <div className="px-6 py-4 border-b border-gray-100">
-            <h2 className="font-bold text-gray-900">📋 Requests</h2>
+            <h2 className="font-bold text-gray-900">Requests</h2>
           </div>
           <div className="divide-y divide-gray-50">
             {activeOrders.filter((o: any) => ['CREATED', 'MATCHING', 'PENDING'].includes(o.status)).length === 0 ? (
@@ -756,7 +756,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               activeOrders.filter((o: any) => ['CREATED', 'MATCHING', 'PENDING'].includes(o.status)).map((o: any, i: number) => (
                 <div key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center text-2xl shadow-sm">📋</div>
+                    <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center text-2xl shadow-sm"></div>
                     <div>
                       <h3 className="font-bold text-gray-900">{o.service}</h3>
                       <p className="text-sm text-gray-500 mt-1">Status: {o.status} &middot; {new Date(o.createdAt || Date.now()).toLocaleDateString()}</p>
@@ -772,7 +772,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       {activeTab === "properties" && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
           <div className="px-6 py-4 border-b border-gray-100">
-            <h2 className="font-bold text-gray-900">🏢 Properties</h2>
+            <h2 className="font-bold text-gray-900">Properties</h2>
           </div>
           <div className="divide-y divide-gray-50">
             {orders.filter((o: any) => o.type === "property").length === 0 ? (
@@ -781,11 +781,14 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               orders.filter((o: any) => o.type === "property").map((o: any, i: number) => (
                 <div key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-2xl shadow-sm">🏢</div>
+                    <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-2xl shadow-sm"></div>
                     <div>
                       <h3 className="font-bold text-gray-900">{o.service} <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">{o.tier || 'Standard'}</span></h3>
                       <p className="text-sm text-gray-500 mt-1">{o.status} &middot; {new Date(o.createdAt || Date.now()).toLocaleDateString()}</p>
                     </div>
+                  </div>
+                  <div>
+                    <Link href={`${prefix}/properties/edit/${o.id}`} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-bold rounded-lg transition">Edit</Link>
                   </div>
                 </div>
               ))
@@ -797,7 +800,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       {activeTab === "history" && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
           <div className="px-6 py-4 border-b border-gray-100">
-            <h2 className="font-bold text-gray-900">📜 History</h2>
+            <h2 className="font-bold text-gray-900">History</h2>
           </div>
           <div className="divide-y divide-gray-50">
             {historyOrders.length === 0 ? (
@@ -806,7 +809,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               historyOrders.map((o: any, i: number) => (
                 <div key={i} className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50 transition cursor-pointer">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-2xl shadow-sm">✅</div>
+                    <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-2xl shadow-sm"></div>
                     <div>
                       <h3 className="font-bold text-gray-900">{o.service}</h3>
                       <p className="text-sm text-gray-500 mt-1">{o.fixerName || 'Partner'} &middot; {new Date(o.createdAt || Date.now()).toLocaleDateString()}</p>
@@ -826,7 +829,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       {activeTab === "chat" && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
           <div className="px-6 py-4 border-b border-gray-100">
-            <h2 className="font-bold text-gray-900">💬 Chat</h2>
+            <h2 className="font-bold text-gray-900">Chat</h2>
           </div>
           <div className="divide-y divide-gray-50">
             {activeOrders.filter((o: any) => o.status !== 'PENDING' && o.status !== 'CREATED').length === 0 ? (
@@ -844,7 +847,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                     </div>
                   </div>
                   <div className="text-right">
-                    <span className="text-xl">💬</span>
+                    <span className="text-xl"></span>
                   </div>
                 </Link>
               ))
@@ -856,7 +859,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       {activeTab === "alerts" && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
           <div className="px-6 py-4 border-b border-gray-100">
-            <h2 className="font-bold text-gray-900">🔔 Alerts</h2>
+            <h2 className="font-bold text-gray-900">Alerts</h2>
           </div>
           <div className="divide-y divide-gray-50">
             {orders.length === 0 ? (
@@ -897,19 +900,19 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                 <p className="text-xs text-gray-500 font-medium mb-1">Active</p>
-                <p className="text-lg font-bold text-gray-900 flex items-center gap-1">⚡ {stats.active}</p>
+                <p className="text-lg font-bold text-gray-900 flex items-center gap-1">{stats.active}</p>
               </div>
               <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                 <p className="text-xs text-gray-500 font-medium mb-1">Completed</p>
-                <p className="text-lg font-bold text-gray-900 flex items-center gap-1">✅ {stats.completed}</p>
+                <p className="text-lg font-bold text-gray-900 flex items-center gap-1">{stats.completed}</p>
               </div>
               <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                 <p className="text-xs text-gray-500 font-medium mb-1">Messages</p>
-                <p className="text-lg font-bold text-gray-900 flex items-center gap-1">💬 {stats.messages}</p>
+                <p className="text-lg font-bold text-gray-900 flex items-center gap-1">{stats.messages}</p>
               </div>
               <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                 <p className="text-xs text-gray-500 font-medium mb-1">Satisfaction</p>
-                <p className="text-lg font-bold text-gray-900 flex items-center gap-1">🏆 4.8 ⭐</p>
+                <p className="text-lg font-bold text-gray-900 flex items-center gap-1">4.8 </p>
               </div>
             </div>
             <button onClick={onLogout} className="w-full py-2 bg-gray-100 text-gray-600 hover:bg-gray-200 text-sm font-bold rounded-lg transition">
@@ -926,7 +929,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               {activeOrders.filter((o: any) => o.status === 'CONFIRMED' || o.status === 'IN_PROGRESS').slice(0, 2).map((o: any, i: number) => (
                 <div key={i} className="p-4 flex items-center justify-between hover:bg-gray-50 transition">
                   <div className="flex items-center gap-3">
-                    <span className="text-2xl">{o.type === 'property' ? '🏢' : '🏠'}</span>
+                    <span className="text-2xl">{o.type === 'property' ? '' : ''}</span>
                     <div>
                       <p className="font-bold text-sm text-gray-900">{o.fixerName || 'Partner'} &middot; {o.service}</p>
                       <p className="text-xs text-sky-600 font-medium mt-0.5">Soon</p>
@@ -944,7 +947,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           {/* Recent Alerts */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-100">
-              <h3 className="font-bold text-gray-900 flex items-center gap-2">🔔 Recent Alerts</h3>
+              <h3 className="font-bold text-gray-900 flex items-center gap-2">Recent Alerts</h3>
             </div>
             <div className="p-4 space-y-4">
               {activeOrders.slice(0, 3).map((o: any, i: number) => (
@@ -963,12 +966,12 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           {/* Pending Ratings */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-100 bg-amber-50/50">
-              <h3 className="font-bold text-amber-900 flex items-center gap-2">⭐ Pending Ratings</h3>
+              <h3 className="font-bold text-amber-900 flex items-center gap-2"> Pending Ratings</h3>
             </div>
             <div className="p-5">
               {historyOrders.slice(0, 1).map((o: any, i: number) => (
                 <div key={i} className="flex items-start gap-3">
-                  <span className="text-2xl">⚡</span>
+                  <span className="text-2xl"></span>
                   <div className="flex-1">
                     <p className="font-bold text-sm text-gray-900">{o.fixerName || 'Partner'} &middot; {o.service}</p>
                     <p className="text-xs text-gray-500 mt-0.5 mb-2">Completed Recently</p>
@@ -989,7 +992,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           {/* Active Services */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-              <h2 className="font-bold text-gray-900 flex items-center gap-2">⚡ Active Services</h2>
+              <h2 className="font-bold text-gray-900 flex items-center gap-2">Active Services</h2>
               <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full">{activeOrders.length}</span>
             </div>
             <div className="divide-y divide-gray-50">
@@ -999,7 +1002,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 activeOrders.map((o: any, i: number) => (
                   <div key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer">
                     <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl shadow-sm">{o.type === 'property' ? '🏢' : o.type === 'project' ? '💼' : o.type === 'professional' ? '👔' : '🏠'}</div>
+                      <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl shadow-sm">{o.type === 'property' ? '' : o.type === 'project' ? '' : o.type === 'professional' ? '' : ''}</div>
                       <div>
                         <h3 className="font-bold text-gray-900">{o.service} <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">{o.tier || 'Standard'}</span></h3>
                         <p className="text-sm text-gray-500 mt-1">{o.fixerName || 'Awaiting Partner'} &middot; {new Date(o.createdAt || Date.now()).toLocaleDateString()}</p>
@@ -1007,7 +1010,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">{o.status}</span>
-                      {o.status !== 'PENDING' && o.status !== 'CREATED' && <Link href={`${prefix}/chat/${o.id}`} className="text-gray-400 hover:text-sky-600 transition"><span className="text-xl">💬</span></Link>}
+                      {o.status !== 'PENDING' && o.status !== 'CREATED' && <Link href={`${prefix}/chat/${o.id}`} className="text-gray-400 hover:text-sky-600 transition"><span className="text-xl"></span></Link>}
                     </div>
                   </div>
                 ))
@@ -1018,7 +1021,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           {/* Recent Chats */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-100">
-              <h3 className="font-bold text-gray-900 flex items-center gap-2">💬 Recent Chats</h3>
+              <h3 className="font-bold text-gray-900 flex items-center gap-2">Recent Chats</h3>
             </div>
             <div className="divide-y divide-gray-50">
               {activeOrders.filter((o: any) => o.status !== 'PENDING' && o.status !== 'CREATED').slice(0, 3).map((o: any, i: number) => (
@@ -1043,7 +1046,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           {/* Recent History */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
             <div className="px-6 py-4 border-b border-gray-100">
-              <h2 className="font-bold text-gray-900 flex items-center gap-2">📜 Recent History</h2>
+              <h2 className="font-bold text-gray-900 flex items-center gap-2">Recent History</h2>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">
@@ -1061,11 +1064,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   {historyOrders.slice(0, 3).map((o: any, i: number) => (
                     <tr key={i} className="hover:bg-gray-50 transition cursor-pointer">
                       <td className="px-6 py-4 font-bold text-gray-900 flex items-center gap-2">
-                        <span className="text-lg">{o.type === 'property' ? '🏢' : '🏠'}</span> {o.service}
+                        <span className="text-lg">{o.type === 'property' ? '' : ''}</span> {o.service}
                       </td>
                       <td className="px-6 py-4 text-gray-600">{o.fixerName || 'Partner'}</td>
                       <td className="px-6 py-4"><span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded font-medium">{o.tier || 'Standard'}</span></td>
-                      <td className="px-6 py-4 text-amber-500 font-bold">5 ⭐</td>
+                      <td className="px-6 py-4 text-amber-500 font-bold">5 </td>
                       <td className="px-6 py-4 font-bold text-gray-900">฿{o.finalPrice || o.estimatedPrice || '0'}</td>
                       <td className="px-6 py-4 text-gray-500">{new Date(o.updatedAt || Date.now()).toLocaleDateString()}</td>
                     </tr>

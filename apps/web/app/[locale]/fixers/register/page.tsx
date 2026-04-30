@@ -1385,10 +1385,10 @@ export default function FixerRegisterPage() {
             type: "warn",
             message:
               locale === "th"
-                ? "⚠️ ชื่อไม่ครบถ้วน — กรุณาใช้ชื่อ-นามสกุลจริง"
+                ? " ชื่อไม่ครบถ้วน — กรุณาใช้ชื่อ-นามสกุลจริง"
                 : locale === "zh"
-                  ? "⚠️ 姓名不完整 — 请使用全名"
-                  : "⚠️ Incomplete name — please use full legal name",
+                  ? " 姓名不完整 — 请使用全名"
+                  : " Incomplete name — please use full legal name",
           });
         }
         if (!hasPhone || !hasEmail) {
@@ -1396,10 +1396,10 @@ export default function FixerRegisterPage() {
             type: "warn",
             message:
               locale === "th"
-                ? "⚠️ ข้อมูลติดต่อไม่ครบถ้วน"
+                ? " ข้อมูลติดต่อไม่ครบถ้วน"
                 : locale === "zh"
-                  ? "⚠️ 联系信息不完整"
-                  : "⚠️ Incomplete contact information",
+                  ? " 联系信息不完整"
+                  : " Incomplete contact information",
           });
         }
 
@@ -1540,8 +1540,8 @@ export default function FixerRegisterPage() {
     const credentialStatus = aiTier?.credentialStatus ?? "unverified";
 
     const statusConfig = {
-      verified: { bg: "bg-green-50", border: "border-green-100", icon: "✅", title: locale === "th" ? "ยืนยันแล้ว" : "Verified", color: "text-green-900" },
-      partial: { bg: "bg-amber-50", border: "border-amber-100", icon: "⚠️", title: locale === "th" ? "ยืนยันบางส่วน" : "Partially Verified", color: "text-amber-900" },
+      verified: { bg: "bg-green-50", border: "border-green-100", icon: "", title: locale === "th" ? "ยืนยันแล้ว" : "Verified", color: "text-green-900" },
+      partial: { bg: "bg-amber-50", border: "border-amber-100", icon: "", title: locale === "th" ? "ยืนยันบางส่วน" : "Partially Verified", color: "text-amber-900" },
       unverified: { bg: "bg-gray-50", border: "border-gray-200", icon: "📝", title: locale === "th" ? "รอตรวจสอบ" : "Pending Review", color: "text-gray-900" },
     };
     const statusStyle = statusConfig[credentialStatus];
@@ -1552,7 +1552,7 @@ export default function FixerRegisterPage() {
           {/* Header */}
           <div className="p-8 text-center border-b border-gray-100 bg-white">
             <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-3xl">🎉</span>
+              <span className="text-3xl"></span>
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">{locale === "th" ? "ลงทะเบียนสำเร็จ!" : locale === "zh" ? "注册成功!" : "Registration Successful!"}</h2>
             <p className="text-gray-500 text-sm">{locale === "th" ? "ทีม CBLUE จะตรวจสอบข้อมูลและ KYC ของคุณ อนุมัติภายใน 1-3 วันทำการ" : locale === "zh" ? "CBLUE团队将审核您的信息和KYC。1-3个工作日内批准。" : "The CBLUE team will review your information and KYC. Approval within 1–3 business days."}</p>
@@ -1560,7 +1560,7 @@ export default function FixerRegisterPage() {
 
           {/* AI Assessment Card */}
           <div className="bg-gradient-to-r from-slate-50 to-white px-8 py-5 border-b border-gray-100 flex justify-between items-center">
-            <h3 className="font-bold text-gray-900 flex items-center gap-2">🤖 CBLUE AI Tier Assessment</h3>
+            <h3 className="font-bold text-gray-900 flex items-center gap-2">CBLUE AI Tier Assessment</h3>
             <span className="text-xs text-gray-500 px-2 py-1 bg-white rounded border border-gray-200">Overall Score: <strong className="text-gray-900">{score}/100</strong></span>
           </div>
 
@@ -1602,12 +1602,12 @@ export default function FixerRegisterPage() {
 
               {/* AI Verification Results */}
               <div>
-                <h4 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wider">🔍 {locale === "th" ? "ผลการตรวจสอบ AI" : locale === "zh" ? "AI验证结果" : "AI Verification Results"}</h4>
+                <h4 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wider">{locale === "th" ? "ผลการตรวจสอบ AI" : locale === "zh" ? "AI验证结果" : "AI Verification Results"}</h4>
                 <ul className="space-y-3 text-sm">
                   {flags.length > 0 ? flags.map((f, idx) => (
                     <li key={idx} className="flex items-start gap-2 text-gray-600">
                       <span className={`mt-0.5 ${f.type === "pass" ? "text-green-500" : f.type === "warn" ? "text-amber-500" : "text-red-500"}`}>
-                        {f.type === "pass" ? "✅" : f.type === "warn" ? "⚠️" : "❌"}
+                        {f.type === "pass" ? "" : f.type === "warn" ? "" : ""}
                       </span>
                       <span>{f.message}</span>
                     </li>
@@ -1619,7 +1619,7 @@ export default function FixerRegisterPage() {
             </div>
 
             <div className="p-4 bg-gray-50 rounded-xl text-xs text-gray-500 border border-gray-100 flex items-start gap-3">
-              <span className="text-lg">🔒</span>
+              <span className="text-lg"></span>
               <p>{locale === "th" ? "ความปลอดภัย: ข้อมูลของคุณถูกเข้ารหัสและปกป้องตาม PDPA ข้อมูลรับรองถูกตรวจสอบเพื่อรักษาความสมบูรณ์ของแพลตฟอร์ม" : locale === "zh" ? "安全：您的数据根据PDPA加密和保护。凭证经过验证以维护平台完整性。" : "Security: Your data is encrypted and protected under PDPA. Credentials are verified to maintain platform integrity."}</p>
             </div>
 
@@ -1783,7 +1783,7 @@ export default function FixerRegisterPage() {
           {/* Company / Personal Formal Address */}
           <fieldset>
             <legend className="text-lg font-semibold text-gray-900 mb-4">
-              🏢{" "}
+              {" "}
               {locale === "th"
                 ? "ที่อยู่บริษัท / ที่อยู่ตามทะเบียนบ้าน"
                 : locale === "zh"
@@ -2258,13 +2258,13 @@ export default function FixerRegisterPage() {
                 {/* KYC photo guide */}
                 <p className="text-xs text-gray-400 mb-2">
                   {locale === "th"
-                    ? "📋 อัพโหลดตามลำดับ: 1) บัตรด้านหน้า 2) บัตรด้านหลัง 3) เซลฟี่คู่กับบัตร"
+                    ? "อัพโหลดตามลำดับ: 1) บัตรด้านหน้า 2) บัตรด้านหลัง 3) เซลฟี่คู่กับบัตร"
                     : locale === "zh"
-                      ? "📋 按顺序上传：1) 证件正面 2) 证件反面 3) 手持证件自拍"
-                      : "📋 Upload in order: 1) ID card front 2) ID card back 3) Selfie with ID"}
+                      ? "按顺序上传：1) 证件正面 2) 证件反面 3) 手持证件自拍"
+                      : "Upload in order: 1) ID card front 2) ID card back 3) Selfie with ID"}
                 </p>
                 <p className="text-xs text-sky-600 mb-2">
-                  🤖{" "}
+                  {" "}
                   {locale === "th"
                     ? "ระบบ AI จะตรวจสอบว่ารูปภาพเป็นบัตรประชาชนจริงหรือไม่ รูปที่ไม่ถูกต้องจะถูกปฏิเสธ"
                     : locale === "zh"
@@ -2292,10 +2292,10 @@ export default function FixerRegisterPage() {
                       />
                     </svg>
                     {locale === "th"
-                      ? "🤖 AI กำลังตรวจสอบรูปภาพ..."
+                      ? "AI กำลังตรวจสอบรูปภาพ..."
                       : locale === "zh"
-                        ? "🤖 AI正在验证照片..."
-                        : "🤖 AI verifying photo..."}
+                        ? "AI正在验证照片..."
+                        : "AI verifying photo..."}
                   </div>
                 )}
 
@@ -2462,7 +2462,7 @@ export default function FixerRegisterPage() {
 
             {/* Household Maintenance */}
             <h4 className="text-sm font-semibold text-blue-700 mt-4 mb-2 flex items-center gap-2">
-              🏠{" "}
+              {" "}
               {locale === "th"
                 ? "งานซ่อมบำรุงบ้าน"
                 : locale === "zh"
@@ -2534,7 +2534,7 @@ export default function FixerRegisterPage() {
 
             {/* Book Professionals */}
             <h4 className="text-sm font-semibold text-purple-700 mt-4 mb-2 flex items-center gap-2">
-              👔{" "}
+              {" "}
               {locale === "th"
                 ? "มืออาชีพ"
                 : locale === "zh"
@@ -2758,7 +2758,7 @@ export default function FixerRegisterPage() {
                   />
                   {gpsCoords ? (
                     <p className="text-sm text-green-600 font-medium">
-                      ✅ 📍{" "}
+                      📍{" "}
                       {locale === "th"
                         ? "ตำแหน่ง"
                         : locale === "zh"
