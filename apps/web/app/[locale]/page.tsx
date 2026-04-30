@@ -397,7 +397,7 @@ export default function Home() {
             <div className="bg-gradient-to-br from-emerald-50 to-green-50 rounded-2xl overflow-hidden shadow-xl border border-emerald-100">
               <div className="bg-gradient-to-r from-emerald-600 to-green-600 px-8 py-5">
                 <h3 className="text-xl font-bold text-white text-center">
-                  {locale === "th" ? "สำหรับพาร์ทเนอร์ — รับงาน เพิ่มรายได้ เติบโตไปด้วยกัน" : locale === "zh" ? "合作伙伴 — 接单赚钱，共同成长" : "For Partners — Get Jobs, Grow Income, Succeed Together"}
+                  {locale === "th" ? "สำหรับพาร์ทเนอร์ — รับงาน เพิ่มรายได้ เติบโตไปด้วยกัน" : locale === "zh" ? "合作伙伴 — 接单赚钱，共同成长" : "For Partners"}
                 </h3>
               </div>
               <div className="p-8">

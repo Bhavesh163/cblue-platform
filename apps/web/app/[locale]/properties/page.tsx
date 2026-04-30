@@ -961,17 +961,14 @@ export default function PropertiesPage() {
           {/* CTA to register property */}
           {!searched && (
             <div className="text-center py-12">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-                {["CONDO", "HOUSE", "LAND"].map((type) => (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 max-w-7xl mx-auto px-4">
+                {PROPERTY_TYPES.map((type) => (
                   <button
                     key={type}
                     onClick={() => handleSearch({ propertyType: type })}
-                    className="bg-white rounded-xl p-6 border border-gray-200 text-center hover:border-green-500 hover:shadow-md transition cursor-pointer"
+                    className="bg-white rounded-xl p-4 border border-gray-200 text-center hover:border-green-500 hover:shadow-md transition cursor-pointer flex flex-col items-center justify-center gap-2"
                   >
-                    <div className="text-4xl mb-3">
-                      {type === "CONDO" ? "" : type === "HOUSE" ? "" : "🌳"}
-                    </div>
-                    <h3 className="font-semibold text-gray-900">{t(`types.${typeKeys[type]}`)}</h3>
+                    <h3 className="font-semibold text-gray-900 text-sm sm:text-base">{t(`types.${typeKeys[type]}`)}</h3>
                   </button>
                 ))}
               </div>
