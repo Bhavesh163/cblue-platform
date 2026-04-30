@@ -1526,7 +1526,7 @@ export default function FixerResults({
               </thead>
               <tbody>
                 {[
-                  { name: t("economy"), fee: "\u0E3F200", stars: "\u2B50", exp: "1-3", key: "economy" },
+                  { name: t("economy"), fee: "\u0E3F100", stars: "\u2B50", exp: "1-3", key: "economy" },
                   { name: t("standard"), fee: "\u0E3F400", stars: "\u2B50\u2B50", exp: "3-5", key: "standard" },
                   { name: t("corporate"), fee: "\u0E3F600", stars: "\u2B50\u2B50\u2B50", exp: "5-7", key: "corporate" },
                   { name: t("specialist"), fee: "\u0E3F800", stars: "\u2B50\u2B50\u2B50\u2B50", exp: "7-10", key: "specialist" },

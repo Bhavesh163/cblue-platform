@@ -117,22 +117,32 @@ export default function DashboardPage() {
 
         const res = await fetch("/api/v1/users/me", {
           headers: { Authorization: `Bearer ${token}` }
+        }).catch(err => {
+          console.error("Failed to fetch user data:", err);
+          return null;
         });
-        
+
+        if (!res) {
+          if (isMounted) {
+            setSubscriber(null);
+            setLoading(false);
+          }
+          return;
+        }
+
         if (res.ok) {
           const user = await res.json();
           if (isMounted) {
-            
             const stored = localStorage.getItem("subscriber");
             if (stored) {
-               setSubscriber(JSON.parse(stored));
+              setSubscriber(JSON.parse(stored));
             } else {
                setSubscriber({ id: user.id, name: user.name, email: user.email, phone: user.phone, status: "ACTIVE" });
             }
           }
 
-          const ordersRes = await fetch("/api/v1/orders/my", { headers: { Authorization: `Bearer ${token}` } });
-          if (ordersRes.ok && isMounted) setOrders(await ordersRes.json());
+          const ordersRes = await fetch("/api/v1/orders/my", { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
+          if (ordersRes && ordersRes.ok && isMounted) setOrders(await ordersRes.json());
 
         } else if (res.status === 401 || res.status === 403) {
           localStorage.removeItem("subscriber_token");

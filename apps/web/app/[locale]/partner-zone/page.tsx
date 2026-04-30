@@ -169,7 +169,7 @@ const ICON_MAP: Record<string, string> = { household: "\u{1F3E0}", project: "\u{
 const STATUS_STYLE: Record<string, string> = { pending: "bg-yellow-100 text-yellow-800", in_progress: "bg-blue-100 text-blue-800", completed: "bg-green-100 text-green-800", cancelled: "bg-red-100 text-red-800" };
 const TIER_STYLE: Record<string, string> = { Economy: "bg-green-50 text-green-700", Standard: "bg-blue-50 text-blue-700", Corporate: "bg-purple-50 text-purple-700", Specialist: "bg-amber-50 text-amber-700", Expert: "bg-red-50 text-red-700" };
 const LISTING_STATUS_STYLE: Record<string, string> = { active: "bg-green-100 text-green-700", pending: "bg-yellow-100 text-yellow-700", sold: "bg-gray-100 text-gray-600" };
-const tierDeposit: Record<string, number> = { economy: 200, standard: 400, corporate: 600, specialist: 800, expert: 1000 };
+const tierDeposit: Record<string, number> = { economy: 100, standard: 400, corporate: 600, specialist: 800, expert: 1000 };
 
 /* --- Main Component --- */
 export default function PartnerZonePage() {
@@ -324,7 +324,7 @@ export default function PartnerZonePage() {
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             {[
-              { name: "Economy", fee: "200", color: "border-green-200 bg-green-50", textColor: "text-green-700" },
+              { name: "Economy", fee: "100", color: "border-green-200 bg-green-50", textColor: "text-green-700" },
               { name: "Standard", fee: "400", color: "border-blue-200 bg-blue-50", textColor: "text-blue-700" },
               { name: "Corporate", fee: "600", color: "border-purple-200 bg-purple-50", textColor: "text-purple-700" },
               { name: "Specialist", fee: "800", color: "border-amber-200 bg-amber-50", textColor: "text-amber-700" },

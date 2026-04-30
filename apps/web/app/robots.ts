@@ -10,5 +10,6 @@ export default function robots(): MetadataRoute.Robots {
       },
     ],
     sitemap: "https://www.cblue.co.th/sitemap.xml",
+    host: "https://www.cblue.co.th",
   };
 }

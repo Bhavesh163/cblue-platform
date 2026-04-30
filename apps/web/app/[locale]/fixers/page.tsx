@@ -108,31 +108,37 @@ export default function FixerProPage() {
             setPartner(parsed);
             setIsFixer(true);
           }
-          const consent = localStorage.getItem("pdpa_consent_partner");
-          if (!consent) setShowPdpa(true);
         }
 
         const res = await fetch("/api/v1/users/me", {
           headers: { Authorization: `Bearer ${token}` }
+        }).catch(err => {
+          console.error("Failed to fetch user data:", err);
+          return null;
         });
-        
+
+        if (!res) {
+          if (isMounted) setIsFixer(false);
+          return;
+        }
+
         if (res.ok) {
           const user = await res.json();
           if (isMounted) {
             setIsFixer(!!user.fixer);
             const stored = localStorage.getItem("subscriber");
             if (stored) {
-               setPartner(JSON.parse(stored));
+              setPartner(JSON.parse(stored));
             } else {
-               setPartner({ id: user.id, name: user.name, email: user.email, phone: user.phone, status: "ACTIVE" });
+              setPartner({ id: user.id, name: user.name, email: user.email, phone: user.phone, status: "ACTIVE" });
             }
           }
 
-          const ordersRes = await fetch("/api/v1/orders/fixer", { headers: { Authorization: `Bearer ${token}` } });
-          if (ordersRes.ok && isMounted) setOrders(await ordersRes.json());
-          
-          const propRes = await fetch("/api/v1/properties/my", { headers: { Authorization: `Bearer ${token}` } });
-          if (propRes.ok && isMounted) setMyProperties(await propRes.json());
+          const ordersRes = await fetch("/api/v1/orders/fixer", { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
+          if (ordersRes && ordersRes.ok && isMounted) setOrders(await ordersRes.json());
+
+          const propRes = await fetch("/api/v1/properties/my", { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
+          if (propRes && propRes.ok && isMounted) setMyProperties(await propRes.json());
 
         } else if (res.status === 401 || res.status === 403) {
           localStorage.removeItem("subscriber_token");

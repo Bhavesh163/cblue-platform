@@ -363,7 +363,7 @@ export const metadata: Metadata = {
     shortcut: [ { url: "/favicon.ico" } ]
   },
   other: {
-    "msvalidate.01": "",
+    "msvalidate.01": "22C81DF9E2DC0903E7EAC1DA3A7382B2", // Example hash, the actual one should be updated by the user in environment or hardcoded here later
     "apple-mobile-web-app-capable": "yes",
     "apple-mobile-web-app-status-bar-style": "black-translucent",
     "apple-mobile-web-app-title": "CBLUE",
