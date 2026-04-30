@@ -173,7 +173,7 @@
     "contactName": "联系人姓名",
     "submitListing": "提交发布",
     "types": {
-      "condo": "公寓", "office": "办公室", "warehouse": "仓库", "factory": "工厂",
+      "🏢 condo": "🏢 公寓", "🏠 house": "🏠 别墅", "🏡 townhouse": "🏡 联排别墅", "🌳 land": "🌳 土地", "🏬 commercial": "🏬 商业", "💼 office": "💼 办公室", "🏢 apartment": "🏢 公寓", "🏭 warehouse": "🏭 仓库", "🏭 factory": "🏭 工厂", "office": "办公室", "warehouse": "仓库", "factory": "工厂",
       "house": "独栋别墅",
       "townhouse": "联排别墅",
       "land": "土地",

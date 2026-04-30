@@ -73,15 +73,15 @@ export default function PropertyRegisterPage() {
   });
 
   const typeKeys: Record<string, string> = {
-    CONDO: "condo",
-    HOUSE: "house",
-    TOWNHOUSE: "townhouse",
-    LAND: "land",
-    COMMERCIAL: "commercial",
-    OFFICE: "office",
-    APARTMENT: "apartment",
-    WAREHOUSE: "warehouse",
-    FACTORY: "factory"
+    CONDO: "🏢 condo",
+    HOUSE: "🏠 house",
+    TOWNHOUSE: "🏡 townhouse",
+    LAND: "🌳 land",
+    COMMERCIAL: "🏬 commercial",
+    OFFICE: "💼 office",
+    APARTMENT: "🏢 apartment",
+    WAREHOUSE: "🏭 warehouse",
+    FACTORY: "🏭 factory"
   };
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {

@@ -365,7 +365,7 @@ export default function ServicesPage() {
                 href={`${prefix}/dashboard?tab=property`}
                 className="px-8 py-3 bg-white text-amber-700 border-2 border-amber-200 rounded-xl font-semibold hover:bg-amber-50 transition shadow-lg"
               >
-                {locale === "th" ? "📝 ลงประกาศขาย/เช่า" : locale === "zh" ? "📝 发布出售/出租" : "📝 List Your Property"}
+                {locale === "th" ? "ลงประกาศขาย/เช่า" : locale === "zh" ? "发布出售/出租" : "List Your Property"}
               </Link>
             </div>
           </div>

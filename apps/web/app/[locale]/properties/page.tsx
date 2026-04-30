@@ -204,15 +204,15 @@ export default function PropertiesPage() {
   ];
 
   const typeKeys: Record<string, string> = {
-    "CONDO": "condo",
-    "HOUSE": "house",
-    "TOWNHOUSE": "townhouse",
-    "LAND": "land",
-    "COMMERCIAL": "commercial",
-    "OFFICE": "office",
-    "APARTMENT": "apartment",
-    "WAREHOUSE": "warehouse",
-    "FACTORY": "factory"
+    "CONDO": "🏢 condo",
+    "HOUSE": "🏠 house",
+    "TOWNHOUSE": "🏡 townhouse",
+    "LAND": "🌳 land",
+    "COMMERCIAL": "🏬 commercial",
+    "OFFICE": "💼 office",
+    "APARTMENT": "🏢 apartment",
+    "WAREHOUSE": "🏭 warehouse",
+    "FACTORY": "🏭 factory"
   };
 
   return (
