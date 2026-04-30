@@ -173,7 +173,7 @@
     "contactName": "ชื่อผู้ติดต่อ",
     "submitListing": "ลงประกาศ",
     "types": {
-      "condo": "คอนโด",
+      "condo": "คอนโด", "office": "ออฟฟิศ", "warehouse": "โกดัง", "factory": "โรงงาน",
       "house": "บ้านเดี่ยว",
       "townhouse": "ทาวน์เฮาส์",
       "land": "ที่ดิน",

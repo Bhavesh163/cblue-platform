@@ -8,7 +8,7 @@ import { THAI_PROVINCES } from "../lib/constants";
 import PdpaConsent from "../components/PdpaConsent";
 import generatePayload from "promptpay-qr";
 import { QRCodeSVG } from "qrcode.react";
-const PROPERTY_TYPES = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "APARTMENT"] as const;
+const PROPERTY_TYPES = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "OFFICE", "APARTMENT", "WAREHOUSE", "FACTORY"] as const;
 
 
 
@@ -204,12 +204,15 @@ export default function PropertiesPage() {
   ];
 
   const typeKeys: Record<string, string> = {
-    CONDO: "condo",
-    HOUSE: "house",
-    TOWNHOUSE: "townhouse",
-    LAND: "land",
-    COMMERCIAL: "commercial",
-    APARTMENT: "apartment",
+    "CONDO": "condo",
+    "HOUSE": "house",
+    "TOWNHOUSE": "townhouse",
+    "LAND": "land",
+    "COMMERCIAL": "commercial",
+    "OFFICE": "office",
+    "APARTMENT": "apartment",
+    "WAREHOUSE": "warehouse",
+    "FACTORY": "factory"
   };
 
   return (

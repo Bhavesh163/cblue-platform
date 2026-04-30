@@ -173,7 +173,7 @@
     "contactName": "Contact Name",
     "submitListing": "Submit Listing",
     "types": {
-      "condo": "Condo",
+      "condo": "Condo", "office": "Office", "warehouse": "Warehouse", "factory": "Factory",
       "house": "House",
       "townhouse": "Townhouse",
       "land": "Land",
