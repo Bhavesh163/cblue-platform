@@ -8,12 +8,15 @@ import { useRouter } from "next/navigation";
 import PdpaConsent from "../components/PdpaConsent";
 
 interface PartnerInfo {
-  id: string;
+  id?: string;
   name: string;
   email: string;
-  phone: string;
+  phone?: string;
   company?: string;
   status: string;
+  tier?: string;
+  createdAt?: string;
+  tierScore?: number;
 }
 
 const stats = {
@@ -306,10 +309,12 @@ export default function FixerProPage() {
         </div>
 
         {/* Tab Content */}
-        {activeTab === "overview" && <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={incomingJobs} completedJobs={completedJobs} earnings={[]} stats={stats} notifications={notifications} />}
+        <div className={`mt-6 ${activeTab !== 'overview' ? 'hidden' : ''}`}>
+          <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={incomingJobs} completedJobs={completedJobs} earnings={[]} stats={stats} notifications={notifications} />
+        </div>
         {activeTab === "active" && <PartnerJobs locale={locale} activeJobs={activeJobs} />}
         {activeTab === "requests" && <PartnerRequests locale={locale} incomingJobs={incomingJobs} />}
-        {activeTab === "properties" && <PartnerProperties locale={locale} prefix={prefix} properties={properties} />}
+        {activeTab === "properties" && <PartnerProperties locale={locale} prefix={prefix} properties={myProperties} />}
         {activeTab === "history" && <PartnerHistory locale={locale} completedJobs={completedJobs} />}
         {activeTab === "chat" && <PartnerChats locale={locale} chats={chats} />}
         {activeTab === "notifications" && <PartnerNotifications locale={locale} notifications={notifications} />}
@@ -489,19 +494,20 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
   const maxEarning = earnings.length > 0 ? Math.max(...earnings.map(e => e.amount)) : 0;
   return (
     <div className="space-y-6">
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      {/* Stats Row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "进行中" : "Active Jobs", value: stats.activeJobs, icon: "🔧", color: "text-sky-600" },
-          { label: locale === "th" ? "เสร็จสิ้น" : locale === "zh" ? "已完成" : "Completed", value: stats.completedJobs, icon: "✅", color: "text-green-600" },
-          { label: locale === "th" ? "รายได้เดือนนี้" : locale === "zh" ? "本月收入" : "Monthly Earn", value: stats.monthlyEarnings, icon: "💰", color: "text-amber-600" },
-          { label: locale === "th" ? "คะแนน" : locale === "zh" ? "评分" : "Rating", value: `${stats.rating} ⭐`, icon: "🏆", color: "text-purple-600" },
-          { label: locale === "th" ? "อัตราตอบรับ" : locale === "zh" ? "响应率" : "Response", value: stats.responseRate, icon: "⚡", color: "text-indigo-600" },
-          { label: locale === "th" ? "ลูกค้าประจำ" : locale === "zh" ? "回头客" : "Repeat", value: stats.repeatClients, icon: "🤝", color: "text-teal-600" },
+          { label: locale === "th" ? "งานที่ใช้งานอยู่" : "Active Jobs", value: activeJobs?.length || 0, icon: "⚡", color: "text-amber-600" },
+          { label: locale === "th" ? "เสร็จสิ้น" : "Completed", value: completedJobs?.length || 0, icon: "✅", color: "text-green-600" },
+          { label: locale === "th" ? "รายได้ต่อเดือน" : "Monthly Earn", value: stats?.monthlyEarnings || "฿0", icon: "💰", color: "text-indigo-600" },
+          { label: locale === "th" ? "คะแนน" : "Rating", value: `${stats?.rating || 0} ⭐`, icon: "🏆", color: "text-amber-600" },
         ].map((s) => (
-          <div key={s.label} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-            <p className="text-xs text-gray-500 mb-1">{s.label}</p>
-            <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
+          <div key={s.label} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-semibold text-gray-500">{s.label}</span>
+              <span className="text-xl">{s.icon}</span>
+            </div>
+            <p className={`text-2xl sm:text-3xl font-extrabold ${s.color}`}>{s.value}</p>
           </div>
         ))}
       </div>
@@ -708,35 +714,37 @@ function PartnerRequests({ locale, incomingJobs }: { locale: string; incomingJob
     </div>
   );
 }
-
-/* ===== PARTNER HISTORY ===== */
 function PartnerHistory({ locale, completedJobs }: { locale: string; completedJobs: any[] }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-100">
-        <h2 className="font-bold text-gray-900 flex items-center gap-2">📜 {locale === "th" ? "ประวัติงานทั้งหมด" : locale === "zh" ? "完整工作历史" : "Full Job History"}</h2>
+      <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+        <h2 className="font-bold text-gray-900 flex items-center gap-2">📜 {locale === "th" ? "ประวัติการทำงาน" : locale === "zh" ? "工作历史" : "Job History"}</h2>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead><tr className="bg-gray-50 border-b border-gray-200">
-            <th className="text-left py-3 px-4 font-semibold text-gray-600">{locale === "th" ? "บริการ" : locale === "zh" ? "服务" : "Service"}</th>
-            <th className="text-left py-3 px-4 font-semibold text-gray-600">{locale === "th" ? "ลูกค้า" : locale === "zh" ? "客户" : "Customer"}</th>
-            <th className="text-center py-3 px-4 font-semibold text-gray-600">{locale === "th" ? "ระดับ" : locale === "zh" ? "等级" : "Tier"}</th>
-            <th className="text-center py-3 px-4 font-semibold text-gray-600">{locale === "th" ? "คะแนน" : locale === "zh" ? "评分" : "Rating"}</th>
-            <th className="text-center py-3 px-4 font-semibold text-gray-600">{locale === "th" ? "รายได้" : locale === "zh" ? "收入" : "Earned"}</th>
-            <th className="text-center py-3 px-4 font-semibold text-gray-600">{locale === "th" ? "วันที่" : locale === "zh" ? "日期" : "Date"}</th>
-          </tr></thead>
-          <tbody>
-            {completedJobs.map((h) => (
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 text-xs uppercase tracking-wider">
+              <th className="py-3 px-4 font-semibold">{locale === "th" ? "บริการ" : "Service"}</th>
+              <th className="py-3 px-4 font-semibold">{locale === "th" ? "ลูกค้า" : "Customer"}</th>
+              <th className="py-3 px-4 font-semibold text-center">{locale === "th" ? "ระดับ" : "Tier"}</th>
+              <th className="py-3 px-4 font-semibold text-center">{locale === "th" ? "รายได้" : "Fee"}</th>
+              <th className="py-3 px-4 font-semibold text-center">{locale === "th" ? "วันที่" : "Date"}</th>
+            </tr>
+          </thead>
+          <tbody className="text-sm">
+            {completedJobs.length > 0 ? completedJobs.map((h) => (
               <tr key={h.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition">
-                <td className="py-3 px-4 font-medium text-gray-900">{locale === "th" ? h.serviceTh : locale === "zh" ? h.serviceZh : h.service}</td>
-                <td className="py-3 px-4 text-gray-600">{h.customer}</td>
-                <td className="py-3 px-4 text-center"><span className={`px-2 py-0.5 rounded-full text-xs font-bold ${TIER_STYLE[h.tier] || ""}`}>{h.tier}</span></td>
-                <td className="py-3 px-4 text-center text-amber-600 font-semibold">{h.rating} ⭐</td>
-                <td className="py-3 px-4 text-center font-bold text-green-700">{h.earnings}</td>
-                <td className="py-3 px-4 text-center text-gray-500">{h.date}</td>
+                <td className="py-3 px-4 font-medium text-gray-900">{h.service}</td>
+                <td className="py-3 px-4 text-gray-600">#{h.customerId || 'Customer'}</td>
+                <td className="py-3 px-4 text-center"><span className="px-2 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-700">{h.tier || 'Standard'}</span></td>
+                <td className="py-3 px-4 text-center font-bold text-green-700">{h.fee || '฿0'}</td>
+                <td className="py-3 px-4 text-center text-gray-500">{new Date(h.updatedAt || Date.now()).toLocaleDateString()}</td>
               </tr>
-            ))}
+            )) : (
+              <tr>
+                <td colSpan={5} className="py-8 text-center text-gray-500">No completed jobs yet.</td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -755,29 +763,28 @@ function PartnerChats({ locale, chats }: { locale: string; chats: any[] }) {
       </div>
       <div className="divide-y divide-gray-50">
         {chats && chats.length > 0 ? chats.map((c: any) => (
-          <div key={c.id} className={`flex items-center gap-4 px-6 py-4 cursor-pointer transition ${c.unread > 0 ? "bg-purple-50/50 hover:bg-purple-50" : "hover:bg-gray-50"}`}>
+          <div key={c.id} className={`flex items-center gap-4 px-6 py-4 cursor-pointer transition hover:bg-gray-50`}>
             <div className="relative">
-              <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-sm font-bold text-gray-600">{c.name.slice(-4)}</div>
-              {c.online && <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-400 rounded-full border-2 border-white" />}
+              <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-sm font-bold text-gray-600">{c.customerId || c.customerName?.slice(0, 2) || "C"}</div>
+              <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-400 rounded-full border-2 border-white" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex justify-between items-baseline mb-1">
                 <div className="flex items-center gap-2">
-                  <p className="font-bold text-gray-900 truncate">{c.name}</p>
+                  <p className="font-bold text-gray-900 truncate">Customer #{c.customerId || "Customer"}</p>
                   <span className="text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-500">{c.service}</span>
                 </div>
-                <span className="text-xs text-gray-400 whitespace-nowrap ml-2">{locale === "th" ? c.timeTh : locale === "zh" ? c.timeZh : c.time}</span>
+                <span className="text-xs text-gray-400 whitespace-nowrap ml-2">Active</span>
               </div>
               <div className="flex justify-between items-center mt-1">
-                <p className={`text-sm truncate ${c.unread > 0 ? "font-semibold text-gray-900" : "text-gray-500"}`}>
-                  {locale === "th" ? c.lastMsgTh : locale === "zh" ? c.lastMsgZh : c.lastMsg}
+                <p className={`text-sm truncate text-gray-500`}>
+                  {locale === "th" ? "คลิกเพื่อดูแชท" : "Click to open chat"}
                 </p>
-                {c.unread > 0 && <span className="flex-shrink-0 ml-2 w-5 h-5 bg-purple-600 text-white text-[10px] rounded-full flex items-center justify-center font-bold">{c.unread}</span>}
               </div>
             </div>
           </div>
         )) : (
-          <p className="text-sm text-gray-500 p-6 text-center">{locale === "th" ? "ไม่มีแชทล่าสุด" : locale === "zh" ? "没有最近的聊天" : "No recent chats"}</p>
+          <p className="text-sm text-gray-500 p-6 text-center">{locale === "th" ? "ไม่มีแชทล่าสุด" : locale === "zh" ? "没有最近的聊天" : "No active chats"}</p>
         )}
       </div>
     </div>
@@ -834,19 +841,18 @@ function PartnerProfile({ locale, prefix, partner }: { locale: string; prefix: s
             </div>
           </div>
           
-          
           <div className="flex-1 w-full">
             <div className="flex justify-between items-start mb-4">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">{partner.name}</h2>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className="text-sm font-semibold text-purple-700 bg-purple-100 px-2 py-0.5 rounded">Specialist Tier</span>
+                  <span className="text-sm font-semibold text-purple-700 bg-purple-100 px-2 py-0.5 rounded">{partner.tier || 'Specialist Tier'}</span>
                   <span className="text-xs text-gray-500 flex items-center gap-1"><span className="text-green-500">✓</span> {locale === "th" ? "ยืนยันตัวตนแล้ว (KYC)" : "Verified (KYC)"}</span>
                 </div>
               </div>
-              <button className="px-5 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition text-sm font-semibold shadow-sm">
+              <Link href={`${prefix}/fixers/register`} className="px-5 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition text-sm font-semibold shadow-sm">
                 {locale === "th" ? "แก้ไขโปรไฟล์" : locale === "zh" ? "编辑资料" : "Edit Profile"}
-              </button>
+              </Link>
             </div>
             
             {/* Contact Info */}
@@ -865,7 +871,7 @@ function PartnerProfile({ locale, prefix, partner }: { locale: string; prefix: s
               </div>
               <div>
                 <h3 className="text-xs font-semibold text-gray-400 uppercase mb-1">{locale === "th" ? "วันที่สมัคร" : "Member Since"}</h3>
-                <p className="text-sm font-medium text-gray-900">{new Date().toLocaleDateString()}</p>
+                <p className="text-sm font-medium text-gray-900">{new Date(partner.createdAt || Date.now()).toLocaleDateString()}</p>
               </div>
             </div>
           </div>
@@ -878,7 +884,7 @@ function PartnerProfile({ locale, prefix, partner }: { locale: string; prefix: s
           <h3 className="font-bold text-sky-900 flex items-center gap-2">
             <span className="text-xl">🤖</span> CBLUE AI Tier Assessment
           </h3>
-          <span className="text-sm text-sky-700 font-semibold bg-white px-3 py-1 rounded-full shadow-sm">Overall Score: 69/100</span>
+          <span className="text-sm text-sky-700 font-semibold bg-white px-3 py-1 rounded-full shadow-sm">Overall Score: {partner.tierScore || 69}/100</span>
         </div>
         
         <div className="p-6">
@@ -1285,7 +1291,7 @@ function PartnerActiveJobs({ locale, prefix, orders }: { locale: string; prefix:
 
 function PartnerIncomingRequests({ locale, prefix, orders }: { locale: string; prefix: string; orders: any[] }) {
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8">
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
         <h2 className="font-bold text-gray-900 flex items-center gap-2">📋 Incoming Requests</h2>
         <span className="bg-amber-100 text-amber-700 text-xs font-bold px-2.5 py-1 rounded-full">{orders.length}</span>
@@ -1312,3 +1318,4 @@ function PartnerIncomingRequests({ locale, prefix, orders }: { locale: string; p
     </div>
   );
 }
+

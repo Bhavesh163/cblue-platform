@@ -714,6 +714,168 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       
       {activeTab === "profile" && <ProfileTab locale={locale} prefix={prefix} subscriber={subscriber} activeOrders={activeOrders} historyOrders={historyOrders} />}
       
+      {activeTab === "active" && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
+          <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+            <h2 className="font-bold text-gray-900 flex items-center gap-2">⚡ Active Services</h2>
+            <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full">{activeOrders.length}</span>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {activeOrders.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">No active services currently.</div>
+            ) : (
+              activeOrders.map((o: any, i: number) => (
+                <div key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl shadow-sm">{o.type === 'property' ? '🏢' : o.type === 'project' ? '💼' : o.type === 'professional' ? '👔' : '🏠'}</div>
+                    <div>
+                      <h3 className="font-bold text-gray-900">{o.service} <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">{o.tier || 'Standard'}</span></h3>
+                      <p className="text-sm text-gray-500 mt-1">{o.fixerName || 'Awaiting Partner'} &middot; {new Date(o.createdAt || Date.now()).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-2">
+                    <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">{o.status}</span>
+                    {o.status !== 'PENDING' && o.status !== 'CREATED' && <Link href={`${prefix}/chat/${o.id}`} className="text-gray-400 hover:text-sky-600 transition"><span className="text-xl">💬</span></Link>}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === "requests" && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
+          <div className="px-6 py-4 border-b border-gray-100">
+            <h2 className="font-bold text-gray-900">📋 Requests</h2>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {activeOrders.filter((o: any) => ['CREATED', 'MATCHING', 'PENDING'].includes(o.status)).length === 0 ? (
+              <div className="p-8 text-center text-gray-500">No active requests.</div>
+            ) : (
+              activeOrders.filter((o: any) => ['CREATED', 'MATCHING', 'PENDING'].includes(o.status)).map((o: any, i: number) => (
+                <div key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center text-2xl shadow-sm">📋</div>
+                    <div>
+                      <h3 className="font-bold text-gray-900">{o.service}</h3>
+                      <p className="text-sm text-gray-500 mt-1">Status: {o.status} &middot; {new Date(o.createdAt || Date.now()).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === "properties" && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
+          <div className="px-6 py-4 border-b border-gray-100">
+            <h2 className="font-bold text-gray-900">🏢 Properties</h2>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {orders.filter((o: any) => o.type === "property").length === 0 ? (
+              <div className="p-8 text-center text-gray-500">No property orders found.</div>
+            ) : (
+              orders.filter((o: any) => o.type === "property").map((o: any, i: number) => (
+                <div key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-2xl shadow-sm">🏢</div>
+                    <div>
+                      <h3 className="font-bold text-gray-900">{o.service} <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">{o.tier || 'Standard'}</span></h3>
+                      <p className="text-sm text-gray-500 mt-1">{o.status} &middot; {new Date(o.createdAt || Date.now()).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === "history" && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
+          <div className="px-6 py-4 border-b border-gray-100">
+            <h2 className="font-bold text-gray-900">📜 History</h2>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {historyOrders.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">No history found.</div>
+            ) : (
+              historyOrders.map((o: any, i: number) => (
+                <div key={i} className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50 transition cursor-pointer">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-2xl shadow-sm">✅</div>
+                    <div>
+                      <h3 className="font-bold text-gray-900">{o.service}</h3>
+                      <p className="text-sm text-gray-500 mt-1">{o.fixerName || 'Partner'} &middot; {new Date(o.createdAt || Date.now()).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-sm font-bold text-gray-900">{o.fee || '฿0'}</span>
+                    <span className="px-2 py-0.5 bg-gray-200 text-gray-700 text-[10px] font-bold rounded-full">{o.status}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === "chat" && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
+          <div className="px-6 py-4 border-b border-gray-100">
+            <h2 className="font-bold text-gray-900">💬 Chat</h2>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {activeOrders.filter((o: any) => o.status !== 'PENDING' && o.status !== 'CREATED').length === 0 ? (
+              <div className="p-8 text-center text-gray-500">No active chats.</div>
+            ) : (
+              activeOrders.filter((o: any) => o.status !== 'PENDING' && o.status !== 'CREATED').map((o: any, i: number) => (
+                <Link key={i} href={`${prefix}/chat/${o.id}`} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer block">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full bg-sky-100 flex items-center justify-center text-xl font-bold text-sky-700">
+                      {(o.fixerName || 'P').charAt(0)}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-gray-900">{o.fixerName || 'Partner'}</h3>
+                      <p className="text-sm text-gray-500 mt-1">{o.service}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xl">💬</span>
+                  </div>
+                </Link>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === "alerts" && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
+          <div className="px-6 py-4 border-b border-gray-100">
+            <h2 className="font-bold text-gray-900">🔔 Alerts</h2>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {orders.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">No recent alerts.</div>
+            ) : (
+              orders.slice(0, 10).map((o: any, i: number) => (
+                <div key={i} className="p-6 flex items-center gap-4 hover:bg-gray-50 transition cursor-pointer">
+                  <span className={`w-3 h-3 rounded-full flex-shrink-0 ${o.status === 'COMPLETED' ? 'bg-green-500' : 'bg-sky-500'}`}></span>
+                  <div>
+                    <p className="text-sm text-gray-800"><span className="font-bold">System:</span> Order {o.id.slice(0,6)} status updated to {o.status}</p>
+                    <p className="text-xs text-gray-400 mt-1">{new Date(o.updatedAt || Date.now()).toLocaleString()}</p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+      
       <div className={`grid grid-cols-1 lg:grid-cols-3 gap-6 ${activeTab !== 'overview' ? 'hidden' : ''}`}>
 
         {/* LEFT COLUMN: Profile & Alerts */}
