@@ -415,7 +415,7 @@ export class FixerService {
         verification_hints: [
           'Vision service unavailable — document analysis deferred',
         ],
-        timestamp: new Date().toISOString(),
+        timestamp: new Date().toISOString(), fallback: true,
       };
     }
   }
@@ -466,7 +466,7 @@ export class FixerService {
         verification_hints: [
           'Vision service unavailable — document analysis deferred',
         ],
-        timestamp: new Date().toISOString(),
+        timestamp: new Date().toISOString(), fallback: true,
       }));
 
       return {

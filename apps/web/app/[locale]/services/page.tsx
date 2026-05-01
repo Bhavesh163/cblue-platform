@@ -61,7 +61,7 @@ const professionalServices = [
   { id: "lawyer", value: "LAWYER", emoji: "⚖️", name: "Lawyer", nameTh: "ทนายความ", nameZh: "律师" },
   { id: "architect", value: "ARCHITECT", emoji: "📐", name: "Architect", nameTh: "สถาปนิก", nameZh: "建筑师" },
   { id: "interior-designer", value: "INTERIOR_DESIGNER", emoji: "🎨", name: "Interior Designer", nameTh: "มัณฑนากร", nameZh: "室内设计师" },
-  { id: "cpa", value: "CPA", emoji: "", name: "CPA", nameTh: "ผู้สอบบัญชี", nameZh: "注册会计师" },
+  { id: "cpa", value: "CPA", emoji: "⚖️", name: "CPA", nameTh: "ผู้สอบบัญชี", nameZh: "注册会计师" },
   { id: "engineer", value: "ENGINEER", emoji: "🏗️", name: "Engineer", nameTh: "วิศวกร", nameZh: "工程师" },
   { id: "software-programmer", value: "SOFTWARE_PROGRAMMER", emoji: "💻", name: "Software Programmer", nameTh: "โปรแกรมเมอร์", nameZh: "程序员" },
   { id: "digital-marketing", value: "DIGITAL_MARKETING", emoji: "📣", name: "Digital Marketing", nameTh: "การตลาดดิจิทัล", nameZh: "数字营销" },
