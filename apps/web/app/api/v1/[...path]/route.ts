@@ -30,9 +30,9 @@ function getBackendUrl() {
 
 const SKIP_REQ = new Set([
   "host", "connection", "keep-alive", "transfer-encoding",
-  "te", "trailer", "upgrade",
+  "te", "trailer", "upgrade", "content-length",
 ]);
-const SKIP_RES = new Set(["content-encoding", "transfer-encoding"]);
+const SKIP_RES = new Set(["content-encoding", "transfer-encoding", "content-length"]);
 
 async function handler(
   request: NextRequest,

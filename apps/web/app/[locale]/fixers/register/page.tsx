@@ -168,24 +168,6 @@ export default function FixerRegisterPage() {
     checkFixer();
   }, []);
 
-  if (checkingStatus) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><div className="w-8 h-8 border-4 border-sky-600 border-t-transparent rounded-full animate-spin"></div></div>;
-
-  if (isAlreadyFixer && !success) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-10 max-w-lg text-center">
-          <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
-            <span className="text-4xl">✓</span>
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">{locale === "th" ? "คุณเป็นช่างของ CBLUE แล้ว" : "You are already a CBLUE Fixer"}</h2>
-          <p className="text-gray-600 mb-8">{locale === "th" ? "บัญชีของคุณได้รับการลงทะเบียนเป็นช่างและมืออาชีพเรียบร้อยแล้ว คุณสามารถจัดการโปรไฟล์และรับงานได้ที่หน้าแดชบอร์ด" : "Your account is already registered as a Fixer & Pro. You can manage your profile and accept jobs from your dashboard."}</p>
-          <Link href={`${prefix}/fixers`} className="inline-block px-8 py-3 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl shadow-lg transition">
-            {locale === "th" ? "ไปที่หน้าแดชบอร์ด" : "Go to Dashboard"}
-          </Link>
-        </div>
-      </div>
-    );
-  }
 
   // Send portfolio files to AI vision service for OCR/text extraction
   const digestPortfolioFiles = useCallback(async (files: File[]) => {
@@ -1532,6 +1514,24 @@ export default function FixerRegisterPage() {
     }).catch(() => {}); // Non-blocking
   }, [aiTier, success]);
 
+  if (checkingStatus) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><div className="w-8 h-8 border-4 border-sky-600 border-t-transparent rounded-full animate-spin"></div></div>;
+
+  if (isAlreadyFixer && !success) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-10 max-w-lg text-center">
+          <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
+            <span className="text-4xl">✓</span>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">{locale === "th" ? "คุณเป็นช่างของ CBLUE แล้ว" : "You are already a CBLUE Fixer"}</h2>
+          <p className="text-gray-600 mb-8">{locale === "th" ? "บัญชีของคุณได้รับการลงทะเบียนเป็นช่างและมืออาชีพเรียบร้อยแล้ว คุณสามารถจัดการโปรไฟล์และรับงานได้ที่หน้าแดชบอร์ด" : "Your account is already registered as a Fixer & Pro. You can manage your profile and accept jobs from your dashboard."}</p>
+          <Link href={`${prefix}/fixers`} className="inline-block px-8 py-3 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl shadow-lg transition">
+            {locale === "th" ? "ไปที่หน้าแดชบอร์ด" : "Go to Dashboard"}
+          </Link>
+        </div>
+      </div>
+    );
+  }
   if (success) {
     const tierLabel = aiTier?.tier ?? "Economy";
     const score = aiTier?.score ?? 0;
