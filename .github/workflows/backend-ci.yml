@@ -384,6 +384,9 @@ jobs:
             # ── Ensure port 80 traffic goes to 3002 (CF worker restriction) ──
             docker run --rm --net=host --cap-add=NET_ADMIN alpine sh -c "apk add --no-cache iptables >/dev/null 2>&1; iptables -t nat -C PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3002 2>/dev/null || iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3002"
 
+            # ── Clean up old iptables hack ──
+            docker run --rm --net=host --cap-add=NET_ADMIN alpine sh -c "apk add --no-cache iptables >/dev/null 2>&1; iptables -t nat -D PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3002 2>/dev/null || true"
+
             # ── Verify backend health ──
             HEALTH=$(curl -sf http://127.0.0.1:3002/api/v1/health 2>&1 || echo '{"status":"unreachable"}')
             echo "Backend health: $HEALTH"

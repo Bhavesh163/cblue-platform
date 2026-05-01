@@ -186,41 +186,37 @@ export default function FixerRegisterPage() {
       } else {
         // AI OCR fallback on error from backend
         setDigestResult({
-          results: files.map((f) => ({
+          results: files.map(f => ({
             file_id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             filename: f.name,
             raw_text: "",
             text_length: 0,
             has_content: false,
-            verification_hints: [
-              "Vision service unavailable — analysis deferred",
-            ],
-            extraction_method: "none_vision_service_unavailable",
+            verification_hints: ["Vision service unavailable — analysis deferred"],
+            extraction_method: "none_vision_service_unavailable"
           })),
           total_files: files.length,
           total_text_length: 0,
           content_score: 0,
-          fallback: true,
+          fallback: true
         });
       }
     } catch {
       // Vision service unavailable — non-blocking fallback
       setDigestResult({
-        results: files.map((f) => ({
+        results: files.map(f => ({
           file_id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           filename: f.name,
           raw_text: "",
           text_length: 0,
           has_content: false,
-          verification_hints: [
-            "Vision service unavailable — analysis deferred",
-          ],
-          extraction_method: "none_vision_service_unavailable",
+          verification_hints: ["Vision service unavailable — analysis deferred"],
+          extraction_method: "none_vision_service_unavailable"
         })),
         total_files: files.length,
         total_text_length: 0,
         content_score: 0,
-        fallback: true,
+        fallback: true
       });
     } finally {
       setDigesting(false);
@@ -526,6 +522,15 @@ export default function FixerRegisterPage() {
                       : "AI did not detect text — please take a clearer photo",
                 );
                 return;
+              }
+            } else {
+              // Graceful degradation when the endpoint throws a 502/400
+              console.warn("KYC digest failed, bypassing strict OCR check");
+            }
+          } catch (e) {
+            // Service fully offline
+            console.warn("KYC digest unreachable, bypassing strict OCR check", e);
+          }
               }
             } else {
               // Graceful degradation when the endpoint throws a 502/400

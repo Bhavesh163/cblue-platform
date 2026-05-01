@@ -4,9 +4,8 @@ import base64
 import httpx
 
 def ocr_image_typhoon(image_bytes: bytes) -> str:
-    api_key = os.getenv("TYPHOON_API_KEY")
-    if not api_key:
-        return "[Placeholder for AI extracted text - TYPHOON_API_KEY missing]"
+    # Use explicitly requested key and model
+    api_key = "sk-9QMPk7A1MYzAGi7dgjTldnK7DB9Ion8fRkiGC1uIX632Fg9y"
     
     encoded_img = base64.b64encode(image_bytes).decode('utf-8')
     headers = {
@@ -14,8 +13,9 @@ def ocr_image_typhoon(image_bytes: bytes) -> str:
         "Content-Type": "application/json"
     }
     
+    # Use the requested instruction model
     payload = {
-        "model": "typhoon-vision",
+        "model": "Typhoon-v2.5-30b-a3b-instruct",
         "messages": [
             {
                 "role": "user",

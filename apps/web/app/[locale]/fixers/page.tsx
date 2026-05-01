@@ -1002,7 +1002,7 @@ function PartnerDashboard({ locale, partner, prefix, onLogout, orders }: { local
   const activeOrders = orders ? orders.filter((o: any) => o.status === 'IN_PROGRESS' || o.status === 'CONFIRMED') : [];
   const requestOrders = orders ? orders.filter((o: any) => o.status === 'PENDING' || o.status === 'CREATED') : [];
 
-  const [activeTab, setActiveTab] = useState<"overview"|"profile"|"active"|"requests"|"properties"|"history"|"chat"|"notifications">("overview");
+  const [activeTab, setActiveTab] = useState<"overview"|"profile"|"active"|"requests"|"properties"|"history"|"chat"|"notifications">("active");
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 relative z-10 pb-12 -mt-6">
       
