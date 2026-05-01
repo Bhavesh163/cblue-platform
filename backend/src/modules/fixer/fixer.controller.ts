@@ -109,16 +109,6 @@ export class FixerController {
 
   // ── AI Digest (no auth — called during registration before user has token) ──
 
-  @Post('kyc-digest')
-  @Throttle({ default: { ttl: 30000, limit: 10 } })
-  @UseInterceptors(FileInterceptor('file'))
-  async kycDigest(@UploadedFile() file: Express.Multer.File) {
-    return this.fixerService.kycDigest(file);
-  }
-
-    return this.fixerService.digestPortfolio(files);
-  }
-
   @Get('me')
   @UseGuards(JwtAuthGuard)
   getMyProfile(@CurrentUser('id') userId: string) {
@@ -190,5 +180,8 @@ export class FixerController {
   @UseGuards(JwtAuthGuard)
   setAvailability(
     @CurrentUser('id') userId: string,
+  ) {
+    // TODO: implement setAvailability in service
+    return { success: true };
   }
 }

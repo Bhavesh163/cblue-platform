@@ -529,15 +529,6 @@ export default function FixerRegisterPage() {
             }
           } catch (e) {
             // Service fully offline
-            console.warn("KYC digest unreachable, bypassing strict OCR check", e);
-          }
-              }
-            } else {
-              // Graceful degradation when the endpoint throws a 502/400
-              console.warn("KYC digest failed, bypassing strict OCR check");
-            }
-          } catch (e) {
-            // Service fully offline
             console.warn(
               "KYC digest unreachable, bypassing strict OCR check",
               e,
