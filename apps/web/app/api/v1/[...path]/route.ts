@@ -66,10 +66,10 @@ async function handler(
 
     const upstream = await fetch(target, init);
 
-    // If backend returned a non-JSON error (e.g., nginx HTML 403/404),
+    // If backend returned a non-JSON error (e.g., nginx HTML 502/404),
     // convert to a proper JSON 502 so the frontend shows "service unavailable"
     const ct = upstream.headers.get("content-type") || "";
-    if (!upstream.ok || !ct.includes("application/json")) {
+    if (!upstream.ok && !ct.includes("application/json")) {
       await upstream.text().catch(() => {});
       return Response.json(
         {
