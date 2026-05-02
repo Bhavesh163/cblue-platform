@@ -293,8 +293,10 @@ jobs:
             
             # Use raw docker commands for deployment to bypass broken docker-compose aliasing
             echo "🚀 Deploying backend container directly..."
+            NETWORK=$(docker network ls --format '{{.Name}}' | grep -iE 'docker_default|cblue-platform_default|cblue_default|infrastructure_default' | head -1 || echo 'bridge')
+            echo "Using network: $NETWORK"
             docker run -d --name cblue_backend_fallback \
-                --network docker_default \
+                --network "$NETWORK" \
                 --restart unless-stopped \
                 -p 3002:3002 \
                 -e DATABASE_URL="postgresql://admin:NewPass456!@postgres:5432/cblue" \
@@ -303,6 +305,10 @@ jobs:
                 -e JWT_SECRET=change-in-production \
                 -e JWT_REFRESH_SECRET=change-in-production \
                 -e JWT_EXPIRATION=15m -e JWT_REFRESH_EXPIRATION=7d \
+                -e MAILJET_API_KEY="11ec31e7118977d3846996bb91b9df53" \
+                -e MAILJET_API_SECRET="ac74812e9034e53634c0b31b02313f35" \
+                -e MAILJET_FROM_EMAIL="noreply@cblue.co.th" \
+                -e FRONTEND_URL="https://cblue.co.th" \
                 -e PORT=3002 -e NODE_ENV=production \
                 --restart unless-stopped \
                 "$IMAGE" 2>&1 || {
