@@ -43,12 +43,20 @@ def ocr_image_typhoon(image_bytes: bytes) -> str:
             "Content-Type": "application/json"
         }
         
+        system_prompt = """You are a world-class enterprise AI Verification Assistant for CBLUE platform.
+Your task is to analyze OCR text from KYC documents, portfolios, licenses, or certificates.
+Extract structured information with high accuracy. Find dates, names, license numbers, project experience, and identify if the document acts as identity verification or a professional credential. Do not hallucinate external facts. Translate concepts to English but retain original Thai names and numbers."""
+
         llm_payload = {
             "model": "Typhoon-v2.5-30b-a3b-instruct",
             "messages": [
                 {
+                    "role": "system",
+                    "content": system_prompt
+                },
+                {
                     "role": "user",
-                    "content": f"Extract and format all details clearly from this OCR text as if parsing an ID card, license, certificate, or portfolio. OCR Text:\n{extracted_text}"
+                    "content": f"Extract and format all details clearly from this OCR text:\n\n{extracted_text}"
                 }
             ],
             "max_tokens": 1500,

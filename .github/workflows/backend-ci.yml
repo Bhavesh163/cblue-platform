@@ -202,13 +202,13 @@ jobs:
             echo "✅ Code updated"
 
             # ── Detect docker compose command ──
-            if docker compose version >/dev/null 2>&1; then
+            if docker compose version 2>/dev/null | grep -q 'compose'; then
               DC="docker compose"
-            elif command -v docker-compose >/dev/null 2>&1; then
+            elif docker-compose --version 2>/dev/null | grep -qi 'compose'; then
               DC="docker-compose"
             else
-              echo "❌ Docker Compose not found"
-              exit 1
+              echo "⚠️ Warning: No valid docker compose found. Will use docker run fallbacks."
+              DC="docker"
             fi
             echo "Using: $DC"
 
@@ -246,8 +246,10 @@ jobs:
             fi
 
             # ── Start infrastructure first, then backend ──
-            $DC -f infrastructure/docker/docker-compose.yml rm -sf backend 2>/dev/null || true
-            $DC -f infrastructure/docker/docker-compose.yml rm -sf nginx 2>/dev/null || true
+            if [ "$DC" != "docker" ]; then
+              $DC -f infrastructure/docker/docker-compose.yml rm -sf backend 2>/dev/null || true
+              $DC -f infrastructure/docker/docker-compose.yml rm -sf nginx 2>/dev/null || true
+            fi
 
             # Restart unhealthy infrastructure containers before starting backend
             echo "🔧 Ensuring infrastructure containers are healthy..."
@@ -255,12 +257,16 @@ jobs:
               STATUS=$(docker inspect --format='{{.State.Health.Status}}' "$(docker ps -aqf "name=$SVC" | head -1)" 2>/dev/null || echo "none")
               if [ "$STATUS" = "unhealthy" ]; then
                 echo "  ⚠️ $SVC is unhealthy — restarting..."
-                $DC -f infrastructure/docker/docker-compose.yml restart "$SVC" 2>&1 || true
+                docker restart "docker_${SVC}_1" 2>/dev/null || docker restart "cblue-platform_${SVC}_1" 2>/dev/null || true
               fi
             done
 
-            # Start infrastructure services
-            $DC -f infrastructure/docker/docker-compose.yml up -d postgres redis rabbitmq 2>&1 || true
+            # Start infrastructure services (try docker compose if available)
+            if [ "$DC" != "docker" ]; then
+              $DC -f infrastructure/docker/docker-compose.yml up -d postgres redis rabbitmq 2>&1 || true
+            else
+              echo "⚠️ Cannot check infrastructure via compose. Assuming they are running natively."
+            fi
             echo "⏳ Waiting for infrastructure to stabilize..."
             sleep 15
 
@@ -279,17 +285,17 @@ jobs:
 
             # Force kill any containers holding port 3002
             echo "🔧 Force terminating any containers on port 3002..."
-            docker ps -a | grep -iE 'backend|3002' | awk '{print $1}' | xargs -r docker rm -f 2>/dev/null || true
-            docker ps -a -q --filter "publish=3002" | xargs -r docker rm -f 2>/dev/null || true
-            docker stop cblue_backend_fallback docker_backend_1 2>/dev/null || true
-            docker rm -f cblue_backend_fallback docker_backend_1 2>/dev/null || true
+            # Remove redirection of stderr so we can see why it fails
+            docker ps -a | grep -iE 'backend|3002' | awk '{print $1}' | xargs -r docker rm -f || true
+            docker ps -a -q --filter "publish=3002" | xargs -r docker rm -f || true
+            docker stop cblue_backend_fallback docker_backend_1 cblue-platform_backend_1 2>/dev/null || true
+            docker rm -f cblue_backend_fallback docker_backend_1 cblue-platform_backend_1 2>/dev/null || true
             
-            # Start backend (depends_on uses service_started now, so this won't block on health)
-            $DC -f infrastructure/docker/docker-compose.yml up -d backend --force-recreate 2>&1 || {
-              echo "⚠️ docker-compose up backend failed — trying docker run fallback..."
-              docker rm -f docker_backend_1 cblue_backend_fallback 2>/dev/null || true
-              docker run -d --name cblue_backend_fallback \
+            # Use raw docker commands for deployment to bypass broken docker-compose aliasing
+            echo "🚀 Deploying backend container directly..."
+            docker run -d --name cblue_backend_fallback \
                 --network docker_default \
+                --restart unless-stopped \
                 -p 3002:3002 \
                 -e DATABASE_URL="postgresql://admin:NewPass456!@postgres:5432/cblue" \
                 -e REDIS_HOST=redis -e REDIS_PORT=6379 \
@@ -304,7 +310,7 @@ jobs:
                   docker ps -a 2>&1
                   exit 1
                 }
-            }
+
             echo "⏳ Waiting for backend to start..."
             sleep 20
 
