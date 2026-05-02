@@ -33,7 +33,7 @@ export const PROJECT_SERVICES = [
 export const PROFESSIONAL_SERVICES = [
   { value: "LAWYER", label: "Lawyer", labelTh: "ทนายความ", labelZh: "律师" },
   { value: "ACCOUNTANT", label: "Accountant", labelTh: "นักบัญชี", labelZh: "会计" },
-  { value: "CPA", label: "CPA", labelTh: "ผู้สอบบัญชี", labelZh: "注册会计师" },
+  { value: "CPA", label: "⚖️ CPA", labelTh: "⚖️ ผู้สอบบัญชี (CPA)", labelZh: "⚖️ 注册会计师 (CPA)" },
   { value: "ARCHITECT", label: "Architect", labelTh: "สถาปนิก", labelZh: "建筑师" },
   { value: "INTERIOR_DESIGNER", label: "Interior Designer", labelTh: "มัณฑนากร", labelZh: "室内设计师" },
   { value: "DESIGN_CIVIL_ENGINEER", label: "Design Civil Engineer", labelTh: "วิศวกรโยธาออกแบบ", labelZh: "设计土木工程师" },

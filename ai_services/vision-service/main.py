@@ -42,6 +42,7 @@ ALLOWED_TYPES = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  # docx
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # xlsx
     "application/vnd.ms-excel",  # xls
+    "text/plain",  # txt
 }
 
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
@@ -157,6 +158,19 @@ def extract_excel(xlsx_bytes: bytes) -> str:
         return f"[Excel error: {e}]"
 
 
+# ── TXT extraction ──
+
+def extract_txt(txt_bytes: bytes) -> str:
+    """Extract text from plain text file, fallback encoding."""
+    try:
+        return txt_bytes.decode('utf-8')
+    except UnicodeDecodeError:
+        try:
+            return txt_bytes.decode('cp874')
+        except Exception as e:
+            return f"[TXT decode error: {e}]"
+
+
 # ── Verification hint extraction ──
 
 def extract_hints(text: str, filename: str) -> list[str]:
@@ -256,6 +270,9 @@ async def extract_single(file: UploadFile = File(...)):
     elif "spreadsheetml" in ct or "ms-excel" in ct:
         raw_text = extract_excel(content)
         method = "openpyxl"
+    elif ct == "text/plain":
+        raw_text = extract_txt(content)
+        method = "txt_decode"
     else:
         # Fallback: try OCR on anything
         raw_text = ocr_image(content)
@@ -336,6 +353,9 @@ async def extract_batch(files: list[UploadFile] = File(...)):
         elif "spreadsheetml" in ct or "ms-excel" in ct:
             raw_text = extract_excel(content)
             method = "openpyxl"
+        elif ct == "text/plain":
+            raw_text = extract_txt(content)
+            method = "txt_decode"
         else:
             raw_text = ocr_image(content)
             method = "fallback_ocr"

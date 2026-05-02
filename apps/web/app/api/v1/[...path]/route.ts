@@ -20,7 +20,7 @@ function getBackendUrl() {
   if (process.env.API_BACKEND_URL) return process.env.API_BACKEND_URL;
   if (process.env.NODE_ENV === "development") return "http://localhost:3002";
   // The droplet explicitly exposes 3002 for the nest backend.
-  return "http://api-backend.cblue.co.th:3002";
+  return "http://api-backend.cblue.co.th";
 }
 
 
