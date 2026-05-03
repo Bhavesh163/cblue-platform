@@ -32,7 +32,7 @@ export default () => ({
   mailjet: {
     apiKey: process.env.MAILJET_API_KEY || '11ec31e7118977d3846996bb91b9df53',
     apiSecret: process.env.MAILJET_API_SECRET || 'ac74812e9034e53634c0b31b02313f35',
-    fromEmail: process.env.MAILJET_FROM_EMAIL || 'noreply@cblue.co.th',
+    fromEmail: process.env.MAILJET_FROM_EMAIL || 'ghiscafe@gmail.com',
   },
   frontendUrl: process.env.FRONTEND_URL || 'https://cblue.co.th',
   visionService: {
