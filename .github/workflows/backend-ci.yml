@@ -305,8 +305,8 @@ jobs:
                 -e JWT_SECRET=change-in-production \
                 -e JWT_REFRESH_SECRET=change-in-production \
                 -e JWT_EXPIRATION=15m -e JWT_REFRESH_EXPIRATION=7d \
-                -e MAILJET_API_KEY="11ec31e7118977d3846996bb91b9df53" \
-                -e MAILJET_API_SECRET="ac74812e9034e53634c0b31b02313f35" \
+                -e MAILJET_API_KEY="515b1389c9f3ce79b51f58955681dd9c" \
+                -e MAILJET_API_SECRET="95e113e56293d977324d710a3067fb15" \
                 -e MAILJET_FROM_EMAIL="noreply@cblue.co.th" \
                 -e FRONTEND_URL="https://cblue.co.th" \
                 -e PORT=3002 -e NODE_ENV=production \
