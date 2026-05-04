@@ -58,9 +58,7 @@ export class FixerService {
     const fixer = await this.prisma.fixer.create({
       data: {
         userId,
-        bio: dto.bio,
-        description: dto.description,
-        pastExperience: dto.pastExperience,
+          status: 'APPROVED', // Auto-approved via AI for seamless booking access
         pastProjectType: dto.pastProjectType,
         yearsExperience: dto.yearsExperience,
         travelRadius: dto.travelRadius,
