@@ -865,8 +865,7 @@ export default function FixerRegisterPage() {
               return;
             }
           } else {
-            const msg =
-              errData.message ||
+            const msg = Array.isArray(errData.message) ? errData.message.join(", ") : errData.message ||
               (locale === "th"
                 ? "เข้าสู่ระบบ/สมัครสมาชิกล้มเหลว"
                 : locale === "zh"

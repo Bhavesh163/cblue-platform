@@ -142,7 +142,7 @@ export default function PropertyRegisterPage() {
         });
         if (!authRes.ok) {
           const errData = await authRes.json().catch(() => ({ message: "" }));
-          const msg = errData.message || (locale === "th" ? "เข้าสู่ระบบ/สมัครสมาชิกล้มเหลว" : locale === "zh" ? "登录/注册失败" : "Login/Register failed");
+          const msg = Array.isArray(errData.message) ? errData.message.join(", ") : errData.message || (locale === "th" ? "เข้าสู่ระบบ/สมัครสมาชิกล้มเหลว" : locale === "zh" ? "登录/注册失败" : "Login/Register failed");
           setError(msg);
           return;
         }
