@@ -278,19 +278,53 @@ export class SubscriptionService {
           To: [{ Email: email, Name: name }],
           Subject: 'CBLUE - Password Reset / รีเซ็ตรหัสผ่าน / 重置密码',
           HTMLPart: `
-            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <h2 style="color: #0284c7;">CBLUE - Password Reset</h2>
-              <p>Hello ${name},</p>
-              <p>You requested a password reset. Click the button below to set a new password:</p>
-              <p>คุณได้ร้องขอการรีเซ็ตรหัสผ่าน กรุณากดปุ่มด้านล่างเพื่อตั้งรหัสผ่านใหม่:</p>
-              <p>您已请求重置密码。请点击下方按钮设置新密码：</p>
-              <a href="${resetUrl}" style="display: inline-block; padding: 12px 24px; background-color: #0284c7; color: white; text-decoration: none; border-radius: 8px; margin: 16px 0;">
-                Reset Password / ตั้งรหัสผ่านใหม่ / 重置密码
-              </a>
-              <p style="color: #666; font-size: 14px;">This link expires in 1 hour. / ลิงก์นี้จะหมดอายุใน 1 ชั่วโมง / 此链接将在1小时后失效。</p>
-              <p style="color: #666; font-size: 14px;">If you didn't request this, please ignore this email. / หากคุณไม่ได้ร้องขอ กรุณาเพิกเฉยอีเมลนี้</p>
-              <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
-              <p style="color: #999; font-size: 12px;">© Construction Blue Co., Ltd.</p>
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f7f6; padding: 40px 0; min-height: 100vh;">
+              <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.08);">
+                
+                <!-- Header with Logo Area -->
+                <div style="background-color: #0c4a6e; padding: 32px 40px; text-align: center;">
+                  <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600; letter-spacing: 0.5px;">CBLUE.</h1>
+                </div>
+
+                <!-- Body content -->
+                <div style="padding: 40px;">
+                  <h2 style="color: #1e293b; margin-top: 0; font-size: 20px; font-weight: 600;">Password Reset Request</h2>
+                  <p style="color: #475569; font-size: 16px; line-height: 1.6; margin-bottom: 24px;">
+                    Hello ${name},
+                  </p>
+                  <p style="color: #475569; font-size: 16px; line-height: 1.6; margin-bottom: 24px;">
+                    We received a request to reset your password for your CBLUE account. This link is valid for the next <strong>1 hour</strong>.
+                    <br/><span style="font-size: 14px; color: #64748b; margin-top: 4px; display: inline-block;">(คุณได้ร้องขอการรีเซ็ตรหัสผ่าน บัญชี CBLUE ของคุณ. ลิงก์นี้จะหมดอายุใน 1 ชั่วโมง / 您已请求重置CBLUE账户密码。此链接将在1小时后失效)</span>
+                  </p>
+                  
+                  <div style="text-align: center; margin: 32px 0;">
+                    <a href="${resetUrl}" style="display: inline-block; padding: 14px 32px; background-color: #0284c7; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600; text-align: center; transition: background-color 0.2s;">
+                      Reset Password
+                    </a>
+                  </div>
+
+                  <p style="color: #475569; font-size: 16px; line-height: 1.6; margin-bottom: 24px;">
+                    If you did not request a password reset, please ignore this email or contact support if you have concerns.
+                    <br/><span style="font-size: 14px; color: #64748b; margin-top: 4px; display: inline-block;">(หากคุณไม่ได้ร้องขอ กรุณาเพิกเฉยอีเมลนี้ / 若非本人操作，请忽略此邮件)</span>
+                  </p>
+
+                  <!-- Divider -->
+                  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 32px 0;" />
+
+                  <p style="color: #94a3b8; font-size: 13px; line-height: 1.5; margin: 0; text-align: center;">
+                    If the button above is not working, copy and paste the following link into your browser:<br/>
+                    <a href="${resetUrl}" style="color: #0284c7; text-decoration: none; word-break: break-all;">${resetUrl}</a>
+                  </p>
+                </div>
+                
+                <!-- Footer -->
+                <div style="background-color: #f8fafc; padding: 24px 40px; text-align: center; border-top: 1px solid #e2e8f0;">
+                  <p style="color: #94a3b8; font-size: 13px; margin: 0;">
+                    &copy; ${new Date().getFullYear()} Construction Blue Co., Ltd. All rights reserved.
+                  </p>
+                </div>
+
+              </div>
             </div>
           `,
         },
