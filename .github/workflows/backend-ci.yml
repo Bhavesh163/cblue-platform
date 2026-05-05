@@ -285,25 +285,22 @@ jobs:
               sleep 5
             done
 
-            # Force kill any containers holding port 3002
-            echo "🔧 Force terminating any containers on port 3002..."
-            # Remove redirection of stderr so we can see why it fails
-            docker ps -a | grep -iE 'backend|3002' | awk '{print $1}' | xargs -r docker rm -f || true
-            docker ps -a -q --filter "publish=3002" | xargs -r docker rm -f || true
-            docker stop cblue_backend_fallback docker_backend_1 cblue-platform_backend_1 2>/dev/null || true
-            docker rm -f cblue_backend_fallback docker_backend_1 cblue-platform_backend_1 2>/dev/null || true
-            
+            # Keep current backend alive during deploy; only switch after candidate is healthy.
+            PREV_BACKEND=$(docker ps --filter "publish=3002" --format "{{.Names}}" | head -1)
+            echo "Current backend on :3002: ${PREV_BACKEND:-none}"
+            docker rm -f cblue_backend_candidate 2>/dev/null || true
+
             # Use raw docker commands for deployment to bypass broken docker-compose aliasing
-            echo "🚀 Deploying backend container directly..."
+            echo "🚀 Deploying candidate backend container on :3003..."
             # Detect docker network — try multiple patterns and fall back to bridge
             NETWORK=$(docker network ls --format '{{.Name}}' | grep -iE 'docker_default|cblue-platform_default|cblue_default|infrastructure_default|default' | grep -v '^bridge$' | head -1 || echo 'bridge')
             # If still empty, use bridge
             if [ -z "$NETWORK" ]; then NETWORK="bridge"; fi
             echo "Using network: $NETWORK"
-            docker run -d --name cblue_backend_fallback \
+            docker run -d --name cblue_backend_candidate \
                 --network "$NETWORK" \
                 --restart unless-stopped \
-                -p 3002:3002 \
+              -p 3003:3002 \
                 -e DATABASE_URL="postgresql://admin:NewPass456!@postgres:5432/cblue" \
                 -e REDIS_HOST=redis -e REDIS_PORT=6379 \
                 -e RABBITMQ_URL="amqp://admin:password@rabbitmq:5672" \
@@ -317,17 +314,17 @@ jobs:
                 -e PORT=3002 -e NODE_ENV=production \
                 --restart unless-stopped \
                 "$IMAGE" 2>&1 || {
-                  echo "❌ Failed to start backend container"
+                  echo "❌ Failed to start candidate backend container"
                   docker ps -a 2>&1
                   exit 1
                 }
 
-            echo "⏳ Waiting for backend to start..."
+            echo "⏳ Waiting for candidate backend to start..."
             sleep 20
 
             # ── Run Prisma migrations via direct SQL (bypasses prisma CLI config issues) ──
             POSTGRES_CONTAINER=$(docker ps --filter "name=postgres" --format "{{.Names}}" | head -1)
-            BACKEND_CONTAINER=$(docker ps --filter "name=backend" --format "{{.Names}}" | head -1)
+            BACKEND_CONTAINER="cblue_backend_candidate"
             if [ -z "$POSTGRES_CONTAINER" ]; then
               echo "❌ Postgres container not found!"
               docker ps -a 2>&1
@@ -386,30 +383,66 @@ jobs:
             docker restart "$BACKEND_CONTAINER" 2>/dev/null || true
             sleep 10
 
-            # ── Ensure port 80 traffic goes to 3002 (CF worker restriction) ──
-            docker run --rm --net=host --cap-add=NET_ADMIN alpine sh -c "apk add --no-cache iptables >/dev/null 2>&1; iptables -t nat -C PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3002 2>/dev/null || iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3002"
+            # ── Verify candidate backend health on 3003 ──
+            HEALTH=$(curl -sf http://127.0.0.1:3003/api/v1/health 2>&1 || echo '{"status":"unreachable"}')
+            echo "Candidate backend health: $HEALTH"
 
-            # ── Verify backend health ──
-            HEALTH=$(curl -sf http://127.0.0.1:3002/api/v1/health 2>&1 || echo '{"status":"unreachable"}')
-            echo "Backend health: $HEALTH"
-
-            # ── Verify registration endpoint ──
-            REG_TEST=$(curl -sf -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:3002/api/v1/subscription/register \
+            # ── Verify registration endpoint on candidate ──
+            REG_TEST=$(curl -sf -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:3003/api/v1/subscription/register \
               -H "Content-Type: application/json" \
               -d '{"name":"test","email":"deploy-test@example.com","password":"NotReal1!","phone":"0000000000"}' 2>&1 || echo "000")
-            echo "Registration endpoint status: $REG_TEST"
+            echo "Candidate registration endpoint status: $REG_TEST"
             # 201=success, 409=email exists (both mean it works), 400=validation (works)
             if [ "$REG_TEST" = "201" ] || [ "$REG_TEST" = "409" ] || [ "$REG_TEST" = "400" ]; then
-              echo "✅ Registration endpoint is functional"
+              echo "✅ Candidate registration endpoint is functional"
             else
-              echo "❌ Registration returned $REG_TEST — backend is not functional"
+              echo "❌ Candidate registration returned $REG_TEST — keeping existing backend untouched"
               docker logs --tail=20 "$BACKEND_CONTAINER" 2>&1 || true
               exit 1
             fi
 
             if echo "$HEALTH" | grep -q '"ok"'; then
-              echo "✅ Deploy complete: $DEPLOY_SHA"
+              echo "✅ Candidate healthy — promoting to live on :3002"
+              docker rm -f cblue_backend_fallback docker_backend_1 cblue-platform_backend_1 2>/dev/null || true
+              if [ -n "$PREV_BACKEND" ] && [ "$PREV_BACKEND" != "$BACKEND_CONTAINER" ]; then
+                docker rm -f "$PREV_BACKEND" 2>/dev/null || true
+              fi
+
+              docker run -d --name cblue_backend_fallback \
+                --network "$NETWORK" \
+                --restart unless-stopped \
+                -p 3002:3002 \
+                -e DATABASE_URL="postgresql://admin:NewPass456!@postgres:5432/cblue" \
+                -e REDIS_HOST=redis -e REDIS_PORT=6379 \
+                -e RABBITMQ_URL="amqp://admin:password@rabbitmq:5672" \
+                -e JWT_SECRET=change-in-production \
+                -e JWT_REFRESH_SECRET=change-in-production \
+                -e JWT_EXPIRATION=15m -e JWT_REFRESH_EXPIRATION=7d \
+                -e MAILJET_API_KEY="11ec31e7118977d3846996bb91b9df53" \
+                -e MAILJET_API_SECRET="ac74812e9034e53634c0b31b02313f35" \
+                -e MAILJET_FROM_EMAIL="noreply@cblue.co.th" \
+                -e FRONTEND_URL="https://cblue.co.th" \
+                -e PORT=3002 -e NODE_ENV=production \
+                "$IMAGE" 2>&1
+
+              sleep 15
+
+              # ── Ensure port 80 traffic goes to 3002 (CF worker restriction) ──
+              docker run --rm --net=host --cap-add=NET_ADMIN alpine sh -c "apk add --no-cache iptables >/dev/null 2>&1; iptables -t nat -C PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3002 2>/dev/null || iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3002"
+
+              FINAL_HEALTH=$(curl -sf http://127.0.0.1:3002/api/v1/health 2>&1 || echo '{"status":"unreachable"}')
+              echo "Live backend health: $FINAL_HEALTH"
+
+              if echo "$FINAL_HEALTH" | grep -q '"ok"'; then
+                docker rm -f cblue_backend_candidate 2>/dev/null || true
+                echo "✅ Deploy complete: $DEPLOY_SHA"
+              else
+                echo "❌ Live backend failed after promotion"
+                docker logs --tail=20 cblue_backend_fallback 2>&1 || true
+                exit 1
+              fi
             else
-              echo "⚠️ Deploy complete but backend not healthy — check logs"
+              echo "❌ Candidate backend not healthy — keeping existing backend untouched"
               docker logs --tail=20 "$BACKEND_CONTAINER" 2>&1 || true
+              exit 1
             fi
