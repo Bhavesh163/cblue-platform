@@ -242,133 +242,94 @@ export class FixerService {
     if (pool.length === 0) return [];
 
     const formattedPool = pool.map((f) => {
-      let basePrice = 200;
+      let basePrice = 0;
       if (f.priceList && Array.isArray(f.priceList) && f.priceList.length > 0) {
         const list = f.priceList as Record<string, unknown>[];
-        const match = list.find(
-          (item: Record<string, unknown>) =>
-            typeof item.service === 'string' &&
-            item.service.toLowerCase().includes(service.toLowerCase()),
-        );
-        if (list.length > 0) {
-          basePrice = match
-            ? parseFloat(match.finalPrice as string)
-            : parseFloat(list[0].finalPrice as string);
+        // match specific service properly
+        const match = list.find((item: Record<string, unknown>) => {
+          if (!item.service || typeof item.service !== 'string') return false;
+          // allow partial matching like 'website_development' vs 'Website development'
+          const s1 = item.service.toLowerCase().replace(/_/g, ' ');
+          const s2 = service.toLowerCase().replace(/_/g, ' ');
+          return s1.includes(s2) || s2.includes(s1);
+        });
+
+        if (match && match.finalPrice) {
+          basePrice = parseFloat(match.finalPrice as string);
+        } else if (list[0].finalPrice) {
+          basePrice = parseFloat(list[0].finalPrice as string);
         }
       }
 
       return {
         id: f.id,
         alias: f.user?.company || f.user?.name || `Partner-${f.id.slice(0, 4)}`,
-        tier: f.tier.toLowerCase(),
-        rating: f.rating,
-        totalJobs: f.completedJobs,
-        price: basePrice || 500,
-        satisfaction:
-          f.rating >= 4.5 ? 90 + Math.random() * 10 : 70 + Math.random() * 20,
+        tier: (f.tier || 'economy').toLowerCase(),
+        rating: f.rating || 0,
+        totalJobs: f.completedJobs || 0,
+        price: basePrice > 0 ? basePrice : 500, // Safe default fallback
+        satisfaction: f.rating >= 4.5 ? 90 + Math.random() * 10 : 70 + Math.random() * 20,
         specialties: f.skills.map((s) => s.name),
         experienceYears: f.yearsExperience || 1,
+        selectedReason: '',
+        matchIcon: '',
       };
     });
 
-    const tierRank: Record<string, number> = {
-      economy: 0,
-      standard: 1,
-      corporate: 2,
-      specialist: 3,
-      expert: 4,
-    };
-    const selected: SelectedFixer[] = [];
+    const isUpperTier = (tier: string) => ['corporate', 'specialist', 'expert', 'manager', 'director', 'luxury', 'grandeur'].includes(tier);
 
-    const pick = (f: SelectedFixer, reason?: string) => {
-      if (!selected.some((s) => String(s.id) === String(f.id))) {
-        selected.push({ ...f, selectedReason: reason });
+    let results = [];
+    let usedIds = new Set();
+
+    const pick = (partner, reason) => {
+      if (partner && !usedIds.has(partner.id)) {
+        partner.selectedReason = reason;
+        results.push(partner);
+        usedIds.add(partner.id);
       }
     };
 
+    // Slot 1-2: 💰 Two cheapest in area
     const byPrice = [...formattedPool].sort((a, b) => a.price - b.price);
-    const bySatisfaction = [...formattedPool].sort((a, b) => {
-      if (b.rating !== a.rating) return b.rating - a.rating;
-      if (b.satisfaction !== a.satisfaction)
-        return b.satisfaction - a.satisfaction;
-      return b.totalJobs - a.totalJobs;
-    });
+    pick(byPrice[0], '💰 Cheapest in area');
+    pick(byPrice.find(p => !usedIds.has(p.id)), '💰 Ranked 2nd Cheapest');
 
-    // Slots 1-2: 💰 Two cheapest in area
-    let priceAdded = 0;
-    for (const f of byPrice) {
-      if (priceAdded >= 2) break;
-      if (!selected.some((s) => s.id === f.id)) {
-        pick({ ...f, selectedReason: '💰 Cheapest in area' });
-        priceAdded++;
-      }
-    }
+    // Slot 3-4: ⭐ Two highest satisfaction (stars, tiebreak by total jobs/reviews)
+    const bySatisfaction = [...formattedPool].sort((a, b) => b.rating - a.rating || b.totalJobs - a.totalJobs);
+    pick(bySatisfaction.find(p => !usedIds.has(p.id)), '⭐ Highest Rated');
+    pick(bySatisfaction.find(p => !usedIds.has(p.id)), '⭐ Highly Recommended');
 
-    // Slots 3-4: ⭐ Two highest satisfaction (stars, tiebreak by total jobs/reviews)
-    let satAdded = 0;
-    for (const f of bySatisfaction) {
-      if (satAdded >= 2) break;
-      if (!selected.some((s) => s.id === f.id)) {
-        pick({ ...f, selectedReason: '⭐ Highest Rated' });
-        satAdded++;
-      }
-    }
-
-    // Slot 5: 🏆 Cheapest of upper tier (corporate+specialist+expert)
-    const upperTiers = formattedPool.filter((f) => tierRank[f.tier] >= 2);
+    // Slot 5: 🏆 Cheapest of upper tier
+    const upperTiers = formattedPool.filter((f) => isUpperTier(f.tier));
     const upperByPrice = [...upperTiers].sort((a, b) => a.price - b.price);
-    const upperBySat = [...upperTiers].sort(
-      (a, b) => b.satisfaction - a.satisfaction,
-    );
-
-    const cheapUpper = upperByPrice.find(
-      (f) => !selected.some((s) => s.id === f.id),
-    );
-    if (cheapUpper)
-      pick({ ...cheapUpper, selectedReason: '🏆 Cheapest of upper tier' });
+    if(upperByPrice.length > 0) pick(upperByPrice.find(f => !usedIds.has(f.id)), '🏆 Cheapest of upper tier');
 
     // Slot 6: 🏆 Highest rated of upper tier
-    const satUpper = upperBySat.find(
-      (f) => !selected.some((s) => s.id === f.id),
-    );
-    if (satUpper)
-      pick({ ...satUpper, selectedReason: '🏆 Highest rated of upper tier' });
+    const upperBySat = [...upperTiers].sort((a, b) => b.rating - a.rating || b.totalJobs - a.totalJobs);
+    if(upperBySat.length > 0) pick(upperBySat.find(f => !usedIds.has(f.id)), '🏆 Highest rated of upper tier');
 
     // Slot 7: 🔄 Returning partner
-    // For demo purposes, we randomly select a previously selected partner to simulate a returning partner.
-    const returning = formattedPool.find(
-      (f) => !selected.some((s) => s.id === f.id) && f.totalJobs > 0,
-    );
-    if (returning)
-      pick({
-        ...returning,
-        alias: `★ ${returning.alias}`,
-        selectedReason: '🔄 Returning partner',
-      });
+    const returningPool = formattedPool.filter(p => !usedIds.has(p.id));
+    if(returningPool.length > 0) {
+      const returning = returningPool[Math.floor(Math.random() * returningPool.length)];
+      returning.alias = '★ ' + returning.alias;
+      pick(returning, '🔄 Returning partner');
+    }
 
     // Slot 8: 👤 Customer nomination by partner ID number
     if (nominateId) {
-      const nominated = formattedPool.find(
-        (f) =>
-          f.id === nominateId ||
-          f.id.endsWith(nominateId) ||
-          f.alias.includes(nominateId),
-      );
-      if (nominated && !selected.some((s) => s.id === nominated.id)) {
-        pick({ ...nominated, selectedReason: '👤 Customer nomination' });
-      }
+      const nominated = formattedPool.find((f) => f.id === nominateId || f.id.endsWith(nominateId) || f.alias.includes(nominateId));
+      if (nominated) pick(nominated, '👤 Customer nomination');
     }
 
-    // Fill the rest with random candidates if we have not reached 8
-    const shuffled = [...formattedPool].sort(() => Math.random() - 0.5);
-    for (const f of shuffled) {
-      if (selected.length >= 8) break;
-      if (!selected.some((s) => s.id === f.id)) {
-        pick({ ...f, selectedReason: '💡 Suggested Candidate' });
-      }
+    // Fill remaining up to 8 if necessary
+    const remaining = formattedPool.filter(p => !usedIds.has(p.id));
+    for (const r of remaining) {
+      if (results.length >= 8) break;
+      pick(r, '💡 Suggested Candidate');
     }
 
-    return selected.slice(0, 8);
+    return results.slice(0, 8);
   }
 
   // ── Portfolio AI Digest ──
