@@ -290,6 +290,23 @@ jobs:
             echo "Current backend on :3002: ${PREV_BACKEND:-none}"
             docker rm -f cblue_backend_candidate 2>/dev/null || true
 
+            # Resolve DATABASE_URL from the live backend first to avoid credential drift.
+            DATABASE_URL_RUNTIME=""
+            if [ -n "$PREV_BACKEND" ]; then
+              DATABASE_URL_RUNTIME=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$PREV_BACKEND" 2>/dev/null | grep '^DATABASE_URL=' | sed 's/^DATABASE_URL=//' | head -1 || true)
+            fi
+
+            # Fallback: derive from postgres container env if live backend is unavailable.
+            if [ -z "$DATABASE_URL_RUNTIME" ]; then
+              POSTGRES_CONTAINER=$(docker ps --filter "name=postgres" --format "{{.Names}}" | head -1)
+              PG_PASSWORD=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$POSTGRES_CONTAINER" 2>/dev/null | grep '^POSTGRES_PASSWORD=' | sed 's/^POSTGRES_PASSWORD=//' | head -1 || true)
+              if [ -z "$PG_PASSWORD" ]; then
+                PG_PASSWORD='NewPass456!'
+              fi
+              DATABASE_URL_RUNTIME="postgresql://admin:${PG_PASSWORD}@postgres:5432/cblue"
+            fi
+            echo "Resolved runtime DATABASE_URL for backend deployment"
+
             # Use raw docker commands for deployment to bypass broken docker-compose aliasing
             echo "🚀 Deploying candidate backend container on :3003..."
             # Detect docker network — try multiple patterns and fall back to bridge
@@ -301,7 +318,7 @@ jobs:
                 --network "$NETWORK" \
                 --restart unless-stopped \
               -p 3003:3002 \
-                -e DATABASE_URL="postgresql://admin:NewPass456!@postgres:5432/cblue" \
+                -e DATABASE_URL="$DATABASE_URL_RUNTIME" \
                 -e REDIS_HOST=redis -e REDIS_PORT=6379 \
                 -e RABBITMQ_URL="amqp://admin:password@rabbitmq:5672" \
                 -e JWT_SECRET=change-in-production \
@@ -412,7 +429,7 @@ jobs:
                 --network "$NETWORK" \
                 --restart unless-stopped \
                 -p 3002:3002 \
-                -e DATABASE_URL="postgresql://admin:NewPass456!@postgres:5432/cblue" \
+                -e DATABASE_URL="$DATABASE_URL_RUNTIME" \
                 -e REDIS_HOST=redis -e REDIS_PORT=6379 \
                 -e RABBITMQ_URL="amqp://admin:password@rabbitmq:5672" \
                 -e JWT_SECRET=change-in-production \
