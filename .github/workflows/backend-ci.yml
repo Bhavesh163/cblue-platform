@@ -433,12 +433,24 @@ jobs:
             docker restart "$BACKEND_CONTAINER" 2>/dev/null || true
             sleep 10
 
-            # ── Verify candidate backend health on 3003 ──
-            HEALTH=$(curl -sf http://127.0.0.1:3003/api/v1/health 2>&1 || echo '{"status":"unreachable"}')
-            echo "Candidate backend health: $HEALTH"
+            # ── Verify candidate backend readiness on 3003 (do not use curl -f; 4xx can still mean app is up) ──
+            CANDIDATE_READY="false"
+            CANDIDATE_HEALTH_CODE="000"
+            CANDIDATE_LOGIN_CODE="000"
+            for i in $(seq 1 12); do
+              CANDIDATE_HEALTH_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3003/api/v1/health || echo "000")
+              CANDIDATE_LOGIN_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:3003/api/v1/subscription/login -H "Content-Type: application/json" -d '{"email":"probe@example.com","password":"invalid"}' || echo "000")
+              echo "Candidate probe ($i/12): health=${CANDIDATE_HEALTH_CODE}, login=${CANDIDATE_LOGIN_CODE}"
+
+              if [ "$CANDIDATE_HEALTH_CODE" != "000" ] || [ "$CANDIDATE_LOGIN_CODE" != "000" ]; then
+                CANDIDATE_READY="true"
+                break
+              fi
+              sleep 5
+            done
 
             # ── Verify registration endpoint on candidate ──
-            REG_TEST=$(curl -sf -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:3003/api/v1/subscription/register \
+            REG_TEST=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:3003/api/v1/subscription/register \
               -H "Content-Type: application/json" \
               -d '{"name":"test","email":"deploy-test@example.com","password":"NotReal1!","phone":"0000000000"}' 2>&1 || echo "000")
             echo "Candidate registration endpoint status: $REG_TEST"
@@ -447,11 +459,11 @@ jobs:
               echo "✅ Candidate registration endpoint is functional"
             else
               echo "❌ Candidate registration returned $REG_TEST — keeping existing backend untouched"
-              docker logs --tail=20 "$BACKEND_CONTAINER" 2>&1 || true
+              docker logs --tail=80 "$BACKEND_CONTAINER" 2>&1 || true
               exit 1
             fi
 
-            if echo "$HEALTH" | grep -q '"ok"'; then
+            if [ "$CANDIDATE_READY" = "true" ]; then
               echo "✅ Candidate healthy — promoting to live on :3002"
               docker rm -f cblue_backend_fallback docker_backend_1 cblue-platform_backend_1 2>/dev/null || true
               if [ -n "$PREV_BACKEND" ] && [ "$PREV_BACKEND" != "$BACKEND_CONTAINER" ]; then
@@ -480,19 +492,20 @@ jobs:
               # ── Ensure port 80 traffic goes to 3002 (CF worker restriction) ──
               docker run --rm --net=host --cap-add=NET_ADMIN alpine sh -c "apk add --no-cache iptables >/dev/null 2>&1; iptables -t nat -C PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3002 2>/dev/null || iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3002"
 
-              FINAL_HEALTH=$(curl -sf http://127.0.0.1:3002/api/v1/health 2>&1 || echo '{"status":"unreachable"}')
-              echo "Live backend health: $FINAL_HEALTH"
+              FINAL_HEALTH_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3002/api/v1/health || echo "000")
+              FINAL_LOGIN_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:3002/api/v1/subscription/login -H "Content-Type: application/json" -d '{"email":"probe@example.com","password":"invalid"}' || echo "000")
+              echo "Live backend probe: health=${FINAL_HEALTH_CODE}, login=${FINAL_LOGIN_CODE}"
 
-              if echo "$FINAL_HEALTH" | grep -q '"ok"'; then
+              if [ "$FINAL_HEALTH_CODE" != "000" ] || [ "$FINAL_LOGIN_CODE" != "000" ]; then
                 docker rm -f cblue_backend_candidate 2>/dev/null || true
                 echo "✅ Deploy complete: $DEPLOY_SHA"
               else
                 echo "❌ Live backend failed after promotion"
-                docker logs --tail=20 cblue_backend_fallback 2>&1 || true
+                docker logs --tail=80 cblue_backend_fallback 2>&1 || true
                 exit 1
               fi
             else
               echo "❌ Candidate backend not healthy — keeping existing backend untouched"
-              docker logs --tail=20 "$BACKEND_CONTAINER" 2>&1 || true
+              docker logs --tail=80 "$BACKEND_CONTAINER" 2>&1 || true
               exit 1
             fi

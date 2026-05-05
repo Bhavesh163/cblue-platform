@@ -58,7 +58,7 @@ export class FixerService {
     const fixer = await this.prisma.fixer.create({
       data: {
         userId,
-          status: 'APPROVED', // Auto-approved via AI for seamless booking access
+        status: 'APPROVED', // Auto-approved via AI for seamless booking access
         pastProjectType: dto.pastProjectType,
         yearsExperience: dto.yearsExperience,
         travelRadius: dto.travelRadius,
@@ -234,7 +234,9 @@ export class FixerService {
   private extractQuantityFromDescription(description?: string): number {
     if (!description) return 1;
     // Match patterns like "1,000 sqm", "1000m2", "500 sqft", "3 units", "5 rooms"
-    const match = description.match(/(\d[\d,]*\.?\d*)\s*(sqm|m2|sqft|sq\.?m|ตร\.?ม|ตรม|unit|units|ชุด|ห้อง|room|rooms|floor|floors|ชั้น|item|items|job|งาน)?/i);
+    const match = description.match(
+      /(\d[\d,]*\.?\d*)\s*(sqm|m2|sqft|sq\.?m|ตร\.?ม|ตรม|unit|units|ชุด|ห้อง|room|rooms|floor|floors|ชั้น|item|items|job|งาน)?/i,
+    );
     if (match && match[1]) {
       const qty = parseFloat(match[1].replace(/,/g, ''));
       if (!isNaN(qty) && qty > 0) return qty;
@@ -269,14 +271,16 @@ export class FixerService {
       if (f.priceList && Array.isArray(f.priceList) && f.priceList.length > 0) {
         const list = f.priceList as Record<string, unknown>[];
         // match specific service properly — case-insensitive, ignore underscores/hyphens
-        const normalize = (s: string) => s.toLowerCase().replace(/[_\-\/]/g, ' ').trim();
+        const normalize = (s: string) =>
+          s.toLowerCase().replace(/[-_/]/g, ' ').trim();
         const svc = normalize(service);
 
-        const match = list.find((item: Record<string, unknown>) => {
-          if (!item.service || typeof item.service !== 'string') return false;
-          const s1 = normalize(item.service);
-          return s1.includes(svc) || svc.includes(s1);
-        }) || list[0]; // fallback to first item
+        const match =
+          list.find((item: Record<string, unknown>) => {
+            if (!item.service || typeof item.service !== 'string') return false;
+            const s1 = normalize(item.service);
+            return s1.includes(svc) || svc.includes(s1);
+          }) || list[0]; // fallback to first item
 
         if (match) {
           const unitRate = parseFloat((match.finalPrice as string) || '0');
@@ -285,7 +289,8 @@ export class FixerService {
           // Unit rate = finalPrice ÷ partnerQty (price per unit)
           const pricePerUnit = unitRate > 0 ? unitRate / partnerQty : unitRate;
           // Estimated total = customer quantity × unit rate
-          basePrice = customerQty > 1 ? Math.round(pricePerUnit * customerQty) : unitRate;
+          basePrice =
+            customerQty > 1 ? Math.round(pricePerUnit * customerQty) : unitRate;
           matchedUnit = (match.unit as string) || '';
           matchedQty = customerQty;
         }
@@ -301,7 +306,8 @@ export class FixerService {
         estimatedTotal: basePrice > 0 ? basePrice : null,
         estimatedUnit: matchedUnit,
         estimatedQty: matchedQty,
-        satisfaction: f.rating >= 4.5 ? 90 + Math.random() * 10 : 70 + Math.random() * 20,
+        satisfaction:
+          f.rating >= 4.5 ? 90 + Math.random() * 10 : 70 + Math.random() * 20,
         specialties: f.skills.map((s) => s.name),
         experienceYears: f.yearsExperience || 1,
         selectedReason: '',
@@ -309,10 +315,19 @@ export class FixerService {
       };
     });
 
-    const isUpperTier = (tier: string) => ['corporate', 'specialist', 'expert', 'manager', 'director', 'luxury', 'grandeur'].includes(tier);
+    const isUpperTier = (tier: string) =>
+      [
+        'corporate',
+        'specialist',
+        'expert',
+        'manager',
+        'director',
+        'luxury',
+        'grandeur',
+      ].includes(tier);
 
-    let results: any[] = [];
-    let usedIds = new Set();
+    const results: any[] = [];
+    const usedIds = new Set();
 
     const pick = (partner, reason) => {
       if (partner && !usedIds.has(partner.id)) {
@@ -325,38 +340,65 @@ export class FixerService {
     // Slot 1-2: 💰 Two cheapest in area
     const byPrice = [...formattedPool].sort((a, b) => a.price - b.price);
     pick(byPrice[0], '💰 Cheapest in area');
-    pick(byPrice.find(p => !usedIds.has(p.id)), '💰 Ranked 2nd Cheapest');
+    pick(
+      byPrice.find((p) => !usedIds.has(p.id)),
+      '💰 Ranked 2nd Cheapest',
+    );
 
     // Slot 3-4: ⭐ Two highest satisfaction (stars, tiebreak by total jobs/reviews)
-    const bySatisfaction = [...formattedPool].sort((a, b) => b.rating - a.rating || b.totalJobs - a.totalJobs);
-    pick(bySatisfaction.find(p => !usedIds.has(p.id)), '⭐ Highest Rated');
-    pick(bySatisfaction.find(p => !usedIds.has(p.id)), '⭐ Highly Recommended');
+    const bySatisfaction = [...formattedPool].sort(
+      (a, b) => b.rating - a.rating || b.totalJobs - a.totalJobs,
+    );
+    pick(
+      bySatisfaction.find((p) => !usedIds.has(p.id)),
+      '⭐ Highest Rated',
+    );
+    pick(
+      bySatisfaction.find((p) => !usedIds.has(p.id)),
+      '⭐ Highly Recommended',
+    );
 
     // Slot 5: 🏆 Cheapest of upper tier
     const upperTiers = formattedPool.filter((f) => isUpperTier(f.tier));
     const upperByPrice = [...upperTiers].sort((a, b) => a.price - b.price);
-    if(upperByPrice.length > 0) pick(upperByPrice.find(f => !usedIds.has(f.id)), '🏆 Cheapest of upper tier');
+    if (upperByPrice.length > 0)
+      pick(
+        upperByPrice.find((f) => !usedIds.has(f.id)),
+        '🏆 Cheapest of upper tier',
+      );
 
     // Slot 6: 🏆 Highest rated of upper tier
-    const upperBySat = [...upperTiers].sort((a, b) => b.rating - a.rating || b.totalJobs - a.totalJobs);
-    if(upperBySat.length > 0) pick(upperBySat.find(f => !usedIds.has(f.id)), '🏆 Highest rated of upper tier');
+    const upperBySat = [...upperTiers].sort(
+      (a, b) => b.rating - a.rating || b.totalJobs - a.totalJobs,
+    );
+    if (upperBySat.length > 0)
+      pick(
+        upperBySat.find((f) => !usedIds.has(f.id)),
+        '🏆 Highest rated of upper tier',
+      );
 
     // Slot 7: 🔄 Returning partner
-    const returningPool = formattedPool.filter(p => !usedIds.has(p.id));
-    if(returningPool.length > 0) {
-      const returning = returningPool[Math.floor(Math.random() * returningPool.length)];
+    const returningPool = formattedPool.filter((p) => !usedIds.has(p.id));
+    if (returningPool.length > 0) {
+      const returning =
+        returningPool[Math.floor(Math.random() * returningPool.length)];
       returning.alias = '★ ' + returning.alias;
       pick(returning, '🔄 Returning partner');
     }
 
     // Slot 8: 👤 Customer nomination by partner ID number
     if (nominateId) {
-      const nominated = formattedPool.find((f) => f.id === nominateId || f.id.endsWith(nominateId) || f.alias.includes(nominateId));
+      const nominated = formattedPool.find(
+        (f) =>
+          f.id === nominateId ||
+          f.id.endsWith(nominateId) ||
+          f.alias.includes(nominateId),
+      );
       if (nominated) pick(nominated, '👤 Customer nomination');
     }
 
     // Fill remaining up to 8 if necessary
-    const remaining = formattedPool.filter(p => !usedIds.has(p.id));
+    const remaining = formattedPool.filter((p) => !usedIds.has(p.id));
     for (const r of remaining) {
       if (results.length >= 8) break;
       pick(r, '💡 Suggested Candidate');
@@ -407,7 +449,8 @@ export class FixerService {
         verification_hints: [
           'Vision service unavailable — document analysis deferred',
         ],
-        timestamp: new Date().toISOString(), fallback: true,
+        timestamp: new Date().toISOString(),
+        fallback: true,
       };
     }
   }
@@ -458,7 +501,8 @@ export class FixerService {
         verification_hints: [
           'Vision service unavailable — document analysis deferred',
         ],
-        timestamp: new Date().toISOString(), fallback: true,
+        timestamp: new Date().toISOString(),
+        fallback: true,
       }));
 
       return {

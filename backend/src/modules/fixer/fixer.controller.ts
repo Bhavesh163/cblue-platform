@@ -33,32 +33,18 @@ export class FixerController {
   }
   // ── AI Digest (no auth — called during registration before user has token) ──
 
-
-
   @Post('kyc-digest')
-
   @Throttle({ default: { ttl: 30000, limit: 10 } })
-
   @UseInterceptors(FileInterceptor('file'))
-
   async kycDigest(@UploadedFile() file: Express.Multer.File) {
-
     return this.fixerService.kycDigest(file);
-
   }
 
-
-
   @Post('portfolio-digest')
-
   @Throttle({ default: { ttl: 60000, limit: 5 } })
-
   @UseInterceptors(FilesInterceptor('files', 10))
-
   async digestPortfolio(@UploadedFiles() files: Express.Multer.File[]) {
-
     const ALLOWED_MIMES = [
-
       'image/jpeg',
 
       'image/png',
@@ -74,37 +60,25 @@ export class FixerController {
       'application/vnd.ms-excel',
 
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-
     ];
 
     const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
     for (const file of files) {
-
       if (file.mimetype && !ALLOWED_MIMES.includes(file.mimetype)) {
-
         throw new BadRequestException(
-
           `Unsupported file type: ${file.originalname}`,
-
         );
-
       }
 
       if (file.size > MAX_FILE_SIZE) {
-
         throw new BadRequestException(
-
           `File too large: ${file.originalname} (max 50MB)`,
-
         );
-
       }
-
     }
 
     return this.fixerService.digestPortfolio(files);
-
   }
 
   // ── AI Digest (no auth — called during registration before user has token) ──
@@ -145,6 +119,7 @@ export class FixerController {
     return this.fixerService.uploadKyc(userId, dto);
   }
 
+  @Post('me/upload-portfolio')
   @UseGuards(JwtAuthGuard)
   uploadPortfolio(
     @CurrentUser('id') userId: string,
@@ -182,8 +157,8 @@ export class FixerController {
   @UseGuards(JwtAuthGuard)
   setAvailability(
     @CurrentUser('id') userId: string,
+    @Body() dto: SetAvailabilityDto,
   ) {
-    // TODO: implement setAvailability in service
-    return { success: true };
+    return this.fixerService.setAvailability(userId, dto);
   }
 }
