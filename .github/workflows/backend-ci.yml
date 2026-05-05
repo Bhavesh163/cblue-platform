@@ -510,22 +510,34 @@ jobs:
                 -e PORT=3002 -e NODE_ENV=production \
                 "$IMAGE" 2>&1
 
-              sleep 15
+              sleep 10
 
               # ── Ensure port 80 traffic goes to 3002 (CF worker restriction) ──
               docker run --rm --net=host --cap-add=NET_ADMIN alpine sh -c "apk add --no-cache iptables >/dev/null 2>&1; iptables -t nat -C PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3002 2>/dev/null || iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3002"
 
-              FINAL_HEALTH_RAW=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3002/api/v1/health || true)
-              FINAL_LOGIN_RAW=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:3002/api/v1/subscription/login -H "Content-Type: application/json" -d '{"email":"probe@example.com","password":"invalid"}' || true)
-              FINAL_HEALTH_CODE=$(normalize_http_code "$FINAL_HEALTH_RAW")
-              FINAL_LOGIN_CODE=$(normalize_http_code "$FINAL_LOGIN_RAW")
-              echo "Live backend probe: health=${FINAL_HEALTH_CODE}, login=${FINAL_LOGIN_CODE}"
+              LIVE_READY="false"
+              FINAL_HEALTH_CODE="000"
+              FINAL_LOGIN_CODE="000"
+              for i in $(seq 1 18); do
+                FINAL_HEALTH_RAW=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3002/api/v1/health || true)
+                FINAL_LOGIN_RAW=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:3002/api/v1/subscription/login -H "Content-Type: application/json" -d '{"email":"probe@example.com","password":"invalid"}' || true)
+                FINAL_HEALTH_CODE=$(normalize_http_code "$FINAL_HEALTH_RAW")
+                FINAL_LOGIN_CODE=$(normalize_http_code "$FINAL_LOGIN_RAW")
+                echo "Live backend probe ($i/18): health=${FINAL_HEALTH_CODE}, login=${FINAL_LOGIN_CODE}"
 
-              if [ "$FINAL_HEALTH_CODE" != "000" ] || [ "$FINAL_LOGIN_CODE" != "000" ]; then
+                if [ "$FINAL_HEALTH_CODE" != "000" ] || [ "$FINAL_LOGIN_CODE" != "000" ]; then
+                  LIVE_READY="true"
+                  break
+                fi
+                sleep 5
+              done
+
+              if [ "$LIVE_READY" = "true" ]; then
                 docker rm -f cblue_backend_candidate 2>/dev/null || true
                 echo "✅ Deploy complete: $DEPLOY_SHA"
               else
                 echo "❌ Live backend failed after promotion"
+                docker ps -a 2>&1 || true
                 docker logs --tail=80 cblue_backend_fallback 2>&1 || true
                 exit 1
               fi
