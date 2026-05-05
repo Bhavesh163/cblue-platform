@@ -9,6 +9,7 @@ import {
   type ChangeEvent,
 } from "react";
 import { useTranslations, useLocale } from "next-intl";
+import { useSearchParams } from "next/navigation";
 import {
   HOUSEHOLD_SERVICES,
   PROJECT_SERVICES,
@@ -98,6 +99,8 @@ const initialForm: FormData = {
 export default function FixerRegisterPage() {
   const t = useTranslations("fixer");
   const locale = useLocale();
+  const searchParams = useSearchParams();
+  const isEditMode = searchParams.get("edit") === "1";
   const [form, setForm] = useState<FormData>(initialForm);
   const [kycImages, setKycImages] = useState<File[]>([]);
   const [portfolioImages, setPortfolioImages] = useState<File[]>([]);
@@ -149,24 +152,87 @@ export default function FixerRegisterPage() {
   const [digesting, setDigesting] = useState(false);
 
 
+  const populateFixerForm = useCallback((user: any, fixer: any) => {
+    setForm((prev) => ({
+      ...prev,
+      name: user?.name || prev.name,
+      email: user?.email || prev.email,
+      phone: user?.phone || prev.phone,
+      company: user?.company || prev.company,
+      bio: fixer?.bio || "",
+      yearsExperience:
+        fixer?.yearsExperience !== null && fixer?.yearsExperience !== undefined
+          ? String(fixer.yearsExperience)
+          : "",
+      travelRadius:
+        fixer?.travelRadius !== null && fixer?.travelRadius !== undefined
+          ? String(fixer.travelRadius)
+          : prev.travelRadius,
+      selectedSkills: Array.isArray(fixer?.skills)
+        ? fixer.skills.map((skill: any) => skill.name)
+        : [],
+      province: fixer?.serviceProvince || "",
+      district: fixer?.serviceDistrict || "",
+      postalCode: fixer?.servicePostalCode || "",
+      description: fixer?.description || "",
+      pastExperience: fixer?.pastExperience || "",
+      pastProjectType: fixer?.pastProjectType || "none",
+      consent: true,
+    }));
+
+    const nextPriceRows =
+      Array.isArray(fixer?.priceList) && fixer.priceList.length > 0
+        ? fixer.priceList.map((row: any) => ({
+            service: row?.service || "",
+            quantity: row?.quantity ? String(row.quantity) : "",
+            unit: row?.unit || "",
+            finalPrice: row?.finalPrice ? String(row.finalPrice) : "",
+          }))
+        : [{ service: "", quantity: "", unit: "", finalPrice: "" }];
+
+    setPriceRows(nextPriceRows);
+  }, []);
+
   useEffect(() => {
     async function checkFixer() {
       try {
         const token = localStorage.getItem("subscriber_token");
-        if (token) {
-          const res = await fetch("/api/v1/users/me", { headers: { Authorization: `Bearer ${token}` }});
-          if (res.ok) {
-            const data = await res.json();
-            if (data.fixer) {
-              setIsAlreadyFixer(true);
-            }
-          }
+        if (!token) {
+          setCheckingStatus(false);
+          return;
         }
-      } catch (e) {}
+
+        const res = await fetch("/api/v1/users/me", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) {
+          setCheckingStatus(false);
+          return;
+        }
+
+        const data = await res.json();
+        if (!data?.fixer) {
+          setCheckingStatus(false);
+          return;
+        }
+
+        setIsAlreadyFixer(true);
+        setIsRegisteredFixer(true);
+
+        const fixerRes = await fetch("/api/v1/fixers/me", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (fixerRes.ok) {
+          const fixerProfile = await fixerRes.json();
+          populateFixerForm(data, fixerProfile);
+        }
+      } catch {
+        // ignore
+      }
       setCheckingStatus(false);
     }
     checkFixer();
-  }, []);
+  }, [populateFixerForm]);
 
 
   // Send portfolio files to AI vision service for OCR/text extraction
@@ -1027,8 +1093,9 @@ export default function FixerRegisterPage() {
         portfolioImageCount: portfolioImages.length,
       };
 
-      const regRes = await fetch("/api/v1/fixers/register", {
-        method: "POST",
+      const fixerEndpoint = isRegisteredFixer ? "/api/v1/fixers/me" : "/api/v1/fixers/register";
+      const regRes = await fetch(fixerEndpoint, {
+        method: isRegisteredFixer ? "PUT" : "POST",
         headers: {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -1511,7 +1578,7 @@ export default function FixerRegisterPage() {
 
   if (checkingStatus) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><div className="w-8 h-8 border-4 border-sky-600 border-t-transparent rounded-full animate-spin"></div></div>;
 
-  if (isAlreadyFixer && !success) {
+  if (isAlreadyFixer && !success && !isEditMode) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-10 max-w-lg text-center">
@@ -1519,10 +1586,15 @@ export default function FixerRegisterPage() {
             <span className="text-4xl">✓</span>
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-4">{locale === "th" ? "คุณเป็นช่างของ CBLUE แล้ว" : "You are already a CBLUE Fixer"}</h2>
-          <p className="text-gray-600 mb-8">{locale === "th" ? "บัญชีของคุณได้รับการลงทะเบียนเป็นช่างและมืออาชีพเรียบร้อยแล้ว คุณสามารถจัดการโปรไฟล์และรับงานได้ที่หน้าแดชบอร์ด" : "Your account is already registered as a Fixer & Pro. You can manage your profile and accept jobs from your dashboard."}</p>
-          <Link href={`${prefix}/fixers`} className="inline-block px-8 py-3 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl shadow-lg transition">
-            {locale === "th" ? "ไปที่หน้าแดชบอร์ด" : "Go to Dashboard"}
-          </Link>
+          <p className="text-gray-600 mb-8">{locale === "th" ? "บัญชีของคุณได้รับการลงทะเบียนเป็นช่างและมืออาชีพเรียบร้อยแล้ว คุณสามารถไปที่แดชบอร์ดหรือแก้ไขข้อมูลโปรไฟล์เดิมได้ทันที" : "Your account is already registered as a Fixer & Pro. You can go to the dashboard or open your existing fixer profile in edit mode."}</p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Link href={`${prefix}/fixers`} className="inline-block px-8 py-3 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl shadow-lg transition">
+              {locale === "th" ? "ไปที่หน้าแดชบอร์ด" : "Go to Dashboard"}
+            </Link>
+            <Link href={`${prefix}/fixers/register?edit=1`} className="inline-block px-8 py-3 bg-white hover:bg-gray-50 text-gray-900 font-bold rounded-xl border border-gray-300 transition">
+              {locale === "th" ? "แก้ไขโปรไฟล์เดิม" : "Edit Existing Profile"}
+            </Link>
+          </div>
         </div>
       </div>
     );

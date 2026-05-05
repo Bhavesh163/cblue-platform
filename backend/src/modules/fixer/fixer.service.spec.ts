@@ -25,6 +25,7 @@ describe('FixerService', () => {
     prisma = {
       fixer: {
         findUnique: jest.fn(),
+        findMany: jest.fn(),
         create: jest.fn(),
       },
       user: {
@@ -32,8 +33,10 @@ describe('FixerService', () => {
       },
       fixerSkill: {
         create: jest.fn(),
+        createMany: jest.fn(),
         findFirst: jest.fn(),
         delete: jest.fn(),
+        deleteMany: jest.fn(),
       },
       fixerAvailability: {
         upsert: jest.fn(),
@@ -216,6 +219,74 @@ describe('FixerService', () => {
         key: 'portfolio/1.jpg',
       });
       expect(result.type).toBe('portfolio');
+    });
+  });
+
+  describe('matchFixers', () => {
+    it('should use quantity-aware price list matching for fit-out projects', async () => {
+      prisma.fixer.findMany.mockResolvedValue([
+        {
+          id: 'fixer-fitout',
+          tier: 'CORPORATE',
+          rating: 4.9,
+          completedJobs: 24,
+          yearsExperience: 8,
+          description: 'Office interior and fitout specialist',
+          pastProjectType: 'corporate',
+          bio: 'Commercial renovation team',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          priceList: [
+            {
+              service: 'office fitout',
+              quantity: '1',
+              unit: 'sqm',
+              finalPrice: '1200',
+            },
+          ],
+          user: { name: 'Fitout Pro', company: 'Fitout Pro Co' },
+          skills: [{ category: 'project', name: 'office fitout' }],
+        },
+        {
+          id: 'fixer-other',
+          tier: 'STANDARD',
+          rating: 4.4,
+          completedJobs: 18,
+          yearsExperience: 5,
+          description: 'Painting and touch-up work',
+          pastProjectType: 'none',
+          bio: 'General works',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          priceList: [
+            {
+              service: 'painting',
+              quantity: '1',
+              unit: 'job',
+              finalPrice: '15000',
+            },
+          ],
+          user: { name: 'Painter Team', company: 'Painter Team Co' },
+          skills: [{ category: 'project', name: 'painting' }],
+        },
+      ]);
+
+      const result = await service.matchFixers(
+        'project',
+        'Pathum Wan',
+        'Bangkok',
+        'Need 1000 square meter office fit out work',
+      );
+
+      const fitoutCandidate = result.find(
+        (candidate) => candidate.id === 'fixer-fitout',
+      );
+
+      expect(fitoutCandidate).toBeDefined();
+      expect(fitoutCandidate?.estimatedTotal).toBe(1200000);
+      expect(fitoutCandidate?.price).toBe(1200000);
+      expect(fitoutCandidate?.estimatedUnit).toBe('sqm');
+      expect(fitoutCandidate?.estimatedQty).toBe(1000);
     });
   });
 });

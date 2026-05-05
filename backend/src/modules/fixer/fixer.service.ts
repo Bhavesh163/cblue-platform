@@ -33,6 +33,18 @@ export interface SelectedFixer {
 @Injectable()
 export class FixerService {
   private readonly logger = new Logger(FixerService.name);
+  private readonly fillerTokens = new Set([
+    'and',
+    'the',
+    'for',
+    'with',
+    'งาน',
+    'project',
+    'service',
+    'services',
+    'job',
+    'work',
+  ]);
 
   constructor(
     private prisma: PrismaService,
@@ -111,10 +123,65 @@ export class FixerService {
   async getMyFixerProfile(userId: string) {
     const fixer = await this.prisma.fixer.findUnique({
       where: { userId },
-      include: { skills: true, availability: true },
+      include: { user: true, skills: true, availability: true },
     });
     if (!fixer) throw new NotFoundException('Fixer profile not found');
     return fixer;
+  }
+
+  async updateMyFixerProfile(userId: string, dto: RegisterFixerDto) {
+    const fixer = await this.getFixerByUserId(userId);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        name: dto.name,
+        email: dto.email,
+        phone: dto.phone,
+        company: dto.company,
+        role: 'FIXER',
+      },
+    });
+
+    const updatedFixer = await this.prisma.fixer.update({
+      where: { id: fixer.id },
+      data: {
+        bio: dto.bio,
+        description: dto.description,
+        pastExperience: dto.pastExperience,
+        pastProjectType: dto.pastProjectType,
+        yearsExperience: dto.yearsExperience,
+        travelRadius: dto.travelRadius,
+        priceList: dto.priceList
+          ? (JSON.parse(JSON.stringify(dto.priceList)) as Prisma.InputJsonValue)
+          : Prisma.JsonNull,
+        serviceProvince: dto.address?.province,
+        serviceDistrict: dto.address?.district,
+        servicePostalCode: dto.address?.postalCode,
+        gpsLat: dto.gpsCoords?.lat,
+        gpsLng: dto.gpsCoords?.lng,
+      },
+    });
+
+    await this.prisma.fixerSkill.deleteMany({
+      where: { fixerId: fixer.id },
+    });
+
+    if (dto.skills && dto.skills.length > 0) {
+      await this.prisma.fixerSkill.createMany({
+        data: dto.skills.map((skill) => ({
+          fixerId: fixer.id,
+          category: skill.category,
+          name: skill.name,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    return this.prisma.fixer.findUnique({
+      where: { id: updatedFixer.id },
+      include: { user: true, skills: true, availability: true },
+    });
   }
 
   // ── KYC / Image uploads ──
@@ -233,7 +300,6 @@ export class FixerService {
    */
   private extractQuantityFromDescription(description?: string): number {
     if (!description) return 1;
-    // Match patterns like "1,000 sqm", "1000m2", "500 sqft", "3 units", "5 rooms"
     const match = description.match(
       /(\d[\d,]*\.?\d*)\s*(sqm|m2|sqft|sq\.?m|ตร\.?ม|ตรม|unit|units|ชุด|ห้อง|room|rooms|floor|floors|ชั้น|item|items|job|งาน)?/i,
     );
@@ -244,6 +310,97 @@ export class FixerService {
     return 1;
   }
 
+  private normalizeSearchText(value?: string): string {
+    return (value || '')
+      .toLowerCase()
+      .replace(/fit\s*[- ]?out/g, 'fitout')
+      .replace(/square\s*meters?/g, 'sqm')
+      .replace(/square\s*meter/g, 'sqm')
+      .replace(/sq\.?\s*m\.?/g, 'sqm')
+      .replace(/[^a-z0-9ก-๙\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private tokenize(value?: string): string[] {
+    return this.normalizeSearchText(value)
+      .split(' ')
+      .filter((token) => token.length > 1 && !this.fillerTokens.has(token));
+  }
+
+  private buildSearchTerms(service: string, description?: string): string[] {
+    const tokens = new Set<string>([
+      ...this.tokenize(service),
+      ...this.tokenize(description),
+    ]);
+    const normalizedDescription = this.normalizeSearchText(description);
+
+    if (normalizedDescription.includes('office')) tokens.add('office');
+    if (normalizedDescription.includes('fitout')) {
+      tokens.add('fitout');
+      tokens.add('interior');
+      tokens.add('renovation');
+    }
+
+    return [...tokens];
+  }
+
+  private scoreTextMatch(candidateText: string, searchTerms: string[]): number {
+    if (searchTerms.length === 0) return 0;
+
+    const normalizedCandidate = this.normalizeSearchText(candidateText);
+    let score = 0;
+
+    for (const term of searchTerms) {
+      if (!term) continue;
+      if (normalizedCandidate === term) {
+        score += 6;
+        continue;
+      }
+      if (normalizedCandidate.includes(term)) {
+        score += term.length >= 5 ? 4 : 2;
+      }
+    }
+
+    for (let index = 0; index < searchTerms.length - 1; index += 1) {
+      const phrase = `${searchTerms[index]} ${searchTerms[index + 1]}`;
+      if (phrase.trim().length > 3 && normalizedCandidate.includes(phrase)) {
+        score += 5;
+      }
+    }
+
+    return score;
+  }
+
+  private matchServiceArea(
+    fixer: {
+      serviceProvince?: string | null;
+      serviceDistrict?: string | null;
+    },
+    district: string,
+    province: string,
+  ): boolean {
+    const normalizedProvince = this.normalizeSearchText(province);
+    const normalizedDistrict = this.normalizeSearchText(district);
+    const autoProvince = !normalizedProvince || normalizedProvince === 'auto';
+    const autoDistrict = !normalizedDistrict || normalizedDistrict === 'auto';
+
+    if (autoProvince && autoDistrict) return true;
+
+    const fixerProvince = this.normalizeSearchText(fixer.serviceProvince || '');
+    const fixerDistrict = this.normalizeSearchText(fixer.serviceDistrict || '');
+
+    if (!autoProvince && fixerProvince && fixerProvince !== normalizedProvince) {
+      return false;
+    }
+
+    if (!autoDistrict && fixerDistrict && fixerDistrict !== normalizedDistrict) {
+      return false;
+    }
+
+    return true;
+  }
+
   async matchFixers(
     service: string,
     district: string,
@@ -251,50 +408,91 @@ export class FixerService {
     description?: string,
     nominateId?: string,
   ) {
-    const pool = await this.prisma.fixer.findMany({
+    const allFixers = await this.prisma.fixer.findMany({
       where: {
         status: 'APPROVED',
       },
       include: { user: true, skills: true },
     });
 
+    const pool = allFixers.filter((fixer) =>
+      this.matchServiceArea(fixer, district, province),
+    );
+
     if (pool.length === 0) return [];
 
-    // Extract customer-specified quantity from the service description
     const customerQty = this.extractQuantityFromDescription(description);
+    const searchTerms = this.buildSearchTerms(service, description);
 
     const formattedPool = pool.map((f) => {
       let basePrice = 0;
       let matchedUnit = '';
       let matchedQty = 1;
+      let matchedScore = 0;
+      const skillText = f.skills
+        .map((skill) => `${skill.category} ${skill.name}`)
+        .join(' ');
+      const profileText = `${skillText} ${f.description || ''} ${f.pastProjectType || ''} ${f.bio || ''}`;
 
       if (f.priceList && Array.isArray(f.priceList) && f.priceList.length > 0) {
         const list = f.priceList as Record<string, unknown>[];
-        // match specific service properly — case-insensitive, ignore underscores/hyphens
-        const normalize = (s: string) =>
-          s.toLowerCase().replace(/[-_/]/g, ' ').trim();
-        const svc = normalize(service);
+        const rankedList = list
+          .map((item) => {
+            const candidateText = [
+              typeof item.service === 'string' ? item.service : '',
+              typeof item.unit === 'string' ? item.unit : '',
+              profileText,
+            ]
+              .filter(Boolean)
+              .join(' ');
 
-        const match =
-          list.find((item: Record<string, unknown>) => {
-            if (!item.service || typeof item.service !== 'string') return false;
-            const s1 = normalize(item.service);
-            return s1.includes(svc) || svc.includes(s1);
-          }) || list[0]; // fallback to first item
+            return {
+              item,
+              score: this.scoreTextMatch(candidateText, searchTerms),
+            };
+          })
+          .sort((a, b) => {
+            if (b.score !== a.score) return b.score - a.score;
+            return (
+              (Number(a.item.finalPrice) || Number.MAX_SAFE_INTEGER) -
+              (Number(b.item.finalPrice) || Number.MAX_SAFE_INTEGER)
+            );
+          });
+
+        const match = rankedList[0];
 
         if (match) {
-          const unitRate = parseFloat((match.finalPrice as string) || '0');
-          // partner's own quantity from their price declaration (default 1 if not set)
-          const partnerQty = parseFloat((match.quantity as string) || '1') || 1;
-          // Unit rate = finalPrice ÷ partnerQty (price per unit)
+          const matchedItem = match.item;
+          const unitRate = parseFloat((matchedItem.finalPrice as string) || '0');
+          const partnerQty =
+            parseFloat((matchedItem.quantity as string) || '1') || 1;
           const pricePerUnit = unitRate > 0 ? unitRate / partnerQty : unitRate;
-          // Estimated total = customer quantity × unit rate
-          basePrice =
-            customerQty > 1 ? Math.round(pricePerUnit * customerQty) : unitRate;
-          matchedUnit = (match.unit as string) || '';
+          const hasTextualMatch = match.score > 0;
+
+          if (hasTextualMatch) {
+            basePrice =
+              customerQty > 1
+                ? Math.round(pricePerUnit * customerQty)
+                : unitRate;
+          } else {
+            basePrice = unitRate;
+          }
+
+          matchedUnit = (matchedItem.unit as string) || '';
           matchedQty = customerQty;
+          matchedScore = match.score;
         }
       }
+
+      const fallbackProfileScore = this.scoreTextMatch(profileText, searchTerms);
+      const overallScore = Math.max(matchedScore, fallbackProfileScore);
+      const minListedPrice = Array.isArray(f.priceList)
+        ? (f.priceList as Record<string, unknown>[]).reduce((min, item) => {
+            const value = Number(item.finalPrice) || 0;
+            if (value <= 0) return min;
+            return min === 0 ? value : Math.min(min, value);
+          }, 0)
+        : 0;
 
       return {
         id: f.id,
@@ -302,10 +500,11 @@ export class FixerService {
         tier: (f.tier || 'economy').toLowerCase(),
         rating: f.rating || 0,
         totalJobs: f.completedJobs || 0,
-        price: basePrice > 0 ? basePrice : 500, // Safe default fallback
+        price: basePrice > 0 ? basePrice : minListedPrice || 500,
         estimatedTotal: basePrice > 0 ? basePrice : null,
         estimatedUnit: matchedUnit,
         estimatedQty: matchedQty,
+        matchScore: overallScore,
         satisfaction:
           f.rating >= 4.5 ? 90 + Math.random() * 10 : 70 + Math.random() * 20,
         specialties: f.skills.map((s) => s.name),
@@ -314,6 +513,9 @@ export class FixerService {
         matchIcon: '',
       };
     });
+
+    const matchedPool = formattedPool.filter((partner) => partner.matchScore > 0);
+    const rankingPool = matchedPool.length > 0 ? matchedPool : formattedPool;
 
     const isUpperTier = (tier: string) =>
       [
@@ -337,16 +539,14 @@ export class FixerService {
       }
     };
 
-    // Slot 1-2: 💰 Two cheapest in area
-    const byPrice = [...formattedPool].sort((a, b) => a.price - b.price);
+    const byPrice = [...rankingPool].sort((a, b) => a.price - b.price);
     pick(byPrice[0], '💰 Cheapest in area');
     pick(
       byPrice.find((p) => !usedIds.has(p.id)),
       '💰 Ranked 2nd Cheapest',
     );
 
-    // Slot 3-4: ⭐ Two highest satisfaction (stars, tiebreak by total jobs/reviews)
-    const bySatisfaction = [...formattedPool].sort(
+    const bySatisfaction = [...rankingPool].sort(
       (a, b) => b.rating - a.rating || b.totalJobs - a.totalJobs,
     );
     pick(
@@ -358,8 +558,7 @@ export class FixerService {
       '⭐ Highly Recommended',
     );
 
-    // Slot 5: 🏆 Cheapest of upper tier
-    const upperTiers = formattedPool.filter((f) => isUpperTier(f.tier));
+    const upperTiers = rankingPool.filter((f) => isUpperTier(f.tier));
     const upperByPrice = [...upperTiers].sort((a, b) => a.price - b.price);
     if (upperByPrice.length > 0)
       pick(
@@ -367,7 +566,6 @@ export class FixerService {
         '🏆 Cheapest of upper tier',
       );
 
-    // Slot 6: 🏆 Highest rated of upper tier
     const upperBySat = [...upperTiers].sort(
       (a, b) => b.rating - a.rating || b.totalJobs - a.totalJobs,
     );
@@ -377,8 +575,7 @@ export class FixerService {
         '🏆 Highest rated of upper tier',
       );
 
-    // Slot 7: 🔄 Returning partner
-    const returningPool = formattedPool.filter((p) => !usedIds.has(p.id));
+    const returningPool = rankingPool.filter((p) => !usedIds.has(p.id));
     if (returningPool.length > 0) {
       const returning =
         returningPool[Math.floor(Math.random() * returningPool.length)];
@@ -386,9 +583,8 @@ export class FixerService {
       pick(returning, '🔄 Returning partner');
     }
 
-    // Slot 8: 👤 Customer nomination by partner ID number
     if (nominateId) {
-      const nominated = formattedPool.find(
+      const nominated = rankingPool.find(
         (f) =>
           f.id === nominateId ||
           f.id.endsWith(nominateId) ||
@@ -397,8 +593,7 @@ export class FixerService {
       if (nominated) pick(nominated, '👤 Customer nomination');
     }
 
-    // Fill remaining up to 8 if necessary
-    const remaining = formattedPool.filter((p) => !usedIds.has(p.id));
+    const remaining = rankingPool.filter((p) => !usedIds.has(p.id));
     for (const r of remaining) {
       if (results.length >= 8) break;
       pick(r, '💡 Suggested Candidate');

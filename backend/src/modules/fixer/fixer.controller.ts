@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Delete,
   Body,
   Param,
@@ -87,6 +88,15 @@ export class FixerController {
   @UseGuards(JwtAuthGuard)
   getMyProfile(@CurrentUser('id') userId: string) {
     return this.fixerService.getMyFixerProfile(userId);
+  }
+
+  @Put('me')
+  @UseGuards(JwtAuthGuard)
+  updateMyProfile(
+    @CurrentUser('id') userId: string,
+    @Body() dto: RegisterFixerDto,
+  ) {
+    return this.fixerService.updateMyFixerProfile(userId, dto);
   }
 
   @Get('match')
