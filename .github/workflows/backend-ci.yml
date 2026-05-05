@@ -437,9 +437,23 @@ jobs:
             CANDIDATE_READY="false"
             CANDIDATE_HEALTH_CODE="000"
             CANDIDATE_LOGIN_CODE="000"
+
+            normalize_http_code() {
+              CODE_RAW="$1"
+              CODE_ONLY=$(echo "$CODE_RAW" | tr -cd '0-9')
+              CODE_LAST3=$(echo "$CODE_ONLY" | tail -c 4)
+              if [ -z "$CODE_LAST3" ]; then
+                echo "000"
+              else
+                echo "$CODE_LAST3"
+              fi
+            }
+
             for i in $(seq 1 12); do
-              CANDIDATE_HEALTH_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3003/api/v1/health || echo "000")
-              CANDIDATE_LOGIN_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:3003/api/v1/subscription/login -H "Content-Type: application/json" -d '{"email":"probe@example.com","password":"invalid"}' || echo "000")
+              CANDIDATE_HEALTH_RAW=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3003/api/v1/health || true)
+              CANDIDATE_LOGIN_RAW=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:3003/api/v1/subscription/login -H "Content-Type: application/json" -d '{"email":"probe@example.com","password":"invalid"}' || true)
+              CANDIDATE_HEALTH_CODE=$(normalize_http_code "$CANDIDATE_HEALTH_RAW")
+              CANDIDATE_LOGIN_CODE=$(normalize_http_code "$CANDIDATE_LOGIN_RAW")
               echo "Candidate probe ($i/12): health=${CANDIDATE_HEALTH_CODE}, login=${CANDIDATE_LOGIN_CODE}"
 
               if [ "$CANDIDATE_HEALTH_CODE" != "000" ] || [ "$CANDIDATE_LOGIN_CODE" != "000" ]; then
@@ -449,21 +463,30 @@ jobs:
               sleep 5
             done
 
-            # ── Verify registration endpoint on candidate ──
-            REG_TEST=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:3003/api/v1/subscription/register \
-              -H "Content-Type: application/json" \
-              -d '{"name":"test","email":"deploy-test@example.com","password":"NotReal1!","phone":"0000000000"}' 2>&1 || echo "000")
-            echo "Candidate registration endpoint status: $REG_TEST"
-            # 201=success, 409=email exists (both mean it works), 400=validation (works)
-            if [ "$REG_TEST" = "201" ] || [ "$REG_TEST" = "409" ] || [ "$REG_TEST" = "400" ]; then
-              echo "✅ Candidate registration endpoint is functional"
-            else
-              echo "❌ Candidate registration returned $REG_TEST — keeping existing backend untouched"
-              docker logs --tail=80 "$BACKEND_CONTAINER" 2>&1 || true
-              exit 1
-            fi
-
             if [ "$CANDIDATE_READY" = "true" ]; then
+              # ── Verify registration endpoint on candidate with retries ──
+              REG_TEST="000"
+              for i in $(seq 1 8); do
+                REG_RAW=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:3003/api/v1/subscription/register \
+                  -H "Content-Type: application/json" \
+                  -d '{"name":"test","email":"deploy-test@example.com","password":"NotReal1!","phone":"0000000000"}' || true)
+                REG_TEST=$(normalize_http_code "$REG_RAW")
+                echo "Candidate registration endpoint status ($i/8): $REG_TEST"
+
+                # 201=success, 409=email exists (both mean it works), 400=validation (works)
+                if [ "$REG_TEST" = "201" ] || [ "$REG_TEST" = "409" ] || [ "$REG_TEST" = "400" ]; then
+                  echo "✅ Candidate registration endpoint is functional"
+                  break
+                fi
+                sleep 4
+              done
+
+              if [ "$REG_TEST" != "201" ] && [ "$REG_TEST" != "409" ] && [ "$REG_TEST" != "400" ]; then
+                echo "❌ Candidate registration returned $REG_TEST — keeping existing backend untouched"
+                docker logs --tail=80 "$BACKEND_CONTAINER" 2>&1 || true
+                exit 1
+              fi
+
               echo "✅ Candidate healthy — promoting to live on :3002"
               docker rm -f cblue_backend_fallback docker_backend_1 cblue-platform_backend_1 2>/dev/null || true
               if [ -n "$PREV_BACKEND" ] && [ "$PREV_BACKEND" != "$BACKEND_CONTAINER" ]; then
@@ -492,8 +515,10 @@ jobs:
               # ── Ensure port 80 traffic goes to 3002 (CF worker restriction) ──
               docker run --rm --net=host --cap-add=NET_ADMIN alpine sh -c "apk add --no-cache iptables >/dev/null 2>&1; iptables -t nat -C PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3002 2>/dev/null || iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3002"
 
-              FINAL_HEALTH_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3002/api/v1/health || echo "000")
-              FINAL_LOGIN_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:3002/api/v1/subscription/login -H "Content-Type: application/json" -d '{"email":"probe@example.com","password":"invalid"}' || echo "000")
+              FINAL_HEALTH_RAW=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3002/api/v1/health || true)
+              FINAL_LOGIN_RAW=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:3002/api/v1/subscription/login -H "Content-Type: application/json" -d '{"email":"probe@example.com","password":"invalid"}' || true)
+              FINAL_HEALTH_CODE=$(normalize_http_code "$FINAL_HEALTH_RAW")
+              FINAL_LOGIN_CODE=$(normalize_http_code "$FINAL_LOGIN_RAW")
               echo "Live backend probe: health=${FINAL_HEALTH_CODE}, login=${FINAL_LOGIN_CODE}"
 
               if [ "$FINAL_HEALTH_CODE" != "000" ] || [ "$FINAL_LOGIN_CODE" != "000" ]; then
