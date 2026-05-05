@@ -46,4 +46,4 @@ EXPOSE 3002
 
 # Run Prisma migrations before starting the app — this ensures the DB schema
 # is always up to date regardless of how/when the container starts.
-CMD ["sh", "-c", "npx prisma migrate deploy --schema=prisma/schema.prisma 2>&1 || echo '⚠️ migrate deploy failed — continuing'; node dist/src/main.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy --schema=prisma/schema.prisma && node dist/src/main.js"]

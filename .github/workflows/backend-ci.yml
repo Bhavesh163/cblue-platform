@@ -335,62 +335,52 @@ jobs:
             fi
             echo "Using postgres: $POSTGRES_CONTAINER, backend: $BACKEND_CONTAINER"
 
-            # Check if tables already exist
-            TABLE_COUNT=$(docker exec "$POSTGRES_CONTAINER" psql -U admin -d cblue -t -c \
-              "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE';" 2>&1 | tr -d ' ')
-            echo "Existing tables: $TABLE_COUNT"
+            # Always try to apply pending migrations to avoid schema drift runtime 500s.
+            echo "📦 Running migrations via direct SQL (pending-only)..."
 
-            if [ "$TABLE_COUNT" -lt 5 ] 2>/dev/null; then
-              echo "📦 Running migrations via direct SQL..."
+            # Create _prisma_migrations table if it doesn't exist
+            docker exec "$POSTGRES_CONTAINER" psql -U admin -d cblue -c "
+              CREATE TABLE IF NOT EXISTS _prisma_migrations (
+                id VARCHAR(36) PRIMARY KEY,
+                checksum VARCHAR(64) NOT NULL,
+                finished_at TIMESTAMPTZ,
+                migration_name VARCHAR(255) NOT NULL,
+                logs TEXT,
+                rolled_back_at TIMESTAMPTZ,
+                started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                applied_steps_count INTEGER NOT NULL DEFAULT 0
+              );
+            " 2>&1
 
-              # Create _prisma_migrations table if it doesn't exist
-              docker exec "$POSTGRES_CONTAINER" psql -U admin -d cblue -c "
-                CREATE TABLE IF NOT EXISTS _prisma_migrations (
-                  id VARCHAR(36) PRIMARY KEY,
-                  checksum VARCHAR(64) NOT NULL,
-                  finished_at TIMESTAMPTZ,
-                  migration_name VARCHAR(255) NOT NULL,
-                  logs TEXT,
-                  rolled_back_at TIMESTAMPTZ,
-                  started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                  applied_steps_count INTEGER NOT NULL DEFAULT 0
-                );
-              " 2>&1
+            # Apply each migration SQL file in order
+            MIGRATIONS_DIR="$DEPLOY_DIR/backend/prisma/migrations"
+            for MIG_DIR in $(ls -d "$MIGRATIONS_DIR"/*/ 2>/dev/null | sort); do
+              MIG_NAME=$(basename "$MIG_DIR")
+              MIG_SQL="$MIG_DIR/migration.sql"
+              if [ ! -f "$MIG_SQL" ]; then continue; fi
 
-              # Apply each migration SQL file in order
-              DEPLOY_DIR_RESOLVED=$(docker exec "$BACKEND_CONTAINER" sh -c 'echo $PWD' 2>/dev/null || echo "/opt/cblue-platform/backend")
-              MIGRATIONS_DIR="$DEPLOY_DIR/backend/prisma/migrations"
-              for MIG_DIR in $(ls -d "$MIGRATIONS_DIR"/*/  2>/dev/null | sort); do
-                MIG_NAME=$(basename "$MIG_DIR")
-                MIG_SQL="$MIG_DIR/migration.sql"
-                if [ ! -f "$MIG_SQL" ]; then continue; fi
+              # Check if already applied
+              ALREADY=$(docker exec "$POSTGRES_CONTAINER" psql -U admin -d cblue -t -c \
+                "SELECT count(*) FROM _prisma_migrations WHERE migration_name='$MIG_NAME';" 2>&1 | tr -d ' ')
 
-                # Check if already applied
-                ALREADY=$(docker exec "$POSTGRES_CONTAINER" psql -U admin -d cblue -t -c \
-                  "SELECT count(*) FROM _prisma_migrations WHERE migration_name='$MIG_NAME';" 2>&1 | tr -d ' ')
-
-                if [ "$ALREADY" = "0" ]; then
-                  echo "  Applying: $MIG_NAME"
-                  # Copy SQL file into container and execute
-                  docker cp "$MIG_SQL" "$POSTGRES_CONTAINER:/tmp/migration.sql"
-                  docker exec "$POSTGRES_CONTAINER" psql -U admin -d cblue -f /tmp/migration.sql 2>&1 || {
-                    echo "  ⚠️ Migration $MIG_NAME had errors (may be partial — continuing)"
-                  }
-                  # Record migration
+              if [ "$ALREADY" = "0" ]; then
+                echo "  Applying: $MIG_NAME"
+                docker cp "$MIG_SQL" "$POSTGRES_CONTAINER:/tmp/migration.sql"
+                if docker exec "$POSTGRES_CONTAINER" psql -U admin -d cblue -f /tmp/migration.sql 2>&1; then
                   docker exec "$POSTGRES_CONTAINER" psql -U admin -d cblue -c \
-                    "INSERT INTO _prisma_migrations (id, checksum, finished_at, migration_name, applied_steps_count) VALUES (gen_random_uuid(), md5('$MIG_NAME'), now(), '$MIG_NAME', 1) ON CONFLICT DO NOTHING;" 2>&1
+                    "INSERT INTO _prisma_migrations (id, checksum, finished_at, migration_name, applied_steps_count) VALUES (md5(random()::text || clock_timestamp()::text), md5('$MIG_NAME'), now(), '$MIG_NAME', 1) ON CONFLICT DO NOTHING;" 2>&1
                 else
-                  echo "  Skip (already applied): $MIG_NAME"
+                  echo "❌ Migration $MIG_NAME failed"
+                  exit 1
                 fi
-              done
+              else
+                echo "  Skip (already applied): $MIG_NAME"
+              fi
+            done
 
-              # Verify tables were created
-              TABLE_COUNT_AFTER=$(docker exec "$POSTGRES_CONTAINER" psql -U admin -d cblue -t -c \
-                "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE';" 2>&1 | tr -d ' ')
-              echo "✅ Tables after migration: $TABLE_COUNT_AFTER"
-            else
-              echo "✅ Database already has $TABLE_COUNT tables — skipping migrations"
-            fi
+            TABLE_COUNT_AFTER=$(docker exec "$POSTGRES_CONTAINER" psql -U admin -d cblue -t -c \
+              "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE';" 2>&1 | tr -d ' ')
+            echo "✅ Tables after migration check: $TABLE_COUNT_AFTER"
 
             # ── Restart backend to pick up new tables ──
             docker restart "$BACKEND_CONTAINER" 2>/dev/null || true
