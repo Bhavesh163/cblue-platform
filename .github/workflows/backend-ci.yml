@@ -402,8 +402,9 @@ jobs:
             if [ "$REG_TEST" = "201" ] || [ "$REG_TEST" = "409" ] || [ "$REG_TEST" = "400" ]; then
               echo "✅ Registration endpoint is functional"
             else
-              echo "⚠️ Registration returned $REG_TEST — check backend logs"
+              echo "❌ Registration returned $REG_TEST — backend is not functional"
               docker logs --tail=20 "$BACKEND_CONTAINER" 2>&1 || true
+              exit 1
             fi
 
             if echo "$HEALTH" | grep -q '"ok"'; then
