@@ -276,14 +276,26 @@ jobs:
             echo "⏳ Waiting for infrastructure to stabilize..."
             sleep 15
 
+            # Resolve the primary postgres container explicitly (avoid selecting another project's DB).
+            POSTGRES_CONTAINER=$(docker ps --format "{{.Names}}" | grep -E '^docker_postgres_1$|^cblue-platform_postgres_1$|^postgres$|postgres' | head -1)
+            if [ -z "$POSTGRES_CONTAINER" ]; then
+              echo "❌ Postgres container not found"
+              docker ps -a 2>&1
+              exit 1
+            fi
+
+            PG_USER=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$POSTGRES_CONTAINER" 2>/dev/null | grep '^POSTGRES_USER=' | sed 's/^POSTGRES_USER=//' | head -1 || true)
+            PG_DB=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$POSTGRES_CONTAINER" 2>/dev/null | grep '^POSTGRES_DB=' | sed 's/^POSTGRES_DB=//' | head -1 || true)
+            PG_PASSWORD=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$POSTGRES_CONTAINER" 2>/dev/null | grep '^POSTGRES_PASSWORD=' | sed 's/^POSTGRES_PASSWORD=//' | head -1 || true)
+            if [ -z "$PG_USER" ]; then PG_USER='admin'; fi
+            if [ -z "$PG_DB" ]; then PG_DB='cblue'; fi
+            if [ -z "$PG_PASSWORD" ]; then PG_PASSWORD='NewPass456!'; fi
+
             # Wait for postgres specifically (it's the critical dependency)
             for i in $(seq 1 12); do
-              PG_CONTAINER=$(docker ps --filter "name=postgres" --format "{{.Names}}" | head -1)
-              if [ -n "$PG_CONTAINER" ]; then
-                if docker exec "$PG_CONTAINER" pg_isready -U admin -d cblue >/dev/null 2>&1; then
-                  echo "✅ Postgres is ready"
-                  break
-                fi
+              if docker exec "$POSTGRES_CONTAINER" pg_isready -U "$PG_USER" -d "$PG_DB" >/dev/null 2>&1; then
+                echo "✅ Postgres is ready"
+                break
               fi
               echo "  Waiting for postgres... ($i/12)"
               sleep 5
@@ -294,27 +306,19 @@ jobs:
             echo "Current backend on :3002: ${PREV_BACKEND:-none}"
             docker rm -f cblue_backend_candidate 2>/dev/null || true
 
-            # Resolve DATABASE_URL from backend .env first (if present), then postgres env.
+            # Resolve DATABASE_URL from backend .env first (if present), then selected postgres container env.
             DATABASE_URL_RUNTIME=""
             if [ -f "$DEPLOY_DIR/backend/.env" ]; then
               DATABASE_URL_RUNTIME=$(grep -E '^DATABASE_URL=' "$DEPLOY_DIR/backend/.env" | tail -1 | cut -d '=' -f2- | sed 's/^"//;s/"$//' || true)
             fi
 
-            # If .env did not provide DATABASE_URL, derive from postgres container env.
+            # If .env did not provide DATABASE_URL, derive from selected postgres container env.
             if [ -z "$DATABASE_URL_RUNTIME" ]; then
-            POSTGRES_CONTAINER=$(docker ps --filter "name=postgres" --format "{{.Names}}" | head -1)
-            PG_USER=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$POSTGRES_CONTAINER" 2>/dev/null | grep '^POSTGRES_USER=' | sed 's/^POSTGRES_USER=//' | head -1 || true)
-            PG_DB=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$POSTGRES_CONTAINER" 2>/dev/null | grep '^POSTGRES_DB=' | sed 's/^POSTGRES_DB=//' | head -1 || true)
-            PG_PASSWORD=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$POSTGRES_CONTAINER" 2>/dev/null | grep '^POSTGRES_PASSWORD=' | sed 's/^POSTGRES_PASSWORD=//' | head -1 || true)
-
-            if [ -z "$PG_USER" ]; then PG_USER='admin'; fi
-            if [ -z "$PG_DB" ]; then PG_DB='cblue'; fi
-            if [ -z "$PG_PASSWORD" ]; then PG_PASSWORD='NewPass456!'; fi
             PG_PASSWORD_ENC="$PG_PASSWORD"
             if command -v python3 >/dev/null 2>&1; then
               PG_PASSWORD_ENC=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$PG_PASSWORD")
             fi
-            DATABASE_URL_RUNTIME="postgresql://${PG_USER}:${PG_PASSWORD_ENC}@postgres:5432/${PG_DB}"
+            DATABASE_URL_RUNTIME="postgresql://${PG_USER}:${PG_PASSWORD_ENC}@${POSTGRES_CONTAINER}:5432/${PG_DB}"
             fi
 
             # Fallback: if postgres env is not readable, reuse live backend DATABASE_URL.
@@ -323,11 +327,25 @@ jobs:
             fi
             echo "Resolved runtime DATABASE_URL for backend deployment"
 
+            # Build service hosts for the same compose stack prefix as selected postgres.
+            STACK_PREFIX=$(echo "$POSTGRES_CONTAINER" | sed -E 's/postgres.*$//')
+            REDIS_HOST="redis"
+            RABBIT_HOST="rabbitmq"
+            if [ -n "$STACK_PREFIX" ] && docker ps --format "{{.Names}}" | grep -q "^${STACK_PREFIX}redis_1$"; then
+              REDIS_HOST="${STACK_PREFIX}redis_1"
+            fi
+            if [ -n "$STACK_PREFIX" ] && docker ps --format "{{.Names}}" | grep -q "^${STACK_PREFIX}rabbitmq_1$"; then
+              RABBIT_HOST="${STACK_PREFIX}rabbitmq_1"
+            fi
+            RABBIT_USER=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$RABBIT_HOST" 2>/dev/null | grep '^RABBITMQ_DEFAULT_USER=' | sed 's/^RABBITMQ_DEFAULT_USER=//' | head -1 || true)
+            RABBIT_PASS=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$RABBIT_HOST" 2>/dev/null | grep '^RABBITMQ_DEFAULT_PASS=' | sed 's/^RABBITMQ_DEFAULT_PASS=//' | head -1 || true)
+            if [ -z "$RABBIT_USER" ]; then RABBIT_USER='admin'; fi
+            if [ -z "$RABBIT_PASS" ]; then RABBIT_PASS='password'; fi
+
             # Use raw docker commands for deployment to bypass broken docker-compose aliasing
             echo "🚀 Deploying candidate backend container on :3003..."
-            # Detect docker network — try multiple patterns and fall back to bridge
-            NETWORK=$(docker network ls --format '{{.Name}}' | grep -iE 'docker_default|cblue-platform_default|cblue_default|infrastructure_default|default' | grep -v '^bridge$' | head -1 || echo 'bridge')
-            # If still empty, use bridge
+            # Use the same network as the selected postgres container.
+            NETWORK=$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{printf "%s\n" $k}}{{end}}' "$POSTGRES_CONTAINER" 2>/dev/null | head -1)
             if [ -z "$NETWORK" ]; then NETWORK="bridge"; fi
             echo "Using network: $NETWORK"
             docker run -d --name cblue_backend_candidate \
@@ -335,8 +353,8 @@ jobs:
                 --restart unless-stopped \
               -p 3003:3002 \
                 -e DATABASE_URL="$DATABASE_URL_RUNTIME" \
-                -e REDIS_HOST=redis -e REDIS_PORT=6379 \
-                -e RABBITMQ_URL="amqp://admin:password@rabbitmq:5672" \
+                -e REDIS_HOST="$REDIS_HOST" -e REDIS_PORT=6379 \
+                -e RABBITMQ_URL="amqp://${RABBIT_USER}:${RABBIT_PASS}@${RABBIT_HOST}:5672" \
                 -e JWT_SECRET=change-in-production \
                 -e JWT_REFRESH_SECRET=change-in-production \
                 -e JWT_EXPIRATION=15m -e JWT_REFRESH_EXPIRATION=7d \
@@ -356,7 +374,6 @@ jobs:
             sleep 20
 
             # ── Run Prisma migrations via direct SQL (bypasses prisma CLI config issues) ──
-            POSTGRES_CONTAINER=$(docker ps --filter "name=postgres" --format "{{.Names}}" | head -1)
             BACKEND_CONTAINER="cblue_backend_candidate"
             if [ -z "$POSTGRES_CONTAINER" ]; then
               echo "❌ Postgres container not found!"
@@ -369,7 +386,7 @@ jobs:
             echo "📦 Running migrations via direct SQL (pending-only)..."
 
             # Create _prisma_migrations table if it doesn't exist
-            docker exec "$POSTGRES_CONTAINER" psql -U admin -d cblue -c "
+            docker exec "$POSTGRES_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -c "
               CREATE TABLE IF NOT EXISTS _prisma_migrations (
                 id VARCHAR(36) PRIMARY KEY,
                 checksum VARCHAR(64) NOT NULL,
@@ -390,14 +407,14 @@ jobs:
               if [ ! -f "$MIG_SQL" ]; then continue; fi
 
               # Check if already applied
-              ALREADY=$(docker exec "$POSTGRES_CONTAINER" psql -U admin -d cblue -t -c \
+                ALREADY=$(docker exec "$POSTGRES_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -t -c \
                 "SELECT count(*) FROM _prisma_migrations WHERE migration_name='$MIG_NAME';" 2>&1 | tr -d ' ')
 
               if [ "$ALREADY" = "0" ]; then
                 echo "  Applying: $MIG_NAME"
                 docker cp "$MIG_SQL" "$POSTGRES_CONTAINER:/tmp/migration.sql"
-                if docker exec "$POSTGRES_CONTAINER" psql -U admin -d cblue -f /tmp/migration.sql 2>&1; then
-                  docker exec "$POSTGRES_CONTAINER" psql -U admin -d cblue -c \
+                  if docker exec "$POSTGRES_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -f /tmp/migration.sql 2>&1; then
+                    docker exec "$POSTGRES_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -c \
                     "INSERT INTO _prisma_migrations (id, checksum, finished_at, migration_name, applied_steps_count) VALUES (md5(random()::text || clock_timestamp()::text), md5('$MIG_NAME'), now(), '$MIG_NAME', 1) ON CONFLICT DO NOTHING;" 2>&1
                 else
                   echo "❌ Migration $MIG_NAME failed"
@@ -408,7 +425,7 @@ jobs:
               fi
             done
 
-            TABLE_COUNT_AFTER=$(docker exec "$POSTGRES_CONTAINER" psql -U admin -d cblue -t -c \
+            TABLE_COUNT_AFTER=$(docker exec "$POSTGRES_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -t -c \
               "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE';" 2>&1 | tr -d ' ')
             echo "✅ Tables after migration check: $TABLE_COUNT_AFTER"
 
@@ -446,8 +463,8 @@ jobs:
                 --restart unless-stopped \
                 -p 3002:3002 \
                 -e DATABASE_URL="$DATABASE_URL_RUNTIME" \
-                -e REDIS_HOST=redis -e REDIS_PORT=6379 \
-                -e RABBITMQ_URL="amqp://admin:password@rabbitmq:5672" \
+                -e REDIS_HOST="$REDIS_HOST" -e REDIS_PORT=6379 \
+                -e RABBITMQ_URL="amqp://${RABBIT_USER}:${RABBIT_PASS}@${RABBIT_HOST}:5672" \
                 -e JWT_SECRET=change-in-production \
                 -e JWT_REFRESH_SECRET=change-in-production \
                 -e JWT_EXPIRATION=15m -e JWT_REFRESH_EXPIRATION=7d \
