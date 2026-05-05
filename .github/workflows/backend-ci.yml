@@ -290,28 +290,21 @@ jobs:
             echo "Current backend on :3002: ${PREV_BACKEND:-none}"
             docker rm -f cblue_backend_candidate 2>/dev/null || true
 
-            # Resolve DATABASE_URL from the live backend first to avoid credential drift.
+            # Resolve DATABASE_URL from postgres container env first (source of truth).
             DATABASE_URL_RUNTIME=""
-            if [ -n "$PREV_BACKEND" ]; then
-              DATABASE_URL_RUNTIME=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$PREV_BACKEND" 2>/dev/null | grep '^DATABASE_URL=' | sed 's/^DATABASE_URL=//' | head -1 || true)
-            fi
+            POSTGRES_CONTAINER=$(docker ps --filter "name=postgres" --format "{{.Names}}" | head -1)
+            PG_USER=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$POSTGRES_CONTAINER" 2>/dev/null | grep '^POSTGRES_USER=' | sed 's/^POSTGRES_USER=//' | head -1 || true)
+            PG_DB=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$POSTGRES_CONTAINER" 2>/dev/null | grep '^POSTGRES_DB=' | sed 's/^POSTGRES_DB=//' | head -1 || true)
+            PG_PASSWORD=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$POSTGRES_CONTAINER" 2>/dev/null | grep '^POSTGRES_PASSWORD=' | sed 's/^POSTGRES_PASSWORD=//' | head -1 || true)
 
-            # Fallback: derive from postgres container env if live backend is unavailable.
-            if [ -z "$DATABASE_URL_RUNTIME" ]; then
-              POSTGRES_CONTAINER=$(docker ps --filter "name=postgres" --format "{{.Names}}" | head -1)
-              PG_USER=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$POSTGRES_CONTAINER" 2>/dev/null | grep '^POSTGRES_USER=' | sed 's/^POSTGRES_USER=//' | head -1 || true)
-              PG_DB=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$POSTGRES_CONTAINER" 2>/dev/null | grep '^POSTGRES_DB=' | sed 's/^POSTGRES_DB=//' | head -1 || true)
-              PG_PASSWORD=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$POSTGRES_CONTAINER" 2>/dev/null | grep '^POSTGRES_PASSWORD=' | sed 's/^POSTGRES_PASSWORD=//' | head -1 || true)
-              if [ -z "$PG_USER" ]; then
-                PG_USER='admin'
-              fi
-              if [ -z "$PG_DB" ]; then
-                PG_DB='cblue'
-              fi
-              if [ -z "$PG_PASSWORD" ]; then
-                PG_PASSWORD='NewPass456!'
-              fi
-              DATABASE_URL_RUNTIME="postgresql://${PG_USER}:${PG_PASSWORD}@postgres:5432/${PG_DB}"
+            if [ -z "$PG_USER" ]; then PG_USER='admin'; fi
+            if [ -z "$PG_DB" ]; then PG_DB='cblue'; fi
+            if [ -z "$PG_PASSWORD" ]; then PG_PASSWORD='NewPass456!'; fi
+            DATABASE_URL_RUNTIME="postgresql://${PG_USER}:${PG_PASSWORD}@postgres:5432/${PG_DB}"
+
+            # Fallback: if postgres env is not readable, reuse live backend DATABASE_URL.
+            if [ -z "$DATABASE_URL_RUNTIME" ] && [ -n "$PREV_BACKEND" ]; then
+              DATABASE_URL_RUNTIME=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$PREV_BACKEND" 2>/dev/null | grep '^DATABASE_URL=' | sed 's/^DATABASE_URL=//' | head -1 || true)
             fi
             echo "Resolved runtime DATABASE_URL for backend deployment"
 
