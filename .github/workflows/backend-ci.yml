@@ -1,5 +1,9 @@
 name: Backend CI/CD
 
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main, develop]
