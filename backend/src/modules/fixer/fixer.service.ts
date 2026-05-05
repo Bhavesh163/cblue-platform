@@ -278,7 +278,7 @@ export class FixerService {
 
     const isUpperTier = (tier: string) => ['corporate', 'specialist', 'expert', 'manager', 'director', 'luxury', 'grandeur'].includes(tier);
 
-    let results = [];
+    let results: any[] = [];
     let usedIds = new Set();
 
     const pick = (partner, reason) => {
