@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useRef,
+  Suspense,
   type FormEvent,
   type ChangeEvent,
 } from "react";
@@ -96,7 +97,7 @@ const initialForm: FormData = {
   consent: false,
 };
 
-export default function FixerRegisterPage() {
+function FixerRegisterContent() {
   const t = useTranslations("fixer");
   const locale = useLocale();
   const searchParams = useSearchParams();
@@ -3396,5 +3397,13 @@ export default function FixerRegisterPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function FixerRegisterPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50" />}>
+      <FixerRegisterContent />
+    </Suspense>
   );
 }
