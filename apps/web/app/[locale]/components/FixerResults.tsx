@@ -9,6 +9,9 @@ interface Fixer {
   rating: number;
   totalJobs: number;
   price: number;
+  estimatedTotal?: number;
+  estimatedUnit?: string;
+  estimatedQty?: number;
   satisfaction: number;
   specialties: string[];
   experienceYears: number;
@@ -480,7 +483,8 @@ export default function FixerResults({
   // Hydration-safe: initialize random/date-dependent values on client
   useEffect(() => {
     // Try fetching real candidates from the backend AI Top-8 algorithm
-    fetch(`/api/v1/fixers/match?service=${encodeURIComponent(service)}&district=auto&province=auto`)
+    const descParam = description ? `&description=${encodeURIComponent(description)}` : '';
+    fetch(`/api/v1/fixers/match?service=${encodeURIComponent(service)}&district=auto&province=auto${descParam}`)
       .then(res => res.ok ? res.json() : null)
       .then(data => {
         if (data && Array.isArray(data) && data.length > 0) {
@@ -491,7 +495,10 @@ export default function FixerResults({
             tier: d.tier.charAt(0).toUpperCase() + d.tier.slice(1).toLowerCase(),
             rating: d.rating,
             totalJobs: d.totalJobs || d.completedJobs || 0,
-            price: d.price,
+            price: d.estimatedTotal ?? d.price,
+            estimatedTotal: d.estimatedTotal,
+            estimatedUnit: d.estimatedUnit,
+            estimatedQty: d.estimatedQty,
             satisfaction: Math.round(d.satisfaction || 85),
             specialties: d.specialties || [],
             experienceYears: d.experienceYears || 1,
@@ -1446,7 +1453,8 @@ export default function FixerResults({
     if (!nominateId.trim()) return;
     
     try {
-      const url = `/api/v1/fixers/match?service=${encodeURIComponent(service)}&district=auto&province=auto&nominateId=${encodeURIComponent(nominateId)}`;
+      const descParam = description ? `&description=${encodeURIComponent(description)}` : '';
+      const url = `/api/v1/fixers/match?service=${encodeURIComponent(service)}&district=auto&province=auto${descParam}&nominateId=${encodeURIComponent(nominateId)}`;
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
@@ -1599,7 +1607,20 @@ export default function FixerResults({
                 <p className="text-xs text-gray-400">{t("processingFee")}</p>
                 <p className="text-xl font-bold text-gray-800">฿{feeForTier}</p>
                 <p className="text-xs text-gray-400 mb-2">
-                  {locale === "th" ? "ราคาเริ่มต้น" : locale === "zh" ? "起始价" : "Est. from"} ฿{fixer.price}
+                  {(fixer as any).estimatedTotal && (fixer as any).estimatedTotal > 1000
+                    ? <>
+                        <span className="text-green-700 font-semibold">
+                          {locale === "th" ? "ประมาณการรวม" : locale === "zh" ? "预估总价" : "Est. total"}
+                          {" "}฿{((fixer as any).estimatedTotal as number).toLocaleString()}
+                        </span>
+                        {(fixer as any).estimatedUnit && (
+                          <span className="text-gray-400 ml-1">
+                            ({(fixer as any).estimatedQty} {(fixer as any).estimatedUnit})
+                          </span>
+                        )}
+                      </>
+                    : <>{locale === "th" ? "ราคาเริ่มต้น" : locale === "zh" ? "起始价" : "Est. from"} ฿{(fixer.price ?? 0).toLocaleString()}</>
+                  }
                 </p>
                 <button
                   onClick={() => handleSelect(fixer)}

@@ -226,10 +226,27 @@ export class FixerService {
 
   // ── AI Top-8 Selection Algorithm Matrix ──
 
+  /**
+   * Extracts a numeric quantity from a customer's free-text service description.
+   * e.g. "1000 sqm office fit-out" → 1000
+   *      "3 units air conditioning" → 3
+   */
+  private extractQuantityFromDescription(description?: string): number {
+    if (!description) return 1;
+    // Match patterns like "1,000 sqm", "1000m2", "500 sqft", "3 units", "5 rooms"
+    const match = description.match(/(\d[\d,]*\.?\d*)\s*(sqm|m2|sqft|sq\.?m|ตร\.?ม|ตรม|unit|units|ชุด|ห้อง|room|rooms|floor|floors|ชั้น|item|items|job|งาน)?/i);
+    if (match && match[1]) {
+      const qty = parseFloat(match[1].replace(/,/g, ''));
+      if (!isNaN(qty) && qty > 0) return qty;
+    }
+    return 1;
+  }
+
   async matchFixers(
     service: string,
     district: string,
     province: string,
+    description?: string,
     nominateId?: string,
   ) {
     const pool = await this.prisma.fixer.findMany({
@@ -241,23 +258,36 @@ export class FixerService {
 
     if (pool.length === 0) return [];
 
+    // Extract customer-specified quantity from the service description
+    const customerQty = this.extractQuantityFromDescription(description);
+
     const formattedPool = pool.map((f) => {
       let basePrice = 0;
+      let matchedUnit = '';
+      let matchedQty = 1;
+
       if (f.priceList && Array.isArray(f.priceList) && f.priceList.length > 0) {
         const list = f.priceList as Record<string, unknown>[];
-        // match specific service properly
+        // match specific service properly — case-insensitive, ignore underscores/hyphens
+        const normalize = (s: string) => s.toLowerCase().replace(/[_\-\/]/g, ' ').trim();
+        const svc = normalize(service);
+
         const match = list.find((item: Record<string, unknown>) => {
           if (!item.service || typeof item.service !== 'string') return false;
-          // allow partial matching like 'website_development' vs 'Website development'
-          const s1 = item.service.toLowerCase().replace(/_/g, ' ');
-          const s2 = service.toLowerCase().replace(/_/g, ' ');
-          return s1.includes(s2) || s2.includes(s1);
-        });
+          const s1 = normalize(item.service);
+          return s1.includes(svc) || svc.includes(s1);
+        }) || list[0]; // fallback to first item
 
-        if (match && match.finalPrice) {
-          basePrice = parseFloat(match.finalPrice as string);
-        } else if (list[0].finalPrice) {
-          basePrice = parseFloat(list[0].finalPrice as string);
+        if (match) {
+          const unitRate = parseFloat((match.finalPrice as string) || '0');
+          // partner's own quantity from their price declaration (default 1 if not set)
+          const partnerQty = parseFloat((match.quantity as string) || '1') || 1;
+          // Unit rate = finalPrice ÷ partnerQty (price per unit)
+          const pricePerUnit = unitRate > 0 ? unitRate / partnerQty : unitRate;
+          // Estimated total = customer quantity × unit rate
+          basePrice = customerQty > 1 ? Math.round(pricePerUnit * customerQty) : unitRate;
+          matchedUnit = (match.unit as string) || '';
+          matchedQty = customerQty;
         }
       }
 
@@ -268,6 +298,9 @@ export class FixerService {
         rating: f.rating || 0,
         totalJobs: f.completedJobs || 0,
         price: basePrice > 0 ? basePrice : 500, // Safe default fallback
+        estimatedTotal: basePrice > 0 ? basePrice : null,
+        estimatedUnit: matchedUnit,
+        estimatedQty: matchedQty,
         satisfaction: f.rating >= 4.5 ? 90 + Math.random() * 10 : 70 + Math.random() * 20,
         specialties: f.skills.map((s) => s.name),
         experienceYears: f.yearsExperience || 1,

@@ -295,7 +295,10 @@ jobs:
             
             # Use raw docker commands for deployment to bypass broken docker-compose aliasing
             echo "🚀 Deploying backend container directly..."
-            NETWORK=$(docker network ls --format '{{.Name}}' | grep -iE 'docker_default|cblue-platform_default|cblue_default|infrastructure_default' | head -1 || echo 'bridge')
+            # Detect docker network — try multiple patterns and fall back to bridge
+            NETWORK=$(docker network ls --format '{{.Name}}' | grep -iE 'docker_default|cblue-platform_default|cblue_default|infrastructure_default|default' | grep -v '^bridge$' | head -1 || echo 'bridge')
+            # If still empty, use bridge
+            if [ -z "$NETWORK" ]; then NETWORK="bridge"; fi
             echo "Using network: $NETWORK"
             docker run -d --name cblue_backend_fallback \
                 --network "$NETWORK" \

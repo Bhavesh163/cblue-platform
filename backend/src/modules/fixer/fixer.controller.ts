@@ -120,12 +120,14 @@ export class FixerController {
     @Query('service') service: string,
     @Query('district') district: string,
     @Query('province') province: string,
+    @Query('description') description?: string,
     @Query('nominateId') nominateId?: string,
   ) {
     return this.fixerService.matchFixers(
       service,
       district,
       province,
+      description,
       nominateId,
     );
   }
