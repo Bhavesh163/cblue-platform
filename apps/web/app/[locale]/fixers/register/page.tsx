@@ -316,16 +316,29 @@ function FixerRegisterContent() {
           return;
         }
 
+        let userFallback = null;
+        try {
+          const subStr = localStorage.getItem("subscriber");
+          if (subStr) userFallback = JSON.parse(subStr);
+        } catch { /* ignore */ }
+
         const res = await fetch("/api/v1/users/me", {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (!res.ok) {
+        
+        if (!res.ok && !userFallback) {
           setCheckingStatus(false);
           return;
         }
 
-        const data = await res.json();
-        if (!data?.fixer) {
+        let data = userFallback;
+        if (res.ok) {
+          data = await res.json();
+        }
+
+        if (!data?.fixer && !isEditMode) {
+          // If not in edit mode and no fixer found, stop but keep user data mapped
+          populateFixerForm(data, null);
           setCheckingStatus(false);
           return;
         }
@@ -336,10 +349,16 @@ function FixerRegisterContent() {
         const fixerRes = await fetch("/api/v1/fixers/me", {
           headers: { Authorization: `Bearer ${token}` },
         });
+        
+        let fixerProfile = null;
         if (fixerRes.ok) {
-          const fixerProfile = await fixerRes.json();
-          populateFixerForm(data, fixerProfile);
+          fixerProfile = await fixerRes.json();
+        } else {
+          console.warn("Failed to fetch fixer profile (e.g. 502). Falling back to user data.");
         }
+        
+        // Always populate form, even if fixerProfile is null (will use user data)
+        populateFixerForm(data, fixerProfile);
       } catch {
         // ignore
       }

@@ -300,7 +300,8 @@ export class FixerService {
    */
   private extractQuantityFromDescription(description?: string): number {
     if (!description) return 1;
-    const match = description.match(
+    const normalized = this.normalizeSearchText(description);
+    const match = normalized.match(
       /(\d[\d,]*\.?\d*)\s*(sqm|m2|sqft|sq\.?m|ตร\.?ม|ตรม|unit|units|ชุด|ห้อง|room|rooms|floor|floors|ชั้น|item|items|job|งาน)?/i,
     );
     if (match && match[1]) {
