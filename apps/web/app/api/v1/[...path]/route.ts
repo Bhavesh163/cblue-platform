@@ -16,11 +16,21 @@ import { NextRequest } from "next/server";
 
 
 
-function getBackendUrl() {
-  if (process.env.API_BACKEND_URL) return process.env.API_BACKEND_URL;
-  if (process.env.NODE_ENV === "development") return "http://localhost:3002";
-  // The droplet explicitly exposes 3002 for the nest backend.
-  return "http://api-backend.cblue.co.th";
+function getBackendUrls() {
+  const env = process.env.API_BACKEND_URL;
+  if (env) {
+    return env
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean);
+  }
+
+  if (process.env.NODE_ENV === "development") {
+    return ["http://localhost:3002"];
+  }
+
+  // Prefer explicit backend port in production, keep hostname-only fallback.
+  return ["http://api-backend.cblue.co.th:3002", "http://api-backend.cblue.co.th"];
 }
 
 
@@ -39,14 +49,10 @@ async function handler(
   request: NextRequest,
   context: { params: Promise<{ path: string[] }> },
 ): Promise<Response> {
+  const backendUrls = getBackendUrls();
   let target = "";
   try {
     const { path } = await context.params;
-    const url = new URL(`/api/v1/${path.join("/")}`, getBackendUrl());
-
-    // Forward query string
-    request.nextUrl.searchParams.forEach((v, k) => url.searchParams.set(k, v));
-    target = url.toString();
 
     // Forward headers (skip hop-by-hop)
     const headers = new Headers();
@@ -75,7 +81,34 @@ async function handler(
       init.duplex = "half"; // required for streaming body on edge
     }
 
-    const upstream = await fetch(target, init);
+    const method = request.method.toUpperCase();
+    const canRetry = ["GET", "HEAD", "OPTIONS"].includes(method);
+    let upstream: Response | null = null;
+    let lastError: unknown = null;
+
+    for (let i = 0; i < backendUrls.length; i += 1) {
+      const url = new URL(`/api/v1/${path.join("/")}`, backendUrls[i]);
+      request.nextUrl.searchParams.forEach((v, k) => url.searchParams.set(k, v));
+      target = url.toString();
+
+      try {
+        const attempt = await fetch(target, init);
+
+        if (!canRetry || attempt.status < 500 || i === backendUrls.length - 1) {
+          upstream = attempt;
+          break;
+        }
+      } catch (err) {
+        lastError = err;
+        if (!canRetry || i === backendUrls.length - 1) {
+          throw err;
+        }
+      }
+    }
+
+    if (!upstream) {
+      throw lastError instanceof Error ? lastError : new Error("No upstream response");
+    }
 
     // If backend returned a non-JSON error (e.g., nginx HTML 502/404),
     // convert to a proper JSON 502 so the frontend shows "service unavailable"
@@ -114,7 +147,7 @@ async function handler(
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[api-proxy]", request.method, target, msg);
     return Response.json(
-      { error: "proxy_error", message: msg, backend: getBackendUrl() },
+      { error: "proxy_error", message: msg, backends: backendUrls },
       { status: 502 },
     );
   }

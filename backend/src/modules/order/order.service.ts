@@ -101,6 +101,19 @@ export class OrderService {
     });
   }
 
+  async findMyFixerOrders(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { fixer: true },
+    });
+
+    if (!user?.fixer) {
+      return [];
+    }
+
+    return this.findByFixer(user.fixer.id);
+  }
+
   async findByFixer(fixerId: string) {
     return this.prisma.order.findMany({
       where: { fixerId },
