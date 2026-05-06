@@ -11,7 +11,7 @@ function getApiBaseUrl(): string {
   if (typeof window !== "undefined") {
     const host = window.location.hostname;
     if (host === "cblue.co.th" || host === "www.cblue.co.th") {
-      return "https://api.cblue.co.th/api/v1";
+      return "/api/v1";
     }
   }
 

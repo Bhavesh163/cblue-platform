@@ -973,7 +973,7 @@ function FixerRegisterContent() {
       setError(t("skillError"));
       return;
     }
-    if (kycImages.length === 0) {
+    if (!isEditMode && kycImages.length === 0) {
       setError(t("kycError"));
       return;
     }
@@ -1709,18 +1709,22 @@ function FixerRegisterContent() {
         {/* Header */}
         <div className="text-center mb-10">
           <h1 className="text-3xl font-bold text-gray-900">
-            {locale === "th"
+            {isEditMode 
+              ? (locale === "th" ? "แก้ไขโปรไฟล์ช่าง" : locale === "zh" ? "编辑技工个人资料" : "Edit Fixer Profile")
+              : (locale === "th"
               ? "สมัครเป็นช่าง CBLUE และมืออาชีพ"
               : locale === "zh"
                 ? "注册为 CBLUE 技工与专业人士"
-                : "Register as CBLUE Fixer & Pro"}
+                : "Register as CBLUE Fixer & Pro")}
           </h1>
           <p className="mt-3 text-lg text-gray-500">
-            {locale === "th"
+            {isEditMode 
+              ? (locale === "th" ? "อัปเดตข้อมูลและข้อมูลประจำตัวของคุณ" : locale === "zh" ? "更新您的信息和身份信息" : "Update your information and credentials")
+              : (locale === "th"
               ? "สมัครเพื่อเข้าถึงบริการมืออาชีพและจัดการคำขอของคุณ"
               : locale === "zh"
                 ? "注册以访问专业服务并管理您的请求"
-                : "Sign up to access professional services and manage your requests"}
+                : "Sign up to access professional services and manage your requests")}
           </p>
         </div>
 
