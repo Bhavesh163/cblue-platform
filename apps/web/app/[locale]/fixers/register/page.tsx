@@ -178,6 +178,15 @@ function FixerRegisterContent() {
       description: fixer?.description || "",
       pastExperience: fixer?.pastExperience || "",
       pastProjectType: fixer?.pastProjectType || "none",
+      companyHouseNumber: fixer?.address?.houseNumber || user?.address?.houseNumber || "",
+      companyBuilding: fixer?.address?.building || user?.address?.building || "",
+      companyFloor: fixer?.address?.floor || user?.address?.floor || "",
+      companyRoad: fixer?.address?.road || user?.address?.road || "",
+      companySoi: fixer?.address?.soi || user?.address?.soi || "",
+      companyProvince: fixer?.address?.province || user?.address?.province || "",
+      companyDistrict: fixer?.address?.district || user?.address?.district || "",
+      companySubdistrict: fixer?.address?.subdistrict || user?.address?.subdistrict || "",
+      companyPostalCode: fixer?.address?.postalCode || user?.address?.postalCode || "",
       consent: true,
     }));
 
@@ -973,7 +982,7 @@ function FixerRegisterContent() {
       setError(t("skillError"));
       return;
     }
-    if (!isEditMode && kycImages.length === 0) {
+    if (kycImages.length === 0) {
       setError(t("kycError"));
       return;
     }

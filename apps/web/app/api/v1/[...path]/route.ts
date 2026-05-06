@@ -52,6 +52,12 @@ async function handler(
     request.headers.forEach((v, k) => {
       if (!SKIP_REQ.has(k.toLowerCase())) headers.set(k, v);
     });
+    
+    // Explicitly add Authorization header if token exists in cookies
+    const token = request.cookies.get('token')?.value;
+    if (token && !headers.has('authorization')) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
 
     // Build fetch init
     const init: RequestInit & { duplex?: string } = {
