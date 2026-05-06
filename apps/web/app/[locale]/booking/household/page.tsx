@@ -11,6 +11,7 @@ import { getSubdistrictsForDistrict, lookupByPostalCode } from "../../lib/thai-s
 import ReCaptcha from "../../components/ReCaptcha";
 import GpsDetectButton from "../../components/GpsDetectButton";
 import FixerResults from "../../components/FixerResults";
+import DatePickerInput from "../../components/DatePickerInput";
 
 
 
@@ -584,16 +585,13 @@ function HouseholdBookingContent() {
                   <label htmlFor="scheduledDate" className="block text-sm font-medium text-gray-700 mb-1">
                     {locale === "th" ? "วันที่ต้องการเริ่มงาน" : locale === "zh" ? "期望开工日期" : "Preferred Start Date"} <span className="text-red-500">*</span>
                   </label>
-                  <input
+                  <DatePickerInput
                     id="scheduledDate"
                     name="scheduledDate"
-                    type="text"
-                    required
                     value={form.scheduledDate}
                     onChange={handleChange}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                     placeholder="DD/MM/YYYY"
-                    inputMode="numeric"
+                    required
                   />
                 </div>
                 <div>

@@ -25,6 +25,7 @@ import {
 import ReCaptcha from "../../components/ReCaptcha";
 import GpsDetectButton from "../../components/GpsDetectButton";
 import Link from "next/link";
+import DatePickerInput from "../../components/DatePickerInput";
 
 interface PriceRow {
   service: string;
@@ -2870,20 +2871,13 @@ function FixerRegisterContent() {
                     ? "期望开始日期"
                     : "Desired Start Date"}
               </label>
-              <input
+              <DatePickerInput
                 id="scheduledDate"
                 name="scheduledDate"
-                type="text"
-                required
-                value={scheduledDateInput}
-                onChange={(e) => {
-                  const next = e.target.value;
-                  setScheduledDateInput(next);
-                  setForm((prev) => ({ ...prev, scheduledDate: next }));
-                }}
-                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                value={form.scheduledDate}
+                onChange={handleChange}
                 placeholder="DD/MM/YYYY"
-                inputMode="numeric"
+                required
               />
             </div>
           </fieldset>
