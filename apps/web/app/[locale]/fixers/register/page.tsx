@@ -97,6 +97,47 @@ const initialForm: FormData = {
   consent: false,
 };
 
+function normalizeDateToIso(value: string): string | null {
+  const input = (value || "").trim();
+  if (!input) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(input)) {
+    const parts = input.split("-").map((v) => parseInt(v, 10));
+    if (parts.length !== 3) return null;
+    const y = parts[0]!;
+    const m = parts[1]!;
+    const d = parts[2]!;
+    const dt = new Date(y, m - 1, d);
+    if (
+      dt.getFullYear() === y &&
+      dt.getMonth() === m - 1 &&
+      dt.getDate() === d
+    ) {
+      return input;
+    }
+    return null;
+  }
+
+  const ddmmyyyy = input.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!ddmmyyyy) return null;
+
+  const d = parseInt(ddmmyyyy[1]!, 10);
+  const m = parseInt(ddmmyyyy[2]!, 10);
+  const y = parseInt(ddmmyyyy[3]!, 10);
+  const dt = new Date(y, m - 1, d);
+  if (
+    dt.getFullYear() !== y ||
+    dt.getMonth() !== m - 1 ||
+    dt.getDate() !== d
+  ) {
+    return null;
+  }
+
+  return `${y.toString().padStart(4, "0")}-${m
+    .toString()
+    .padStart(2, "0")}-${d.toString().padStart(2, "0")}`;
+}
+
 function FixerRegisterContent() {
   const t = useTranslations("fixer");
   const locale = useLocale();
@@ -151,9 +192,19 @@ function FixerRegisterContent() {
     fallback?: boolean;
   } | null>(null);
   const [digesting, setDigesting] = useState(false);
+  const [scheduledDateInput, setScheduledDateInput] = useState("");
 
 
   const populateFixerForm = useCallback((user: any, fixer: any) => {
+    const primaryAddress =
+      fixer?.user?.addresses?.find((a: any) => a?.isDefault) ||
+      fixer?.user?.addresses?.[0] ||
+      user?.addresses?.find((a: any) => a?.isDefault) ||
+      user?.addresses?.[0] ||
+      user?.address;
+
+    const normalizedDate = normalizeDateToIso(fixer?.scheduledDate || "") || "";
+
     setForm((prev) => ({
       ...prev,
       name: user?.name || prev.name,
@@ -170,23 +221,63 @@ function FixerRegisterContent() {
           ? String(fixer.travelRadius)
           : prev.travelRadius,
       selectedSkills: Array.isArray(fixer?.skills)
-        ? fixer.skills.map((skill: any) => skill.name)
+        ? fixer.skills.map((skill: any) =>
+            typeof skill === "string" ? skill : (skill?.name ?? ""),
+          )
+            .filter(Boolean)
         : [],
       province: fixer?.serviceProvince || "",
       district: fixer?.serviceDistrict || "",
       postalCode: fixer?.servicePostalCode || "",
+      scheduledDate: normalizedDate,
       description: fixer?.description || "",
       pastExperience: fixer?.pastExperience || "",
       pastProjectType: fixer?.pastProjectType || "none",
-      companyHouseNumber: fixer?.address?.houseNumber || user?.address?.houseNumber || "",
-      companyBuilding: fixer?.address?.building || user?.address?.building || "",
-      companyFloor: fixer?.address?.floor || user?.address?.floor || "",
-      companyRoad: fixer?.address?.road || user?.address?.road || "",
-      companySoi: fixer?.address?.soi || user?.address?.soi || "",
-      companyProvince: fixer?.address?.province || user?.address?.province || "",
-      companyDistrict: fixer?.address?.district || user?.address?.district || "",
-      companySubdistrict: fixer?.address?.subdistrict || user?.address?.subdistrict || "",
-      companyPostalCode: fixer?.address?.postalCode || user?.address?.postalCode || "",
+      companyHouseNumber:
+        fixer?.companyAddress?.houseNumber ||
+        fixer?.address?.houseNumber ||
+        primaryAddress?.houseNumber ||
+        "",
+      companyBuilding:
+        fixer?.companyAddress?.building ||
+        fixer?.address?.building ||
+        primaryAddress?.building ||
+        "",
+      companyFloor:
+        fixer?.companyAddress?.floor ||
+        fixer?.address?.floor ||
+        primaryAddress?.floor ||
+        "",
+      companyRoad:
+        fixer?.companyAddress?.road ||
+        fixer?.address?.road ||
+        primaryAddress?.road ||
+        "",
+      companySoi:
+        fixer?.companyAddress?.soi ||
+        fixer?.address?.soi ||
+        primaryAddress?.soi ||
+        "",
+      companyProvince:
+        fixer?.companyAddress?.province ||
+        fixer?.address?.province ||
+        primaryAddress?.province ||
+        "",
+      companyDistrict:
+        fixer?.companyAddress?.district ||
+        fixer?.address?.district ||
+        primaryAddress?.district ||
+        "",
+      companySubdistrict:
+        fixer?.companyAddress?.subdistrict ||
+        fixer?.address?.subdistrict ||
+        primaryAddress?.subdistrict ||
+        "",
+      companyPostalCode:
+        fixer?.companyAddress?.postalCode ||
+        fixer?.address?.postalCode ||
+        primaryAddress?.postalCode ||
+        "",
       consent: true,
     }));
 
@@ -198,9 +289,21 @@ function FixerRegisterContent() {
             unit: row?.unit || "",
             finalPrice: row?.finalPrice ? String(row.finalPrice) : "",
           }))
+        : Array.isArray(fixer?.pricing) && fixer.pricing.length > 0
+          ? fixer.pricing.map((row: any) => ({
+              service: row?.service || row?.name || "",
+              quantity: row?.quantity ? String(row.quantity) : "",
+              unit: row?.unit || "",
+              finalPrice: row?.finalPrice ? String(row.finalPrice) : "",
+            }))
         : [{ service: "", quantity: "", unit: "", finalPrice: "" }];
 
     setPriceRows(nextPriceRows);
+    setScheduledDateInput(
+      normalizedDate
+        ? `${normalizedDate.slice(8, 10)}/${normalizedDate.slice(5, 7)}/${normalizedDate.slice(0, 4)}`
+        : "",
+    );
   }, []);
 
   useEffect(() => {
@@ -982,8 +1085,14 @@ function FixerRegisterContent() {
       setError(t("skillError"));
       return;
     }
-    if (kycImages.length === 0) {
-      setError(t("kycError"));
+    if (kycImages.length < 3) {
+      setError(
+        locale === "th"
+          ? "กรุณาอัปโหลด KYC ให้ครบ 3 รูป (ด้านหน้า, ด้านหลัง, เซลฟี่คู่บัตร)"
+          : locale === "zh"
+            ? "请上传完整3张KYC图片（正面、背面、手持自拍）"
+            : "Please upload all 3 KYC images (front, back, and selfie with ID)",
+      );
       return;
     }
     // Added new required fields checks
@@ -1011,13 +1120,16 @@ function FixerRegisterContent() {
       );
       return;
     }
-    if (!form.scheduledDate) {
+    const normalizedScheduledDate = normalizeDateToIso(
+      form.scheduledDate || scheduledDateInput,
+    );
+    if (!normalizedScheduledDate) {
       setError(
         locale === "th"
-          ? "กรุณาระบุวันที่พร้อมเริ่มงาน"
+          ? "กรุณาระบุวันที่พร้อมเริ่มงานในรูปแบบ DD/MM/YYYY"
           : locale === "zh"
-            ? "请指定随时可开始工作的日期"
-            : "Please specify the date ready to start",
+            ? "请输入DD/MM/YYYY格式的可开始日期"
+            : "Please enter a valid start date in DD/MM/YYYY format",
       );
       return;
     }
@@ -1067,7 +1179,7 @@ function FixerRegisterContent() {
           category: s,
           name: s,
         })),
-        scheduledDate: form.scheduledDate,
+        scheduledDate: normalizedScheduledDate,
         address: {
           province: form.province,
           district: form.district,
@@ -2761,11 +2873,17 @@ function FixerRegisterContent() {
               <input
                 id="scheduledDate"
                 name="scheduledDate"
-                type="date"
+                type="text"
                 required
-                value={form.scheduledDate}
-                onChange={handleChange}
+                value={scheduledDateInput}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setScheduledDateInput(next);
+                  setForm((prev) => ({ ...prev, scheduledDate: next }));
+                }}
                 className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                placeholder="DD/MM/YYYY"
+                inputMode="numeric"
               />
             </div>
           </fieldset>
@@ -3401,11 +3519,29 @@ function FixerRegisterContent() {
                     ? "提交中..."
                     : "Submitting..."
                 : locale === "th"
-                  ? "สมัครเป็นช่าง CBLUE"
+                  ? isEditMode
+                    ? "บันทึกการแก้ไขโปรไฟล์"
+                    : "สมัครเป็นช่าง CBLUE"
                   : locale === "zh"
-                    ? "注册成为 CBLUE 技工"
-                    : "Register as CBLUE Fixer"}
+                    ? isEditMode
+                      ? "保存资料修改"
+                      : "注册成为 CBLUE 技工"
+                    : isEditMode
+                      ? "Save Profile Changes"
+                      : "Register as CBLUE Fixer"}
             </button>
+            {isEditMode && (
+              <Link
+                href={`${prefix}/fixers`}
+                className="block text-center w-full py-2.5 px-6 text-sm font-medium rounded-full border border-gray-300 text-gray-700 hover:bg-gray-50 transition"
+              >
+                {locale === "th"
+                  ? "ยกเลิกการแก้ไข"
+                  : locale === "zh"
+                    ? "取消编辑"
+                    : "Cancel Edit"}
+              </Link>
+            )}
           </div>
         </form>
       </div>

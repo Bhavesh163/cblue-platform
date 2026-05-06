@@ -434,6 +434,7 @@ export default function FixerResults({
 }) {
   const t = (key: string) => T[locale]?.[key] || T["en"]![key] || key;
   const [fixers, setFixers] = useState<Fixer[]>([]);
+  const [matchError, setMatchError] = useState("");
   const [step, setStep] = useState<Step>("matching");
   const [selectedFixer, setSelectedFixer] = useState<Fixer | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -482,6 +483,8 @@ export default function FixerResults({
 
   // Hydration-safe: initialize random/date-dependent values on client
   useEffect(() => {
+    const allowDemoFallback = process.env.NODE_ENV === "development";
+
     // Try fetching real candidates from the backend AI Top-8 algorithm
     const descParam = description ? `&description=${encodeURIComponent(description)}` : '';
     fetch(`/api/v1/fixers/match?service=${encodeURIComponent(service)}&district=auto&province=auto${descParam}`)
@@ -505,12 +508,25 @@ export default function FixerResults({
             selectedReason: d.selectedReason,
           }));
           setFixers(mapped);
+          setMatchError("");
         } else {
-          setFixers(generateDemoFixers(service));
+          if (allowDemoFallback) {
+            setFixers(generateDemoFixers(service));
+            setMatchError("");
+          } else {
+            setFixers([]);
+            setMatchError(locale === "th" ? "ไม่พบผลจับคู่จากระบบ กรุณาลองใหม่อีกครั้ง" : locale === "zh" ? "系统暂时无法返回匹配结果，请重试" : "Matching service is temporarily unavailable. Please try again.");
+          }
         }
       })
       .catch(() => {
-        setFixers(generateDemoFixers(service));
+        if (allowDemoFallback) {
+          setFixers(generateDemoFixers(service));
+          setMatchError("");
+        } else {
+          setFixers([]);
+          setMatchError(locale === "th" ? "ระบบจับคู่ขัดข้องชั่วคราว กรุณาลองใหม่" : locale === "zh" ? "匹配系统暂时故障，请稍后重试" : "Matching service failed. Please try again shortly.");
+        }
       });
       
     setIssueImageUrls((issueImages || []).map(f => URL.createObjectURL(f)));
@@ -523,7 +539,7 @@ export default function FixerResults({
     };
     const pool = comments[locale] ?? comments["en"]!;
     setFixerCommentOfCustomer(pool[Math.floor(Math.random() * pool.length)]!);
-  }, [locale]);
+  }, [description, locale, service]);
 
   // Persist workflow state to localStorage
   useEffect(() => {
@@ -1461,26 +1477,37 @@ export default function FixerResults({
         const nominated = data.find((f: any) => f.id === nominateId || f.id.endsWith(nominateId) || f.alias.includes(nominateId));
         if (nominated) {
           setNominatedFixer(nominated);
+          setMatchError("");
           return;
         }
       }
     } catch (err) {
       console.error(err);
     }
-    
-    // Simulate finding a partner by ID as fallback
-    const found: Fixer = {
-      id: `f-nom-${nominateId}`,
-      alias: `Partner-${nominateId.padStart(4, "0")}`,
-      tier: (["economy", "standard", "corporate", "specialist", "expert"] as const)[Math.floor(Math.random() * 5)]!,
-      rating: parseFloat((3.0 + Math.random() * 2).toFixed(1)),
-      totalJobs: 5 + Math.floor(Math.random() * 100),
-      price: 300 + Math.floor(Math.random() * 500),
-      satisfaction: 70 + Math.floor(Math.random() * 30),
-      specialties: [service || "General"],
-      experienceYears: 2 + Math.floor(Math.random() * 10),
-    };
-    setNominatedFixer(found);
+
+    if (process.env.NODE_ENV === "development") {
+      const found: Fixer = {
+        id: `f-nom-${nominateId}`,
+        alias: `Partner-${nominateId.padStart(4, "0")}`,
+        tier: (["economy", "standard", "corporate", "specialist", "expert"] as const)[Math.floor(Math.random() * 5)]!,
+        rating: parseFloat((3.0 + Math.random() * 2).toFixed(1)),
+        totalJobs: 5 + Math.floor(Math.random() * 100),
+        price: 300 + Math.floor(Math.random() * 500),
+        satisfaction: 70 + Math.floor(Math.random() * 30),
+        specialties: [service || "General"],
+        experienceYears: 2 + Math.floor(Math.random() * 10),
+      };
+      setNominatedFixer(found);
+      return;
+    }
+
+    setMatchError(
+      locale === "th"
+        ? "ไม่พบพาร์ทเนอร์ตามรหัสที่ระบุ"
+        : locale === "zh"
+          ? "未找到您输入的合作伙伴编号"
+          : "No partner found for that ID",
+    );
   };
 
   // Selection criteria labels
@@ -1503,6 +1530,7 @@ export default function FixerResults({
         <span className="inline-block px-4 py-1.5 bg-gradient-to-r from-sky-100 to-indigo-100 text-sky-700 rounded-full text-xs font-bold mb-3 border border-sky-200"> {locale === "th" ? "AI Top 8 จับคู่อัจฉริยะ" : locale === "zh" ? "AI Top 8 智能匹配" : "AI-Powered Top 8 Match"}</span>
         <h1 className="text-2xl font-bold text-gray-900">{t("matchTitle")}</h1>
         <p className="text-gray-500 mt-2">{t("matchDesc").replace("{count}", String(allDisplayFixers.length))}</p>
+        {matchError && <p className="mt-3 text-sm text-red-600">{matchError}</p>}
       </div>
 
       {/* AI Selection Criteria Legend */}

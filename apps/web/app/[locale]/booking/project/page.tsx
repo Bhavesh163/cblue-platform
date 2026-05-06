@@ -23,6 +23,32 @@ const BUDGET_RANGES = [
   { value: "OVER_5M", th: "มากกว่า 5 ล้านบาท", en: "Over ฿5M", zh: "超过 ฿500万" },
 ];
 
+function normalizeDateToIso(value: string): string | null {
+  const input = (value || "").trim();
+  if (!input) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(input)) return input;
+
+  const match = input.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!match) return null;
+
+  const d = parseInt(match[1]!, 10);
+  const m = parseInt(match[2]!, 10);
+  const y = parseInt(match[3]!, 10);
+  const dt = new Date(y, m - 1, d);
+  if (
+    dt.getFullYear() !== y ||
+    dt.getMonth() !== m - 1 ||
+    dt.getDate() !== d
+  ) {
+    return null;
+  }
+
+  return `${y.toString().padStart(4, "0")}-${m
+    .toString()
+    .padStart(2, "0")}-${d.toString().padStart(2, "0")}`;
+}
+
 interface FormData {
   name: string;
   email: string;
@@ -259,6 +285,11 @@ function ProjectBookingContent() {
       setError(t("recaptchaError"));
       return;
     }
+    const normalizedScheduledDate = normalizeDateToIso(form.scheduledDate);
+    if (!normalizedScheduledDate) {
+      setError(locale === "th" ? "กรุณากรอกวันที่ในรูปแบบ DD/MM/YYYY" : locale === "zh" ? "请输入DD/MM/YYYY格式日期" : "Please enter the date in DD/MM/YYYY format");
+      return;
+    }
     setSubmitting(true);
     setError("");
 
@@ -270,8 +301,8 @@ function ProjectBookingContent() {
         phone: form.phone,
         company: form.company,
         serviceCategory: form.serviceCategory,
-        scheduledAt: form.scheduledDate
-          ? `${form.scheduledDate}T${form.scheduledTime || "09:00"}:00`
+        scheduledAt: normalizedScheduledDate
+          ? `${normalizedScheduledDate}T${form.scheduledTime || "09:00"}:00`
           : undefined,
         budgetRange: form.budgetRange || undefined,
         tier: form.tier,
@@ -552,11 +583,13 @@ function ProjectBookingContent() {
                 <input
                   id="scheduledDate"
                   name="scheduledDate"
-                  type="date"
+                  type="text"
                   required
                   value={form.scheduledDate}
                   onChange={handleChange}
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                  placeholder="DD/MM/YYYY"
+                  inputMode="numeric"
                 />
               </div>
 

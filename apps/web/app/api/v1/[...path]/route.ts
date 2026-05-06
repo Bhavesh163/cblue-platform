@@ -33,6 +33,7 @@ const SKIP_REQ = new Set([
   "te", "trailer", "upgrade", "content-length", "accept-encoding",
 ]);
 const SKIP_RES = new Set(["content-encoding", "transfer-encoding", "content-length"]);
+const PASSTHROUGH_ERROR_STATUS = new Set([400, 401, 403, 404, 409, 422, 429]);
 
 async function handler(
   request: NextRequest,
@@ -53,8 +54,12 @@ async function handler(
       if (!SKIP_REQ.has(k.toLowerCase())) headers.set(k, v);
     });
     
-    // Explicitly add Authorization header if token exists in cookies
-    const token = request.cookies.get('token')?.value;
+    // Explicitly add Authorization header from known auth cookies if missing.
+    const token =
+      request.cookies.get("subscriber_token")?.value ||
+      request.cookies.get("token")?.value ||
+      request.cookies.get("accessToken")?.value ||
+      request.cookies.get("auth_token")?.value;
     if (token && !headers.has('authorization')) {
       headers.set('Authorization', `Bearer ${token}`);
     }
@@ -76,14 +81,21 @@ async function handler(
     // convert to a proper JSON 502 so the frontend shows "service unavailable"
     const ct = upstream.headers.get("content-type") || "";
     if (!upstream.ok && !ct.includes("application/json")) {
-      await upstream.text().catch(() => {});
+      const raw = await upstream.text().catch(() => "");
+      const status = PASSTHROUGH_ERROR_STATUS.has(upstream.status)
+        ? upstream.status
+        : 502;
       return Response.json(
         {
-          error: "backend_unavailable",
-          message: "Backend service is temporarily unavailable",
-          statusCode: 502,
+          error: status === 502 ? "backend_unavailable" : "upstream_error",
+          message:
+            status === 502
+              ? "Backend service is temporarily unavailable"
+              : "Upstream service returned an error",
+          upstreamStatus: upstream.status,
+          detail: raw ? raw.slice(0, 240) : undefined,
         },
-        { status: 502 },
+        { status },
       );
     }
 
