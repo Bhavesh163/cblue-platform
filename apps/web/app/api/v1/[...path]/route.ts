@@ -43,7 +43,7 @@ const SKIP_REQ = new Set([
   "host", "keep-alive",
   "te", "trailer", "upgrade", "accept-encoding",
 ]);
-const SKIP_RES = new Set(["content-encoding", "transfer-encoding"]);
+const SKIP_RES = new Set(["content-encoding", "transfer-encoding", "content-length"]);
 const PASSTHROUGH_ERROR_STATUS = new Set([400, 401, 403, 404, 409, 422, 429]);
 
 async function handler(
@@ -75,6 +75,7 @@ async function handler(
     const init: RequestInit & { duplex?: string } = {
       method: request.method,
       headers,
+      signal: AbortSignal.timeout(30000), // Add 30s timeout
     };
 
     if (!["GET", "HEAD", "OPTIONS"].includes(request.method.toUpperCase())) {
