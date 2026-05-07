@@ -29,8 +29,9 @@ function getBackendUrls() {
     return ["http://localhost:3002"];
   }
 
-  // Prefer explicit backend port in production, keep hostname-only fallback.
-  return ["http://api-backend.cblue.co.th:3002", "http://api-backend.cblue.co.th"];
+  // Cloudflare Workers block outgoing fetches to non-standard HTTP ports (like 3002).
+  // We MUST use standard port 80 (or 443) which points to Nginx reverse proxy.
+  return ["http://api-backend.cblue.co.th"];
 }
 
 
