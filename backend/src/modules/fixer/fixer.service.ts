@@ -318,6 +318,7 @@ export class FixerService {
       .replace(/square\s*meters?/g, 'sqm')
       .replace(/square\s*meter/g, 'sqm')
       .replace(/sq\.?\s*m\.?/g, 'sqm')
+      .replace(/bangkok|bkk/g, 'กรุงเทพมหานคร')
       .replace(/[^a-z0-9ก-๙\s]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();

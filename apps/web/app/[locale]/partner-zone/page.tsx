@@ -183,9 +183,27 @@ export default function PartnerZonePage() {
   const [messages, setMessages] = useState<Record<string, ChatMessage[]>>(DEMO_MESSAGES);
   const [newMessage, setNewMessage] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const [userProfile, setUserProfile] = useState<ProviderProfile>(DEMO_PROFILE);
 
   useEffect(() => {
-    try { setIsAuthenticated(!!localStorage.getItem("subscriber")); } catch { setIsAuthenticated(false); }
+    try { 
+      setIsAuthenticated(!!localStorage.getItem("subscriber"));
+      
+      const sub = JSON.parse(localStorage.getItem("subscriber") || "{}");
+      const fixer = JSON.parse(localStorage.getItem("fixer_profile_cache") || "null") || sub.fixer;
+      
+      if (sub && sub.email) {
+        setUserProfile(prev => ({
+          ...prev,
+          name: sub.name || `${sub.firstName} ${sub.lastName}`.trim() || prev.name,
+          email: sub.email || prev.email,
+          phone: sub.phone || prev.phone,
+          tier: fixer?.tier?.toLowerCase() || (fixer?.score >= 80 ? "expert" : fixer?.score >= 60 ? "specialist" : "corporate") || "corporate",
+          company: fixer?.companyName || prev.company,
+          profession: fixer?.services?.[0] || prev.profession
+        }));
+      }
+    } catch { setIsAuthenticated(false); }
   }, []);
 
   useEffect(() => {
@@ -277,10 +295,10 @@ export default function PartnerZonePage() {
               <p className="text-amber-200 text-sm mt-1">{t.subtitle}</p>
             </div>
             <div className="flex items-center gap-3 bg-white/10 backdrop-blur rounded-xl px-4 py-2.5">
-              <div className="w-10 h-10 rounded-full bg-amber-400/30 flex items-center justify-center text-white font-bold">{DEMO_PROFILE.name?.charAt(0)}</div>
+              <div className="w-10 h-10 rounded-full bg-amber-400/30 flex items-center justify-center text-white font-bold">{userProfile.name?.charAt(0)}</div>
               <div>
-                <p className="text-white text-sm font-semibold">{DEMO_PROFILE.name}</p>
-                <p className="text-amber-200 text-xs">{DEMO_PROFILE.email}</p>
+                <p className="text-white text-sm font-semibold">{userProfile.name}</p>
+                <p className="text-amber-200 text-xs">{userProfile.email}</p>
               </div>
             </div>
           </div>
@@ -306,13 +324,13 @@ export default function PartnerZonePage() {
         </div>
 
         {/* Tab Content */}
-        {activeTab === "overview" && <OverviewTab t={t} locale={locale} prefix={prefix} profile={DEMO_PROFILE} activeJobs={activeJobs} pastJobs={pastJobs} notifications={DEMO_NOTIFICATIONS} properties={DEMO_PROPERTIES} />}
+        {activeTab === "overview" && <OverviewTab t={t} locale={locale} prefix={prefix} profile={userProfile} activeJobs={activeJobs} pastJobs={pastJobs} notifications={DEMO_NOTIFICATIONS} properties={DEMO_PROPERTIES} />}
         {activeTab === "jobs" && <JobsTab t={t} activeJobs={activeJobs} pastJobs={pastJobs} statusLabels={statusLabels} onSelectJob={(id) => { setSelectedJob(id); setActiveTab("chat"); }} />}
         {activeTab === "properties" && <PropertiesTab t={t} locale={locale} prefix={prefix} properties={DEMO_PROPERTIES} />}
         {activeTab === "chat" && <ChatTabContent t={t} messages={messages} selectedJob={selectedJob} setSelectedJob={setSelectedJob} newMessage={newMessage} setNewMessage={setNewMessage} sendMessage={sendMessage} statusLabels={statusLabels} chatEndRef={chatEndRef} />}
         {activeTab === "notifications" && <NotificationsTab t={t} locale={locale} notifications={DEMO_NOTIFICATIONS} />}
         {activeTab === "history" && <HistoryTab t={t} locale={locale} pastJobs={pastJobs} statusLabels={statusLabels} />}
-        {activeTab === "profile" && <ProfileTab t={t} locale={locale} profile={DEMO_PROFILE} renderStars={renderStars} />}
+        {activeTab === "profile" && <ProfileTab t={t} locale={locale} profile={userProfile} renderStars={renderStars} />}
 
         {/* Tier Info */}
         <div className="mt-8 bg-white rounded-2xl shadow-lg border border-gray-100 p-6">

@@ -353,8 +353,19 @@ function FixerRegisterContent() {
         let fixerProfile = null;
         if (fixerRes.ok) {
           fixerProfile = await fixerRes.json();
+          try {
+            localStorage.setItem("fixer_profile_cache", JSON.stringify(fixerProfile));
+          } catch {}
         } else {
           console.warn("Failed to fetch fixer profile (e.g. 502). Falling back to user data.");
+          if (data?.fixer) {
+            fixerProfile = data.fixer;
+          } else {
+            try {
+              const cached = localStorage.getItem("fixer_profile_cache");
+              if (cached) fixerProfile = JSON.parse(cached);
+            } catch {}
+          }
         }
         
         // Always populate form, even if fixerProfile is null (will use user data)
