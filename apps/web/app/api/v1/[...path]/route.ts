@@ -40,10 +40,10 @@ function getBackendUrls() {
 
 
 const SKIP_REQ = new Set([
-  "host", "keep-alive",
+  "host", "keep-alive", "connection",
   "te", "trailer", "upgrade", "accept-encoding",
 ]);
-const SKIP_RES = new Set(["content-encoding", "transfer-encoding", "content-length"]);
+const SKIP_RES = new Set(["content-encoding", "transfer-encoding", "content-length", "connection"]);
 const PASSTHROUGH_ERROR_STATUS = new Set([400, 401, 403, 404, 409, 422, 429]);
 
 async function handler(
@@ -138,7 +138,10 @@ async function handler(
       if (!SKIP_RES.has(k.toLowerCase())) resHeaders.set(k, v);
     });
 
-    return new Response(upstream.body, {
+    const nullBodyStatuses = [101, 204, 205, 304];
+    const body = nullBodyStatuses.includes(upstream.status) ? null : upstream.body;
+
+    return new Response(body, {
       status: upstream.status,
       statusText: upstream.statusText,
       headers: resHeaders,
