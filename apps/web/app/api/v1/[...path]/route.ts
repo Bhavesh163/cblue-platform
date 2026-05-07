@@ -40,10 +40,10 @@ function getBackendUrls() {
 
 
 const SKIP_REQ = new Set([
-  "host", "connection", "keep-alive", "transfer-encoding",
-  "te", "trailer", "upgrade", "content-length", "accept-encoding",
+  "host", "keep-alive",
+  "te", "trailer", "upgrade", "accept-encoding",
 ]);
-const SKIP_RES = new Set(["content-encoding", "transfer-encoding", "content-length"]);
+const SKIP_RES = new Set(["content-encoding", "transfer-encoding"]);
 const PASSTHROUGH_ERROR_STATUS = new Set([400, 401, 403, 404, 409, 422, 429]);
 
 async function handler(
@@ -112,22 +112,20 @@ async function handler(
     }
 
     // If backend returned a non-JSON error (e.g., nginx HTML 502/404),
-    // convert to a proper JSON 502 so the frontend shows "service unavailable"
+    // convert to a proper JSON error so the frontend parses it gracefully.
     const ct = upstream.headers.get("content-type") || "";
     if (!upstream.ok && !ct.includes("application/json")) {
       const raw = await upstream.text().catch(() => "");
-      const status = PASSTHROUGH_ERROR_STATUS.has(upstream.status)
-        ? upstream.status
-        : 502;
+      const status = upstream.status; // Pass through the exact status 
       return Response.json(
         {
-          error: status === 502 ? "backend_unavailable" : "upstream_error",
+          error: status >= 500 ? "backend_unavailable" : "upstream_error",
           message:
-            status === 502
+            status >= 500
               ? "Backend service is temporarily unavailable"
-              : "Upstream service returned an error",
-          upstreamStatus: upstream.status,
-          detail: raw ? raw.slice(0, 240) : undefined,
+              : `Upstream service returned an error: ${status}`,
+          upstreamStatus: status,
+          detail: raw ? raw.slice(0, 500) : undefined // Include raw output just in case
         },
         { status },
       );
