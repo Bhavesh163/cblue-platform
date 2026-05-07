@@ -414,25 +414,26 @@ export class FixerService {
     description?: string,
     nominateId?: string,
   ) {
-    const allFixers = await this.prisma.fixer.findMany({
-      where: {
-        status: 'APPROVED',
-      },
-      include: { user: true, skills: true },
-    });
+    try {
+      const allFixers = await this.prisma.fixer.findMany({
+        where: {
+          status: 'APPROVED',
+        },
+        include: { user: true, skills: true },
+      });
 
-    console.log(`[matchFixers] Input district: ${district}, province: ${province}, allFixers length = ${allFixers.length}`);
-    const pool = allFixers.filter((fixer) =>
-      this.matchServiceArea(fixer, district, province),
-    );
-    console.log(`[matchFixers] After matchServiceArea, pool length = ${pool.length}`);
+      console.log(`[matchFixers] Input district: ${district}, province: ${province}, allFixers length = ${allFixers.length}`);
+      const pool = allFixers.filter((fixer) =>
+        this.matchServiceArea(fixer, district, province),
+      );
+      console.log(`[matchFixers] After matchServiceArea, pool length = ${pool.length}`);
 
-    if (pool.length === 0) return [];
+      if (pool.length === 0) return [];
 
-    const customerQty = this.extractQuantityFromDescription(description);
-    const searchTerms = this.buildSearchTerms(service, description);
+      const customerQty = this.extractQuantityFromDescription(description);
+      const searchTerms = this.buildSearchTerms(service, description);
 
-    const formattedPool = pool.map((f) => {
+      const formattedPool = pool.map((f) => {
       let basePrice = 0;
       let matchedUnit = '';
       let matchedQty = 1;
@@ -471,9 +472,9 @@ export class FixerService {
 
         if (match) {
           const matchedItem = match.item;
-          const unitRate = parseFloat((matchedItem.finalPrice as string) || '0');
+          const unitRate = parseFloat(String(matchedItem.finalPrice)) || 0;
           const partnerQty =
-            parseFloat((matchedItem.quantity as string) || '1') || 1;
+            parseFloat(String(matchedItem.quantity)) || 1;
           const pricePerUnit = unitRate > 0 ? unitRate / partnerQty : unitRate;
           const hasTextualMatch = match.score > 0;
 
@@ -606,6 +607,10 @@ export class FixerService {
     }
 
     return results.slice(0, 8);
+    } catch (error) {
+      console.error('[matchFixers] error', error);
+      return [];
+    }
   }
 
   // ── Portfolio AI Digest ──
