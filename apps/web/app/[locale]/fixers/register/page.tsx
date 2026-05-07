@@ -206,7 +206,7 @@ function FixerRegisterContent() {
       user?.addresses?.[0] ||
       user?.address;
 
-    const normalizedDate = normalizeDateToIso(fixer?.scheduledDate || "") || "";
+    const normalizedDate = normalizeDateToIso(fixer?.availableStartDate || fixer?.scheduledDate || "") || "";
 
     setForm((prev) => ({
       ...prev,
@@ -1728,6 +1728,16 @@ function FixerRegisterContent() {
         flags: aiTier.flags,
         credentialStatus: aiTier.credentialStatus,
       }),
+    }).then(() => {
+      try {
+        const cached = localStorage.getItem("fixer_profile_cache");
+        if (cached) {
+          const profile = JSON.parse(cached);
+          profile.tier = aiTier.tier.toUpperCase();
+          profile.score = aiTier.score;
+          localStorage.setItem("fixer_profile_cache", JSON.stringify(profile));
+        }
+      } catch (e) {}
     }).catch(() => {}); // Non-blocking
   }, [aiTier, success]);
 
@@ -2379,13 +2389,14 @@ function FixerRegisterContent() {
           </fieldset>
 
           {/* KYC */}
-          <fieldset>
-            <legend className="text-lg font-semibold text-gray-900 mb-4">
-              {locale === "th"
-                ? "ยืนยันตัวตน (KYC)"
-                : locale === "zh"
-                  ? "身份验证 (KYC)"
-                  : "Identity Verification (KYC)"}
+          {!isEditMode && (
+            <fieldset>
+              <legend className="text-lg font-semibold text-gray-900 mb-4">
+                {locale === "th"
+                  ? "ยืนยันตัวตน (KYC)"
+                  : locale === "zh"
+                    ? "身份验证 (KYC)"
+                    : "Identity Verification (KYC)"}
             </legend>
             <div className="space-y-4">
               <div>
@@ -2592,7 +2603,8 @@ function FixerRegisterContent() {
                 )}
               </div>
             </div>
-          </fieldset>
+            </fieldset>
+          )}
 
           {/* Portfolio */}
           <fieldset>

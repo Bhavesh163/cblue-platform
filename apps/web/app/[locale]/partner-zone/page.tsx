@@ -198,11 +198,31 @@ export default function PartnerZonePage() {
           name: sub.name || `${sub.firstName} ${sub.lastName}`.trim() || prev.name,
           email: sub.email || prev.email,
           phone: sub.phone || prev.phone,
-          tier: fixer?.tier?.toLowerCase() || (fixer?.score >= 80 ? "expert" : fixer?.score >= 60 ? "specialist" : "corporate") || "corporate",
+          tier: fixer?.tier?.toLowerCase() || (fixer?.score >= 80 ? "expert" : fixer?.score >= 60 ? "specialist" : "economy"),
           company: fixer?.companyName || prev.company,
           profession: fixer?.services?.[0] || prev.profession
         }));
       }
+
+      // Automatically fetch updated fixer profile silently to fix stale cache / fallback logic
+      const token = localStorage.getItem("subscriber_token");
+      if (token) {
+        fetch("/api/v1/fixers/me", { headers: { Authorization: `Bearer ${token}` } })
+          .then(res => res.ok ? res.json() : null)
+          .then(data => {
+            if (data) {
+              localStorage.setItem("fixer_profile_cache", JSON.stringify(data));
+              setUserProfile(prev => ({
+                ...prev,
+                tier: data?.tier?.toLowerCase() || (data?.score >= 80 ? "expert" : data?.score >= 60 ? "specialist" : "economy"),
+                company: data?.companyName || prev.company,
+                profession: data?.services?.[0] || prev.profession
+              }));
+            }
+          })
+          .catch(() => {});
+      }
+
     } catch { setIsAuthenticated(false); }
   }, []);
 

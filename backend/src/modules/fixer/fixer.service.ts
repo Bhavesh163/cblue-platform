@@ -74,6 +74,8 @@ export class FixerService {
         pastProjectType: dto.pastProjectType,
         yearsExperience: dto.yearsExperience,
         travelRadius: dto.travelRadius,
+        availableStartDate: dto.scheduledDate,
+        companyAddress: dto.companyAddress ? (JSON.parse(JSON.stringify(dto.companyAddress)) as Prisma.InputJsonValue) : undefined,
         priceList: dto.priceList
           ? (JSON.parse(JSON.stringify(dto.priceList)) as Prisma.InputJsonValue)
           : undefined,
@@ -152,6 +154,8 @@ export class FixerService {
         pastProjectType: dto.pastProjectType,
         yearsExperience: dto.yearsExperience,
         travelRadius: dto.travelRadius,
+        availableStartDate: dto.scheduledDate,
+        companyAddress: dto.companyAddress ? (JSON.parse(JSON.stringify(dto.companyAddress)) as Prisma.InputJsonValue) : Prisma.JsonNull,
         priceList: dto.priceList
           ? (JSON.parse(JSON.stringify(dto.priceList)) as Prisma.InputJsonValue)
           : Prisma.JsonNull,
