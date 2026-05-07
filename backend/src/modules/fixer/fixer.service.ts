@@ -421,9 +421,11 @@ export class FixerService {
       include: { user: true, skills: true },
     });
 
+    console.log(`[matchFixers] Input district: ${district}, province: ${province}, allFixers length = ${allFixers.length}`);
     const pool = allFixers.filter((fixer) =>
       this.matchServiceArea(fixer, district, province),
     );
+    console.log(`[matchFixers] After matchServiceArea, pool length = ${pool.length}`);
 
     if (pool.length === 0) return [];
 
