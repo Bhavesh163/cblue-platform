@@ -128,7 +128,7 @@ const DEMO_JOBS: Job[] = [
 ];
 
 const DEMO_PROFILE: ProviderProfile = {
-  name: "Partner Demo", profession: "Plumber / Electrician", tier: "corporate",
+  name: "Partner Demo", profession: "Plumber / Electrician", tier: "standard",
   rating: 4.7, totalJobs: 142, email: "partner@cblue.co.th", phone: "091-xxx-xxxx",
   company: "Demo Services Co.",
   priceList: [
