@@ -60,4 +60,9 @@ export class UserController {
   ) {
     return this.userService.deleteAddress(userId, addressId);
   }
+
+  @Delete('me')
+  deleteAccount(@CurrentUser('id') userId: string) {
+    return this.userService.deleteAccount(userId);
+  }
 }

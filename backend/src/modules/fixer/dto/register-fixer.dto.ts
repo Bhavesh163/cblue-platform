@@ -179,4 +179,22 @@ export class RegisterFixerDto {
   @IsOptional()
   @IsString()
   addressText?: string;
+
+  @IsOptional()
+  @IsNumber()
+  aiScore?: number;
+
+  @IsOptional()
+  @IsString()
+  aiTier?: string;
+
+  @IsOptional()
+  aiBreakdown?: any;
+
+  @IsOptional()
+  aiFlags?: any;
+
+  @IsOptional()
+  @IsString()
+  aiCredentialStatus?: string;
 }

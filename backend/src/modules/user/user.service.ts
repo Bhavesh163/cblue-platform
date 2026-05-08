@@ -77,4 +77,31 @@ export class UserService {
 
     return this.prisma.address.delete({ where: { id: addressId } });
   }
+
+  async deleteAccount(userId: string) {
+    const ts = Date.now();
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        name: 'Deleted User',
+        email: `deleted_${userId}_${ts}@cblue.co.th`,
+        phone: null,
+        company: null,
+        isActive: false,
+      },
+    });
+    // optionally deactivate fixer if exists
+    const fixer = await this.prisma.fixer.findUnique({ where: { userId } });
+    if (fixer) {
+      await this.prisma.fixer.update({
+        where: { userId },
+        data: {
+          bio: null,
+          description: null,
+          status: 'REJECTED'
+        }
+      });
+    }
+    return { success: true, message: 'Account deleted via PDPA' };
+  }
 }

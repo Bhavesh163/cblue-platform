@@ -84,6 +84,11 @@ export class FixerService {
         servicePostalCode: dto.address?.postalCode,
         gpsLat: dto.gpsCoords?.lat,
         gpsLng: dto.gpsCoords?.lng,
+        aiScore: dto.aiScore,
+        aiTier: dto.aiTier,
+        aiBreakdown: dto.aiBreakdown ? (JSON.parse(JSON.stringify(dto.aiBreakdown)) as Prisma.InputJsonValue) : undefined,
+        aiFlags: dto.aiFlags ? (JSON.parse(JSON.stringify(dto.aiFlags)) as Prisma.InputJsonValue) : undefined,
+        aiCredentialStatus: dto.aiCredentialStatus,
       },
       include: { user: true },
     });
@@ -163,6 +168,11 @@ export class FixerService {
         servicePostalCode: dto.address?.postalCode,
         gpsLat: dto.gpsCoords?.lat,
         gpsLng: dto.gpsCoords?.lng,
+        aiScore: dto.aiScore,
+        aiTier: dto.aiTier,
+        aiBreakdown: dto.aiBreakdown ? (JSON.parse(JSON.stringify(dto.aiBreakdown)) as Prisma.InputJsonValue) : Prisma.JsonNull,
+        aiFlags: dto.aiFlags ? (JSON.parse(JSON.stringify(dto.aiFlags)) as Prisma.InputJsonValue) : Prisma.JsonNull,
+        aiCredentialStatus: dto.aiCredentialStatus,
       },
     });
 
@@ -415,9 +425,6 @@ export class FixerService {
   ) {
     try {
       const allFixers = await this.prisma.fixer.findMany({
-        where: {
-          status: 'APPROVED',
-        },
         include: { user: true, skills: true },
       });
 

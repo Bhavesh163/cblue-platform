@@ -207,13 +207,14 @@ function FixerRegisterContent() {
       user?.address;
 
     const normalizedDate = normalizeDateToIso(fixer?.availableStartDate || fixer?.scheduledDate || "") || "";
+    const displayDate = normalizedDate ? `${normalizedDate.slice(8, 10)}/${normalizedDate.slice(5, 7)}/${normalizedDate.slice(0, 4)}` : "";
 
     setForm((prev) => ({
       ...prev,
       name: user?.name || prev.name,
       email: user?.email || prev.email,
       phone: user?.phone || prev.phone,
-      company: user?.company || prev.company,
+      company: fixer?.user?.company || user?.company || prev.company,
       bio: fixer?.bio || "",
       yearsExperience:
         fixer?.yearsExperience !== null && fixer?.yearsExperience !== undefined
@@ -225,14 +226,14 @@ function FixerRegisterContent() {
           : prev.travelRadius,
       selectedSkills: Array.isArray(fixer?.skills)
         ? fixer.skills.map((skill: any) =>
-            typeof skill === "string" ? skill : (skill?.name ?? ""),
+            typeof skill === "string" ? skill : (skill?.name ?? skill?.category ?? ""),
           )
             .filter(Boolean)
         : [],
       province: fixer?.serviceProvince || "",
       district: fixer?.serviceDistrict || "",
       postalCode: fixer?.servicePostalCode || "",
-      scheduledDate: normalizedDate,
+      scheduledDate: displayDate,
       description: fixer?.description || "",
       pastExperience: fixer?.pastExperience || "",
       pastProjectType: fixer?.pastProjectType || "none",
@@ -353,19 +354,22 @@ function FixerRegisterContent() {
         });
         
         let fixerProfile = null;
+        const cacheKey = `fixer_profile_cache_${data?.email || ''}`;
         if (fixerRes.ok) {
           fixerProfile = await fixerRes.json();
           try {
-            localStorage.setItem("fixer_profile_cache", JSON.stringify(fixerProfile));
+            if (data?.email) localStorage.setItem(cacheKey, JSON.stringify(fixerProfile));
           } catch {}
         } else {
-          console.warn("Failed to fetch fixer profile (e.g. 502). Falling back to user data.");
+          console.warn("Failed to fetch fixer profile (e.g. 502/404). Falling back to user data.");
           if (data?.fixer) {
             fixerProfile = data.fixer;
           } else {
             try {
-              const cached = localStorage.getItem("fixer_profile_cache");
-              if (cached) fixerProfile = JSON.parse(cached);
+              if (data?.email) {
+                const cached = localStorage.getItem(cacheKey);
+                if (cached) fixerProfile = JSON.parse(cached);
+              }
             } catch {}
           }
         }
@@ -1118,13 +1122,13 @@ function FixerRegisterContent() {
       setError(t("skillError"));
       return;
     }
-    if (kycImages.length < 3) {
+    if (!isEditMode && kycImages.length < 3) {
       setError(
         locale === "th"
           ? "กรุณาอัปโหลด KYC ให้ครบ 3 รูป (ด้านหน้า, ด้านหลัง, เซลฟี่คู่บัตร)"
           : locale === "zh"
             ? "请上传完整3张KYC图片（正面、背面、手持自拍）"
-            : "Please upload all 3 KYC images (front, back, and selfie with ID)",
+            : "Please upload all 3 KYC images (front, back, and selfie with ID)"
       );
       return;
     }
@@ -1730,12 +1734,13 @@ function FixerRegisterContent() {
       }),
     }).then(() => {
       try {
-        const cached = localStorage.getItem("fixer_profile_cache");
+        const cacheKey = `fixer_profile_cache_${form.email}`;
+        const cached = localStorage.getItem(cacheKey);
         if (cached) {
           const profile = JSON.parse(cached);
           profile.tier = aiTier.tier.toUpperCase();
           profile.score = aiTier.score;
-          localStorage.setItem("fixer_profile_cache", JSON.stringify(profile));
+          localStorage.setItem(cacheKey, JSON.stringify(profile));
         }
       } catch (e) {}
     }).catch(() => {}); // Non-blocking

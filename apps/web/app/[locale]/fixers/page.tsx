@@ -275,10 +275,10 @@ export default function FixerProPage() {
                 <p className="text-purple-100 mt-2">{locale === "th" ? "รับงาน จัดการแดชบอร์ด และเพิ่มรายได้" : locale === "zh" ? "接受工作、管理仪表板、增加收入" : "Receive jobs, manage your dashboard, and grow earnings"}</p>
               </div>
               <div className="flex gap-3">
-                <Link href={`${prefix}/subscription/login`} className="px-6 py-3 bg-white text-purple-700 rounded-xl font-bold text-sm hover:bg-purple-50 transition shadow-lg whitespace-nowrap">
+                <Link href={`subscription/login`} className="px-6 py-3 bg-white text-purple-700 rounded-xl font-bold text-sm hover:bg-purple-50 transition shadow-lg whitespace-nowrap">
                   {locale === "th" ? "เข้าสู่ระบบ" : locale === "zh" ? "登录" : "Log In"}
                 </Link>
-                <Link href={`${prefix}/fixers/register`} className="px-6 py-3 border-2 border-white/40 text-white rounded-xl font-bold text-sm hover:bg-white/10 transition whitespace-nowrap">
+                <Link href={`fixers/register`} className="px-6 py-3 border-2 border-white/40 text-white rounded-xl font-bold text-sm hover:bg-white/10 transition whitespace-nowrap">
                   {locale === "th" ? "สมัครสมาชิก" : locale === "zh" ? "注册" : "Register"}
                 </Link>
               </div>
@@ -296,7 +296,7 @@ export default function FixerProPage() {
             <p className="text-gray-500 mb-6">
               {locale === "th" ? "สมัครเข้าร่วมกับ CBLUE วันนี้เพื่อรับงานและเพิ่มรายได้ของคุณ" : locale === "zh" ? "立即注册CBLUE，开始接单并增加您的收入。" : "Register with CBLUE today to start receiving jobs and growing your income."}
             </p>
-            <Link href={`${prefix}/fixers/register`} className="inline-block px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition shadow-lg">
+            <Link href={`fixers/register`} className="inline-block px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition shadow-lg">
               {locale === "th" ? "ลงทะเบียนเลย" : locale === "zh" ? "立即注册" : "Register Now"}
             </Link>
           </div>
@@ -356,7 +356,7 @@ export default function FixerProPage() {
                   <li key={i} className="flex items-center gap-2"><span className="text-green-500">✓</span> {item}</li>
                 ))}
               </ul>
-              <Link href={`${prefix}/fixers/register`} className="block text-center py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-xl shadow transition">
+              <Link href={`fixers/register`} className="block text-center py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-xl shadow transition">
                 {locale === "th" ? "สมัครเป็นช่าง" : locale === "zh" ? "注册成为技工" : "Register as Fixer"}
               </Link>
             </div>
@@ -378,7 +378,7 @@ export default function FixerProPage() {
                   <li key={i} className="flex items-center gap-2"><span className="text-green-500">✓</span> {item}</li>
                 ))}
               </ul>
-              <Link href={`${prefix}/properties/register`} className="block text-center py-2.5 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl shadow transition">
+              <Link href={`properties/register`} className="block text-center py-2.5 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl shadow transition">
                 {locale === "th" ? "ลงประกาศ" : locale === "zh" ? "发布房产" : "List Property"}
               </Link>
             </div>
@@ -835,7 +835,7 @@ function PartnerProfile({ locale, prefix, partner }: { locale: string; prefix: s
         <div className="text-5xl mb-4"></div>
         <h2 className="text-xl font-bold text-gray-900 mb-2">{locale === "th" ? "เข้าสู่ระบบเพื่อดูโปรไฟล์" : locale === "zh" ? "登录查看个人资料" : "Log in to view profile"}</h2>
         <p className="text-sm text-gray-500 mb-6">{locale === "th" ? "เข้าสู่ระบบเพื่อจัดการข้อมูลและการตั้งค่า" : locale === "zh" ? "登录管理您的合作伙伴账户" : "Sign in to manage your partner account"}</p>
-        <Link href={`${prefix}/subscription/login?redirect=/fixers`} className="px-6 py-2.5 bg-sky-600 text-white rounded-lg font-bold hover:bg-sky-700 transition inline-block">
+        <Link href={`subscription/login?redirect=/fixers`} className="px-6 py-2.5 bg-sky-600 text-white rounded-lg font-bold hover:bg-sky-700 transition inline-block">
           {locale === "th" ? "เข้าสู่ระบบ" : locale === "zh" ? "登录" : "Log In"}
         </Link>
       </div>
@@ -863,9 +863,19 @@ function PartnerProfile({ locale, prefix, partner }: { locale: string; prefix: s
                   <span className="text-xs text-gray-500 flex items-center gap-1"><span className="text-green-500">✓</span> {locale === "th" ? "ยืนยันตัวตนแล้ว (KYC)" : "Verified (KYC)"}</span>
                 </div>
               </div>
-              <Link href={`${prefix}/fixers/register?edit=1`} className="px-5 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition text-sm font-semibold shadow-sm">
-                {locale === "th" ? "แก้ไขโปรไฟล์" : locale === "zh" ? "编辑资料" : "Edit Profile"}
-              </Link>
+              <div className="flex gap-2">
+                <Link href={`fixers/register?edit=1`} className="px-5 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition text-sm font-semibold shadow-sm">
+                  {locale === "th" ? "แก้ไขโปรไฟล์" : locale === "zh" ? "编辑资料" : "Edit Profile"}
+                </Link>
+                <button onClick={() => {
+                  if (confirm(locale === "th" ? "ยืนยันการลบบัญชีและข้อมูลทั้งหมดตามกฎหมาย PDPA?" : "Confirm deleting your account and all data per PDPA law?")) {
+                    fetch('/api/v1/users/me', { method: 'DELETE', headers: { Authorization: `Bearer ${localStorage.getItem('subscriber_token')}` } })
+                    .then(() => { localStorage.clear(); window.location.href = '/subscription/login'; });
+                  }
+                }} className="px-5 py-2.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition text-sm font-semibold shadow-sm">
+                  {locale === "th" ? "ลบบัญชี" : locale === "zh" ? "删除账户" : "Delete Account"}
+                </button>
+              </div>
             </div>
             
             {/* Contact Info */}
@@ -997,7 +1007,7 @@ function PartnerProperties({ locale, prefix, properties }: { locale: string; pre
             </div>
             
             <div className="flex items-center gap-4 text-sm mt-4 pt-4 border-t border-gray-100">
-              <Link href={`${prefix}/properties/${p.id}/edit`} className="ml-auto px-4 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-lg transition">
+              <Link href={`properties/${p.id}/edit`} className="ml-auto px-4 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-lg transition">
                 {locale === "th" ? "แก้ไข" : locale === "zh" ? "编辑" : "Edit"}
               </Link>
             </div>
@@ -1301,7 +1311,7 @@ function PartnerActiveJobs({ locale, prefix, orders }: { locale: string; prefix:
             <div className="flex flex-col items-end gap-2">
               <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">{o.status}</span>
               <span className="font-bold text-gray-900 mt-1">฿{o.finalPrice || o.estimatedPrice || 0}</span>
-              <Link href={`${prefix}/chat/${o.id}`} className="text-gray-400 hover:text-sky-600 transition mt-2"><span className="text-xl">Chat</span></Link>
+              <Link href={`chat/${o.id}`} className="text-gray-400 hover:text-sky-600 transition mt-2"><span className="text-xl">Chat</span></Link>
             </div>
           </div>
         ))}
