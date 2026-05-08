@@ -183,6 +183,12 @@ model Fixer {
   servicePostalCode String?   // primary service area postal code
   gpsLat          Float?
   gpsLng          Float?
+  
+  aiScore         Int?
+  aiTier          String?
+  aiBreakdown     Json?
+  aiFlags         Json?
+  aiCredentialStatus String?
 
   skills       FixerSkill[]
   availability FixerAvailability[]

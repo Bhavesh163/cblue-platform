@@ -127,8 +127,7 @@ export class FixerService {
       where: { userId },
       include: { user: true, skills: true, availability: true },
     });
-    if (!fixer) throw new NotFoundException('Fixer profile not found');
-    return fixer;
+    return fixer || null;
   }
 
   async updateMyFixerProfile(userId: string, dto: RegisterFixerDto) {
