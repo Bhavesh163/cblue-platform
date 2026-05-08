@@ -449,8 +449,13 @@ export class FixerService {
         .join(' ');
       const profileText = `${skillText} ${f.description || ''} ${f.pastProjectType || ''} ${f.bio || ''}`;
 
-      if (f.priceList && Array.isArray(f.priceList) && f.priceList.length > 0) {
-        const list = f.priceList as Record<string, unknown>[];
+      let rawPriceList = f.priceList;
+      if (typeof rawPriceList === 'string') {
+        try { rawPriceList = JSON.parse(rawPriceList); } catch (e) {}
+      }
+
+      if (rawPriceList && Array.isArray(rawPriceList) && rawPriceList.length > 0) {
+        const list = rawPriceList as Record<string, unknown>[];
         const rankedList = list
           .map((item) => {
             const candidateText = [
@@ -499,8 +504,8 @@ export class FixerService {
 
       const fallbackProfileScore = this.scoreTextMatch(profileText, searchTerms);
       const overallScore = Math.max(matchedScore, fallbackProfileScore);
-      const minListedPrice = Array.isArray(f.priceList)
-        ? (f.priceList as Record<string, unknown>[]).reduce((min, item) => {
+      const minListedPrice = Array.isArray(rawPriceList)
+        ? (rawPriceList as Record<string, unknown>[]).reduce((min, item) => {
             const value = Number(item.finalPrice) || 0;
             if (value <= 0) return min;
             return min === 0 ? value : Math.min(min, value);

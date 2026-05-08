@@ -2394,7 +2394,6 @@ function FixerRegisterContent() {
           </fieldset>
 
           {/* KYC */}
-          {!isEditMode && (
             <fieldset>
               <legend className="text-lg font-semibold text-gray-900 mb-4">
                 {locale === "th"
@@ -2609,7 +2608,6 @@ function FixerRegisterContent() {
               </div>
             </div>
             </fieldset>
-          )}
 
           {/* Portfolio */}
           <fieldset>
