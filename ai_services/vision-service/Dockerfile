@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.11-slim-bookworm
 
 # Install Tesseract OCR + poppler (for pdf2image) + Thai language pack
 RUN apt-get update && apt-get install -y --no-install-recommends \
