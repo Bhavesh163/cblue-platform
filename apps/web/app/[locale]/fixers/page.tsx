@@ -17,6 +17,9 @@ interface PartnerInfo {
   tier?: string;
   createdAt?: string;
   tierScore?: number;
+  breakdown?: any[];
+  flags?: any[];
+  credentialStatus?: string;
 }
 
 const stats = {
