@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 // NOTE: Do NOT set `export const runtime = "edge"` here.
 // OpenNext bundles everything into a single CF Worker — explicit edge runtime
 // on route handlers breaks the bundler. The Worker already runs at the edge.
@@ -75,6 +77,8 @@ async function handler(
     const init: RequestInit & { duplex?: string } = {
       method: request.method,
       headers,
+      cache: "no-store", // CRITICAL: Prevent cross-session data bleeding by dis
+abling internal Next.js fetch cache.
       signal: AbortSignal.timeout(30000), // Add 30s timeout
     };
 
