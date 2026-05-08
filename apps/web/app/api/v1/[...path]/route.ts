@@ -77,8 +77,7 @@ async function handler(
     const init: RequestInit & { duplex?: string } = {
       method: request.method,
       headers,
-      cache: "no-store", // CRITICAL: Prevent cross-session data bleeding by dis
-abling internal Next.js fetch cache.
+      cache: "no-store", // CRITICAL: Prevent cross-session data bleeding by disabling internal Next.js fetch cache.
       signal: AbortSignal.timeout(30000), // Add 30s timeout
     };
 
