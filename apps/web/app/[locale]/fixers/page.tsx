@@ -136,8 +136,11 @@ export default function FixerProPage() {
               phone: user.fixer?.contactPhone || user.phone,
               company: user.fixer?.companyName || "-",
               status: user.fixer?.status || "ACTIVE",
-              tier: user.fixer?.tier || "Standard",
+              tier: user.fixer?.aiTier || user.fixer?.tier || "Standard",
               tierScore: user.fixer?.aiScore || 69,
+              breakdown: user.fixer?.aiBreakdown || [],
+              flags: user.fixer?.aiFlags || [],
+              credentialStatus: user.fixer?.aiCredentialStatus || "unverified",
               createdAt: user.fixer?.createdAt || user.createdAt
             };
             setPartner(pInfo);
@@ -905,7 +908,7 @@ function PartnerProfile({ locale, prefix, partner }: { locale: string; prefix: s
 
           <h4 className="font-bold text-gray-800 mb-4">Evaluation Breakdown</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-            {[
+            {(Array.isArray(partner.breakdown) && partner.breakdown.length > 0 ? partner.breakdown : [
               { label: "Experience", score: 25, max: 25 },
               { label: "Skills Breadth", score: 12, max: 15 },
               { label: "KYC Verification", score: 15, max: 15 },
@@ -913,7 +916,7 @@ function PartnerProfile({ locale, prefix, partner }: { locale: string; prefix: s
               { label: "Profile Completeness", score: 7, max: 10 },
               { label: "Price List", score: 6, max: 10 },
               { label: "Credential Verification", score: 4, max: 10 }
-            ].map((item, i) => (
+            ]).map((item: any, i: number) => (
               <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
                 <span className="text-gray-700 font-medium text-sm">{item.label}</span>
                 <span className={`font-bold ${item.score === item.max ? 'text-green-600' : item.score === 0 ? 'text-red-500' : 'text-amber-600'}`}>
@@ -925,10 +928,19 @@ function PartnerProfile({ locale, prefix, partner }: { locale: string; prefix: s
 
           <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><span className="text-lg"></span> AI Verification Results</h4>
           <ul className="space-y-3 mb-8 bg-gray-50 p-5 rounded-xl border border-gray-100">
-            <li className="flex gap-3"><span className="text-red-500 font-bold"></span><span className="text-gray-700 text-sm">No company info provided</span></li>
-            <li className="flex gap-3"><span className="text-green-500 font-bold"></span><span className="text-gray-700 text-sm">Experience consistent with project type</span></li>
-            <li className="flex gap-3"><span className="text-red-500 font-bold"></span><span className="text-gray-700 text-sm">No work description provided</span></li>
-            <li className="flex gap-3"><span className="text-green-500 font-bold"></span><span className="text-gray-700 text-sm">KYC documents complete (front & back)</span></li>
+            {(Array.isArray(partner.flags) && partner.flags.length > 0 ? partner.flags : [
+              { type: "fail", message: "No company info provided" },
+              { type: "pass", message: "Experience consistent with project type" },
+              { type: "fail", message: "No work description provided" },
+              { type: "pass", message: "KYC documents complete (front & back)" }
+            ]).map((flag: any, i: number) => (
+              <li key={i} className="flex gap-3">
+                <span className={`font-bold ${flag.type === "pass" ? "text-green-500" : flag.type === "fail" ? "text-red-500" : "text-amber-500"}`}>
+                  {flag.type === "pass" ? "✓" : flag.type === "fail" ? "✕" : "⚠"}
+                </span>
+                <span className="text-gray-700 text-sm">{flag.message}</span>
+              </li>
+            ))}
           </ul>
 
           <div className="bg-sky-50 rounded-xl p-5 border border-sky-100 space-y-4">
