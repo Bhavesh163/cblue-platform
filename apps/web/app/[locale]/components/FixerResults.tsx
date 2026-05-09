@@ -579,13 +579,11 @@ export default function FixerResults({
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
 
-  // Simulate partner confirmation after entering notify step
+  // Partner confirmation must be manual or through actual backend
+  // Added bypass button for testing
   useEffect(() => {
     if (step !== "notify") return;
-    const timer = setTimeout(() => {
-      setPartnerConfirmed(true);
-    }, 4000);
-    return () => clearTimeout(timer);
+    // Auto-simulation removed per user request: "Please wait for partner to click confirmation"
   }, [step]);
 
   // Simulate variation after meeting confirmed — 50% chance
@@ -613,18 +611,8 @@ export default function FixerResults({
   };
 
   const handlePaymentComplete = () => {
-    setChatMessages([
-      {
-        id: "sys-1",
-        sender: "fixer",
-        text: locale === "th"
-          ? "สวัสดีครับ/ค่ะ ยินดีให้บริการ! กรุณาแจ้งรายละเอียดเพิ่มเติม"
-          : locale === "zh"
-          ? "你好！很高兴为您服务。请提供更多详情。"
-          : "Hello! Happy to help. Please share more details about your request.",
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      },
-    ]);
+    // Avoid simulating fake chat messages answering on behalf of users
+    setChatMessages([]);
     setStep("chat");
   };
 
@@ -638,25 +626,6 @@ export default function FixerResults({
     };
     setChatMessages((prev) => [...prev, newMsg]);
     setChatInput("");
-
-    // Simulate fixer reply
-    setTimeout(() => {
-      const replies: string[] = locale === "th"
-        ? ["รับทราบครับ/ค่ะ", "กำลังเตรียมการเดินทาง", "จะถึงตามเวลานัดหมายครับ/ค่ะ"]
-        : locale === "zh"
-        ? ["收到", "正在准备出发", "会按时到达"]
-        : ["Got it!", "Preparing to head out.", "Will arrive as scheduled."];
-      const replyText = replies[Math.floor(Math.random() * replies.length)]!;
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          id: `reply-${Date.now()}`,
-          sender: "fixer" as const,
-          text: replyText,
-          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        },
-      ]);
-    }, 1500);
   };
 
   const handleFinishChat = () => {
@@ -680,11 +649,6 @@ export default function FixerResults({
   const handleSubmitReview = () => {
     setCustomerRated(true);
     setPartnerRateReady(false);
-    // Simulate partner submitting their rating after 3 seconds
-    setTimeout(() => {
-      setPartnerRateReady(true);
-      setTimeout(() => setStep("done"), 1500); // Auto transition to done
-    }, 3000);
   };
 
   const fee = selectedFixer ? getProcessingFee(bookingType, selectedFixer.tier) : 100;
@@ -948,6 +912,14 @@ export default function FixerResults({
                     <span className="inline-block w-5 h-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
                     <span className="text-sm text-gray-500">{locale === "th" ? "กำลังรอพาร์ทเนอร์ให้คะแนน..." : locale === "zh" ? "等待伙伴评分中..." : "Waiting for partner to submit rating..."}</span>
                   </div>
+                  <div className="mt-4 text-center">
+                    <button 
+                      onClick={() => { setPartnerRateReady(true); }}
+                      className="text-xs text-sky-600 underline hover:text-sky-800"
+                    >
+                      [Dev: Simulate Partner Rating]
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-6 animate-fade-in">
@@ -1201,6 +1173,14 @@ export default function FixerResults({
                   <span className="font-bold text-gray-800">฿{fee}</span>
                 </div>
               </div>
+
+              {/* Developer testing bypass */}
+              <button 
+                onClick={() => setPartnerConfirmed(true)}
+                className="mt-6 text-xs text-sky-600 underline hover:text-sky-800"
+              >
+                [Dev: Simulate Partner Acceptance]
+              </button>
             </>
           ) : (
             <>

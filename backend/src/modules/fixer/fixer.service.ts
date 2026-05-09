@@ -458,17 +458,16 @@ export class FixerService {
         const list = rawPriceList as Record<string, unknown>[];
         const rankedList = list
           .map((item) => {
-            const candidateText = [
+            const itemText = [
               typeof item.service === 'string' ? item.service : '',
               typeof item.unit === 'string' ? item.unit : '',
-              profileText,
             ]
               .filter(Boolean)
               .join(' ');
 
             return {
               item,
-              score: this.scoreTextMatch(candidateText, searchTerms),
+              score: this.scoreTextMatch(itemText, searchTerms),
             };
           })
           .sort((a, b) => {

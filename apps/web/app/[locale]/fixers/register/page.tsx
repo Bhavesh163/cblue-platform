@@ -1122,7 +1122,7 @@ function FixerRegisterContent() {
       setError(t("skillError"));
       return;
     }
-    if (!isEditMode && kycImages.length < 3) {
+    if (kycImages.length < 3) {
       setError(
         locale === "th"
           ? "กรุณาอัปโหลด KYC ให้ครบ 3 รูป (ด้านหน้า, ด้านหลัง, เซลฟี่คู่บัตร)"

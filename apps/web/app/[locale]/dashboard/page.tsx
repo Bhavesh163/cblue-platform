@@ -133,12 +133,23 @@ export default function DashboardPage() {
         if (res.ok) {
           const user = await res.json();
           if (isMounted) {
-            const stored = localStorage.getItem("subscriber");
-            if (stored) {
-              setSubscriber(JSON.parse(stored));
-            } else {
-               setSubscriber({ id: user.id, name: user.name, email: user.email, phone: user.phone, status: "ACTIVE" });
+            const hasFixer = !!user.fixer;
+            let subInfo: any = { 
+              id: user.id, 
+              name: user.name, 
+              email: user.email, 
+              phone: user.phone, 
+              status: "ACTIVE" 
+            };
+
+            // If they are a fixer, inject fixer info
+            if (hasFixer) {
+              subInfo.tier = user.fixer?.aiTier || user.fixer?.tier || "Standard";
             }
+
+            setSubscriber(subInfo);
+            // Overwrite stored to fix any bad hydration
+            localStorage.setItem("subscriber", JSON.stringify(subInfo));
           }
 
           const ordersRes = await fetch("/api/v1/orders/my", { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);

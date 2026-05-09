@@ -122,9 +122,9 @@ async function handler(
     });
 
     const nullBodyStatuses = [101, 204, 205, 304];
-    const body = nullBodyStatuses.includes(upstream.status) ? null : upstream.body;
+    const bodyBuffer = nullBodyStatuses.includes(upstream.status) ? null : await upstream.arrayBuffer();
 
-    return new Response(body, {
+    return new Response(bodyBuffer, {
       status: upstream.status,
       // Cloudflare throws if statusText is explicitly empty string, omit it
       headers: resHeaders,

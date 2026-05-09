@@ -112,7 +112,11 @@ export default function FixerProPage() {
           if (stored) {
             const parsed = JSON.parse(stored);
             setPartner(parsed);
-            setIsFixer(true);
+            
+            // Only eagerly assume they are a fixer if they actually have a fixer tier in their payload
+            if (parsed.tier && parsed.tier !== "Standard") {
+              setIsFixer(true);
+            }
           }
         }
 
@@ -131,21 +135,36 @@ export default function FixerProPage() {
         if (res.ok) {
           const user = await res.json();
           if (isMounted) {
-            setIsFixer(!!user.fixer);
-            const pInfo = {
+            const hasFixer = !!user.fixer;
+            setIsFixer(hasFixer);
+            
+            // Generate base info
+            let pInfo: any = {
               id: user.id,
-              name: user.fixer?.contactName || user.name,
+              name: user.name,
               email: user.email,
-              phone: user.fixer?.contactPhone || user.phone,
-              company: user.fixer?.companyName || "-",
-              status: user.fixer?.status || "ACTIVE",
-              tier: user.fixer?.aiTier || user.fixer?.tier || "Standard",
-              tierScore: user.fixer?.aiScore || 69,
-              breakdown: user.fixer?.aiBreakdown || [],
-              flags: user.fixer?.aiFlags || [],
-              credentialStatus: user.fixer?.aiCredentialStatus || "unverified",
-              createdAt: user.fixer?.createdAt || user.createdAt
+              phone: user.phone,
+              status: "ACTIVE"
             };
+
+            // If they are actually a fixer, poplate fixer schema
+            if (hasFixer) {
+              pInfo = {
+                id: user.id,
+                name: user.fixer?.contactName || user.name,
+                email: user.email,
+                phone: user.fixer?.contactPhone || user.phone,
+                company: user.fixer?.companyName || "-",
+                status: user.fixer?.status || "ACTIVE",
+                tier: user.fixer?.aiTier || user.fixer?.tier || "Standard",
+                tierScore: user.fixer?.aiScore || 69,
+                breakdown: user.fixer?.aiBreakdown || [],
+                flags: user.fixer?.aiFlags || [],
+                credentialStatus: user.fixer?.aiCredentialStatus || "unverified",
+                createdAt: user.fixer?.createdAt || user.createdAt
+              };
+            }
+            
             setPartner(pInfo);
             localStorage.setItem("subscriber", JSON.stringify(pInfo));
           }
@@ -540,7 +559,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
               <span className="ml-auto px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">{locale === "th" ? "ใช้งานอยู่" : locale === "zh" ? "活跃" : "Active"}</span>
             </div>
             <div className="flex gap-2 mt-2">
-              <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold">{locale === "th" ? "ระดับ Corporate" : locale === "zh" ? "企业级" : "Corporate Tier"}</span>
+              <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold">{partner.tier || "Standard Tier"}</span>
               <span className="px-3 py-1 bg-sky-100 text-sky-700 rounded-full text-xs font-bold">{locale === "th" ? "ยืนยันแล้ว" : locale === "zh" ? "已验证" : "Verified"}</span>
               <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-bold">{locale === "th" ? "KYC ✓ ยืนยันแล้ว" : locale === "zh" ? "KYC ✓ 已验证" : "KYC ✓"}</span>
             </div>
@@ -1076,7 +1095,7 @@ function PartnerDashboard({ locale, partner, prefix, onLogout, orders }: { local
                 <p className="text-sm text-gray-500">{partner.email} &middot; {partner.phone || "0819852846"}</p>
                 <div className="flex gap-2 mt-1">
                   <span className="text-xs bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded">Active</span>
-                  <span className="text-xs bg-purple-100 text-purple-700 font-bold px-2 py-0.5 rounded">Corporate Tier</span>
+                  <span className="text-xs bg-purple-100 text-purple-700 font-bold px-2 py-0.5 rounded">{partner.tier || "Standard Tier"}</span>
                   <span className="text-xs bg-sky-100 text-sky-700 font-bold px-2 py-0.5 rounded">KYC ✓</span>
                 </div>
               </div>
