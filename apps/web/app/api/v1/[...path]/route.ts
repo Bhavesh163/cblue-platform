@@ -146,7 +146,7 @@ async function handler(
 
     return new Response(body, {
       status: upstream.status,
-      statusText: upstream.statusText,
+      // Cloudflare throws if statusText is explicitly empty string, omit it
       headers: resHeaders,
     });
   } catch (err) {
