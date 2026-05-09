@@ -336,7 +336,7 @@ export default function PropertiesPage() {
               <div className="flex items-center gap-1 mb-4">
                 {(["tier", "po", "payment", "notify", "chat", "meeting", "rate", "done"] as const).map((s, i) => (
                   <div key={s} className={`h-1.5 flex-1 rounded-full transition-colors ${
-                    (["tier", "po", "payment", "notify", "chat", "meeting", "rate", "done"] as const).indexOf(contactStep) >= i
+                    (["tier", "payment", "po", "notify", "chat", "meeting", "rate", "done"] as const).indexOf(contactStep) >= i
                       ? "bg-emerald-500" : "bg-gray-200"
                   }`} />
                 ))}
@@ -385,8 +385,7 @@ export default function PropertiesPage() {
                   </div>
                   <button
                     onClick={() => {
-                      setPoNumber(generatePO());
-                      setContactStep("po");
+                      setContactStep("payment");
                     }}
                     disabled={!selectedTier}
                     className="mt-4 w-full py-3 bg-green-700 text-white font-bold rounded-xl disabled:opacity-40 hover:bg-green-800 transition"
@@ -445,12 +444,11 @@ export default function PropertiesPage() {
                       : "Keep this PO number for your records. Property pricing is negotiated directly between parties."}
                   </div>
                   <button onClick={() => {
-                    setContactStep("payment");
+                    setContactStep("notify");
+                    setListerConfirmed(false);
+                    setTimeout(() => setListerConfirmed(true), 4000);
                   }} className="w-full py-3 bg-green-700 text-white font-bold rounded-xl hover:bg-green-800 transition">
-                    {locale === "th" ? "ดำเนินการต่อ" : locale === "zh" ? "继续" : "Continue"}
-                  </button>
-                  <button onClick={() => setContactStep("tier")} className="w-full mt-3 py-2 text-sm text-gray-500 hover:text-gray-700">
-                    {locale === "th" ? "กลับไปแก้ไข" : locale === "zh" ? "返回修改" : "Back to edit"}
+                    {locale === "th" ? "รับทราบ" : locale === "zh" ? "确认" : "Acknowledge"}
                   </button>
                 </div>
                 );
@@ -480,13 +478,12 @@ export default function PropertiesPage() {
                     </div>
                   </div>
                   <div className="flex gap-3">
-                    <button onClick={() => setContactStep("po")} className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl font-semibold text-sm">
+                    <button onClick={() => setContactStep("tier")} className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl font-semibold text-sm">
                       ← {locale === "th" ? "กลับ" : locale === "zh" ? "返回" : "Back"}
                     </button>
                     <button onClick={() => {
-                      setContactStep("notify");
-                      setListerConfirmed(false);
-                      setTimeout(() => setListerConfirmed(true), 4000);
+                      setPoNumber(generatePO());
+                      setContactStep("po");
                     }} className="flex-1 py-2.5 bg-green-700 text-white rounded-xl font-bold text-sm hover:bg-green-800 transition">
                       {locale === "th" ? "ชำระเงินแล้ว" : locale === "zh" ? "我已支付" : "I have paid"}
                     </button>

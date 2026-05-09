@@ -834,6 +834,19 @@ function ProfileTab({ t, locale, profile, renderStars }: {
               profile.tier === "standard" ? "bg-blue-50 text-blue-700" :
               "bg-green-50 text-green-700"
             }`}>{t[profile.tier]}</span>
+            <div className="mt-3 flex justify-end gap-2">
+              <button className="px-3 py-1 border border-gray-200 text-gray-600 rounded-full hover:bg-gray-50 transition text-xs font-semibold">
+                {t.editProfile}
+              </button>
+              <button onClick={() => {
+                if (confirm(locale === "th" ? "ยืนยันการลบบัญชีและข้อมูลทั้งหมดตามกฎหมาย PDPA?" : "Confirm deleting your account and all data per PDPA law?")) {
+                  fetch('/api/v1/users/me', { method: 'DELETE', headers: { Authorization: `Bearer ${localStorage.getItem('provider_token') || ''}` } })
+                  .then(() => { localStorage.clear(); window.location.href = `/${locale}/subscription/login`; });
+                }
+              }} className="px-3 py-1 bg-red-50 border border-red-200 text-red-600 rounded-full hover:bg-red-100 transition text-xs font-semibold">
+                {locale === "th" ? "ลบบัญชี" : locale === "zh" ? "删除账户" : "Delete Account"}
+              </button>
+            </div>
           </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

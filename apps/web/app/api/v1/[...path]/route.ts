@@ -43,7 +43,7 @@ function getBackendUrls() {
 
 const SKIP_REQ = new Set([
   "host", "keep-alive", "connection",
-  "te", "trailer", "upgrade", "accept-encoding",
+  "te", "trailer", "upgrade", "accept-encoding", "content-length"
 ]);
 const SKIP_RES = new Set(["content-encoding", "transfer-encoding", "content-length", "connection"]);
 const PASSTHROUGH_ERROR_STATUS = new Set([400, 401, 403, 404, 409, 422, 429]);
@@ -120,15 +120,19 @@ async function handler(
     const ct = upstream.headers.get("content-type") || "";
     if (!upstream.ok && !ct.includes("application/json")) {
       const raw = await upstream.text().catch(() => "");
-      const status = upstream.status; // Pass through the exact status 
+      const originalStatus = upstream.status;
+      // Cloudflare intercepts 502s/504s and overwrites the body with an HTML page. 
+      // We map these to 500 so the JSON reaches the Next.js frontend.
+      const status = (originalStatus === 502 || originalStatus === 504) ? 500 : originalStatus;
+      
       return Response.json(
         {
           error: status >= 500 ? "backend_unavailable" : "upstream_error",
           message:
             status >= 500
               ? "Backend service is temporarily unavailable"
-              : `Upstream service returned an error: ${status}`,
-          upstreamStatus: status,
+              : `Upstream service returned an error: ${originalStatus}`,
+          upstreamStatus: originalStatus,
           detail: raw ? raw.slice(0, 500) : undefined // Include raw output just in case
         },
         { status },
@@ -144,8 +148,10 @@ async function handler(
     const nullBodyStatuses = [101, 204, 205, 304];
     const body = nullBodyStatuses.includes(upstream.status) ? null : upstream.body;
 
+    const finalStatus = (upstream.status === 502 || upstream.status === 504) ? 500 : upstream.status;
+
     return new Response(body, {
-      status: upstream.status,
+      status: finalStatus,
       // Cloudflare throws if statusText is explicitly empty string, omit it
       headers: resHeaders,
     });
@@ -154,7 +160,7 @@ async function handler(
     console.error("[api-proxy]", request.method, target, msg);
     return Response.json(
       { error: "proxy_error", message: msg, backends: backendUrls },
-      { status: 502 },
+      { status: 500 }, // Change 502 to 500 to prevent CF override
     );
   }
 }

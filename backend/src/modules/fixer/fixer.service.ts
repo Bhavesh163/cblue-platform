@@ -485,16 +485,12 @@ export class FixerService {
           const matchedItem = match.item;
           const unitRate = parseFloat(String(matchedItem.finalPrice)) || 0;
           const partnerQty =
-            parseFloat(String(matchedItem.quantity)) || 1;
-          const pricePerUnit = unitRate > 0 ? unitRate / partnerQty : unitRate;
+            parseFloat(String(matchedItem.amount)) || parseFloat(String(matchedItem.quantity)) || 1;
+          const pricePerUnit = unitRate;
           const hasTextualMatch = match.score > 0;
 
-// Always multiply by customerQty if qty > 1, regardless of text match
-                    // This ensures projects with quantities (1000 sqm) show correct price
-                    basePrice =
-                      customerQty > 1
-                        ? Math.round(pricePerUnit * customerQty)
-                        : unitRate;
+          // Compute correctly based on requested qty
+          basePrice = Math.round(pricePerUnit * customerQty);
 
           matchedUnit = (matchedItem.unit as string) || '';
           matchedQty = customerQty;

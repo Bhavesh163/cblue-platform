@@ -359,6 +359,7 @@ function FixerRegisterContent() {
           fixerProfile = await fixerRes.json();
           try {
             if (data?.email) localStorage.setItem(cacheKey, JSON.stringify(fixerProfile));
+            localStorage.setItem("fixer_profile_cache", JSON.stringify(fixerProfile));
           } catch {}
         } else {
           console.warn("Failed to fetch fixer profile (e.g. 502/404). Falling back to user data.");
@@ -366,10 +367,9 @@ function FixerRegisterContent() {
             fixerProfile = data.fixer;
           } else {
             try {
-              if (data?.email) {
-                const cached = localStorage.getItem(cacheKey);
-                if (cached) fixerProfile = JSON.parse(cached);
-              }
+              let cached = localStorage.getItem(cacheKey);
+              if (!cached) cached = localStorage.getItem("fixer_profile_cache");
+              if (cached) fixerProfile = JSON.parse(cached);
             } catch {}
           }
         }

@@ -410,7 +410,7 @@ const tierColors: Record<string, { bg: string; text: string; border: string }> =
 
 const getTierColor = (tier: string) => tierColors[tier] ?? tierColors["standard"]!;
 
-type Step = "matching" | "list" | "confirm" | "po" | "notify" | "payment" | "chat" | "meeting" | "variation" | "complete" | "rate" | "done";
+type Step = "matching" | "select" | "po" | "notify" | "confirm" | "payment" | "chat" | "meeting" | "variation" | "complete" | "rate" | "done";
 
 import generatePayload from "promptpay-qr";
 import { QRCodeSVG } from "qrcode.react";
@@ -566,7 +566,7 @@ export default function FixerResults({
       setAiStep((prev) => {
         if (prev >= steps) {
           clearInterval(timer);
-          setTimeout(() => setStep("list"), 400);
+          setTimeout(() => setStep("select"), 400);
           return prev;
         }
         return prev + 1;
@@ -597,10 +597,6 @@ export default function FixerResults({
 
   const handleSelect = (fixer: Fixer) => {
     setSelectedFixer(fixer);
-    setStep("confirm");
-  };
-
-  const handleConfirm = () => {
     setStep("po");
   };
 
@@ -609,6 +605,10 @@ export default function FixerResults({
   };
 
   const handleProceedPayment = () => {
+    setStep("confirm");
+  };
+
+  const handleConfirm = () => {
     setStep("payment");
   };
 
@@ -664,11 +664,7 @@ export default function FixerResults({
   };
 
   const handleMeetingConfirm = () => {
-    if (showVariation) {
-      setStep("variation");
-    } else {
-      setStep("complete");
-    }
+    setStep("variation");
   };
 
   const handleVariationDecision = (approved: boolean) => {
@@ -685,18 +681,21 @@ export default function FixerResults({
     setCustomerRated(true);
     setPartnerRateReady(false);
     // Simulate partner submitting their rating after 3 seconds
-    setTimeout(() => setPartnerRateReady(true), 3000);
+    setTimeout(() => {
+      setPartnerRateReady(true);
+      setTimeout(() => setStep("done"), 1500); // Auto transition to done
+    }, 3000);
   };
 
   const fee = selectedFixer ? getProcessingFee(bookingType, selectedFixer.tier) : 100;
   const tierLabel = selectedFixer ? t(selectedFixer.tier) : "";
 
   // Step progress bar for the 12-step flow (visible after matching)
-  const flowSteps: Step[] = ["matching", "list", "confirm", "po", "notify", "payment", "chat", "meeting", "variation", "complete", "rate", "done"];
+  const flowSteps: Step[] = ["matching", "select", "po", "notify", "confirm", "payment", "chat", "meeting", "variation", "complete", "rate", "done"];
   const flowLabels: Record<string, Record<Step, string>> = {
-    en: { matching: "Match", list: "Select", confirm: "Confirm", po: "PO", notify: "Notify", payment: "Pay", chat: "Chat", meeting: "Meet", variation: "Variation", complete: "Complete", rate: "Rate", done: "Done" },
-    th: { matching: "จับคู่", list: "เลือก", confirm: "ยืนยัน", po: "PO", notify: "แจ้ง", payment: "จ่าย", chat: "แชท", meeting: "นัดหมาย", variation: "เปลี่ยนแปลง", complete: "เสร็จ", rate: "คะแนน", done: "จบ" },
-    zh: { matching: "匹配", list: "选择", confirm: "确认", po: "PO", notify: "通知", payment: "支付", chat: "聊天", meeting: "会面", variation: "变更", complete: "完工", rate: "评分", done: "完成" },
+    en: { matching: "Match", select: "Select", confirm: "Confirm", po: "PO", notify: "Notify", payment: "Pay", chat: "Chat", meeting: "Meet", variation: "Variation", complete: "Complete", rate: "Rate", done: "Done" },
+    th: { matching: "จับคู่", select: "เลือก", confirm: "ยืนยัน", po: "PO", notify: "แจ้ง", payment: "จ่าย", chat: "แชท", meeting: "นัดหมาย", variation: "เปลี่ยนแปลง", complete: "เสร็จ", rate: "คะแนน", done: "จบ" },
+    zh: { matching: "匹配", select: "选择", confirm: "确认", po: "PO", notify: "通知", payment: "支付", chat: "聊天", meeting: "会面", variation: "变更", complete: "完工", rate: "评分", done: "完成" },
   };
   const hideVariation = !showVariation && step !== "variation";
   const visibleSteps = hideVariation ? flowSteps.filter(s => s !== "variation") : flowSteps;
@@ -1395,7 +1394,7 @@ export default function FixerResults({
             {locale === "th" ? "รับทราบ & ส่งให้พาร์ทเนอร์" : locale === "zh" ? "确认并通知合作伙伴" : "Acknowledge & Notify Partner"}
           </button>
           <button
-            onClick={() => { setSelectedFixer(null); setStep("list"); }}
+            onClick={() => { setSelectedFixer(null); setStep("select"); }}
             className="mt-3 w-full text-sm text-gray-500 hover:text-gray-700"
           >
             {t("cancel")}
@@ -1452,7 +1451,7 @@ export default function FixerResults({
             {t("confirmBtn")}
           </button>
           <button
-            onClick={() => { setSelectedFixer(null); setStep("list"); }}
+            onClick={() => { setSelectedFixer(null); setStep("select"); }}
             className="text-sm text-gray-500 hover:text-gray-700"
           >
             {t("cancel")}
