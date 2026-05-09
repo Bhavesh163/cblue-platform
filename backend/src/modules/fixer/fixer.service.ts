@@ -486,7 +486,7 @@ export class FixerService {
           const unitRate = parseFloat(String(matchedItem.finalPrice)) || 0;
           const partnerQty =
             parseFloat(String(matchedItem.amount)) || parseFloat(String(matchedItem.quantity)) || 1;
-          const pricePerUnit = unitRate;
+          const pricePerUnit = unitRate / partnerQty;
           const hasTextualMatch = match.score > 0;
 
           // Compute correctly based on requested qty

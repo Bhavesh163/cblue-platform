@@ -115,30 +115,6 @@ async function handler(
       throw lastError instanceof Error ? lastError : new Error("No upstream response");
     }
 
-    // If backend returned a non-JSON error (e.g., nginx HTML 502/404),
-    // convert to a proper JSON error so the frontend parses it gracefully.
-    const ct = upstream.headers.get("content-type") || "";
-    if (!upstream.ok && !ct.includes("application/json")) {
-      const raw = await upstream.text().catch(() => "");
-      const originalStatus = upstream.status;
-      // Cloudflare intercepts 502s/504s and overwrites the body with an HTML page. 
-      // We map these to 500 so the JSON reaches the Next.js frontend.
-      const status = (originalStatus === 502 || originalStatus === 504) ? 500 : originalStatus;
-      
-      return Response.json(
-        {
-          error: status >= 500 ? "backend_unavailable" : "upstream_error",
-          message:
-            status >= 500
-              ? "Backend service is temporarily unavailable"
-              : `Upstream service returned an error: ${originalStatus}`,
-          upstreamStatus: originalStatus,
-          detail: raw ? raw.slice(0, 500) : undefined // Include raw output just in case
-        },
-        { status },
-      );
-    }
-
     // Build response (strip hop-by-hop)
     const resHeaders = new Headers();
     upstream.headers.forEach((v, k) => {
@@ -148,10 +124,8 @@ async function handler(
     const nullBodyStatuses = [101, 204, 205, 304];
     const body = nullBodyStatuses.includes(upstream.status) ? null : upstream.body;
 
-    const finalStatus = (upstream.status === 502 || upstream.status === 504) ? 500 : upstream.status;
-
     return new Response(body, {
-      status: finalStatus,
+      status: upstream.status,
       // Cloudflare throws if statusText is explicitly empty string, omit it
       headers: resHeaders,
     });
