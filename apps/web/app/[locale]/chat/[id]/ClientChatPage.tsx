@@ -22,7 +22,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
 
   return (
     <div className="max-w-md mx-auto p-4 py-8">
-      <Link href={`/${locale}/dashboard`} className="text-blue-600 hover:underline mb-4 inline-block">&larr; Back to Dashboard</Link>
+      <Link href={`/${locale}/dashboard`} className="text-blue-600 hover:underline mb-4 inline-block">&larr; Go to Our Customer</Link>
       <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 text-center">
         <div className="w-16 h-16 mx-auto bg-blue-100 rounded-full flex items-center justify-center mb-4">
           <span className="text-2xl animate-pulse">⏳</span>

@@ -463,7 +463,7 @@ export default function PropertiesPage() {
                     </p>
                     <div className="inline-block bg-white border-2 border-gray-100 rounded-2xl p-4 mb-4 shadow-sm">
                       <div className="w-48 h-48 rounded-lg flex items-center justify-center text-gray-400">
-                        <QRCodeSVG value={generatePayload("0999999999", { amount: PROPERTY_TIERS.find((ti) => ti.name === selectedTier)?.fee || 0 })} size={192} />
+                        <div className="bg-yellow-100 p-4 border border-yellow-300 rounded text-yellow-800 text-center mx-auto my-4 text-sm font-semibold max-w-xs cursor-pointer border-dashed border-2 hover:bg-yellow-200">🚧 Testing Period Pill 🚧<br/>Click the button below to bypass payment</div>
                       </div>
                       <p className="text-lg font-extrabold text-green-700 mt-3">
                         ฿{PROPERTY_TIERS.find((ti) => ti.name === selectedTier)?.fee || 0}
