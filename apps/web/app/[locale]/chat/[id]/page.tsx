@@ -1,5 +1,6 @@
 import ClientChatPage from "./ClientChatPage";
 
-export default function ChatPage({ params }: { params: { locale: string, id: string } }) {
-  return <ClientChatPage orderId={params.id} locale={params.locale} />;
+export default async function ChatPage({ params }: { params: Promise<{ locale: string, id: string }> }) {
+  const resolvedParams = await params;
+  return <ClientChatPage orderId={resolvedParams.id} locale={resolvedParams.locale} />;
 }
