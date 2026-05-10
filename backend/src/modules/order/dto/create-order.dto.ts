@@ -17,8 +17,12 @@ export enum OrderType {
 
 export class CreateOrderDto {
   @IsString()
-  @IsNotEmpty()
-  addressId: string;
+  @IsOptional()
+  addressId?: string;
+
+  @IsString()
+  @IsOptional()
+  fixerId?: string;
 
   @IsEnum(OrderType)
   orderType: OrderType = OrderType.HOUSEHOLD;

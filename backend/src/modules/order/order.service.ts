@@ -29,33 +29,48 @@ export class OrderService {
   ) {}
 
   async create(userId: string, dto: CreateOrderDto) {
-    // Verify address belongs to user
-    const address = await this.prisma.address.findFirst({
-      where: { id: dto.addressId, userId },
-    });
-    if (!address) {
-      throw new BadRequestException(
-        'Address not found or does not belong to user',
-      );
+    let addressId = dto.addressId;
+    if (addressId) {
+      const address = await this.prisma.address.findFirst({
+        where: { id: addressId, userId },
+      });
+      if (!address) {
+        throw new BadRequestException('Address not found or does not belong to user');
+      }
+    } else {
+      // Create fallback dummy address for guest/direct flows
+      const dummyAddress = await this.prisma.address.create({
+        data: {
+          userId,
+          label: "Temporary Request Location",
+          province: "Unknown",
+          district: "Unknown",
+          subdistrict: "Unknown",
+          postalCode: "00000"
+        }
+      });
+      addressId = dummyAddress.id;
     }
 
     const order = await this.prisma.order.create({
       data: {
         userId,
-        addressId: dto.addressId,
+        addressId: addressId,
         orderType: dto.orderType,
         serviceCategory: dto.serviceCategory,
         description: dto.description,
         isUrgent: dto.isUrgent ?? false,
         scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : null,
         estimatedPrice: dto.estimatedPrice,
+        fixerId: dto.fixerId || null,
         statusHistory: {
           create: {
-            status: OrderStatus.CREATED,
+            status: dto.fixerId ? OrderStatus.MATCHING : OrderStatus.CREATED,
             changedBy: userId,
             note: 'Order created',
           },
         },
+        ...(dto.fixerId && { status: OrderStatus.MATCHING }),
       },
       include: {
         address: true,

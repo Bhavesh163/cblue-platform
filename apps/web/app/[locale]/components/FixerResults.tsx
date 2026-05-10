@@ -598,7 +598,33 @@ export default function FixerResults({
     setStep("po");
   };
 
-  const handlePOAcknowledge = () => {
+  const handlePOAcknowledge = async () => {
+    // Attempt to persist the order to database
+    try {
+      const token = localStorage.getItem("subscriber_token");
+      if (token && selectedFixer) {
+        // Extract plain number from string logic (e.g. ฿25,000,000 or similar)
+        const estStr = String(selectedFixer.price || 0).replace(/[^0-9.]/g, '');
+        const estPrice = parseFloat(estStr) || 0;
+
+        await fetch("/api/v1/orders", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            orderType: bookingType === "household" ? "HOUSEHOLD" : "PROJECT",
+            serviceCategory: service,
+            description: `${poNumber} | ${description}`,
+            fixerId: selectedFixer.id,
+            estimatedPrice: estPrice,
+          })
+        });
+      }
+    } catch (e) {
+      console.error("Order creation non-blocking fail", e);
+    }
     setStep("notify");
   };
 
