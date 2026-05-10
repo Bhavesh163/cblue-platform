@@ -13,6 +13,8 @@ import { CreateSubscriberDto } from './dto/create-subscriber.dto';
 import { LoginSubscriberDto } from './dto/login-subscriber.dto';
 import { ForgotPasswordDto, ResetPasswordDto } from './dto/forgot-password.dto';
 
+import * as crypto from 'crypto';
+
 @Injectable()
 export class SubscriptionService {
   private readonly logger = new Logger(SubscriptionService.name);
@@ -175,11 +177,7 @@ export class SubscriptionService {
     }
 
     // Generate secure random token
-    const array = new Uint8Array(32);
-    crypto.getRandomValues(array);
-    const resetToken = Array.from(array, (b) =>
-      b.toString(16).padStart(2, '0'),
-    ).join('');
+    const resetToken = crypto.randomBytes(32).toString('hex');
     const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
     await this.prisma.subscriber.update({
