@@ -106,7 +106,12 @@ export class OrderService {
 
   async findByUser(userId: string) {
     return this.prisma.order.findMany({
-      where: { userId },
+      where: { 
+        OR: [
+          { userId },
+          { fixer: { userId } }
+        ]
+      },
       include: {
         address: true,
         fixer: { include: { user: true } },

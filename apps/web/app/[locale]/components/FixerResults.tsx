@@ -939,12 +939,6 @@ export default function FixerResults({
                     <span className="text-sm text-gray-500">{locale === "th" ? "กำลังรอพาร์ทเนอร์ให้คะแนน..." : locale === "zh" ? "等待伙伴评分中..." : "Waiting for partner to submit rating..."}</span>
                   </div>
                   <div className="mt-4 text-center">
-                    <button 
-                      onClick={() => { setPartnerRateReady(true); }}
-                      className="text-xs text-sky-600 underline hover:text-sky-800"
-                    >
-                      [Dev: Simulate Partner Rating]
-                    </button>
                   </div>
                 </div>
               ) : (
@@ -1189,7 +1183,7 @@ export default function FixerResults({
               </div>
 
               {/* PO reference */}
-              <div className="bg-gray-50 rounded-xl p-4 text-sm text-left">
+              <div className="bg-gray-50 rounded-xl p-4 text-sm text-left mb-6">
                 <div className="flex justify-between mb-1">
                   <span className="text-gray-500">{t("poNumber")}</span>
                   <span className="font-mono font-bold text-gray-800">{poNumber}</span>
@@ -1200,13 +1194,12 @@ export default function FixerResults({
                 </div>
               </div>
 
-              {/* Developer testing bypass */}
-              <button 
-                onClick={() => setPartnerConfirmed(true)}
-                className="mt-6 text-xs text-sky-600 underline hover:text-sky-800"
+              <a 
+                href="/en/dashboard"
+                className="inline-block mt-4 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
               >
-                [Dev: Simulate Partner Acceptance]
-              </button>
+                Go to Dashboard
+              </a>
             </>
           ) : (
             <>
