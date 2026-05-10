@@ -29,7 +29,7 @@ export class CreateOrderDto {
 
   @IsString()
   @IsNotEmpty()
-  @IsIn(ALL_SERVICE_CATEGORIES as unknown as string[])
+  // @IsIn(ALL_SERVICE_CATEGORIES as unknown as string[])
   serviceCategory: string;
 
   @IsString()

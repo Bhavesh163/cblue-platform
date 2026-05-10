@@ -1248,8 +1248,9 @@ export default function FixerResults({
           <h2 className="text-xl font-bold text-gray-800 mb-2">{t("paymentTitle")}</h2>
           <p className="text-gray-500 text-sm mb-6">{t("paymentDesc")}</p>
 
-          <div className="mx-auto w-48 h-48 bg-white rounded-xl border-2 border-gray-100 flex items-center justify-center mb-6 p-2 shadow-sm">
-            <QRCodeSVG value={payload} size={160} />
+          <div className="mx-auto bg-yellow-100 text-yellow-800 rounded-xl border-2 border-yellow-200 flex flex-col items-center justify-center mb-6 p-6 shadow-sm">
+            <span className="font-bold text-lg mb-2">🚧 Testing Period 🚧</span>
+            <span className="text-sm text-center">Click the button below to simulate successful payment and proceed.</span>
           </div>
 
           <div className="bg-gray-50 rounded-xl p-4 mb-6 space-y-2 text-sm">
