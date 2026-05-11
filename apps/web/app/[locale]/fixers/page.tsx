@@ -265,7 +265,22 @@ export default function FixerProPage() {
 
             <div className="flex gap-4 mt-8">
               <button 
-                onClick={() => { setWaitModalOrder(null); window.alert('PO Accepted! Notification sent to customer.'); }} 
+                onClick={async () => {
+                  try {
+                    const token = localStorage.getItem("subscriber_token");
+                    await fetch(`http://localhost:3002/api/orders/${waitModalOrder.id}`, {
+                      method: 'PUT',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        ...(token ? { Authorization: `Bearer ${token}` } : {})
+                      },
+                      body: JSON.stringify({ status: "PENDING" })
+                    });
+                    window.location.reload();
+                  } catch (e) {
+                    console.error(e);
+                  }
+                }} 
                 className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl transition shadow-md"
               >
                 Accept PO
@@ -669,7 +684,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
               <div className="flex items-center gap-2">
                 <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[req.tier] || ""}`}>{req.tier}</span>
                 {req.urgency === "urgent" && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-700">{locale === "th" ? "เร่งด่วน" : locale === "zh" ? "紧急" : "Urgent"}</span>}
-                <button className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition">{locale === "th" ? "รับ" : locale === "zh" ? "接受" : "Accept"}</button>
+                <button onClick={(e) => { e.stopPropagation(); onJobClick && onJobClick(req); }} className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition">{locale === "th" ? "รับ" : locale === "zh" ? "接受" : "Accept"}</button>
                 <button className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">{locale === "th" ? "ปฏิเสธ" : locale === "zh" ? "拒绝" : "Decline"}</button>
               </div>
             </div>
@@ -713,9 +728,62 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
           </div>
         </div>
       </div>
+
+      {/* Recent Activity Sections */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100">
+            <h2 className="font-bold text-gray-900">Recent Alerts</h2>
+          </div>
+          <div className="p-6 text-center text-sm text-gray-500">No recent alerts.</div>
+        </div>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100">
+            <h2 className="font-bold text-gray-900">Pending Ratings</h2>
+          </div>
+          <div className="p-6 text-center text-sm text-gray-500">No pending ratings.</div>
+        </div>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100">
+            <h2 className="font-bold text-gray-900">Recent Chats</h2>
+          </div>
+          <div className="p-6 text-center text-sm text-gray-500">No recent chats.</div>
+        </div>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+            <h2 className="font-bold text-gray-900">Recent History</h2>
+            <span className="text-xs text-purple-600 font-bold cursor-pointer hover:underline">View All →</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead className="bg-gray-50/50 text-gray-500 text-xs uppercase tracking-wider">
+                <tr>
+                  <th className="py-2 px-4">Service</th>
+                  <th className="py-2 px-4">Customer</th>
+                  <th className="py-2 px-4">Date</th>
+                </tr>
+              </thead>
+              <tbody className="text-sm">
+                {completedJobs.slice(0, 3).length > 0 ? completedJobs.slice(0, 3).map((h) => (
+                  <tr key={h.id} className="border-b border-gray-50">
+                    <td className="py-3 px-4 font-medium">{h.service}</td>
+                    <td className="py-3 px-4 text-gray-600">{h.customer}</td>
+                    <td className="py-3 px-4 text-gray-500">{h.date}</td>
+                  </tr>
+                )) : (
+                  <tr>
+                    <td colSpan={5} className="py-6 text-center text-gray-500">No completed jobs yet.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
+
 
 /* ===== PARTNER JOBS (Active) ===== */
 function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activeJobs: any[]; onJobClick?: (job: any) => void; }) {
@@ -739,7 +807,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
               </div>
             </div>
             <div className="flex items-center gap-4">
-              {['MATCHING', 'CREATED', 'PENDING'].includes(job.status?.toUpperCase()) ? (
+              {['MATCHING', 'CREATED', 'PENDING'].includes(job.status?.trim()?.toUpperCase()) ? (
                 <>
                   <div className="flex-1">
                     <p className="text-sm text-amber-600 font-bold mb-1">Awaiting Your Confirmation</p>
@@ -768,40 +836,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
   );
 }
 
-/* ===== PARTNER REQUESTS ===== */
-function PartnerRequests({ locale, incomingJobs }: { locale: string; incomingJobs: any[] }) {
-  return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-100">
-        <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "คำขอใหม่ทั้งหมด" : locale === "zh" ? "所有新请求" : "All Incoming Requests"}</h2>
-      </div>
-      <div className="divide-y divide-gray-50">
-        {incomingJobs.map((req) => (
-          <div key={req.id} className={`p-6 transition ${req.urgency === "urgent" ? "bg-red-50/30 hover:bg-red-50/50" : "hover:bg-gray-50/50"}`}>
-            <div className="flex items-center gap-4">
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${req.urgency === "urgent" ? "bg-red-100" : "bg-amber-100"}`}></div>
-              <div className="flex-1">
-                <h3 className="font-bold text-gray-900">{locale === "th" ? req.serviceTh : locale === "zh" ? req.serviceZh : req.service}</h3>
-                <p className="text-sm text-gray-500">{req.customer} &middot; {req.date}</p>
-                <p className="text-sm text-gray-600 mt-1">{locale === "th" ? "งบประมาณ" : locale === "zh" ? "预算" : "Budget"}: <span className="font-bold">{req.budget}</span></p>
-              </div>
-              <div className="flex flex-col items-end gap-2">
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${TIER_STYLE[req.tier] || ""}`}>{req.tier}</span>
-                  {req.urgency === "urgent" && <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-red-100 text-red-700 animate-pulse">🔴 {locale === "th" ? "เร่งด่วน" : locale === "zh" ? "紧急" : "Urgent"}</span>}
-                </div>
-                <div className="flex gap-2">
-                  <button className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition">{locale === "th" ? "รับงาน" : locale === "zh" ? "接受" : "Accept"}</button>
-                  <button className="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">{locale === "th" ? "ปฏิเสธ" : locale === "zh" ? "拒绝" : "Decline"}</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+
 function PartnerHistory({ locale, completedJobs }: { locale: string; completedJobs: any[] }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">

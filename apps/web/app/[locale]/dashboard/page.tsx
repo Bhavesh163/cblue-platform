@@ -448,51 +448,7 @@ function BookingsTab({ locale, activeOrders }: { locale: string; activeOrders: a
   );
 }
 
-/* ===== REQUESTS TAB ===== */
-function RequestsTab({ locale, requests }: { locale: string; requests: any[] }) {
-  const STATUS_STYLE: any = {
-    "CREATED": "bg-gray-100 text-gray-700",
-    "MATCHING": "bg-yellow-100 text-yellow-700",
-    "PENDING": "bg-blue-100 text-blue-700",
-  };
 
-  const getStatusLabel = (status: string, locale: string) => {
-    const labels: any = {
-      "CREATED": { th: "รอดำเนินการ", zh: "等待中", en: "Created" },
-      "MATCHING": { th: "กำลังจับคู่", zh: "匹配中", en: "Matching" },
-      "PENDING": { th: "กำลังดำเนินการ", zh: "进行中", en: "Pending" }
-    };
-    return labels[status]?.[locale] || status;
-  };
-
-  return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-100">
-        <h2 className="font-bold text-gray-900 flex items-center gap-2">🔄 {locale === "th" ? "คำขอจัดซื้อ" : locale === "zh" ? "采购请求" : "Procurement Requests"}</h2>
-      </div>
-      <div className="divide-y divide-gray-50">
-        {requests && requests.length > 0 ? requests.map((r: any) => (
-          <div key={r.id} className="p-6 hover:bg-gray-50/50 transition">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center text-2xl">📦</div>
-              <div className="flex-1">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="font-bold text-gray-900">{locale === "th" ? r.serviceTh : locale === "zh" ? r.serviceZh : r.service}</h3>
-                    <p className="text-sm text-gray-500 mt-1">{r.date}</p>
-                  </div>
-                  <span className={`text-xs px-3 py-1 rounded-full font-bold ${STATUS_STYLE[r.status] || ""}`}>{getStatusLabel(r.status, locale)}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )) : (
-          <p className="text-sm text-gray-500 p-6 text-center">{locale === "th" ? "ไม่มีคำขอ" : locale === "zh" ? "没有请求" : "No requests"}</p>
-        )}
-      </div>
-    </div>
-  );
-}
 
 /* ===== HISTORY TAB ===== */
 function HistoryTab({ locale, historyOrders }: { locale: string; historyOrders: any[] }) {
@@ -707,7 +663,7 @@ function PropertyTab({ locale, prefix, properties }: { locale: string; prefix: s
 function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { locale: string; subscriber: any; prefix: string; onLogout: () => void, orders: any[] }) {
   const [activeTab, setActiveTab] = useState<"overview"|"profile"|"active"|"requests"|"properties"|"history"|"chat"|"alerts">("overview");
   const [waitModalOrder, setWaitModalOrder] = useState<any>(null);
-  const handleOrderClick = (o: any) => { if (o.status && ['MATCHING', 'CREATED', 'PENDING'].includes(o.status.toUpperCase())) setWaitModalOrder(o); else window.location.href = `${prefix}/chat/${o.id}`; };
+  const handleOrderClick = (o: any) => { if (o.status && ['MATCHING', 'CREATED', 'PENDING'].includes(o.status.trim().toUpperCase())) window.location.href = `${prefix}/booking/resume/${o.id}`; else window.location.href = `${prefix}/chat/${o.id}`; };
   const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLED', 'DONE'].includes(o.status)) : [];
   const historyOrders = orders ? orders.filter((o: any) => ['COMPLETED', 'CANCELLED', 'DONE'].includes(o.status)) : [];
   const propertiesCount = orders ? orders.filter((o: any) => o.type === "property").length : 0;
@@ -767,30 +723,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         </div>
       )}
 
-      {activeTab === "requests" && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
-          <div className="px-6 py-4 border-b border-gray-100">
-            <h2 className="font-bold text-gray-900">Requests</h2>
-          </div>
-          <div className="divide-y divide-gray-50">
-            {activeOrders.filter((o: any) => ['CREATED', 'MATCHING', 'PENDING'].includes(o.status)).length === 0 ? (
-              <div className="p-8 text-center text-gray-500">No active requests.</div>
-            ) : (
-              activeOrders.filter((o: any) => ['CREATED', 'MATCHING', 'PENDING'].includes(o.status)).map((o: any, i: number) => (
-                <div key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer" onClick={() => handleOrderClick ? handleOrderClick(o) : null}>
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center text-2xl shadow-sm"></div>
-                    <div>
-                      <h3 className="font-bold text-gray-900">{o.service}</h3>
-                      <p className="text-sm text-gray-500 mt-1">Status: {o.status} &middot; {new Date(o.createdAt || Date.now()).toLocaleDateString()}</p>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
+
 
       {activeTab === "properties" && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">

@@ -423,6 +423,8 @@ export default function FixerResults({
   description,
   issueImages,
   onNewBooking,
+  initialStep,
+  initialOrderData,
 }: {
   locale: string;
   bookingType: BookingType;
@@ -431,12 +433,14 @@ export default function FixerResults({
   description?: string;
   issueImages?: File[];
   onNewBooking: () => void;
+  initialStep?: string;
+  initialOrderData?: any;
 }) {
   const t = (key: string) => T[locale]?.[key] || T["en"]![key] || key;
   const [fixers, setFixers] = useState<Fixer[]>([]);
   const [matchError, setMatchError] = useState("");
-  const [step, setStep] = useState<Step>("matching");
-  const [selectedFixer, setSelectedFixer] = useState<Fixer | null>(null);
+  const [step, setStep] = useState<Step>((initialStep as any) || "matching");
+  const [selectedFixer, setSelectedFixer] = useState<Fixer | null>(initialOrderData?.fixer || null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -446,8 +450,8 @@ export default function FixerResults({
   const [issueImageUrls, setIssueImageUrls] = useState<string[]>([]);
 
   // PO state
-  const [poNumber, setPoNumber] = useState("PO-0000-0000");
-  const [partnerConfirmed, setPartnerConfirmed] = useState(false);
+  const [poNumber, setPoNumber] = useState(initialOrderData?.poNumber || "PO-0000-0000");
+  const [partnerConfirmed, setPartnerConfirmed] = useState(initialOrderData?.status?.toUpperCase() === "PENDING");
 
   // Meeting state
   const [meetingDate, setMeetingDate] = useState("");
