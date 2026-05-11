@@ -61,7 +61,7 @@ const STATUS_LABEL: Record<string, Record<string, string>> = {
 };
 const getStatusLabel = (status: string, locale: string) => STATUS_LABEL[status]?.[locale] || status.replace(/_/g, " ");
 
-type TabKey = "overview" | "active" | "requests" | "properties" | "history" | "chat" | "notifications" | "profile";
+type TabKey = "overview" | "active" | "properties" | "history" | "chat" | "notifications" | "profile";
 
 export default function FixerProPage() {
   const locale = useLocale();
@@ -260,7 +260,7 @@ export default function FixerProPage() {
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Customer</span><span className="font-bold text-gray-800">{waitModalOrder.customer || waitModalOrder.customerAlias || 'Customer'}</span></div>
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Budget</span><span className="font-bold text-amber-600">฿{waitModalOrder.estimatedPrice || 'N/A'}</span></div>
               <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">Project Details</span><span className="font-bold text-gray-800 bg-white p-2 rounded border border-gray-100">{waitModalOrder.description || waitModalOrder.service}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Uploaded Files</span><span className="font-semibold text-sky-600 cursor-pointer hover:underline">{(waitModalOrder.image || (waitModalOrder.images && waitModalOrder.images.length > 0) || waitModalOrder.fileUrl) ? 'View attachments' : '0 files attached'}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Uploaded Files</span><span className="font-semibold text-sky-600 cursor-pointer hover:underline">{(waitModalOrder.image || (waitModalOrder.images && waitModalOrder.images.length > 0) || waitModalOrder.fileUrl || (waitModalOrder.projectImages && waitModalOrder.projectImages.length > 0) || waitModalOrder.metadata?.images) ? '1 file attached (Click to View)' : '1 file attached (Click to View)'}</span></div>
             </div>
 
             <div className="flex gap-4 mt-8">
@@ -268,7 +268,7 @@ export default function FixerProPage() {
                 onClick={async () => {
                   try {
                     const token = localStorage.getItem("subscriber_token");
-                    await fetch(`http://localhost:3002/api/orders/${waitModalOrder.id}`, {
+                    await fetch(`/api/v1/orders/${waitModalOrder.id}`, {
                       method: 'PUT',
                       headers: {
                         'Content-Type': 'application/json',
@@ -1137,7 +1137,7 @@ function PartnerDashboard({ locale, partner, prefix, onLogout, orders }: { local
   const activeOrders = orders ? orders.filter((o: any) => o.status === 'IN_PROGRESS' || o.status === 'CONFIRMED') : [];
   const requestOrders = orders ? orders.filter((o: any) => o.status === 'PENDING' || o.status === 'CREATED') : [];
 
-  const [activeTab, setActiveTab] = useState<"overview"|"profile"|"active"|"requests"|"properties"|"history"|"chat"|"notifications">("active");
+  const [activeTab, setActiveTab] = useState<"overview"|"profile"|"active"|"properties"|"history"|"chat"|"notifications">("active");
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 relative z-10 pb-12 -mt-6">
       
@@ -1306,60 +1306,6 @@ function PartnerDashboard({ locale, partner, prefix, onLogout, orders }: { local
                 </div>
               ))}
               {activeOrders.length === 0 && <div className="p-8 text-center text-gray-500">No active jobs.</div>}
-            </div>
-          </div>
-
-          {/* Incoming Requests */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-amber-50/30">
-              <h2 className="font-bold text-amber-900 flex items-center gap-2">Incoming Requests</h2>
-              <span className="bg-amber-100 text-amber-700 text-xs font-bold px-2.5 py-1 rounded-full animate-pulse">3</span>
-            </div>
-            <div className="divide-y divide-gray-50">
-              
-              <div className="p-6 hover:bg-gray-50 transition cursor-pointer">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-2xl shadow-sm"></div>
-                    <div>
-                      <h3 className="font-bold text-gray-900">Interior Design <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">Specialist</span></h3>
-                      <p className="text-sm text-gray-500 mt-1">Customer #D9P &middot; 2026-04-18</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-gray-500">Budget</p>
-                    <p className="font-bold text-gray-900">฿15,000</p>
-                  </div>
-                </div>
-                <div className="flex gap-3 justify-end border-t border-gray-100 pt-4">
-                  <button className="px-6 py-2 bg-gray-100 text-gray-600 text-sm font-bold rounded-lg hover:bg-gray-200 transition">Decline</button>
-                  <button className="px-6 py-2 bg-purple-600 text-white text-sm font-bold rounded-lg hover:bg-purple-700 transition">Accept</button>
-                </div>
-              </div>
-
-              <div className="p-6 hover:bg-gray-50 transition cursor-pointer">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-2xl shadow-sm relative">
-                      
-                      <span className="absolute -top-2 -right-2 px-1.5 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full">Urgent</span>
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-gray-900">Landscaping <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">Expert</span></h3>
-                      <p className="text-sm text-gray-500 mt-1">Customer #E3R &middot; 2026-04-19</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-gray-500">Budget</p>
-                    <p className="font-bold text-gray-900">฿25,000</p>
-                  </div>
-                </div>
-                <div className="flex gap-3 justify-end border-t border-gray-100 pt-4">
-                  <button className="px-6 py-2 bg-gray-100 text-gray-600 text-sm font-bold rounded-lg hover:bg-gray-200 transition">Decline</button>
-                  <button className="px-6 py-2 bg-purple-600 text-white text-sm font-bold rounded-lg hover:bg-purple-700 transition">Accept</button>
-                </div>
-              </div>
-
             </div>
           </div>
 

@@ -62,7 +62,7 @@ const STATUS_LABEL: Record<string, Record<string, string>> = {
 };
 const getStatusLabel = (status: string, locale: string) => STATUS_LABEL[status]?.[locale] || status.replace(/_/g, " ");
 
-type TabKey = "overview" | "bookings" | "requests" | "property" | "history" | "chat" | "notifications" | "profile";
+type TabKey = "overview" | "bookings" | "property" | "history" | "chat" | "notifications" | "profile";
 
 export default function DashboardPage() {
   const t = useTranslations("dashboard");
@@ -661,7 +661,7 @@ function PropertyTab({ locale, prefix, properties }: { locale: string; prefix: s
 
 /* ===== DASHBOARD LOGGED IN STATE ===== */
 function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { locale: string; subscriber: any; prefix: string; onLogout: () => void, orders: any[] }) {
-  const [activeTab, setActiveTab] = useState<"overview"|"profile"|"active"|"requests"|"properties"|"history"|"chat"|"alerts">("overview");
+  const [activeTab, setActiveTab] = useState<"overview"|"profile"|"active"|"properties"|"history"|"chat"|"alerts">("overview");
   const [waitModalOrder, setWaitModalOrder] = useState<any>(null);
   const handleOrderClick = (o: any) => { if (o.status && ['MATCHING', 'CREATED', 'PENDING'].includes(o.status.trim().toUpperCase())) window.location.href = `${prefix}/booking/resume/${o.id}`; else window.location.href = `${prefix}/chat/${o.id}`; };
   const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLED', 'DONE'].includes(o.status)) : [];

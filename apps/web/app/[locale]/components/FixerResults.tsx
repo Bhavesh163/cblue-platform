@@ -436,6 +436,7 @@ export default function FixerResults({
   initialStep?: string;
   initialOrderData?: any;
 }) {
+
   const t = (key: string) => T[locale]?.[key] || T["en"]![key] || key;
   const [fixers, setFixers] = useState<Fixer[]>([]);
   const [matchError, setMatchError] = useState("");
@@ -451,6 +452,10 @@ export default function FixerResults({
 
   // PO state
   const [poNumber, setPoNumber] = useState(initialOrderData?.poNumber || "PO-0000-0000");
+
+
+
+
   const [partnerConfirmed, setPartnerConfirmed] = useState(initialOrderData?.status?.toUpperCase() === "PENDING");
 
   // Meeting state
@@ -476,6 +481,27 @@ export default function FixerResults({
 
   // Variation amount (stored in state to avoid Math.random() on re-render)
   const [variationAmount, setVariationAmount] = useState(0);
+
+    // Poll order status to auto-advance when partner accepts
+  useEffect(() => {
+    if ((step === "notify" || step === "matching") && initialOrderData?.id) {
+      const interval = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/v1/orders/${initialOrderData.id}`);
+          if (res.ok) {
+            const updated = await res.json();
+            if (updated.status === 'PENDING' && !partnerConfirmed) {
+              setPartnerConfirmed(true);
+              setStep("payment"); // proceed to payment step!
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
+      }, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [step, initialOrderData, partnerConfirmed]);
 
   // Compute variation amount once when entering variation step
   useEffect(() => {

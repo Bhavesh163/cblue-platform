@@ -15,12 +15,12 @@ export default function ResumeBookingPage({ params }: { params: Promise<{ locale
   useEffect(() => {
     const fetchOrder = async () => {
       try {
-        const res = await fetch(`http://localhost:3002/api/orders/${id}`);
+        const res = await fetch(`/api/v1/orders/${id}`);
         if (!res.ok) {
           // Fallback to searching all orders if needed, for safety
           const token = localStorage.getItem("subscriber_token");
           if (token) {
-            const listRes = await fetch("http://localhost:3002/api/orders/user", {
+            const listRes = await fetch("/api/v1/orders/user", {
               headers: { Authorization: `Bearer ${token}` }
             });
             if (listRes.ok) {
