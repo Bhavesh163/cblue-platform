@@ -180,6 +180,7 @@ export default function PartnerZonePage() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [selectedJob, setSelectedJob] = useState<string | null>(null);
+  const [waitModalJob, setWaitModalJob] = useState<Job | null>(null);
   const [messages, setMessages] = useState<Record<string, ChatMessage[]>>(DEMO_MESSAGES);
   const [newMessage, setNewMessage] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -345,7 +346,14 @@ export default function PartnerZonePage() {
 
         {/* Tab Content */}
         {activeTab === "overview" && <OverviewTab t={t} locale={locale} prefix={prefix} profile={userProfile} activeJobs={activeJobs} pastJobs={pastJobs} notifications={DEMO_NOTIFICATIONS} properties={DEMO_PROPERTIES} />}
-        {activeTab === "jobs" && <JobsTab t={t} activeJobs={activeJobs} pastJobs={pastJobs} statusLabels={statusLabels} onSelectJob={(id) => { setSelectedJob(id); setActiveTab("chat"); }} />}
+        {activeTab === "jobs" && <JobsTab t={t} activeJobs={activeJobs} pastJobs={pastJobs} statusLabels={statusLabels} onSelectJob={(id) => { 
+          const job = [...activeJobs, ...pastJobs].find(j => j.id === id);
+          if (job && (job.status === "pending" || (job.status as string) === "MATCHING" || (job.status as any) === "matching")) {
+            setWaitModalJob(job);
+          } else {
+            setSelectedJob(id); setActiveTab("chat"); 
+          }
+        }} />}
         {activeTab === "properties" && <PropertiesTab t={t} locale={locale} prefix={prefix} properties={DEMO_PROPERTIES} />}
         {activeTab === "chat" && <ChatTabContent t={t} messages={messages} selectedJob={selectedJob} setSelectedJob={setSelectedJob} newMessage={newMessage} setNewMessage={setNewMessage} sendMessage={sendMessage} statusLabels={statusLabels} chatEndRef={chatEndRef} />}
         {activeTab === "notifications" && <NotificationsTab t={t} locale={locale} notifications={DEMO_NOTIFICATIONS} />}
@@ -376,6 +384,36 @@ export default function PartnerZonePage() {
           </div>
         </div>
       </div>
+      
+      {waitModalJob && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="mb-2 text-sm font-semibold text-amber-600 bg-amber-50 inline-block px-3 py-1 rounded-full">Step 5 of 12 (Partner)</div>
+            <h2 className="text-2xl font-bold text-gray-900 mt-2">New PO Details</h2>
+            <p className="text-gray-500 mt-2">Customer #{waitModalJob.customerAlias} has placed a new request.</p>
+            
+            <div className="mt-6 w-full bg-gray-50 rounded-xl p-4 space-y-2 text-sm text-left">
+              <div className="flex justify-between"><span className="text-gray-500">PO Number</span><span className="font-mono font-bold text-gray-800">PO-2605-{waitModalJob.id.slice(0, 4)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Customer Budget</span><span className="font-bold text-gray-800">฿3,500</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Project Details</span><span className="font-bold text-gray-800">{waitModalJob.description}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Uploaded Files</span><span className="font-bold text-sky-600 underline cursor-pointer">View Docs</span></div>
+            </div>
+
+            <button 
+              onClick={() => { setSelectedJob(waitModalJob.id); setActiveTab("chat"); setWaitModalJob(null); }} 
+              className="mt-6 w-full py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition"
+            >
+              Open Chat to Confirm
+            </button>
+            <button 
+              onClick={() => setWaitModalJob(null)} 
+              className="mt-2 w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

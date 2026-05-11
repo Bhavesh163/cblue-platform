@@ -1108,7 +1108,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       {waitModalOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200">
-            <div className="mb-2 text-sm font-semibold text-sky-600 bg-sky-50 inline-block px-3 py-1 rounded-full">Step 4 of 11</div>
+            <div className="mb-2 text-sm font-semibold text-sky-600 bg-sky-50 inline-block px-3 py-1 rounded-full">Step 4 of 12</div>
             <h2 className="text-2xl font-bold text-gray-900 mt-2">Waiting for Partner Confirmation</h2>
             <p className="text-gray-500 mt-2">We've notified {waitModalOrder.fixerName || 'the partner'} about your booking. They will review and confirm shortly.</p>
             
@@ -1127,10 +1127,13 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             </div>
 
             <button 
-              onClick={() => setWaitModalOrder(null)} 
+              onClick={() => {
+                setWaitModalOrder(null);
+                window.location.href = `${prefix}/dashboard`; 
+              }} 
               className="mt-6 w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition"
             >
-              Close
+              Go to Our Customer Page
             </button>
           </div>
         </div>

@@ -1,0 +1,7 @@
+#!/bin/bash
+cat << 'ENVA' > backend/.env
+MAILJET_API_KEY=515b1389c9f3ce79b51f58955681dd9c
+MAILJET_SECRET_KEY=95e113e56293d977324d710a3067fb15
+MAILJET_FROM_EMAIL=noreply@lblue.tech
+FRONTEND_URL=https://cblue.co.th/
+ENVA

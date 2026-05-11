@@ -1242,8 +1242,8 @@ export default function FixerResults({
           <p className="text-gray-500 text-sm mb-6">{t("paymentDesc")}</p>
 
           <div className="mx-auto bg-yellow-100 text-yellow-800 rounded-xl border-2 border-yellow-200 flex flex-col items-center justify-center mb-6 p-6 shadow-sm">
-            <span className="font-bold text-lg mb-2">🚧 Testing Period 🚧</span>
-            <span className="text-sm text-center">Click the button below to simulate successful payment and proceed.</span>
+            <span className="font-bold text-lg mb-2">🚧 Payment system via PromptPay QR 🚧</span>
+            <span className="text-sm text-center">Testing Pill: Click the button below to simulate successful payment and proceed. (Mockup QR Code)</span>
           </div>
 
           <div className="bg-gray-50 rounded-xl p-4 mb-6 space-y-2 text-sm">

@@ -1,0 +1,2 @@
+sed -i 's/<div key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer">/<Link href={`${prefix}\/chat\/${o.id}`} key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer">/g' apps/web/app/\[locale\]/dashboard/page.tsx
+sed -i 's/<\/div>\n              ))/\n                <\/Link>\n              ))/' apps/web/app/\[locale\]/dashboard/page.tsx
