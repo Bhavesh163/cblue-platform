@@ -202,7 +202,8 @@ export default function FixerProPage() {
     serviceTh: (o.serviceCategory || "").replace(/_/g, " "),
     serviceZh: (o.serviceCategory || "").replace(/_/g, " "),
     date: new Date(o.createdAt).toLocaleDateString(),
-    tier: "Standard",
+    description: o.description || "",
+    tier: (o.description || "").includes('TIER:') ? (o.description || "").split('TIER:')[1].split(' |')[0] : "Standard",
     status: o.status,
     progress: o.status === 'COMPLETED' ? 100 : o.status === 'IN_PROGRESS' ? 50 : 20,
     fee: o.estimatedPrice ? `฿${o.estimatedPrice}` : "TBD"
@@ -622,7 +623,8 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
               <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center text-lg"></div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? req.serviceTh : locale === "zh" ? req.serviceZh : req.service}</p>
-                <p className="text-xs text-gray-500">{req.customer} &middot; {req.date} &middot; {locale === "th" ? "งบ" : locale === "zh" ? "预算" : "Budget"}: {req.budget}</p>
+                <p className="text-xs text-gray-500">{req.customer} &middot; {req.date} &middot; {locale === "th" ? "งบ" : locale === "zh" ? "预算" : "Budget"}: {req.fee}</p>
+                <p className="text-xs text-gray-500 mt-1" style={{ whiteSpace: "pre-wrap" }}>{req.description}</p>
               </div>
               <div className="flex items-center gap-2">
                 <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[req.tier] || ""}`}>{req.tier}</span>

@@ -616,7 +616,7 @@ export default function FixerResults({
           body: JSON.stringify({
             orderType: bookingType === "household" ? "HOUSEHOLD" : "PROJECT",
             serviceCategory: service,
-            description: `${poNumber} | ${description}`,
+            description: `${poNumber} | TIER:${typeof selectedFixer?.tier === "string" ? selectedFixer.tier.toUpperCase() : "STANDARD"} | ${description}`,
             fixerId: selectedFixer.id,
             estimatedPrice: estPrice,
           })
@@ -687,7 +687,7 @@ export default function FixerResults({
     th: { matching: "จับคู่", select: "เลือก", confirm: "ยืนยัน", po: "PO", notify: "แจ้ง", payment: "จ่าย", chat: "แชท", meeting: "นัดหมาย", variation: "เปลี่ยนแปลง", complete: "เสร็จ", rate: "คะแนน", done: "จบ" },
     zh: { matching: "匹配", select: "选择", confirm: "确认", po: "PO", notify: "通知", payment: "支付", chat: "聊天", meeting: "会面", variation: "变更", complete: "完工", rate: "评分", done: "完成" },
   };
-  const hideVariation = !showVariation && step !== "variation";
+  const hideVariation = false; // Always show variation to be strictly 12 steps
   const visibleSteps = hideVariation ? flowSteps.filter(s => s !== "variation") : flowSteps;
   const visibleIndex = visibleSteps.indexOf(step);
   const StepProgressBar = () => step === "matching" ? null : (
@@ -1198,7 +1198,7 @@ export default function FixerResults({
                 href="/en/dashboard"
                 className="inline-block mt-4 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
               >
-                Go to Dashboard
+                Go to Our Customer Page
               </a>
             </>
           ) : (
