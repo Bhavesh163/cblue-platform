@@ -456,7 +456,7 @@ export default function FixerResults({
 
 
 
-  const [partnerConfirmed, setPartnerConfirmed] = useState(initialOrderData?.status?.toUpperCase() === "PENDING");
+  const [partnerConfirmed, setPartnerConfirmed] = useState(initialOrderData?.status?.toUpperCase() === "CONFIRMED");
 
   // Meeting state
   const [meetingDate, setMeetingDate] = useState("");
@@ -487,10 +487,10 @@ export default function FixerResults({
     if ((step === "notify" || step === "matching") && initialOrderData?.id) {
       const interval = setInterval(async () => {
         try {
-          const res = await fetch(`/api/v1/orders/${initialOrderData.id}`);
+          const res = await fetch(`/api/v1/orders/${initialOrderData.id}`, { headers: { Authorization: `Bearer ${localStorage.getItem("subscriber_token")}` } });
           if (res.ok) {
             const updated = await res.json();
-            if (updated.status === 'PENDING' && !partnerConfirmed) {
+            if (updated.status === 'CONFIRMED') {
               setPartnerConfirmed(true);
               setStep("payment"); // proceed to payment step!
             }

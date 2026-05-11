@@ -274,7 +274,7 @@ export default function FixerProPage() {
                         'Content-Type': 'application/json',
                         ...(token ? { Authorization: `Bearer ${token}` } : {})
                       },
-                      body: JSON.stringify({ status: "PENDING" })
+                      body: JSON.stringify({ status: "CONFIRMED" })
                     });
                     window.location.reload();
                   } catch (e) {
