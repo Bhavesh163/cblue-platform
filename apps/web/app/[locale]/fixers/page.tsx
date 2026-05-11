@@ -74,6 +74,8 @@ export default function FixerProPage() {
   const [showPdpa, setShowPdpa] = useState(false);
 
   const [orders, setOrders] = useState<any[]>([]);
+  const [waitModalOrder, setWaitModalOrder] = useState<any>(null);
+  const handleJobClick = (job: any) => { if (job.status && ['MATCHING', 'CREATED'].includes(job.status.toUpperCase())) setWaitModalOrder(job); else window.location.href = `/${locale}/chat/${job.id}`; };
   const [myProperties, setMyProperties] = useState<any[]>([]);
 
 
@@ -223,14 +225,14 @@ export default function FixerProPage() {
   const chats: any[] = [];
   const notifications: any[] = [];
 
-  const activeJobs = mappedOrders.filter(o => !['COMPLETED', 'CANCELLED', 'CREATED', 'PENDING'].includes(o.status));
+  const activeJobs = mappedOrders.filter(o => !['COMPLETED', 'CANCELLED'].includes(o.status));
   const completedJobs = mappedOrders.filter(o => o.status === 'COMPLETED');
   const incomingJobs = mappedOrders.filter(o => ['CREATED', 'PENDING', 'MATCHING'].includes(o.status));
 
   const tabs: { key: TabKey; label: string; icon: string; badge?: number }[] = [
     { key: "overview", label: locale === "th" ? "ภาพรวม" : locale === "zh" ? "概览" : "Overview", icon: "" },
     { key: "active", label: locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "当前工作" : "Active Jobs", icon: "", badge: 0 },
-    { key: "requests", label: locale === "th" ? "คำขอใหม่" : locale === "zh" ? "新请求" : "Requests", icon: "", badge: 0 },
+    
     { key: "properties", label: locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房产" : "Properties", icon: "" },
     { key: "history", label: locale === "th" ? "ประวัติงาน" : locale === "zh" ? "历史" : "History", icon: "" },
     { key: "chat", label: locale === "th" ? "แชท" : locale === "zh" ? "聊天" : "Chat", icon: "", badge: 0 },
@@ -241,6 +243,44 @@ export default function FixerProPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50/30">
       {/* PDPA Consent Modal */}
+
+      {/* PO Accept/Decline Modal */}
+      {waitModalOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-start mb-4">
+              <div className="mb-2 text-sm font-semibold text-purple-600 bg-purple-50 inline-block px-3 py-1 rounded-full">Step 5 of 12</div>
+              <button onClick={() => setWaitModalOrder(null)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mt-2">Review PO Details</h2>
+            <p className="text-gray-500 mt-2">Customer has placed a request for {waitModalOrder.serviceTh || waitModalOrder.service}. Please review the PO details below and accept or decline.</p>
+            
+            <div className="w-full bg-gray-50 rounded-xl p-5 mt-6 space-y-3 text-sm text-left border border-gray-100 shadow-inner">
+              <div className="flex justify-between border-b pb-2"><span className="text-gray-500">PO Number</span><span className="font-mono font-bold text-gray-800">PO-2605-{waitModalOrder.id ? waitModalOrder.id.slice(0, 4) : '9605'}</span></div>
+              <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Customer</span><span className="font-bold text-gray-800">{waitModalOrder.customer || waitModalOrder.customerAlias || 'Customer'}</span></div>
+              <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Budget</span><span className="font-bold text-amber-600">฿{waitModalOrder.estimatedPrice || 'N/A'}</span></div>
+              <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">Project Details</span><span className="font-bold text-gray-800 bg-white p-2 rounded border border-gray-100">{waitModalOrder.description || waitModalOrder.service}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Uploaded Files</span><span className="font-semibold text-sky-600 cursor-pointer hover:underline">{waitModalOrder.image ? '1 file attached' : '0 files attached'}</span></div>
+            </div>
+
+            <div className="flex gap-4 mt-8">
+              <button 
+                onClick={() => { setWaitModalOrder(null); window.alert('PO Accepted! Notification sent to customer.'); }} 
+                className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl transition shadow-md"
+              >
+                Accept PO
+              </button>
+              <button 
+                onClick={() => setWaitModalOrder(null)} 
+                className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition"
+              >
+                Decline
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showPdpa && (
         <PdpaConsent
           locale={locale}
@@ -343,10 +383,10 @@ export default function FixerProPage() {
 
         {/* Tab Content */}
         <div className={`mt-6 ${activeTab !== 'overview' ? 'hidden' : ''}`}>
-          <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={incomingJobs} completedJobs={completedJobs} earnings={[]} stats={stats} notifications={notifications} />
+          <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={incomingJobs} completedJobs={completedJobs} earnings={[]} stats={stats} notifications={notifications} onJobClick={handleJobClick} />
         </div>
-        {activeTab === "active" && <PartnerJobs locale={locale} activeJobs={activeJobs} />}
-        {activeTab === "requests" && <PartnerRequests locale={locale} incomingJobs={incomingJobs} />}
+        {activeTab === "active" && <PartnerJobs locale={locale} activeJobs={activeJobs} onJobClick={handleJobClick} />}
+        
         {activeTab === "properties" && <PartnerProperties locale={locale} prefix={prefix} properties={myProperties} />}
         {activeTab === "history" && <PartnerHistory locale={locale} completedJobs={completedJobs} />}
         {activeTab === "chat" && <PartnerChats locale={locale} chats={chats} />}
@@ -523,7 +563,7 @@ export default function FixerProPage() {
 }
 
 /* ===== PARTNER OVERVIEW ===== */
-function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJobs, earnings, stats, notifications }: { locale: string; partner: PartnerInfo | null; activeJobs: any[]; incomingJobs: any[]; completedJobs: any[]; earnings: any[]; stats: any; notifications: any[] }) {
+function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJobs, earnings, stats, notifications, onJobClick }: { locale: string; partner: PartnerInfo | null; activeJobs: any[]; incomingJobs: any[]; completedJobs: any[]; earnings: any[]; stats: any; notifications: any[]; onJobClick?: (job: any) => void; }) {
   const maxEarning = earnings.length > 0 ? Math.max(...earnings.map(e => e.amount)) : 0;
   return (
     <div className="space-y-6">
@@ -619,7 +659,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
         </div>
         <div className="divide-y divide-gray-50">
           {incomingJobs.slice(0, 2).map((req) => (
-            <div key={req.id} className="px-6 py-4 flex items-center gap-4 hover:bg-amber-50/30 transition">
+            <div key={req.id} className="px-6 py-4 flex items-center gap-4 hover:bg-amber-50 transition cursor-pointer" onClick={() => onJobClick && onJobClick(req)}>
               <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center text-lg"></div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? req.serviceTh : locale === "zh" ? req.serviceZh : req.service}</p>
@@ -678,7 +718,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
 }
 
 /* ===== PARTNER JOBS (Active) ===== */
-function PartnerJobs({ locale, activeJobs }: { locale: string; activeJobs: any[] }) {
+function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activeJobs: any[]; onJobClick?: (job: any) => void; }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100">
@@ -686,7 +726,7 @@ function PartnerJobs({ locale, activeJobs }: { locale: string; activeJobs: any[]
       </div>
       <div className="divide-y divide-gray-50">
         {activeJobs.map((job) => (
-          <div key={job.id} className="p-6 hover:bg-gray-50/50 transition">
+          <div key={job.id} className="p-6 hover:bg-purple-50 transition cursor-pointer" onClick={() => onJobClick && onJobClick(job)}>
             <div className="flex items-center gap-4 mb-3">
               <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center text-2xl"></div>
               <div className="flex-1">
@@ -699,13 +739,27 @@ function PartnerJobs({ locale, activeJobs }: { locale: string; activeJobs: any[]
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <div className="flex-1">
-                <div className="w-full bg-gray-100 rounded-full h-2">
-                  <div className="bg-purple-500 h-2 rounded-full" style={{ width: `${job.progress}%` }} />
-                </div>
-                <p className="text-xs text-gray-400 mt-1">{job.progress}% {locale === "th" ? "ดำเนินการแล้ว" : locale === "zh" ? "已完成" : "completed"}</p>
-              </div>
-              <button className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg transition">{locale === "th" ? "แชท" : locale === "zh" ? "聊天" : "Chat"}</button>
+              {['MATCHING', 'CREATED', 'PENDING'].includes(job.status?.toUpperCase()) ? (
+                <>
+                  <div className="flex-1">
+                    <p className="text-sm text-amber-600 font-bold mb-1">Awaiting Your Confirmation</p>
+                    <p className="text-xs text-gray-500 line-clamp-1">{job.description || "Review project info and files"}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition" onClick={(e) => { e.stopPropagation(); onJobClick && onJobClick(job); }}>{locale === "th" ? "ดูและรับงาน" : locale === "zh" ? "查看并接受" : "Review & Accept"}</button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex-1">
+                    <div className="w-full bg-gray-100 rounded-full h-2">
+                      <div className="bg-purple-500 h-2 rounded-full" style={{ width: `${job.progress}%` }} />
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">{job.progress}% {locale === "th" ? "ดำเนินการแล้ว" : locale === "zh" ? "已完成" : "completed"}</p>
+                  </div>
+                  <button className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg transition" onClick={(e) => { e.stopPropagation(); window.location.href = `/${locale}/chat/${job.id}`; }}>{locale === "th" ? "แชท" : locale === "zh" ? "聊天" : "Chat"}</button>
+                </>
+              )}
             </div>
           </div>
         ))}
@@ -1058,7 +1112,7 @@ function PartnerDashboard({ locale, partner, prefix, onLogout, orders }: { local
         {[
           { key: "overview", icon: "", label: "Overview", count: null },
           { key: "active", icon: "", label: "Active Jobs", count: 3 },
-          { key: "requests", icon: "", label: "Requests", count: 3 },
+          
           { key: "properties", icon: "", label: "Properties", count: null },
           { key: "history", icon: "", label: "History", count: null },
           { key: "chat", icon: "", label: "Chat", count: 3 },
@@ -1073,8 +1127,8 @@ function PartnerDashboard({ locale, partner, prefix, onLogout, orders }: { local
       </div>
 
       {activeTab === "profile" && <PartnerProfile locale={locale} prefix={prefix} partner={partner} />}
-   {activeTab === "active" && <PartnerJobs locale={locale} activeJobs={activeOrders} />}
-   {activeTab === "requests" && <PartnerRequests locale={locale} incomingJobs={requestOrders} />}
+   {activeTab === "active" && <PartnerJobs locale={locale} activeJobs={[...activeOrders, ...(orders || [])]} />}
+   
   
       
       <div className={`grid grid-cols-1 lg:grid-cols-3 gap-6 ${activeTab !== 'overview' ? 'hidden' : ''}`}>

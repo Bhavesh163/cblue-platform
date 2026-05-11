@@ -180,7 +180,7 @@ export default function DashboardPage() {
     partner: o.fixer?.user?.name || "Pending matching",
     date: new Date(o.createdAt).toLocaleDateString(),
     progress: o.status === 'COMPLETED' ? 100 : o.status === 'IN_PROGRESS' ? 50 : 20,
-    tier: "Standard",
+    tier: o.description?.toUpperCase().includes("TIER:ECONOMY") ? "ECONOMY" : o.description?.toUpperCase().includes("TIER:STANDARD") ? "Standard" : o.description?.toUpperCase().includes("TIER:CORPORATE") ? "Corporate" : o.description?.toUpperCase().includes("TIER:SPECIALIST") ? "Specialist" : o.description?.toUpperCase().includes("TIER:EXPERT") ? "Expert" : "Standard",
     status: o.status,
     rating: 0,
     fee: o.estimatedPrice ? `฿${o.estimatedPrice}` : "TBD"
@@ -194,7 +194,7 @@ export default function DashboardPage() {
   const tabs: { key: TabKey; label: string; icon: string; badge?: number }[] = [
     { key: "overview", label: locale === "th" ? "ภาพรวม" : locale === "zh" ? "概览" : "Overview", icon: "" },
     { key: "bookings", label: locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "当前工作" : "Active Jobs", icon: "", badge: activeOrders.length },
-    { key: "requests", label: locale === "th" ? "คำขอ" : locale === "zh" ? "请求" : "Requests", icon: "", badge: requests.length },
+    
     { key: "property", label: locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房产" : "Properties", icon: "", badge: properties.length > 0 ? properties.length : undefined },
     { key: "history", label: locale === "th" ? "ประวัติ" : locale === "zh" ? "历史" : "History", icon: "" },
     { key: "chat", label: locale === "th" ? "แชท" : locale === "zh" ? "聊天" : "Chat", icon: "", badge: undefined },
@@ -707,7 +707,7 @@ function PropertyTab({ locale, prefix, properties }: { locale: string; prefix: s
 function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { locale: string; subscriber: any; prefix: string; onLogout: () => void, orders: any[] }) {
   const [activeTab, setActiveTab] = useState<"overview"|"profile"|"active"|"requests"|"properties"|"history"|"chat"|"alerts">("overview");
   const [waitModalOrder, setWaitModalOrder] = useState<any>(null);
-  const handleOrderClick = (o: any) => { if (['MATCHING', 'CREATED'].includes(o.status)) setWaitModalOrder(o); else window.location.href = `${prefix}/chat/${o.id}`; };
+  const handleOrderClick = (o: any) => { if (o.status && ['MATCHING', 'CREATED'].includes(o.status.toUpperCase())) setWaitModalOrder(o); else window.location.href = `${prefix}/chat/${o.id}`; };
   const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLED', 'DONE'].includes(o.status)) : [];
   const historyOrders = orders ? orders.filter((o: any) => ['COMPLETED', 'CANCELLED', 'DONE'].includes(o.status)) : [];
   const propertiesCount = orders ? orders.filter((o: any) => o.type === "property").length : 0;
@@ -721,7 +721,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         {[
           { key: "overview", icon: "", label: locale === "th" ? "ภาพรวม" : "Overview", count: null },
           { key: "active", icon: "", label: locale === "th" ? "งานที่ใช้งานอยู่" : "Active Jobs", count: activeOrders.length || null },
-          { key: "requests", icon: "", label: locale === "th" ? "คำขอ" : "Requests", count: null },
+          
           { key: "properties", icon: "", label: locale === "th" ? "อสังหาฯ" : "Properties", count: propertiesCount || null },
           { key: "history", icon: "", label: locale === "th" ? "ประวัติ" : "History", count: historyOrders.length || null },
           { key: "chat", icon: "", label: locale === "th" ? "แชท" : "Chat", count: null },
@@ -740,7 +740,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       {activeTab === "active" && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
           <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-            <h2 className="font-bold text-gray-900 flex items-center gap-2">Active Services</h2>
+            <h2 className="font-bold text-gray-900 flex items-center gap-2">Active Jobs</h2>
             <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full">{activeOrders.length}</span>
           </div>
           <div className="divide-y divide-gray-50">
@@ -748,17 +748,17 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               <div className="p-8 text-center text-gray-500">No active services currently.</div>
             ) : (
               activeOrders.map((o: any, i: number) => (
-                <div key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer">
+                <div key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer" onClick={() => handleOrderClick ? handleOrderClick(o) : null}>
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl shadow-sm">{o.type === 'property' ? '' : o.type === 'project' ? '' : o.type === 'professional' ? '' : ''}</div>
                     <div>
-                      <h3 className="font-bold text-gray-900">{o.service} <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">{o.tier || 'Standard'}</span></h3>
+                      <h3 className="font-bold text-gray-900">{o.service} <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">{o.description?.toUpperCase().includes('TIER:ECONOMY') ? 'ECONOMY' : o.description?.toUpperCase().includes('TIER:STANDARD') ? 'Standard' : (o.tier || 'Standard')}</span></h3>
                       <p className="text-sm text-gray-500 mt-1">{o.fixerName || 'Awaiting Partner'} &middot; {new Date(o.createdAt || Date.now()).toLocaleDateString()}</p>
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-2">
                     <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">{o.status}</span>
-                    {o.status !== 'PENDING' && o.status !== 'CREATED' && <Link href={`${prefix}/chat/${o.id}`} className="text-gray-400 hover:text-sky-600 transition"><span className="text-xl"></span></Link>}
+                    {o.status !== 'PENDING' && o.status !== 'CREATED' && <Link href={`${prefix}/chat/${o.id}`} className="text-gray-400 hover:text-sky-600 transition" onClick={(e) => e.stopPropagation()}><span className="text-xl"></span></Link>}
                   </div>
                 </div>
               ))
@@ -777,7 +777,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               <div className="p-8 text-center text-gray-500">No active requests.</div>
             ) : (
               activeOrders.filter((o: any) => ['CREATED', 'MATCHING', 'PENDING'].includes(o.status)).map((o: any, i: number) => (
-                <div key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer">
+                <div key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer" onClick={() => handleOrderClick ? handleOrderClick(o) : null}>
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center text-2xl shadow-sm"></div>
                     <div>
@@ -802,11 +802,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               <div className="p-8 text-center text-gray-500">No property orders found.</div>
             ) : (
               orders.filter((o: any) => o.type === "property").map((o: any, i: number) => (
-                <div key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer">
+                <div key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer" onClick={() => handleOrderClick ? handleOrderClick(o) : null}>
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-2xl shadow-sm"></div>
                     <div>
-                      <h3 className="font-bold text-gray-900">{o.service} <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">{o.tier || 'Standard'}</span></h3>
+                      <h3 className="font-bold text-gray-900">{o.service} <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">{o.description?.toUpperCase().includes('TIER:ECONOMY') ? 'ECONOMY' : o.description?.toUpperCase().includes('TIER:STANDARD') ? 'Standard' : (o.tier || 'Standard')}</span></h3>
                       <p className="text-sm text-gray-500 mt-1">{o.status} &middot; {new Date(o.createdAt || Date.now()).toLocaleDateString()}</p>
                     </div>
                   </div>
@@ -1012,10 +1012,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         {/* RIGHT COLUMN: Main content feeds */}
         <div className="lg:col-span-2 space-y-6">
           
-          {/* Active Services */}
+          {/* Active Jobs */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-              <h2 className="font-bold text-gray-900 flex items-center gap-2">Active Services</h2>
+              <h2 className="font-bold text-gray-900 flex items-center gap-2">Active Jobs</h2>
               <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full">{activeOrders.length}</span>
             </div>
             <div className="divide-y divide-gray-50">
@@ -1023,17 +1023,17 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 <div className="p-8 text-center text-gray-500">No active services currently.</div>
               ) : (
                 activeOrders.map((o: any, i: number) => (
-                  <div key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer">
+                  <div key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer" onClick={() => handleOrderClick ? handleOrderClick(o) : null}>
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl shadow-sm">{o.type === 'property' ? '' : o.type === 'project' ? '' : o.type === 'professional' ? '' : ''}</div>
                       <div>
-                        <h3 className="font-bold text-gray-900">{o.service} <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">{o.tier || 'Standard'}</span></h3>
+                        <h3 className="font-bold text-gray-900">{o.service} <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">{o.description?.toUpperCase().includes('TIER:ECONOMY') ? 'ECONOMY' : o.description?.toUpperCase().includes('TIER:STANDARD') ? 'Standard' : (o.tier || 'Standard')}</span></h3>
                         <p className="text-sm text-gray-500 mt-1">{o.fixerName || 'Awaiting Partner'} &middot; {new Date(o.createdAt || Date.now()).toLocaleDateString()}</p>
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">{o.status}</span>
-                      {o.status !== 'PENDING' && o.status !== 'CREATED' && <Link href={`${prefix}/chat/${o.id}`} className="text-gray-400 hover:text-sky-600 transition"><span className="text-xl"></span></Link>}
+                      {o.status !== 'PENDING' && o.status !== 'CREATED' && <Link href={`${prefix}/chat/${o.id}`} className="text-gray-400 hover:text-sky-600 transition" onClick={(e) => e.stopPropagation()}><span className="text-xl"></span></Link>}
                     </div>
                   </div>
                 ))
@@ -1048,7 +1048,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             </div>
             <div className="divide-y divide-gray-50">
               {activeOrders.filter((o: any) => o.status !== 'PENDING' && o.status !== 'CREATED').slice(0, 3).map((o: any, i: number) => (
-                <Link key={i} href={`${prefix}/chat/${o.id}`} className="p-4 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer block">
+                <Link key={i} href={`${prefix}/chat/${o.id}`} className="p-4 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer block" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center font-bold text-gray-600 text-sm">
                       {(o.fixerName || 'P').charAt(0)}
@@ -1090,7 +1090,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                         <span className="text-lg">{o.type === 'property' ? '' : ''}</span> {o.service}
                       </td>
                       <td className="px-6 py-4 text-gray-600">{o.fixerName || 'Partner'}</td>
-                      <td className="px-6 py-4"><span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded font-medium">{o.tier || 'Standard'}</span></td>
+                      <td className="px-6 py-4"><span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded font-medium">{o.description?.toUpperCase().includes('TIER:ECONOMY') ? 'ECONOMY' : o.description?.toUpperCase().includes('TIER:STANDARD') ? 'Standard' : (o.tier || 'Standard')}</span></td>
                       <td className="px-6 py-4 text-amber-500 font-bold">5 </td>
                       <td className="px-6 py-4 font-bold text-gray-900">฿{o.finalPrice || o.estimatedPrice || '0'}</td>
                       <td className="px-6 py-4 text-gray-500">{new Date(o.updatedAt || Date.now()).toLocaleDateString()}</td>
@@ -1108,7 +1108,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       {waitModalOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200">
-            <div className="mb-2 text-sm font-semibold text-sky-600 bg-sky-50 inline-block px-3 py-1 rounded-full">Step 4 of 12</div>
+            <div className="mb-2 text-sm font-semibold text-sky-600 bg-sky-50 inline-block px-3 py-1 rounded-full">Step 5 of 12</div>
             <h2 className="text-2xl font-bold text-gray-900 mt-2">Waiting for Partner Confirmation</h2>
             <p className="text-gray-500 mt-2">We've notified {waitModalOrder.fixerName || 'the partner'} about your booking. They will review and confirm shortly.</p>
             
@@ -1118,7 +1118,15 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               
               <div className="w-full bg-gray-50 rounded-xl p-4 space-y-2 text-sm text-left">
                 <div className="flex justify-between"><span className="text-gray-500">PO Number</span><span className="font-mono font-bold text-gray-800">PO-2605-{waitModalOrder.id.slice(0, 4)}</span></div>
-                <div className="flex justify-between"><span className="text-gray-500">Processing Fee</span><span className="font-bold text-gray-800">฿{waitModalOrder.description?.includes('TIER:Economy') ? '100' : waitModalOrder.description?.includes('TIER:Standard') ? '400' : '100'}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Processing Fee</span><span className="font-bold text-gray-800">฿{(() => {
+                  const desc = waitModalOrder.description || '';
+                  if (desc.includes('TIER:ECONOMY')) return '100';
+                  if (desc.includes('TIER:Standard')) return '400';
+                  if (desc.includes('TIER:Corporate') || desc.includes('TIER:Upper')) return '600';
+                  if (desc.includes('TIER:Specialist') || desc.includes('TIER:Manager') || desc.includes('TIER:Luxury')) return '800';
+                  if (desc.includes('TIER:Expert') || desc.includes('TIER:Director') || desc.includes('TIER:Grandeur')) return '1,000';
+                  return '100';
+                })()}</span></div>
               </div>
             </div>
 
@@ -1129,7 +1137,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <button 
               onClick={() => {
                 setWaitModalOrder(null);
-                window.location.href = `${prefix}/dashboard`; 
+                window.location.href = `${prefix}/partner-zone`; 
               }} 
               className="mt-6 w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition"
             >

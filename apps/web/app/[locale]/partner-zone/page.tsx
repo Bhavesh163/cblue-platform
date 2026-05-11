@@ -345,7 +345,13 @@ export default function PartnerZonePage() {
         </div>
 
         {/* Tab Content */}
-        {activeTab === "overview" && <OverviewTab t={t} locale={locale} prefix={prefix} profile={userProfile} activeJobs={activeJobs} pastJobs={pastJobs} notifications={DEMO_NOTIFICATIONS} properties={DEMO_PROPERTIES} />}
+        {activeTab === "overview" && <OverviewTab t={t} locale={locale} prefix={prefix} profile={userProfile} activeJobs={activeJobs} pastJobs={pastJobs} notifications={DEMO_NOTIFICATIONS} properties={DEMO_PROPERTIES} onOrderClick={(job) => {
+          if (job && (job.status === "pending" || job.status === "MATCHING" || job.status === "matching")) {
+            setWaitModalJob(job);
+          } else {
+            setSelectedJob(job.id); setActiveTab("chat");
+          }
+        }} />}
         {activeTab === "jobs" && <JobsTab t={t} activeJobs={activeJobs} pastJobs={pastJobs} statusLabels={statusLabels} onSelectJob={(id) => { 
           const job = [...activeJobs, ...pastJobs].find(j => j.id === id);
           if (job && (job.status === "pending" || (job.status as string) === "MATCHING" || (job.status as any) === "matching")) {
@@ -419,7 +425,8 @@ export default function PartnerZonePage() {
 }
 
 /* ===== OVERVIEW TAB ===== */
-function OverviewTab({ t, locale, prefix, profile, activeJobs, pastJobs, notifications, properties }: {
+function OverviewTab({ t, locale, prefix, profile, activeJobs, pastJobs, notifications, properties, onOrderClick }: {
+  onOrderClick?: (job: any) => void;
   t: Translations; locale: string; prefix: string; profile: ProviderProfile;
   activeJobs: Job[]; pastJobs: Job[]; notifications: Notification[]; properties: PropertyListing[];
 }) {
@@ -462,13 +469,13 @@ function OverviewTab({ t, locale, prefix, profile, activeJobs, pastJobs, notific
           </div>
           <div className="divide-y divide-gray-50">
             {activeJobs.map((job) => (
-              <div key={job.id} className="px-6 py-4 flex items-center gap-3 hover:bg-gray-50/50 transition">
+              <div key={job.id} className="px-6 py-4 flex items-center gap-3 hover:bg-gray-50/50 transition cursor-pointer" onClick={() => onOrderClick && onOrderClick(job)}>
                 <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center text-lg">{ICON_MAP[job.type]}</div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-900 text-sm">{job.serviceCategory}</p>
                   <p className="text-xs text-gray-500">{t.anonymousCustomer} #{job.customerAlias}</p>
                 </div>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[job.tier] || ""}`}>{job.tier}</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[job.tier] || ""}`}>{job.description?.includes('TIER:Economy') ? 'ECONOMY' : job.description?.includes('TIER:Standard') ? 'Standard' : (job.tier || 'Standard')}</span>
                 <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_STYLE[job.status] || ""}`}>{job.status.replace("_", " ")}</span>
               </div>
             ))}
@@ -527,7 +534,7 @@ function JobsTab({ t, activeJobs, pastJobs, statusLabels, onSelectJob }: {
         <div className="flex items-center justify-between text-xs text-gray-400">
           <span>{job.serviceCategory}</span>
           <div className="flex items-center gap-2">
-            <span className={`px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[job.tier] || ""}`}>{job.tier}</span>
+            <span className={`px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[job.tier] || ""}`}>{job.description?.includes('TIER:Economy') ? 'ECONOMY' : job.description?.includes('TIER:Standard') ? 'Standard' : (job.tier || 'Standard')}</span>
             <span>{new Date(job.createdAt).toLocaleDateString()}</span>
           </div>
         </div>
@@ -835,7 +842,7 @@ function HistoryTab({ t, locale, pastJobs, statusLabels }: { t: Translations; lo
                 <td className="py-3 px-4"><span className="mr-2">{ICON_MAP[job.type]}</span><span className="text-gray-700 capitalize">{job.type}</span></td>
                 <td className="py-3 px-4 font-medium text-gray-900">{job.serviceCategory}</td>
                 <td className="py-3 px-4 text-gray-600">#{job.customerAlias}</td>
-                <td className="py-3 px-4 text-center"><span className={`px-2 py-0.5 rounded-full text-xs font-bold ${TIER_STYLE[job.tier] || ""}`}>{job.tier}</span></td>
+                <td className="py-3 px-4 text-center"><span className={`px-2 py-0.5 rounded-full text-xs font-bold ${TIER_STYLE[job.tier] || ""}`}>{job.description?.includes('TIER:Economy') ? 'ECONOMY' : job.description?.includes('TIER:Standard') ? 'Standard' : (job.tier || 'Standard')}</span></td>
                 <td className="py-3 px-4 text-center"><span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_STYLE[job.status] || ""}`}>{statusLabels[job.status]}</span></td>
                 <td className="py-3 px-4 text-center text-gray-500">{new Date(job.createdAt).toLocaleDateString()}</td>
               </tr>

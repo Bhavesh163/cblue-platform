@@ -1233,7 +1233,7 @@ export default function FixerResults({
   // Step: Payment QR
   if (step === "payment" && selectedFixer) {
     const refCode = `CBLUE-${poNumber.replace("PO-", "")}`;
-    const payload = generatePayload("0999999999", { amount: fee });
+    
     return (
       <><StepProgressBar />
       <div className="mx-auto max-w-md px-4 py-12">
@@ -1243,7 +1243,7 @@ export default function FixerResults({
 
           <div className="mx-auto bg-yellow-100 text-yellow-800 rounded-xl border-2 border-yellow-200 flex flex-col items-center justify-center mb-6 p-6 shadow-sm">
             <span className="font-bold text-lg mb-2">🚧 Payment system via PromptPay QR 🚧</span>
-            <span className="text-sm text-center">Testing Pill: Click the button below to simulate successful payment and proceed. (Mockup QR Code)</span>
+            <span className="text-sm text-center">Testing Pill: This is a temporary pill showing it is testing period for customer to click and pass the step.</span>
           </div>
 
           <div className="bg-gray-50 rounded-xl p-4 mb-6 space-y-2 text-sm">

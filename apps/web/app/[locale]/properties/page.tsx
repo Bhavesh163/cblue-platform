@@ -7,7 +7,6 @@ import { useTranslations, useLocale } from "next-intl";
 import { THAI_PROVINCES } from "../lib/constants";
 import PdpaConsent from "../components/PdpaConsent";
 import generatePayload from "promptpay-qr";
-import { QRCodeSVG } from "qrcode.react";
 const PROPERTY_TYPES = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "OFFICE", "APARTMENT", "WAREHOUSE", "FACTORY"] as const;
 
 

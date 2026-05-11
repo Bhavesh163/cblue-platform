@@ -346,8 +346,12 @@ export class SubscriptionService {
       if (!response.ok) {
         const errorText = await response.text();
         this.logger.error(`Mailjet error: ${errorText}`);
+        this.logger.log(
+          `[FALLBACK] Password reset link for ${email}: /en/subscription/reset-password?token=${resetToken}`
+        );
       } else {
         this.logger.log(`Password reset email sent to ${email}`);
+        this.logger.log(`[BACKUP-LINK] /en/subscription/reset-password?token=${resetToken}`);
       }
     } catch (error) {
       this.logger.error(`Failed to send email: ${error}`);
