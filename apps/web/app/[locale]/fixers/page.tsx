@@ -260,7 +260,7 @@ export default function FixerProPage() {
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Customer</span><span className="font-bold text-gray-800">{waitModalOrder.customer || waitModalOrder.customerAlias || 'Customer'}</span></div>
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Budget</span><span className="font-bold text-amber-600">฿{waitModalOrder.estimatedPrice || 'N/A'}</span></div>
               <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">Project Details</span><span className="font-bold text-gray-800 bg-white p-2 rounded border border-gray-100">{waitModalOrder.description || waitModalOrder.service}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Uploaded Files</span><span className="font-semibold text-sky-600 cursor-pointer hover:underline" onClick={() => { const url = waitModalOrder.image || waitModalOrder.fileUrl || (waitModalOrder.projectImages && waitModalOrder.projectImages[0]) || (waitModalOrder.images && waitModalOrder.images[0]) || (waitModalOrder.metadata?.images && waitModalOrder.metadata.images[0]); if(url) window.open(url, "_blank"); else alert("No file attached"); }}>{(waitModalOrder.image || (waitModalOrder.images && waitModalOrder.images.length > 0) || waitModalOrder.fileUrl || (waitModalOrder.projectImages && waitModalOrder.projectImages.length > 0) || waitModalOrder.metadata?.images) ? "1 file attached (Click to View)" : "1 file attached (Click to View)"}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Uploaded Files</span><span className="font-semibold text-sky-600 cursor-pointer hover:underline" onClick={() => { const url = waitModalOrder.image || waitModalOrder.fileUrl || (waitModalOrder.projectImages && waitModalOrder.projectImages[0]) || (waitModalOrder.images && waitModalOrder.images[0]) || (waitModalOrder.metadata?.images && waitModalOrder.metadata.images[0]); if(url) window.open(url, "_blank"); else alert("No file attached. Order JSON: " + JSON.stringify(waitModalOrder)); }}>{(waitModalOrder.image || (waitModalOrder.images && waitModalOrder.images.length > 0) || waitModalOrder.fileUrl || (waitModalOrder.projectImages && waitModalOrder.projectImages.length > 0) || waitModalOrder.metadata?.images) ? "1 file attached (Click to View)" : "1 file attached (Click to View)"}</span></div>
             </div>
 
             <div className="flex gap-4 mt-8">
@@ -268,7 +268,7 @@ export default function FixerProPage() {
                 onClick={async () => {
                   try {
                     const token = localStorage.getItem("subscriber_token");
-                    await fetch(`/api/v1/orders/${waitModalOrder.id}`, {
+                    const res = await fetch(`/api/v1/orders/${waitModalOrder.id}`, {
                       method: 'PUT',
                       headers: {
                         'Content-Type': 'application/json',
@@ -276,6 +276,12 @@ export default function FixerProPage() {
                       },
                       body: JSON.stringify({ status: "CONFIRMED" })
                     });
+                    if (!res.ok) {
+                        const errorText = await res.text();
+                        console.error('Accept PO Error:', errorText);
+                        alert(`Error accepting PO: ${res.status} - ${errorText}`);
+                        return;
+                    }
                     window.location.reload();
                   } catch (e) {
                     console.error(e);
