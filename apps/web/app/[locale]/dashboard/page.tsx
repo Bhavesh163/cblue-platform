@@ -707,7 +707,7 @@ function PropertyTab({ locale, prefix, properties }: { locale: string; prefix: s
 function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { locale: string; subscriber: any; prefix: string; onLogout: () => void, orders: any[] }) {
   const [activeTab, setActiveTab] = useState<"overview"|"profile"|"active"|"requests"|"properties"|"history"|"chat"|"alerts">("overview");
   const [waitModalOrder, setWaitModalOrder] = useState<any>(null);
-  const handleOrderClick = (o: any) => { if (o.status && ['MATCHING', 'CREATED'].includes(o.status.toUpperCase())) setWaitModalOrder(o); else window.location.href = `${prefix}/chat/${o.id}`; };
+  const handleOrderClick = (o: any) => { if (o.status && ['MATCHING', 'CREATED', 'PENDING'].includes(o.status.toUpperCase())) setWaitModalOrder(o); else window.location.href = `${prefix}/chat/${o.id}`; };
   const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLED', 'DONE'].includes(o.status)) : [];
   const historyOrders = orders ? orders.filter((o: any) => ['COMPLETED', 'CANCELLED', 'DONE'].includes(o.status)) : [];
   const propertiesCount = orders ? orders.filter((o: any) => o.type === "property").length : 0;

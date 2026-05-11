@@ -1,0 +1,15 @@
+app/[locale]/properties/page.tsx:10:import { QRCodeSVG } from "qrcode.react";
+app/[locale]/properties/page.tsx:462:                      {locale === "th" ? "สแกน QR Code เพื่อชำระค่าธรรมเนียมดำเนินการ" : locale === "zh" ? "扫描QR码支付处理费" : "Scan QR Code to pay the processing fee"}
+app/[locale]/components/FixerResults.tsx:47:    paymentDesc: "Scan the QR code to pay the processing fee",
+app/[locale]/components/FixerResults.tsx:124:    paymentDesc: "สแกน QR code เพื่อชำระค่าธรรมเนียม",
+app/[locale]/components/FixerResults.tsx:416:import { QRCodeSVG } from "qrcode.react";
+app/[locale]/components/FixerResults.tsx:1233:  // Step: Payment QR
+app/[locale]/components/FixerResults.tsx:1245:            <span className="font-bold text-lg mb-2">🚧 Payment system via PromptPay QR 🚧</span>
+app/[locale]/booking/professional/page.tsx:995:              <p>การชำระเงินผ่าน PromptPay QR จำนวน 300 บาทเป็นค่ามัดจำเพื่อยืนยันการจอง ซึ่งจะหักจากยอดชำระทั้งหมด ค่าบริการสุดท้ายขึ้นอยู่กับประเภทบริการ ระดับช่าง และขอบเขตงาน</p>
+app/[locale]/terms/page.tsx:17:    s4: "When you book a fixer or professional, a processing fee is required based on the selected tier:\n• Economy: ฿100\n• Standard: ฿400\n• Corporate / Upper: ฿600\n• Specialist / Manager / Luxury: ฿800\n• Expert / Director / Grandeur: ฿1,000\n\nPayments are processed via PromptPay QR. All fees are non-refundable once the fixer/professional has confirmed the booking, except where required by applicable law.",
+app/[locale]/terms/page.tsx:49:    s4: "เมื่อจองช่างหรือมืออาชีพ จะมีค่าธรรมเนียมดำเนินการตามระดับที่เลือก:\n• Economy: ฿100\n• Standard: ฿400\n• Corporate / Upper: ฿600\n• Specialist / Manager / Luxury: ฿800\n• Expert / Director / Grandeur: ฿1,000\n\nชำระเงินผ่าน PromptPay QR ค่าธรรมเนียมไม่สามารถขอคืนได้หลังจากช่าง/มืออาชีพยืนยันการจองแล้ว ยกเว้นตามที่กฎหมายกำหนด",
+app/[locale]/terms/page.tsx:81:    s4: "预约技工或专业人员时，需根据所选等级支付处理费：\n• Economy: ฿100\n• Standard: ฿400\n• Corporate / Upper: ฿600\n• Specialist / Manager / Luxury: ฿800\n• Expert / Director / Grandeur: ฿1,000\n\n通过 PromptPay QR 支付。技工/专业人员确认预约后，费用不可退还，法律规定除外。",
+app/[locale]/page.tsx:77:                    ? "ค่าดำเนินการเริ่มต้นที่ 100 บาทสำหรับระดับ Economy, 400 บาท Standard, 600 บาท Corporate, 800 บาท Specialist, และ 1,000 บาทสำหรับ Expert ชำระผ่าน PromptPay QR"
+app/[locale]/page.tsx:80:                    : "Processing fees start at 100 THB for Economy tier, 400 for Standard, 600 for Corporate, 800 for Specialist, and 1,000 THB for Expert tier. Payment via PromptPay QR.",
+app/[locale]/page.tsx:354:                    ? "CBLUE ใช้ AI จับคู่อัจฉริยะเพื่อเสนอช่างซ่อมบ้าน ทีมโครงการ มืออาชีพ และอสังหาริมทรัพย์ที่ดีที่สุดในพื้นที่ของคุณ ราคาโปร่งใส 5 ระดับ จ่ายผ่าน PromptPay QR เริ่มต้นเพียง ฿100 พร้อมรับประกันคุณภาพและระบบรีวิวจริง"
+app/[locale]/page.tsx:357:                    : "CBLUE uses AI smart matching to recommend the best household fixers, project teams, professionals, and properties in your area. Transparent 5-tier pricing, PromptPay QR payment starting from just ฿100, quality guarantee, and verified reviews."}
