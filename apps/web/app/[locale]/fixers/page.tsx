@@ -260,7 +260,7 @@ export default function FixerProPage() {
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Customer</span><span className="font-bold text-gray-800">{waitModalOrder.customer || waitModalOrder.customerAlias || 'Customer'}</span></div>
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Budget</span><span className="font-bold text-amber-600">฿{waitModalOrder.estimatedPrice || 'N/A'}</span></div>
               <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">Project Details</span><span className="font-bold text-gray-800 bg-white p-2 rounded border border-gray-100">{waitModalOrder.description || waitModalOrder.service}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Uploaded Files</span><span className="font-semibold text-sky-600 cursor-pointer hover:underline" onClick={() => { const url = waitModalOrder.image || waitModalOrder.fileUrl || (waitModalOrder.projectImages && waitModalOrder.projectImages[0]) || (waitModalOrder.images && waitModalOrder.images[0]) || (waitModalOrder.metadata?.images && waitModalOrder.metadata.images[0]); if(url) window.open(url, "_blank"); else { alert("Fallback Image Display (Testing Phase)"); window.open("https://picsum.photos/800/600", "_blank"); } }}>{(waitModalOrder.image || (waitModalOrder.images && waitModalOrder.images.length > 0) || waitModalOrder.fileUrl || (waitModalOrder.projectImages && waitModalOrder.projectImages.length > 0) || waitModalOrder.metadata?.images) ? "1 file attached (Click to View)" : "1 file attached (Click to View)"}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Uploaded Files</span><span className="font-semibold text-sky-600 cursor-pointer hover:underline" onClick={() => { const url = waitModalOrder.image || waitModalOrder.fileUrl || (waitModalOrder.projectImages && waitModalOrder.projectImages[0]) || (waitModalOrder.images && waitModalOrder.images[0]) || (waitModalOrder.metadata?.images && waitModalOrder.metadata.images[0]); if(url) window.open(url, "_blank"); else { alert("No file was uploaded for this order."); } }}>{(waitModalOrder.image || (waitModalOrder.images && waitModalOrder.images.length > 0) || waitModalOrder.fileUrl || (waitModalOrder.projectImages && waitModalOrder.projectImages.length > 0) || waitModalOrder.metadata?.images) ? "1 file attached (Click to View)" : "1 file attached (Click to View)"}</span></div>
             </div>
 
             <div className="flex gap-4 mt-8">
@@ -282,7 +282,7 @@ export default function FixerProPage() {
                         alert(`Error accepting PO: ${res.status} - ${errorText}`);
                         return;
                     }
-                    window.location.reload();
+                    alert("PO Accepted Successfully! Notifying Customer..."); window.location.reload();
                   } catch (e) {
                     console.error(e);
                   }
@@ -796,11 +796,11 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
               {['MATCHING', 'CREATED', 'PENDING'].includes(job.status?.trim()?.toUpperCase()) ? (
                 <>
                   <div className="flex-1">
-                    <p className="text-sm text-amber-600 font-bold mb-1">Awaiting Your Confirmation</p>
+                    <p className="text-sm text-amber-600 font-bold mb-1">Processing</p>
                     <p className="text-xs text-gray-500 line-clamp-1">{job.description || "Review project info and files"}</p>
                   </div>
                   <div className="flex gap-2">
-                    <button className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition" onClick={(e) => { e.stopPropagation(); onJobClick && onJobClick(job); }}>{locale === "th" ? "ดูและรับงาน" : locale === "zh" ? "查看并接受" : "Review & Accept"}</button>
+                    <button className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition" onClick={(e) => { e.stopPropagation(); onJobClick && onJobClick(job); }}>{locale === "th" ? "ดูและรับงาน" : locale === "zh" ? "查看并接受" : "Review Job"}</button>
                   </div>
                 </>
               ) : (
