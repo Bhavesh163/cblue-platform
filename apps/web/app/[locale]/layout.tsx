@@ -1,3 +1,6 @@
+import { ChatbotWidget } from "./components/ChatbotWidget";
+import { setRequestLocale } from "next-intl/server";
+import { NextIntlClientProvider } from "next-intl";
 import { Header } from "./components/Header";
 import { Footer } from "./components/Footer";
 import type { Metadata } from "next";
