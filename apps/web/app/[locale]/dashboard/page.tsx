@@ -709,7 +709,14 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                     <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl shadow-sm">{o.type === 'property' ? '' : o.type === 'project' ? '' : o.type === 'professional' ? '' : ''}</div>
                     <div>
                       <h3 className="font-bold text-gray-900">{o.service} <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">{o.description?.toUpperCase().includes('TIER:ECONOMY') ? 'ECONOMY' : o.description?.toUpperCase().includes('TIER:STANDARD') ? 'Standard' : (o.tier || 'Standard')}</span></h3>
-                      <p className="text-sm text-gray-500 mt-1">{o.fixerName || 'Awaiting Partner'} &middot; {new Date(o.createdAt || Date.now()).toLocaleDateString()}</p>
+                      <p className="text-sm text-gray-500 mt-1 mb-2">
+                          <span className="font-semibold text-gray-700">{o.fixerName || 'Awaiting Partner'}</span>
+                        </p>
+                        <div className="bg-white rounded p-2 text-xs border space-y-1 mb-2">
+                           <div className="flex justify-between font-mono"><span className="text-gray-400">PO:</span> <span className="font-semibold">PO-2605-{o.id ? o.id.slice(0, 4) : 'xxxx'}</span></div>
+                           <div className="flex justify-between"><span className="text-gray-400">Service:</span> <span className="font-semibold truncate">{o.serviceCategory || o.serviceTh || 'General'}</span></div>
+                           <div className="flex justify-between"><span className="text-gray-400">Est. Cost:</span> <span className="font-semibold text-amber-600">฿{o.estimatedPrice || 'N/A'}</span></div>
+                        </div>
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-2">
@@ -961,7 +968,14 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                       <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl shadow-sm">{o.type === 'property' ? '' : o.type === 'project' ? '' : o.type === 'professional' ? '' : ''}</div>
                       <div>
                         <h3 className="font-bold text-gray-900">{o.service} <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">{o.description?.toUpperCase().includes('TIER:ECONOMY') ? 'ECONOMY' : o.description?.toUpperCase().includes('TIER:STANDARD') ? 'Standard' : (o.tier || 'Standard')}</span></h3>
-                        <p className="text-sm text-gray-500 mt-1">{o.fixerName || 'Awaiting Partner'} &middot; {new Date(o.createdAt || Date.now()).toLocaleDateString()}</p>
+                        <p className="text-sm text-gray-500 mt-1 mb-2">
+                          <span className="font-semibold text-gray-700">{o.fixerName || 'Awaiting Partner'}</span>
+                        </p>
+                        <div className="bg-white rounded p-2 text-xs border space-y-1 mb-2">
+                           <div className="flex justify-between font-mono"><span className="text-gray-400">PO:</span> <span className="font-semibold">PO-2605-{o.id ? o.id.slice(0, 4) : 'xxxx'}</span></div>
+                           <div className="flex justify-between"><span className="text-gray-400">Service:</span> <span className="font-semibold truncate">{o.serviceCategory || o.serviceTh || 'General'}</span></div>
+                           <div className="flex justify-between"><span className="text-gray-400">Est. Cost:</span> <span className="font-semibold text-amber-600">฿{o.estimatedPrice || 'N/A'}</span></div>
+                        </div>
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-2">
@@ -1042,7 +1056,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="mb-2 text-sm font-semibold text-sky-600 bg-sky-50 inline-block px-3 py-1 rounded-full">Step 5 of 12</div>
-            <h2 className="text-2xl font-bold text-gray-900 mt-2">Waiting for Partner Confirmation</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mt-2">Pending Payment</h2>
             <p className="text-gray-500 mt-2">We've notified {waitModalOrder.fixerName || 'the partner'} about your booking. They will review and confirm shortly.</p>
             
             <div className="mt-6 flex flex-col items-center">

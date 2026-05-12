@@ -1,4 +1,9 @@
+const fs = require('fs');
 
+const FILE = 'apps/web/app/[locale]/chat/[id]/ClientChatPage.tsx';
+let data = fs.readFileSync(FILE, 'utf8');
+
+const newCode = `
 "use client";
 
 import { useEffect, useState } from "react";
@@ -19,8 +24,8 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
   useEffect(() => {
     const token = localStorage.getItem("subscriber_token") || localStorage.getItem("token");
     if (!token) return;
-    fetch(`/api/v1/orders/${orderId}`, {
-      headers: { Authorization: `Bearer ${token}` }
+    fetch(\`/api/v1/orders/\${orderId}\`, {
+      headers: { Authorization: \`Bearer \${token}\` }
     })
       .then(res => res.json())
       .then(data => setOrder(data))
@@ -31,7 +36,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
 
   return (
     <div className="max-w-md mx-auto p-4 py-8">
-      <Link href={isPartner ? `/${locale}/fixers` : `/${locale}/dashboard`} className="text-blue-600 hover:underline mb-4 inline-block">
+      <Link href={isPartner ? \`/\${locale}/fixers\` : \`/\${locale}/dashboard\`} className="text-blue-600 hover:underline mb-4 inline-block">
         &larr; Go back to {isPartner ? "Our Partner" : "Our Customer"}
       </Link>
       <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 text-center">
@@ -78,7 +83,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
         </div>
         
         { order.status === 'ASSIGNED' && !isPartner && (
-            <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl transition" onClick={() => window.location.href = `/${locale}/payment`}>
+            <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl transition" onClick={() => window.location.href = \`/\${locale}/payment\`}>
               Proceed to Temporary Payment Validation
             </button>
         )}
@@ -91,3 +96,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
     </div>
   );
 }
+`;
+
+fs.writeFileSync(FILE, newCode);
+console.log('Fixed ClientChatPage');
