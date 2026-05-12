@@ -274,7 +274,7 @@ export default function FixerProPage() {
                         'Content-Type': 'application/json',
                         ...(token ? { Authorization: `Bearer ${token}` } : {})
                       },
-                      body: JSON.stringify({ status: "CONFIRMED" })
+                      body: JSON.stringify({ status: "ASSIGNED" })
                     });
                     if (!res.ok) {
                         const errorText = await res.text();
@@ -766,7 +766,6 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
             </table>
           </div>
         </div>
-      </div>
     </div>
   );
 }
