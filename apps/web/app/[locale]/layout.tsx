@@ -2,16 +2,7 @@ import { Header } from "./components/Header";
 import { Footer } from "./components/Footer";
 import type { Metadata } from "next";
 
-export const metadata: Metadata = {
-  title: "CBLUE | Find Fixers, Pros & Properties in Thailand",
-  description: "Best-in-class enterprise platform for matching fixers, project teams, professionals and properties in Thailand. Expert household maintenance, property sales, lawyer, accountant, CPA, architect and more.",
-  keywords: [
-    "ช่างซ่อมบ้าน", "หาช่างซ่อมบ้าน", "มืออาชีพ", "หามืออาชีพ", "เจ้าหน้าที่ความปลอดภัย", "หาเจ้าหน้าที่ความปลอดภัย", "ตรวจประจำปี", "วิศวกรกรควบคุมงาน", "หาวิศวกรกรควบคุมงาน", "ผู้ตรวจสอบบัญชี", "หาผู้ตรวจสอบบัญชี", "ผู้ออกแบบ", "หาผู้ออกแบบ", "ขายบ้าน", "ขายคอนโด", "ขายโกดัง", "ขายที่ดิน", "ขายโรงงาน", "ขายอาคาร", "บ้าน", "คอนโด", "โกดัง", "ที่ดิน", "โรงงาน", "อาคาร", "ออฟฟิศ", "บ้านให้เช่า", "คอนโดให้เช่า", "โกดังให้เช่า", "ที่ดินให้เช่า", "โรงงานให้เช่า", "อาคารให้เช่า", "บ้านมื่อสอง", "คอนโดมื่อสอง", "โกดังมื่อสอง", "ที่ดินมื่อสอง", "โรงงานมื่อสอง", "อาคารมื่อสอง", "ออฟฟิศ", "เช่าบ้าน", "เช่าคอนโด", "เช่าโกดัง", "เช่าที่ดิน", "เช่าโรงงาน", "เช่าอาคาร", "เช่าออฟฟิศ", "หาทาวน์เฮ้าส์", "ทาวน์เฮ้าส์ให้เช่า", "ทาวน์เฮ้าส์มื่อสอง", "ซื้อทาวน์เฮ้าส์", "ขายทาวน์เฮ้าส์",
-    "Lawyer", "accountant", "CPA", "Architect", "Interior Designer", "Design Civil Engineer", "Construction Civil Engineer", "Design Mechanical Engineer", "Construction Mechanical Engineer", "Design Electrical Engineer", "Construction Electrical Engineer", "Software Programer", "Digital Marketing", "Safety manager", "HSE manager", "firelifesafety", "FLS", "Lawyer search", "accountant search", "CPA search", "Architect search", "Interior Designer search", "Design Civil Engineer search", "Construction Civil Engineer search", "Design Mechanical Engineer", "Construction Mechanical Engineer", "Design Electrical Engineer", "Construction Electrical Engineer", "Software Programer", "Digital Marketing search", "Safety manager search", "HSE manager search", "firelifesafety search", "FLS search",
-    "家庭维修工", "寻找维修工", "专业人士", "寻找专业人士", "安全主任", "年度检查", "监理工程师", "审计师", "寻找审计师", "设计师", "出售房屋", "出售公寓", "出售仓库", "出售土地", "出售工厂", "出售建筑", "租房", "二手房", "办公室", "律师", "会计师", "注册会计师", "建筑师", "室内设计师", "土木工程师", "机械工程师", "电气工程师", "软件程序员", "数字营销", "cblue", "cblue.co.th", "www.cblue.co.th", "cblue หาช่าง", "cblue หาช่างซ่อมบ้าน", "cblue home fixer"
-  ]
-};
-}): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
   const titles: Record<string, string> = {
     th: "CBLUE - แพลตฟอร์มช่างซ่อมบำรุง ทีมโครงการ มืออาชีพ และอสังหาริมทรัพย์อันดับ 1 ของไทย",
