@@ -492,7 +492,7 @@ export default function FixerResults({
             const updated = await res.json();
             if (updated.status === 'CONFIRMED') {
               setPartnerConfirmed(true);
-              setStep("payment"); // proceed to payment step!
+              setStep("confirm"); // proceed to confirm step!
             }
           }
         } catch (e) {

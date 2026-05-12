@@ -704,9 +704,9 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
           </div>
         </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-          <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">{locale === "th" ? "แชทล่าสุด" : locale === "zh" ? "最近聊天" : "Recent Chats"}</h3>
+          <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">{locale === "th" ? "แชทที่เข้ามาล่าสุด" : locale === "zh" ? "最近收到的来信" : "Recent incoming chats"}</h3>
           <div className="space-y-2">
-            {chats && chats.length > 0 ? chats.slice(0, 1).map((c: any) => (
+            {chats && chats.length > 0 ? chats.slice(0, 4).map((c: any) => (
               <div key={c.id} className={`flex items-center gap-3 p-3 rounded-lg ${c.unread > 0 ? "bg-purple-50 border border-purple-100" : "bg-gray-50"}`}>
                 <div className="relative">
                   <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600">{c.name.slice(-3)}</div>
@@ -721,7 +721,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
                   {c.unread > 0 && <span className="block mt-0.5 ml-auto w-5 h-5 bg-purple-600 text-white text-[10px] rounded-full flex items-center justify-center font-bold">{c.unread}</span>}
                 </div>
               </div>
-            )) : <p className="text-sm text-gray-500 py-4 text-center">{locale === "th" ? "ไม่มีแชทล่าสุด" : locale === "zh" ? "没有最近的聊天" : "No recent chats"}</p>}
+            )) : <p className="text-sm text-gray-500 py-4 text-center">{locale === "th" ? "ไม่มีแชทล่าสุด" : locale === "zh" ? "没有最近的聊天" : "No recent incoming chats"}</p>}
           </div>
         </div>
       </div>
@@ -734,12 +734,12 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
           <span className="text-xs bg-sky-100 text-sky-700 px-2.5 py-1 rounded-full font-bold">{activeJobs.length}</span>
         </div>
         <div className="divide-y divide-gray-50">
-          {activeJobs.map((job) => (
+          {activeJobs.slice(0, 5).map((job) => (
             <div key={job.id} className="px-6 py-4 flex items-center gap-4 hover:bg-gray-50/50 transition">
               <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center text-lg"></div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? job.serviceTh : locale === "zh" ? job.serviceZh : job.service}</p>
-                <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; PO: {job.poNumber || job.id.slice(-6)} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || job.earnings || "-"} &middot; {locale === "th" ? "โครงการ" : "Project"}: {job.project || "Cblue"}</p>
+                <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || job.earnings || "-"} &middot; PO-{job.poNumber || job.id.slice(-6)} | {job.subdistrict || "Saphansong"}</p>
                 <div className="mt-1.5 w-full bg-gray-100 rounded-full h-1.5">
                   <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${job.progress}%` }} />
                 </div>
@@ -801,12 +801,12 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
         <span className="text-xs bg-sky-100 text-sky-700 px-2.5 py-1 rounded-full font-bold">{activeJobs.length}</span>
       </div>
       <div className="divide-y divide-gray-50">
-        {activeJobs.map((job) => (
+        {activeJobs.slice(0, 5).map((job) => (
           <div key={job.id} className="px-6 py-4 flex items-center gap-4 hover:bg-gray-50/50 transition">
             <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center text-lg"></div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? job.serviceTh : locale === "zh" ? job.serviceZh : job.service}</p>
-              <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; PO: {job.poNumber || job.id.slice(-6)} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || job.earnings || "-"} &middot; {locale === "th" ? "โครงการ" : "Project"}: {job.project || "Cblue"}</p>
+              <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || job.earnings || "-"} &middot; PO-{job.poNumber || job.id.slice(-6)} | {job.subdistrict || "Saphansong"}</p>
               <div className="mt-1.5 w-full bg-gray-100 rounded-full h-1.5">
                 <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${job.progress}%` }} />
               </div>
@@ -901,7 +901,7 @@ function PartnerChats({ locale, chats }: { locale: string; chats: any[] }) {
         <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "แชท" : locale === "zh" ? "聊天" : "Chats"}</h2>
       </div>
       <div className="divide-y divide-gray-50">
-        {chats && chats.length > 0 ? chats.slice(0, 1).map((c: any) => (
+        {chats && chats.length > 0 ? chats.slice(0, 4).map((c: any) => (
           <div key={c.id} className={`flex items-center gap-4 px-6 py-4 cursor-pointer transition hover:bg-gray-50`}>
             <div className="relative">
               <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-sm font-bold text-gray-600">{c.customerId || c.customerName?.slice(0, 2) || "C"}</div>
