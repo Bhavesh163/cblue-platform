@@ -703,7 +703,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
           <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">{locale === "th" ? "การแจ้งเตือนล่าสุด" : locale === "zh" ? "最近通知" : "Recent Alerts"}</h3>
           <div className="space-y-2">
-            {notifications.slice(0, 3).map((n) => (
+            {notifications.slice(0, 1).map((n) => (
               <div key={n.id} className={`flex items-center gap-3 p-3 rounded-lg ${n.unread ? "bg-purple-50 border border-purple-100" : "bg-gray-50"}`}>
                 <span className={`w-2 h-2 rounded-full ${n.dot} flex-shrink-0`} />
                 <p className="text-sm text-gray-700 flex-1">{locale === "th" ? n.msgTh : locale === "zh" ? n.msgZh : n.msg}</p>
@@ -715,7 +715,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
           <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">{locale === "th" ? "แชทล่าสุด" : locale === "zh" ? "最近聊天" : "Recent Chats"}</h3>
           <div className="space-y-2">
-            {chats && chats.length > 0 ? chats.map((c: any) => (
+            {chats && chats.length > 0 ? chats.slice(0, 1).map((c: any) => (
               <div key={c.id} className={`flex items-center gap-3 p-3 rounded-lg ${c.unread > 0 ? "bg-purple-50 border border-purple-100" : "bg-gray-50"}`}>
                 <div className="relative">
                   <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600">{c.name.slice(-3)}</div>
@@ -871,7 +871,7 @@ function PartnerChats({ locale, chats }: { locale: string; chats: any[] }) {
         <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "แชท" : locale === "zh" ? "聊天" : "Chats"}</h2>
       </div>
       <div className="divide-y divide-gray-50">
-        {chats && chats.length > 0 ? chats.map((c: any) => (
+        {chats && chats.length > 0 ? chats.slice(0, 1).map((c: any) => (
           <div key={c.id} className={`flex items-center gap-4 px-6 py-4 cursor-pointer transition hover:bg-gray-50`}>
             <div className="relative">
               <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-sm font-bold text-gray-600">{c.customerId || c.customerName?.slice(0, 2) || "C"}</div>
