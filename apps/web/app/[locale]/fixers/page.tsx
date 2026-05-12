@@ -265,7 +265,7 @@ export default function FixerProPage() {
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Budget</span><span className="font-bold text-amber-600">฿{waitModalOrder.budget || waitModalOrder.estimatedPrice || waitModalOrder.finalPrice || '0'}</span></div>
               <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">Project Details</span><span className="font-bold text-gray-800 bg-white p-2 rounded border border-gray-100">{waitModalOrder.description || waitModalOrder.service}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Uploaded Files</span><span className="font-semibold text-sky-600 cursor-pointer hover:underline" onClick={() => { 
-                let url = waitModalOrder.image || waitModalOrder.fileUrl || (waitModalOrder.projectImages && waitModalOrder.projectImages[0]) || (waitModalOrder.images && waitModalOrder.images[0]) || (waitModalOrder.metadata?.images && waitModalOrder.metadata.images[0]); 
+                let url = waitModalOrder?.issueImage || waitModalOrder?.image || waitModalOrder?.fileUrl || (waitModalOrder?.projectImages && waitModalOrder?.projectImages[0]) || (waitModalOrder?.images && waitModalOrder?.images[0]) || (waitModalOrder?.metadata?.images && waitModalOrder?.metadata.images[0]) || (waitModalOrder?.metadata?.issueImageUrl) || (waitModalOrder?.metadata?.issueImage); 
                 if(!url) {
                     try {
                         const localData = JSON.parse(localStorage.getItem("jobData") || "{}");
