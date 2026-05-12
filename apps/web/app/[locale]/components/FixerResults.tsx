@@ -695,7 +695,7 @@ export default function FixerResults({
   const handleVariationDecision = (approved: boolean) => {
     setVariationApproved(approved);
     // Both cases proceed to complete — approved = addendum accepted, rejected = original scope only
-    setStep("complete");
+    setStep("payment");
   };
 
   const handleCompleteConfirm = () => {
@@ -1271,9 +1271,9 @@ export default function FixerResults({
           <h2 className="text-xl font-bold text-gray-800 mb-2">{t("paymentTitle")}</h2>
           <p className="text-gray-500 text-sm mb-6">{t("paymentDesc")}</p>
 
-          <div className="mx-auto bg-yellow-100 text-yellow-800 rounded-xl border-2 border-yellow-200 flex flex-col items-center justify-center mb-6 p-6 shadow-sm">
-            <span className="font-bold text-lg mb-2">🚧 Payment system via PromptPay QR 🚧</span>
-            <span className="text-sm text-center">Testing Pill: This is a temporary pill showing it is testing period for customer to click and pass the step.</span>
+          <div className="mx-auto bg-yellow-100 text-yellow-800 rounded-xl border-2 border-yellow-200 flex flex-col items-center justify-center mb-6 p-6 shadow-sm cursor-pointer hover:bg-yellow-200 transition" onClick={() => setStep("done")}>
+            <span className="font-bold text-lg mb-2">🚧 Testing Period Payment Pill 🚧</span>
+            <span className="text-sm text-center font-bold">Click here to pass free payment simulation</span>
           </div>
 
           <div className="bg-gray-50 rounded-xl p-4 mb-6 space-y-2 text-sm">

@@ -269,7 +269,7 @@ export class SubscriptionService {
         {
           From: {
             Email:
-              this.configService.get<string>('mailjet.fromEmail') ||
+               
               'noreply@lblue.tech',
             Name: 'CBLUE',
           },
