@@ -61,7 +61,7 @@ const STATUS_LABEL: Record<string, Record<string, string>> = {
 };
 const getStatusLabel = (status: string, locale: string) => STATUS_LABEL[status]?.[locale] || status.replace(/_/g, " ");
 
-type TabKey = "overview" | "active" | "properties" | "history" | "chat" | "notifications" | "profile";
+type TabKey = "overview" | "requests" | "active" | "properties" | "history" | "chat" | "notifications" | "profile";
 
 export default function FixerProPage() {
   const locale = useLocale();
@@ -231,6 +231,8 @@ export default function FixerProPage() {
 
   const tabs: { key: TabKey; label: string; icon: string; badge?: number }[] = [
     { key: "overview", label: locale === "th" ? "ภาพรวม" : locale === "zh" ? "概览" : "Overview", icon: "" },
+    { key: "requests", label: locale === "th" ? "คำขอใหม่" : locale === "zh" ? "新请求" : "Requests", icon: "📋", badge: 4 },
+    { key: "requests", label: locale === "th" ? "คำขอใหม่" : locale === "zh" ? "新请求" : "Requests", icon: "📋", badge: 4 },
     { key: "active", label: locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "当前工作" : "Active Jobs", icon: "", badge: 0 },
     
     { key: "properties", label: locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房产" : "Properties", icon: "" },
@@ -1132,7 +1134,9 @@ function PartnerDashboard({ locale, partner, prefix, onLogout, orders }: { local
       <div className="flex gap-2 bg-white rounded-xl shadow-sm border border-gray-200 p-2 mb-6 overflow-x-auto no-scrollbar">
         {[
           { key: "overview", icon: "", label: "Overview", count: null },
-          { key: "active", icon: "", label: "Active Jobs", count: 3 },
+          { key: "requests", label: locale === "th" ? "คำขอใหม่" : locale === "zh" ? "新请求" : "Requests", icon: "📋", badge: 4 },
+    { key: "requests", label: locale === "th" ? "คำขอใหม่" : locale === "zh" ? "新请求" : "Requests", icon: "📋", badge: 4 },
+    { key: "active", icon: "", label: "Active Jobs", count: 3 },
           
           { key: "properties", icon: "", label: "Properties", count: null },
           { key: "history", icon: "", label: "History", count: null },
