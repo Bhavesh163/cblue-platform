@@ -35,6 +35,23 @@ const stats = {
 
 
 
+  const EARNINGS_MOCK = [
+    { month: "Feb 25", monthTh: "ก.พ. 25", monthZh: "2月 25", amount: 12000 },
+    { month: "Mar 25", monthTh: "มี.ค. 25", monthZh: "3月 25", amount: 15400 },
+    { month: "Apr 25", monthTh: "เม.ย. 25", monthZh: "4月 25", amount: 11000 },
+    { month: "May 25", monthTh: "พ.ค. 25", monthZh: "5月 25", amount: 18500 },
+    { month: "Jun 25", monthTh: "มิ.ย. 25", monthZh: "6月 25", amount: 16000 },
+    { month: "Jul 25", monthTh: "ก.ค. 25", monthZh: "7月 25", amount: 20000 },
+    { month: "Aug 25", monthTh: "ส.ค. 25", monthZh: "8月 25", amount: 22000 },
+    { month: "Sep 25", monthTh: "ก.ย. 25", monthZh: "9月 25", amount: 19500 },
+    { month: "Oct 25", monthTh: "ต.ค. 25", monthZh: "10月 25", amount: 23000 },
+    { month: "Nov 25", monthTh: "พ.ย. 25", monthZh: "11月 25", amount: 21000 },
+    { month: "Dec 25", monthTh: "ธ.ค. 25", monthZh: "12月 25", amount: 18000 },
+    { month: "Jan 26", monthTh: "ม.ค. 26", monthZh: "1月 26", amount: 25000 },
+    { month: "Feb 26", monthTh: "ก.พ. 26", monthZh: "2月 26", amount: 24000 },
+    { month: "Mar 26", monthTh: "มี.ค. 26", monthZh: "3月 26", amount: 26500 },
+  ];
+
 const chats: any[] = [];
 
 const notifications: any[] = [];
@@ -58,9 +75,9 @@ const STATUS_LABEL: Record<string, Record<string, string>> = {
   CONFIRMED: { en: "Confirmed", th: "ยืนยันแล้ว", zh: "已确认" },
   PENDING: { en: "Pending", th: "รอดำเนินการ", zh: "待处理" },
   COMPLETED: { en: "Completed", th: "เสร็จสิ้น", zh: "已完成" },
-  ASSIGNED: { en: "Waiting for customer to proceed", th: "รอให้ลูกค้าดำเนินการ", zh: "等待客户处理" },
-  ACCEPTED: { en: "Waiting for customer to proceed", th: "รอให้ลูกค้าดำเนินการ", zh: "等待客户处理" },
-  MATCHING: { en: "Action needed", th: "โปรดดำเนินการในคำขอใหม่", zh: "需要处理新请求" },
+  ASSIGNED: { en: "", th: "", zh: "" },
+  ACCEPTED: { en: "", th: "", zh: "" },
+  MATCHING: { en: "Action needed", th: "Action needed", zh: "Action needed" },
 };
 const getStatusLabel = (status: string, locale: string) => STATUS_LABEL[status]?.[locale] || status.replace(/_/g, " ");
 
@@ -198,21 +215,35 @@ export default function FixerProPage() {
 
 
   
-  const mappedOrders = orders.map(o => ({
-        id: o.id,
-    customer: o.user?.name || "Customer",
-    type: o.orderType?.toLowerCase() || "household",
-    phone: o.user?.phone || "",
-    service: (o.serviceCategory || "").replace(/_/g, " "),
-    serviceTh: (o.serviceCategory || "").replace(/_/g, " "),
-    serviceZh: (o.serviceCategory || "").replace(/_/g, " "),
-    date: new Date(o.createdAt).toLocaleDateString(),
-    description: o.description || "",
-    tier: (o.description || "").includes('TIER:') ? (o.description || "").split('TIER:')[1].split(' |')[0] : "Standard",
-    status: o.status,
-    progress: o.status === 'COMPLETED' ? 100 : (['IN_PROGRESS', 'CONFIRMED', 'ACCEPTED'].includes(o.status) ? 40 : 15),
-    fee: o.estimatedPrice ? `฿${o.estimatedPrice.toLocaleString()}` : "0", budget: o.estimatedPrice ? o.estimatedPrice.toLocaleString() : "0"
-  }));
+  const mappedOrders = orders.map(o => {
+    const desc = o.description || "";
+    let extractedPo = "";
+    if (desc.includes("PO-")) {
+      extractedPo = desc.match(/PO-[a-zA-Z0-9-]+/)?.[0] || "";
+    }
+    if (!extractedPo) {
+      extractedPo = `PO-${o.id?.slice(0, 4)}-${o.id?.slice(4, 8)}`;
+    }
+    
+    return {
+      id: o.id,
+      po: extractedPo,
+      subdistrict: o.location ? o.location.split(' ')[0] : "Saphansong",
+      customer: o.user?.name || "Customer",
+      type: o.orderType?.toLowerCase() || "household",
+      phone: o.user?.phone || "",
+      service: (o.serviceCategory || "").replace(/_/g, " "),
+      serviceTh: (o.serviceCategory || "").replace(/_/g, " "),
+      serviceZh: (o.serviceCategory || "").replace(/_/g, " "),
+      date: new Date(o.createdAt).toLocaleDateString(),
+      description: desc,
+      tier: desc.includes('TIER:') ? desc.split('TIER:')[1].split(' |')[0] : "Standard",
+      status: o.status,
+      progress: o.status === 'COMPLETED' ? 100 : (['IN_PROGRESS', 'CONFIRMED', 'ACCEPTED'].includes(o.status) ? 40 : 15),
+      fee: o.estimatedPrice ? `฿${o.estimatedPrice.toLocaleString()}` : "0", 
+      budget: o.estimatedPrice ? o.estimatedPrice.toLocaleString() : "0"
+    };
+  });
 
   
   const properties = myProperties.map(p => ({
@@ -225,6 +256,23 @@ export default function FixerProPage() {
     status: p.status,
     fee: p.price ? `฿${p.price.toLocaleString()}` : "N/A"
   }));
+  const EARNINGS_MOCK = [
+    { month: "Feb 25", monthTh: "ก.พ. 25", monthZh: "2月 25", amount: 12000 },
+    { month: "Mar 25", monthTh: "มี.ค. 25", monthZh: "3月 25", amount: 15400 },
+    { month: "Apr 25", monthTh: "เม.ย. 25", monthZh: "4月 25", amount: 11000 },
+    { month: "May 25", monthTh: "พ.ค. 25", monthZh: "5月 25", amount: 18500 },
+    { month: "Jun 25", monthTh: "มิ.ย. 25", monthZh: "6月 25", amount: 16000 },
+    { month: "Jul 25", monthTh: "ก.ค. 25", monthZh: "7月 25", amount: 20000 },
+    { month: "Aug 25", monthTh: "ส.ค. 25", monthZh: "8月 25", amount: 22000 },
+    { month: "Sep 25", monthTh: "ก.ย. 25", monthZh: "9月 25", amount: 19500 },
+    { month: "Oct 25", monthTh: "ต.ค. 25", monthZh: "10月 25", amount: 23000 },
+    { month: "Nov 25", monthTh: "พ.ย. 25", monthZh: "11月 25", amount: 21000 },
+    { month: "Dec 25", monthTh: "ธ.ค. 25", monthZh: "12月 25", amount: 18000 },
+    { month: "Jan 26", monthTh: "ม.ค. 26", monthZh: "1月 26", amount: 25000 },
+    { month: "Feb 26", monthTh: "ก.พ. 26", monthZh: "2月 26", amount: 24000 },
+    { month: "Mar 26", monthTh: "มี.ค. 26", monthZh: "3月 26", amount: 26500 },
+  ];
+
   const chats: any[] = [];
   const notifications: any[] = [];
 
@@ -421,7 +469,7 @@ export default function FixerProPage() {
 
         {/* Tab Content */}
         <div className={`mt-6 ${activeTab !== 'overview' ? 'hidden' : ''}`}>
-          <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={incomingJobs} completedJobs={completedJobs} earnings={[]} stats={stats} notifications={notifications} chats={[]} onJobClick={handleJobClick} />
+          <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={incomingJobs} completedJobs={completedJobs} earnings={EARNINGS_MOCK} stats={stats} notifications={notifications} chats={[]} onJobClick={handleJobClick} />
         </div>
         {activeTab === "requests" && <PartnerRequests locale={locale} incomingJobs={incomingJobs} onJobClick={handleJobClick} />}
         {activeTab === "active" && <PartnerJobs locale={locale} activeJobs={activeJobs} onJobClick={handleJobClick} />}
@@ -739,7 +787,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
               <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center text-lg"></div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? job.serviceTh : locale === "zh" ? job.serviceZh : job.service}</p>
-                <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"} &middot; PO-{job.id?.slice(0, 4)}-{job.id?.slice(4, 8)} | {job.subdistrict || "Saphansong"}</p>
+                <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"} &middot; {job.po} | {job.subdistrict || "Saphansong"}</p>
                 <div className="mt-1.5 w-full bg-gray-100 rounded-full h-1.5">
                   <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${job.progress}%` }} />
                 </div>
@@ -801,12 +849,12 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
         <span className="text-xs bg-sky-100 text-sky-700 px-2.5 py-1 rounded-full font-bold">{activeJobs.length}</span>
       </div>
       <div className="divide-y divide-gray-50">
-        {activeJobs.slice(0, 5).map((job) => (
+        {activeJobs.map((job) => (
           <div key={job.id} className="px-6 py-4 flex items-center gap-4 hover:bg-gray-50/50 transition">
             <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center text-lg"></div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? job.serviceTh : locale === "zh" ? job.serviceZh : job.service}</p>
-              <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"} &middot; PO-{job.id?.slice(0, 4)}-{job.id?.slice(4, 8)} | {job.subdistrict || "Saphansong"}</p>
+              <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"} &middot; {job.po} | {job.subdistrict || "Saphansong"}</p>
               <div className="mt-1.5 w-full bg-gray-100 rounded-full h-1.5">
                 <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${job.progress}%` }} />
               </div>
@@ -1285,7 +1333,7 @@ function PartnerDashboard({ locale, partner, prefix, onLogout, orders }: { local
                     <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl shadow-sm"></div>
                     <div>
                       <h3 className="font-bold text-gray-900">{o.service}</h3>
-                      <p className="text-sm text-gray-500 mt-1">{o.user?.name || "Customer"} &middot; {new Date(o.createdAt).toLocaleDateString()} &middot; Budget: ฿{o.estimatedPrice || "0"} &middot; PO-{o.id?.slice(0, 4)}-{o.id?.slice(4, 8)} | {o.user?.subdistrict || "Saphansong"}</p><div className="mt-2 w-full">
+                      <p className="text-sm text-gray-500 mt-1">{o.user?.name || "Customer"} &middot; {new Date(o.createdAt).toLocaleDateString()} &middot; Budget: ฿{o.estimatedPrice || "0"} &middot; {o.po || `PO-${o.id?.slice(0, 4)}-${o.id?.slice(4, 8)}`} | {o.user?.subdistrict || "Saphansong"}</p><div className="mt-2 w-full">
 <div className="flex justify-between text-[10px] text-gray-500 mb-1 px-1">
   <span className={['PENDING',''].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Notify</span>
   <span className={['CONFIRMED'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Confirm</span>
@@ -1363,7 +1411,7 @@ function PartnerActiveJobs({ locale, prefix, orders }: { locale: string; prefix:
               <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl shadow-sm"></div>
               <div>
                 <h3 className="font-bold text-gray-900">{o.service} <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">{o.tier || 'Standard'}</span></h3>
-                <p className="text-sm text-gray-500 mt-1">{o.user?.name || "Customer"} &middot; {new Date(o.createdAt).toLocaleDateString()} &middot; Budget: ฿{o.estimatedPrice || "0"} &middot; PO-{o.id?.slice(0, 4)}-{o.id?.slice(4, 8)} | {o.user?.subdistrict || "Saphansong"}</p><div className="mt-2 w-full">
+                <p className="text-sm text-gray-500 mt-1">{o.user?.name || "Customer"} &middot; {new Date(o.createdAt).toLocaleDateString()} &middot; Budget: ฿{o.estimatedPrice || "0"} &middot; {o.po || `PO-${o.id?.slice(0, 4)}-${o.id?.slice(4, 8)}`} | {o.user?.subdistrict || "Saphansong"}</p><div className="mt-2 w-full">
 <div className="flex justify-between text-[10px] text-gray-500 mb-1 px-1">
   <span className={['PENDING',''].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Notify</span>
   <span className={['CONFIRMED'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Confirm</span>

@@ -697,16 +697,17 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     { title: "FITOUT", customer: "Suppadesh", date: "5/11/2026", budget: "฿25,000,000", po: "PO-3a68-12e3", location: "Saphansong", tier: "Standard", actionNeeded: true, step: 6 },
   ];
 
-  const STEPS = ["Match", "Select", "PO", "Notify", "Confirm", "Pay", "Chat", "Meet", "Variation", "Complete", "Rate", "Done"];
+  const STEPS_FULL = ["Match", "Select", "PO", "Notify", "Confirm", "Pay", "Chat", "Meet", "Variation", "Complete", "Rate", "Done"];
+  const STEPS = ["Notify", "Confirm", "Pay", "Chat", "Meet", "Variation", "Complete", "Rate", "Done"];
 
     const Progress12Steps = ({ currentStep }: { currentStep: number }) => (
     <div className="w-full mt-4 overflow-x-auto pb-4 hide-scrollbar">
       <div className="flex items-center min-w-max relative px-2">
         <div className="absolute left-4 right-4 top-3 -translate-y-1/2 h-1 bg-gray-200 rounded-full"></div>
-        <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, ((currentStep - 1) / (STEPS.length - 1)) * 100))}%` }}></div>
+        <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, ((currentStep - 4) / (STEPS.length - 1)) * 100))}%` }}></div>
         
         {STEPS.map((s, i) => {
-          const stepNum = i + 1;
+          const stepNum = i + 4; // Notify starts at 4
           const isCompleted = stepNum < currentStep;
           const isCurrent = stepNum === currentStep;
           return (
@@ -753,7 +754,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   };
 
   const renderActiveCard = (item: any, idx: number) => (
-    <div key={idx} className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 transition mb-4 flex flex-col gap-3">
+    <div key={idx} className="block hover:bg-gray-50/50 p-6 transition flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <span className="font-semibold text-gray-900 text-lg">{item.title}</span>
         {item.actionNeeded ? (
@@ -1104,7 +1105,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
               </div>
               <button className="text-sm font-bold text-sky-600 hover:text-sky-700" onClick={() => setActiveTab("active")}>View All</button>
             </div>
-            <div>
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50">
               {ACTIVE_MOCK.map((m, i) => renderActiveCard(m, i))}
             </div>
           </div>
