@@ -721,35 +721,57 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     </div>
   );
 
+  
   const renderRequestCard = (item: any) => {
-    if (mockPayments[item.id]) return null; // hide if paid
+    if (mockPayments[item.id]) return null;
     return (
-      <div key={item.id} className="bg-white border border-gray-200 p-5 rounded-lg mb-4 flex flex-col gap-2 relative">
-        <div className="text-sm font-bold text-sky-600">Step 6 of 12 Paying fee & Notification to Proceed &nbsp;|&nbsp; <span className="text-gray-900">{item.title}</span></div>
-        <div className="text-sm text-gray-600">{item.customer} &middot; {item.date} &middot; Budget: {item.budget}</div>
-        <div className="text-sm text-gray-500">{item.po} | TIER:{item.tier} | {item.desc}</div>
-        <div><span className="inline-block bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded font-bold uppercase">{item.tier}</span></div>
-        <div className="flex gap-4 mt-3">
-          <button className="bg-sky-600 outline-none text-white px-6 py-2 rounded font-bold hover:bg-sky-700 transition shadow-sm" onClick={() => setWaitModalOrder({ id: item.id, status: 'MATCHING', request: item })}>Paying fee</button>
-          <button className="border border-gray-300 text-gray-600 px-6 py-2 outline-none rounded font-bold hover:bg-gray-100 transition shadow-sm">Decline</button>
+      <div key={item.id} className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md cursor-pointer transition mb-4">
+        <div className="flex items-center justify-between mb-3 border-b border-gray-100 pb-3">
+          <span className="font-semibold text-gray-900">Step 6 of 12 Paying fee & Notification to Proceed &nbsp;|&nbsp; <span>{item.title}</span></span>
+          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-100 text-blue-800">New Request</span>
+        </div>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between text-sm text-gray-600">
+            <span>{item.customer} &middot; {item.date}</span>
+            <span className="font-semibold text-gray-900 pr-2">Budget: {item.budget}</span>
+          </div>
+          <p className="text-sm text-gray-600">{item.desc}</p>
+          <div className="flex items-center justify-between text-xs text-gray-400 mt-2">
+            <span>{item.po}</span>
+            <span className="px-2 py-0.5 rounded-full font-bold bg-blue-50 text-blue-700">{item.tier}</span>
+          </div>
+          <div className="flex gap-4 mt-4">
+            <button className="bg-sky-600 outline-none text-white px-6 py-2 rounded-lg text-sm font-bold hover:bg-sky-700 transition shadow-sm w-full md:w-auto" onClick={() => setWaitModalOrder({ id: item.id, status: 'MATCHING', request: item })}>Paying fee</button>
+            <button className="border border-gray-300 text-gray-600 px-6 py-2 outline-none rounded-lg text-sm font-bold hover:bg-gray-100 transition shadow-sm w-full md:w-auto">Decline</button>
+          </div>
         </div>
       </div>
     );
   };
 
   const renderActiveCard = (item: any, idx: number) => (
-    <div key={idx} className="bg-white border border-gray-200 p-5 rounded-lg mb-4 flex flex-col gap-2">
-      <div className="font-bold text-gray-900 text-lg">{item.title}</div>
-      <div className="text-sm text-gray-600">{item.customer} &middot; {item.date} &middot; Budget: {item.budget} &middot; {item.po} | {item.location}</div>
-      <div className="flex items-center gap-2">
-        <span className="inline-block bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded font-bold uppercase">{item.tier}</span>
-        {item.actionNeeded && <span className="text-red-500 text-xs font-bold flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block"></span>Action needed</span>}
+    <div key={idx} className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md cursor-pointer transition mb-4 flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <span className="font-semibold text-gray-900 text-lg">{item.title}</span>
+        {item.actionNeeded ? (
+          <span className="text-red-500 text-xs font-bold flex items-center gap-1 bg-red-50 px-2.5 py-1 rounded-full"><span className="w-2 h-2 rounded-full bg-red-500 inline-block"></span>Action needed</span>
+        ) : (
+          <span className="text-gray-500 text-xs font-bold px-2.5 py-1 rounded-full bg-gray-100">In Progress</span>
+        )}
       </div>
-      <div className="mt-2 text-sky-600 text-sm font-bold opacity-0">...</div>
-      <Progress12Steps currentStep={item.step} />
+      <div className="flex items-center justify-between text-sm text-gray-600">
+        <span>{item.customer} &middot; {item.date} &middot; {item.location}</span>
+        <span className="font-semibold text-gray-900 pr-2">Budget: {item.budget}</span>
+      </div>
+      <div className="flex items-center justify-between text-xs text-gray-400 border-b border-gray-100 pb-3">
+        <span>{item.po}</span>
+        <span className="px-2 py-0.5 rounded-full font-bold bg-blue-50 text-blue-700 uppercase">{item.tier}</span>
+      </div>
+      <div className="mt-2 pt-2">
+        <Progress12Steps currentStep={item.step} />
+      </div>
     </div>
   );
-
 const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLED', 'DONE'].includes(o.status)) : [];
   const historyOrders = orders ? orders.filter((o: any) => ['COMPLETED', 'CANCELLED', 'DONE'].includes(o.status)) : [];
   const propertiesCount = orders ? orders.filter((o: any) => o.type === "property").length : 0;
@@ -1038,20 +1060,39 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 my-6">
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-                <h3 className="font-bold text-gray-800 mb-4 flex items-center justify-between">Recent Chats <span className="text-xs text-sky-600 cursor-pointer">View All</span></h3>
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <h3 className="font-bold text-gray-800 mb-4 flex items-center justify-between">Recent Incoming Chats <span className="text-xs text-sky-600 cursor-pointer" onClick={() => setActiveTab("chat")}>View All</span></h3>
                 <div className="space-y-4">
-                  <div className="flex items-center gap-3"><div className="w-8 h-8 bg-gray-200 rounded-full"></div><div><p className="text-sm font-bold text-gray-700">Fixer John</p><p className="text-xs text-gray-500">I will arrive at 10 AM.</p></div></div>
-                  <div className="flex items-center gap-3"><div className="w-8 h-8 bg-gray-200 rounded-full"></div><div><p className="text-sm font-bold text-gray-700">Proj Manager</p><p className="text-xs text-gray-500">Material is delivered.</p></div></div>
+                  <div className="bg-sky-50 rounded-lg p-3 border border-sky-100">
+                    <p className="text-sm font-bold text-gray-700 mb-1">System <span className="text-xs text-gray-400 font-normal float-right">Just now</span></p>
+                    <p className="text-xs text-sky-800">PO-3a68-12e3 just be paid by customer to notify to proceed and let both meet.</p>
+                  </div>
                 </div>
               </div>
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-                <h3 className="font-bold text-gray-800 mb-4 flex items-center justify-between">Recent Alerts <span className="text-xs text-sky-600 cursor-pointer">View All</span></h3>
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <h3 className="font-bold text-gray-800 mb-4 flex items-center justify-between">Recent Alerts <span className="text-xs text-sky-600 cursor-pointer" onClick={() => setActiveTab("alerts")}>View All</span></h3>
                 <div className="space-y-4">
-                  <div className="flex items-center gap-3 text-sm text-gray-700"><div className="w-2 h-2 rounded-full bg-red-500"></div> Quote updated for KITCHEN UPGRADE</div>
-                  <div className="flex items-center gap-3 text-sm text-gray-700"><div className="w-2 h-2 rounded-full bg-blue-500"></div> Invoice #PO-2931 Paid</div>
+                  <div className="flex items-start gap-3 text-sm text-gray-700"><div className="w-2 h-2 mt-1.5 rounded-full bg-blue-500 flex-shrink-0"></div><p>Partner notified to review job with PO and detail, to confirm meeting.</p></div>
+                  <div className="flex items-start gap-3 text-sm text-gray-700"><div className="w-2 h-2 mt-1.5 rounded-full bg-amber-500 flex-shrink-0"></div><p>Partner to review variation order and complete.</p></div>
                 </div>
               </div>
+          </div>
+          
+          <div>
+            <div className="flex justify-between items-center mb-4 mt-6">
+              <div className="flex flex-col">
+                <h2 className="text-xl font-bold text-gray-800">⏰ Upcoming Meetings</h2>
+                <span className="text-gray-500 font-bold text-sm">1</span>
+              </div>
+              <button className="text-sm font-bold text-sky-600 hover:text-sky-700">View All</button>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mt-4">
+              <div className="flex justify-between items-center mb-2">
+                 <span className="text-gray-900 font-bold">FITOUT (PO-3a68-12e3)</span>
+                 <span className="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-bold">Tomorrow, 10:00 AM</span>
+              </div>
+              <p className="text-sm text-gray-600">Location: Saphansong | Provider: Suppadesh</p>
+            </div>
           </div>
 
           <div>
@@ -1067,108 +1108,8 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
             </div>
           </div>
         </div>
-
-          
-          {/* Active Jobs */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8">
-            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-              <h2 className="font-bold text-gray-900 flex items-center gap-2">Active Jobs</h2>
-              <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full">{activeOrders.length}</span>
-            </div>
-            <div className="divide-y divide-gray-50">
-              {activeOrders.length === 0 ? (
-                <div className="p-8 text-center text-gray-500">No active services currently.</div>
-              ) : (
-                activeOrders.map((o: any, i: number) => (
-                  <div key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer" onClick={() => handleOrderClick ? handleOrderClick(o) : null}>
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl shadow-sm">{o.type === 'property' ? '' : o.type === 'project' ? '' : o.type === 'professional' ? '' : ''}</div>
-                      <div>
-                        <h3 className="font-bold text-gray-900">{o.service} <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">{o.description?.toUpperCase().includes('TIER:ECONOMY') ? 'ECONOMY' : o.description?.toUpperCase().includes('TIER:STANDARD') ? 'Standard' : (o.tier || 'Standard')}</span></h3>
-                        <p className="text-sm text-gray-500 mt-1 mb-2">
-                          <span className="font-semibold text-gray-700">{o.fixerName || 'Awaiting Partner'}</span>
-                        </p>
-                        <div className="bg-white rounded p-2 text-xs border space-y-1 mb-2">
-                           <div className="flex justify-between font-mono"><span className="text-gray-400">PO:</span> <span className="font-semibold">PO-2605-{o.id ? o.id.slice(0, 4) : 'xxxx'}</span></div>
-                           <div className="flex justify-between"><span className="text-gray-400">Service:</span> <span className="font-semibold truncate">{o.serviceCategory || o.serviceTh || 'General'}</span></div>
-                           <div className="flex justify-between"><span className="text-gray-400">Est. Cost:</span> <span className="font-semibold text-amber-600">฿{o.estimatedPrice || 'N/A'}</span></div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">{o.status}</span>
-                      {o.status !== 'PENDING' && o.status !== 'CREATED' && <Link href={`${prefix}/chat/${o.id}`} className="text-gray-400 hover:text-sky-600 transition" onClick={(e) => e.stopPropagation()}><span className="text-xl"></span></Link>}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Recent Chats */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-100">
-              <h3 className="font-bold text-gray-900 flex items-center gap-2">Recent Chats</h3>
-            </div>
-            <div className="divide-y divide-gray-50">
-              {activeOrders.filter((o: any) => o.status !== 'PENDING' && o.status !== 'CREATED').slice(0, 3).map((o: any, i: number) => (
-                <Link key={i} href={`${prefix}/chat/${o.id}`} className="p-4 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer block" onClick={(e) => e.stopPropagation()}>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center font-bold text-gray-600 text-sm">
-                      {(o.fixerName || 'P').charAt(0)}
-                    </div>
-                    <div>
-                      <p className="font-bold text-sm text-gray-900">{o.fixerName || 'Partner'} &middot; <span className="font-normal text-gray-500">{o.service}</span></p>
-                      <p className="text-xs text-gray-600 mt-0.5 truncate max-w-[200px]">Check chat for updates</p>
-                    </div>
-                  </div>
-                </Link>
-              ))}
-              {activeOrders.filter((o: any) => o.status !== 'PENDING' && o.status !== 'CREATED').length === 0 && (
-                <div className="p-4 text-sm text-gray-500">No active chats.</div>
-              )}
-            </div>
-          </div>
-
-          {/* Recent History */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
-            <div className="px-6 py-4 border-b border-gray-100">
-              <h2 className="font-bold text-gray-900 flex items-center gap-2">Recent History</h2>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs text-gray-400 bg-gray-50/50 uppercase border-b border-gray-100">
-                  <tr>
-                    <th className="px-6 py-3 font-semibold">Service</th>
-                    <th className="px-6 py-3 font-semibold">Fixer / Pro</th>
-                    <th className="px-6 py-3 font-semibold">Tier</th>
-                    <th className="px-6 py-3 font-semibold">Rating</th>
-                    <th className="px-6 py-3 font-semibold">Fee</th>
-                    <th className="px-6 py-3 font-semibold">Date</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {historyOrders.slice(0, 3).map((o: any, i: number) => (
-                    <tr key={i} className="hover:bg-gray-50 transition cursor-pointer">
-                      <td className="px-6 py-4 font-bold text-gray-900 flex items-center gap-2">
-                        <span className="text-lg">{o.type === 'property' ? '' : ''}</span> {o.service}
-                      </td>
-                      <td className="px-6 py-4 text-gray-600">{o.fixerName || 'Partner'}</td>
-                      <td className="px-6 py-4"><span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded font-medium">{o.description?.toUpperCase().includes('TIER:ECONOMY') ? 'ECONOMY' : o.description?.toUpperCase().includes('TIER:STANDARD') ? 'Standard' : (o.tier || 'Standard')}</span></td>
-                      <td className="px-6 py-4 text-amber-500 font-bold">5 </td>
-                      <td className="px-6 py-4 font-bold text-gray-900">฿{o.finalPrice || o.estimatedPrice || '0'}</td>
-                      <td className="px-6 py-4 text-gray-500">{new Date(o.updatedAt || Date.now()).toLocaleDateString()}</td>
-                    </tr>
-                  ))}
-                  {historyOrders.length === 0 && (
-                    <tr><td colSpan={6} className="px-6 py-8 text-center text-gray-500">No completed orders yet.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      {waitModalOrder && (
+      </div>
+{waitModalOrder && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto pt-20 pb-20">
           <div className="w-full max-w-4xl bg-white rounded-t-3xl sm:rounded-3xl shadow-xl flex flex-col p-6 sm:p-10 relative">
             <h2 className="font-bold text-xl text-center mb-6">Step 6 of 12<br/>Paying fee & Notification to Proceed</h2>
