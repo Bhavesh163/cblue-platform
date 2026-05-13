@@ -677,7 +677,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       budget: "฿5,000,000", 
       po: "PO-b01d-c200", 
       tier: "ECONOMY", 
-      desc: "I want ................."
+      desc: "I want to renovate my kitchen and fix the plumbing"
     },
     { 
       id: "req2",
@@ -687,7 +687,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       budget: "฿25,000,000", 
       po: "PO-3a68-12e3", 
       tier: "STANDARD", 
-      desc: "I want to have a project team to carry out a 1000 sq.m. office fitout in Bangkok"
+      desc: "I want a project team for a 1000 sq.m. office fitout"
     }
   ];
 
@@ -711,8 +711,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           const isCurrent = stepNum === currentStep;
           return (
             <div key={s} className="relative z-10 flex flex-col items-center flex-1 px-1">
-              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${isCompleted ? 'bg-sky-500 text-white' : isCurrent ? 'bg-sky-500 text-white shadow-[0_0_0_4px_rgba(14,165,233,0.2)]' : 'bg-white border-2 border-gray-300 text-gray-400'}`}>
-                {isCompleted ? '✓' : stepNum}
+              <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors ${isCompleted ? 'bg-sky-500 text-white' : isCurrent ? 'bg-sky-500 text-white shadow-[0_0_0_4px_rgba(14,165,233,0.2)]' : 'bg-gray-300'}`}>
+                {isCompleted ? '✓' : ''}
               </div>
               <span className={`text-[10px] mt-2 whitespace-nowrap ${isCurrent ? 'text-sky-600 font-bold' : isCompleted ? 'text-sky-500' : 'text-gray-400'}`}>
                 {s}
@@ -723,12 +723,16 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       </div>
     </div>
   );
+        })}
+      </div>
+    </div>
+  );
 
   
   const renderRequestCard = (item: any) => {
     if (mockPayments[item.id]) return null;
     return (
-      <div key={item.id} className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md cursor-pointer transition mb-4">
+      <div key={item.id} className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 transition mb-4">
         <div className="flex items-center justify-between mb-3 border-b border-gray-100 pb-3">
           <span className="font-semibold text-gray-900">Step 6 of 12 Paying fee & Notification to Proceed &nbsp;|&nbsp; <span>{item.title}</span></span>
           <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-100 text-blue-800">New Request</span>
@@ -753,7 +757,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   };
 
   const renderActiveCard = (item: any, idx: number) => (
-    <div key={idx} className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md cursor-pointer transition mb-4 flex flex-col gap-3">
+    <div key={idx} className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 transition mb-4 flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <span className="font-semibold text-gray-900 text-lg">{item.title}</span>
         {item.actionNeeded ? (
@@ -898,7 +902,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                   C
                 </div>
                 <div>
-                  <h3 className="font-bold text-gray-900">Cblue</h3>
+                  <h3 className="font-bold text-gray-900">Fitout - PO-3a68-12e3 - ฿25,000,000</h3>
                   <p className="text-sm text-sky-600 mt-1 font-medium">PO-3a68-12e3 just be paid by customer to notify to proceed and let both meet.</p>
                 </div>
               </div>
@@ -1061,11 +1065,11 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                 <h3 className="font-bold text-gray-800 mb-4 flex items-center justify-between">Recent Incoming Chats <span className="text-xs text-sky-600 cursor-pointer" onClick={() => setActiveTab("chat")}>View All</span></h3>
                 <div className="space-y-4">
                   <div className="bg-sky-50 rounded-lg p-4 border border-sky-100 shadow-sm mt-3">
-                    <p className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-2"><span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">C</span> Cblue <span className="text-xs text-gray-400 font-normal ml-auto">Just now</span></p>
+                    <p className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-2"><span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">C</span> Fitout - PO-3a68-12e3 - ฿25,000,000 <span className="text-xs text-gray-400 font-normal ml-auto">Just now</span></p>
                     <p className="text-sm text-sky-800 font-medium">PO-3a68-12e3 just be paid by customer to notify to proceed and let both meet.</p>
                   </div>
                   <div className="bg-white rounded-lg p-4 border border-gray-100 shadow-sm">
-                    <p className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-2"><span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">C</span> Cblue <span className="text-xs text-gray-400 font-normal ml-auto">2 mins ago</span></p>
+                    <p className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-2"><span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">C</span> Fitout - PO-3a68-12e3 - ฿25,000,000 <span className="text-xs text-gray-400 font-normal ml-auto">2 mins ago</span></p>
                     <p className="text-sm text-gray-600">Please inform us of your available time to meet at the jobsite. The chat is now active for both to use for this project.</p>
                   </div>
                 </div>
@@ -1170,7 +1174,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                 onClick={() => {
                   alert("Notification: Payment Complete! Notifying to proceed.");
                   setMockPayments(prev => ({...prev, [waitModalOrder.id]: true}));
-                  setWaitModalOrder(null);
+                  setWaitModalOrder(null); setActiveTab("chat");
                 }}
               >
                 🚧 Testing Period Payment Pill 🚧

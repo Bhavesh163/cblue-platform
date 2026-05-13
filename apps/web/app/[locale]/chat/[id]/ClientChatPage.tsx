@@ -36,13 +36,13 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
       </Link>
       <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 text-center">
         <div className="w-16 h-16 mx-auto bg-blue-100 rounded-full flex items-center justify-center mb-4">
-          <span className="text-2xl animate-pulse">{order.status === 'ASSIGNED' ? '💰' : '⏳'}</span>
+          <span className="text-2xl animate-pulse">{(order.status || "Unknown") === 'ASSIGNED' ? '💰' : '⏳'}</span>
         </div>
         <h2 className="text-xl font-bold text-gray-800 mb-2">
-          {order.status === 'ASSIGNED' ? (isPartner ? 'Waiting for Customer Payment' : 'Pending Payment Confirmation') : 'Pending Actions'}
+          {(order.status || "Unknown") === 'ASSIGNED' ? (isPartner ? 'Waiting for Customer Payment' : 'Pending Payment Confirmation') : 'Pending Actions'}
         </h2>
         <p className="text-gray-500 text-sm mb-6">
-          {order.status === 'ASSIGNED' ? 
+          {(order.status || "Unknown") === 'ASSIGNED' ? 
             (isPartner ? 'Customer is currently proceeding with the processing fee payment.' : 'Partner has accepted. Please proceed with payment below.') : 
             'Waiting for system process'
           }
@@ -51,15 +51,15 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
         <div className="bg-gray-50 rounded-xl p-6 mb-6 text-sm text-left shadow-inner border border-gray-100">
           <div className="flex justify-between border-b pb-2 mb-2">
             <span className="text-gray-500">Draft PO Number</span>
-            <span className="font-mono font-bold text-gray-800">PO-2605-{order.id.slice(0,4)}</span>
+            <span className="font-mono font-bold text-gray-800">PO-2605-{(order.id ? order.id.slice(0,4) : orderId.slice(0,4))}</span>
           </div>
           <div className="flex justify-between border-b pb-2 mb-2">
             <span className="text-gray-500">Service</span>
-            <span className="font-bold text-gray-800">{order.serviceCategory}</span>
+            <span className="font-bold text-gray-800">{(order.serviceCategory || "Unknown Service")}</span>
           </div>
           <div className="flex justify-between border-b pb-2 mb-2">
             <span className="text-gray-500">Status</span>
-            <span className="font-bold text-gray-800">{order.status}</span>
+            <span className="font-bold text-gray-800">{(order.status || "Unknown")}</span>
           </div>
           <div className="flex justify-between mb-2 pb-2 border-b">
             <span className="text-gray-500">Estimated Project Cost</span>
@@ -67,7 +67,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
           </div>
           <div className="flex flex-col mb-2">
             <span className="text-gray-500 mb-1">Project Details</span>
-            <span className="font-semibold text-gray-700">{order.description}</span>
+            <span className="font-semibold text-gray-700">{(order.description || "N/A")}</span>
           </div>
           { order.image && (
              <div className="mt-4 border-t pt-4">
@@ -77,7 +77,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
           )}
         </div>
         
-        { order.status === 'ASSIGNED' && !isPartner && (
+        { (order.status || "Unknown") === 'ASSIGNED' && !isPartner && (
             <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl transition" onClick={() => window.location.href = `/${locale}/payment`}>
               Proceed to Temporary Payment Validation
             </button>
