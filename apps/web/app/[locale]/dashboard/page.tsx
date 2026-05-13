@@ -739,7 +739,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
               <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center text-lg"></div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? job.serviceTh : locale === "zh" ? job.serviceZh : job.service}</p>
-                <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"} &middot; PO-{o.id?.slice(0, 4)}-{o.id?.slice(4, 8)} | {job.subdistrict || "Saphansong"}</p>
+                <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"} &middot; PO-{job.id?.slice(0, 4)}-{job.id?.slice(4, 8)} | {job.subdistrict || "Saphansong"}</p>
                 <div className="mt-1.5 w-full bg-gray-100 rounded-full h-1.5">
                   <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${job.progress}%` }} />
                 </div>
@@ -806,7 +806,7 @@ function CustomerJobs({ locale, activeJobs, onJobClick }: { locale: string; acti
             <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center text-lg"></div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? job.serviceTh : locale === "zh" ? job.serviceZh : job.service}</p>
-              <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"} &middot; PO-{o.id?.slice(0, 4)}-{o.id?.slice(4, 8)} | {job.subdistrict || "Saphansong"}</p>
+              <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"} &middot; PO-{job.id?.slice(0, 4)}-{job.id?.slice(4, 8)} | {job.subdistrict || "Saphansong"}</p>
               <div className="mt-1.5 w-full bg-gray-100 rounded-full h-1.5">
                 <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${job.progress}%` }} />
               </div>

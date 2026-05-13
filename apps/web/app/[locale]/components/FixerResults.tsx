@@ -1271,7 +1271,7 @@ export default function FixerResults({
           <h2 className="text-xl font-bold text-gray-800 mb-2">{t("paymentTitle")}</h2>
           <p className="text-gray-500 text-sm mb-6">{t("paymentDesc")}</p>
 
-          <div className="mx-auto bg-yellow-100 text-yellow-800 rounded-xl border-2 border-yellow-200 flex flex-col items-center justify-center mb-6 p-6 shadow-sm cursor-pointer hover:bg-yellow-200 transition" onClick={() => setStep("done")}>
+          <div className="mx-auto bg-yellow-100 text-yellow-800 rounded-xl border-2 border-yellow-200 flex flex-col items-center justify-center mb-6 p-6 shadow-sm cursor-pointer hover:bg-yellow-200 transition" onClick={handlePaymentComplete}>
             <span className="font-bold text-lg mb-2">🚧 Testing Period Payment Pill 🚧</span>
             <span className="text-sm text-center font-bold">Click here to pass free payment simulation</span>
           </div>
