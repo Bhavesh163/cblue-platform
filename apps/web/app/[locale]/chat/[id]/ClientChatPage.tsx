@@ -1,13 +1,19 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useTranslations } from "next-intl";
 
 export default function ClientChatPage({ orderId, locale }: { orderId: string, locale: string }) {
-  const [order, setOrder] = useState<any>(null);
   const [isPartner, setIsPartner] = useState(false);
+  const [messages, setMessages] = useState([
+    {
+      id: 1,
+      sender: "system",
+      text: "Dear Khun Ghis, Please inform us of your available time to meet at the jobsite. This chat room is now created for you to connect",
+      time: "Just now"
+    }
+  ]);
+  const [inputText, setInputText] = useState("");
   
   useEffect(() => {
     const pToken = localStorage.getItem("subscriber_token");
@@ -16,77 +22,57 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
     }
   }, []);
 
-  useEffect(() => {
-    const token = localStorage.getItem("subscriber_token") || localStorage.getItem("token");
-    if (!token) return;
-    fetch(`/api/v1/orders/${orderId}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => res.json())
-      .then(data => setOrder(data))
-      .catch(console.error);
-  }, [orderId]);
-
-  if (!order) return <div className="p-12 text-center">Loading...</div>;
+  const handleSend = (e: React.FormEvent) => {
+    e.preventDefault();
+    if(!inputText.trim()) return;
+    setMessages(prev => [...prev, {
+      id: Date.now(),
+      sender: "me",
+      text: inputText,
+      time: "Just now"
+    }]);
+    setInputText("");
+  };
 
   return (
-    <div className="max-w-md mx-auto p-4 py-8">
-      <Link href={isPartner ? `/${locale}/fixers` : `/${locale}/dashboard`} className="text-blue-600 hover:underline mb-4 inline-block">
-        &larr; Go back to {isPartner ? "Our Partner" : "Our Customer"}
-      </Link>
-      <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 text-center">
-        <div className="w-16 h-16 mx-auto bg-blue-100 rounded-full flex items-center justify-center mb-4">
-          <span className="text-2xl animate-pulse">{(order.status || "Unknown") === 'ASSIGNED' ? '💰' : '⏳'}</span>
+    <div className="max-w-2xl mx-auto h-screen flex flex-col bg-gray-50 border-x border-gray-200">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 p-4 sticky top-0 z-10 flex items-center gap-4">
+        <Link href={isPartner ? `/${locale}/fixers` : `/${locale}/dashboard`} className="text-gray-500 hover:text-gray-800 transition">
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+        </Link>
+        <div className="flex-1">
+          <h2 className="font-bold text-gray-900 text-lg">Fit out - {orderId} - ฿25,000,000</h2>
+          <p className="text-xs text-green-600 font-medium">Online</p>
         </div>
-        <h2 className="text-xl font-bold text-gray-800 mb-2">
-          {(order.status || "Unknown") === 'ASSIGNED' ? (isPartner ? 'Waiting for Customer Payment' : 'Pending Payment Confirmation') : 'Pending Actions'}
-        </h2>
-        <p className="text-gray-500 text-sm mb-6">
-          {(order.status || "Unknown") === 'ASSIGNED' ? 
-            (isPartner ? 'Customer is currently proceeding with the processing fee payment.' : 'Partner has accepted. Please proceed with payment below.') : 
-            'Waiting for system process'
-          }
-        </p>
-        
-        <div className="bg-gray-50 rounded-xl p-6 mb-6 text-sm text-left shadow-inner border border-gray-100">
-          <div className="flex justify-between border-b pb-2 mb-2">
-            <span className="text-gray-500">Draft PO Number</span>
-            <span className="font-mono font-bold text-gray-800">PO-2605-{(order.id ? order.id.slice(0,4) : orderId.slice(0,4))}</span>
+      </div>
+
+      {/* Chat Area */}
+      <div className="flex-1 p-4 overflow-y-auto space-y-4">
+        {messages.map(msg => (
+          <div key={msg.id} className={`flex ${msg.sender === 'me' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${msg.sender === 'me' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none shadow-sm'}`}>
+              <p>{msg.text}</p>
+              <div className={`text-[10px] mt-1 text-right ${msg.sender === 'me' ? 'text-blue-100' : 'text-gray-400'}`}>{msg.time}</div>
+            </div>
           </div>
-          <div className="flex justify-between border-b pb-2 mb-2">
-            <span className="text-gray-500">Service</span>
-            <span className="font-bold text-gray-800">{(order.serviceCategory || "Unknown Service")}</span>
-          </div>
-          <div className="flex justify-between border-b pb-2 mb-2">
-            <span className="text-gray-500">Status</span>
-            <span className="font-bold text-gray-800">{(order.status || "Unknown")}</span>
-          </div>
-          <div className="flex justify-between mb-2 pb-2 border-b">
-            <span className="text-gray-500">Estimated Project Cost</span>
-            <span className="font-bold text-gray-800">฿{order.estimatedPrice || 'N/A'}</span>
-          </div>
-          <div className="flex flex-col mb-2">
-            <span className="text-gray-500 mb-1">Project Details</span>
-            <span className="font-semibold text-gray-700">{(order.description || "N/A")}</span>
-          </div>
-          { order.image && (
-             <div className="mt-4 border-t pt-4">
-               <span className="text-gray-500 block mb-2">Uploaded Reference File</span>
-               <a href={order.image} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">View Uploaded Image</a>
-             </div>
-          )}
-        </div>
-        
-        { (order.status || "Unknown") === 'ASSIGNED' && !isPartner && (
-            <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl transition" onClick={() => window.location.href = `/${locale}/payment`}>
-              Proceed to Temporary Payment Validation
-            </button>
-        )}
-        
-        <p className="text-xs text-gray-400 mt-4 leading-relaxed">
-          The final service price is negotiated directly between you and the counterpart. 
-          CBLUE acts only as a matching platform and does not determine or guarantee final pricing.
-        </p>
+        ))}
+      </div>
+
+      {/* Input Area */}
+      <div className="bg-white border-t border-gray-200 p-4">
+        <form onSubmit={handleSend} className="flex items-center gap-2">
+          <input 
+            type="text" 
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            placeholder="Type your message..." 
+            className="flex-1 bg-gray-100 border-transparent focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 rounded-full px-4 py-2 outline-none transition"
+          />
+          <button type="submit" className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-700 transition flex-shrink-0">
+            <svg className="w-5 h-5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+          </button>
+        </form>
       </div>
     </div>
   );

@@ -412,8 +412,8 @@ const getTierColor = (tier: string) => tierColors[tier] ?? tierColors["standard"
 
 type Step = "matching" | "select" | "po" | "notify" | "confirm" | "payment" | "chat" | "meeting" | "variation" | "complete" | "rate" | "done";
 
-import generatePayload from "promptpay-qr";
-import { QRCodeSVG } from "qrcode.react";
+
+
 
 export default function FixerResults({
   locale,

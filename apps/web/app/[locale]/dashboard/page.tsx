@@ -677,7 +677,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       budget: "฿5,000,000", 
       po: "PO-b01d-c200", 
       tier: "ECONOMY", 
-      desc: "I want to renovate my kitchen and fix the plumbing"
+      desc: "I want a team to carry out a 3000 sq.m. housing project."
     },
     { 
       id: "req2",
@@ -687,7 +687,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       budget: "฿25,000,000", 
       po: "PO-3a68-12e3", 
       tier: "STANDARD", 
-      desc: "I want a project team for a 1000 sq.m. office fitout"
+      desc: "I want to have a project team to carry out a 1000 sq.m. office fitout in Bangkok"
     }
   ];
 
@@ -729,7 +729,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const renderRequestCard = (item: any) => {
     if (mockPayments[item.id]) return null;
     return (
-      <div key={item.id} className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 transition mb-4">
+      <div key={item.id} className="block hover:bg-gray-50/50 p-6 transition flex flex-col gap-3">
         <div className="flex items-center justify-between mb-3 border-b border-gray-100 pb-3">
           <span className="font-semibold text-gray-900">Step 6 of 12 Paying fee & Notification to Proceed &nbsp;|&nbsp; <span>{item.title}</span></span>
           <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-100 text-blue-800">New Request</span>
@@ -812,7 +812,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
             <h2 className="font-bold text-gray-900">Incoming Requests</h2>
             <div className="text-sm text-gray-500 font-bold">{REQUESTS_MOCK.filter(m => !mockPayments[m.id]).length}</div>
           </div>
-          <div className="p-6">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50 mt-4 mx-6">
               {REQUESTS_MOCK.map(m => renderRequestCard(m))}
           </div>
         </div>
@@ -1142,30 +1142,41 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
         </div>
       </div>
 {waitModalOrder && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto pt-20 pb-20">
-          <div className="w-full max-w-4xl bg-white rounded-t-3xl sm:rounded-3xl shadow-xl flex flex-col p-6 sm:p-10 relative">
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto pt-10 pb-10">
+          <div className="w-full max-w-lg bg-white rounded-3xl shadow-xl flex flex-col p-6 relative">
             <h2 className="font-bold text-xl text-center mb-6">Step 6 of 12<br/>Paying fee & Notification to Proceed</h2>
             <Progress12Steps currentStep={6} />
+            <h3 className="text-center font-bold text-gray-800 text-lg mt-6">Pay fee & NTP</h3>
             
-            <div className="mt-8 flex flex-col items-center max-w-md mx-auto">
+            <div className="mt-4 flex flex-col items-center mx-auto">
               {/* Type of service and provider details added */}
-              <div className="flex flex-col items-center mb-6 text-center space-y-1">
-                <span className="text-gray-900 font-bold text-lg">{waitModalOrder.request?.title || 'Fit out'}</span>
-                <span className="text-gray-600 text-sm">Service provider: {waitModalOrder.request?.customer || 'Suppadesh'}</span>
-                <span className="text-gray-600 text-sm font-bold text-sky-600">Budget: {waitModalOrder.request?.budget || '฿25,000,000'}</span>
+              <div className="w-full flex justify-between border-b border-gray-100 pb-3 mb-3">
+                <div className="flex flex-col">
+                  <span className="text-gray-500 text-xs uppercase tracking-wider">Service</span>
+                  <span className="font-bold text-gray-900">{waitModalOrder.request?.title || 'Fit out'}</span>
+                </div>
+                <div className="flex flex-col text-right">
+                  <span className="text-gray-500 text-xs uppercase tracking-wider">Budget</span>
+                  <span className="font-bold text-sky-600">{waitModalOrder.request?.budget || '฿25,000,000'}</span>
+                </div>
               </div>
               
-              <div className="bg-sky-50 text-sky-800 text-sm p-4 rounded-xl mt-2 mb-6 border border-sky-100 text-center font-medium">
-                The service provider has accepted the PO. Please pay the processing fee and notify to proceed.
+              <div className="w-full flex justify-between items-center mb-4">
+                 <span className="text-gray-600 text-sm">Provider</span>
+                 <span className="text-gray-900 font-semibold">{waitModalOrder.request?.customer || 'Suppadesh'}</span>
               </div>
               
-              <div className="w-full bg-gray-50 rounded-xl p-4 space-y-2 text-sm text-left">
-                <div className="flex justify-between"><span className="text-gray-500">PO Number</span><span className="font-mono font-bold text-gray-800">{waitModalOrder.request?.po || 'PO-SYS-202'}</span></div>
-                <div className="flex justify-between"><span className="text-gray-500">Processing Fee</span><span className="font-bold text-gray-800">฿100</span></div>
+              <div className="bg-sky-50 text-sky-800 text-[13px] p-3 rounded-xl mb-4 border border-sky-100 text-center font-medium">
+                Please pay the processing fee and notify to proceed.
+              </div>
+              
+              <div className="w-full bg-gray-50 rounded-xl p-3 space-y-2 text-sm text-left mb-4">
+                <div className="flex justify-between items-center"><span className="text-gray-500 text-xs">PO Number</span><span className="font-mono font-bold text-gray-800">{waitModalOrder.request?.po || 'PO-SYS-202'}</span></div>
+                <div className="flex justify-between items-center"><span className="text-gray-500 text-xs">Processing Fee</span><span className="font-bold text-gray-800">฿100</span></div>
               </div>
 
-              <div className="bg-amber-50 text-amber-800 text-xs p-4 rounded-xl mt-6">
-                The final service price is negotiated directly between you and the service provider. CBLUE acts only as a matching platform and does not determine or guarantee final pricing. The processing fee is non-refundable as the matching service is completed once the customer initiates the process.
+              <div className="w-full text-center text-[10px] text-gray-400 mt-2 px-2">
+                Processing fee is non-refundable. CBLUE acts solely as a matching platform.
               </div>
 
               <button 

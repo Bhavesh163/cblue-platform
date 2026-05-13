@@ -222,7 +222,7 @@ export default function FixerProPage() {
       extractedPo = desc.match(/PO-[a-zA-Z0-9-]+/)?.[0] || "";
     }
     if (!extractedPo) {
-      extractedPo = `PO-${o.id?.slice(0, 4)}-${o.id?.slice(4, 8)}`;
+      extractedPo = `PO-2605-${o.id?.slice(0, 4)}`;
     }
     
     return {
@@ -308,7 +308,7 @@ export default function FixerProPage() {
             <p className="text-gray-500 mt-2">Customer has placed a request for {waitModalOrder.serviceTh || waitModalOrder.service}. Please review the PO details below and accept or decline.</p>
             
             <div className="w-full bg-gray-50 rounded-xl p-5 mt-6 space-y-3 text-sm text-left border border-gray-100 shadow-inner">
-              <div className="flex justify-between border-b pb-2"><span className="text-gray-500">PO Number</span><span className="font-mono font-bold text-gray-800">PO-2605-{waitModalOrder.id ? waitModalOrder.id.slice(4, 8) : '9605'}</span></div>
+              <div className="flex justify-between border-b pb-2"><span className="text-gray-500">PO Number</span><span className="font-mono font-bold text-gray-800">{waitModalOrder.po || `PO-${waitModalOrder.id?.slice(0, 4)}-${waitModalOrder.id?.slice(4, 8)}`}</span></div>
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Customer</span><span className="font-bold text-gray-800">{waitModalOrder.customer || waitModalOrder.customerAlias || 'Customer'}</span></div>
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Budget</span><span className="font-bold text-amber-600">฿{waitModalOrder.budget || waitModalOrder.estimatedPrice || waitModalOrder.finalPrice || '0'}</span></div>
               <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">Project Details</span><span className="font-bold text-gray-800 bg-white p-2 rounded border border-gray-100">{waitModalOrder.description || waitModalOrder.service}</span></div>
@@ -718,7 +718,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
           <span className="text-xs bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full font-bold">{incomingJobs.length}</span>
         </div>
         <div className="divide-y divide-gray-50">
-          {incomingJobs.slice(0, 2).map((req) => (
+          {incomingJobs.slice(0, 3).map((req) => (
             <div key={req.id} className="px-6 py-4 flex items-center gap-4 hover:bg-amber-50 transition cursor-pointer" onClick={() => onJobClick && onJobClick(req)}>
               <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center text-lg"></div>
               <div className="flex-1 min-w-0">
@@ -788,8 +788,30 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? job.serviceTh : locale === "zh" ? job.serviceZh : job.service}</p>
                 <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"} &middot; {job.po} | {job.subdistrict || "Saphansong"}</p>
-                <div className="mt-1.5 w-full bg-gray-100 rounded-full h-1.5">
-                  <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${job.progress}%` }} />
+                <div className="mt-2 w-full pt-1">
+                  <div className="w-full overflow-x-auto pb-2 hide-scrollbar">
+                    <div className="flex items-center min-w-max relative px-2">
+                      <div className="absolute left-4 right-4 top-3 -translate-y-1/2 h-1 bg-gray-200 rounded-full"></div>
+                      <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, (( (job.status==='IN_PROGRESS' || job.status==='CONFIRMED' || job.status==='ACCEPTED' ? 5 : job.status==='COMPLETED' ? 12 : 5) - 4) / (8)) * 100))}%` }}></div>
+                      
+                      {["Notify", "Confirm", "Pay", "Chat", "Meet", "Variation", "Complete", "Rate", "Done"].map((s, i) => {
+                        const stepNum = i + 4; // Notify starts at 4
+                        const currentStep = job.status === 'COMPLETED' ? 12 : 5;
+                        const isCompleted = stepNum < currentStep;
+                        const isCurrent = stepNum === currentStep;
+                        return (
+                          <div key={s} className="relative z-10 flex flex-col items-center flex-1 px-1">
+                            <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors ${isCompleted ? 'bg-sky-500 text-white' : isCurrent ? 'bg-sky-500 text-white shadow-[0_0_0_4px_rgba(14,165,233,0.2)]' : 'bg-gray-300'}`}>
+                              {isCompleted ? '✓' : ''}
+                            </div>
+                            <span className={`text-[10px] mt-2 whitespace-nowrap ${isCurrent ? 'text-sky-600 font-bold' : isCompleted ? 'text-sky-500' : 'text-gray-400'}`}>
+                              {s}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
