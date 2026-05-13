@@ -3,47 +3,39 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useLocale } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { useRouter } from "next/navigation";
 import PdpaConsent from "../components/PdpaConsent";
 
-interface PartnerInfo {
-  id?: string;
+interface SubscriberInfo {
+  id: string;
   name: string;
   email: string;
-  phone?: string;
+  phone: string;
   company?: string;
   status: string;
-  tier?: string;
-  createdAt?: string;
-  tierScore?: number;
-  breakdown?: any[];
-  flags?: any[];
-  credentialStatus?: string;
 }
 
-const stats = {
-  activeJobs: 0,
-  completedJobs: 0,
-  monthlyEarnings: "฿0",
-  rating: 0,
-  responseRate: "0%",
-  repeatClients: 0,
-};
+type ServiceType = "household" | "project" | "professional" | "property";
 
 
 
 
-
-const chats: any[] = [];
 
 const notifications: any[] = [];
 
+const chats: any[] = [];
+
+const ICON_MAP: Record<string, string> = { household: "", project: "", professional: "", property: "" };
 const STATUS_STYLE: Record<string, string> = {
   IN_PROGRESS: "bg-purple-100 text-purple-700",
   CONFIRMED: "bg-green-100 text-green-700",
-  PENDING: "bg-amber-100 text-amber-700",
+  DEPOSIT_PENDING: "bg-amber-100 text-amber-700",
   COMPLETED: "bg-emerald-100 text-emerald-700",
+  MATCHING: "bg-yellow-100 text-yellow-700",
+  VIEWING_SCHEDULED: "bg-blue-100 text-blue-700",
+  CONTACTED: "bg-indigo-100 text-indigo-700",
+  DEPOSIT_PAID: "bg-green-100 text-green-700",
 };
 const TIER_STYLE: Record<string, string> = {
   Economy: "bg-green-50 text-green-700",
@@ -51,50 +43,51 @@ const TIER_STYLE: Record<string, string> = {
   Corporate: "bg-purple-50 text-purple-700",
   Specialist: "bg-amber-50 text-amber-700",
   Expert: "bg-red-50 text-red-700",
+  Upper: "bg-teal-50 text-teal-700",
+  Luxury: "bg-amber-50 text-amber-700",
+  Grandeur: "bg-purple-50 text-purple-700",
 };
+
 
 const STATUS_LABEL: Record<string, Record<string, string>> = {
   IN_PROGRESS: { en: "In Progress", th: "กำลังดำเนินการ", zh: "进行中" },
   CONFIRMED: { en: "Confirmed", th: "ยืนยันแล้ว", zh: "已确认" },
-  PENDING: { en: "Pending", th: "รอดำเนินการ", zh: "待处理" },
+  DEPOSIT_PENDING: { en: "Deposit Pending", th: "รอชำระเงิน", zh: "待付款" },
   COMPLETED: { en: "Completed", th: "เสร็จสิ้น", zh: "已完成" },
-  ASSIGNED: { en: "Waiting for partner to proceed", th: "รอให้ลูกค้าดำเนินการ", zh: "等待客户处理" },
-  ACCEPTED: { en: "Waiting for partner to proceed", th: "รอให้ลูกค้าดำเนินการ", zh: "等待客户处理" },
-  MATCHING: { en: "Action needed", th: "โปรดดำเนินการในคำขอใหม่", zh: "需要处理新请求" },
+  MATCHING: { en: "Matching", th: "กำลังจับคู่", zh: "匹配中" },
+  PENDING: { en: "Pending", th: "รอดำเนินการ", zh: "待处理" },
+  VIEWING_SCHEDULED: { en: "Viewing Scheduled", th: "นัดดูแล้ว", zh: "已安排看房" },
+  CONTACTED: { en: "Contacted", th: "ติดต่อแล้ว", zh: "已联系" },
+  DEPOSIT_PAID: { en: "Deposit Paid", th: "ชำระแล้ว", zh: "已付款" },
 };
 const getStatusLabel = (status: string, locale: string) => STATUS_LABEL[status]?.[locale] || status.replace(/_/g, " ");
 
-type TabKey = "overview" | "requests" | "active" | "properties" | "history" | "chat" | "notifications" | "profile";
+type TabKey = "overview" | "bookings" | "property" | "history" | "chat" | "notifications" | "profile";
 
-export default function FixerProPage() {
+export default function DashboardPage() {
+  const t = useTranslations("dashboard");
   const locale = useLocale();
   const router = useRouter();
   const prefix = `/${locale}`;
 
-  const [partner, setPartner] = useState<PartnerInfo | null>(null);
+  const [subscriber, setSubscriber] = useState<SubscriberInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [showPdpa, setShowPdpa] = useState(false);
 
   const [orders, setOrders] = useState<any[]>([]);
-  const [waitModalOrder, setWaitModalOrder] = useState<any>(null);
-  const handleJobClick = (job: any) => { if (job.status && ['MATCHING', 'CREATED'].includes(job.status.toUpperCase())) setWaitModalOrder(job); else window.location.href = `/${locale}/chat/${job.id}`; };
-  const [myProperties, setMyProperties] = useState<any[]>([]);
 
 
-
-  const [isFixer, setIsFixer] = useState(false);
 
   
   useEffect(() => {
     const handleStorageChange = () => {
       const token = localStorage.getItem("subscriber_token");
       if (!token) {
-        setPartner(null);
-        setIsFixer(false);
+        setSubscriber(null);
       } else {
         const stored = localStorage.getItem("subscriber");
-        if (stored) setPartner(JSON.parse(stored));
+        if (stored) setSubscriber(JSON.parse(stored));
       }
     };
     window.addEventListener("storage", handleStorageChange);
@@ -116,13 +109,10 @@ export default function FixerProPage() {
           const stored = localStorage.getItem("subscriber");
           if (stored) {
             const parsed = JSON.parse(stored);
-            setPartner(parsed);
-            
-            // Only eagerly assume they are a fixer if they actually have a fixer tier in their payload
-            if (parsed.tier && parsed.tier !== "Standard") {
-              setIsFixer(true);
-            }
+            setSubscriber(parsed);
           }
+          const consent = localStorage.getItem("pdpa_consent_customer");
+          if (!consent) setShowPdpa(true);
         }
 
         const res = await fetch("/api/v1/users/me", {
@@ -133,7 +123,10 @@ export default function FixerProPage() {
         });
 
         if (!res) {
-          if (isMounted) setIsFixer(false);
+          if (isMounted) {
+            setSubscriber(null);
+            setLoading(false);
+          }
           return;
         }
 
@@ -141,50 +134,32 @@ export default function FixerProPage() {
           const user = await res.json();
           if (isMounted) {
             const hasFixer = !!user.fixer;
-            setIsFixer(hasFixer);
-            
-            // Generate base info
-            let pInfo: any = {
-              id: user.id,
-              name: user.name,
-              email: user.email,
-              phone: user.phone,
-              status: "ACTIVE"
+            let subInfo: any = { 
+              id: user.id, 
+              name: user.name, 
+              email: user.email, 
+              phone: user.phone, 
+              status: "ACTIVE" 
             };
 
-            // If they are actually a fixer, poplate fixer schema
+            // If they are a fixer, inject fixer info
             if (hasFixer) {
-              pInfo = {
-                id: user.id,
-                name: user.fixer?.contactName || user.name,
-                email: user.email,
-                phone: user.fixer?.contactPhone || user.phone,
-                company: user.fixer?.companyName || "-",
-                status: user.fixer?.status || "ACTIVE",
-                tier: user.fixer?.aiTier || user.fixer?.tier || "Standard",
-                tierScore: user.fixer?.aiScore || 69,
-                breakdown: user.fixer?.aiBreakdown || [],
-                flags: user.fixer?.aiFlags || [],
-                credentialStatus: user.fixer?.aiCredentialStatus || "unverified",
-                createdAt: user.fixer?.createdAt || user.createdAt
-              };
+              subInfo.tier = user.fixer?.aiTier || user.fixer?.tier || "Standard";
             }
-            
-            setPartner(pInfo);
-            localStorage.setItem("subscriber", JSON.stringify(pInfo));
+
+            setSubscriber(subInfo);
+            // Overwrite stored to fix any bad hydration
+            localStorage.setItem("subscriber", JSON.stringify(subInfo));
           }
 
-          const ordersRes = await fetch("/api/v1/orders/fixer", { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
+          const ordersRes = await fetch("/api/v1/orders/my", { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
           if (ordersRes && ordersRes.ok && isMounted) setOrders(await ordersRes.json());
-
-          const propRes = await fetch("/api/v1/properties/my", { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
-          if (propRes && propRes.ok && isMounted) setMyProperties(await propRes.json());
 
         } else if (res.status === 401 || res.status === 403) {
           localStorage.removeItem("subscriber_token");
           localStorage.removeItem("subscriber");
           if (isMounted) {
-            setPartner(null); setIsFixer(false);
+            setSubscriber(null);
           }
         }
       } catch { /* ignore */ }
@@ -192,167 +167,76 @@ export default function FixerProPage() {
     };
         fetchUser();
     return () => { isMounted = false; };
-  }, []);
-
-  const isSubscribed = !!partner;
+  }, [router, prefix]);
 
 
   
   const mappedOrders = orders.map(o => ({
-        id: o.id,
-    customer: o.user?.name || "Customer",
+    id: o.id,
     type: o.orderType?.toLowerCase() || "household",
-    phone: o.user?.phone || "",
     service: (o.serviceCategory || "").replace(/_/g, " "),
     serviceTh: (o.serviceCategory || "").replace(/_/g, " "),
     serviceZh: (o.serviceCategory || "").replace(/_/g, " "),
+    partner: o.fixer?.user?.name || "Pending matching",
     date: new Date(o.createdAt).toLocaleDateString(),
-    description: o.description || "",
-    tier: (o.description || "").includes('TIER:') ? (o.description || "").split('TIER:')[1].split(' |')[0] : "Standard",
+    progress: o.status === 'COMPLETED' ? 100 : o.status === 'IN_PROGRESS' ? 50 : 20,
+    tier: o.description?.toUpperCase().includes("TIER:ECONOMY") ? "ECONOMY" : o.description?.toUpperCase().includes("TIER:STANDARD") ? "Standard" : o.description?.toUpperCase().includes("TIER:CORPORATE") ? "Corporate" : o.description?.toUpperCase().includes("TIER:SPECIALIST") ? "Specialist" : o.description?.toUpperCase().includes("TIER:EXPERT") ? "Expert" : "Standard",
     status: o.status,
-    progress: o.status === 'COMPLETED' ? 100 : (['IN_PROGRESS', 'CONFIRMED', 'ACCEPTED'].includes(o.status) ? 40 : 15),
-    fee: o.estimatedPrice ? `฿${o.estimatedPrice.toLocaleString()}` : "0", budget: o.estimatedPrice ? o.estimatedPrice.toLocaleString() : "0"
+    rating: 0,
+    fee: o.estimatedPrice ? `฿${o.estimatedPrice}` : "TBD"
   }));
 
-  
-  const properties = myProperties.map(p => ({
-    id: p.id,
-    type: 'property',
-    service: p.title,
-    serviceTh: p.titleTh || p.title,
-    serviceZh: p.titleZh || p.title,
-    location: p.address?.province || "Bangkok",
-    status: p.status,
-    fee: p.price ? `฿${p.price.toLocaleString()}` : "N/A"
-  }));
-  const chats: any[] = [];
-  const notifications: any[] = [];
-
-  const activeJobs = mappedOrders.filter(o => !['COMPLETED', 'CANCELLED'].includes(o.status));
-  const completedJobs = mappedOrders.filter(o => o.status === 'COMPLETED');
-  const incomingJobs = mappedOrders.filter(o => ['CREATED', 'PENDING', 'MATCHING'].includes(o.status));
+  const activeOrders = mappedOrders.filter(o => !['COMPLETED', 'CANCELLED'].includes(o.status));
+  const historyOrders = mappedOrders.filter(o => ['COMPLETED', 'CANCELLED'].includes(o.status));
+  const requests = activeOrders.filter(o => ['CREATED', 'MATCHING', 'PENDING'].includes(o.status));
+  const properties = mappedOrders.filter(o => o.type === 'property');
 
   const tabs: { key: TabKey; label: string; icon: string; badge?: number }[] = [
     { key: "overview", label: locale === "th" ? "ภาพรวม" : locale === "zh" ? "概览" : "Overview", icon: "" },
-    { key: "requests", label: locale === "th" ? "คำขอใหม่" : locale === "zh" ? "新请求" : "Requests", icon: "📋", badge: 4 },
-        { key: "active", label: locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "当前工作" : "Active Jobs", icon: "", badge: 0 },
+    { key: "bookings", label: locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "当前工作" : "Active Jobs", icon: "", badge: activeOrders.length },
     
-    { key: "properties", label: locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房产" : "Properties", icon: "" },
-    { key: "history", label: locale === "th" ? "ประวัติงาน" : locale === "zh" ? "历史" : "History", icon: "" },
-    { key: "chat", label: locale === "th" ? "แชท" : locale === "zh" ? "聊天" : "Chat", icon: "", badge: 0 },
-    { key: "notifications", label: locale === "th" ? "แจ้งเตือน" : locale === "zh" ? "通知" : "Alerts", icon: "", badge: 0 },
+    { key: "property", label: locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房产" : "Properties", icon: "", badge: properties.length > 0 ? properties.length : undefined },
+    { key: "history", label: locale === "th" ? "ประวัติ" : locale === "zh" ? "历史" : "History", icon: "" },
+    { key: "chat", label: locale === "th" ? "แชท" : locale === "zh" ? "聊天" : "Chat", icon: "", badge: undefined },
+    { key: "notifications", label: locale === "th" ? "แจ้งเตือน" : locale === "zh" ? "通知" : "Alerts", icon: "", badge: undefined },
     { key: "profile", label: locale === "th" ? "โปรไฟล์" : locale === "zh" ? "个人资料" : "Profile", icon: "" },
   ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50/30">
       {/* PDPA Consent Modal */}
-
-      {/* PO Accept/Decline Modal */}
-      {waitModalOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl animate-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-start mb-4">
-              <div className="mb-2 text-sm font-semibold text-purple-600 bg-purple-50 inline-block px-3 py-1 rounded-full">Step 5 of 12</div>
-              <button onClick={() => setWaitModalOrder(null)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mt-2">Review Draft PO & Proceed to Payment</h2>
-            <p className="text-gray-500 mt-2">Partner has confirmed the draft PO for {waitModalOrder.serviceTh || waitModalOrder.service}. Please review the draft PO and proceed to payment simulation to confirm the project.</p>
-            
-            <div className="w-full bg-gray-50 rounded-xl p-5 mt-6 space-y-3 text-sm text-left border border-gray-100 shadow-inner">
-              <div className="flex justify-between border-b pb-2"><span className="text-gray-500">PO Number</span><span className="font-mono font-bold text-gray-800">PO-2605-{waitModalOrder.id ? waitModalOrder.id.slice(4, 8) : '9605'}</span></div>
-              <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Customer</span><span className="font-bold text-gray-800">{waitModalOrder.customer || waitModalOrder.customerAlias || 'Customer'}</span></div>
-              <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Budget</span><span className="font-bold text-amber-600">฿{waitModalOrder.budget || waitModalOrder.estimatedPrice || waitModalOrder.finalPrice || '0'}</span></div>
-              <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">Project Details</span><span className="font-bold text-gray-800 bg-white p-2 rounded border border-gray-100">{waitModalOrder.description || waitModalOrder.service}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Uploaded Files</span><span className="font-semibold text-sky-600 cursor-pointer hover:underline" onClick={() => { 
-                let url = waitModalOrder?.issueImage || waitModalOrder?.image || waitModalOrder?.fileUrl || (waitModalOrder?.projectImages && waitModalOrder?.projectImages[0]) || (waitModalOrder?.images && waitModalOrder?.images[0]) || (waitModalOrder?.metadata?.images && waitModalOrder?.metadata.images[0]) || (waitModalOrder?.metadata?.issueImageUrl) || (waitModalOrder?.metadata?.issueImage); 
-                if(!url) {
-                    try {
-                        const localData = JSON.parse(localStorage.getItem("jobData") || "{}");
-                        if(localData && localData.image) url = localData.image;
-                        else if(localData && localData.projectImages && localData.projectImages.length > 0) url = localData.projectImages[0];
-                    } catch(e) {}
-                }
-                if(url) window.open(url, "_blank"); 
-                else { alert("No file was uploaded for this order."); } 
-              }}>
-                {(waitModalOrder.image || (waitModalOrder.images && waitModalOrder.images.length > 0) || waitModalOrder.fileUrl || (waitModalOrder.projectImages && waitModalOrder.projectImages.length > 0) || waitModalOrder.metadata?.images || (typeof window !== 'undefined' && localStorage.getItem("jobData") && JSON.parse(localStorage.getItem("jobData") || "{}").image)) ? "1 file attached (Click to View)" : "1 file attached (Click to View)"}
-              </span></div>
-            </div>
-
-            <div className="flex gap-4 mt-8">
-              <button 
-                onClick={async () => {
-                  try {
-                    const token = localStorage.getItem("subscriber_token");
-                    const res = await fetch(`/api/v1/orders/${waitModalOrder.id}/status`, {
-                      method: 'PUT',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        ...(token ? { Authorization: `Bearer ${token}` } : {})
-                      },
-                      body: JSON.stringify({ status: "ASSIGNED" })
-                    });
-                    if (!res.ok) {
-                        const errorText = await res.text();
-                        console.error('Accept PO Error:', errorText);
-                        alert(`Error accepting PO: ${res.status} - ${errorText}`);
-                        return;
-                    }
-                    alert("PO Accepted Successfully! Notifying Customer..."); window.location.reload();
-                  } catch (e) {
-                    console.error(e);
-                  }
-                }} 
-                className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl transition shadow-md"
-              >
-                Accept PO
-              </button>
-              <button 
-                onClick={() => setWaitModalOrder(null)} 
-                className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition"
-              >
-                Decline
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {showPdpa && (
         <PdpaConsent
           locale={locale}
           prefix={prefix}
-          role="fixer"
+          role="customer"
           onAccept={(ts) => {
-            localStorage.setItem("pdpa_consent_partner", ts);
+            localStorage.setItem("pdpa_consent_customer", ts);
             setShowPdpa(false);
           }}
         />
       )}
-      {/* Hero Header */}
+      {/* Hero Header with scenic background */}
       <div className="relative overflow-hidden">
-        <Image src="/images/scenic-house.jpg" alt="" fill sizes="100vw" className="object-cover" priority />
-        <div className="absolute inset-0 bg-gradient-to-r from-indigo-900/90 to-purple-800/80" />
+        <Image src="/images/scenic-building.jpg" alt="" fill sizes="100vw" className="object-cover" priority />
+        <div className="absolute inset-0 bg-gradient-to-r from-sky-900/90 to-blue-800/80" />
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-10">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-white">
-                {locale === "th" ? "พาร์ทเนอร์ของเรา" : locale === "zh" ? "我们的合作伙伴" : "Our Customer"}
-              </h1>
-              <p className="text-purple-200 text-sm mt-1">
-                {locale === "th" ? "จัดการงาน คำขอ แชท รายได้ และโปรไฟล์" : locale === "zh" ? "管理工作、请求、聊天、收入和个人资料" : "Manage jobs, requests, chat, and profile"}
+              <h1 className="text-3xl font-bold text-white">{t("title")}</h1>
+              <p className="text-sky-200 text-sm mt-1">
+                {locale === "th" ? "จัดการบริการ คำสั่ง แชท และข้อมูลบัญชีของคุณ" : locale === "zh" ? "管理您的服务、预约、聊天和账户" : "Manage your services, bookings, chat, and account"}
               </p>
             </div>
-            {partner ? (
+            {subscriber ? (
               <div className="flex items-center gap-3 bg-white/10 backdrop-blur rounded-xl px-4 py-2.5">
-                <div className="w-10 h-10 rounded-full bg-purple-400/30 flex items-center justify-center text-white font-bold">{partner.name?.charAt(0) || "P"}</div>
+                <div className="w-10 h-10 rounded-full bg-sky-400/30 flex items-center justify-center text-white font-bold">{subscriber.name?.charAt(0) || "U"}</div>
                 <div>
-                  <p className="text-white text-sm font-semibold">{partner.name}</p>
-                  <p className="text-purple-200 text-xs">{partner.email}</p>
+                  <p className="text-white text-sm font-semibold">{subscriber.name}</p>
+                  <p className="text-sky-200 text-xs">{subscriber.email}</p>
                 </div>
                 <button
-                  onClick={() => { localStorage.removeItem("subscriber"); localStorage.removeItem("subscriber_token"); localStorage.removeItem("pdpa_consent_partner"); window.dispatchEvent(new Event("storage")); router.push(prefix); }}
+                  onClick={() => { localStorage.removeItem("subscriber"); localStorage.removeItem("subscriber_token"); localStorage.removeItem("pdpa_consent_customer"); window.dispatchEvent(new Event("storage")); router.push(prefix); }}
                   className="ml-2 px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold rounded-lg transition"
                 >
                   {locale === "th" ? "ออกจากระบบ" : locale === "zh" ? "退出登录" : "Logout"}
@@ -364,19 +248,19 @@ export default function FixerProPage() {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 -mt-6 relative z-10 pb-12">
-        {/* Not logged in CTA */}
-        {!isSubscribed && !loading && (
-          <div className="bg-gradient-to-r from-purple-600 to-indigo-700 rounded-2xl p-8 mb-8 text-white shadow-xl">
+        {/* Subscribe CTA (when not logged in) */}
+        {!subscriber && !loading && (
+          <div className="bg-gradient-to-r from-sky-600 to-blue-700 rounded-2xl p-8 mb-8 text-white shadow-xl">
             <div className="flex flex-col md:flex-row items-center justify-between gap-6">
               <div>
-                <h2 className="text-2xl font-bold">{locale === "th" ? "เข้าสู่ระบบพาร์ทเนอร์" : locale === "zh" ? "合作伙伴登录" : "Partner Login"}</h2>
-                <p className="text-purple-100 mt-2">{locale === "th" ? "รับงาน จัดการแดชบอร์ด และเพิ่มรายได้" : locale === "zh" ? "接受工作、管理仪表板、增加收入" : "Receive jobs, manage your dashboard, and grow earnings"}</p>
+                <h2 className="text-2xl font-bold">{locale === "th" ? "เริ่มต้นกับ CBLUE" : locale === "zh" ? "开始CBLUE之旅" : "Get Started with CBLUE"}</h2>
+                <p className="text-sky-100 mt-2">{locale === "th" ? "เข้าถึงช่างซ่อมบ้าน ทีมโครงการ มืออาชีพ และอสังหาริมทรัพย์ที่ผ่านการตรวจสอบ" : locale === "zh" ? "访问经过验证的技工、项目团队、专业人士和房产" : "Access verified fixers, project teams, professionals, and properties"}</p>
               </div>
               <div className="flex gap-3">
-                <Link href={`subscription/login`} className="px-6 py-3 bg-white text-purple-700 rounded-xl font-bold text-sm hover:bg-purple-50 transition shadow-lg whitespace-nowrap">
+                <Link href={`${prefix}/subscription/login`} className="px-6 py-3 bg-white text-sky-700 rounded-xl font-bold text-sm hover:bg-sky-50 transition shadow-lg whitespace-nowrap">
                   {locale === "th" ? "เข้าสู่ระบบ" : locale === "zh" ? "登录" : "Log In"}
                 </Link>
-                <Link href={`fixers/register`} className="px-6 py-3 border-2 border-white/40 text-white rounded-xl font-bold text-sm hover:bg-white/10 transition whitespace-nowrap">
+                <Link href={`${prefix}/subscription/register`} className="px-6 py-3 border-2 border-white/40 text-white rounded-xl font-bold text-sm hover:bg-white/10 transition whitespace-nowrap">
                   {locale === "th" ? "สมัครสมาชิก" : locale === "zh" ? "注册" : "Register"}
                 </Link>
               </div>
@@ -384,762 +268,389 @@ export default function FixerProPage() {
           </div>
         )}
 
-        {/* Main Content Area */}
-        {isSubscribed && !isFixer && !loading && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 mb-8 text-center max-w-2xl mx-auto">
-            <div className="text-5xl mb-4">👷‍♂️</div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">
-              {locale === "th" ? "คุณยังไม่ได้ลงทะเบียนเป็นพาร์ทเนอร์" : locale === "zh" ? "您尚未注册成为合作伙伴" : "You are not yet a registered Partner"}
-            </h2>
-            <p className="text-gray-500 mb-6">
-              {locale === "th" ? "สมัครเข้าร่วมกับ CBLUE วันนี้เพื่อรับงานและเพิ่มรายได้ของคุณ" : locale === "zh" ? "立即注册CBLUE，开始接单并增加您的收入。" : "Register with CBLUE today to start receiving jobs and growing your income."}
-            </p>
-            <Link href={`fixers/register`} className="inline-block px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition shadow-lg">
-              {locale === "th" ? "ลงทะเบียนเลย" : locale === "zh" ? "立即注册" : "Register Now"}
+        {/* Quick Book - 4 Services */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          {[
+            { href: `${prefix}/booking/household`, icon: "", label: locale === "th" ? "จองช่างซ่อมบ้าน" : locale === "zh" ? "预约技工" : "Book Fixer", desc: locale === "th" ? "ประปา ไฟฟ้า แอร์" : locale === "zh" ? "管道、电气、空调" : "Plumbing, Electrical, AC", color: "from-sky-500 to-blue-600" },
+            { href: `${prefix}/booking/project`, icon: "", label: locale === "th" ? "จองทีมโครงการ" : locale === "zh" ? "预约项目团队" : "Book Project Team", desc: locale === "th" ? "เว็บ AI สมาร์ทโฮม" : locale === "zh" ? "网站、AI、智能家居" : "Web, AI, Smart Home", color: "from-indigo-500 to-purple-600" },
+            { href: `${prefix}/booking/professional`, icon: "", label: locale === "th" ? "จองมืออาชีพ" : locale === "zh" ? "预约专业人士" : "Book Professional", desc: locale === "th" ? "ทนาย สถาปนิก วิศวกร" : locale === "zh" ? "律师、建筑师、工程师" : "Lawyer, Architect, Engineer", color: "from-emerald-500 to-teal-600" },
+            { href: `${prefix}/properties`, icon: "", label: locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房产" : "Book Property", desc: locale === "th" ? "ซื้อ ขาย เช่า" : locale === "zh" ? "买、卖、租" : "Buy, Sell, Rent", color: "from-amber-500 to-orange-600" },
+          ].map((s) => (
+            <Link key={s.href} href={s.href} className="group relative bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition-all hover:-translate-y-1">
+              <div className={`h-2 bg-gradient-to-r ${s.color}`} />
+              <div className="p-5">
+                <span className="text-3xl block mb-2">{s.icon}</span>
+                <h3 className="font-bold text-gray-900 text-sm">{s.label}</h3>
+                <p className="text-xs text-gray-500 mt-1">{s.desc}</p>
+              </div>
             </Link>
-          </div>
-        )}
-
-        {isSubscribed && isFixer && (
-          <>
-            <div className="flex gap-1 bg-white rounded-xl shadow-sm border border-gray-200 p-1.5 mb-6 overflow-x-auto">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${
-                activeTab === tab.key ? "bg-purple-600 text-white shadow" : "text-gray-600 hover:bg-gray-100"
-              }`}
-            >
-              <span>{tab.icon}</span> {tab.label}
-              {tab.badge ? (
-                <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${activeTab === tab.key ? "bg-white/30 text-white" : "bg-red-100 text-red-700"}`}>{tab.badge}</span>
-              ) : null}
-            </button>
           ))}
         </div>
 
-        {/* Tab Content */}
-        <div className={`mt-6 ${activeTab !== 'overview' ? 'hidden' : ''}`}>
-          <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={incomingJobs} completedJobs={completedJobs} earnings={[]} stats={stats} notifications={notifications} chats={[]} onJobClick={handleJobClick} />
-        </div>
-        {activeTab === "requests" && <PartnerRequests locale={locale} incomingJobs={incomingJobs} onJobClick={handleJobClick} />}
-        {activeTab === "active" && <CustomerJobs locale={locale} activeJobs={activeJobs} onJobClick={handleJobClick} />}
         
-        {activeTab === "properties" && <PartnerProperties locale={locale} prefix={prefix} properties={myProperties} />}
-        {activeTab === "history" && <PartnerHistory locale={locale} completedJobs={completedJobs} />}
-        {activeTab === "chat" && <PartnerChats locale={locale} chats={chats} />}
-        {activeTab === "notifications" && <PartnerNotifications locale={locale} notifications={notifications} />}
-        {activeTab === "profile" && <PartnerProfile locale={locale} prefix={prefix} partner={partner} />}
-          </>
+        {/* Main Content */}
+        {subscriber && !loading && (
+          <CustomerDashboard locale={locale} subscriber={subscriber} prefix={prefix} orders={orders} onLogout={() => {
+            localStorage.removeItem("subscriber"); 
+            localStorage.removeItem("subscriber_token"); 
+            localStorage.removeItem("pdpa_consent_customer"); 
+            window.dispatchEvent(new Event("storage"));
+            router.push(prefix);
+          }} />
         )}
+{/* Tier Comparison */}
+      <div className="mt-8 bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
+        <h2 className="text-lg font-bold text-gray-900 mb-2">
+          {locale === "th" ? "เปรียบเทียบระดับบริการ" : locale === "zh" ? "服务等级比较" : "Tier Comparison"}
+        </h2>
+        <p className="text-sm text-gray-500 mb-5">{locale === "th" ? "ค่าธรรมเนียมดำเนินการต่อการจับคู่" : locale === "zh" ? "每次匹配的处理费" : "Processing fee per matching"}</p>
 
-        <div className="my-10 border-t border-gray-200" />
-
-        {/* Registration Cards */}
-        {(!isSubscribed || !isFixer) && !loading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          {/* Register as Fixer & Pro */}
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition">
-            <div className="h-2 bg-gradient-to-r from-sky-500 to-blue-600" />
-            <div className="p-7">
-              <div className="w-12 h-12 rounded-xl bg-sky-100 flex items-center justify-center mb-4 text-xl"></div>
-              <h2 className="text-lg font-bold text-gray-800 mb-2">{locale === "th" ? "สมัครเป็นช่างและมืออาชีพ CBLUE" : locale === "zh" ? "注册成为CBLUE技工和专业人士" : "Register as CBLUE Fixer & Pro"}</h2>
-              <p className="text-gray-500 text-sm mb-5">{locale === "th" ? "เข้าร่วมเครือข่ายช่างมืออาชีพ รับงานทั่วประเทศ" : locale === "zh" ? "加入专业网络，全国接单" : "Join our professional network. Receive jobs nationwide."}</p>
-              <ul className="text-sm text-gray-600 space-y-1.5 mb-5">
-                {[
-                  locale === "th" ? "รับงานทั่วประเทศ" : locale === "zh" ? "全国接单" : "Receive jobs nationwide",
-                  locale === "th" ? "KYC ยืนยันตัวตน" : locale === "zh" ? "KYC身份验证" : "KYC identity verification",
-                  locale === "th" ? "5 ระดับ Economy / Standard / Corporate / Specialist / Expert" : locale === "zh" ? "5个等级：基础到专家" : "5 tiers: Economy to Expert",
-                ].map((item, i) => (
-                  <li key={i} className="flex items-center gap-2"><span className="text-green-500">✓</span> {item}</li>
-                ))}
-              </ul>
-              <Link href={`fixers/register`} className="block text-center py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-xl shadow transition">
-                {locale === "th" ? "สมัครเป็นช่าง" : locale === "zh" ? "注册成为技工" : "Register as Fixer"}
-              </Link>
+        {/* Fixer & Professional Tiers */}
+        <h3 className="text-sm font-semibold text-gray-700 mb-3"> {locale === "th" ? "ช่างซ่อม / มืออาชีพ" : locale === "zh" ? "技工 / 专业人士" : "Fixer / Professional"}</h3>
+        <div className="grid grid-cols-5 gap-3 mb-6">
+          {[
+            { name: "Economy", fee: "฿100", color: "border-green-200 bg-green-50", textColor: "text-green-700", desc: locale === "th" ? "บริการทั่วไป" : locale === "zh" ? "基础服务" : "Basic" },
+            { name: "Standard", fee: "฿400", color: "border-blue-200 bg-blue-50", textColor: "text-blue-700", desc: locale === "th" ? "มาตรฐาน" : locale === "zh" ? "标准" : "Standard" },
+            { name: "Corporate", fee: "฿600", color: "border-purple-200 bg-purple-50", textColor: "text-purple-700", desc: locale === "th" ? "องค์กร" : locale === "zh" ? "企业" : "Corporate" },
+            { name: "Specialist", fee: "฿800", color: "border-amber-200 bg-amber-50", textColor: "text-amber-700", desc: locale === "th" ? "ผู้ชำนาญ" : locale === "zh" ? "专家" : "Specialist" },
+            { name: "Expert", fee: "฿1,000", color: "border-red-200 bg-red-50", textColor: "text-red-700", desc: locale === "th" ? "ผู้เชี่ยวชาญ" : locale === "zh" ? "大师" : "Expert" },
+          ].map((item) => (
+            <div key={item.name} className={`rounded-xl border-2 p-4 text-center ${item.color}`}>
+              <h3 className={`font-bold text-sm ${item.textColor}`}>{item.name}</h3>
+              <p className={`text-2xl font-extrabold ${item.textColor} mt-1`}>{item.fee}</p>
+              <p className="text-xs text-gray-500 mt-1">{item.desc}</p>
             </div>
-          </div>
-
-          {/* List Property */}
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition">
-            <div className="h-2 bg-gradient-to-r from-green-500 to-emerald-600" />
-            <div className="p-7">
-              <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center mb-4 text-xl"></div>
-              <h2 className="text-lg font-bold text-gray-800 mb-2">{locale === "th" ? "ลงประกาศอสังหาริมทรัพย์" : locale === "zh" ? "发布新房产" : "List New Property"}</h2>
-              <p className="text-gray-500 text-sm mb-5">{locale === "th" ? "ลงประกาศขายหรือเช่าคอนโด บ้าน ทาวน์เฮาส์ ที่ดิน" : locale === "zh" ? "发布公寓、别墅、联排别墅或土地出售或出租" : "List condo, house, townhouse, or land for sale or rent."}</p>
-              <ul className="text-sm text-gray-600 space-y-1.5 mb-5">
-                {[
-                  locale === "th" ? "เข้าถึงผู้ซื้อและผู้เช่าทั่วไทย" : locale === "zh" ? "触达全国买家和租客" : "Reach buyers & renters nationwide",
-                  locale === "th" ? "อัปโหลดรูปภาพและรายละเอียด" : locale === "zh" ? "上传照片和详情" : "Upload photos & details",
-                  locale === "th" ? "จัดการประกาศจากแดชบอร์ด" : locale === "zh" ? "从仪表板管理列表" : "Manage listings from dashboard",
-                ].map((item, i) => (
-                  <li key={i} className="flex items-center gap-2"><span className="text-green-500">✓</span> {item}</li>
-                ))}
-              </ul>
-              <Link href={`properties/register`} className="block text-center py-2.5 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl shadow transition">
-                {locale === "th" ? "ลงประกาศ" : locale === "zh" ? "发布房产" : "List Property"}
-              </Link>
-            </div>
-          </div>
+          ))}
         </div>
 
-        )}
-
-        {/* Price List Table */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden mb-8">
-          <div className="h-2 bg-gradient-to-r from-amber-400 to-orange-500" />
-          <div className="p-7">
-            <h2 className="text-xl font-bold text-gray-900 mb-1 text-center">
-              {locale === "th" ? "ตารางราคาค่าประสานงาน" : locale === "zh" ? "处理费价格表" : "Processing Fee Price List"}
-            </h2>
-            <p className="text-gray-500 text-sm text-center mb-5">
-              {locale === "th" ? "ค่าประสานงานที่ลูกค้าจ่ายต่อการจับคู่ 1 ครั้ง" : locale === "zh" ? "客户每次匹配技工/专业人士支付的一次性费用" : "One-time fee per fixer/professional matching"}
-            </p>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead><tr className="border-b-2 border-gray-200">
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">{locale === "th" ? "ระดับ" : locale === "zh" ? "等级" : "Tier"}</th>
-                  <th className="text-center py-3 px-4 font-semibold text-gray-700">{locale === "th" ? "ค่าประสานงาน" : locale === "zh" ? "费用" : "Fee"}</th>
-                  
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">{locale === "th" ? "คุณสมบัติ" : locale === "zh" ? "资质" : "Qualifications"}</th>
-                </tr></thead>
-                <tbody>
-                  {[
-                    { tier: "Economy", fee: "฿100", stars: "", qual: locale === "th" ? "ช่างทั่วไป ประสบการณ์เบื้องต้น" : locale === "zh" ? "普通技工，基础经验" : "General fixer, basic experience", color: "bg-green-50 text-green-700" },
-                    { tier: "Standard", fee: "฿400", stars: "", qual: locale === "th" ? "ช่างมีประสบการณ์ ผลงานดี" : locale === "zh" ? "有经验，良好记录" : "Experienced, good track record", color: "bg-blue-50 text-blue-700" },
-                    { tier: "Corporate", fee: "฿600", stars: "", qual: locale === "th" ? "ช่างมืออาชีพ หรือทีมงาน" : locale === "zh" ? "专业技工或团队" : "Professional fixer or team", color: "bg-purple-50 text-purple-700" },
-                    { tier: "Specialist", fee: "฿800", stars: "", qual: locale === "th" ? "ผู้เชี่ยวชาญเฉพาะทาง มีใบรับรอง" : locale === "zh" ? "认证专家" : "Certified specialist", color: "bg-amber-50 text-amber-700" },
-                    { tier: "Expert", fee: "฿1,000", stars: "", qual: locale === "th" ? "ผู้เชี่ยวชาญระดับสูง 10+ ปี" : locale === "zh" ? "高级专家，10+年经验" : "Senior expert, 10+ years", color: "bg-red-50 text-red-700" },
-                  ].map((r) => (
-                    <tr key={r.tier} className="border-b border-gray-100 hover:bg-gray-50 transition">
-                      <td className="py-3 px-4"><span className={`px-3 py-1 rounded-full text-xs font-bold ${r.color}`}>{r.tier}</span></td>
-                      <td className="py-3 px-4 text-center font-bold text-gray-900">{r.fee}</td>
-                      
-                      <td className="py-3 px-4 text-gray-600">{r.qual}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        {/* Property Tiers */}
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">{locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房产" : "Property"}</h3>
+        <div className="grid grid-cols-5 gap-3">
+          {[
+            { name: "Economy", fee: "฿100", color: "border-green-200 bg-green-50", textColor: "text-green-700", desc: locale === "th" ? "ห้องเช่า" : locale === "zh" ? "房间" : "Room" },
+            { name: "Standard", fee: "฿400", color: "border-blue-200 bg-blue-50", textColor: "text-blue-700", desc: locale === "th" ? "คอนโด" : locale === "zh" ? "公寓" : "Condo" },
+            { name: "Upper", fee: "฿600", color: "border-teal-200 bg-teal-50", textColor: "text-teal-700", desc: locale === "th" ? "บ้าน" : locale === "zh" ? "别墅" : "House" },
+            { name: "Luxury", fee: "฿800", color: "border-amber-200 bg-amber-50", textColor: "text-amber-700", desc: locale === "th" ? "หรูหรา" : locale === "zh" ? "豪华" : "Luxury" },
+            { name: "Grandeur", fee: "฿1,000", color: "border-purple-200 bg-purple-50", textColor: "text-purple-700", desc: locale === "th" ? "พรีเมียม" : locale === "zh" ? "顶级" : "Premium" },
+          ].map((item) => (
+            <div key={item.name} className={`rounded-xl border-2 p-4 text-center ${item.color}`}>
+              <h3 className={`font-bold text-sm ${item.textColor}`}>{item.name}</h3>
+              <p className={`text-2xl font-extrabold ${item.textColor} mt-1`}>{item.fee}</p>
+              <p className="text-xs text-gray-500 mt-1">{item.desc}</p>
             </div>
-            <p className="text-xs text-gray-400 mt-4 text-center">
-              {locale === "th" ? "* ค่าประสานงานเป็นค่าบริการแพลตฟอร์ม ไม่รวมค่าจ้างช่าง" : locale === "zh" ? "* 仅平台费用，不包括技工费用。客户直接协商价格。" : "* Platform fee only, excludes fixer charges. Customers negotiate pricing directly."}
-            </p>
-          </div>
-        </div>
-
-        {/* Tier Qualification Table */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
-          <div className="h-2 bg-gradient-to-r from-purple-500 to-indigo-600" />
-          <div className="p-7">
-            <h2 className="text-xl font-bold text-gray-900 mb-1 text-center">
-              {locale === "th" ? "คุณสมบัติระดับช่าง (Tier Qualification)" : locale === "zh" ? "等级资质标准" : "Tier Qualification Criteria"}
-            </h2>
-            <p className="text-gray-500 text-sm text-center mb-5">
-              {locale === "th" ? "ระดับบริการกำหนดจากประสบการณ์ ผลงาน และใบรับรอง" : locale === "zh" ? "由经验、业绩和证书决定" : "Determined by experience, track record, and certifications"}
-            </p>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead><tr className="border-b-2 border-gray-200">
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">{locale === "th" ? "ระดับ" : locale === "zh" ? "等级" : "Tier"}</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">{locale === "th" ? "ประสบการณ์" : locale === "zh" ? "经验" : "Experience"}</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">{locale === "th" ? "ผลงาน" : locale === "zh" ? "过往项目" : "Past Projects"}</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">{locale === "th" ? "ใบรับรอง" : locale === "zh" ? "证书" : "Certifications"}</th>
-                </tr></thead>
-                <tbody>
-                  {[
-                    { tier: "Economy", exp: "1+ years", projects: locale === "th" ? "ไม่จำเป็น" : locale === "zh" ? "不需要" : "Not required", certs: locale === "th" ? "ไม่จำเป็น" : locale === "zh" ? "不需要" : "Not required", color: "bg-green-50 text-green-700" },
-                    { tier: "Standard", exp: "3+ years", projects: "3+", certs: locale === "th" ? "แนะนำ" : locale === "zh" ? "建议" : "Recommended", color: "bg-blue-50 text-blue-700" },
-                    { tier: "Corporate", exp: "5+ years", projects: "10+", certs: locale === "th" ? "จำเป็น" : locale === "zh" ? "必需" : "Required", color: "bg-purple-50 text-purple-700" },
-                    { tier: "Specialist", exp: "7+ years", projects: "20+", certs: locale === "th" ? "จำเป็น + เฉพาะทาง" : locale === "zh" ? "必需 + 专业" : "Required + specialized", color: "bg-amber-50 text-amber-700" },
-                    { tier: "Expert", exp: "10+ years", projects: "50+", certs: locale === "th" ? "จำเป็น + ขั้นสูง" : locale === "zh" ? "必需 + 高级" : "Required + advanced", color: "bg-red-50 text-red-700" },
-                  ].map((r) => (
-                    <tr key={r.tier} className="border-b border-gray-100 hover:bg-gray-50 transition">
-                      <td className="py-3 px-4"><span className={`px-3 py-1 rounded-full text-xs font-bold ${r.color}`}>{r.tier}</span></td>
-                      <td className="py-3 px-4 text-gray-600">{r.exp}</td>
-                      <td className="py-3 px-4 text-gray-600">{r.projects}</td>
-                      <td className="py-3 px-4 text-gray-600">{r.certs}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="text-xs text-gray-400 mt-4 text-center">
-              {locale === "th" ? "* ช่างสามารถอัปเกรดระดับได้เมื่อมีคุณสมบัติครบถ้วน" : locale === "zh" ? "* 技工满足资质后可升级等级" : "* Fixers can upgrade their tier when qualifications are met."}
-            </p>
-          </div>
-        </div>
-
-        {/* Disclaimer */}
-        <div className="mt-4 bg-gray-50 border border-gray-200 rounded-xl p-4 text-xs text-gray-500">
-          <p className="font-semibold text-gray-700 mb-1"> {locale === "th" ? "ข้อจำกัดความรับผิดชอบ" : locale === "zh" ? "免责声明" : "Disclaimer"}</p>
-          <p>{locale === "th"
-            ? "CBLUE เป็นแพลตฟอร์มจับคู่เท่านั้น ราคาที่ตกลง ขอบเขตงาน และการชำระเงินระหว่างคุณกับพาร์ทเนอร์ (ช่าง/ทีมโครงการ/มืออาชีพ/ผู้ลงประกาศอสังหาริมทรัพย์) เป็นข้อตกลงโดยตรงระหว่างทั้งสองฝ่าย CBLUE ไม่รับผิดชอบต่อข้อพิพาทด้านราคา คุณภาพงาน หรือข้อตกลงที่เกิดขึ้นหลังกระบวนการจับคู่"
-            : locale === "zh"
-            ? "CBLUE 仅作为匹配平台。您与合作伙伴（技工/项目团队/专业人士/房产发布者）之间约定的价格、工作范围和付款为双方直接安排。CBLUE 不对匹配过程后产生的价格争议、工作质量或协议承担责任。"
-            : "CBLUE acts as a matching platform only. The agreed price, scope of work, and payment between you and the partner (fixer/project team/professional/property lister) is a direct arrangement between both parties. CBLUE is not responsible for pricing disputes, work quality, or agreements made after the matching process."
-          }</p>
-          <p className="mt-2 font-semibold text-gray-700">{locale === "th"
-            ? "📌 ค่าธรรมเนียมดำเนินการไม่สามารถคืนเงินได้ เนื่องจากบริการจับคู่ได้ดำเนินการเสร็จสิ้นแล้วเมื่อลูกค้าเริ่มกระบวนการ ค่าธรรมเนียมนี้ครอบคลุมการจับคู่ AI, การตรวจสอบพาร์ทเนอร์, การออก PO และการจัดการการสื่อสาร"
-            : locale === "zh"
-            ? "📌 处理费不可退还，因为匹配服务在客户发起流程后已完成。此费用涵盖AI匹配、合作伙伴验证、PO签发和通信协调。"
-            : "📌 The processing fee is non-refundable as the matching service is completed once the customer initiates the process. This fee covers AI matching, partner verification, PO issuance, and communication facilitation."
-          }</p>
-        </div>
-        {/* Data Retention Notice */}
-        <div className="mt-3 bg-blue-50 border border-blue-200 rounded-xl p-4 text-xs text-blue-700">
-          <p className="font-semibold mb-1">🛡️ {locale === "th" ? "นโยบายการเก็บรักษาข้อมูล (PDPA)" : locale === "zh" ? "数据保留政策 (PDPA)" : "Data Retention Policy (PDPA)"}</p>
-          <p>{locale === "th"
-            ? "ความยินยอม: 3 ปี | ประวัติบริการ: 18 เดือน | บัญชีไม่ใช้งาน: ลบหลัง 12 เดือน"
-            : locale === "zh"
-            ? "同意记录: 3年 | 服务历史: 18个月 | 非活跃账户: 12个月后删除"
-            : "Consent: 3 years | Service history: 18 months | Inactive accounts: deleted after 12 months"
-          }</p>
+          ))}
         </div>
       </div>
+
+            </div>
     </div>
   );
 }
 
-/* ===== PARTNER OVERVIEW ===== */
-function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJobs, earnings, stats, notifications, onJobClick }: { locale: string; partner: PartnerInfo | null; activeJobs: any[]; incomingJobs: any[]; completedJobs: any[]; earnings: any[]; stats: any; notifications: any[]; chats?: any[]; onJobClick?: (job: any) => void; }) {
-  const maxEarning = earnings.length > 0 ? Math.max(...earnings.map(e => e.amount)) : 0;
+
+
+/* ===== OVERVIEW TAB ===== */
+function OverviewTab({ locale, subscriber, activeOrders, historyOrders, chats, notifications }: { locale: string; subscriber: any; activeOrders: any[]; onOrderClick?: (o: any) => void; historyOrders: any[]; chats: any[]; notifications: any[] }) {
+  const STATUS_STYLE: any = {
+    "CREATED": "bg-gray-100 text-gray-700",
+    "MATCHING": "bg-yellow-100 text-yellow-700",
+    "PENDING": "bg-blue-100 text-blue-700",
+    "COMPLETED": "bg-green-100 text-green-700",
+    "CANCELLED": "bg-red-100 text-red-700"
+  };
+
+  const getStatusLabel = (status: string, locale: string) => {
+    const labels: any = {
+      "CREATED": { th: "รอดำเนินการ", zh: "等待中", en: "Created" },
+      "MATCHING": { th: "กำลังจับคู่", zh: "匹配中", en: "Matching" },
+      "PENDING": { th: "กำลังดำเนินการ", zh: "进行中", en: "Pending" },
+      "COMPLETED": { th: "เสร็จสิ้น", zh: "已完成", en: "Completed" },
+      "CANCELLED": { th: "ยกเลิก", zh: "已取消", en: "Cancelled" }
+    };
+    return labels[status]?.[locale] || status;
+  };
+
   return (
     <div className="space-y-6">
-      {/* Stats Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: locale === "th" ? "งานที่ใช้งานอยู่" : "Active Jobs", value: activeJobs?.length || 0, icon: "", color: "text-amber-600" },
-          { label: locale === "th" ? "เสร็จสิ้น" : "Completed", value: completedJobs?.length || 0, icon: "", color: "text-green-600" },
-          { label: locale === "th" ? "รายได้ต่อเดือน" : "Monthly Earn", value: stats?.monthlyEarnings || "฿0", icon: "", color: "text-indigo-600" },
-          { label: locale === "th" ? "คะแนน" : "Rating", value: `${stats?.rating || 0} `, icon: "", color: "text-amber-600" },
-        ].map((s) => (
-          <div key={s.label} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-semibold text-gray-500">{s.label}</span>
-              <span className="text-xl">{s.icon}</span>
+      {/* Pending Tasks */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+          <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "งานที่กำลังดำเนินการ" : locale === "zh" ? "进行中的任务" : "Active Tasks"}</h2>
+        </div>
+        <div className="divide-y divide-gray-50">
+          {activeOrders.length > 0 ? activeOrders.slice(0, 3).map((job: any) => (
+            <div key={job.id} className="p-6 flex items-center gap-4 hover:bg-gray-50 transition">
+              <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl">{job.type === 'household' ? '' : job.type === 'project' ? '' : job.type === 'professional' ? '' : ''}</div>
+              <div className="flex-1">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="font-bold text-gray-900">{locale === "th" ? job.serviceTh : locale === "zh" ? job.serviceZh : job.service}</h3>
+                    <p className="text-sm text-gray-500 mt-1">{job.date}</p>
+                  </div>
+                  <span className={`text-xs px-3 py-1 rounded-full font-bold ${STATUS_STYLE[job.status] || ""}`}>{getStatusLabel(job.status, locale)}</span>
+                </div>
+              </div>
             </div>
-            <p className={`text-2xl sm:text-3xl font-extrabold ${s.color}`}>{s.value}</p>
-          </div>
-        ))}
+          )) : (
+            <p className="text-sm text-gray-500 p-6 text-center">{locale === "th" ? "ไม่มีงานที่กำลังดำเนินการ" : locale === "zh" ? "没有进行中的任务" : "No active tasks"}</p>
+          )}
+        </div>
       </div>
+    </div>
+  );
+}
 
-      {/* Profile + Earnings row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Profile */}
-        {partner && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+/* ===== BOOKINGS TAB ===== */
+function BookingsTab({ locale, activeOrders }: { locale: string; activeOrders: any[]; onOrderClick?: (o: any) => void }) {
+  const STATUS_STYLE: any = {
+    "CREATED": "bg-gray-100 text-gray-700",
+    "MATCHING": "bg-yellow-100 text-yellow-700",
+    "PENDING": "bg-blue-100 text-blue-700",
+  };
+
+  const getStatusLabel = (status: string, locale: string) => {
+    const labels: any = {
+      "CREATED": { th: "รอดำเนินการ", zh: "等待中", en: "Created" },
+      "MATCHING": { th: "กำลังจับคู่", zh: "匹配中", en: "Matching" },
+      "PENDING": { th: "กำลังดำเนินการ", zh: "进行中", en: "Pending" }
+    };
+    return labels[status]?.[locale] || status;
+  };
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-100">
+        <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "การจองของฉัน" : locale === "zh" ? "我的预订" : "My Bookings"}</h2>
+      </div>
+      <div className="divide-y divide-gray-50">
+        {activeOrders.length > 0 ? activeOrders.map((b: any) => (
+          <div key={b.id} className="p-6 hover:bg-gray-50/50 transition">
             <div className="flex items-center gap-4 mb-4">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white text-2xl font-bold shadow-lg">{partner.name?.charAt(0)}</div>
-              <div>
-                <h3 className="text-lg font-bold text-gray-900">{partner.name}</h3>
-                <p className="text-sm text-gray-500">{partner.email}</p>
-                <p className="text-xs text-gray-400">{partner.phone}</p>
+              <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl">
+                {b.type === 'household' ? '' : b.type === 'project' ? '' : b.type === 'professional' ? '' : ''}
               </div>
-              <span className="ml-auto px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">{locale === "th" ? "ใช้งานอยู่" : locale === "zh" ? "活跃" : "Active"}</span>
-            </div>
-            <div className="flex gap-2 mt-2">
-              <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold">{partner.tier || "Standard Tier"}</span>
-              <span className="px-3 py-1 bg-sky-100 text-sky-700 rounded-full text-xs font-bold">{locale === "th" ? "ยืนยันแล้ว" : locale === "zh" ? "已验证" : "Verified"}</span>
-              <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-bold">{locale === "th" ? "KYC ✓ ยืนยันแล้ว" : locale === "zh" ? "KYC ✓ 已验证" : "KYC ✓"}</span>
+              <div className="flex-1">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="font-bold text-gray-900">{locale === "th" ? b.serviceTh : locale === "zh" ? b.serviceZh : b.service}</h3>
+                    <p className="text-sm text-gray-500 mt-1">{b.date}</p>
+                  </div>
+                  <span className={`text-xs px-3 py-1 rounded-full font-bold ${STATUS_STYLE[b.status] || ""}`}>{getStatusLabel(b.status, locale)}</span>
+                </div>
+              </div>
             </div>
           </div>
+        )) : (
+          <p className="text-sm text-gray-500 p-6 text-center">{locale === "th" ? "ไม่มีการจอง" : locale === "zh" ? "没有预订" : "No bookings"}</p>
         )}
-
-        {/* Earnings Chart */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">{locale === "th" ? "รายได้รายเดือน" : locale === "zh" ? "月收入" : "Monthly Earnings"}</h3>
-          <div className="flex items-end gap-4 h-32">
-            {earnings.map((e) => (
-              <div key={e.month} className="flex-1 flex flex-col items-center">
-                <span className="text-xs font-bold text-gray-700 mb-1">฿{(e.amount / 1000).toFixed(1)}k</span>
-                <div className="w-full bg-purple-100 rounded-t-lg relative" style={{ height: `${(e.amount / maxEarning) * 100}%` }}>
-                  <div className="absolute inset-0 bg-gradient-to-t from-purple-500 to-indigo-500 rounded-t-lg" />
-                </div>
-                <span className="text-xs text-gray-500 mt-1">{locale === "th" ? e.monthTh : locale === "zh" ? e.monthZh : e.month}</span>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
-
-      {/* Incoming Requests Preview */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "คำขอใหม่" : locale === "zh" ? "新订单" : "Incoming Requests"}</h2>
-          <span className="text-xs bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full font-bold">{incomingJobs.length}</span>
-        </div>
-        <div className="divide-y divide-gray-50">
-          {incomingJobs.slice(0, 2).map((req) => (
-            <div key={req.id} className="px-6 py-4 flex items-center gap-4 hover:bg-amber-50 transition cursor-pointer" onClick={() => onJobClick && onJobClick(req)}>
-              <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center text-lg"></div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? req.serviceTh : locale === "zh" ? req.serviceZh : req.service}</p>
-                <p className="text-xs text-gray-500">{req.customer} &middot; {req.date} &middot; {locale === "th" ? "งบ" : locale === "zh" ? "预算" : "Budget"}: {req.fee}</p>
-                <p className="text-xs text-gray-500 mt-1" style={{ whiteSpace: "pre-wrap" }}>{req.description}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[req.tier] || ""}`}>{req.tier}</span>
-                {req.urgency === "urgent" && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-700">{locale === "th" ? "เร่งด่วน" : locale === "zh" ? "紧急" : "Urgent"}</span>}
-                <button onClick={(e) => { e.stopPropagation(); onJobClick && onJobClick(req); }} className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition">{locale === "th" ? "รับ" : locale === "zh" ? "接受" : "Accept"}</button>
-                <button className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">{locale === "th" ? "ปฏิเสธ" : locale === "zh" ? "拒绝" : "Decline"}</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Notifications + Chat side by side */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-          <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">{locale === "th" ? "การแจ้งเตือนล่าสุด" : locale === "zh" ? "最近通知" : "Recent Alerts"}</h3>
-          <div className="space-y-2">
-            {notifications.slice(0, 1).map((n) => (
-              <div key={n.id} className={`flex items-center gap-3 p-3 rounded-lg ${n.unread ? "bg-purple-50 border border-purple-100" : "bg-gray-50"}`}>
-                <span className={`w-2 h-2 rounded-full ${n.dot} flex-shrink-0`} />
-                <p className="text-sm text-gray-700 flex-1">{locale === "th" ? n.msgTh : locale === "zh" ? n.msgZh : n.msg}</p>
-                <span className="text-xs text-gray-400 whitespace-nowrap">{n.time}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-          <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">{locale === "th" ? "แชทที่เข้ามาล่าสุด" : locale === "zh" ? "最近收到的来信" : "Recent incoming chats"}</h3>
-          <div className="space-y-2">
-            {chats && chats.length > 0 ? chats.slice(0, 4).map((c: any) => (
-              <div key={c.id} className={`flex items-center gap-3 p-3 rounded-lg ${c.unread > 0 ? "bg-purple-50 border border-purple-100" : "bg-gray-50"}`}>
-                <div className="relative">
-                  <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600">{c.name.slice(-3)}</div>
-                  {c.online && <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-400 rounded-full border-2 border-white" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-800">{c.name} <span className="text-gray-400 font-normal">· {c.service}</span></p>
-                  <p className="text-xs text-gray-500 truncate">{locale === "th" ? c.lastMsgTh : locale === "zh" ? c.lastMsgZh : c.lastMsg}</p>
-                </div>
-                <div className="text-right">
-                  <span className="text-xs text-gray-400">{locale === "th" ? c.timeTh : locale === "zh" ? c.timeZh : c.time}</span>
-                  {c.unread > 0 && <span className="block mt-0.5 ml-auto w-5 h-5 bg-purple-600 text-white text-[10px] rounded-full flex items-center justify-center font-bold">{c.unread}</span>}
-                </div>
-              </div>
-            )) : <p className="text-sm text-gray-500 py-4 text-center">{locale === "th" ? "ไม่มีแชทล่าสุด" : locale === "zh" ? "没有最近的聊天" : "No recent incoming chats"}</p>}
-          </div>
-        </div>
-      </div>
-
-
-        {/* Active Jobs Preview */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="font-bold text-gray-900 flex items-center gap-2"> {locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "进行中的工作" : "Active Jobs"}</h2>
-          <span className="text-xs bg-sky-100 text-sky-700 px-2.5 py-1 rounded-full font-bold">{activeJobs.length}</span>
-        </div>
-        <div className="divide-y divide-gray-50">
-          {activeJobs.slice(0, 5).map((job) => (
-            <div key={job.id} className="px-6 py-4 flex items-center gap-4 hover:bg-gray-50/50 transition">
-              <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center text-lg"></div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? job.serviceTh : locale === "zh" ? job.serviceZh : job.service}</p>
-                <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"} &middot; PO-{job.id?.slice(0, 4)}-{job.id?.slice(4, 8)} | {job.subdistrict || "Saphansong"}</p>
-                <div className="mt-1.5 w-full bg-gray-100 rounded-full h-1.5">
-                  <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${job.progress}%` }} />
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[job.tier] || ""}`}>{job.tier}</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_STYLE[job.status] || ""}`}>{getStatusLabel(job.status, locale)}</span>
-                <span className="text-xs font-bold text-gray-700">{job.earnings}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="font-bold text-gray-900">Recent History</h2>
-            <span className="text-xs text-purple-600 font-bold cursor-pointer hover:underline">View All →</span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-gray-50/50 text-gray-500 text-xs uppercase tracking-wider">
-                <tr>
-                  <th className="py-2 px-4">Service</th>
-                  <th className="py-2 px-4">Customer</th>
-                  <th className="py-2 px-4">Date</th>
-                </tr>
-              </thead>
-              <tbody className="text-sm">
-                {completedJobs.slice(0, 3).length > 0 ? completedJobs.slice(0, 3).map((h) => (
-                  <tr key={h.id} className="border-b border-gray-50">
-                    <td className="py-3 px-4 font-medium">{h.service}</td>
-                    <td className="py-3 px-4 text-gray-600">{h.customer}</td>
-                    <td className="py-3 px-4 text-gray-500">{h.date}</td>
-                  </tr>
-                )) : (
-                  <tr>
-                    <td colSpan={5} className="py-6 text-center text-gray-500">No completed jobs yet.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
     </div>
   );
 }
 
 
-/* ===== PARTNER JOBS (Active) ===== */
 
+/* ===== HISTORY TAB ===== */
+function HistoryTab({ locale, historyOrders }: { locale: string; historyOrders: any[] }) {
+  const getStatusLabel = (status: string, locale: string) => {
+    const labels: any = {
+      "COMPLETED": { th: "เสร็จสิ้น", zh: "已完成", en: "Completed" },
+      "CANCELLED": { th: "ยกเลิก", zh: "已取消", en: "Cancelled" }
+    };
+    return labels[status]?.[locale] || status;
+  };
 
-/* ===== PARTNER JOBS (Active) ===== */
-function CustomerJobs({ locale, activeJobs, onJobClick }: { locale: string; activeJobs: any[]; onJobClick?: (job: any) => void; }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-        <h2 className="font-bold text-gray-900 flex items-center gap-2"> {locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "进行中的工作" : "Active Jobs"}</h2>
-        <span className="text-xs bg-sky-100 text-sky-700 px-2.5 py-1 rounded-full font-bold">{activeJobs.length}</span>
+      <div className="px-6 py-4 border-b border-gray-100">
+        <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "ประวัติการใช้บริการ" : locale === "zh" ? "服务历史" : "Service History"}</h2>
       </div>
       <div className="divide-y divide-gray-50">
-        {activeJobs.slice(0, 5).map((job) => (
-          <div key={job.id} className="px-6 py-4 flex items-center gap-4 hover:bg-gray-50/50 transition">
-            <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center text-lg"></div>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? job.serviceTh : locale === "zh" ? job.serviceZh : job.service}</p>
-              <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"} &middot; PO-{job.id?.slice(0, 4)}-{job.id?.slice(4, 8)} | {job.subdistrict || "Saphansong"}</p>
-              <div className="mt-1.5 w-full bg-gray-100 rounded-full h-1.5">
-                <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${job.progress}%` }} />
+        {historyOrders && historyOrders.length > 0 ? historyOrders.map((h: any) => (
+          <div key={h.id} className="p-6 hover:bg-gray-50/50 transition">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-2xl">
+                {h.type === 'household' ? '' : h.type === 'project' ? '' : h.type === 'professional' ? '' : ''}
+              </div>
+              <div className="flex-1">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="font-bold text-gray-900">{locale === "th" ? h.serviceTh : locale === "zh" ? h.serviceZh : h.service}</h3>
+                    <p className="text-sm text-gray-500 mt-1">{h.date}</p>
+                  </div>
+                  <span className={`text-xs px-3 py-1 rounded-full font-bold ${h.status === 'COMPLETED' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{getStatusLabel(h.status, locale)}</span>
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[job.tier] || ""}`}>{job.tier}</span>
-              <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_STYLE[job.status] || ""}`}>{getStatusLabel(job.status, locale)}</span>
-              <span className="text-xs font-bold text-gray-700">{job.earnings}</span>
+          </div>
+        )) : (
+          <p className="text-sm text-gray-500 p-6 text-center">{locale === "th" ? "ไม่มีประวัติการใช้บริการ" : locale === "zh" ? "没有服务历史" : "No service history"}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ===== PROFILE TAB ===== */
+function ProfileTab({ locale, prefix, subscriber, activeOrders, historyOrders }: { locale: string; prefix: string; subscriber: any; activeOrders: any[]; onOrderClick?: (o: any) => void; historyOrders: any[] }) {
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+      <div className="flex flex-col md:flex-row gap-8 items-start">
+        <div className="w-32 h-32 rounded-2xl bg-gradient-to-br from-sky-100 to-blue-50 flex items-center justify-center shadow-inner flex-shrink-0 relative group cursor-pointer overflow-hidden">
+          <span className="text-5xl"></span>
+        </div>
+        
+        <div className="flex-1 w-full">
+          <div className="flex justify-between items-start mb-6">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">{subscriber?.name || "User"}</h2>
+              <p className="text-gray-500 flex items-center gap-2 mt-1">
+                <span className="text-green-500">✓</span> {locale === "th" ? "ยืนยันตัวตนแล้ว (KYC)" : locale === "zh" ? "已验证 (KYC)" : "Verified (KYC)"}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button className="px-4 py-2 border border-gray-200 text-gray-600 rounded-full hover:bg-gray-50 transition text-sm font-semibold">
+                {locale === "th" ? "แก้ไขโปรไฟล์" : locale === "zh" ? "编辑资料" : "Edit Profile"}
+              </button>
+              <button onClick={() => {
+                if (confirm(locale === "th" ? "ยืนยันการลบบัญชีและข้อมูลทั้งหมดตามกฎหมาย PDPA?" : "Confirm deleting your account and all data per PDPA law?")) {
+                  fetch('/api/v1/users/me', { method: 'DELETE', headers: { Authorization: `Bearer ${localStorage.getItem('subscriber_token') || ''}` } })
+                  .then(() => { localStorage.clear(); window.location.href = `/${locale}/subscription/login`; });
+                }
+              }} className="px-4 py-2 border border-red-200 bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition text-sm font-semibold">
+                {locale === "th" ? "ลบบัญชี" : locale === "zh" ? "删除账户" : "Delete Account"}
+              </button>
             </div>
           </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
-function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string; incomingJobs: any[]; onJobClick?: (job: any) => void; }) {
-  return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-        <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "คำขอใหม่" : locale === "zh" ? "新订单" : "Incoming Requests"}</h2>
-        <span className="text-xs bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full font-bold">{incomingJobs.length}</span>
-      </div>
-      <div className="divide-y divide-gray-50">
-        {incomingJobs.map((req) => (
-          <div key={req.id} className="px-6 py-4 flex items-center gap-4 hover:bg-amber-50 transition cursor-pointer" onClick={() => onJobClick && onJobClick(req)}>
-            <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center text-lg"></div>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? req.serviceTh : locale === "zh" ? req.serviceZh : req.service}</p>
-              <p className="text-xs text-amber-600 font-semibold mt-0.5">{locale === "th" ? "โปรดพิจารณาและรับงานนี้เพื่อดำเนินการต่อ" : locale === "zh" ? "请审核并接受此工作以继续" : "Please review and accept this job to proceed"}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{req.customer} &middot; {req.date} &middot; {locale === "th" ? "งบ" : locale === "zh" ? "预算" : "Budget"}: {req.fee}</p>
-              <p className="text-xs text-gray-500 mt-1" style={{ whiteSpace: "pre-wrap" }}>{req.description}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-6">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-400 mb-1">{locale === "th" ? "เบอร์โทรศัพท์" : locale === "zh" ? "电话号码" : "Phone Number"}</h3>
+              <p className="text-gray-900 font-medium">{subscriber?.phone || "-"}</p>
             </div>
-            <div className="flex items-center gap-2">
-              <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[req.tier] || ""}`}>{req.tier}</span>
-              {req.urgency === "urgent" && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-700">{locale === "th" ? "เร่งด่วน" : locale === "zh" ? "紧急" : "Urgent"}</span>}
-              <button onClick={(e) => { e.stopPropagation(); onJobClick && onJobClick(req); }} className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition">{locale === "th" ? "รับ" : locale === "zh" ? "接受" : "Accept"}</button>
-              <button className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">{locale === "th" ? "ปฏิเสธ" : locale === "zh" ? "拒绝" : "Decline"}</button>
+            <div>
+              <h3 className="text-sm font-semibold text-gray-400 mb-1">{locale === "th" ? "อีเมล" : locale === "zh" ? "电子邮件" : "Email"}</h3>
+              <p className="text-gray-900 font-medium">{subscriber?.email || "-"}</p>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-gray-400 mb-1">{locale === "th" ? "วันที่สมัคร" : locale === "zh" ? "注册日期" : "Member Since"}</h3>
+              <p className="text-gray-900 font-medium">{new Date().toLocaleDateString()}</p>
             </div>
           </div>
-        ))}
+        </div>
       </div>
     </div>
   );
 }
 
-function PartnerHistory({ locale, completedJobs }: { locale: string; completedJobs: any[] }) {
-  return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-        <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "ประวัติการทำงาน" : locale === "zh" ? "工作历史" : "Job History"}</h2>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 text-xs uppercase tracking-wider">
-              <th className="py-3 px-4 font-semibold">{locale === "th" ? "บริการ" : "Service"}</th>
-              <th className="py-3 px-4 font-semibold">{locale === "th" ? "ลูกค้า" : "Customer"}</th>
-              <th className="py-3 px-4 font-semibold text-center">{locale === "th" ? "ระดับ" : "Tier"}</th>
-              <th className="py-3 px-4 font-semibold text-center">{locale === "th" ? "รายได้" : "Fee"}</th>
-              <th className="py-3 px-4 font-semibold text-center">{locale === "th" ? "วันที่" : "Date"}</th>
-            </tr>
-          </thead>
-          <tbody className="text-sm">
-            {completedJobs.length > 0 ? completedJobs.map((h) => (
-              <tr key={h.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition">
-                <td className="py-3 px-4 font-medium text-gray-900">{h.service}</td>
-                <td className="py-3 px-4 text-gray-600">#{h.customerId || 'Customer'}</td>
-                <td className="py-3 px-4 text-center"><span className="px-2 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-700">{h.tier || 'Standard'}</span></td>
-                <td className="py-3 px-4 text-center font-bold text-green-700">{h.fee || '฿0'}</td>
-                <td className="py-3 px-4 text-center text-gray-500">{new Date(h.updatedAt || Date.now()).toLocaleDateString()}</td>
-              </tr>
-            )) : (
-              <tr>
-                <td colSpan={5} className="py-8 text-center text-gray-500">No completed jobs yet.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-/* ===== PARTNER CHAT ===== */
-
-/* ===== PARTNER CHATS ===== */
-function PartnerChats({ locale, chats }: { locale: string; chats: any[] }) {
+/* ===== CHAT TAB ===== */
+function ChatTab({ locale, chats }: { locale: string; chats: any[] }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100">
         <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "แชท" : locale === "zh" ? "聊天" : "Chats"}</h2>
       </div>
       <div className="divide-y divide-gray-50">
-        {chats && chats.length > 0 ? chats.slice(0, 4).map((c: any) => (
-          <div key={c.id} className={`flex items-center gap-4 px-6 py-4 cursor-pointer transition hover:bg-gray-50`}>
+        {chats && chats.length > 0 ? chats.map((c: any) => (
+          <div key={c.id} className={`flex items-center gap-4 px-6 py-4 cursor-pointer transition ${c.unread > 0 ? "bg-sky-50/50 hover:bg-sky-50" : "hover:bg-gray-50"}`}>
             <div className="relative">
-              <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-sm font-bold text-gray-600">{c.customerId || c.customerName?.slice(0, 2) || "C"}</div>
-              <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-400 rounded-full border-2 border-white" />
+              <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-sm font-bold text-gray-600">{c.name.slice(-4)}</div>
+              {c.online && <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white" />}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex justify-between items-baseline mb-1">
-                <div className="flex items-center gap-2">
-                  <p className="font-bold text-gray-900 truncate">Customer #{c.customerId || "Customer"}</p>
-                  <span className="text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-500">{c.service}</span>
-                </div>
-                <span className="text-xs text-gray-400 whitespace-nowrap ml-2">Active</span>
+                <p className="font-bold text-gray-900 truncate">{c.name} <span className="text-gray-400 font-normal">· {c.service}</span></p>
+                <span className="text-xs text-gray-400 whitespace-nowrap ml-2">{locale === "th" ? c.timeTh : locale === "zh" ? c.timeZh : c.time}</span>
               </div>
-              <div className="flex justify-between items-center mt-1">
-                <p className={`text-sm truncate text-gray-500`}>
-                  {locale === "th" ? "คลิกเพื่อดูแชท" : "Click to open chat"}
+              <div className="flex justify-between items-center">
+                <p className={`text-sm truncate ${c.unread > 0 ? "font-semibold text-gray-900" : "text-gray-500"}`}>
+                  {locale === "th" ? c.lastMsgTh : locale === "zh" ? c.lastMsgZh : c.lastMsg}
                 </p>
+                {c.unread > 0 && <span className="flex-shrink-0 ml-2 w-5 h-5 bg-sky-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">{c.unread}</span>}
               </div>
             </div>
           </div>
         )) : (
-          <p className="text-sm text-gray-500 p-6 text-center">{locale === "th" ? "ไม่มีแชทล่าสุด" : locale === "zh" ? "没有最近的聊天" : "No active chats"}</p>
+          <p className="text-sm text-gray-500 p-6 text-center">{locale === "th" ? "ไม่มีแชทล่าสุด" : locale === "zh" ? "没有最近的聊天" : "No recent chats"}</p>
         )}
       </div>
     </div>
   );
 }
 
-/* ===== PARTNER NOTIFICATIONS ===== */
-function PartnerNotifications({ locale, notifications }: { locale: string; notifications: any[] }) {
+/* ===== NOTIFICATIONS TAB ===== */
+function NotificationsTab({ locale, notifications }: { locale: string; notifications: any[] }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-100">
-        <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "การแจ้งเตือนทั้งหมด" : locale === "zh" ? "所有通知" : "All Notifications"}</h2>
+      <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+        <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "การแจ้งเตือน" : locale === "zh" ? "通知" : "Notifications"}</h2>
       </div>
       <div className="divide-y divide-gray-50">
-        {notifications.map((n) => (
-          <div key={n.id} className={`flex items-center gap-4 px-6 py-4 transition ${n.unread ? "bg-purple-50/50" : "hover:bg-gray-50"}`}>
+        {notifications && notifications.length > 0 ? notifications.map((n: any) => (
+          <div key={n.id} className={`flex items-center gap-4 px-6 py-4 transition ${n.unread ? "bg-sky-50/50" : "hover:bg-gray-50"}`}>
             <span className={`w-3 h-3 rounded-full ${n.dot} flex-shrink-0`} />
             <p className="text-sm text-gray-800 flex-1">{locale === "th" ? n.msgTh : locale === "zh" ? n.msgZh : n.msg}</p>
             <span className="text-xs text-gray-400 whitespace-nowrap">{n.time}</span>
-            {n.unread && <span className="w-2 h-2 bg-purple-500 rounded-full" />}
+            {n.unread && <span className="w-2.5 h-2.5 bg-sky-500 rounded-full" />}
           </div>
-        ))}
+        )) : (
+          <p className="text-sm text-gray-500 p-6 text-center">{locale === "th" ? "ไม่มีการแจ้งเตือน" : locale === "zh" ? "没有通知" : "No recent alerts"}</p>
+        )}
       </div>
     </div>
   );
 }
 
+/* ===== PROPERTY TAB ===== */
+function PropertyTab({ locale, prefix, properties }: { locale: string; prefix: string; properties: any[] }) {
+  const STATUS_STYLE: any = {
+    "CREATED": "bg-gray-100 text-gray-700",
+    "MATCHING": "bg-yellow-100 text-yellow-700",
+    "PENDING": "bg-blue-100 text-blue-700",
+    "COMPLETED": "bg-green-100 text-green-700",
+    "CANCELLED": "bg-red-100 text-red-700"
+  };
 
-/* ===== PARTNER PROFILE ===== */
-function PartnerProfile({ locale, prefix, partner }: { locale: string; prefix: string; partner: PartnerInfo | null }) {
-  const router = useRouter();
-  if (!partner) {
-    return (
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-10 text-center">
-        <div className="text-5xl mb-4"></div>
-        <h2 className="text-xl font-bold text-gray-900 mb-2">{locale === "th" ? "เข้าสู่ระบบเพื่อดูโปรไฟล์" : locale === "zh" ? "登录查看个人资料" : "Log in to view profile"}</h2>
-        <p className="text-sm text-gray-500 mb-6">{locale === "th" ? "เข้าสู่ระบบเพื่อจัดการข้อมูลและการตั้งค่า" : locale === "zh" ? "登录管理您的合作伙伴账户" : "Sign in to manage your partner account"}</p>
-        <Link href={`subscription/login?redirect=/fixers`} className="px-6 py-2.5 bg-sky-600 text-white rounded-lg font-bold hover:bg-sky-700 transition inline-block">
-          {locale === "th" ? "เข้าสู่ระบบ" : locale === "zh" ? "登录" : "Log In"}
-        </Link>
-      </div>
-    );
-  }
+  const getStatusLabel = (status: string, locale: string) => {
+    const labels: any = {
+      "CREATED": { th: "รอดำเนินการ", zh: "等待中", en: "Created" },
+      "MATCHING": { th: "กำลังจับคู่", zh: "匹配中", en: "Matching" },
+      "PENDING": { th: "กำลังดำเนินการ", zh: "进行中", en: "Pending" },
+      "COMPLETED": { th: "เสร็จสิ้น", zh: "已完成", en: "Completed" },
+      "CANCELLED": { th: "ยกเลิก", zh: "已取消", en: "Cancelled" }
+    };
+    return labels[status]?.[locale] || status;
+  };
 
-  return (
-    <div className="space-y-6">
-      {/* Profile Overview Card */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-        <div className="flex flex-col md:flex-row gap-8 items-start">
-          <div className="w-32 h-32 rounded-2xl bg-gradient-to-br from-purple-100 to-indigo-50 flex items-center justify-center shadow-inner flex-shrink-0 relative">
-            <span className="text-5xl"></span>
-            <div className="absolute -bottom-2 -right-2 bg-white rounded-full p-1 shadow">
-              <span className="w-8 h-8 flex items-center justify-center bg-green-100 text-green-600 rounded-full text-xs font-bold">✓</span>
-            </div>
-          </div>
-          
-          <div className="flex-1 w-full">
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">{partner.name}</h2>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-sm font-semibold text-purple-700 bg-purple-100 px-2 py-0.5 rounded">{partner.tier || 'Specialist Tier'}</span>
-                  <span className="text-xs text-gray-500 flex items-center gap-1"><span className="text-green-500">✓</span> {locale === "th" ? "ยืนยันตัวตนแล้ว (KYC)" : "Verified (KYC)"}</span>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Link href={`fixers/register?edit=1`} className="px-5 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition text-sm font-semibold shadow-sm">
-                  {locale === "th" ? "แก้ไขโปรไฟล์" : locale === "zh" ? "编辑资料" : "Edit Profile"}
-                </Link>
-                <button onClick={() => {
-                  if (confirm(locale === "th" ? "ยืนยันการลบบัญชีและข้อมูลทั้งหมดตามกฎหมาย PDPA?" : "Confirm deleting your account and all data per PDPA law?")) {
-                    fetch('/api/v1/users/me', { method: 'DELETE', headers: { Authorization: `Bearer ${localStorage.getItem('subscriber_token')}` } })
-                    .then(() => { localStorage.clear(); window.location.href = '/subscription/login'; });
-                  }
-                }} className="px-5 py-2.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition text-sm font-semibold shadow-sm">
-                  {locale === "th" ? "ลบบัญชี" : locale === "zh" ? "删除账户" : "Delete Account"}
-                </button>
-              </div>
-            </div>
-            
-            {/* Contact Info */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-6 pt-6 border-t border-gray-100">
-              <div>
-                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-1">{locale === "th" ? "อีเมล" : "Email"}</h3>
-                <p className="text-sm font-medium text-gray-900">{partner.email}</p>
-              </div>
-              <div>
-                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-1">{locale === "th" ? "เบอร์โทรศัพท์" : "Phone"}</h3>
-                <p className="text-sm font-medium text-gray-900">{partner.phone || "-"}</p>
-              </div>
-              <div>
-                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-1">{locale === "th" ? "บริษัท/นิติบุคคล" : "Company"}</h3>
-                <p className="text-sm font-medium text-gray-900">{partner.company || "-"}</p>
-              </div>
-              <div>
-                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-1">{locale === "th" ? "วันที่สมัคร" : "Member Since"}</h3>
-                <p className="text-sm font-medium text-gray-900">{new Date(partner.createdAt || Date.now()).toLocaleDateString()}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* AI Assessment & Upgrade Path */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden mb-8">
-        <div className="bg-sky-50 px-6 py-4 border-b border-sky-100 flex items-center justify-between">
-          <h3 className="font-bold text-sky-900 flex items-center gap-2">
-            <span className="text-xl"></span> CBLUE AI Tier Assessment
-          </h3>
-          <span className="text-sm text-sky-700 font-semibold bg-white px-3 py-1 rounded-full shadow-sm">Overall Score: {partner.tierScore || 69}/100</span>
-        </div>
-        
-        <div className="p-6">
-          <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-r-2xl flex items-start gap-4 mb-6">
-            <div className="text-2xl"></div>
-            <div>
-              <p className="text-green-800 font-bold">Fully Verified by CBLUE AI</p>
-              <p className="text-green-600 text-sm">Your information and KYC documents have been instantly verified by CBLUE AI. Your profile is active and ready to accept bookings.</p>
-            </div>
-          </div>
-
-          <h4 className="font-bold text-gray-800 mb-4">Evaluation Breakdown</h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-            {(Array.isArray(partner.breakdown) && partner.breakdown.length > 0 ? partner.breakdown : [
-              { label: "Experience", score: 25, max: 25 },
-              { label: "Skills Breadth", score: 12, max: 15 },
-              { label: "KYC Verification", score: 15, max: 15 },
-              { label: "Portfolio & Evidence", score: 0, max: 15 },
-              { label: "Profile Completeness", score: 7, max: 10 },
-              { label: "Price List", score: 6, max: 10 },
-              { label: "Credential Verification", score: 4, max: 10 }
-            ]).map((item: any, i: number) => (
-              <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
-                <span className="text-gray-700 font-medium text-sm">{item.label}</span>
-                <span className={`font-bold ${item.score === item.max ? 'text-green-600' : item.score === 0 ? 'text-red-500' : 'text-amber-600'}`}>
-                  {item.score}/{item.max}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><span className="text-lg"></span> AI Verification Results</h4>
-          <ul className="space-y-3 mb-8 bg-gray-50 p-5 rounded-xl border border-gray-100">
-            {(Array.isArray(partner.flags) && partner.flags.length > 0 ? partner.flags : [
-              { type: "fail", message: "No company info provided" },
-              { type: "pass", message: "Experience consistent with project type" },
-              { type: "fail", message: "No work description provided" },
-              { type: "pass", message: "KYC documents complete (front & back)" }
-            ]).map((flag: any, i: number) => (
-              <li key={i} className="flex gap-3">
-                <span className={`font-bold ${flag.type === "pass" ? "text-green-500" : flag.type === "fail" ? "text-red-500" : "text-amber-500"}`}>
-                  {flag.type === "pass" ? "✓" : flag.type === "fail" ? "✕" : "⚠"}
-                </span>
-                <span className="text-gray-700 text-sm">{flag.message}</span>
-              </li>
-            ))}
-          </ul>
-
-          <div className="bg-sky-50 rounded-xl p-5 border border-sky-100 space-y-4">
-            <div className="flex gap-3">
-              <span className="text-sky-600 text-xl mt-0.5"></span>
-              <div>
-                <p className="font-bold text-sky-900 mb-1">How to upgrade</p>
-                <p className="text-sky-800 text-sm leading-relaxed">Gain more experience, upload portfolio work, update certifications, and maintain good reviews — CBLUE AI will automatically re-evaluate and upgrade your tier when you edit your profile or accumulate work history.</p>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <span className="text-sky-600 text-xl mt-0.5"></span>
-              <div>
-                <p className="font-bold text-sky-900 mb-1">Security</p>
-                <p className="text-sky-800 text-sm leading-relaxed">Your data is encrypted and protected under PDPA. Credentials are verified to maintain platform integrity.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
-
-
-/* ===== PARTNER PROPERTIES ===== */
-function PartnerProperties({ locale, prefix, properties }: { locale: string; prefix: string; properties: any[] }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100">
-        <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "อสังหาริมทรัพย์ของคุณ" : locale === "zh" ? "您的房产" : "Your Properties"}</h2>
+        <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "การนัดหมายดูอสังหาริมทรัพย์" : locale === "zh" ? "房产查询" : "Property Inquiries"}</h2>
       </div>
       <div className="divide-y divide-gray-50">
         {properties && properties.length > 0 ? properties.map((p: any) => (
           <div key={p.id} className="p-6 hover:bg-gray-50/50 transition">
             <div className="flex items-center gap-4 mb-4">
-              <div className="w-16 h-16 rounded-xl bg-teal-100 flex items-center justify-center text-3xl"></div>
+              <div className="w-12 h-12 rounded-xl bg-teal-100 flex items-center justify-center text-2xl"></div>
               <div className="flex-1">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="font-bold text-gray-900">{locale === "th" ? p.serviceTh : locale === "zh" ? p.serviceZh : p.service}</h3>
-                    <p className="text-sm text-gray-500 mt-1">{p.location || "-"} &middot; {p.fee}</p>
+                    <h3 className="font-bold text-gray-900">{locale === "th" ? p.serviceTh : locale === "zh" ? p.serviceZh : p.service} <span className="text-gray-400 font-normal">· {p.partner}</span></h3>
+                    <p className="text-sm text-gray-500 mt-1">{p.fee}</p>
                   </div>
-                  <span className={`text-xs px-3 py-1 rounded-full font-bold ${p.status === 'AVAILABLE' || p.status === 'CREATED' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                    {p.status}
-                  </span>
+                  <span className={`text-xs px-3 py-1 rounded-full font-bold ${STATUS_STYLE[p.status] || ""}`}>{getStatusLabel(p.status, locale)}</span>
                 </div>
               </div>
             </div>
             
-            <div className="flex items-center gap-4 text-sm mt-4 pt-4 border-t border-gray-100">
-              <Link href={`properties/${p.id}/edit`} className="ml-auto px-4 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-lg transition">
-                {locale === "th" ? "แก้ไข" : locale === "zh" ? "编辑" : "Edit"}
+            <div className="flex items-center gap-3 text-sm">
+              <Link href={`${prefix}/chat/${p.id}`} className="flex-1 text-center py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-lg transition">
+                {locale === "th" ? "แชท" : locale === "zh" ? "聊天" : "Chat"}
               </Link>
             </div>
           </div>
         )) : (
-          <p className="text-sm text-gray-500 p-6 text-center">{locale === "th" ? "ไม่มีประกาศอสังหาริมทรัพย์" : locale === "zh" ? "没有房产列表" : "No properties listed"}</p>
+          <p className="text-sm text-gray-500 p-6 text-center">{locale === "th" ? "ไม่มีรายการอสังหาริมทรัพย์" : locale === "zh" ? "没有房产查询" : "No property inquiries"}</p>
         )}
       </div>
     </div>
@@ -1149,90 +660,222 @@ function PartnerProperties({ locale, prefix, properties }: { locale: string; pre
 
 
 /* ===== DASHBOARD LOGGED IN STATE ===== */
-function PartnerDashboard({ locale, partner, prefix, onLogout, orders }: { locale: string; partner: any; prefix: string; onLogout: () => void, orders?: any[] }) {
-  const activeOrders = orders ? orders.filter((o: any) => o.status === 'IN_PROGRESS' || o.status === 'CONFIRMED') : [];
-  const requestOrders = orders ? orders.filter((o: any) => o.status === 'PENDING' || o.status === 'CREATED') : [];
+function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { locale: string; subscriber: any; prefix: string; onLogout: () => void, orders: any[] }) {
+  const [activeTab, setActiveTab] = useState<"overview"|"profile"|"active"|"properties"|"history"|"chat"|"alerts">("overview");
+  const [waitModalOrder, setWaitModalOrder] = useState<any>(null);
+  const handleOrderClick = (o: any) => { if (o.status && ['MATCHING', 'CREATED', 'PENDING'].includes(o.status.trim().toUpperCase())) window.location.href = `${prefix}/booking/resume/${o.id}`; else window.location.href = `${prefix}/chat/${o.id}`; };
+  const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLED', 'DONE'].includes(o.status)) : [];
+  const historyOrders = orders ? orders.filter((o: any) => ['COMPLETED', 'CANCELLED', 'DONE'].includes(o.status)) : [];
+  const propertiesCount = orders ? orders.filter((o: any) => o.type === "property").length : 0;
+  const stats = { active: activeOrders.length, completed: historyOrders.length, messages: 0, rating: "4.8" };
 
-  const [activeTab, setActiveTab] = useState<"overview"|"profile"|"active"|"properties"|"history"|"chat"|"notifications">("active");
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 relative z-10 pb-12 -mt-6">
       
       {/* Top Navigation Pills */}
-      
       <div className="flex gap-2 bg-white rounded-xl shadow-sm border border-gray-200 p-2 mb-6 overflow-x-auto no-scrollbar">
         {[
-          { key: "overview", icon: "", label: "Overview", count: null },
-          { key: "requests", label: locale === "th" ? "คำขอใหม่" : locale === "zh" ? "新请求" : "Requests", icon: "📋", badge: 4 },
-        { key: "active", icon: "", label: "Active Jobs", count: 3 },
+          { key: "overview", icon: "", label: locale === "th" ? "ภาพรวม" : "Overview", count: null },
+          { key: "active", icon: "", label: locale === "th" ? "งานที่ใช้งานอยู่" : "Active Jobs", count: activeOrders.length || null },
           
-          { key: "properties", icon: "", label: "Properties", count: null },
-          { key: "history", icon: "", label: "History", count: null },
-          { key: "chat", icon: "", label: "Chat", count: 3 },
-          { key: "alerts", icon: "", label: "Alerts", count: 3 },
-          { key: "profile", icon: "", label: "Profile", count: null },
+          { key: "properties", icon: "", label: locale === "th" ? "อสังหาฯ" : "Properties", count: propertiesCount || null },
+          { key: "history", icon: "", label: locale === "th" ? "ประวัติ" : "History", count: historyOrders.length || null },
+          { key: "chat", icon: "", label: locale === "th" ? "แชท" : "Chat", count: null },
+          { key: "alerts", icon: "", label: locale === "th" ? "การแจ้งเตือน" : "Alerts", count: null },
+          { key: "profile", icon: "", label: locale === "th" ? "โปรไฟล์" : "Profile", count: null },
         ].map((tab, i) => (
-          <button key={tab.key} onClick={() => setActiveTab(tab.key as any)} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition whitespace-nowrap ${activeTab === tab.key ? 'bg-purple-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'}`}>
+          <button key={tab.key} onClick={() => setActiveTab(tab.key as any)} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition whitespace-nowrap ${activeTab === tab.key ? 'bg-sky-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'}`}>
             <span>{tab.icon}</span> {tab.label}
             {tab.count && <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${activeTab === tab.key ? 'bg-white/30 text-white' : 'bg-red-100 text-red-700'}`}>{tab.count}</span>}
           </button>
         ))}
       </div>
+      
+      {activeTab === "profile" && <ProfileTab locale={locale} prefix={prefix} subscriber={subscriber} activeOrders={activeOrders} onOrderClick={handleOrderClick} historyOrders={historyOrders} />}
+      
+      {activeTab === "active" && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
+          <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+            <h2 className="font-bold text-gray-900 flex items-center gap-2">Active Jobs</h2>
+            <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full">{activeOrders.length}</span>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {activeOrders.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">No active services currently.</div>
+            ) : (
+              activeOrders.map((o: any, i: number) => (
+                <div key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer" onClick={() => handleOrderClick ? handleOrderClick(o) : null}>
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl shadow-sm">{o.type === 'property' ? '' : o.type === 'project' ? '' : o.type === 'professional' ? '' : ''}</div>
+                    <div>
+                      <h3 className="font-bold text-gray-900">{o.service} <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">{o.description?.toUpperCase().includes('TIER:ECONOMY') ? 'ECONOMY' : o.description?.toUpperCase().includes('TIER:STANDARD') ? 'Standard' : (o.tier || 'Standard')}</span></h3>
+                      <p className="text-sm text-gray-500 mt-1 mb-2">
+                          <span className="font-semibold text-gray-700">{o.fixerName || 'Awaiting Partner'}</span>
+                        </p>
+                        <div className="bg-white rounded p-2 text-xs border space-y-1 mb-2">
+                           <div className="flex justify-between font-mono"><span className="text-gray-400">PO:</span> <span className="font-semibold">PO-2605-{o.id ? o.id.slice(0, 4) : 'xxxx'}</span></div>
+                           <div className="flex justify-between"><span className="text-gray-400">Service:</span> <span className="font-semibold truncate">{o.serviceCategory || o.serviceTh || 'General'}</span></div>
+                           <div className="flex justify-between"><span className="text-gray-400">Est. Cost:</span> <span className="font-semibold text-amber-600">฿{o.estimatedPrice || 'N/A'}</span></div>
+                        </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-2">
+                    <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">{o.status}</span>
+                    {o.status !== 'PENDING' && o.status !== 'CREATED' && <Link href={`${prefix}/chat/${o.id}`} className="text-gray-400 hover:text-sky-600 transition" onClick={(e) => e.stopPropagation()}><span className="text-xl"></span></Link>}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
-      {activeTab === "profile" && <PartnerProfile locale={locale} prefix={prefix} partner={partner} />}
-   {activeTab === "active" && <CustomerJobs locale={locale} activeJobs={[...activeOrders, ...(orders || [])]} />}
-   
-  
+
+
+      {activeTab === "properties" && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
+          <div className="px-6 py-4 border-b border-gray-100">
+            <h2 className="font-bold text-gray-900">Properties</h2>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {orders.filter((o: any) => o.type === "property").length === 0 ? (
+              <div className="p-8 text-center text-gray-500">No property orders found.</div>
+            ) : (
+              orders.filter((o: any) => o.type === "property").map((o: any, i: number) => (
+                <div key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer" onClick={() => handleOrderClick ? handleOrderClick(o) : null}>
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-2xl shadow-sm"></div>
+                    <div>
+                      <h3 className="font-bold text-gray-900">{o.service} <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">{o.description?.toUpperCase().includes('TIER:ECONOMY') ? 'ECONOMY' : o.description?.toUpperCase().includes('TIER:STANDARD') ? 'Standard' : (o.tier || 'Standard')}</span></h3>
+                      <p className="text-sm text-gray-500 mt-1">{o.status} &middot; {new Date(o.createdAt || Date.now()).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <Link href={`${prefix}/properties/edit/${o.id}`} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-bold rounded-lg transition">Edit</Link>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === "history" && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
+          <div className="px-6 py-4 border-b border-gray-100">
+            <h2 className="font-bold text-gray-900">History</h2>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {historyOrders.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">No history found.</div>
+            ) : (
+              historyOrders.map((o: any, i: number) => (
+                <div key={i} className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50 transition cursor-pointer">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-2xl shadow-sm"></div>
+                    <div>
+                      <h3 className="font-bold text-gray-900">{o.service}</h3>
+                      <p className="text-sm text-gray-500 mt-1">{o.fixerName || 'Partner'} &middot; {new Date(o.createdAt || Date.now()).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-sm font-bold text-gray-900">{o.fee || '฿0'}</span>
+                    <span className="px-2 py-0.5 bg-gray-200 text-gray-700 text-[10px] font-bold rounded-full">{o.status}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === "chat" && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
+          <div className="px-6 py-4 border-b border-gray-100">
+            <h2 className="font-bold text-gray-900">Chat</h2>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {activeOrders.filter((o: any) => o.status !== 'PENDING' && o.status !== 'CREATED').length === 0 ? (
+              <div className="p-8 text-center text-gray-500">No active chats.</div>
+            ) : (
+              activeOrders.filter((o: any) => o.status !== 'PENDING' && o.status !== 'CREATED').map((o: any, i: number) => (
+                <Link key={i} href={`${prefix}/chat/${o.id}`} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer block">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full bg-sky-100 flex items-center justify-center text-xl font-bold text-sky-700">
+                      {(o.fixerName || 'P').charAt(0)}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-gray-900">{o.fixerName || 'Partner'}</h3>
+                      <p className="text-sm text-gray-500 mt-1">{o.service}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xl"></span>
+                  </div>
+                </Link>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === "alerts" && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
+          <div className="px-6 py-4 border-b border-gray-100">
+            <h2 className="font-bold text-gray-900">Alerts</h2>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {orders.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">No recent alerts.</div>
+            ) : (
+              orders.slice(0, 10).map((o: any, i: number) => (
+                <div key={i} className="p-6 flex items-center gap-4 hover:bg-gray-50 transition cursor-pointer">
+                  <span className={`w-3 h-3 rounded-full flex-shrink-0 ${o.status === 'COMPLETED' ? 'bg-green-500' : 'bg-sky-500'}`}></span>
+                  <div>
+                    <p className="text-sm text-gray-800"><span className="font-bold">System:</span> Order {o.id.slice(0,6)} status updated to {o.status}</p>
+                    <p className="text-xs text-gray-400 mt-1">{new Date(o.updatedAt || Date.now()).toLocaleString()}</p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
       
       <div className={`grid grid-cols-1 lg:grid-cols-3 gap-6 ${activeTab !== 'overview' ? 'hidden' : ''}`}>
 
-
-      
-        
-        {/* LEFT COLUMN: Profile & Stats */}
+        {/* LEFT COLUMN: Profile & Alerts */}
         <div className="space-y-6">
           
           {/* Profile Card */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-purple-50 rounded-bl-full -z-0 opacity-50"></div>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-sky-50 rounded-bl-full -z-0 opacity-50"></div>
             <div className="relative z-10 flex items-center gap-4 mb-6">
-              <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 text-2xl font-bold shadow-inner">
-                {partner.name.charAt(0).toUpperCase()}
+              <div className="w-16 h-16 rounded-full bg-sky-100 flex items-center justify-center text-sky-600 text-2xl font-bold shadow-inner">
+                {subscriber.name.charAt(0).toUpperCase()}
               </div>
               <div>
-                <h2 className="text-xl font-bold text-gray-900">{partner.name}</h2>
-                <p className="text-sm text-gray-500">{partner.email} &middot; {partner.phone || "0819852846"}</p>
-                <div className="flex gap-2 mt-1">
-                  <span className="text-xs bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded">Active</span>
-                  <span className="text-xs bg-purple-100 text-purple-700 font-bold px-2 py-0.5 rounded">{partner.tier || "Standard Tier"}</span>
-                  <span className="text-xs bg-sky-100 text-sky-700 font-bold px-2 py-0.5 rounded">KYC ✓</span>
-                </div>
+                <h2 className="text-xl font-bold text-gray-900">{subscriber.name}</h2>
+                <p className="text-sm text-gray-500">{subscriber.email} &middot; {subscriber.phone || "0819852846"}</p>
               </div>
             </div>
             
             <div className="grid grid-cols-2 gap-3 mb-4">
-              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
-                <p className="text-xs text-gray-500 font-medium mb-1">Active Jobs</p>
-                <p className="text-lg font-bold text-gray-900">3</p>
+              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                <p className="text-xs text-gray-500 font-medium mb-1">Active</p>
+                <p className="text-lg font-bold text-gray-900 flex items-center gap-1">{stats.active}</p>
               </div>
-              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
+              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                 <p className="text-xs text-gray-500 font-medium mb-1">Completed</p>
-                <p className="text-lg font-bold text-gray-900">47</p>
+                <p className="text-lg font-bold text-gray-900 flex items-center gap-1">{stats.completed}</p>
               </div>
-              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
-                <p className="text-xs text-gray-500 font-medium mb-1">Rating</p>
-                <p className="text-lg font-bold text-gray-900 text-amber-500">4.8 </p>
+              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                <p className="text-xs text-gray-500 font-medium mb-1">Messages</p>
+                <p className="text-lg font-bold text-gray-900 flex items-center gap-1">{stats.messages}</p>
               </div>
-              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
-                <p className="text-xs text-gray-500 font-medium mb-1">Response</p>
-                <p className="text-lg font-bold text-green-600">96%</p>
-              </div>
-              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
-                <p className="text-xs text-gray-500 font-medium mb-1">Repeat Clients</p>
-                <p className="text-lg font-bold text-gray-900">12</p>
-              </div>
-              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
-                <p className="text-xs text-gray-500 font-medium mb-1">Monthly Earn</p>
-                <p className="text-lg font-bold text-sky-600">฿18,500</p>
+              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                <p className="text-xs text-gray-500 font-medium mb-1">Satisfaction</p>
+                <p className="text-lg font-bold text-gray-900 flex items-center gap-1">4.8 </p>
               </div>
             </div>
             <button onClick={onLogout} className="w-full py-2 bg-gray-100 text-gray-600 hover:bg-gray-200 text-sm font-bold rounded-lg transition">
@@ -1240,185 +883,216 @@ function PartnerDashboard({ locale, partner, prefix, onLogout, orders }: { local
             </button>
           </div>
 
-          {/* Monthly Earnings Chart (Simplified UI) */}
+          {/* Upcoming Meetings */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center">
-              <h3 className="font-bold text-gray-900 flex items-center gap-2">Monthly Earnings</h3>
-              <span className="text-sky-600 font-bold text-sm">฿18,500 (Apr)</span>
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2">⏰ Upcoming Meetings</h3>
             </div>
-            <div className="p-5 flex items-end justify-between h-32">
-              <div className="flex flex-col items-center gap-2">
-                <div className="w-8 bg-sky-200 rounded-t-sm h-12 relative group"><span className="absolute -top-6 text-xs text-gray-400 font-medium hidden group-hover:block whitespace-nowrap bg-white px-1 shadow border rounded">฿12.5k</span></div>
-                <span className="text-xs font-bold text-gray-500">Jan</span>
-              </div>
-              <div className="flex flex-col items-center gap-2">
-                <div className="w-8 bg-sky-300 rounded-t-sm h-16 relative group"><span className="absolute -top-6 text-xs text-gray-400 font-medium hidden group-hover:block whitespace-nowrap bg-white px-1 shadow border rounded">฿15.2k</span></div>
-                <span className="text-xs font-bold text-gray-500">Feb</span>
-              </div>
-              <div className="flex flex-col items-center gap-2">
-                <div className="w-8 bg-sky-400 rounded-t-sm h-20 relative group"><span className="absolute -top-6 text-xs text-gray-400 font-medium hidden group-hover:block whitespace-nowrap bg-white px-1 shadow border rounded">฿18.8k</span></div>
-                <span className="text-xs font-bold text-gray-500">Mar</span>
-              </div>
-              <div className="flex flex-col items-center gap-2">
-                <div className="w-8 bg-sky-500 rounded-t-sm h-16 relative group"><span className="absolute -top-6 text-xs text-gray-400 font-medium hidden group-hover:block whitespace-nowrap bg-white px-1 shadow border rounded">฿18.5k</span></div>
-                <span className="text-xs font-bold text-gray-900">Apr</span>
-              </div>
+            <div className="divide-y divide-gray-50">
+              {activeOrders.filter((o: any) => o.status === 'CONFIRMED' || o.status === 'IN_PROGRESS').slice(0, 2).map((o: any, i: number) => (
+                <div key={i} className="p-4 flex items-center justify-between hover:bg-gray-50 transition">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">{o.type === 'property' ? '' : ''}</span>
+                    <div>
+                      <p className="font-bold text-sm text-gray-900">{o.fixerName || 'Partner'} &middot; {o.service}</p>
+                      <p className="text-xs text-sky-600 font-medium mt-0.5">Soon</p>
+                    </div>
+                  </div>
+                  <button className="px-3 py-1 bg-sky-100 text-sky-700 text-xs font-bold rounded-md hover:bg-sky-200">Confirm</button>
+                </div>
+              ))}
+              {activeOrders.filter((o: any) => o.status === 'CONFIRMED' || o.status === 'IN_PROGRESS').length === 0 && (
+                <div className="p-4 text-sm text-gray-500">No upcoming meetings.</div>
+              )}
             </div>
           </div>
 
-
-        </div>
-
-        {/* RIGHT COLUMN: Jobs & Requests */}
-        <div className="lg:col-span-2 space-y-6">
-          
-                    {/* Active Jobs */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8">
-            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-              <h2 className="font-bold text-gray-900 flex items-center gap-2"> Active Jobs</h2>
-              <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full">{activeOrders.length}</span>
+          {/* Recent Alerts */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2">Recent Alerts</h3>
             </div>
-            <div className="divide-y divide-gray-50">
+            <div className="p-4 space-y-4">
               {activeOrders.slice(0, 3).map((o: any, i: number) => (
-                <div key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl shadow-sm"></div>
-                    <div>
-                      <h3 className="font-bold text-gray-900">{o.service}</h3>
-                      <p className="text-sm text-gray-500 mt-1">{o.fixer?.alias || o.fixer?.name || "Partner"} &middot; {new Date(o.createdAt).toLocaleDateString()} &middot; Budget: ฿{o.estimatedPrice || "0"} &middot; PO-{o.id?.slice(0, 4)}-{o.id?.slice(4, 8)} | {o.user?.subdistrict || "Saphansong"}</p><div className="mt-2 w-full">
-<div className="flex justify-between text-[10px] text-gray-500 mb-1 px-1">
-  <span className={['PENDING',''].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Notify</span>
-  <span className={['CONFIRMED'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Confirm</span>
-  <span className={['ACCEPTED'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Pay</span>
-  <span className={['IN_PROGRESS'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Chat</span>
-  <span className={['MEETING'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Meet</span>
-  <span className={['VARIATION'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Variation</span>
-  <span className={['WORKING'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Complete</span>
-  <span className={['RATING'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Rate</span>
-  <span className={['COMPLETED'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Done</span>
-</div>
-<div className="w-full bg-gray-100 rounded-full h-1.5"><div className="bg-purple-500 h-1.5 rounded-full transition-all duration-500" style={{ width: (o.status === 'COMPLETED' ? '100%' : o.status === 'RATING' ? '88%' : o.status === 'WORKING' ? '77%' : o.status === 'VARIATION' ? '66%' : o.status === 'MEETING' ? '55%' : o.status === 'IN_PROGRESS' ? '44%' : o.status === 'ACCEPTED' ? '33%' : o.status === 'CONFIRMED' ? '22%' : '11%') }} /></div>
-</div>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-2">
-                    <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">{o.status}</span>
-                    <span className="font-bold text-gray-900 mt-1">฿{o.finalPrice || o.estimatedPrice || 0}</span>
+                <div key={i} className="flex gap-3">
+                  <span className={`w-2 h-2 mt-1.5 rounded-full flex-shrink-0 ${o.status === 'CONFIRMED' ? 'bg-green-500' : o.status === 'PENDING' ? 'bg-amber-500' : 'bg-sky-500'}`}></span>
+                  <div>
+                    <p className="text-sm text-gray-800">Your {o.service} order is {o.status.toLowerCase()}</p>
+                    <p className="text-xs text-gray-400 mt-1">Recently</p>
                   </div>
                 </div>
               ))}
-              {activeOrders.length === 0 && <div className="p-8 text-center text-gray-500">No active jobs.</div>}
+              {activeOrders.length === 0 && <p className="text-sm text-gray-500">No recent alerts.</p>}
+            </div>
+          </div>
+
+          {/* Pending Ratings */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 bg-amber-50/50">
+              <h3 className="font-bold text-amber-900 flex items-center gap-2"> Pending Ratings</h3>
+            </div>
+            <div className="p-5">
+              {historyOrders.slice(0, 1).map((o: any, i: number) => (
+                <div key={i} className="flex items-start gap-3">
+                  <span className="text-2xl"></span>
+                  <div className="flex-1">
+                    <p className="font-bold text-sm text-gray-900">{o.fixerName || 'Partner'} &middot; {o.service}</p>
+                    <p className="text-xs text-gray-500 mt-0.5 mb-2">Completed Recently</p>
+                    <div className="flex gap-1 text-2xl text-gray-300 hover:text-amber-400 cursor-pointer transition-colors">
+                      <span>★</span><span>★</span><span>★</span><span>★</span><span>★</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {historyOrders.length === 0 && <p className="text-sm text-gray-500">No pending ratings.</p>}
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN: Main content feeds */}
+        <div className="lg:col-span-2 space-y-6">
+          
+          {/* Active Jobs */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8">
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+              <h2 className="font-bold text-gray-900 flex items-center gap-2">Active Jobs</h2>
+              <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full">{activeOrders.length}</span>
+            </div>
+            <div className="divide-y divide-gray-50">
+              {activeOrders.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">No active services currently.</div>
+              ) : (
+                activeOrders.map((o: any, i: number) => (
+                  <div key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer" onClick={() => handleOrderClick ? handleOrderClick(o) : null}>
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl shadow-sm">{o.type === 'property' ? '' : o.type === 'project' ? '' : o.type === 'professional' ? '' : ''}</div>
+                      <div>
+                        <h3 className="font-bold text-gray-900">{o.service} <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">{o.description?.toUpperCase().includes('TIER:ECONOMY') ? 'ECONOMY' : o.description?.toUpperCase().includes('TIER:STANDARD') ? 'Standard' : (o.tier || 'Standard')}</span></h3>
+                        <p className="text-sm text-gray-500 mt-1 mb-2">
+                          <span className="font-semibold text-gray-700">{o.fixerName || 'Awaiting Partner'}</span>
+                        </p>
+                        <div className="bg-white rounded p-2 text-xs border space-y-1 mb-2">
+                           <div className="flex justify-between font-mono"><span className="text-gray-400">PO:</span> <span className="font-semibold">PO-2605-{o.id ? o.id.slice(0, 4) : 'xxxx'}</span></div>
+                           <div className="flex justify-between"><span className="text-gray-400">Service:</span> <span className="font-semibold truncate">{o.serviceCategory || o.serviceTh || 'General'}</span></div>
+                           <div className="flex justify-between"><span className="text-gray-400">Est. Cost:</span> <span className="font-semibold text-amber-600">฿{o.estimatedPrice || 'N/A'}</span></div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">{o.status}</span>
+                      {o.status !== 'PENDING' && o.status !== 'CREATED' && <Link href={`${prefix}/chat/${o.id}`} className="text-gray-400 hover:text-sky-600 transition" onClick={(e) => e.stopPropagation()}><span className="text-xl"></span></Link>}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
           {/* Recent Chats */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100">
-              <h2 className="font-bold text-gray-900 flex items-center gap-2">Recent Chats</h2>
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2">Recent Chats</h3>
             </div>
             <div className="divide-y divide-gray-50">
-              {[
-                { id: "A2X", svc: "Plumbing", msg: "Thank you, waiting for you", time: "2m ago", unread: 2 },
-                { id: "B7K", svc: "AC", msg: "Which day works for you?", time: "30m ago", unread: 1 },
-                { id: "C4M", svc: "Electrical", msg: "Job is done, thanks!", time: "2h ago", unread: 0 },
-              ].map(c => (
-                <div key={c.id} className={`p-4 flex items-center gap-4 cursor-pointer transition ${c.unread ? 'bg-purple-50/30 hover:bg-purple-50' : 'hover:bg-gray-50'}`}>
-                  <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center font-bold text-gray-600">
-                    {c.id}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex justify-between mb-1">
-                      <p className="font-bold text-gray-900 text-sm">Customer #{c.id} <span className="text-gray-400 font-normal">&middot; {c.svc}</span></p>
-                      <span className="text-xs text-gray-400">{c.time}</span>
+              {activeOrders.filter((o: any) => o.status !== 'PENDING' && o.status !== 'CREATED').slice(0, 3).map((o: any, i: number) => (
+                <Link key={i} href={`${prefix}/chat/${o.id}`} className="p-4 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer block" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center font-bold text-gray-600 text-sm">
+                      {(o.fixerName || 'P').charAt(0)}
                     </div>
-                    <div className="flex justify-between items-center">
-                      <p className={`text-sm ${c.unread ? 'font-semibold text-gray-900' : 'text-gray-500'}`}>{c.msg}</p>
-                      {c.unread > 0 && <span className="w-5 h-5 rounded-full bg-purple-600 text-white text-[10px] font-bold flex items-center justify-center">{c.unread}</span>}
+                    <div>
+                      <p className="font-bold text-sm text-gray-900">{o.fixerName || 'Partner'} &middot; <span className="font-normal text-gray-500">{o.service}</span></p>
+                      <p className="text-xs text-gray-600 mt-0.5 truncate max-w-[200px]">Check chat for updates</p>
                     </div>
                   </div>
-                </div>
+                </Link>
               ))}
+              {activeOrders.filter((o: any) => o.status !== 'PENDING' && o.status !== 'CREATED').length === 0 && (
+                <div className="p-4 text-sm text-gray-500">No active chats.</div>
+              )}
             </div>
           </div>
 
+          {/* Recent History */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
+            <div className="px-6 py-4 border-b border-gray-100">
+              <h2 className="font-bold text-gray-900 flex items-center gap-2">Recent History</h2>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs text-gray-400 bg-gray-50/50 uppercase border-b border-gray-100">
+                  <tr>
+                    <th className="px-6 py-3 font-semibold">Service</th>
+                    <th className="px-6 py-3 font-semibold">Fixer / Pro</th>
+                    <th className="px-6 py-3 font-semibold">Tier</th>
+                    <th className="px-6 py-3 font-semibold">Rating</th>
+                    <th className="px-6 py-3 font-semibold">Fee</th>
+                    <th className="px-6 py-3 font-semibold">Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {historyOrders.slice(0, 3).map((o: any, i: number) => (
+                    <tr key={i} className="hover:bg-gray-50 transition cursor-pointer">
+                      <td className="px-6 py-4 font-bold text-gray-900 flex items-center gap-2">
+                        <span className="text-lg">{o.type === 'property' ? '' : ''}</span> {o.service}
+                      </td>
+                      <td className="px-6 py-4 text-gray-600">{o.fixerName || 'Partner'}</td>
+                      <td className="px-6 py-4"><span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded font-medium">{o.description?.toUpperCase().includes('TIER:ECONOMY') ? 'ECONOMY' : o.description?.toUpperCase().includes('TIER:STANDARD') ? 'Standard' : (o.tier || 'Standard')}</span></td>
+                      <td className="px-6 py-4 text-amber-500 font-bold">5 </td>
+                      <td className="px-6 py-4 font-bold text-gray-900">฿{o.finalPrice || o.estimatedPrice || '0'}</td>
+                      <td className="px-6 py-4 text-gray-500">{new Date(o.updatedAt || Date.now()).toLocaleDateString()}</td>
+                    </tr>
+                  ))}
+                  {historyOrders.length === 0 && (
+                    <tr><td colSpan={6} className="px-6 py-8 text-center text-gray-500">No completed orders yet.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-
-
-function CustomerActiveJobs({ locale, prefix, orders }: { locale: string; prefix: string; orders: any[] }) {
-  return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8">
-      <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-        <h2 className="font-bold text-gray-900 flex items-center gap-2"> Active Jobs</h2>
-        <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full">{orders.length}</span>
-      </div>
-      <div className="divide-y divide-gray-50">
-        {orders.map((o: any, i: number) => (
-          <div key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl shadow-sm"></div>
-              <div>
-                <h3 className="font-bold text-gray-900">{o.service} <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">{o.tier || 'Standard'}</span></h3>
-                <p className="text-sm text-gray-500 mt-1">{o.fixer?.alias || o.fixer?.name || "Partner"} &middot; {new Date(o.createdAt).toLocaleDateString()} &middot; Budget: ฿{o.estimatedPrice || "0"} &middot; PO-{o.id?.slice(0, 4)}-{o.id?.slice(4, 8)} | {o.user?.subdistrict || "Saphansong"}</p><div className="mt-2 w-full">
-<div className="flex justify-between text-[10px] text-gray-500 mb-1 px-1">
-  <span className={['PENDING',''].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Notify</span>
-  <span className={['CONFIRMED'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Confirm</span>
-  <span className={['ACCEPTED'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Pay</span>
-  <span className={['IN_PROGRESS'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Chat</span>
-  <span className={['MEETING'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Meet</span>
-  <span className={['VARIATION'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Variation</span>
-  <span className={['WORKING'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Complete</span>
-  <span className={['RATING'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Rate</span>
-  <span className={['COMPLETED'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Done</span>
-</div>
-<div className="w-full bg-gray-100 rounded-full h-1.5"><div className="bg-purple-500 h-1.5 rounded-full transition-all duration-500" style={{ width: (o.status === 'COMPLETED' ? '100%' : o.status === 'RATING' ? '88%' : o.status === 'WORKING' ? '77%' : o.status === 'VARIATION' ? '66%' : o.status === 'MEETING' ? '55%' : o.status === 'IN_PROGRESS' ? '44%' : o.status === 'ACCEPTED' ? '33%' : o.status === 'CONFIRMED' ? '22%' : '11%') }} /></div>
-</div>
+      {waitModalOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="mb-2 text-sm font-semibold text-sky-600 bg-sky-50 inline-block px-3 py-1 rounded-full">Step 5 of 12</div>
+            <h2 className="text-2xl font-bold text-gray-900 mt-2">Pending Payment</h2>
+            <p className="text-gray-500 mt-2">We've notified {waitModalOrder.fixerName || 'the partner'} about your booking. They will review and confirm shortly.</p>
+            
+            <div className="mt-6 flex flex-col items-center">
+              <span className="inline-block w-8 h-8 border-4 border-sky-500 border-t-transparent rounded-full animate-spin mb-4" />
+              <p className="text-sky-600 font-bold mb-6">Waiting for confirmation...</p>
+              
+              <div className="w-full bg-gray-50 rounded-xl p-4 space-y-2 text-sm text-left">
+                <div className="flex justify-between"><span className="text-gray-500">PO Number</span><span className="font-mono font-bold text-gray-800">PO-2605-{waitModalOrder.id.slice(0, 4)}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Processing Fee</span><span className="font-bold text-gray-800">฿{(() => {
+                  const desc = waitModalOrder.description || '';
+                  if (desc.includes('TIER:ECONOMY')) return '100';
+                  if (desc.includes('TIER:Standard')) return '400';
+                  if (desc.includes('TIER:Corporate') || desc.includes('TIER:Upper')) return '600';
+                  if (desc.includes('TIER:Specialist') || desc.includes('TIER:Manager') || desc.includes('TIER:Luxury')) return '800';
+                  if (desc.includes('TIER:Expert') || desc.includes('TIER:Director') || desc.includes('TIER:Grandeur')) return '1,000';
+                  return '100';
+                })()}</span></div>
               </div>
             </div>
-            <div className="flex flex-col items-end gap-2">
-              <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">{o.status}</span>
-              <span className="font-bold text-gray-900 mt-1">฿{o.finalPrice || o.estimatedPrice || 0}</span>
-              <Link href={`chat/${o.id}`} className="text-gray-400 hover:text-sky-600 transition mt-2"><span className="text-xl">Chat</span></Link>
+
+            <div className="bg-amber-50 text-amber-800 text-xs p-4 rounded-xl mt-6">
+              The final service price is negotiated directly between you and the service provider. CBLUE acts only as a matching platform and does not determine or guarantee final pricing. The processing fee is non-refundable as the matching service is completed once the customer initiates the process.
             </div>
+
+            <button 
+              onClick={() => {
+                setWaitModalOrder(null);
+                window.location.href = `${prefix}/partner-zone`; 
+              }} 
+              className="mt-6 w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition"
+            >
+              Go to Our Customer Page
+            </button>
           </div>
-        ))}
-        {orders.length === 0 && <div className="p-8 text-center text-gray-500">No active jobs.</div>}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
-
-function PartnerIncomingRequests({ locale, prefix, orders }: { locale: string; prefix: string; orders: any[] }) {
-  return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-        <h2 className="font-bold text-gray-900 flex items-center gap-2">Incoming Requests</h2>
-        <span className="bg-amber-100 text-amber-700 text-xs font-bold px-2.5 py-1 rounded-full">{orders.length}</span>
-      </div>
-      <div className="divide-y divide-gray-50">
-        {orders.map((o: any, i: number) => (
-          <div key={i} className="p-6 flex items-center justify-between hover:bg-amber-50/30 transition">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center text-2xl shadow-sm"></div>
-              <div>
-                <h3 className="font-bold text-gray-900">{o.service} <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">{o.tier || 'Standard'}</span></h3>
-                <p className="text-sm text-gray-500 mt-1">Customer #{o.id.slice(-4)} &middot; {new Date(o.createdAt).toLocaleDateString()} &middot; Est: ฿{o.estimatedPrice || 0}</p>
-                <p className="text-xs text-gray-400 mt-1">Status: {o.status}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <button className="px-6 py-2 bg-amber-500 text-white text-sm font-bold rounded-lg hover:bg-amber-600 transition shadow-sm">Accept</button>
-              <button className="px-6 py-2 bg-gray-100 text-gray-600 text-sm font-bold rounded-lg hover:bg-gray-200 transition">Decline</button>
-            </div>
-          </div>
-        ))}
-        {orders.length === 0 && <div className="p-8 text-center text-gray-500">No incoming requests right now.</div>}
-      </div>
-    </div>
-  );
-}
-
