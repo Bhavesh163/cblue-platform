@@ -1144,7 +1144,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
 {waitModalOrder && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto pt-10 pb-10">
           <div className="w-full max-w-lg bg-white rounded-3xl shadow-xl flex flex-col p-6 relative">
-            <h2 className="font-bold text-xl text-center mb-6">Step 6 of 12<br/>Paying fee & Notification to Proceed</h2>
+            
             <Progress12Steps currentStep={6} />
             <h3 className="text-center font-bold text-gray-800 text-lg mt-6">Pay fee & NTP</h3>
             

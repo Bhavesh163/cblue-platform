@@ -75,7 +75,7 @@ const STATUS_LABEL: Record<string, Record<string, string>> = {
   CONFIRMED: { en: "Confirmed", th: "ยืนยันแล้ว", zh: "已确认" },
   PENDING: { en: "Pending", th: "รอดำเนินการ", zh: "待处理" },
   COMPLETED: { en: "Completed", th: "เสร็จสิ้น", zh: "已完成" },
-  ASSIGNED: { en: "", th: "", zh: "" },
+  : { en: "", th: "", zh: "" },
   ACCEPTED: { en: "", th: "", zh: "" },
   MATCHING: { en: "Action needed", th: "Action needed", zh: "Action needed" },
 };
@@ -339,7 +339,7 @@ export default function FixerProPage() {
                         'Content-Type': 'application/json',
                         ...(token ? { Authorization: `Bearer ${token}` } : {})
                       },
-                      body: JSON.stringify({ status: "ASSIGNED" })
+                      body: JSON.stringify({ status: "" })
                     });
                     if (!res.ok) {
                         const errorText = await res.text();
