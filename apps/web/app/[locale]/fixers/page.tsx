@@ -697,7 +697,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
         {/* Earnings Chart */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
           <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">{locale === "th" ? "รายได้รายเดือน" : locale === "zh" ? "月收入" : "Monthly Earnings"}</h3>
-          <div className="flex items-end gap-4 h-32">
+          <div className="flex items-end gap-2 overflow-x-auto pb-4 h-36 min-w-full">
             {earnings.map((e) => (
               <div key={e.month} className="flex-1 flex flex-col items-center">
                 <span className="text-xs font-bold text-gray-700 mb-1">฿{(e.amount / 1000).toFixed(1)}k</span>
