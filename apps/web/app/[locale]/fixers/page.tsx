@@ -308,7 +308,7 @@ export default function FixerProPage() {
             <p className="text-gray-500 mt-2">Customer has placed a request for {waitModalOrder.serviceTh || waitModalOrder.service}. Please review the PO details below and accept or decline.</p>
             
             <div className="w-full bg-gray-50 rounded-xl p-5 mt-6 space-y-3 text-sm text-left border border-gray-100 shadow-inner">
-              <div className="flex justify-between border-b pb-2"><span className="text-gray-500">PO Number</span><span className="font-mono font-bold text-gray-800">{waitModalOrder.po || `PO-${waitModalOrder.id?.slice(0, 4)}-${waitModalOrder.id?.slice(4, 8)}`}</span></div>
+              <div className="flex justify-between border-b pb-2"><span className="text-gray-500">PO Number</span><span className="font-mono font-bold text-gray-800">{waitModalOrder.po || `PO-2605-${waitModalOrder.id?.slice(0, 4)}`}</span></div>
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Customer</span><span className="font-bold text-gray-800">{waitModalOrder.customer || waitModalOrder.customerAlias || 'Customer'}</span></div>
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Budget</span><span className="font-bold text-amber-600">฿{waitModalOrder.budget || waitModalOrder.estimatedPrice || waitModalOrder.finalPrice || '0'}</span></div>
               <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">Project Details</span><span className="font-bold text-gray-800 bg-white p-2 rounded border border-gray-100">{waitModalOrder.description || waitModalOrder.service}</span></div>
@@ -1355,7 +1355,7 @@ function PartnerDashboard({ locale, partner, prefix, onLogout, orders }: { local
                     <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl shadow-sm"></div>
                     <div>
                       <h3 className="font-bold text-gray-900">{o.service}</h3>
-                      <p className="text-sm text-gray-500 mt-1">{o.user?.name || "Customer"} &middot; {new Date(o.createdAt).toLocaleDateString()} &middot; Budget: ฿{o.estimatedPrice || "0"} &middot; {o.po || `PO-${o.id?.slice(0, 4)}-${o.id?.slice(4, 8)}`} | {o.user?.subdistrict || "Saphansong"}</p><div className="mt-2 w-full">
+                      <p className="text-sm text-gray-500 mt-1">{o.user?.name || "Customer"} &middot; {new Date(o.createdAt).toLocaleDateString()} &middot; Budget: ฿{o.estimatedPrice || "0"} &middot; {o.po || `PO-2605-${o.id?.slice(0, 4)}`} | {o.user?.subdistrict || "Saphansong"}</p><div className="mt-2 w-full">
 <div className="flex justify-between text-[10px] text-gray-500 mb-1 px-1">
   <span className={['PENDING',''].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Notify</span>
   <span className={['CONFIRMED'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Confirm</span>
@@ -1433,7 +1433,7 @@ function PartnerActiveJobs({ locale, prefix, orders }: { locale: string; prefix:
               <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl shadow-sm"></div>
               <div>
                 <h3 className="font-bold text-gray-900">{o.service} <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">{o.tier || 'Standard'}</span></h3>
-                <p className="text-sm text-gray-500 mt-1">{o.user?.name || "Customer"} &middot; {new Date(o.createdAt).toLocaleDateString()} &middot; Budget: ฿{o.estimatedPrice || "0"} &middot; {o.po || `PO-${o.id?.slice(0, 4)}-${o.id?.slice(4, 8)}`} | {o.user?.subdistrict || "Saphansong"}</p><div className="mt-2 w-full">
+                <p className="text-sm text-gray-500 mt-1">{o.user?.name || "Customer"} &middot; {new Date(o.createdAt).toLocaleDateString()} &middot; Budget: ฿{o.estimatedPrice || "0"} &middot; {o.po || `PO-2605-${o.id?.slice(0, 4)}`} | {o.user?.subdistrict || "Saphansong"}</p><div className="mt-2 w-full">
 <div className="flex justify-between text-[10px] text-gray-500 mb-1 px-1">
   <span className={['PENDING',''].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Notify</span>
   <span className={['CONFIRMED'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Confirm</span>

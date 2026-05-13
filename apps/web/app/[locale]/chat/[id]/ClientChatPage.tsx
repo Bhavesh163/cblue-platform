@@ -5,6 +5,7 @@ import Link from "next/link";
 
 export default function ClientChatPage({ orderId, locale }: { orderId: string, locale: string }) {
   const [isPartner, setIsPartner] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -16,6 +17,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
   const [inputText, setInputText] = useState("");
   
   useEffect(() => {
+    setMounted(true);
     const pToken = localStorage.getItem("subscriber_token");
     if(pToken) {
       setIsPartner(true);
@@ -34,6 +36,8 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
     setInputText("");
   };
 
+  if (!mounted) return null;
+
   return (
     <div className="max-w-2xl mx-auto h-screen flex flex-col bg-gray-50 border-x border-gray-200">
       {/* Header */}
@@ -42,7 +46,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
         </Link>
         <div className="flex-1">
-          <h2 className="font-bold text-gray-900 text-lg">Fit out - {orderId} - ฿25,000,000</h2>
+          <h2 className="font-bold text-gray-900 text-lg">Chat - {orderId}</h2>
           <p className="text-xs text-green-600 font-medium">Online</p>
         </div>
       </div>
@@ -60,7 +64,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
       </div>
 
       {/* Input Area */}
-      <div className="bg-white border-t border-gray-200 p-4">
+      <div className="bg-white border-t border-gray-200 p-4 shrink-0">
         <form onSubmit={handleSend} className="flex items-center gap-2">
           <input 
             type="text" 
@@ -69,7 +73,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
             placeholder="Type your message..." 
             className="flex-1 bg-gray-100 border-transparent focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 rounded-full px-4 py-2 outline-none transition"
           />
-          <button type="submit" className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-700 transition flex-shrink-0">
+          <button type="submit" className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-700 transition shrink-0">
             <svg className="w-5 h-5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
           </button>
         </form>
