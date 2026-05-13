@@ -723,10 +723,6 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       </div>
     </div>
   );
-        })}
-      </div>
-    </div>
-  );
 
   
   const renderRequestCard = (item: any) => {
