@@ -1,10 +1,17 @@
-"use client";
-import React, { useState, useEffect } from "react";
+import re
+
+path = "apps/web/app/[locale]/dashboard/page.tsx"
+with open(path, "r", encoding="utf-8") as f:
+    original = f.read()
+
+import os
+# Since replacing huge React files directly through regex is brittle, we'll rewrite the component structure clearly.
+new_file_content = """import React, { useState, useEffect } from "react";
 import Head from "next/head";
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-export default function CustomerDashboard({ params }: { params: Promise<{ locale: string }> }) {
+export default function CustomerDashboard({ params: { locale } }: { params: { locale: string } }) {
   const [activeTab, setActiveTab] = useState("overview");
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const router = useRouter();
@@ -176,3 +183,8 @@ export default function CustomerDashboard({ params }: { params: Promise<{ locale
     </div>
   );
 }
+"""
+
+with open(path, "w", encoding="utf-8") as f:
+    f.write(new_file_content)
+
