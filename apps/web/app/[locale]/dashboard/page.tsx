@@ -1147,8 +1147,16 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
             <Progress12Steps currentStep={6} />
             
             <div className="mt-8 flex flex-col items-center max-w-md mx-auto">
-              <span className="inline-block w-8 h-8 border-4 border-sky-500 border-t-transparent rounded-full animate-spin mb-4" />
-              <p className="text-sky-600 font-bold mb-6">Waiting for payment...</p>
+              {/* Type of service and provider details added */}
+              <div className="flex flex-col items-center mb-6 text-center space-y-1">
+                <span className="text-gray-900 font-bold text-lg">{waitModalOrder.request?.title || 'Fit out'}</span>
+                <span className="text-gray-600 text-sm">Service provider: {waitModalOrder.request?.customer || 'Suppadesh'}</span>
+                <span className="text-gray-600 text-sm font-bold text-sky-600">Budget: {waitModalOrder.request?.budget || '฿25,000,000'}</span>
+              </div>
+              
+              <div className="bg-sky-50 text-sky-800 text-sm p-4 rounded-xl mt-2 mb-6 border border-sky-100 text-center font-medium">
+                The service provider has accepted the PO. Please pay the processing fee and notify to proceed.
+              </div>
               
               <div className="w-full bg-gray-50 rounded-xl p-4 space-y-2 text-sm text-left">
                 <div className="flex justify-between"><span className="text-gray-500">PO Number</span><span className="font-mono font-bold text-gray-800">{waitModalOrder.request?.po || 'PO-SYS-202'}</span></div>
