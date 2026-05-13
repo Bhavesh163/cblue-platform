@@ -60,7 +60,7 @@ const STATUS_LABEL: Record<string, Record<string, string>> = {
   COMPLETED: { en: "Completed", th: "เสร็จสิ้น", zh: "已完成" },
   ASSIGNED: { en: "Waiting for customer to proceed", th: "รอให้ลูกค้าดำเนินการ", zh: "等待客户处理" },
   ACCEPTED: { en: "Waiting for customer to proceed", th: "รอให้ลูกค้าดำเนินการ", zh: "等待客户处理" },
-  MATCHING: { en: "Action at incoming request needed", th: "โปรดดำเนินการในคำขอใหม่", zh: "需要处理新请求" },
+  MATCHING: { en: "Action needed", th: "โปรดดำเนินการในคำขอใหม่", zh: "需要处理新请求" },
 };
 const getStatusLabel = (status: string, locale: string) => STATUS_LABEL[status]?.[locale] || status.replace(/_/g, " ");
 
@@ -260,7 +260,7 @@ export default function FixerProPage() {
             <p className="text-gray-500 mt-2">Customer has placed a request for {waitModalOrder.serviceTh || waitModalOrder.service}. Please review the PO details below and accept or decline.</p>
             
             <div className="w-full bg-gray-50 rounded-xl p-5 mt-6 space-y-3 text-sm text-left border border-gray-100 shadow-inner">
-              <div className="flex justify-between border-b pb-2"><span className="text-gray-500">PO Number</span><span className="font-mono font-bold text-gray-800">PO-2605-{waitModalOrder.id ? waitModalOrder.id.slice(0, 4) : '9605'}</span></div>
+              <div className="flex justify-between border-b pb-2"><span className="text-gray-500">PO Number</span><span className="font-mono font-bold text-gray-800">PO-2605-{waitModalOrder.id ? waitModalOrder.id.slice(4, 8) : '9605'}</span></div>
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Customer</span><span className="font-bold text-gray-800">{waitModalOrder.customer || waitModalOrder.customerAlias || 'Customer'}</span></div>
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Budget</span><span className="font-bold text-amber-600">฿{waitModalOrder.budget || waitModalOrder.estimatedPrice || waitModalOrder.finalPrice || '0'}</span></div>
               <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">Project Details</span><span className="font-bold text-gray-800 bg-white p-2 rounded border border-gray-100">{waitModalOrder.description || waitModalOrder.service}</span></div>
@@ -739,7 +739,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
               <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center text-lg"></div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? job.serviceTh : locale === "zh" ? job.serviceZh : job.service}</p>
-                <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"} &middot; PO-{job.poNumber || job.id.slice(-6)} | {job.subdistrict || "Saphansong"}</p>
+                <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"} &middot; PO-{o.id?.slice(0, 4)}-{o.id?.slice(4, 8)} | {job.subdistrict || "Saphansong"}</p>
                 <div className="mt-1.5 w-full bg-gray-100 rounded-full h-1.5">
                   <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${job.progress}%` }} />
                 </div>
@@ -806,7 +806,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
             <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center text-lg"></div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? job.serviceTh : locale === "zh" ? job.serviceZh : job.service}</p>
-              <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"} &middot; PO-{job.poNumber || job.id.slice(-6)} | {job.subdistrict || "Saphansong"}</p>
+              <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"} &middot; PO-{o.id?.slice(0, 4)}-{o.id?.slice(4, 8)} | {job.subdistrict || "Saphansong"}</p>
               <div className="mt-1.5 w-full bg-gray-100 rounded-full h-1.5">
                 <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${job.progress}%` }} />
               </div>
@@ -1285,7 +1285,20 @@ function PartnerDashboard({ locale, partner, prefix, onLogout, orders }: { local
                     <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl shadow-sm"></div>
                     <div>
                       <h3 className="font-bold text-gray-900">{o.service}</h3>
-                      <p className="text-sm text-gray-500 mt-1">{o.user?.name || "Customer"} &middot; {new Date(o.createdAt).toLocaleDateString()} &middot; Budget: ฿{o.estimatedPrice || "0"} &middot; PO-{o.id.slice(0, 4)}-{o.id.slice(4, 8)} | {o.user?.subdistrict || "Saphansong"}</p><div className="mt-1.5 w-full bg-gray-100 rounded-full h-1.5"><div className="bg-purple-500 h-1.5 rounded-full" style={{ width: (o.status === "COMPLETED" ? "100%" : (["IN_PROGRESS", "CONFIRMED", "ACCEPTED"].includes(o.status) ? "40%" : "15%")) }} /></div>
+                      <p className="text-sm text-gray-500 mt-1">{o.user?.name || "Customer"} &middot; {new Date(o.createdAt).toLocaleDateString()} &middot; Budget: ฿{o.estimatedPrice || "0"} &middot; PO-{o.id?.slice(0, 4)}-{o.id?.slice(4, 8)} | {o.user?.subdistrict || "Saphansong"}</p><div className="mt-2 w-full">
+<div className="flex justify-between text-[10px] text-gray-500 mb-1 px-1">
+  <span className={['PENDING',''].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Notify</span>
+  <span className={['CONFIRMED'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Confirm</span>
+  <span className={['ACCEPTED'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Pay</span>
+  <span className={['IN_PROGRESS'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Chat</span>
+  <span className={['MEETING'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Meet</span>
+  <span className={['VARIATION'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Variation</span>
+  <span className={['WORKING'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Complete</span>
+  <span className={['RATING'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Rate</span>
+  <span className={['COMPLETED'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Done</span>
+</div>
+<div className="w-full bg-gray-100 rounded-full h-1.5"><div className="bg-purple-500 h-1.5 rounded-full transition-all duration-500" style={{ width: (o.status === 'COMPLETED' ? '100%' : o.status === 'RATING' ? '88%' : o.status === 'WORKING' ? '77%' : o.status === 'VARIATION' ? '66%' : o.status === 'MEETING' ? '55%' : o.status === 'IN_PROGRESS' ? '44%' : o.status === 'ACCEPTED' ? '33%' : o.status === 'CONFIRMED' ? '22%' : '11%') }} /></div>
+</div>
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-2">
@@ -1350,7 +1363,20 @@ function PartnerActiveJobs({ locale, prefix, orders }: { locale: string; prefix:
               <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl shadow-sm"></div>
               <div>
                 <h3 className="font-bold text-gray-900">{o.service} <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">{o.tier || 'Standard'}</span></h3>
-                <p className="text-sm text-gray-500 mt-1">{o.user?.name || "Customer"} &middot; {new Date(o.createdAt).toLocaleDateString()} &middot; Budget: ฿{o.estimatedPrice || "0"} &middot; PO-{o.id.slice(0, 4)}-{o.id.slice(4, 8)} | {o.user?.subdistrict || "Saphansong"}</p><div className="mt-1.5 w-full bg-gray-100 rounded-full h-1.5"><div className="bg-purple-500 h-1.5 rounded-full" style={{ width: (o.status === "COMPLETED" ? "100%" : (["IN_PROGRESS", "CONFIRMED", "ACCEPTED"].includes(o.status) ? "40%" : "15%")) }} /></div>
+                <p className="text-sm text-gray-500 mt-1">{o.user?.name || "Customer"} &middot; {new Date(o.createdAt).toLocaleDateString()} &middot; Budget: ฿{o.estimatedPrice || "0"} &middot; PO-{o.id?.slice(0, 4)}-{o.id?.slice(4, 8)} | {o.user?.subdistrict || "Saphansong"}</p><div className="mt-2 w-full">
+<div className="flex justify-between text-[10px] text-gray-500 mb-1 px-1">
+  <span className={['PENDING',''].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Notify</span>
+  <span className={['CONFIRMED'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Confirm</span>
+  <span className={['ACCEPTED'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Pay</span>
+  <span className={['IN_PROGRESS'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Chat</span>
+  <span className={['MEETING'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Meet</span>
+  <span className={['VARIATION'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Variation</span>
+  <span className={['WORKING'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Complete</span>
+  <span className={['RATING'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Rate</span>
+  <span className={['COMPLETED'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Done</span>
+</div>
+<div className="w-full bg-gray-100 rounded-full h-1.5"><div className="bg-purple-500 h-1.5 rounded-full transition-all duration-500" style={{ width: (o.status === 'COMPLETED' ? '100%' : o.status === 'RATING' ? '88%' : o.status === 'WORKING' ? '77%' : o.status === 'VARIATION' ? '66%' : o.status === 'MEETING' ? '55%' : o.status === 'IN_PROGRESS' ? '44%' : o.status === 'ACCEPTED' ? '33%' : o.status === 'CONFIRMED' ? '22%' : '11%') }} /></div>
+</div>
               </div>
             </div>
             <div className="flex flex-col items-end gap-2">
