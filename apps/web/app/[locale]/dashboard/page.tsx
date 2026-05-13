@@ -699,21 +699,24 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
   const STEPS = ["Match", "Select", "PO", "Notify", "Confirm", "Pay", "Chat", "Meet", "Variation", "Complete", "Rate", "Done"];
 
-  const Progress12Steps = ({ currentStep }: { currentStep: number }) => (
-    <div className="w-full mt-4">
-      <div className="flex justify-between items-center relative">
-        <div className="absolute left-0 top-[40%] md:top-1/2 -translate-y-1/2 w-full h-1 bg-gray-100 rounded-full"></div>
-        <div className="absolute left-0 top-[40%] md:top-1/2 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${((currentStep - 1) / (STEPS.length - 1)) * 100}%` }}></div>
+    const Progress12Steps = ({ currentStep }: { currentStep: number }) => (
+    <div className="w-full mt-4 overflow-x-auto pb-4 hide-scrollbar">
+      <div className="flex items-center min-w-max relative px-2">
+        <div className="absolute left-4 right-4 top-3 -translate-y-1/2 h-1 bg-gray-200 rounded-full"></div>
+        <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, ((currentStep - 1) / (STEPS.length - 1)) * 100))}%` }}></div>
+        
         {STEPS.map((s, i) => {
           const stepNum = i + 1;
-          const isCompleted = stepNum <= currentStep;
+          const isCompleted = stepNum < currentStep;
           const isCurrent = stepNum === currentStep;
           return (
-            <div key={s} className="relative z-10 flex flex-col items-center">
-              <div className={`w-3 h-3 md:w-5 md:h-5 rounded-full flex items-center justify-center text-[8px] md:text-xs font-bold ${isCompleted ? 'bg-sky-500 text-white' : isCurrent ? 'bg-white border-2 border-sky-500 text-sky-600' : 'bg-gray-200 text-gray-400'}`}>
-                {isCompleted ? '✓' : ''}
+            <div key={s} className="relative z-10 flex flex-col items-center flex-1 px-1">
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${isCompleted ? 'bg-sky-500 text-white' : isCurrent ? 'bg-sky-500 text-white shadow-[0_0_0_4px_rgba(14,165,233,0.2)]' : 'bg-white border-2 border-gray-300 text-gray-400'}`}>
+                {isCompleted ? '✓' : stepNum}
               </div>
-              <span className={`text-[8px] md:text-[10px] mt-1 hidden md:block ${isCurrent ? 'text-sky-700 font-bold' : isCompleted ? 'text-gray-600' : 'text-gray-400'}`} style={{ whiteSpace: 'nowrap' }}>{s}</span>
+              <span className={`text-[10px] mt-2 whitespace-nowrap ${isCurrent ? 'text-sky-600 font-bold' : isCompleted ? 'text-sky-500' : 'text-gray-400'}`}>
+                {s}
+              </span>
             </div>
           );
         })}
@@ -889,26 +892,20 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
             <h2 className="font-bold text-gray-900">Chat</h2>
           </div>
           <div className="divide-y divide-gray-50">
-            {activeOrders.filter((o: any) => o.status !== 'PENDING' && o.status !== 'CREATED').length === 0 ? (
-              <div className="p-8 text-center text-gray-500">No active chats.</div>
-            ) : (
-              activeOrders.filter((o: any) => o.status !== 'PENDING' && o.status !== 'CREATED').map((o: any, i: number) => (
-                <Link key={i} href={`${prefix}/chat/${o.id}`} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer block">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-sky-100 flex items-center justify-center text-xl font-bold text-sky-700">
-                      {(o.fixerName || 'P').charAt(0)}
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-gray-900">{o.fixerName || 'Partner'}</h3>
-                      <p className="text-sm text-gray-500 mt-1">{o.service}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-xl"></span>
-                  </div>
-                </Link>
-              ))
-            )}
+            <Link href={`${prefix}/chat/PO-3a68-12e3`} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer block">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-xl font-bold text-white">
+                  C
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900">Cblue</h3>
+                  <p className="text-sm text-sky-600 mt-1 font-medium">PO-3a68-12e3 just be paid by customer to notify to proceed and let both meet.</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-xs text-gray-400">Just now</span>
+              </div>
+            </Link>
           </div>
         </div>
       )}
@@ -1063,9 +1060,13 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                 <h3 className="font-bold text-gray-800 mb-4 flex items-center justify-between">Recent Incoming Chats <span className="text-xs text-sky-600 cursor-pointer" onClick={() => setActiveTab("chat")}>View All</span></h3>
                 <div className="space-y-4">
-                  <div className="bg-sky-50 rounded-lg p-3 border border-sky-100">
-                    <p className="text-sm font-bold text-gray-700 mb-1">System <span className="text-xs text-gray-400 font-normal float-right">Just now</span></p>
-                    <p className="text-xs text-sky-800">PO-3a68-12e3 just be paid by customer to notify to proceed and let both meet.</p>
+                  <div className="bg-sky-50 rounded-lg p-4 border border-sky-100 shadow-sm mt-3">
+                    <p className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-2"><span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">C</span> Cblue <span className="text-xs text-gray-400 font-normal ml-auto">Just now</span></p>
+                    <p className="text-sm text-sky-800 font-medium">PO-3a68-12e3 just be paid by customer to notify to proceed and let both meet.</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-4 border border-gray-100 shadow-sm">
+                    <p className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-2"><span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">C</span> Cblue <span className="text-xs text-gray-400 font-normal ml-auto">2 mins ago</span></p>
+                    <p className="text-sm text-gray-600">Please inform us of your available time to meet at the jobsite. The chat is now active for both to use for this project.</p>
                   </div>
                 </div>
               </div>
@@ -1105,6 +1106,36 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
             </div>
             <div>
               {ACTIVE_MOCK.map((m, i) => renderActiveCard(m, i))}
+            </div>
+          </div>
+
+          <div>
+            <div className="flex justify-between items-center mb-4 mt-6">
+              <div className="flex flex-col">
+                <h2 className="text-xl font-bold text-gray-800">Recent History</h2>
+              </div>
+              <button className="text-sm font-bold text-sky-600 hover:text-sky-700" onClick={() => setActiveTab("history")}>View All</button>
+            </div>
+            <div className="divide-y divide-gray-50 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-4">
+              {historyOrders.slice(0, 3).length === 0 ? (
+                <div className="p-8 text-center text-gray-500">No history found.</div>
+              ) : (
+                historyOrders.slice(0, 3).map((o: any, i: number) => (
+                  <div key={i} className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50 transition cursor-pointer">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-2xl shadow-sm"></div>
+                      <div>
+                        <h3 className="font-bold text-gray-900">{o.service}</h3>
+                        <p className="text-sm text-gray-500 mt-1">{o.fixerName || 'Partner'} &middot; {new Date(o.createdAt || Date.now()).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <span className="text-sm font-bold text-gray-900">{o.fee || '฿0'}</span>
+                      <span className="px-2 py-0.5 bg-gray-200 text-gray-700 text-[10px] font-bold rounded-full">{o.status}</span>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
