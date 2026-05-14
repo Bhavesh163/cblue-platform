@@ -757,25 +757,21 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   };
 
   const renderActiveCard = (item: any, idx: number) => (
-    <div key={idx} className="block hover:bg-gray-50/50 p-6 transition flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <span className="font-semibold text-gray-900 text-lg">{item.title}</span>
-        {item.actionNeeded ? (
-          <span className="text-red-500 text-xs font-bold flex items-center gap-1 bg-red-50 px-2.5 py-1 rounded-full"><span className="w-2 h-2 rounded-full bg-red-500 inline-block"></span>Action needed</span>
-        ) : (
-          <span className="text-gray-500 text-xs font-bold px-2.5 py-1 rounded-full bg-gray-100">In Progress</span>
-        )}
+    <div key={idx} className="bg-gray-50 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between hover:bg-gray-100 transition cursor-pointer gap-4" onClick={() => handleOrderClick ? handleOrderClick(item) : null}>
+      <div className="flex items-center gap-4">
+         <div className="w-10 h-10 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center font-bold">{(item.title || item.service || "C").charAt(0)}</div>
+         <div>
+           <h3 className="font-bold text-gray-900">{item.title || item.service} <span className="text-sm font-normal text-gray-500">· {item.po || `PO-${item.id.slice(0,8)}`}</span></h3>
+           <p className="text-sm text-gray-600 mt-0.5">{item.customer || "Customer"} · {item.date || new Date().toLocaleDateString()}</p>
+         </div>
       </div>
-      <div className="flex items-center justify-between text-sm text-gray-600">
-        <span>{item.customer} &middot; {item.date} &middot; {item.location}</span>
-        <span className="font-semibold text-gray-900 pr-2">Budget: {item.budget}</span>
-      </div>
-      <div className="flex items-center justify-between text-xs text-gray-400 border-b border-gray-100 pb-3">
-        <span>{item.po}</span>
-        <span className="px-2 py-0.5 rounded-full font-bold bg-blue-50 text-blue-700 uppercase">{item.tier}</span>
-      </div>
-      <div className="mt-2 pt-2">
-        <Progress12Steps currentStep={item.step} />
+      <div className="flex items-center gap-4 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-end">
+        <div className="flex flex-col gap-1 w-full sm:w-64">
+           <Progress12Steps currentStep={item.step || 4} />
+        </div>
+        <div className="text-right">
+          <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${item.actionNeeded ? 'bg-red-50 text-red-700' : 'bg-blue-100 text-blue-700 whitespace-nowrap'}`}>{item.actionNeeded ? 'Action Needed' : 'In Progress'}</span>
+        </div>
       </div>
     </div>
   );
@@ -829,7 +825,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
               <span className="text-gray-500 font-bold text-sm">{combinedActive.length}</span>
             </div>
           </div>
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50">
+          <div className="flex flex-col gap-3 mt-4">
             {combinedActive.map((m, i) => renderActiveCard(m, i))}
           </div>
         </div>
@@ -1002,7 +998,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
               </div>
               <button className="text-sm font-bold text-sky-600 hover:text-sky-700" onClick={() => setActiveTab("active")}>View All</button>
             </div>
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50">
+            <div className="flex flex-col gap-3 mt-4">
               {combinedActive.map((m, i) => renderActiveCard(m, i))}
             </div>
           </div>
