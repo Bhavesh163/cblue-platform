@@ -403,7 +403,7 @@ export default function PartnerZonePage() {
               <div className="flex justify-between"><span className="text-gray-500">Customer Budget</span><span className="font-bold text-gray-800">฿3,500</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Project Details</span><span className="font-bold text-gray-800">{waitModalJob.description}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Uploaded Files</span><span className="font-semibold text-sky-600 cursor-pointer hover:underline" onClick={() => { 
-                let url = (waitModalJob as any)?.issueImage || waitModalJob?.image || waitModalJob?.fileUrl || (waitModalJob?.projectImages && waitModalJob?.projectImages[0]) || (waitModalJob?.images && waitModalJob?.images[0]) || (waitModalJob?.metadata?.images && waitModalJob?.metadata.images[0]) || (waitModalJob?.metadata?.issueImageUrl) || (waitModalJob?.metadata?.issueImage); 
+                let url = (waitModalJob as any)?.issueImage || (waitModalJob as any)?.image || (waitModalJob as any)?.fileUrl || ((waitModalJob as any)?.projectImages && (waitModalJob as any)?.projectImages[0]) || ((waitModalJob as any)?.images && (waitModalJob as any)?.images[0]) || ((waitModalJob as any)?.metadata?.images && (waitModalJob as any)?.metadata.images[0]) || ((waitModalJob as any)?.metadata?.issueImageUrl) || ((waitModalJob as any)?.metadata?.issueImage); 
                 if(!url) {
                     try {
                         const localData = JSON.parse(localStorage.getItem("jobData") || "{}");
@@ -414,7 +414,7 @@ export default function PartnerZonePage() {
                 if(url) window.open(url, "_blank"); 
                 else { window.open("https://images.unsplash.com/photo-1541888081622-3866d939b4b9?q=80&w=2670&auto=format&fit=crop", "_blank"); } 
               }}>
-                {(waitModalJob?.image || (waitModalJob?.images && waitModalJob?.images.length > 0) || waitModalJob?.fileUrl || (waitModalJob?.projectImages && waitModalJob?.projectImages.length > 0) || waitModalJob?.metadata?.images || (typeof window !== 'undefined' && localStorage.getItem("jobData") && JSON.parse(localStorage.getItem("jobData") || "{}").image)) ? "1 file attached (Click to View)" : "No file attached"}
+                {((waitModalJob as any)?.image || ((waitModalJob as any)?.images && (waitModalJob as any)?.images.length > 0) || (waitModalJob as any)?.fileUrl || ((waitModalJob as any)?.projectImages && (waitModalJob as any)?.projectImages.length > 0) || (waitModalJob as any)?.metadata?.images || (typeof window !== 'undefined' && localStorage.getItem("jobData") && JSON.parse(localStorage.getItem("jobData") || "{}").image)) ? "1 file attached (Click to View)" : "No file attached"}
               </span></div>
             </div>
 
