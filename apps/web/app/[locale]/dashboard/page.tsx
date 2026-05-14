@@ -732,24 +732,23 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const renderRequestCard = (item: any) => {
     if (mockPayments[item.id]) return null;
       return (
-      <div key={item.id} className="block hover:bg-gray-50/50 p-6 transition flex flex-col gap-3">
-        <div className="flex items-center justify-between mb-3 border-b border-gray-100 pb-3">
-          <span className="font-semibold text-gray-900">Step 6 of 12 Paying fee & Notification to Proceed &nbsp;|&nbsp; <span>{item.title}</span></span>
-          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-100 text-blue-800">New Request</span>
+      <div key={item.id} className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+           <div className="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">{(item.title || "R").charAt(0)}</div>
+           <div>
+             <h3 className="font-bold text-gray-900">{item.title} <span className="text-sm font-normal text-gray-500">· {item.po}</span></h3>
+             <p className="text-sm text-gray-600 mt-0.5">{item.customer} · {item.date}</p>
+             <p className="text-xs text-gray-500 mt-1">{item.desc}</p>
+           </div>
         </div>
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between text-sm text-gray-600">
-            <span>{item.customer} &middot; {item.date}</span>
-            <span className="font-semibold text-gray-900 pr-2">Budget: {item.budget}</span>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-end">
+          <div className="text-left sm:text-right flex flex-col gap-1">
+             <span className="font-bold text-gray-900 pr-2">Budget: {item.budget}</span>
+             <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-blue-50 text-blue-700 uppercase self-start sm:self-end w-max">{item.tier}</span>
           </div>
-          <p className="text-sm text-gray-600">{item.desc}</p>
-          <div className="flex items-center justify-between text-xs text-gray-400 mt-2">
-            <span>{item.po}</span>
-            <span className="px-2 py-0.5 rounded-full font-bold bg-blue-50 text-blue-700">{item.tier}</span>
-          </div>
-          <div className="flex gap-4 mt-4">
-            <button className="bg-sky-600 outline-none text-white px-6 py-2 rounded-lg text-sm font-bold hover:bg-sky-700 transition shadow-sm w-full md:w-auto" onClick={() => setWaitModalOrder({ id: item.id, status: 'MATCHING', request: item })}>Paying fee</button>
-            <button className="border border-gray-300 text-gray-600 px-6 py-2 outline-none rounded-lg text-sm font-bold hover:bg-gray-100 transition shadow-sm w-full md:w-auto">Decline</button>
+          <div className="flex gap-2">
+            <button className="bg-sky-600 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-sky-700 transition shadow-sm w-full md:w-auto" onClick={() => setWaitModalOrder({ id: item.id, status: 'MATCHING', request: item })}>Paying fee</button>
+            <button className="border border-gray-300 text-gray-600 px-5 py-2 outline-none rounded-lg text-sm font-bold hover:bg-gray-100 transition shadow-sm w-full md:w-auto">Decline</button>
           </div>
         </div>
       </div>
@@ -757,7 +756,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   };
 
   const renderActiveCard = (item: any, idx: number) => (
-    <div key={idx} className="bg-gray-50 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between hover:bg-gray-100 transition cursor-pointer gap-4" onClick={() => handleOrderClick ? handleOrderClick(item) : null}>
+    <div key={idx} className="bg-gray-50 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
       <div className="flex items-center gap-4">
          <div className="w-10 h-10 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center font-bold">{(item.title || item.service || "C").charAt(0)}</div>
          <div>
@@ -959,15 +958,15 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                 </div>
               </div>
           </div>
-<div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6">
-            <div className="px-5 py-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+<div className="mb-6">
+            <div className="flex justify-between items-center mb-4">
               <div className="flex flex-col">
-                <h3 className="font-bold text-gray-900">Incoming Requests</h3>
+                <h2 className="text-xl font-bold text-gray-800">Incoming Requests</h2>
               </div>
               <button className="text-sm font-bold text-sky-600 hover:text-sky-700" onClick={() => setActiveTab("requests")}>View All</button>
             </div>
-            <div className="p-5">
-              {(subscriber?.email?.includes('ghis') ? REQUESTS_MOCK : []).slice(0, 3).map(m => renderRequestCard(m))}
+            <div className="flex flex-col gap-3">
+              {(subscriber?.email?.includes('ghis') ? REQUESTS_MOCK : []).map(m => renderRequestCard(m))}
             </div>
           </div>
 
@@ -1083,7 +1082,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                   alert("Notification: Payment Complete! Notifying to proceed.");
                   setMockPayments(prev => ({...prev, [waitModalOrder.id]: true}));
                   setMockActiveItems(prev => [...prev, {
-                    ...waitModalOrder,
+                    ...waitModalOrder.request,
                     actionNeeded: false,
                     step: 7
                   }]);

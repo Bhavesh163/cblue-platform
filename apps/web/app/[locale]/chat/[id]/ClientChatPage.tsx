@@ -36,10 +36,10 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
     setInputText("");
   };
 
-  if (!mounted) return <div className="h-[calc(100vh-64px)] w-full flex items-center justify-center">Loading...</div>;
+  if (!mounted) return <div className="h-[calc(100vh-140px)] w-full flex items-center justify-center">Loading...</div>;
 
   return (
-    <div className="max-w-2xl mx-auto h-[calc(100vh-64px)] flex flex-col bg-gray-50 border-x border-gray-200">
+    <div className="max-w-2xl mx-auto h-[calc(100vh-140px)] flex flex-col bg-gray-50 border-x border-gray-200">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 p-4 sticky top-0 z-10 flex items-center gap-4">
         <Link href={isPartner ? `/${locale}/fixers` : `/${locale}/dashboard`} className="text-gray-500 hover:text-gray-800 transition">
