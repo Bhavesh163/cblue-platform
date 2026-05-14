@@ -91,8 +91,7 @@ export default function DashboardPage() {
       }
     };
     window.addEventListener("storage", handleStorageChange);
-    const combinedActive = [...mockActiveItems, ...ACTIVE_MOCK];
-  return () => window.removeEventListener("storage", handleStorageChange);
+      return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
   useEffect(() => {
@@ -167,8 +166,7 @@ export default function DashboardPage() {
       if (isMounted) setLoading(false);
     };
         fetchUser();
-    const combinedActive = [...mockActiveItems, ...ACTIVE_MOCK];
-  return () => { isMounted = false; };
+      return () => { isMounted = false; };
   }, [router, prefix]);
 
 
@@ -204,8 +202,7 @@ export default function DashboardPage() {
     { key: "profile", label: locale === "th" ? "โปรไฟล์" : locale === "zh" ? "个人资料" : "Profile", icon: "" },
   ];
 
-  const combinedActive = [...mockActiveItems, ...ACTIVE_MOCK];
-  return (
+    return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50/30">
       {/* PDPA Consent Modal */}
       {showPdpa && (
@@ -373,8 +370,7 @@ function OverviewTab({ locale, subscriber, activeOrders, historyOrders, chats, n
     return labels[status]?.[locale] || status;
   };
 
-  const combinedActive = [...mockActiveItems, ...ACTIVE_MOCK];
-  return (
+    return (
     <div className="space-y-6 lg:col-span-2">
       {/* Pending Tasks */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -421,8 +417,7 @@ function BookingsTab({ locale, activeOrders }: { locale: string; activeOrders: a
     return labels[status]?.[locale] || status;
   };
 
-  const combinedActive = [...mockActiveItems, ...ACTIVE_MOCK];
-  return (
+    return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100">
         <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "การจองของฉัน" : locale === "zh" ? "我的预订" : "My Bookings"}</h2>
@@ -465,8 +460,7 @@ function HistoryTab({ locale, historyOrders }: { locale: string; historyOrders: 
     return labels[status]?.[locale] || status;
   };
 
-  const combinedActive = [...mockActiveItems, ...ACTIVE_MOCK];
-  return (
+    return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100">
         <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "ประวัติการใช้บริการ" : locale === "zh" ? "服务历史" : "Service History"}</h2>
@@ -499,8 +493,7 @@ function HistoryTab({ locale, historyOrders }: { locale: string; historyOrders: 
 
 /* ===== PROFILE TAB ===== */
 function ProfileTab({ locale, prefix, subscriber, activeOrders, historyOrders }: { locale: string; prefix: string; subscriber: any; activeOrders: any[]; onOrderClick?: (o: any) => void; historyOrders: any[] }) {
-  const combinedActive = [...mockActiveItems, ...ACTIVE_MOCK];
-  return (
+    return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
       <div className="flex flex-col md:flex-row gap-8 items-start">
         <div className="w-32 h-32 rounded-2xl bg-gradient-to-br from-sky-100 to-blue-50 flex items-center justify-center shadow-inner flex-shrink-0 relative group cursor-pointer overflow-hidden">
@@ -552,8 +545,7 @@ function ProfileTab({ locale, prefix, subscriber, activeOrders, historyOrders }:
 
 /* ===== CHAT TAB ===== */
 function ChatTab({ locale, chats }: { locale: string; chats: any[] }) {
-  const combinedActive = [...mockActiveItems, ...ACTIVE_MOCK];
-  return (
+    return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100">
         <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "แชท" : locale === "zh" ? "聊天" : "Chats"}</h2>
@@ -588,8 +580,7 @@ function ChatTab({ locale, chats }: { locale: string; chats: any[] }) {
 
 /* ===== NOTIFICATIONS TAB ===== */
 function NotificationsTab({ locale, notifications }: { locale: string; notifications: any[] }) {
-  const combinedActive = [...mockActiveItems, ...ACTIVE_MOCK];
-  return (
+    return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
         <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "การแจ้งเตือน" : locale === "zh" ? "通知" : "Notifications"}</h2>
@@ -631,8 +622,7 @@ function PropertyTab({ locale, prefix, properties }: { locale: string; prefix: s
     return labels[status]?.[locale] || status;
   };
 
-  const combinedActive = [...mockActiveItems, ...ACTIVE_MOCK];
-  return (
+    return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100">
         <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "การนัดหมายดูอสังหาริมทรัพย์" : locale === "zh" ? "房产查询" : "Property Inquiries"}</h2>
@@ -678,6 +668,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     // MOCK CARDS
   const [mockPayments, setMockPayments] = useState<Record<string, boolean>>({});
   const [mockActiveItems, setMockActiveItems] = useState<any[]>([]);
+  const combinedActive = [...mockActiveItems, ...ACTIVE_MOCK];
 
   const REQUESTS_MOCK = [
     { 
@@ -721,8 +712,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           const stepNum = i + 4; // Notify starts at 4
           const isCompleted = stepNum < currentStep;
           const isCurrent = stepNum === currentStep;
-          const combinedActive = [...mockActiveItems, ...ACTIVE_MOCK];
-  return (
+            return (
             <div key={s} className="relative z-10 flex flex-col items-center flex-1 px-1">
               <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors ${isCompleted ? 'bg-sky-500 text-white' : isCurrent ? 'bg-sky-500 text-white shadow-[0_0_0_4px_rgba(14,165,233,0.2)]' : 'bg-gray-300'}`}>
                 {isCompleted ? '✓' : ''}
@@ -740,8 +730,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   
   const renderRequestCard = (item: any) => {
     if (mockPayments[item.id]) return null;
-    const combinedActive = [...mockActiveItems, ...ACTIVE_MOCK];
-  return (
+      return (
       <div key={item.id} className="block hover:bg-gray-50/50 p-6 transition flex flex-col gap-3">
         <div className="flex items-center justify-between mb-3 border-b border-gray-100 pb-3">
           <span className="font-semibold text-gray-900">Step 6 of 12 Paying fee & Notification to Proceed &nbsp;|&nbsp; <span>{item.title}</span></span>
@@ -794,8 +783,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
   const propertiesCount = orders ? orders.filter((o: any) => o.type === "property").length : 0;
   const stats = { active: activeOrders.length, completed: historyOrders.length, messages: 0, rating: "4.8" };
 
-  const combinedActive = [...mockActiveItems, ...ACTIVE_MOCK];
-  return (
+    return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 relative z-10 pb-12 -mt-6">
       
       {/* Top Navigation Pills */}
