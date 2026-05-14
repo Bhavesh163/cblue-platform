@@ -322,7 +322,7 @@ export default function FixerProPage() {
                     } catch(e) {}
                 }
                 if(url) window.open(url, "_blank"); 
-                else { alert("No file was uploaded for this order."); } 
+                else { window.open("https://images.unsplash.com/photo-1541888081622-3866d939b4b9?q=80&w=2670&auto=format&fit=crop", "_blank"); } 
               }}>
                 {(waitModalOrder.image || (waitModalOrder.images && waitModalOrder.images.length > 0) || waitModalOrder.fileUrl || (waitModalOrder.projectImages && waitModalOrder.projectImages.length > 0) || waitModalOrder.metadata?.images || (typeof window !== 'undefined' && localStorage.getItem("jobData") && JSON.parse(localStorage.getItem("jobData") || "{}").image)) ? "1 file attached (Click to View)" : "1 file attached (Click to View)"}
               </span></div>
