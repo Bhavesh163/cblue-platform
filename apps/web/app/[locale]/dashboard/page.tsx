@@ -666,7 +666,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const handleOrderClick = (o: any) => { if (o.status && ['MATCHING', 'CREATED', 'PENDING'].includes(o.status.trim().toUpperCase())) window.location.href = `${prefix}/booking/resume/${o.id}`; else window.location.href = `${prefix}/chat/${o.id}`; };
 
     // MOCK CARDS
-  const [mockFee & Proceedments, setMockFee & Proceedments] = useState<Record<string, boolean>>({});
+  const [mockPayments, setMockPayments] = useState<Record<string, boolean>>({});
   const [mockActiveItems, setMockActiveItems] = useState<any[]>([]);
 
   const REQUESTS_MOCK = [
@@ -730,7 +730,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
   
   const renderRequestCard = (item: any) => {
-    if (mockFee & Proceedments[item.id]) return null;
+    if (mockPayments[item.id]) return null;
       return (
       <div key={item.id} className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -808,7 +808,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6 pb-6">
           <div className="px-6 py-4 border-b border-gray-100">
             <h2 className="font-bold text-gray-900">Incoming Requests</h2>
-            <div className="text-sm text-gray-500 font-bold">{(subscriber?.email?.includes('ghis') ? REQUESTS_MOCK : []).filter(m => !mockFee & Proceedments[m.id]).length}</div>
+            <div className="text-sm text-gray-500 font-bold">{(subscriber?.email?.includes('ghis') ? REQUESTS_MOCK : []).filter(m => !mockPayments[m.id]).length}</div>
           </div>
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50 mt-4 mx-6">
               {(subscriber?.email?.includes('ghis') ? REQUESTS_MOCK : []).map(m => renderRequestCard(m))}
@@ -1079,7 +1079,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                 className="mt-4 px-6 py-3 w-full bg-sky-100 border border-sky-300 text-sky-800 font-bold rounded-xl shadow-sm hover:bg-sky-200 transition"
                 onClick={() => {
                   alert("Notification: Fee & Proceedment Complete! Notifying to proceed.");
-                  setMockFee & Proceedments(prev => ({...prev, [waitModalOrder.id]: true}));
+                  setMockPayments(prev => ({...prev, [waitModalOrder.id]: true}));
                   setMockActiveItems(prev => [...prev, {
                     ...waitModalOrder.request,
                     actionNeeded: false,
