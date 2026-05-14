@@ -698,7 +698,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     { title: "FITOUT", customer: "Suppadesh", date: "5/11/2026", budget: "฿25,000,000", po: "PO-3a68-12e3", location: "Saphansong", tier: "Standard", actionNeeded: true, step: 6 },
   ];
 
-  const combinedActive = [...mockActiveItems, ...ACTIVE_MOCK];
+  const combinedActive = [...mockActiveItems, ...(subscriber?.email?.includes('ghis') ? ACTIVE_MOCK : [])];
 
   const STEPS_FULL = ["Match", "Select", "PO", "Notify", "Confirm", "Pay", "Chat", "Meet", "Variation", "Complete", "Rate", "Done"];
   const STEPS = ["Notify", "Confirm", "Pay", "Chat", "Meet", "Variation", "Complete", "Rate", "Done"];
@@ -813,21 +813,23 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6 pb-6">
           <div className="px-6 py-4 border-b border-gray-100">
             <h2 className="font-bold text-gray-900">Incoming Requests</h2>
-            <div className="text-sm text-gray-500 font-bold">{REQUESTS_MOCK.filter(m => !mockPayments[m.id]).length}</div>
+            <div className="text-sm text-gray-500 font-bold">{(subscriber?.email?.includes('ghis') ? REQUESTS_MOCK : []).filter(m => !mockPayments[m.id]).length}</div>
           </div>
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50 mt-4 mx-6">
-              {REQUESTS_MOCK.map(m => renderRequestCard(m))}
+              {(subscriber?.email?.includes('ghis') ? REQUESTS_MOCK : []).map(m => renderRequestCard(m))}
           </div>
         </div>
       )}
 
       {activeTab === "active" && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6 pb-6">
-          <div className="px-6 py-4 border-b border-gray-100 flex flex-col">
-            <h2 className="font-bold text-gray-900">Active Jobs</h2>
-            <span className="text-gray-500 text-sm font-bold">{combinedActive.length}</span>
+        <div className="mt-6">
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex flex-col">
+              <h2 className="text-xl font-bold text-gray-800">Active Jobs</h2>
+              <span className="text-gray-500 font-bold text-sm">{combinedActive.length}</span>
+            </div>
           </div>
-          <div className="px-6 pt-4">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50">
             {combinedActive.map((m, i) => renderActiveCard(m, i))}
           </div>
         </div>
@@ -937,129 +939,8 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
         </div>
       )}
       
-      <div className={`grid grid-cols-1 lg:grid-cols-3 gap-6 ${activeTab !== 'overview' ? 'hidden' : ''}`}>
-
-        {/* LEFT COLUMN: Profile & Alerts */}
-        <div className="space-y-6">
+      <div className={`flex flex-col gap-6 ${activeTab !== 'overview' ? 'hidden' : ''}`}>
           
-          {/* Profile Card */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-sky-50 rounded-bl-full -z-0 opacity-50"></div>
-            <div className="relative z-10 flex items-center gap-4 mb-6">
-              <div className="w-16 h-16 rounded-full bg-sky-100 flex items-center justify-center text-sky-600 text-2xl font-bold shadow-inner">
-                {subscriber.name.charAt(0).toUpperCase()}
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">{subscriber.name}</h2>
-                <p className="text-sm text-gray-500">{subscriber.email} &middot; {subscriber.phone || "0819852846"}</p>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                <p className="text-xs text-gray-500 font-medium mb-1">Active</p>
-                <p className="text-lg font-bold text-gray-900 flex items-center gap-1">{stats.active}</p>
-              </div>
-              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                <p className="text-xs text-gray-500 font-medium mb-1">Completed</p>
-                <p className="text-lg font-bold text-gray-900 flex items-center gap-1">{stats.completed}</p>
-              </div>
-              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                <p className="text-xs text-gray-500 font-medium mb-1">Messages</p>
-                <p className="text-lg font-bold text-gray-900 flex items-center gap-1">{stats.messages}</p>
-              </div>
-              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                <p className="text-xs text-gray-500 font-medium mb-1">Satisfaction</p>
-                <p className="text-lg font-bold text-gray-900 flex items-center gap-1">4.8 </p>
-              </div>
-            </div>
-            <button onClick={onLogout} className="w-full py-2 bg-gray-100 text-gray-600 hover:bg-gray-200 text-sm font-bold rounded-lg transition">
-              {locale === "th" ? "ออกจากระบบ" : locale === "zh" ? "退出登录" : "Logout"}
-            </button>
-          </div>
-
-          {/* Upcoming Meetings */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-100">
-              <h3 className="font-bold text-gray-900 flex items-center gap-2">⏰ Upcoming Meetings</h3>
-            </div>
-            <div className="divide-y divide-gray-50">
-              {activeOrders.filter((o: any) => o.status === 'CONFIRMED' || o.status === 'IN_PROGRESS').slice(0, 2).map((o: any, i: number) => (
-                <div key={i} className="p-4 flex items-center justify-between hover:bg-gray-50 transition">
-                  <div className="flex items-center gap-3">
-                    <span className="text-2xl">{o.type === 'property' ? '' : ''}</span>
-                    <div>
-                      <p className="font-bold text-sm text-gray-900">{o.fixerName || 'Partner'} &middot; {o.service}</p>
-                      <p className="text-xs text-sky-600 font-medium mt-0.5">Soon</p>
-                    </div>
-                  </div>
-                  <button className="px-3 py-1 bg-sky-100 text-sky-700 text-xs font-bold rounded-md hover:bg-sky-200">Confirm</button>
-                </div>
-              ))}
-              {activeOrders.filter((o: any) => o.status === 'CONFIRMED' || o.status === 'IN_PROGRESS').length === 0 && (
-                <div className="p-4 text-sm text-gray-500">No upcoming meetings.</div>
-              )}
-            </div>
-          </div>
-
-          {/* Recent Alerts */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-100">
-              <h3 className="font-bold text-gray-900 flex items-center gap-2">Recent Alerts</h3>
-            </div>
-            <div className="p-4 space-y-4">
-              {activeOrders.slice(0, 3).map((o: any, i: number) => (
-                <div key={i} className="flex gap-3">
-                  <span className={`w-2 h-2 mt-1.5 rounded-full flex-shrink-0 ${o.status === 'CONFIRMED' ? 'bg-green-500' : o.status === 'PENDING' ? 'bg-amber-500' : 'bg-sky-500'}`}></span>
-                  <div>
-                    <p className="text-sm text-gray-800">Your {o.service} order is {o.status.toLowerCase()}</p>
-                    <p className="text-xs text-gray-400 mt-1">Recently</p>
-                  </div>
-                </div>
-              ))}
-              {activeOrders.length === 0 && <p className="text-sm text-gray-500">No recent alerts.</p>}
-            </div>
-          </div>
-
-          {/* Pending Ratings */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-100 bg-amber-50/50">
-              <h3 className="font-bold text-amber-900 flex items-center gap-2"> Pending Ratings</h3>
-            </div>
-            <div className="p-5">
-              {historyOrders.slice(0, 1).map((o: any, i: number) => (
-                <div key={i} className="flex items-start gap-3">
-                  <span className="text-2xl"></span>
-                  <div className="flex-1">
-                    <p className="font-bold text-sm text-gray-900">{o.fixerName || 'Partner'} &middot; {o.service}</p>
-                    <p className="text-xs text-gray-500 mt-0.5 mb-2">Completed Recently</p>
-                    <div className="flex gap-1 text-2xl text-gray-300 hover:text-amber-400 cursor-pointer transition-colors">
-                      <span>★</span><span>★</span><span>★</span><span>★</span><span>★</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {historyOrders.length === 0 && <p className="text-sm text-gray-500">No pending ratings.</p>}
-            </div>
-          </div>
-        </div>
-
-        {/* RIGHT COLUMN: Main content feeds */}
-        <div className="lg:col-span-2 space-y-6">
-          
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <div className="flex flex-col">
-                <h2 className="text-xl font-bold text-gray-800">Incoming Requests</h2>
-                <span className="text-gray-500 font-bold text-sm">{REQUESTS_MOCK.filter(m => !mockPayments[m.id]).length}</span>
-              </div>
-              <button className="text-sm font-bold text-sky-600 hover:text-sky-700" onClick={() => setActiveTab("requests")}>View All</button>
-            </div>
-            <div>
-              {REQUESTS_MOCK.slice(0, 3).map(m => renderRequestCard(m))}
-            </div>
-          </div>
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 my-6">
               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                 <h3 className="font-bold text-gray-800 mb-4 flex items-center justify-between">Recent Incoming Chats <span className="text-xs text-sky-600 cursor-pointer" onClick={() => setActiveTab("chat")}>View All</span></h3>
@@ -1082,6 +963,19 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                 </div>
               </div>
           </div>
+<div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6">
+            <div className="px-5 py-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+              <div className="flex flex-col">
+                <h3 className="font-bold text-gray-900">Incoming Requests</h3>
+              </div>
+              <button className="text-sm font-bold text-sky-600 hover:text-sky-700" onClick={() => setActiveTab("requests")}>View All</button>
+            </div>
+            <div className="p-5">
+              {(subscriber?.email?.includes('ghis') ? REQUESTS_MOCK : []).slice(0, 3).map(m => renderRequestCard(m))}
+            </div>
+          </div>
+
+          
           
           <div>
             <div className="flex justify-between items-center mb-4 mt-6">
@@ -1143,8 +1037,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
             </div>
           </div>
         </div>
-      </div>
-{waitModalOrder && (
+      {waitModalOrder && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto pt-10 pb-10">
           <div className="w-full max-w-lg bg-white rounded-3xl shadow-xl flex flex-col p-6 relative">
             

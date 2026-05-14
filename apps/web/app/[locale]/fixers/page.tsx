@@ -54,7 +54,13 @@ const stats = {
 
 const chats: any[] = [];
 
-const notifications: any[] = [];
+const notifications: any[] = [
+    { id: 1, msg: "Review PO Details for GREEN CONSTRUCTION", unread: true, time: "Just now", dot: "bg-purple-500" },
+    { id: 2, msg: "Review PO Details for FIT OUT", unread: true, time: "2 mins ago", dot: "bg-purple-500" },
+    { id: 3, msg: "Confirm meeting at site", unread: false, time: "1 hr ago", dot: "bg-gray-300" },
+    { id: 4, msg: "Request for Approval of Variation", unread: false, time: "Yesterday", dot: "bg-gray-300" },
+    { id: 5, msg: "Request for job complete", unread: false, time: "Yesterday", dot: "bg-gray-300" },
+  ];
 
 const STATUS_STYLE: Record<string, string> = {
   IN_PROGRESS: "bg-purple-100 text-purple-700",
@@ -274,7 +280,13 @@ export default function FixerProPage() {
   ];
 
   const chats: any[] = [];
-  const notifications: any[] = [];
+  const notifications: any[] = [
+    { id: 1, msg: "Review PO Details for GREEN CONSTRUCTION", unread: true, time: "Just now", dot: "bg-purple-500" },
+    { id: 2, msg: "Review PO Details for FIT OUT", unread: true, time: "2 mins ago", dot: "bg-purple-500" },
+    { id: 3, msg: "Confirm meeting at site", unread: false, time: "1 hr ago", dot: "bg-gray-300" },
+    { id: 4, msg: "Request for Approval of Variation", unread: false, time: "Yesterday", dot: "bg-gray-300" },
+    { id: 5, msg: "Request for job complete", unread: false, time: "Yesterday", dot: "bg-gray-300" },
+  ];
 
   const activeJobs = mappedOrders.filter(o => !['COMPLETED', 'CANCELLED'].includes(o.status));
   const completedJobs = mappedOrders.filter(o => o.status === 'COMPLETED');
@@ -311,7 +323,7 @@ export default function FixerProPage() {
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">PO Number</span><span className="font-mono font-bold text-gray-800">{waitModalOrder.po || `PO-2605-${waitModalOrder.id?.slice(0, 4)}`}</span></div>
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Customer</span><span className="font-bold text-gray-800">{waitModalOrder.customer || waitModalOrder.customerAlias || 'Customer'}</span></div>
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Budget</span><span className="font-bold text-amber-600">฿{waitModalOrder.budget || waitModalOrder.estimatedPrice || waitModalOrder.finalPrice || '0'}</span></div>
-              <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">Project Details</span><span className="font-bold text-gray-800 bg-white p-2 rounded border border-gray-100">{waitModalOrder.description || waitModalOrder.service}</span></div>
+              <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">Project Details</span><span className="font-bold text-gray-800 bg-white p-2 rounded border border-gray-100">{(waitModalOrder.description || waitModalOrder.service || "").replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?/, "")}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Uploaded Files</span><span className="font-semibold text-sky-600 cursor-pointer hover:underline" onClick={() => { 
                 let url = waitModalOrder?.issueImage || waitModalOrder?.image || waitModalOrder?.fileUrl || (waitModalOrder?.projectImages && waitModalOrder?.projectImages[0]) || (waitModalOrder?.images && waitModalOrder?.images[0]) || (waitModalOrder?.metadata?.images && waitModalOrder?.metadata.images[0]) || (waitModalOrder?.metadata?.issueImageUrl) || (waitModalOrder?.metadata?.issueImage); 
                 if(!url) {
@@ -324,7 +336,7 @@ export default function FixerProPage() {
                 if(url) window.open(url, "_blank"); 
                 else { window.open("https://images.unsplash.com/photo-1541888081622-3866d939b4b9?q=80&w=2670&auto=format&fit=crop", "_blank"); } 
               }}>
-                {(waitModalOrder.image || (waitModalOrder.images && waitModalOrder.images.length > 0) || waitModalOrder.fileUrl || (waitModalOrder.projectImages && waitModalOrder.projectImages.length > 0) || waitModalOrder.metadata?.images || (typeof window !== 'undefined' && localStorage.getItem("jobData") && JSON.parse(localStorage.getItem("jobData") || "{}").image)) ? "1 file attached (Click to View)" : "1 file attached (Click to View)"}
+                {(waitModalOrder?.image || (waitModalOrder?.images && waitModalOrder?.images.length > 0) || waitModalOrder?.fileUrl || (waitModalOrder?.projectImages && waitModalOrder?.projectImages.length > 0) || waitModalOrder?.metadata?.images || (typeof window !== 'undefined' && localStorage.getItem("jobData") && JSON.parse(localStorage.getItem("jobData") || "{}").image)) ? "1 file attached (Click to View)" : "No file attached"}
               </span></div>
             </div>
 
@@ -333,6 +345,13 @@ export default function FixerProPage() {
                 onClick={async () => {
                   try {
                     const token = localStorage.getItem("subscriber_token");
+                    try {
+                      let wf = JSON.parse(localStorage.getItem("cblue_workflow") || "{}");
+                      if(wf) {
+                        wf.step = 6;
+                        localStorage.setItem("cblue_workflow", JSON.stringify(wf));
+                      }
+                    } catch(e) {}
                     const res = await fetch(`/api/v1/orders/${waitModalOrder.id}/status`, {
                       method: 'PUT',
                       headers: {
@@ -673,7 +692,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
       </div>
 
       {/* Profile + Earnings row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Profile */}
         {partner && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
@@ -738,7 +757,13 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
       </div>
 
       {/* Notifications + Chat side by side */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+          <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">⏰ Upcoming Meetings</h3>
+          <div className="text-gray-500 text-sm italic">
+            No upcoming meetings
+          </div>
+        </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
           <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">{locale === "th" ? "การแจ้งเตือนล่าสุด" : locale === "zh" ? "最近通知" : "Recent Alerts"}</h3>
           <div className="space-y-2">
