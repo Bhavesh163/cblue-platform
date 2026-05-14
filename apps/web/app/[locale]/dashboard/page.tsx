@@ -668,7 +668,6 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     // MOCK CARDS
   const [mockPayments, setMockPayments] = useState<Record<string, boolean>>({});
   const [mockActiveItems, setMockActiveItems] = useState<any[]>([]);
-  const combinedActive = [...mockActiveItems, ...ACTIVE_MOCK];
 
   const REQUESTS_MOCK = [
     { 
@@ -698,6 +697,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     { title: "FITOUT", customer: "Suppadesh", date: "5/11/2026", budget: "฿25,000,000", po: "PO-0265-fa84", location: "Saphansong", tier: "Standard", actionNeeded: false, step: 6 },
     { title: "FITOUT", customer: "Suppadesh", date: "5/11/2026", budget: "฿25,000,000", po: "PO-3a68-12e3", location: "Saphansong", tier: "Standard", actionNeeded: true, step: 6 },
   ];
+
+  const combinedActive = [...mockActiveItems, ...ACTIVE_MOCK];
 
   const STEPS_FULL = ["Match", "Select", "PO", "Notify", "Confirm", "Pay", "Chat", "Meet", "Variation", "Complete", "Rate", "Done"];
   const STEPS = ["Notify", "Confirm", "Pay", "Chat", "Meet", "Variation", "Complete", "Rate", "Done"];
