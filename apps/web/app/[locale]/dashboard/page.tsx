@@ -700,8 +700,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
   const combinedActive = [...mockActiveItems, ...(subscriber?.email?.includes('ghis') ? ACTIVE_MOCK : [])];
 
-  const STEPS_FULL = ["Match", "Select", "PO", "Notify", "Confirm", "Pay", "Chat", "Meet", "Variation", "Complete", "Rate", "Done"];
-  const STEPS = ["Notify", "Confirm", "Pay", "Chat", "Meet", "Variation", "Complete", "Rate", "Done"];
+  const STEPS_FULL = ["Match", "Select", "PO", "Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"];
+  const STEPS = ["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate", "Done"];
 
     const Progress12Steps = ({ currentStep }: { currentStep: number }) => (
     <div className="w-full mt-4 overflow-x-auto pb-4 hide-scrollbar">
@@ -756,11 +756,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   };
 
   const renderActiveCard = (item: any, idx: number) => (
-    <div key={idx} className="bg-gray-50 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+    <div key={idx} className="p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
       <div className="flex items-center gap-4">
          <div className="w-10 h-10 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center font-bold">{(item.title || item.service || "C").charAt(0)}</div>
          <div>
-           <h3 className="font-bold text-gray-900">{item.title || item.service} <span className="text-sm font-normal text-gray-500">· {item.po || `PO-${item.id.slice(0,8)}`}</span></h3>
+           <h3 className="font-bold text-gray-900">{item.title || item.service} <span className="text-sm font-normal text-gray-400">· {item.po || `PO-${item.id?.slice(0,8) || '2605-8471'}`}</span></h3>
            <p className="text-sm text-gray-600 mt-0.5">{item.customer || "Customer"} · {item.date || new Date().toLocaleDateString()}</p>
          </div>
       </div>
@@ -821,10 +821,9 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
           <div className="flex justify-between items-center mb-4">
             <div className="flex flex-col">
               <h2 className="text-xl font-bold text-gray-800">Active Jobs</h2>
-              <span className="text-gray-500 font-bold text-sm">{combinedActive.length}</span>
             </div>
           </div>
-          <div className="flex flex-col gap-3 mt-4">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50 mt-4">
             {combinedActive.map((m, i) => renderActiveCard(m, i))}
           </div>
         </div>
