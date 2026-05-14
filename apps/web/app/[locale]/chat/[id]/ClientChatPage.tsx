@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export default function ClientChatPage({ orderId, locale }: { orderId: string, locale: string }) {
-  const [isPartner, setIsPartner] = useState(false);
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [messages, setMessages] = useState([
     {
@@ -18,10 +18,6 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
   
   useEffect(() => {
     setMounted(true);
-    const pToken = localStorage.getItem("subscriber_token");
-    if(pToken) {
-      setIsPartner(true);
-    }
   }, []);
 
   const handleSend = (e: React.FormEvent) => {
@@ -36,19 +32,23 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
     setInputText("");
   };
 
-  if (!mounted) return <div className="h-[calc(100vh-160px)] mt-4 w-full flex items-center justify-center">Loading...</div>;
+  if (!mounted) return <div className="h-screen w-full flex items-center justify-center">Loading...</div>;
 
   return (
-    <div className="max-w-2xl mx-auto h-[calc(100vh-160px)] mt-4 flex flex-col bg-gray-50 border-x border-gray-200">
+    <div className="max-w-2xl mx-auto h-screen flex flex-col bg-gray-50 border-x border-gray-200">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 p-4 sticky top-0 z-10 flex items-center gap-4">
-        <Link href={isPartner ? `/${locale}/fixers` : `/${locale}/dashboard`} className="text-gray-500 hover:text-gray-800 transition">
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-        </Link>
         <div className="flex-1">
           <h2 className="font-bold text-gray-900 text-lg">Chat - {orderId}</h2>
           <p className="text-xs text-green-600 font-medium">Online</p>
         </div>
+        <button
+          onClick={() => router.back()}
+          className="text-gray-400 hover:text-gray-800 transition text-2xl font-light leading-none"
+          aria-label="Close"
+        >
+          ×
+        </button>
       </div>
 
       {/* Chat Area */}

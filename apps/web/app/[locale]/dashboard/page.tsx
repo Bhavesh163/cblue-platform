@@ -698,7 +698,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     { title: "FITOUT", customer: "Suppadesh", date: "5/11/2026", budget: "฿25,000,000", po: "PO-3a68-12e3", location: "Saphansong", tier: "Standard", actionNeeded: true, step: 6 },
   ];
 
-  const combinedActive = [...mockActiveItems, ...(subscriber?.email?.includes('ghis') ? ACTIVE_MOCK : [])];
+  // Merge: mockActiveItems overrides ACTIVE_MOCK items with same po (for step progression)
+  const paidPOs = new Set(mockActiveItems.map((x: any) => x.po));
+  const filteredStaticMock = (subscriber?.email?.includes('ghis') ? ACTIVE_MOCK : []).filter((item: any) => !paidPOs.has(item.po));
+  const combinedActive = [...filteredStaticMock, ...mockActiveItems];
 
   const STEPS_FULL = ["Match", "Select", "PO", "Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"];
   const STEPS = ["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate", "Done"];
@@ -747,7 +750,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
              <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-blue-50 text-blue-700 uppercase self-start sm:self-end w-max">{item.tier}</span>
           </div>
           <div className="flex gap-2">
-            <button className="bg-sky-600 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-sky-700 transition shadow-sm w-full md:w-auto" onClick={() => setWaitModalOrder({ id: item.id, status: 'MATCHING', request: item })}>Fee & Proceeding fee</button>
+            <button className="bg-sky-600 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-sky-700 transition shadow-sm w-full md:w-auto" onClick={() => setWaitModalOrder({ id: item.id, status: 'MATCHING', request: item })}>Pay Fee & Proceed</button>
             <button className="border border-gray-300 text-gray-600 px-5 py-2 outline-none rounded-lg text-sm font-bold hover:bg-gray-100 transition shadow-sm w-full md:w-auto">Decline</button>
           </div>
         </div>
@@ -761,7 +764,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
          <div className="w-10 h-10 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center font-bold">{(item.title || item.service || "C").charAt(0)}</div>
          <div>
            <h3 className="font-bold text-gray-900">{item.title || item.service} <span className="text-sm font-normal text-gray-400">· {item.po || `PO-${item.id?.slice(0,8) || '2605-8471'}`} | {item.subdistrict || 'Saphansong'}</span></h3>
-           <p className="text-sm text-gray-600 mt-0.5">{item.customer || "Customer"} · {item.date || "11/5/2026 14:30"} · Budget: ฿{Number(item.budget || item.price || 0).toLocaleString()}</p>
+           <p className="text-sm text-gray-600 mt-0.5">{item.customer || "Customer"} · {item.date || "11/5/2026 14:30"} · Budget: {item.budget || ('฿' + Number(item.price || 0).toLocaleString())}</p>
          </div>
       </div>
       <div className="flex items-center gap-4 w-full xl:w-auto mt-2 xl:mt-0 justify-between xl:justify-end overflow-hidden">
@@ -769,7 +772,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
            <Progress12Steps currentStep={item.step || 4} />
         </div>
         <div className="text-right whitespace-nowrap">
-          <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${item.actionNeeded ? 'bg-red-50 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{item.actionNeeded ? 'Action Needed' : 'In Progress'}</span>
+          {item.actionNeeded && <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-red-50 text-red-700">Action Needed</span>}
         </div>
       </div>
     </div>
@@ -892,20 +895,22 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
             <h2 className="font-bold text-gray-900">Chat</h2>
           </div>
           <div className="divide-y divide-gray-50">
-            <Link href={`${prefix}/chat/PO-3a68-12e3`} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer block">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-xl font-bold text-white">
-                  C
+            {subscriber?.email?.includes('ghis') ? (
+              <Link href={`${prefix}/chat/PO-3a68-12e3`} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer block">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-xl font-bold text-white">C</div>
+                  <div>
+                    <h3 className="font-bold text-gray-900">Fitout - PO-3a68-12e3 - ฿25,000,000</h3>
+                    <p className="text-sm text-sky-600 mt-1 font-medium">PO-3a68-12e3 just be paid by customer to notify to proceed and let both meet.</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-bold text-gray-900">Fitout - PO-3a68-12e3 - ฿25,000,000</h3>
-                  <p className="text-sm text-sky-600 mt-1 font-medium">PO-3a68-12e3 just be paid by customer to notify to proceed and let both meet.</p>
+                <div className="text-right">
+                  <span className="text-xs text-gray-400">{new Date().toLocaleString()}</span>
                 </div>
-              </div>
-              <div className="text-right">
-                <span className="text-xs text-gray-400">Just now</span>
-              </div>
-            </Link>
+              </Link>
+            ) : (
+              <p className="text-sm text-gray-500 p-6 text-center">No recent chats.</p>
+            )}
           </div>
         </div>
       )}
@@ -939,21 +944,33 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                 <h3 className="font-bold text-gray-800 mb-4 flex items-center justify-between">Recent Incoming Chats <span className="text-xs text-sky-600 cursor-pointer" onClick={() => setActiveTab("chat")}>View All</span></h3>
                 <div className="space-y-4">
-                  <div className="bg-sky-50 rounded-lg p-4 border border-sky-100 shadow-sm mt-3">
-                    <p className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-2"><span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">C</span> Fitout - PO-3a68-12e3 - ฿25,000,000 <span className="text-xs text-gray-400 font-normal ml-auto">Just now</span></p>
-                    <p className="text-sm text-sky-800 font-medium">PO-3a68-12e3 just be paid by customer to notify to proceed and let both meet.</p>
-                  </div>
-                  <div className="bg-white rounded-lg p-4 border border-gray-100 shadow-sm">
-                    <p className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-2"><span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">C</span> Fitout - PO-3a68-12e3 - ฿25,000,000 <span className="text-xs text-gray-400 font-normal ml-auto">2 mins ago</span></p>
-                    <p className="text-sm text-gray-600">Please inform us of your available time to meet at the jobsite. The chat is now active for both to use for this project.</p>
-                  </div>
+                      {subscriber?.email?.includes('ghis') ? (
+                    <>
+                      <div className="bg-sky-50 rounded-lg p-4 border border-sky-100 shadow-sm mt-3">
+                        <p className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-2"><span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">C</span> Fitout - PO-3a68-12e3 - ฿25,000,000 <span className="text-xs text-gray-400 font-normal ml-auto">{new Date().toLocaleString()}</span></p>
+                        <p className="text-sm text-sky-800 font-medium">PO-3a68-12e3 just be paid by customer to notify to proceed and let both meet.</p>
+                      </div>
+                      <div className="bg-white rounded-lg p-4 border border-gray-100 shadow-sm">
+                        <p className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-2"><span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">C</span> Fitout - PO-3a68-12e3 - ฿25,000,000 <span className="text-xs text-gray-400 font-normal ml-auto">{new Date(Date.now()-120000).toLocaleString()}</span></p>
+                        <p className="text-sm text-gray-600">Please inform us of your available time to meet at the jobsite. The chat is now active for both to use for this project.</p>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-sm text-gray-400 text-center py-4">No recent incoming chats.</p>
+                  )}
                 </div>
               </div>
               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                 <h3 className="font-bold text-gray-800 mb-4 flex items-center justify-between">Recent Alerts <span className="text-xs text-sky-600 cursor-pointer" onClick={() => setActiveTab("alerts")}>View All</span></h3>
                 <div className="space-y-4">
-                  <div className="flex items-start gap-3 text-sm text-gray-700"><div className="w-2 h-2 mt-1.5 rounded-full bg-blue-500 flex-shrink-0"></div><p>Partner notified to review job with PO and detail, to confirm meeting.</p></div>
-                  <div className="flex items-start gap-3 text-sm text-gray-700"><div className="w-2 h-2 mt-1.5 rounded-full bg-amber-500 flex-shrink-0"></div><p>Partner to review variation order and complete.</p></div>
+                  {subscriber?.email?.includes('ghis') ? (
+                    <>
+                      <div className="flex items-start gap-3 text-sm text-gray-700"><div className="w-2 h-2 mt-1.5 rounded-full bg-blue-500 flex-shrink-0"></div><p>Partner accepted PO — please proceed to pay fee. <span className="text-xs text-gray-400 ml-1">{new Date().toLocaleString()}</span></p></div>
+                      <div className="flex items-start gap-3 text-sm text-gray-700"><div className="w-2 h-2 mt-1.5 rounded-full bg-amber-500 flex-shrink-0"></div><p>New meeting request — confirm your availability. <span className="text-xs text-gray-400 ml-1">{new Date(Date.now()-3600000).toLocaleString()}</span></p></div>
+                    </>
+                  ) : (
+                    <p className="text-sm text-gray-400 text-center py-4">No recent alerts.</p>
+                  )}
                 </div>
               </div>
           </div>
@@ -975,17 +992,21 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
             <div className="flex justify-between items-center mb-4 mt-6">
               <div className="flex flex-col">
                 <h2 className="text-xl font-bold text-gray-800">⏰ Upcoming Meetings</h2>
-                <span className="text-gray-500 font-bold text-sm">1</span>
+                {subscriber?.email?.includes('ghis') && <span className="text-gray-500 font-bold text-sm">1</span>}
               </div>
               <button className="text-sm font-bold text-sky-600 hover:text-sky-700">View All</button>
             </div>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mt-4">
-              <div className="flex justify-between items-center mb-2">
-                 <span className="text-gray-900 font-bold">FITOUT (PO-3a68-12e3)</span>
-                 <span className="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-bold">Tomorrow, 10:00 AM</span>
+            {subscriber?.email?.includes('ghis') ? (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mt-4">
+                <div className="flex justify-between items-center mb-2">
+                   <span className="text-gray-900 font-bold">FITOUT (PO-3a68-12e3)</span>
+                   <span className="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-bold">Tomorrow, 10:00 AM</span>
+                </div>
+                <p className="text-sm text-gray-600">Location: Saphansong | Provider: Suppadesh</p>
               </div>
-              <p className="text-sm text-gray-600">Location: Saphansong | Provider: Suppadesh</p>
-            </div>
+            ) : (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mt-4 text-center text-sm text-gray-400">No upcoming meetings</div>
+            )}
           </div>
 
           <div>
@@ -1035,8 +1056,8 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto pt-10 pb-10">
           <div className="w-full max-w-lg bg-white rounded-3xl shadow-xl flex flex-col p-6 relative">
             
-            <Progress12Steps currentStep={6} />
-            <h3 className="text-center font-bold text-gray-800 text-lg mt-6">Fee & Proceed fee & NTP</h3>
+            <div className="text-center text-sm font-bold text-sky-700 bg-sky-50 rounded-xl px-4 py-2 mb-2">Step 6 of 11</div>
+            <h3 className="text-center font-bold text-gray-800 text-lg mt-4">Pay Fee & Notification to Proceed</h3>
             
             <div className="mt-4 flex flex-col items-center mx-auto">
               {/* Type of service and provider details added */}
@@ -1078,17 +1099,17 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
               <button
                 className="mt-4 px-6 py-3 w-full bg-sky-100 border border-sky-300 text-sky-800 font-bold rounded-xl shadow-sm hover:bg-sky-200 transition"
                 onClick={() => {
-                  alert("Notification: Fee & Proceedment Complete! Notifying to proceed.");
                   setMockPayments(prev => ({...prev, [waitModalOrder.id]: true}));
-                  setMockActiveItems(prev => [...prev, {
-                    ...waitModalOrder.request,
-                    actionNeeded: false,
-                    step: 7
-                  }]);
-                  setWaitModalOrder(null); setActiveTab("chat");
+                  // update existing ACTIVE_MOCK item to step 7 by overriding it
+                  setMockActiveItems(prev => [
+                    ...prev.filter((x: any) => x.po !== waitModalOrder.request?.po),
+                    { ...waitModalOrder.request, actionNeeded: false, step: 7 }
+                  ]);
+                  setWaitModalOrder(null);
+                  setActiveTab("chat");
                 }}
               >
-                🚧 Testing Period Fee & Proceedment Pill 🚧
+                🚧 Testing Period Payment Pill 🚧
               </button>
             </div>
           </div>
