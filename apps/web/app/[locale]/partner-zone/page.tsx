@@ -412,7 +412,7 @@ export default function PartnerZonePage() {
                     } catch(e) {}
                 }
                 if(url) window.open(url, "_blank"); 
-                else { window.open("https://images.unsplash.com/photo-1541888081622-3866d939b4b9?q=80&w=2670&auto=format&fit=crop", "_blank"); } 
+                else { window.open("", "_blank"); } 
               }}>
                 {((waitModalJob as any)?.image || ((waitModalJob as any)?.images && (waitModalJob as any)?.images.length > 0) || (waitModalJob as any)?.fileUrl || ((waitModalJob as any)?.projectImages && (waitModalJob as any)?.projectImages.length > 0) || (waitModalJob as any)?.metadata?.images || (typeof window !== 'undefined' && localStorage.getItem("jobData") && JSON.parse(localStorage.getItem("jobData") || "{}").image)) ? "1 file attached (Click to View)" : "No file attached"}
               </span></div>
@@ -422,7 +422,7 @@ export default function PartnerZonePage() {
               onClick={() => { setSelectedJob(waitModalJob.id); setActiveTab("chat"); setWaitModalJob(null); }} 
               className="mt-6 w-full py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition"
             >
-              Open Chat to Confirm
+              Open Chat to Accept
             </button>
             <button 
               onClick={() => setWaitModalJob(null)} 
@@ -897,7 +897,7 @@ function ProfileTab({ t, locale, profile, renderStars }: {
                 {t.editProfile}
               </button>
               <button onClick={() => {
-                if (confirm(locale === "th" ? "ยืนยันการลบบัญชีและข้อมูลทั้งหมดตามกฎหมาย PDPA?" : "Confirm deleting your account and all data per PDPA law?")) {
+                if (confirm(locale === "th" ? "ยืนยันการลบบัญชีและข้อมูลทั้งหมดตามกฎหมาย PDPA?" : "Accept deleting your account and all data per PDPA law?")) {
                   fetch('/api/v1/users/me', { method: 'DELETE', headers: { Authorization: `Bearer ${localStorage.getItem('provider_token') || ''}` } })
                   .then(() => { localStorage.clear(); window.location.href = `/${locale}/subscription/login`; });
                 }

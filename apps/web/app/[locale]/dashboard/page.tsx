@@ -51,7 +51,7 @@ const TIER_STYLE: Record<string, string> = {
 
 const STATUS_LABEL: Record<string, Record<string, string>> = {
   IN_PROGRESS: { en: "In Progress", th: "กำลังดำเนินการ", zh: "进行中" },
-  CONFIRMED: { en: "Confirmed", th: "ยืนยันแล้ว", zh: "已确认" },
+  CONFIRMED: { en: "Accepted", th: "ยืนยันแล้ว", zh: "已确认" },
   DEPOSIT_PENDING: { en: "Deposit Pending", th: "รอชำระเงิน", zh: "待付款" },
   COMPLETED: { en: "Completed", th: "เสร็จสิ้น", zh: "已完成" },
   MATCHING: { en: "Matching", th: "กำลังจับคู่", zh: "匹配中" },
@@ -513,7 +513,7 @@ function ProfileTab({ locale, prefix, subscriber, activeOrders, historyOrders }:
                 {locale === "th" ? "แก้ไขโปรไฟล์" : locale === "zh" ? "编辑资料" : "Edit Profile"}
               </button>
               <button onClick={() => {
-                if (confirm(locale === "th" ? "ยืนยันการลบบัญชีและข้อมูลทั้งหมดตามกฎหมาย PDPA?" : "Confirm deleting your account and all data per PDPA law?")) {
+                if (confirm(locale === "th" ? "ยืนยันการลบบัญชีและข้อมูลทั้งหมดตามกฎหมาย PDPA?" : "Accept deleting your account and all data per PDPA law?")) {
                   fetch('/api/v1/users/me', { method: 'DELETE', headers: { Authorization: `Bearer ${localStorage.getItem('subscriber_token') || ''}` } })
                   .then(() => { localStorage.clear(); window.location.href = `/${locale}/subscription/login`; });
                 }
@@ -666,7 +666,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const handleOrderClick = (o: any) => { if (o.status && ['MATCHING', 'CREATED', 'PENDING'].includes(o.status.trim().toUpperCase())) window.location.href = `${prefix}/booking/resume/${o.id}`; else window.location.href = `${prefix}/chat/${o.id}`; };
 
     // MOCK CARDS
-  const [mockPayments, setMockPayments] = useState<Record<string, boolean>>({});
+  const [mockFee & Proceedments, setMockFee & Proceedments] = useState<Record<string, boolean>>({});
   const [mockActiveItems, setMockActiveItems] = useState<any[]>([]);
 
   const REQUESTS_MOCK = [
@@ -730,7 +730,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
   
   const renderRequestCard = (item: any) => {
-    if (mockPayments[item.id]) return null;
+    if (mockFee & Proceedments[item.id]) return null;
       return (
       <div key={item.id} className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -747,7 +747,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
              <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-blue-50 text-blue-700 uppercase self-start sm:self-end w-max">{item.tier}</span>
           </div>
           <div className="flex gap-2">
-            <button className="bg-sky-600 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-sky-700 transition shadow-sm w-full md:w-auto" onClick={() => setWaitModalOrder({ id: item.id, status: 'MATCHING', request: item })}>Paying fee</button>
+            <button className="bg-sky-600 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-sky-700 transition shadow-sm w-full md:w-auto" onClick={() => setWaitModalOrder({ id: item.id, status: 'MATCHING', request: item })}>Fee & Proceeding fee</button>
             <button className="border border-gray-300 text-gray-600 px-5 py-2 outline-none rounded-lg text-sm font-bold hover:bg-gray-100 transition shadow-sm w-full md:w-auto">Decline</button>
           </div>
         </div>
@@ -808,7 +808,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6 pb-6">
           <div className="px-6 py-4 border-b border-gray-100">
             <h2 className="font-bold text-gray-900">Incoming Requests</h2>
-            <div className="text-sm text-gray-500 font-bold">{(subscriber?.email?.includes('ghis') ? REQUESTS_MOCK : []).filter(m => !mockPayments[m.id]).length}</div>
+            <div className="text-sm text-gray-500 font-bold">{(subscriber?.email?.includes('ghis') ? REQUESTS_MOCK : []).filter(m => !mockFee & Proceedments[m.id]).length}</div>
           </div>
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50 mt-4 mx-6">
               {(subscriber?.email?.includes('ghis') ? REQUESTS_MOCK : []).map(m => renderRequestCard(m))}
@@ -1036,7 +1036,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
           <div className="w-full max-w-lg bg-white rounded-3xl shadow-xl flex flex-col p-6 relative">
             
             <Progress12Steps currentStep={6} />
-            <h3 className="text-center font-bold text-gray-800 text-lg mt-6">Pay fee & NTP</h3>
+            <h3 className="text-center font-bold text-gray-800 text-lg mt-6">Fee & Proceed fee & NTP</h3>
             
             <div className="mt-4 flex flex-col items-center mx-auto">
               {/* Type of service and provider details added */}
@@ -1078,8 +1078,8 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
               <button
                 className="mt-4 px-6 py-3 w-full bg-sky-100 border border-sky-300 text-sky-800 font-bold rounded-xl shadow-sm hover:bg-sky-200 transition"
                 onClick={() => {
-                  alert("Notification: Payment Complete! Notifying to proceed.");
-                  setMockPayments(prev => ({...prev, [waitModalOrder.id]: true}));
+                  alert("Notification: Fee & Proceedment Complete! Notifying to proceed.");
+                  setMockFee & Proceedments(prev => ({...prev, [waitModalOrder.id]: true}));
                   setMockActiveItems(prev => [...prev, {
                     ...waitModalOrder.request,
                     actionNeeded: false,
@@ -1088,7 +1088,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                   setWaitModalOrder(null); setActiveTab("chat");
                 }}
               >
-                🚧 Testing Period Payment Pill 🚧
+                🚧 Testing Period Fee & Proceedment Pill 🚧
               </button>
             </div>
           </div>
