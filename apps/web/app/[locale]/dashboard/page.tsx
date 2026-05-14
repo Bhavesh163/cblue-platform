@@ -756,20 +756,20 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   };
 
   const renderActiveCard = (item: any, idx: number) => (
-    <div key={idx} className="p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+    <div key={idx} className="p-5 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
       <div className="flex items-center gap-4">
          <div className="w-10 h-10 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center font-bold">{(item.title || item.service || "C").charAt(0)}</div>
          <div>
-           <h3 className="font-bold text-gray-900">{item.title || item.service} <span className="text-sm font-normal text-gray-400">· {item.po || `PO-${item.id?.slice(0,8) || '2605-8471'}`}</span></h3>
-           <p className="text-sm text-gray-600 mt-0.5">{item.customer || "Customer"} · {item.date || new Date().toLocaleDateString()}</p>
+           <h3 className="font-bold text-gray-900">{item.title || item.service} <span className="text-sm font-normal text-gray-400">· {item.po || `PO-${item.id?.slice(0,8) || '2605-8471'}`} | {item.subdistrict || 'Saphansong'}</span></h3>
+           <p className="text-sm text-gray-600 mt-0.5">{item.customer || "Customer"} · {item.date || "11/5/2026 14:30"} · Budget: ฿{Number(item.budget || item.price || 0).toLocaleString()}</p>
          </div>
       </div>
-      <div className="flex items-center gap-4 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-end">
-        <div className="flex flex-col gap-1 w-full sm:w-64">
+      <div className="flex items-center gap-4 w-full xl:w-auto mt-2 xl:mt-0 justify-between xl:justify-end overflow-hidden">
+        <div className="flex flex-col gap-1 w-full min-w-[300px] xl:w-[600px]">
            <Progress12Steps currentStep={item.step || 4} />
         </div>
-        <div className="text-right">
-          <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${item.actionNeeded ? 'bg-red-50 text-red-700' : 'bg-blue-100 text-blue-700 whitespace-nowrap'}`}>{item.actionNeeded ? 'Action Needed' : 'In Progress'}</span>
+        <div className="text-right whitespace-nowrap">
+          <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${item.actionNeeded ? 'bg-red-50 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{item.actionNeeded ? 'Action Needed' : 'In Progress'}</span>
         </div>
       </div>
     </div>

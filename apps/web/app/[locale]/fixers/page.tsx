@@ -313,7 +313,7 @@ export default function FixerProPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-start mb-4">
-              <div className="mb-2 text-sm font-semibold text-purple-600 bg-purple-50 inline-block px-3 py-1 rounded-full">Step 5 of 12</div>
+              <div className="mb-2 text-sm font-semibold text-purple-600 bg-purple-50 inline-block px-3 py-1 rounded-full">Step 5 of 11</div>
               <button onClick={() => setWaitModalOrder(null)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mt-2">Review PO Details</h2>
