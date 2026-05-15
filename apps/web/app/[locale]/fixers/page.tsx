@@ -302,13 +302,6 @@ export default function FixerProPage() {
     { id: 5, msg: "Request for job complete", unread: false, time: "Yesterday", dot: "bg-gray-300" },
   ];
 
-  let activeJobs = mappedOrders.filter(o => !['COMPLETED', 'CANCELLED'].includes(o.status));
-  activeJobs = activeJobs.map(job => {
-      const stepLookup = mockActiveState.find((x: any) => x.po === job.po);
-      if (stepLookup) return { ...job, mockStep: stepLookup.step };
-      return job;
-  });
-  const completedJobs = mappedOrders.filter(o => o.status === 'COMPLETED');
   const [mockDynReqs, setMockDynReqs] = useState<any[]>([]);
   const [mockActiveState, setMockActiveState] = useState<any[]>([]);
   useEffect(() => {
@@ -323,6 +316,13 @@ export default function FixerProPage() {
     return () => clearInterval(interval);
   }, []);
 
+  let activeJobs = mappedOrders.filter(o => !['COMPLETED', 'CANCELLED'].includes(o.status));
+  activeJobs = activeJobs.map(job => {
+      const stepLookup = mockActiveState.find((x: any) => x.po === job.po);
+      if (stepLookup) return { ...job, mockStep: stepLookup.step };
+      return job;
+  });
+  const completedJobs = mappedOrders.filter(o => o.status === 'COMPLETED');
   let incomingJobs = mappedOrders.filter(o => ['CREATED', 'PENDING', 'MATCHING'].includes(o.status));
   
   const pendingMeetings = mockDynReqs.filter(r => r.type === 'meeting_pending_partner').map(r => ({
