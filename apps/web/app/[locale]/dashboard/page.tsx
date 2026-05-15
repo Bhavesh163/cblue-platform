@@ -236,7 +236,7 @@ export default function DashboardPage() {
                   <p className="text-sky-200 text-xs">{subscriber.email}</p>
                 </div>
                 <button
-                  onClick={() => { localStorage.removeItem("subscriber"); localStorage.removeItem("subscriber_token"); localStorage.removeItem("pdpa_consent_customer"); localStorage.removeItem("ghis_mock_payments"); localStorage.removeItem("ghis_mock_active"); localStorage.removeItem("ghis_mock_dyn_req"); window.dispatchEvent(new Event("storage")); router.push(prefix); }}
+                  onClick={() => { localStorage.removeItem("subscriber"); localStorage.removeItem("subscriber_token"); localStorage.removeItem("pdpa_consent_customer"); localStorage.removeItem("ghis_mock_payments"); localStorage.removeItem("ghis_mock_active"); localStorage.removeItem("ghis_mock_dyn_req"); localStorage.removeItem("ghis_mock_history"); window.dispatchEvent(new Event("storage")); router.push(prefix); }}
                   className="ml-2 px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold rounded-lg transition"
                 >
                   {locale === "th" ? "ออกจากระบบ" : locale === "zh" ? "退出登录" : "Logout"}
@@ -297,6 +297,7 @@ export default function DashboardPage() {
             localStorage.removeItem("ghis_mock_payments");
             localStorage.removeItem("ghis_mock_active");
             localStorage.removeItem("ghis_mock_dyn_req");
+            localStorage.removeItem("ghis_mock_history");
             window.dispatchEvent(new Event("storage"));
             router.push(prefix);
           }} />
@@ -668,19 +669,31 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const [waitModalOrder, setWaitModalOrder] = useState<any>(null);
   const handleOrderClick = (o: any) => { if (o.status && ['MATCHING', 'CREATED', 'PENDING'].includes(o.status.trim().toUpperCase())) window.location.href = `${prefix}/booking/resume/${o.id}`; else window.location.href = `${prefix}/chat/${o.id}`; };
 
-    // MOCK CARDS - persisted across refreshes
-  const [mockPayments, setMockPayments] = useState<Record<string, boolean>>(() => {
-    try { return JSON.parse(localStorage.getItem("ghis_mock_payments") || "{}"); } catch { return {}; }
-  });
-  const [mockActiveItems, setMockActiveItems] = useState<any[]>(() => {
-    try { return JSON.parse(localStorage.getItem("ghis_mock_active") || "[]"); } catch { return []; }
-  });
-  const [mockDynRequests, setMockDynRequests] = useState<any[]>(() => {
-    try { return JSON.parse(localStorage.getItem("ghis_mock_dyn_req") || "[]"); } catch { return []; }
-  });
-  useEffect(() => { try { localStorage.setItem("ghis_mock_payments", JSON.stringify(mockPayments)); } catch {} }, [mockPayments]);
-  useEffect(() => { try { localStorage.setItem("ghis_mock_active", JSON.stringify(mockActiveItems)); } catch {} }, [mockActiveItems]);
-  useEffect(() => { try { localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(mockDynRequests)); } catch {} }, [mockDynRequests]);
+    // MOCK CARDS - SSR-safe: never read localStorage in useState init (runs on server → throws)
+  const [mockPayments, setMockPayments] = useState<Record<string, boolean>>({});
+  const [mockActiveItems, setMockActiveItems] = useState<any[]>([]);
+  const [mockDynRequests, setMockDynRequests] = useState<any[]>([]);
+  const [mockHistory, setMockHistory] = useState<any[]>([]);
+  const [mockReady, setMockReady] = useState(false);
+  // Load from localStorage AFTER mount (useEffect never runs on server)
+  useEffect(() => {
+    try {
+      const p = localStorage.getItem("ghis_mock_payments");
+      const a = localStorage.getItem("ghis_mock_active");
+      const d = localStorage.getItem("ghis_mock_dyn_req");
+      const h = localStorage.getItem("ghis_mock_history");
+      if (p) setMockPayments(JSON.parse(p));
+      if (a) setMockActiveItems(JSON.parse(a));
+      if (d) setMockDynRequests(JSON.parse(d));
+      if (h) setMockHistory(JSON.parse(h));
+    } catch {}
+    setMockReady(true);
+  }, []);
+  // Persist (mockReady guard prevents overwriting storage on first empty render)
+  useEffect(() => { if (mockReady) try { localStorage.setItem("ghis_mock_payments", JSON.stringify(mockPayments)); } catch {} }, [mockPayments, mockReady]);
+  useEffect(() => { if (mockReady) try { localStorage.setItem("ghis_mock_active", JSON.stringify(mockActiveItems)); } catch {} }, [mockActiveItems, mockReady]);
+  useEffect(() => { if (mockReady) try { localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(mockDynRequests)); } catch {} }, [mockDynRequests, mockReady]);
+  useEffect(() => { if (mockReady) try { localStorage.setItem("ghis_mock_history", JSON.stringify(mockHistory)); } catch {} }, [mockHistory, mockReady]);
 
   const REQUESTS_MOCK = [
     { 
@@ -713,8 +726,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
   // Merge: mockActiveItems overrides ACTIVE_MOCK items with same po (for step progression)
   const paidPOs = new Set(mockActiveItems.map((x: any) => x.po));
-  const filteredStaticMock = (subscriber?.email?.includes('ghis') ? ACTIVE_MOCK : []).filter((item: any) => !paidPOs.has(item.po));
-  const combinedActive = [...filteredStaticMock, ...mockActiveItems];
+  const completedPOs = new Set(mockHistory.map((x: any) => x.po));
+  const filteredStaticMock = (subscriber?.email?.includes('ghis') ? ACTIVE_MOCK : []).filter((item: any) => !paidPOs.has(item.po) && !completedPOs.has(item.po));
+  const combinedActive = [...filteredStaticMock, ...mockActiveItems.filter((x: any) => !completedPOs.has(x.po))];
 
   const STEPS_FULL = ["Match", "Select", "PO", "Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"];
   const STEPS = ["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"];
@@ -766,9 +780,95 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div className="flex gap-2">
               <button className="bg-amber-600 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-amber-700 transition shadow-sm whitespace-nowrap" onClick={() => {
                 setMockActiveItems(prev => prev.map((x: any) => x.po === item.po ? { ...x, step: 8, actionNeeded: false } : x));
-                setMockDynRequests(prev => prev.filter((x: any) => x.id !== item.id));
-                setActiveTab("active");
+                const varId = `variation-${item.po}`;
+                setMockDynRequests(prev => { const f = prev.filter((x: any) => x.id !== item.id && x.id !== varId); return [...f, { id: varId, po: item.po, title: item.title, customer: item.customer, date: new Date().toLocaleString(), budget: item.budget, tier: item.tier, desc: 'Your partner has submitted a variation for your approval. Please review and confirm to proceed.', type: 'variation_pending', step: 9 }]; });
+                setActiveTab("requests");
               }}>Invite to Meet</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    if (item.type === 'variation_pending') {
+      return (
+        <div key={item.id} className="bg-white border border-purple-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center font-bold text-lg">V</div>
+            <div>
+              <h3 className="font-bold text-gray-900">{item.title} <span className="text-sm font-normal text-gray-500">· {item.po} · Step 9 of 11</span></h3>
+              <p className="text-sm text-gray-600 mt-0.5">{item.customer} · {item.date}</p>
+              <p className="text-xs text-gray-500 mt-1">{item.desc}</p>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-end">
+            <div className="text-left sm:text-right flex flex-col gap-1">
+              <span className="font-bold text-gray-900 pr-2">Budget: {item.budget}</span>
+              <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-purple-50 text-purple-700 uppercase self-start sm:self-end w-max">{item.tier}</span>
+            </div>
+            <div className="flex gap-2">
+              <button className="bg-purple-600 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-purple-700 transition shadow-sm whitespace-nowrap" onClick={() => {
+                setMockActiveItems(prev => prev.map((x: any) => x.po === item.po ? { ...x, step: 9, actionNeeded: false } : x));
+                const complId = `complete-${item.po}`;
+                setMockDynRequests(prev => { const f = prev.filter((x: any) => x.id !== item.id && x.id !== complId); return [...f, { id: complId, po: item.po, title: item.title, customer: item.customer, date: new Date().toLocaleString(), budget: item.budget, tier: item.tier, desc: 'Work is completed. Please review and mark as complete to close this project.', type: 'complete_pending', step: 10 }]; });
+                setActiveTab("requests");
+              }}>Approve Variation</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    if (item.type === 'complete_pending') {
+      return (
+        <div key={item.id} className="bg-white border border-green-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-lg bg-green-50 text-green-600 flex items-center justify-center font-bold text-lg">✓</div>
+            <div>
+              <h3 className="font-bold text-gray-900">{item.title} <span className="text-sm font-normal text-gray-500">· {item.po} · Step 10 of 11</span></h3>
+              <p className="text-sm text-gray-600 mt-0.5">{item.customer} · {item.date}</p>
+              <p className="text-xs text-gray-500 mt-1">{item.desc}</p>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-end">
+            <div className="text-left sm:text-right flex flex-col gap-1">
+              <span className="font-bold text-gray-900 pr-2">Budget: {item.budget}</span>
+              <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-green-50 text-green-700 uppercase self-start sm:self-end w-max">{item.tier}</span>
+            </div>
+            <div className="flex gap-2">
+              <button className="bg-green-600 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-green-700 transition shadow-sm whitespace-nowrap" onClick={() => {
+                setMockActiveItems(prev => prev.map((x: any) => x.po === item.po ? { ...x, step: 10, actionNeeded: false } : x));
+                const rateId = `rate-${item.po}`;
+                setMockDynRequests(prev => { const f = prev.filter((x: any) => x.id !== item.id && x.id !== rateId); return [...f, { id: rateId, po: item.po, title: item.title, customer: item.customer, date: new Date().toLocaleString(), budget: item.budget, tier: item.tier, desc: 'Job complete! Please rate your partner and close this project.', type: 'rate_pending', step: 11 }]; });
+                setActiveTab("requests");
+              }}>Mark Complete</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    if (item.type === 'rate_pending') {
+      return (
+        <div key={item.id} className="bg-white border border-yellow-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-lg bg-yellow-50 text-yellow-600 flex items-center justify-center font-bold text-lg">⭐</div>
+            <div>
+              <h3 className="font-bold text-gray-900">{item.title} <span className="text-sm font-normal text-gray-500">· {item.po} · Step 11 of 11</span></h3>
+              <p className="text-sm text-gray-600 mt-0.5">{item.customer} · {item.date}</p>
+              <p className="text-xs text-gray-500 mt-1">{item.desc}</p>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-end">
+            <div className="text-left sm:text-right flex flex-col gap-1">
+              <span className="font-bold text-gray-900 pr-2">Budget: {item.budget}</span>
+              <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-yellow-50 text-yellow-700 uppercase self-start sm:self-end w-max">{item.tier}</span>
+            </div>
+            <div className="flex gap-2">
+              <button className="bg-yellow-500 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-yellow-600 transition shadow-sm whitespace-nowrap" onClick={() => {
+                const job = mockActiveItems.find((x: any) => x.po === item.po);
+                if (job) setMockHistory(prev => [...prev, { ...job, step: 11, completedAt: new Date().toISOString(), status: 'COMPLETED' }]);
+                setMockActiveItems(prev => prev.filter((x: any) => x.po !== item.po));
+                setMockDynRequests(prev => prev.filter((x: any) => x.id !== item.id));
+                setActiveTab("history");
+              }}>Rate & Close ⭐</button>
             </div>
           </div>
         </div>
@@ -819,6 +919,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   );
 const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLED', 'DONE'].includes(o.status)) : [];
   const historyOrders = orders ? orders.filter((o: any) => ['COMPLETED', 'CANCELLED', 'DONE'].includes(o.status)) : [];
+  const allHistory = [...historyOrders, ...mockHistory.map((x: any) => ({ service: x.title, fixerName: x.customer, createdAt: x.completedAt || new Date().toISOString(), fee: x.budget, status: 'COMPLETED', id: x.po }))];
   const propertiesCount = orders ? orders.filter((o: any) => o.type === "property").length : 0;
   const stats = { active: activeOrders.length, completed: historyOrders.length, messages: 0, rating: "4.8" };
 
@@ -906,10 +1007,10 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
             <h2 className="font-bold text-gray-900">History</h2>
           </div>
           <div className="divide-y divide-gray-50">
-            {historyOrders.length === 0 ? (
+            {allHistory.length === 0 ? (
               <div className="p-8 text-center text-gray-500">No history found.</div>
             ) : (
-              historyOrders.map((o: any, i: number) => (
+              allHistory.map((o: any, i: number) => (
                 <div key={i} className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50 transition cursor-pointer">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-2xl shadow-sm"></div>
@@ -1070,10 +1171,10 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
               <button className="text-sm font-bold text-sky-600 hover:text-sky-700" onClick={() => setActiveTab("history")}>View All</button>
             </div>
             <div className="divide-y divide-gray-50 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-4">
-              {historyOrders.slice(0, 3).length === 0 ? (
+              {allHistory.slice(0, 3).length === 0 ? (
                 <div className="p-8 text-center text-gray-500">No history found.</div>
               ) : (
-                historyOrders.slice(0, 3).map((o: any, i: number) => (
+                allHistory.slice(0, 3).map((o: any, i: number) => (
                   <div key={i} className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50 transition cursor-pointer">
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-2xl shadow-sm"></div>
