@@ -667,6 +667,7 @@ function PropertyTab({ locale, prefix, properties }: { locale: string; prefix: s
 function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { locale: string; subscriber: any; prefix: string; onLogout: () => void, orders: any[] }) {
   const [activeTab, setActiveTab] = useState<"overview"|"requests"|"profile"|"active"|"properties"|"history"|"chat"|"alerts">("overview");
   const [waitModalOrder, setWaitModalOrder] = useState<any>(null);
+  const [chatFeed, setChatFeed] = useState<any[]>([]);
   const handleOrderClick = (o: any) => { if (o.status && ['MATCHING', 'CREATED', 'PENDING'].includes(o.status.trim().toUpperCase())) window.location.href = `${prefix}/booking/resume/${o.id}`; else window.location.href = `${prefix}/chat/${o.id}`; };
 
     // MOCK CARDS - SSR-safe: never read localStorage in useState init (runs on server → throws)
@@ -695,6 +696,81 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   useEffect(() => { if (mockReady) try { localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(mockDynRequests)); } catch {} }, [mockDynRequests, mockReady]);
   useEffect(() => { if (mockReady) try { localStorage.setItem("ghis_mock_history", JSON.stringify(mockHistory)); } catch {} }, [mockHistory, mockReady]);
 
+  useEffect(() => {
+    try {
+      const tab = new URLSearchParams(window.location.search).get("tab");
+      if (tab && ["overview", "requests", "profile", "active", "properties", "history", "chat", "alerts"].includes(tab)) {
+        setActiveTab(tab as any);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    const syncMockState = () => {
+      try {
+        const p = localStorage.getItem("ghis_mock_payments");
+        const a = localStorage.getItem("ghis_mock_active");
+        const d = localStorage.getItem("ghis_mock_dyn_req");
+        const h = localStorage.getItem("ghis_mock_history");
+        if (p) setMockPayments(JSON.parse(p));
+        if (a) setMockActiveItems(JSON.parse(a));
+        if (d) setMockDynRequests(JSON.parse(d));
+        if (h) setMockHistory(JSON.parse(h));
+      } catch {}
+    };
+    window.addEventListener("storage", syncMockState);
+    const timer = setInterval(syncMockState, 1200);
+    return () => {
+      window.removeEventListener("storage", syncMockState);
+      clearInterval(timer);
+    };
+  }, []);
+
+  const buildChatFeed = () => {
+    if (typeof window === "undefined") return [];
+    const keys = Object.keys(localStorage).filter((k) => k.startsWith("chat_messages_"));
+    const items: any[] = [];
+    for (const key of keys) {
+      try {
+        const po = key.replace("chat_messages_", "");
+        const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+        if (!Array.isArray(parsed) || parsed.length === 0) continue;
+        const reversed = [...parsed].reverse();
+        const latest = reversed.find((m: any) => {
+          if (!m || typeof m.text !== "string") return false;
+          if (!m.text.trim()) return false;
+          if (m.text.includes("just be paid by customer to notify to proceed and let both meet")) return false;
+          return true;
+        });
+        if (!latest) continue;
+        const title = localStorage.getItem(`chat_title_${po}`) || `Chat - ${po}`;
+        items.push({
+          id: po,
+          po,
+          name: title,
+          lastMsg: latest.text,
+          time: latest.time || "",
+          sort: Number(latest.id) || 0,
+        });
+      } catch {}
+    }
+    items.sort((a, b) => b.sort - a.sort);
+    return items;
+  };
+
+  useEffect(() => {
+    const syncChats = () => setChatFeed(buildChatFeed());
+    syncChats();
+    window.addEventListener("storage", syncChats);
+    window.addEventListener("cblue-chat-updated", syncChats as EventListener);
+    const timer = setInterval(syncChats, 1200);
+    return () => {
+      window.removeEventListener("storage", syncChats);
+      window.removeEventListener("cblue-chat-updated", syncChats as EventListener);
+      clearInterval(timer);
+    };
+  }, []);
+
   const REQUESTS_MOCK = [
     { id: "req1", title: "REINSTATEMENT", customer: "Suppadesh", date: "5/11/2026, 2:30:00 PM", budget: "฿5,000,000", po: "PO-2605-1200", tier: "ECONOMY", desc: "I want a team to carry out a 3000 sq.m. housing project." },
     { id: "req2", title: "FITOUT", customer: "Suppadesh", date: "5/11/2026, 2:35:00 PM", budget: "฿25,000,000", po: "PO-2605-6812", tier: "STANDARD", desc: "I want to have a project team to carry out a 1000 sq.m. office fitout in Bangkok" },
@@ -715,6 +791,33 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const completedPOs = new Set(mockHistory.map((x: any) => x.po));
   const filteredStaticMock = (subscriber?.email?.includes('ghis') ? ACTIVE_MOCK : []).filter((item: any) => !paidPOs.has(item.po) && !completedPOs.has(item.po));
   const combinedActive = [...filteredStaticMock, ...mockActiveItems.filter((x: any) => !completedPOs.has(x.po))];
+  const parseDateMs = (v: any) => {
+    const ts = new Date(v || 0).getTime();
+    return Number.isFinite(ts) ? ts : 0;
+  };
+  const allRequestItems = [...(subscriber?.email?.includes('ghis') ? REQUESTS_MOCK : []), ...mockDynRequests]
+    .filter((m: any) => !mockPayments[m.id])
+    .sort((a: any, b: any) => parseDateMs(b.date) - parseDateMs(a.date));
+  const overviewRequestItems = allRequestItems.slice(0, 3);
+  const upcomingMeetings = mockDynRequests
+    .filter((x: any) => x.type === "meeting_scheduled")
+    .sort((a: any, b: any) => parseDateMs(a.date) - parseDateMs(b.date));
+  const workflowAlerts = mockDynRequests
+    .map((x: any) => {
+      if (x.type === "meeting_scheduled") return { id: `a-${x.id}`, msg: "Confirm meeting at site", time: x.date || new Date().toLocaleString(), dot: "bg-teal-500" };
+      if (x.type === "variation_pending") return { id: `a-${x.id}`, msg: "Request for Approval of Variation", time: x.date || new Date().toLocaleString(), dot: "bg-purple-500" };
+      if (x.type === "complete_pending") return { id: `a-${x.id}`, msg: "Request for job complete", time: x.date || new Date().toLocaleString(), dot: "bg-green-500" };
+      return null;
+    })
+    .filter(Boolean) as any[];
+  const baseAlerts = subscriber?.email?.includes("ghis")
+    ? [
+        { id: "base-1", msg: "Partner accepted PO — please proceed to pay fee.", time: new Date(Date.now() - 2 * 60 * 60 * 1000).toLocaleString(), dot: "bg-blue-500" },
+        { id: "base-2", msg: "New meeting request — confirm your availability.", time: new Date(Date.now() - 3 * 60 * 60 * 1000).toLocaleString(), dot: "bg-amber-500" },
+      ]
+    : [];
+  const allAlerts = [...workflowAlerts, ...baseAlerts].sort((a, b) => parseDateMs(b.time) - parseDateMs(a.time));
+  const overviewAlerts = allAlerts.slice(0, 3);
 
   const STEPS_FULL = ["Match", "Select", "PO", "Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"];
   const STEPS = ["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"];
@@ -747,6 +850,36 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   
   const renderRequestCard = (item: any) => {
     if (mockPayments[item.id]) return null;
+    if (item.type === 'chat_ready') {
+      return (
+        <div key={item.id} className="bg-white border border-sky-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center font-bold text-lg">💬</div>
+            <div>
+              <h3 className="font-bold text-gray-900">{item.title} <span className="text-sm font-normal text-gray-500">· {item.po} · Step 7 of 11</span></h3>
+              <p className="text-sm text-gray-600 mt-0.5">{item.customer} · {item.date}</p>
+              <p className="text-xs text-gray-500 mt-1">Chat is now active. Send a meeting invitation when ready.</p>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-end">
+            <div className="text-left sm:text-right flex flex-col gap-1">
+              <span className="font-bold text-gray-900 pr-2">Budget: {item.budget}</span>
+              <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-sky-50 text-sky-700 uppercase self-start sm:self-end w-max">{item.tier}</span>
+            </div>
+            <div className="flex gap-2">
+              <button className="bg-sky-600 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-sky-700 transition shadow-sm whitespace-nowrap" onClick={() => {
+                setMockActiveItems(prev => prev.map((x: any) => x.po === item.po ? { ...x, step: 8, actionNeeded: false } : x));
+                const pendingId = `meet-pending-${item.po}`;
+                setMockDynRequests(prev => {
+                  const f = prev.filter((x: any) => x.id !== item.id && x.id !== pendingId);
+                  return [...f, { id: pendingId, po: item.po, title: item.title, customer: item.customer, date: new Date().toLocaleString(), budget: item.budget, tier: item.tier, desc: 'Waiting for partner to confirm meeting time...', type: 'meeting_pending_partner', step: 8 }];
+                });
+              }}>Send Meeting Invitation</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
     if (item.type === 'meeting_invite') {
       return (
         <div key={item.id} className="bg-white border border-amber-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -958,7 +1091,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
   const allHistory = [...historyOrders, ...mockHistory.map((x: any) => ({ service: x.title, fixerName: x.customer, createdAt: x.completedAt || new Date().toISOString(), fee: x.budget, status: 'COMPLETED', id: x.po }))];
   const propertiesCount = orders ? orders.filter((o: any) => o.type === "property").length : 0;
   const stats = { active: activeOrders.length, completed: historyOrders.length, messages: 0, rating: "4.8" };
-  const totalReqCount = [...(subscriber?.email?.includes('ghis') ? REQUESTS_MOCK : []), ...mockDynRequests].filter((m: any) => !mockPayments[m.id]).length;
+  const totalReqCount = allRequestItems.length;
 
     return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 relative z-10 pb-12 -mt-6">
@@ -989,10 +1122,10 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6 pb-6">
           <div className="px-6 py-4 border-b border-gray-100">
             <h2 className="font-bold text-gray-900">Incoming Requests</h2>
-            <div className="text-sm text-gray-500 font-bold">{[...(subscriber?.email?.includes('ghis') ? REQUESTS_MOCK : []), ...mockDynRequests].filter(m => !mockPayments[m.id]).length}</div>
+            <div className="text-sm text-gray-500 font-bold">{totalReqCount}</div>
           </div>
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50 mt-4 mx-6">
-              {[...(subscriber?.email?.includes('ghis') ? REQUESTS_MOCK : []), ...mockDynRequests].map(m => renderRequestCard(m))}
+              {allRequestItems.map((m: any) => renderRequestCard(m))}
           </div>
         </div>
       )}
@@ -1075,28 +1208,28 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
             <h2 className="font-bold text-gray-900">Chat</h2>
           </div>
           <div className="divide-y divide-gray-50">
-            {subscriber?.email?.includes('ghis') ? (
-              <div
-                className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer"
-                onClick={() => {
-                  try {
-                    localStorage.setItem("chat_title_PO-2605-6812", "FITOUT - PO-2605-6812 - ฿25,000,000");
-                    localStorage.setItem("chat_from_PO-2605-6812", "dashboard");
-                  } catch {}
-                  window.location.href = `${prefix}/chat/PO-2605-6812`;
-                }}
-              >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-xl font-bold text-white">C</div>
-                  <div>
-                    <h3 className="font-bold text-gray-900">Fitout - PO-2605-6812 - ฿25,000,000</h3>
-                    <p className="text-sm text-sky-600 mt-1 font-medium">PO-2605-6812 just be paid by customer to notify to proceed and let both meet.</p>
+            {chatFeed.length > 0 ? (
+              chatFeed.map((c: any) => (
+                <div
+                  key={c.id}
+                  className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer"
+                  onClick={() => {
+                    try { localStorage.setItem(`chat_from_${c.po}`, "dashboard"); } catch {}
+                    window.location.href = `${prefix}/chat/${c.po}`;
+                  }}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-xl font-bold text-white">C</div>
+                    <div>
+                      <h3 className="font-bold text-gray-900">{c.name}</h3>
+                      <p className="text-sm text-sky-600 mt-1 font-medium">{c.lastMsg}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xs text-gray-400">{c.time || new Date().toLocaleString()}</span>
                   </div>
                 </div>
-                <div className="text-right">
-                  <span className="text-xs text-gray-400">{new Date().toLocaleString()}</span>
-                </div>
-              </div>
+              ))
             ) : (
               <p className="text-sm text-gray-500 p-6 text-center">No recent chats.</p>
             )}
@@ -1110,15 +1243,15 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
             <h2 className="font-bold text-gray-900">Alerts</h2>
           </div>
           <div className="divide-y divide-gray-50">
-            {orders.length === 0 ? (
+            {allAlerts.length === 0 ? (
               <div className="p-8 text-center text-gray-500">No recent alerts.</div>
             ) : (
-              orders.slice(0, 10).map((o: any, i: number) => (
+              allAlerts.map((a: any, i: number) => (
                 <div key={i} className="p-6 flex items-center gap-4 hover:bg-gray-50 transition cursor-pointer">
-                  <span className={`w-3 h-3 rounded-full flex-shrink-0 ${o.status === 'COMPLETED' ? 'bg-green-500' : 'bg-sky-500'}`}></span>
+                  <span className={`w-3 h-3 rounded-full flex-shrink-0 ${a.dot}`}></span>
                   <div>
-                    <p className="text-sm text-gray-800"><span className="font-bold">System:</span> Order {o.id.slice(0,6)} status updated to {o.status}</p>
-                    <p className="text-xs text-gray-400 mt-1">{new Date(o.updatedAt || Date.now()).toLocaleString()}</p>
+                    <p className="text-sm text-gray-800">{a.msg}</p>
+                    <p className="text-xs text-gray-400 mt-1">{a.time}</p>
                   </div>
                 </div>
               ))
@@ -1133,16 +1266,14 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                 <h3 className="font-bold text-gray-800 mb-4 flex items-center justify-between">Recent Incoming Chats <span className="text-xs text-sky-600 cursor-pointer" onClick={() => setActiveTab("chat")}>View All</span></h3>
                 <div className="space-y-4">
-                      {subscriber?.email?.includes('ghis') ? (
+                      {chatFeed.length > 0 ? (
                     <>
-                      <div className="bg-sky-50 rounded-lg p-4 border border-sky-100 shadow-sm mt-3">
-                        <p className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-2"><span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">C</span> Fitout - PO-2605-6812 - ฿25,000,000 <span className="text-xs text-gray-400 font-normal ml-auto">{new Date().toLocaleString()}</span></p>
-                        <p className="text-sm text-sky-800 font-medium">PO-2605-6812 just be paid by customer to notify to proceed and let both meet.</p>
-                      </div>
-                      <div className="bg-white rounded-lg p-4 border border-gray-100 shadow-sm">
-                        <p className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-2"><span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">C</span> Fitout - PO-2605-6812 - ฿25,000,000 <span className="text-xs text-gray-400 font-normal ml-auto">{new Date(Date.now()-120000).toLocaleString()}</span></p>
-                        <p className="text-sm text-gray-600">Please inform us of your available time to meet at the jobsite. The chat is now active for both to use for this project.</p>
-                      </div>
+                      {chatFeed.slice(0, 2).map((c: any) => (
+                        <div key={c.id} className="bg-white rounded-lg p-4 border border-gray-100 shadow-sm">
+                          <p className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-2"><span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">C</span> {c.name} <span className="text-xs text-gray-400 font-normal ml-auto">{c.time || new Date().toLocaleString()}</span></p>
+                          <p className="text-sm text-gray-600">{c.lastMsg}</p>
+                        </div>
+                      ))}
                     </>
                   ) : (
                     <p className="text-sm text-gray-400 text-center py-4">No recent incoming chats.</p>
@@ -1152,10 +1283,11 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                 <h3 className="font-bold text-gray-800 mb-4 flex items-center justify-between">Recent Alerts <span className="text-xs text-sky-600 cursor-pointer" onClick={() => setActiveTab("alerts")}>View All</span></h3>
                 <div className="space-y-4">
-                  {subscriber?.email?.includes('ghis') ? (
+                  {overviewAlerts.length > 0 ? (
                     <>
-                      <div className="flex items-start gap-3 text-sm text-gray-700"><div className="w-2 h-2 mt-1.5 rounded-full bg-blue-500 flex-shrink-0"></div><p>Partner accepted PO — please proceed to pay fee. <span className="text-xs text-gray-400 ml-1">{new Date().toLocaleString()}</span></p></div>
-                      <div className="flex items-start gap-3 text-sm text-gray-700"><div className="w-2 h-2 mt-1.5 rounded-full bg-amber-500 flex-shrink-0"></div><p>New meeting request — confirm your availability. <span className="text-xs text-gray-400 ml-1">{new Date(Date.now()-3600000).toLocaleString()}</span></p></div>
+                      {overviewAlerts.map((a: any) => (
+                        <div key={a.id} className="flex items-start gap-3 text-sm text-gray-700"><div className={`w-2 h-2 mt-1.5 rounded-full ${a.dot} flex-shrink-0`}></div><p>{a.msg} <span className="text-xs text-gray-400 ml-1">{a.time}</span></p></div>
+                      ))}
                     </>
                   ) : (
                     <p className="text-sm text-gray-400 text-center py-4">No recent alerts.</p>
@@ -1171,7 +1303,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
               <button className="text-sm font-bold text-sky-600 hover:text-sky-700" onClick={() => setActiveTab("requests")}>View All</button>
             </div>
             <div className="flex flex-col gap-3">
-              {[...(subscriber?.email?.includes('ghis') ? REQUESTS_MOCK : []), ...mockDynRequests].slice(0, 3).map(m => renderRequestCard(m))}
+              {overviewRequestItems.map((m: any) => renderRequestCard(m))}
             </div>
           </div>
 
@@ -1181,17 +1313,21 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
             <div className="flex justify-between items-center mb-4 mt-6">
               <div className="flex flex-col">
                 <h2 className="text-xl font-bold text-gray-800">⏰ Upcoming Meetings</h2>
-                {subscriber?.email?.includes('ghis') && <span className="text-gray-500 font-bold text-sm">1</span>}
+                <span className="text-gray-500 font-bold text-sm">{upcomingMeetings.length}</span>
               </div>
-              <button className="text-sm font-bold text-sky-600 hover:text-sky-700">View All</button>
+              <button className="text-sm font-bold text-sky-600 hover:text-sky-700" onClick={() => setActiveTab("requests")}>View All</button>
             </div>
-            {subscriber?.email?.includes('ghis') ? (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mt-4">
-                <div className="flex justify-between items-center mb-2">
-                   <span className="text-gray-900 font-bold">FITOUT (PO-2605-6812)</span>
-                   <span className="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-bold">Tomorrow, 10:00 AM</span>
-                </div>
-                <p className="text-sm text-gray-600">Location: Saphansong | Provider: Suppadesh</p>
+            {upcomingMeetings.length > 0 ? (
+              <div className="space-y-3 mt-4">
+                {upcomingMeetings.slice(0, 2).map((m: any) => (
+                  <div key={m.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                    <div className="flex justify-between items-center mb-2">
+                       <span className="text-gray-900 font-bold">{m.title} ({m.po})</span>
+                       <span className="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-bold">{m.date}</span>
+                    </div>
+                    <p className="text-sm text-gray-600">Location: Saphansong | Provider: {m.customer}</p>
+                  </div>
+                ))}
               </div>
             ) : (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mt-4 text-center text-sm text-gray-400">No upcoming meetings</div>
@@ -1293,21 +1429,22 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                     ...prev.filter((x: any) => x.po !== waitModalOrder.request?.po),
                     { ...waitModalOrder.request, actionNeeded: true, step: 7 }
                   ]);
-                  const meetId = `meet-${waitModalOrder.id}`;
+                  const po = waitModalOrder.request?.po;
+                  const chatReqId = `chat-${po}`;
                   setMockDynRequests(prev => [
-                    ...prev.filter((x: any) => x.id !== meetId),
-                    { id: meetId, po: waitModalOrder.request?.po, title: waitModalOrder.request?.title, customer: waitModalOrder.request?.customer || 'Suppadesh', date: new Date().toLocaleString(), budget: waitModalOrder.request?.budget, tier: waitModalOrder.request?.tier, desc: 'Please schedule a jobsite meeting with your partner.', type: 'meeting_invite', step: 8 }
+                    ...prev.filter((x: any) => x.id !== chatReqId),
+                    { id: chatReqId, po, title: waitModalOrder.request?.title, customer: waitModalOrder.request?.customer || 'Suppadesh', date: new Date().toLocaleString(), budget: waitModalOrder.request?.budget, tier: waitModalOrder.request?.tier, desc: 'Chat is active. Send meeting invitation when you are ready.', type: 'chat_ready', step: 7 }
                   ]);
                   try {
                     const chatKey = `chat_messages_${waitModalOrder.request?.po}`;
                     const existing = JSON.parse(localStorage.getItem(chatKey) || '[]');
                     if (existing.length === 0) localStorage.setItem(chatKey, JSON.stringify([{ id: Date.now(), sender: 'system', text: 'Payment confirmed. Your project chat is now active. Please coordinate with your partner here.', time: new Date().toLocaleTimeString() }]));
-                    const po = waitModalOrder.request?.po;
                     const title = waitModalOrder.request?.title || '';
                     const budget = waitModalOrder.request?.budget || '';
                     if (po) {
                       localStorage.setItem(`chat_title_${po}`, `${title} - ${po} - ${budget}`);
                       localStorage.setItem(`chat_from_${po}`, "dashboard");
+                      window.dispatchEvent(new CustomEvent("cblue-chat-updated", { detail: { orderId: po } }));
                     }
                   } catch {}
                   setWaitModalOrder(null);

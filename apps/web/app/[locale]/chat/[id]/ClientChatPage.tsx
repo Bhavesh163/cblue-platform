@@ -17,6 +17,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
   ]);
   const [inputText, setInputText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const chatListRef = useRef<HTMLDivElement>(null);
   const currentEmailRef = useRef<string>("guest");
   const bcRef = useRef<BroadcastChannel | null>(null);
   
@@ -71,7 +72,9 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
   }, [orderId]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const listEl = chatListRef.current;
+    if (!listEl) return;
+    listEl.scrollTop = listEl.scrollHeight;
   }, [messages]);
 
   const handleSend = (e: React.FormEvent) => {
@@ -88,6 +91,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
       try {
         localStorage.setItem(key, JSON.stringify(updated));
         bcRef.current?.postMessage(updated);
+        window.dispatchEvent(new CustomEvent("cblue-chat-updated", { detail: { orderId } }));
       } catch {}
       return updated;
     });
@@ -97,7 +101,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
   if (!mounted) return <div className="h-screen w-full flex items-center justify-center">Loading...</div>;
 
   return (
-    <div className="max-w-2xl mx-auto h-[calc(100vh-6.5rem)] mt-4 flex flex-col transition-none bg-gray-50 border-x border-gray-200 shadow-xl rounded-t-2xl overflow-hidden">
+    <div className="max-w-2xl mx-auto h-[calc(100dvh-6.5rem)] mt-4 flex flex-col transition-none bg-gray-50 border-x border-gray-200 shadow-xl rounded-t-2xl overflow-hidden">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 p-4 shrink-0 flex items-center gap-4">
         <div className="flex-1">
@@ -108,8 +112,8 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
           onClick={() => {
             try {
               const returnTo = localStorage.getItem(`chat_from_${orderId}`);
-              if (returnTo === "fixers") router.push(`/${locale}/fixers`);
-              else router.push(`/${locale}/dashboard`);
+              if (returnTo === "fixers") router.push(`/${locale}/fixers?tab=chat`);
+              else router.push(`/${locale}/dashboard?tab=chat`);
             } catch { router.push('/' + locale + '/' + 'dashboard' + '?tab=chat'); }
           }}
           className="text-gray-400 hover:text-gray-800 transition text-2xl font-light leading-none"
@@ -120,7 +124,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
       </div>
 
       {/* Chat Area */}
-      <div className="flex-1 p-4 overflow-y-auto space-y-4">
+      <div ref={chatListRef} className="flex-1 p-4 overflow-y-auto space-y-4">
         {messages.map(msg => {
           const isMine = msg.sender === currentEmailRef.current || msg.sender === "me";
           return (

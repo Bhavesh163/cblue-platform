@@ -102,6 +102,7 @@ export default function FixerProPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [showPdpa, setShowPdpa] = useState(false);
+  const [chatFeed, setChatFeed] = useState<any[]>([]);
 
   const [orders, setOrders] = useState<any[]>([]);
   const [waitModalOrder, setWaitModalOrder] = useState<any>(null);
@@ -295,12 +296,63 @@ export default function FixerProPage() {
 
   const chats: any[] = [];
   const notifications: any[] = [
-    { id: 1, msg: "Review PO Details for GREEN CONSTRUCTION", unread: true, time: "Just now", dot: "bg-purple-500" },
-    { id: 2, msg: "Review PO Details for FIT OUT", unread: true, time: "2 mins ago", dot: "bg-purple-500" },
-    { id: 3, msg: "Confirm meeting at site", unread: false, time: "1 hr ago", dot: "bg-gray-300" },
-    { id: 4, msg: "Request for Approval of Variation", unread: false, time: "Yesterday", dot: "bg-gray-300" },
-    { id: 5, msg: "Request for job complete", unread: false, time: "Yesterday", dot: "bg-gray-300" },
+    { id: 1, msg: "Review PO Details for GREEN CONSTRUCTION", unread: true, time: new Date().toLocaleString(), dot: "bg-purple-500" },
+    { id: 2, msg: "Review PO Details for FIT OUT", unread: true, time: new Date(Date.now() - 2 * 60 * 1000).toLocaleString(), dot: "bg-purple-500" },
+    { id: 3, msg: "Confirm meeting at site", unread: false, time: new Date(Date.now() - 60 * 60 * 1000).toLocaleString(), dot: "bg-gray-300" },
+    { id: 4, msg: "Request for Approval of Variation", unread: false, time: new Date(Date.now() - 24 * 60 * 60 * 1000).toLocaleString(), dot: "bg-gray-300" },
+    { id: 5, msg: "Request for job complete", unread: false, time: new Date(Date.now() - 25 * 60 * 60 * 1000).toLocaleString(), dot: "bg-gray-300" },
   ];
+
+  useEffect(() => {
+    try {
+      const tab = new URLSearchParams(window.location.search).get("tab");
+      if (tab && ["overview", "requests", "active", "properties", "history", "chat", "notifications", "profile"].includes(tab)) {
+        setActiveTab(tab as TabKey);
+      }
+    } catch {}
+  }, []);
+
+  const buildChatFeed = () => {
+    if (typeof window === "undefined") return [];
+    const keys = Object.keys(localStorage).filter((k) => k.startsWith("chat_messages_"));
+    const items: any[] = [];
+    for (const key of keys) {
+      try {
+        const po = key.replace("chat_messages_", "");
+        const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+        if (!Array.isArray(parsed) || parsed.length === 0) continue;
+        const latest = [...parsed].reverse().find((m: any) => m && typeof m.text === "string" && m.text.trim());
+        if (!latest) continue;
+        const title = localStorage.getItem(`chat_title_${po}`) || `Chat - ${po}`;
+        items.push({
+          id: po,
+          po,
+          name: title,
+          service: po,
+          lastMsg: latest.text,
+          time: latest.time || "",
+          sort: Number(latest.id) || 0,
+          unread: 0,
+          online: true,
+        });
+      } catch {}
+    }
+    items.sort((a, b) => b.sort - a.sort);
+    return items;
+  };
+
+  useEffect(() => {
+    const syncChats = () => setChatFeed(buildChatFeed());
+    syncChats();
+    window.addEventListener("storage", syncChats);
+    window.addEventListener("cblue-chat-updated", syncChats as EventListener);
+    const timer = setInterval(syncChats, 1200);
+    return () => {
+      window.removeEventListener("storage", syncChats);
+      window.removeEventListener("cblue-chat-updated", syncChats as EventListener);
+      clearInterval(timer);
+    };
+  }, []);
 
   const [mockDynReqs, setMockDynReqs] = useState<any[]>([]);
   const [mockActiveState, setMockActiveState] = useState<any[]>([]);
@@ -550,14 +602,14 @@ export default function FixerProPage() {
 
         {/* Tab Content */}
         <div className={`mt-6 ${activeTab !== 'overview' ? 'hidden' : ''}`}>
-          <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={incomingJobs} completedJobs={completedJobs} earnings={EARNINGS_MOCK} stats={stats} notifications={notifications} chats={[]} onJobClick={handleJobClick} />
+          <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={incomingJobs} completedJobs={completedJobs} earnings={EARNINGS_MOCK} stats={stats} notifications={notifications} chats={chatFeed} onJobClick={handleJobClick} onTabChange={(tab) => setActiveTab(tab as TabKey)} />
         </div>
         {activeTab === "requests" && <PartnerRequests locale={locale} incomingJobs={incomingJobs} onJobClick={handleJobClick} />}
         {activeTab === "active" && <PartnerJobs locale={locale} activeJobs={activeJobs} onJobClick={handleJobClick} />}
         
         {activeTab === "properties" && <PartnerProperties locale={locale} prefix={prefix} properties={myProperties} />}
         {activeTab === "history" && <PartnerHistory locale={locale} completedJobs={completedJobs} />}
-        {activeTab === "chat" && <PartnerChats locale={locale} chats={chats} />}
+        {activeTab === "chat" && <PartnerChats locale={locale} chats={chatFeed} />}
         {activeTab === "notifications" && <PartnerNotifications locale={locale} notifications={notifications} />}
         {activeTab === "profile" && <PartnerProfile locale={locale} prefix={prefix} partner={partner} />}
           </>
@@ -731,8 +783,9 @@ export default function FixerProPage() {
 }
 
 /* ===== PARTNER OVERVIEW ===== */
-function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJobs, earnings, stats, notifications, onJobClick }: { locale: string; partner: PartnerInfo | null; activeJobs: any[]; incomingJobs: any[]; completedJobs: any[]; earnings: any[]; stats: any; notifications: any[]; chats?: any[]; onJobClick?: (job: any) => void; }) {
-  const maxEarning = earnings.length > 0 ? Math.max(...earnings.map(e => e.amount)) : 0;
+function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJobs, earnings, stats, notifications, chats = [], onJobClick, onTabChange }: { locale: string; partner: PartnerInfo | null; activeJobs: any[]; incomingJobs: any[]; completedJobs: any[]; earnings: any[]; stats: any; notifications: any[]; chats?: any[]; onJobClick?: (job: any) => void; onTabChange?: (tab: string) => void; }) {
+  const earnings13 = earnings.slice(-13);
+  const maxEarning = earnings13.length > 0 ? Math.max(...earnings13.map(e => e.amount)) : 0;
   return (
     <div className="space-y-6">
       {/* Stats Row */}
@@ -778,8 +831,8 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
         {/* Earnings Chart */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:col-span-2">
           <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">{locale === "th" ? "รายได้รายเดือน" : locale === "zh" ? "月收入" : "Monthly Earnings"}</h3>
-          <div className="flex items-end gap-2 overflow-x-auto pb-4 h-36 min-w-full">
-            {earnings.map((e) => (
+          <div className="grid grid-cols-[repeat(13,minmax(0,1fr))] gap-1 items-end h-40">
+            {earnings13.map((e) => (
               <div key={e.month} className="flex-1 flex flex-col items-center">
                 <span className="text-xs font-bold text-gray-700 mb-1">฿{(e.amount / 1000).toFixed(1)}k</span>
                 <div className="w-full bg-purple-100 rounded-t-lg relative" style={{ height: `${(e.amount / maxEarning) * 100}%` }}>
@@ -796,10 +849,13 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "คำขอใหม่" : locale === "zh" ? "新订单" : "Incoming Requests"}</h2>
-          <span className="text-xs bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full font-bold">{incomingJobs.length}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("requests")}>View All</span>
+            <span className="text-xs bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full font-bold">{incomingJobs.length}</span>
+          </div>
         </div>
         <div className="divide-y divide-gray-50">
-          {incomingJobs.map((req) => (
+          {incomingJobs.slice(0, 3).map((req) => (
             <div key={req.id} className="px-6 py-4 flex items-center gap-4 hover:bg-amber-50 transition cursor-pointer" onClick={() => onJobClick && onJobClick(req)}>
               <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center text-lg"></div>
               <div className="flex-1 min-w-0">
@@ -821,13 +877,13 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
       {/* Notifications + Chat side by side */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-          <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">⏰ Upcoming Meetings</h3>
+          <h3 className="font-bold text-gray-900 mb-3 flex items-center justify-between">⏰ Upcoming Meetings <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("requests")}>View All</span></h3>
           <div className="text-gray-500 text-sm italic">
             No upcoming meetings
           </div>
         </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-          <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">{locale === "th" ? "การแจ้งเตือนล่าสุด" : locale === "zh" ? "最近通知" : "Recent Alerts"}</h3>
+          <h3 className="font-bold text-gray-900 mb-3 flex items-center justify-between">{locale === "th" ? "การแจ้งเตือนล่าสุด" : locale === "zh" ? "最近通知" : "Recent Alerts"} <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("notifications")}>View All</span></h3>
           <div className="space-y-2">
             {notifications.slice(0, 3).map((n) => (
               <div key={n.id} className={`flex items-center gap-3 p-3 rounded-lg ${n.unread ? "bg-purple-50 border border-purple-100" : "bg-gray-50"}`}>
@@ -839,20 +895,20 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
           </div>
         </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-          <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">{locale === "th" ? "แชทที่เข้ามาล่าสุด" : locale === "zh" ? "最近收到的来信" : "Recent incoming chats"}</h3>
+          <h3 className="font-bold text-gray-900 mb-3 flex items-center justify-between">{locale === "th" ? "แชทที่เข้ามาล่าสุด" : locale === "zh" ? "最近收到的来信" : "Recent incoming chats"} <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("chat")}>View All</span></h3>
           <div className="space-y-2">
-            {chats && chats.length > 0 ? chats.slice(0, 4).map((c: any) => (
+            {chats && chats.length > 0 ? chats.slice(0, 2).map((c: any) => (
               <div key={c.id} className={`flex items-center gap-3 p-3 rounded-lg ${c.unread > 0 ? "bg-purple-50 border border-purple-100" : "bg-gray-50"}`}>
                 <div className="relative">
-                  <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600">{c.name.slice(-3)}</div>
+                  <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600">{String(c.name || "C").slice(-3)}</div>
                   {c.online && <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-400 rounded-full border-2 border-white" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-800">{c.name} <span className="text-gray-400 font-normal">· {c.service}</span></p>
-                  <p className="text-xs text-gray-500 truncate">{locale === "th" ? c.lastMsgTh : locale === "zh" ? c.lastMsgZh : c.lastMsg}</p>
+                  <p className="text-sm font-semibold text-gray-800">{c.name} <span className="text-gray-400 font-normal">· {c.service || c.po || "Chat"}</span></p>
+                  <p className="text-xs text-gray-500 truncate">{c.lastMsg}</p>
                 </div>
                 <div className="text-right">
-                  <span className="text-xs text-gray-400">{locale === "th" ? c.timeTh : locale === "zh" ? c.timeZh : c.time}</span>
+                  <span className="text-xs text-gray-400">{c.time || ""}</span>
                   {c.unread > 0 && <span className="block mt-0.5 ml-auto w-5 h-5 bg-purple-600 text-white text-[10px] rounded-full flex items-center justify-center font-bold">{c.unread}</span>}
                 </div>
               </div>
@@ -1079,47 +1135,32 @@ function PartnerChats({ locale, chats }: { locale: string; chats: any[] }) {
         <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "แชท" : locale === "zh" ? "聊天" : "Chats"}</h2>
       </div>
       <div className="divide-y divide-gray-50">
-        {/* Mock chat entry for Suppadesh ↔ Ghis demo */}
-        <div
-          className="flex items-center gap-4 px-6 py-4 cursor-pointer transition hover:bg-gray-50"
-          onClick={() => {
+        {chats && chats.length > 0 && chats.map((c: any) => (
+          <div key={c.id} className={`flex items-center gap-4 px-6 py-4 cursor-pointer transition hover:bg-gray-50`} onClick={() => {
             try {
-              localStorage.setItem("chat_title_PO-2605-6812", "FITOUT - PO-2605-6812 - ฿25,000,000");
-              localStorage.setItem("chat_from_PO-2605-6812", "fixers");
+              if (c.po) {
+                localStorage.setItem(`chat_from_${c.po}`, "fixers");
+              }
             } catch {}
-            window.location.href = `/${locale}/chat/PO-2605-6812`;
-          }}
-        >
-          <div className="relative">
-            <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-sm font-bold text-blue-700">GH</div>
-            <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-400 rounded-full border-2 border-white" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex justify-between items-baseline mb-1">
-              <p className="font-bold text-gray-900">Ghis Cafe · FITOUT</p>
-              <span className="text-xs text-gray-400 whitespace-nowrap ml-2">Active</span>
-            </div>
-            <p className="text-sm truncate text-gray-500">PO-2605-6812 · ฿25,000,000 · {locale === "th" ? "คลิกเพื่อเปิดแชท" : "Click to open chat"}</p>
-          </div>
-        </div>
-        {chats && chats.length > 0 && chats.slice(0, 4).map((c: any) => (
-          <div key={c.id} className={`flex items-center gap-4 px-6 py-4 cursor-pointer transition hover:bg-gray-50`}>
+            window.location.href = `/${locale}/chat/${c.po || c.id}`;
+          }}>
             <div className="relative">
-              <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-sm font-bold text-gray-600">{c.customerId || c.customerName?.slice(0, 2) || "C"}</div>
+              <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-sm font-bold text-gray-600">{String(c.name || "C").slice(-2)}</div>
               <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-400 rounded-full border-2 border-white" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex justify-between items-baseline mb-1">
                 <div className="flex items-center gap-2">
-                  <p className="font-bold text-gray-900 truncate">Customer #{c.customerId || "Customer"}</p>
-                  <span className="text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-500">{c.service}</span>
+                  <p className="font-bold text-gray-900 truncate">{c.name}</p>
+                  <span className="text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-500">{c.service || c.po || "Chat"}</span>
                 </div>
-                <span className="text-xs text-gray-400 whitespace-nowrap ml-2">Active</span>
+                <span className="text-xs text-gray-400 whitespace-nowrap ml-2">{c.time || ""}</span>
               </div>
-              <p className={`text-sm truncate text-gray-500`}>{locale === "th" ? "คลิกเพื่อดูแชท" : "Click to open chat"}</p>
+              <p className={`text-sm truncate text-gray-500`}>{c.lastMsg || (locale === "th" ? "คลิกเพื่อดูแชท" : "Click to open chat")}</p>
             </div>
           </div>
         ))}
+        {(!chats || chats.length === 0) && <p className="text-sm text-gray-500 py-4 text-center">{locale === "th" ? "ไม่มีแชทล่าสุด" : locale === "zh" ? "没有最近的聊天" : "No recent incoming chats"}</p>}
       </div>
     </div>
   );
