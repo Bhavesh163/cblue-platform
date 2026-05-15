@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 export default function ClientChatPage({ orderId, locale }: { orderId: string, locale: string }) {
@@ -15,35 +15,68 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
     }
   ]);
   const [inputText, setInputText] = useState("");
+  const bottomRef = useRef<HTMLDivElement>(null);
   
   useEffect(() => {
     setMounted(true);
-  }, []);
+    const key = `chat_messages_${orderId}`;
+    try {
+      const stored = localStorage.getItem(key);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) setMessages(parsed);
+      }
+    } catch {}
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === key && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed)) setMessages(parsed);
+        } catch {}
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, [orderId]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     if(!inputText.trim()) return;
-    setMessages(prev => [...prev, {
-      id: Date.now(),
-      sender: "me",
-      text: inputText,
-      time: "Just now"
-    }]);
+    const key = `chat_messages_${orderId}`;
+    setMessages(prev => {
+      const updated = [...prev, {
+        id: Date.now(),
+        sender: "me",
+        text: inputText.trim(),
+        time: new Date().toLocaleTimeString()
+      }];
+      try { localStorage.setItem(key, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
     setInputText("");
   };
 
   if (!mounted) return <div className="h-screen w-full flex items-center justify-center">Loading...</div>;
 
   return (
-    <div className="max-w-2xl mx-auto h-screen flex flex-col bg-gray-50 border-x border-gray-200">
+    <div className="max-w-2xl mx-auto h-[calc(100vh-5rem)] flex flex-col bg-gray-50 border-x border-gray-200 shadow-xl">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 p-4 sticky top-0 z-10 flex items-center gap-4">
+      <div className="bg-white border-b border-gray-200 p-4 shrink-0 flex items-center gap-4">
         <div className="flex-1">
           <h2 className="font-bold text-gray-900 text-lg">Chat - {orderId}</h2>
           <p className="text-xs text-green-600 font-medium">Online</p>
         </div>
         <button
-          onClick={() => router.back()}
+          onClick={() => {
+            try {
+              const isFixer = !!localStorage.getItem("fixer_profile_cache");
+              router.push(`/${locale}/${isFixer ? 'fixers' : 'dashboard'}`);
+            } catch { router.back(); }
+          }}
           className="text-gray-400 hover:text-gray-800 transition text-2xl font-light leading-none"
           aria-label="Close"
         >
@@ -61,6 +94,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
             </div>
           </div>
         ))}
+        <div ref={bottomRef} />
       </div>
 
       {/* Input Area */}

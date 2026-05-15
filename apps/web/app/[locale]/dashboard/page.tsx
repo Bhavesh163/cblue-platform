@@ -704,9 +704,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const combinedActive = [...filteredStaticMock, ...mockActiveItems];
 
   const STEPS_FULL = ["Match", "Select", "PO", "Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"];
-  const STEPS = ["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate", "Done"];
+  const STEPS = ["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"];
 
-    const Progress12Steps = ({ currentStep }: { currentStep: number }) => (
+    const Progress12Steps = ({ currentStep, showCurrent = true }: { currentStep: number; showCurrent?: boolean }) => (
     <div className="w-full mt-4 overflow-x-auto pb-4 hide-scrollbar">
       <div className="flex items-center min-w-max relative px-2">
         <div className="absolute left-4 right-4 top-3 -translate-y-1/2 h-1 bg-gray-200 rounded-full"></div>
@@ -715,7 +715,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         {STEPS.map((s, i) => {
           const stepNum = i + 4; // Notify starts at 4
           const isCompleted = stepNum < currentStep;
-          const isCurrent = stepNum === currentStep;
+          const isCurrent = showCurrent && stepNum === currentStep;
             return (
             <div key={s} className="relative z-10 flex flex-col items-center flex-1 px-1">
               <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors ${isCompleted ? 'bg-sky-500 text-white' : isCurrent ? 'bg-sky-500 text-white shadow-[0_0_0_4px_rgba(14,165,233,0.2)]' : 'bg-gray-300'}`}>
@@ -750,7 +750,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
              <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-blue-50 text-blue-700 uppercase self-start sm:self-end w-max">{item.tier}</span>
           </div>
           <div className="flex gap-2">
-            <button className="bg-sky-600 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-sky-700 transition shadow-sm w-full md:w-auto" onClick={() => setWaitModalOrder({ id: item.id, status: 'MATCHING', request: item })}>Pay Fee & Proceed</button>
+            <button className="bg-sky-600 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-sky-700 transition shadow-sm whitespace-nowrap" onClick={() => setWaitModalOrder({ id: item.id, status: 'MATCHING', request: item })}>Pay Fee & Proceed</button>
             <button className="border border-gray-300 text-gray-600 px-5 py-2 outline-none rounded-lg text-sm font-bold hover:bg-gray-100 transition shadow-sm w-full md:w-auto">Decline</button>
           </div>
         </div>
@@ -769,7 +769,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       </div>
       <div className="flex items-center gap-4 w-full xl:w-auto mt-2 xl:mt-0 justify-between xl:justify-end overflow-hidden">
         <div className="flex flex-col gap-1 w-full min-w-[300px] xl:w-[600px]">
-           <Progress12Steps currentStep={item.step || 4} />
+           <Progress12Steps currentStep={item.step || 5} showCurrent={item.actionNeeded !== false} />
         </div>
         <div className="text-right whitespace-nowrap">
           {item.actionNeeded && <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-red-50 text-red-700">Action Needed</span>}
@@ -1053,7 +1053,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
           </div>
         </div>
       {waitModalOrder && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto pt-10 pb-10">
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto pt-24 pb-10">
           <div className="w-full max-w-lg bg-white rounded-3xl shadow-xl flex flex-col p-6 relative">
             
             <div className="text-center text-sm font-bold text-sky-700 bg-sky-50 rounded-xl px-4 py-2 mb-2">Step 6 of 11</div>

@@ -69,6 +69,8 @@ const STATUS_STYLE: Record<string, string> = {
   CONFIRMED: "bg-green-100 text-green-700",
   PENDING: "bg-amber-100 text-amber-700",
   COMPLETED: "bg-emerald-100 text-emerald-700",
+  MATCHING: "bg-amber-100 text-amber-700",
+  CREATED: "bg-amber-100 text-amber-700",
 };
 const TIER_STYLE: Record<string, string> = {
   Economy: "bg-green-50 text-green-700",
@@ -769,7 +771,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
           <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">{locale === "th" ? "การแจ้งเตือนล่าสุด" : locale === "zh" ? "最近通知" : "Recent Alerts"}</h3>
           <div className="space-y-2">
-            {notifications.slice(0, 1).map((n) => (
+            {notifications.slice(0, 3).map((n) => (
               <div key={n.id} className={`flex items-center gap-3 p-3 rounded-lg ${n.unread ? "bg-purple-50 border border-purple-100" : "bg-gray-50"}`}>
                 <span className={`w-2 h-2 rounded-full ${n.dot} flex-shrink-0`} />
                 <p className="text-sm text-gray-700 flex-1">{locale === "th" ? n.msgTh : locale === "zh" ? n.msgZh : n.msg}</p>
@@ -819,13 +821,13 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
                   <div className="w-full overflow-x-auto pb-2 hide-scrollbar">
                     <div className="flex items-center min-w-max relative px-2">
                       <div className="absolute left-4 right-4 top-3 -translate-y-1/2 h-1 bg-gray-200 rounded-full"></div>
-                      <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, (( (job.status==='IN_PROGRESS' || job.status==='CONFIRMED' || job.status==='ACCEPTED' ? 5 : job.status==='COMPLETED' ? 12 : 5) - 4) / (8)) * 100))}%` }}></div>
+                      <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${job.status === 'MATCHING' ? Math.min(100, Math.max(0, ((5 - 4) / 7) * 100)) : 0}%` }}></div>
                       
-                      {["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate", "Done"].map((s, i) => {
+                      {["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"].map((s, i) => {
                         const stepNum = i + 4; // Notify starts at 4
                         const currentStep = job.status === 'COMPLETED' ? 12 : 5;
                         const isCompleted = stepNum < currentStep;
-                        const isCurrent = stepNum === currentStep;
+                        const isCurrent = job.status === 'MATCHING' && stepNum === currentStep;
                         return (
                           <div key={s} className="relative z-10 flex flex-col items-center flex-1 px-1">
                             <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors ${isCompleted ? 'bg-sky-500 text-white' : isCurrent ? 'bg-sky-500 text-white shadow-[0_0_0_4px_rgba(14,165,233,0.2)]' : 'bg-gray-300'}`}>
@@ -843,7 +845,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
               </div>
               <div className="flex items-center gap-2">
                 <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[job.tier] || ""}`}>{job.tier}</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_STYLE[job.status] || ""}`}>{getStatusLabel(job.status, locale)}</span>
+                {getStatusLabel(job.status, locale) !== "" && <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_STYLE[job.status] || ""}`}>{getStatusLabel(job.status, locale)}</span>}
                 <span className="text-xs font-bold text-gray-700">{job.earnings}</span>
               </div>
             </div>
@@ -908,12 +910,12 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
                 <div className="w-full overflow-x-auto pb-2 hide-scrollbar">
                   <div className="flex items-center min-w-max relative px-2">
                     <div className="absolute left-4 right-4 top-3 -translate-y-1/2 h-1 bg-gray-200 rounded-full"></div>
-                    <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, (((job.status==='IN_PROGRESS' || job.status==='CONFIRMED' || job.status==='ACCEPTED' ? 5 : job.status==='COMPLETED' ? 12 : 5) - 4) / 8) * 100))}%` }}></div>
-                    {["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate", "Done"].map((s, i) => {
+                    <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${job.status === 'MATCHING' ? Math.min(100, Math.max(0, ((5 - 4) / 7) * 100)) : 0}%` }}></div>
+                    {["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"].map((s, i) => {
                       const stepNum = i + 4;
                       const currentStep = job.status === 'COMPLETED' ? 12 : 5;
                       const isCompleted = stepNum < currentStep;
-                      const isCurrent = stepNum === currentStep;
+                      const isCurrent = job.status === 'MATCHING' && stepNum === currentStep;
                       return (
                         <div key={s} className="relative z-10 flex flex-col items-center flex-1 px-1">
                           <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors ${isCompleted ? 'bg-sky-500 text-white' : isCurrent ? 'bg-sky-500 text-white shadow-[0_0_0_4px_rgba(14,165,233,0.2)]' : 'bg-gray-300'}`}>
@@ -931,7 +933,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
             </div>
             <div className="flex items-center gap-2">
               <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[job.tier] || ""}`}>{job.tier}</span>
-              <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_STYLE[job.status] || ""}`}>{getStatusLabel(job.status, locale)}</span>
+              {getStatusLabel(job.status, locale) !== "" && <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_STYLE[job.status] || ""}`}>{getStatusLabel(job.status, locale)}</span>}
               <span className="text-xs font-bold text-gray-700">{job.earnings}</span>
             </div>
           </div>
