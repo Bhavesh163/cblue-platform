@@ -18,8 +18,8 @@ interface Fixer {
 }
 
 interface ChatMessage {
-  id: string;
-  sender: "customer" | "fixer";
+  id: string | number;
+  sender: string;
   text: string;
   time: string;
 }
@@ -74,7 +74,7 @@ const T: Record<string, Record<string, string>> = {
     notifyWaiting: "Waiting for confirmation...",
     partnerAccepted: "Partner Accepted!",
     partnerAcceptedDesc: "{fixer} has accepted your booking. You may now proceed with payment.",
-    proceedPayment: "Proceed to Payment",
+    proceedPayment: "Fee & Proceed",
     // Meeting confirmation
     meetingTitle: "Schedule & Confirm Meeting",
     meetingDesc: "Arrange a meeting with {fixer} to discuss the job details.",
@@ -150,7 +150,7 @@ const T: Record<string, Record<string, string>> = {
     notifyWaiting: "กำลังรอการยืนยัน...",
     partnerAccepted: "พาร์ทเนอร์ยอมรับแล้ว!",
     partnerAcceptedDesc: "{fixer} ยอมรับการจองของคุณแล้ว คุณสามารถชำระเงินได้",
-    proceedPayment: "ดำเนินการชำระเงิน",
+    proceedPayment: "ค่าธรรมเนียมและดำเนินการ",
     meetingTitle: "นัดหมายและยืนยันการประชุม",
     meetingDesc: "นัดหมายกับ {fixer} เพื่อหารือรายละเอียดงาน",
     meetingDate: "วันนัดหมาย",
@@ -224,7 +224,7 @@ const T: Record<string, Record<string, string>> = {
     notifyWaiting: "等待确认中...",
     partnerAccepted: "合作伙伴已接受！",
     partnerAcceptedDesc: "{fixer} 已接受您的预约。您现在可以付款。",
-    proceedPayment: "继续付款",
+    proceedPayment: "费用和继续",
     meetingTitle: "安排和确认会议",
     meetingDesc: "与 {fixer} 安排会议讨论工作细节。",
     meetingDate: "会议日期",
@@ -491,6 +491,17 @@ export default function FixerResults({
   // Variation amount (stored in state to avoid Math.random() on re-render)
   const [variationAmount, setVariationAmount] = useState(0);
 
+  const readSubscriber = () => {
+    if (typeof window === "undefined") return null;
+    try {
+      return JSON.parse(localStorage.getItem("subscriber") || "null");
+    } catch {
+      return null;
+    }
+  };
+
+  const getCurrentSenderId = () => readSubscriber()?.email || "customer";
+
     // Poll order status to auto-advance when partner accepts
   useEffect(() => {
     if ((step === "notify" || step === "matching") && initialOrderData?.id) {
@@ -618,6 +629,46 @@ export default function FixerResults({
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
 
+  useEffect(() => {
+    if (step !== "chat" || !poNumber) return;
+
+    const chatKey = `chat_messages_${poNumber}`;
+    const syncChatMessages = () => {
+      try {
+        const stored = JSON.parse(localStorage.getItem(chatKey) || "[]");
+        if (Array.isArray(stored) && stored.length > 0) {
+          setChatMessages(stored);
+          return;
+        }
+      } catch {
+        // Ignore invalid persisted messages and re-seed below.
+      }
+
+      const seeded = [
+        {
+          id: Date.now(),
+          sender: "system",
+          text: "Dear Khun Ghis, Please inform us of your available time to meet at the jobsite. This chat room is now created for you to connect",
+          time: new Date().toLocaleString(),
+        },
+      ];
+      try {
+        localStorage.setItem(chatKey, JSON.stringify(seeded));
+      } catch {
+        // Non-blocking for demo flow.
+      }
+      setChatMessages(seeded);
+    };
+
+    syncChatMessages();
+    window.addEventListener("storage", syncChatMessages);
+    window.addEventListener("cblue-chat-updated", syncChatMessages as EventListener);
+    return () => {
+      window.removeEventListener("storage", syncChatMessages);
+      window.removeEventListener("cblue-chat-updated", syncChatMessages as EventListener);
+    };
+  }, [step, poNumber]);
+
   // Partner confirmation must be manual or through actual backend
   // Added bypass button for testing
   useEffect(() => {
@@ -702,33 +753,76 @@ export default function FixerResults({
     } catch (e) {
       console.error("Order creation non-blocking fail", e);
     }
+
+    if (selectedFixer && bookingType && poNumber) {
+      try {
+        const subscriber = readSubscriber();
+        const customerEmail = subscriber?.email || "";
+        if (customerEmail.includes("ghis")) {
+          const mockActiveKey = "ghis_mock_active";
+          const existing = JSON.parse(localStorage.getItem(mockActiveKey) || "[]");
+          const totalBudget = Number(selectedFixer.estimatedTotal ?? selectedFixer.price ?? 0);
+          const pendingAcceptJob = {
+            id: createdOrderId || `job-${poNumber}`,
+            orderId: createdOrderId || undefined,
+            po: poNumber,
+            title: service,
+            customer: subscriber?.name || "Ghis Cafe",
+            customerName: subscriber?.name || "Ghis Cafe",
+            fixerAlias: selectedFixer.alias,
+            partnerName: selectedFixer.alias,
+            date: new Date().toLocaleString(),
+            budget: totalBudget > 0 ? `฿${totalBudget.toLocaleString()}` : "฿0",
+            location: "Saphansong",
+            tier: selectedFixer.tier,
+            actionNeeded: false,
+            step: 5,
+            fixerId: selectedFixer.id,
+            description,
+          };
+          const idx = existing.findIndex((x: any) => x.po === poNumber);
+          if (idx >= 0) existing[idx] = { ...existing[idx], ...pendingAcceptJob };
+          else existing.push(pendingAcceptJob);
+          localStorage.setItem(mockActiveKey, JSON.stringify(existing));
+          window.dispatchEvent(new Event("storage"));
+        }
+      } catch (e) {
+        console.error("Failed to persist pending accept job:", e);
+      }
+    }
+
     setStep("notify");
   };
 
   const handleProceedPayment = () => {
     if (selectedFixer && bookingType && poNumber) {
       try {
-        const subscriber = localStorage.getItem('subscriber') ? JSON.parse(localStorage.getItem('subscriber')!) : null;
+        const subscriber = readSubscriber();
         const customerEmail = subscriber?.email || '';
         if (customerEmail.includes('ghis')) {
           const mockActiveKey = 'ghis_mock_active';
           const existing = JSON.parse(localStorage.getItem(mockActiveKey) || '[]');
-          const newBooking = {
+          const totalBudget = Number(selectedFixer.estimatedTotal ?? selectedFixer.price ?? 0);
+          const idx = existing.findIndex((x: any) => x.po === poNumber);
+          const current = idx >= 0 ? existing[idx] : {};
+          const nextBooking = {
+            ...current,
             po: poNumber,
             title: service,
             customer: subscriber?.name || 'Ghis Cafe',
-            date: new Date().toLocaleString(),
-            budget: selectedFixer.estimatedTotal ? `฿${selectedFixer.estimatedTotal.toLocaleString()}` : '฿0',
+            customerName: subscriber?.name || 'Ghis Cafe',
+            fixerAlias: selectedFixer.alias,
+            partnerName: selectedFixer.alias,
+            date: current?.date || new Date().toLocaleString(),
+            budget: totalBudget > 0 ? `฿${totalBudget.toLocaleString()}` : '฿0',
             location: 'Saphansong',
             tier: selectedFixer.tier,
             actionNeeded: true,
-            step: 5,
-            fixerAlias: selectedFixer.alias,
+            step: 6,
             fixerId: selectedFixer.id,
           };
-          const idx = existing.findIndex((x: any) => x.po === poNumber);
-          if (idx >= 0) existing[idx] = newBooking;
-          else existing.push(newBooking);
+          if (idx >= 0) existing[idx] = nextBooking;
+          else existing.push(nextBooking);
           localStorage.setItem(mockActiveKey, JSON.stringify(existing));
           window.dispatchEvent(new Event('storage'));
         }
@@ -747,18 +841,24 @@ export default function FixerResults({
     // After payment (step 6), ONLY create step 7 (chat_ready), NOT steps 7+8 together
     if (selectedFixer && bookingType && poNumber) {
       try {
-        const subscriber = localStorage.getItem('subscriber') ? JSON.parse(localStorage.getItem('subscriber')!) : null;
+        const subscriber = readSubscriber();
         const customerEmail = subscriber?.email || '';
         if (customerEmail.includes('ghis')) {
           const mockDynReqKey = 'ghis_mock_dyn_req';
           const existing = JSON.parse(localStorage.getItem(mockDynReqKey) || '[]');
           const filtered = existing.filter((x: any) => x.po !== poNumber);
+          const totalBudget = Number(selectedFixer.estimatedTotal ?? selectedFixer.price ?? 0);
           const newRequest = {
-            id: `chat-${Date.now()}`,
+            id: `chat-${poNumber}`,
             po: poNumber,
+            title: service,
+            customer: selectedFixer.alias,
+            budget: totalBudget > 0 ? `฿${totalBudget.toLocaleString()}` : '฿0',
+            tier: selectedFixer.tier,
+            desc: 'Chat is active. Send meeting invitation when you are ready.',
             type: 'chat_ready',
-            message: 'Chat room opened. Please coordinate meeting details.',
             date: new Date().toLocaleString(),
+            step: 7,
           };
           filtered.push(newRequest);
           localStorage.setItem(mockDynReqKey, JSON.stringify(filtered));
@@ -769,9 +869,30 @@ export default function FixerResults({
           if (jobIdx >= 0) {
             active[jobIdx].step = 7;
             active[jobIdx].actionNeeded = true;
+            active[jobIdx].fixerAlias = selectedFixer.alias;
+            active[jobIdx].partnerName = selectedFixer.alias;
             localStorage.setItem(mockActiveKey, JSON.stringify(active));
             window.dispatchEvent(new Event('storage'));
           }
+
+          const chatKey = `chat_messages_${poNumber}`;
+          const seededMessages = [
+            {
+              id: Date.now(),
+              sender: 'system',
+              text: 'Dear Khun Ghis, Please inform us of your available time to meet at the jobsite. This chat room is now created for you to connect',
+              time: new Date().toLocaleString(),
+            },
+          ];
+          const storedMessages = JSON.parse(localStorage.getItem(chatKey) || '[]');
+          if (!Array.isArray(storedMessages) || storedMessages.length === 0) {
+            localStorage.setItem(chatKey, JSON.stringify(seededMessages));
+            setChatMessages(seededMessages);
+          } else {
+            setChatMessages(storedMessages);
+          }
+          localStorage.setItem(`chat_title_${poNumber}`, `${service} - ${poNumber} - ${totalBudget > 0 ? `฿${totalBudget.toLocaleString()}` : '฿0'}`);
+          window.dispatchEvent(new CustomEvent('cblue-chat-updated', { detail: { orderId: poNumber } }));
         }
       } catch (e) {
         console.error('Failed to create chat workflow:', e);
@@ -785,11 +906,22 @@ export default function FixerResults({
     if (!chatInput.trim()) return;
     const newMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
-      sender: "customer",
-      text: chatInput,
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      sender: getCurrentSenderId(),
+      text: chatInput.trim(),
+      time: new Date().toLocaleString(),
     };
-    setChatMessages((prev) => [...prev, newMsg]);
+    const chatKey = `chat_messages_${poNumber}`;
+    setChatMessages((prev) => {
+      const updated = [...prev, newMsg];
+      try {
+        localStorage.setItem(chatKey, JSON.stringify(updated));
+        window.dispatchEvent(new Event('storage'));
+        window.dispatchEvent(new CustomEvent('cblue-chat-updated', { detail: { orderId: poNumber } }));
+      } catch {
+        // Ignore chat persistence failures in demo mode.
+      }
+      return updated;
+    });
     setChatInput("");
   };
 
@@ -804,7 +936,7 @@ export default function FixerResults({
   const handleVariationDecision = (approved: boolean) => {
     setVariationApproved(approved);
     // Both cases proceed to complete — approved = addendum accepted, rejected = original scope only
-    setStep("payment");
+    setStep("complete");
   };
 
   const handleCompleteConfirm = () => {
@@ -1214,6 +1346,7 @@ export default function FixerResults({
 
   // Step: Chat
   if (step === "chat" && selectedFixer) {
+    const currentSenderId = getCurrentSenderId();
     return (
       <><StepProgressBar />
       <div className="mx-auto max-w-2xl px-4 py-8">
@@ -1249,20 +1382,22 @@ export default function FixerResults({
 
           {/* Messages */}
           <div className="h-80 overflow-y-auto p-4 space-y-3 bg-gray-50">
-            {chatMessages.map((msg) => (
-              <div key={msg.id} className={`flex ${msg.sender === "customer" ? "justify-end" : "justify-start"}`}>
+            {chatMessages.map((msg) => {
+              const isMine = msg.sender === currentSenderId || msg.sender === "customer";
+              return (
+              <div key={msg.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
                 <div className={`max-w-[75%] px-3.5 py-2 rounded-xl text-sm ${
-                  msg.sender === "customer"
+                  isMine
                     ? "bg-sky-600 text-white rounded-br-sm"
                     : "bg-white text-gray-800 shadow-sm border border-gray-100 rounded-bl-sm"
                 }`}>
                   {msg.text}
-                  <div className={`text-[10px] mt-1 ${msg.sender === "customer" ? "text-sky-200" : "text-gray-400"}`}>
+                  <div className={`text-[10px] mt-1 ${isMine ? "text-sky-200" : "text-gray-400"}`}>
                     {msg.time}
                   </div>
                 </div>
               </div>
-            ))}
+            );})}
             <div ref={chatEndRef} />
           </div>
 
@@ -1334,10 +1469,10 @@ export default function FixerResults({
               </div>
 
               <a 
-                href="/en/dashboard"
+                href={`/${locale}/dashboard?tab=active`}
                 className="inline-block mt-4 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
               >
-                Go to Our Customer Page
+                {locale === "th" ? "ไปยังหน้าลูกค้า" : locale === "zh" ? "前往客户页面" : "Go to Our Customer Page"}
               </a>
             </>
           ) : (

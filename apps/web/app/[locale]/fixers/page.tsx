@@ -25,7 +25,7 @@ interface PartnerInfo {
 const stats = {
   activeJobs: 0,
   completedJobs: 0,
-  monthlyEarnings: "฿0",
+  monthlyEarnings: "฿26,500",
   rating: 0,
   responseRate: "0%",
   repeatClients: 0,
@@ -107,14 +107,15 @@ export default function FixerProPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [waitModalOrder, setWaitModalOrder] = useState<any>(null);
   const handleJobClick = (job: any) => {
-    if (job.status && ['MATCHING', 'CREATED'].includes(job.status.toUpperCase())) {
+    if (job.status && ['MATCHING', 'CREATED', 'MEETING_REQUESTED'].includes(job.status.toUpperCase())) {
       setWaitModalOrder(job);
     } else {
+      const chatId = job.po || job.id;
       try {
-        localStorage.setItem(`chat_from_${job.id}`, "fixers");
-        localStorage.setItem(`chat_title_${job.id}`, `${job.service || job.serviceTh || ''} - ${job.po || job.id} - ฿${job.budget || '0'}`);
+        localStorage.setItem(`chat_from_${chatId}`, "fixers");
+        localStorage.setItem(`chat_title_${chatId}`, `${job.service || job.serviceTh || ''} - ${chatId} - ฿${job.budget || '0'}`);
       } catch {}
-      window.location.href = `/${locale}/chat/${job.id}`;
+      window.location.href = `/${locale}/chat/${chatId}`;
     }
   };
   const [myProperties, setMyProperties] = useState<any[]>([]);
@@ -295,13 +296,17 @@ export default function FixerProPage() {
   ];
 
   const chats: any[] = [];
-  const notifications: any[] = [
-    { id: 1, msg: "Review PO Details for GREEN CONSTRUCTION", unread: true, time: new Date().toLocaleString(), dot: "bg-purple-500" },
-    { id: 2, msg: "Review PO Details for FIT OUT", unread: true, time: new Date(Date.now() - 2 * 60 * 1000).toLocaleString(), dot: "bg-purple-500" },
-    { id: 3, msg: "Confirm meeting at site", unread: false, time: new Date(Date.now() - 60 * 60 * 1000).toLocaleString(), dot: "bg-gray-300" },
-    { id: 4, msg: "Request for Approval of Variation", unread: false, time: new Date(Date.now() - 24 * 60 * 60 * 1000).toLocaleString(), dot: "bg-gray-300" },
-    { id: 5, msg: "Request for job complete", unread: false, time: new Date(Date.now() - 25 * 60 * 60 * 1000).toLocaleString(), dot: "bg-gray-300" },
-  ];
+  const [staticNotifications] = useState<any[]>(() => {
+    const now = new Date();
+    const fmt = (date: Date) => date.toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+    return [
+      { id: 1, msg: "Review PO Details for GREEN CONSTRUCTION", unread: true, time: fmt(now), dot: "bg-purple-500" },
+      { id: 2, msg: "Review PO Details for FIT OUT", unread: true, time: fmt(new Date(now.getTime() - 2 * 60 * 1000)), dot: "bg-purple-500" },
+      { id: 3, msg: "Confirm meeting at site", unread: false, time: fmt(new Date(now.getTime() - 60 * 60 * 1000)), dot: "bg-gray-300" },
+      { id: 4, msg: "Request for Approval of Variation", unread: false, time: fmt(new Date(now.getTime() - 24 * 60 * 60 * 1000)), dot: "bg-gray-300" },
+      { id: 5, msg: "Request for job complete", unread: false, time: fmt(new Date(now.getTime() - 25 * 60 * 60 * 1000)), dot: "bg-gray-300" },
+    ];
+  });
 
   useEffect(() => {
     try {
@@ -314,6 +319,18 @@ export default function FixerProPage() {
 
   const buildChatFeed = () => {
     if (typeof window === "undefined") return [];
+    let viewerEmail = "";
+    try {
+      viewerEmail = JSON.parse(localStorage.getItem("subscriber") || "{}")?.email || "";
+    } catch {}
+    const parseChatSort = (msg: any) => {
+      const numericId = Number(String(msg?.id || "").replace(/[^0-9]/g, ""));
+      if (Number.isFinite(numericId) && numericId > 0) return numericId;
+      const timeTs = new Date(msg?.time || 0).getTime();
+      return Number.isFinite(timeTs) ? timeTs : 0;
+    };
+    const isVisibleMessage = (m: any) => m && typeof m.text === "string" && m.text.trim() && m.sender !== "system";
+    const isIncomingMessage = (m: any) => isVisibleMessage(m) && m.sender !== viewerEmail && m.sender !== "fixer" && m.sender !== "partner";
     const keys = Object.keys(localStorage).filter((k) => k.startsWith("chat_messages_"));
     const items: any[] = [];
     for (const key of keys) {
@@ -321,18 +338,23 @@ export default function FixerProPage() {
         const po = key.replace("chat_messages_", "");
         const parsed = JSON.parse(localStorage.getItem(key) || "[]");
         if (!Array.isArray(parsed) || parsed.length === 0) continue;
-        const latest = [...parsed].reverse().find((m: any) => m && typeof m.text === "string" && m.text.trim());
-        if (!latest) continue;
+        const reversed = [...parsed].reverse();
+        const latestVisible = reversed.find((m: any) => isVisibleMessage(m));
+        if (!latestVisible) continue;
+        const latestIncoming = reversed.find((m: any) => isIncomingMessage(m));
         const title = localStorage.getItem(`chat_title_${po}`) || `Chat - ${po}`;
         items.push({
           id: po,
           po,
           name: title,
           service: po,
-          lastMsg: latest.text,
-          time: latest.time || "",
-          sort: Number(latest.id) || 0,
-          unread: 0,
+          lastMsg: latestVisible.text,
+          time: latestVisible.time || "",
+          incomingMsg: latestIncoming?.text || "",
+          incomingTime: latestIncoming?.time || "",
+          hasIncoming: Boolean(latestIncoming),
+          sort: parseChatSort(latestVisible),
+          unread: latestIncoming ? 1 : 0,
           online: true,
         });
       } catch {}
@@ -371,11 +393,12 @@ export default function FixerProPage() {
   let activeJobs = mappedOrders.filter(o => !['COMPLETED', 'CANCELLED'].includes(o.status));
   activeJobs = activeJobs.map(job => {
       const stepLookup = mockActiveState.find((x: any) => x.po === job.po);
-      if (stepLookup) return { ...job, mockStep: stepLookup.step };
+      if (stepLookup) return { ...job, mockStep: stepLookup.step, actionNeeded: stepLookup.actionNeeded };
       return job;
   });
   const completedJobs = mappedOrders.filter(o => o.status === 'COMPLETED');
-  let incomingJobs = mappedOrders.filter(o => ['CREATED', 'PENDING', 'MATCHING'].includes(o.status));
+    const acceptedPos = new Set(mockActiveState.filter((x: any) => Number(x.step || 0) >= 6).map((x: any) => x.po));
+    let incomingJobs = mappedOrders.filter(o => ['CREATED', 'PENDING', 'MATCHING'].includes(o.status) && !acceptedPos.has(o.po));
 
   const parseTs = (v: any) => {
     if (typeof v === "string") {
@@ -400,23 +423,27 @@ export default function FixerProPage() {
     description: r.desc,
     mock: true
   }));
+  const scheduledMeetings = mockDynReqs
+    .filter((r: any) => r.type === 'meeting_scheduled')
+    .sort((a: any, b: any) => parseTs(a.date) - parseTs(b.date));
   incomingJobs = [...pendingMeetings, ...incomingJobs] as any[];
 
   const dynamicNotifications = mockDynReqs.map((r: any) => {
-    const displayTime = typeof r.date === "string" && r.date.includes(":") ? r.date : (r.date ? new Date(r.date).toLocaleString() : new Date().toLocaleString());
+    const displayTime = typeof r.date === "string" && r.date.includes(":") ? r.date : (r.date ? new Date(r.date).toLocaleString() : "");
+    if (r.type === "meeting_pending_partner") return { id: `dyn-${r.id}`, msg: "Confirm meeting at site", unread: true, time: displayTime, dot: "bg-amber-500" };
     if (r.type === "meeting_scheduled") return { id: `dyn-${r.id}`, msg: "Confirm meeting at site", unread: true, time: displayTime, dot: "bg-teal-500" };
     if (r.type === "variation_pending") return { id: `dyn-${r.id}`, msg: "Request for Approval of Variation", unread: true, time: displayTime, dot: "bg-purple-500" };
     if (r.type === "complete_pending") return { id: `dyn-${r.id}`, msg: "Request for job complete", unread: true, time: displayTime, dot: "bg-green-500" };
     return null;
   }).filter(Boolean) as any[];
 
-  const displayNotifications = [...dynamicNotifications, ...notifications]
+  const displayNotifications = [...dynamicNotifications, ...staticNotifications]
     .sort((a: any, b: any) => parseTs(b.time) - parseTs(a.time));
 
   const tabs: { key: TabKey; label: string; icon: string; badge?: number }[] = [
     { key: "overview", label: locale === "th" ? "ภาพรวม" : locale === "zh" ? "概览" : "Overview", icon: "" },
-    { key: "requests", label: locale === "th" ? "คำขอใหม่" : locale === "zh" ? "新请求" : "Requests", icon: "📋", badge: 4 },
-        { key: "active", label: locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "当前工作" : "Active Jobs", icon: "", badge: 0 },
+    { key: "requests", label: locale === "th" ? "คำขอใหม่" : locale === "zh" ? "新请求" : "Requests", icon: "📋", badge: incomingJobs.length || undefined },
+        { key: "active", label: locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "当前工作" : "Active Jobs", icon: "", badge: activeJobs.length || undefined },
     
     { key: "properties", label: locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房产" : "Properties", icon: "" },
     { key: "history", label: locale === "th" ? "ประวัติงาน" : locale === "zh" ? "历史" : "History", icon: "" },
@@ -461,13 +488,6 @@ export default function FixerProPage() {
                     if (orderUrl) url = orderUrl;
                   } catch {}
                 }
-                if(!url) {
-                    try {
-                        const localData = JSON.parse(localStorage.getItem("jobData") || "{}");
-                        if(localData && localData.image) url = localData.image;
-                        else if(localData && localData.projectImages && localData.projectImages.length > 0) url = localData.projectImages[0];
-                    } catch {}
-                }
                 if(url) window.open(url, "_blank"); 
                 else { alert("No uploaded file found for this order. Please re-submit from booking so file can be attached to this PO."); } 
               }}>
@@ -487,43 +507,97 @@ export default function FixerProPage() {
             <div className="flex gap-4 mt-8">
               <button 
                 onClick={async () => {
+                  const po = waitModalOrder.po || `PO-2605-${waitModalOrder.id?.slice(0, 4)}`;
+                  const now = new Date().toLocaleString();
+                  const partnerName = partner?.name || partner?.company || 'Partner';
+                  const serviceTitle = waitModalOrder.serviceTh || waitModalOrder.service;
+                  const budgetLabel = waitModalOrder.fee || (waitModalOrder.budget ? `฿${String(waitModalOrder.budget).replace(/^฿/, '')}` : '฿0');
                   try {
                     const token = localStorage.getItem("subscriber_token");
                     try {
                       let wf = JSON.parse(localStorage.getItem("cblue_workflow") || "{}");
                       if(wf) {
-                        wf.step = 6;
+                        wf.step = waitModalOrder.status === 'MEETING_REQUESTED' ? 8 : 6;
                         localStorage.setItem("cblue_workflow", JSON.stringify(wf));
                       }
                     } catch(e) {}
                     if (waitModalOrder.status === 'MEETING_REQUESTED') {
-                      try {
-                        const d = localStorage.getItem("ghis_mock_dyn_req");
-                        if (d) {
-                          let reqs = JSON.parse(d);
-                          reqs = reqs.map((r: any) => r.id === waitModalOrder.id ? { ...r, type: 'meeting_scheduled', desc: 'Meeting invitation sent. Partner has confirmed the meeting time. Tap below after the site meeting is complete.' } : r);
-                          localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(reqs));
-                        }
-                        alert("Meeting confirmed!");
-                        window.location.reload();
-                        return;
-                      } catch(e) {}
+                      const nextReqs = mockDynReqs.map((r: any) => r.id === waitModalOrder.id ? { ...r, type: 'meeting_scheduled', date: r.date || now, desc: 'Meeting invitation confirmed. Proceed after the site meeting is complete.' } : r);
+                      const nextActive = mockActiveState.map((x: any) => x.po === po ? { ...x, step: 8, actionNeeded: true } : x);
+                      localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(nextReqs));
+                      localStorage.setItem("ghis_mock_active", JSON.stringify(nextActive));
+                      setMockDynReqs(nextReqs);
+                      setMockActiveState(nextActive);
+                      window.dispatchEvent(new Event("storage"));
+                      alert("Meeting confirmed!");
+                      setWaitModalOrder(null);
+                      return;
                     }
-                    const res = await fetch(`/api/v1/orders/${waitModalOrder.id}/status`, {
-                      method: 'PUT',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        ...(token ? { Authorization: `Bearer ${token}` } : {})
+
+                    let backendAcceptError = "";
+                    if (waitModalOrder.id && !waitModalOrder.mock) {
+                      const res = await fetch(`/api/v1/orders/${waitModalOrder.id}/status`, {
+                        method: 'PUT',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          ...(token ? { Authorization: `Bearer ${token}` } : {})
+                        },
+                        body: JSON.stringify({ status: "CONFIRMED" })
+                      });
+                      if (!res.ok) {
+                        backendAcceptError = await res.text();
+                      }
+                    }
+
+                    const activeStateRaw = localStorage.getItem("ghis_mock_active");
+                    const dynReqRaw = localStorage.getItem("ghis_mock_dyn_req");
+                    const activeState = activeStateRaw ? JSON.parse(activeStateRaw) : [];
+                    const dynReqs = dynReqRaw ? JSON.parse(dynReqRaw) : [];
+
+                    const nextActive = [
+                      ...activeState.filter((x: any) => x.po !== po),
+                      {
+                        id: waitModalOrder.id,
+                        orderId: waitModalOrder.id,
+                        po,
+                        title: serviceTitle,
+                        customer: waitModalOrder.customer || 'Ghis Cafe',
+                        customerName: waitModalOrder.customer || 'Ghis Cafe',
+                        fixerAlias: partnerName,
+                        partnerName,
+                        date: waitModalOrder.date || now,
+                        budget: budgetLabel,
+                        location: waitModalOrder.subdistrict || 'Saphansong',
+                        tier: waitModalOrder.tier,
+                        actionNeeded: true,
+                        step: 6,
+                        description: waitModalOrder.description,
                       },
-                      body: JSON.stringify({ status: "" })
-                    });
-                    if (!res.ok) {
-                        const errorText = await res.text();
-                {waitModalOrder.status === 'MEETING_REQUESTED' ? 'Confirm Meeting Time' : 'Accept PO'}
-                        alert(`Error accepting PO: ${res.status} - ${errorText}`);
-                        return;
-                    }
-                    alert("PO Accepted Successfully! Notifying Customer..."); window.location.reload();
+                    ];
+                    const nextReqs = [
+                      ...dynReqs.filter((x: any) => x.po !== po),
+                      {
+                        id: `pay-${po}`,
+                        po,
+                        orderId: waitModalOrder.id,
+                        title: serviceTitle,
+                        customer: partnerName,
+                        date: now,
+                        budget: budgetLabel,
+                        tier: waitModalOrder.tier,
+                        desc: 'Partner accepted the PO. Please pay the processing fee and notify to proceed.',
+                        type: 'payment_pending',
+                        step: 6,
+                      },
+                    ];
+
+                    localStorage.setItem("ghis_mock_active", JSON.stringify(nextActive));
+                    localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(nextReqs));
+                    setMockActiveState(nextActive);
+                    setMockDynReqs(nextReqs);
+                    window.dispatchEvent(new Event("storage"));
+                    alert(backendAcceptError ? "PO accepted locally. Customer workflow updated, but backend status sync still needs attention." : "PO Accepted Successfully! Customer can now pay fee and proceed.");
+                    setWaitModalOrder(null);
                   } catch (e) {
                     console.error(e);
                   }
@@ -645,7 +719,7 @@ export default function FixerProPage() {
 
         {/* Tab Content */}
         <div className={`mt-6 ${activeTab !== 'overview' ? 'hidden' : ''}`}>
-          <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={incomingJobs} completedJobs={completedJobs} earnings={EARNINGS_MOCK} stats={stats} notifications={displayNotifications} chats={chatFeed} onJobClick={handleJobClick} onTabChange={(tab) => setActiveTab(tab as TabKey)} />
+          <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={incomingJobs} scheduledMeetings={scheduledMeetings} completedJobs={completedJobs} earnings={EARNINGS_MOCK} stats={stats} notifications={displayNotifications} chats={chatFeed} onJobClick={handleJobClick} onTabChange={(tab) => setActiveTab(tab as TabKey)} />
         </div>
         {activeTab === "requests" && <PartnerRequests locale={locale} incomingJobs={incomingJobs} onJobClick={handleJobClick} />}
         {activeTab === "active" && <PartnerJobs locale={locale} activeJobs={activeJobs} onJobClick={handleJobClick} />}
@@ -826,9 +900,10 @@ export default function FixerProPage() {
 }
 
 /* ===== PARTNER OVERVIEW ===== */
-function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJobs, earnings, stats, notifications, chats = [], onJobClick, onTabChange }: { locale: string; partner: PartnerInfo | null; activeJobs: any[]; incomingJobs: any[]; completedJobs: any[]; earnings: any[]; stats: any; notifications: any[]; chats?: any[]; onJobClick?: (job: any) => void; onTabChange?: (tab: string) => void; }) {
-  const earnings13 = earnings.slice(-13);
-  const maxEarning = earnings13.length > 0 ? Math.max(...earnings13.map(e => e.amount)) : 0;
+function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledMeetings, completedJobs, earnings, stats, notifications, chats = [], onJobClick, onTabChange }: { locale: string; partner: PartnerInfo | null; activeJobs: any[]; incomingJobs: any[]; scheduledMeetings: any[]; completedJobs: any[]; earnings: any[]; stats: any; notifications: any[]; chats?: any[]; onJobClick?: (job: any) => void; onTabChange?: (tab: string) => void; }) {
+  const earnings12 = earnings.slice(-12);
+  const maxEarning = earnings12.length > 0 ? Math.max(...earnings12.map(e => e.amount)) : 0;
+  const recentIncomingChats = chats.filter((c: any) => c.hasIncoming).slice(0, 2);
   return (
     <div className="space-y-6">
       {/* Stats Row */}
@@ -874,8 +949,8 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
         {/* Earnings Chart */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:col-span-2">
           <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">{locale === "th" ? "รายได้รายเดือน" : locale === "zh" ? "月收入" : "Monthly Earnings"}</h3>
-          <div className="grid grid-cols-[repeat(13,minmax(0,1fr))] gap-1 items-end h-40">
-            {earnings13.map((e) => (
+          <div className="grid grid-cols-[repeat(12,minmax(0,1fr))] gap-1 items-end h-40">
+            {earnings12.map((e) => (
               <div key={e.month} className="flex-1 flex flex-col items-center">
                 <span className="text-xs font-bold text-gray-700 mb-1">฿{(e.amount / 1000).toFixed(1)}k</span>
                 <div className="w-full bg-purple-100 rounded-t-lg relative" style={{ height: `${(e.amount / maxEarning) * 100}%` }}>
@@ -921,9 +996,21 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
           <h3 className="font-bold text-gray-900 mb-3 flex items-center justify-between">⏰ Upcoming Meetings <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("requests")}>View All</span></h3>
-          <div className="text-gray-500 text-sm italic">
-            No upcoming meetings
-          </div>
+          {scheduledMeetings.length > 0 ? (
+            <div className="space-y-2">
+              {scheduledMeetings.slice(0, 2).map((meeting: any) => (
+                <div key={meeting.id} className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
+                  <p className="text-sm font-bold text-gray-800">{meeting.title} ({meeting.po})</p>
+                  <p className="text-xs text-gray-500 mt-1">{meeting.date}</p>
+                  <p className="text-xs text-gray-500 mt-1">Location: Saphansong | Customer: {meeting.customer}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-gray-500 text-sm italic">
+              No upcoming meetings
+            </div>
+          )}
         </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
           <h3 className="font-bold text-gray-900 mb-3 flex items-center justify-between">{locale === "th" ? "การแจ้งเตือนล่าสุด" : locale === "zh" ? "最近通知" : "Recent Alerts"} <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("notifications")}>View All</span></h3>
@@ -940,7 +1027,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
           <h3 className="font-bold text-gray-900 mb-3 flex items-center justify-between">{locale === "th" ? "แชทที่เข้ามาล่าสุด" : locale === "zh" ? "最近收到的来信" : "Recent incoming chats"} <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("chat")}>View All</span></h3>
           <div className="space-y-2">
-            {chats && chats.length > 0 ? chats.slice(0, 2).map((c: any) => (
+            {recentIncomingChats.length > 0 ? recentIncomingChats.map((c: any) => (
               <div key={c.id} className={`flex items-center gap-3 p-3 rounded-lg ${c.unread > 0 ? "bg-purple-50 border border-purple-100" : "bg-gray-50"}`}>
                 <div className="relative">
                   <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600">{String(c.name || "C").slice(-3)}</div>
@@ -948,10 +1035,10 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-800">{c.name} <span className="text-gray-400 font-normal">· {c.service || c.po || "Chat"}</span></p>
-                  <p className="text-xs text-gray-500 truncate">{c.lastMsg}</p>
+                  <p className="text-xs text-gray-500 truncate">{c.incomingMsg}</p>
                 </div>
                 <div className="text-right">
-                  <span className="text-xs text-gray-400">{c.time || ""}</span>
+                  <span className="text-xs text-gray-400">{c.incomingTime || ""}</span>
                   {c.unread > 0 && <span className="block mt-0.5 ml-auto w-5 h-5 bg-purple-600 text-white text-[10px] rounded-full flex items-center justify-center font-bold">{c.unread}</span>}
                 </div>
               </div>
@@ -977,14 +1064,17 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
                 <div className="mt-2 w-full pt-1">
                   <div className="w-full overflow-x-auto pb-2 hide-scrollbar">
                     <div className="flex items-center min-w-max relative px-2">
+                      {(() => {
+                        const currentStep = job.mockStep || (job.status === 'COMPLETED' ? 11 : 5);
+                        return (
+                          <>
                       <div className="absolute left-4 right-4 top-3 -translate-y-1/2 h-1 bg-gray-200 rounded-full"></div>
-                      <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${job.status === 'MATCHING' ? Math.min(100, Math.max(0, ((5 - 4) / 7) * 100)) : 0}%` }}></div>
+                      <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, ((currentStep - 4) / 7) * 100))}%` }}></div>
                       
                       {["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"].map((s, i) => {
                         const stepNum = i + 4; // Notify starts at 4
-                        const currentStep = job.mockStep || (job.status === 'COMPLETED' ? 12 : 5);
                         const isCompleted = stepNum < currentStep;
-                        const isCurrent = job.status === 'MATCHING' && stepNum === currentStep;
+                        const isCurrent = stepNum === currentStep;
                         return (
                           <div key={s} className="relative z-10 flex flex-col items-center flex-1 px-1">
                             <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors ${isCompleted ? 'bg-sky-500 text-white' : isCurrent ? 'bg-sky-500 text-white shadow-[0_0_0_4px_rgba(14,165,233,0.2)]' : 'bg-gray-300'}`}>
@@ -996,12 +1086,16 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
                           </div>
                         );
                       })}
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 mt-2">
                   <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[job.tier] || "bg-gray-100 text-gray-600"}`}>{job.tier}</span>
                   {getStatusLabel(job.status, locale) !== "" && <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_STYLE[job.status] || ""}`}>{getStatusLabel(job.status, locale)}</span>}
+                  {job.actionNeeded && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-50 text-red-700">Action Needed</span>}
                   {job.earnings && <span className="text-xs font-bold text-gray-700">{job.earnings}</span>}
                 </div>
               </div>
@@ -1066,13 +1160,16 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
               <div className="mt-2 w-full pt-1">
                 <div className="w-full overflow-x-auto pb-2 hide-scrollbar">
                   <div className="flex items-center min-w-max relative px-2">
+                    {(() => {
+                      const currentStep = job.mockStep || (job.status === 'COMPLETED' ? 11 : 5);
+                      return (
+                        <>
                     <div className="absolute left-4 right-4 top-3 -translate-y-1/2 h-1 bg-gray-200 rounded-full"></div>
-                    <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${job.status === 'MATCHING' ? Math.min(100, Math.max(0, ((5 - 4) / 7) * 100)) : 0}%` }}></div>
+                    <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, ((currentStep - 4) / 7) * 100))}%` }}></div>
                     {["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"].map((s, i) => {
                       const stepNum = i + 4;
-                        const currentStep = job.mockStep || (job.status === 'COMPLETED' ? 12 : 5);
                       const isCompleted = stepNum < currentStep;
-                      const isCurrent = job.status === 'MATCHING' && stepNum === currentStep;
+                      const isCurrent = stepNum === currentStep;
                       return (
                         <div key={s} className="relative z-10 flex flex-col items-center flex-1 px-1">
                           <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors ${isCompleted ? 'bg-sky-500 text-white' : isCurrent ? 'bg-sky-500 text-white shadow-[0_0_0_4px_rgba(14,165,233,0.2)]' : 'bg-gray-300'}`}>
@@ -1084,12 +1181,16 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
                         </div>
                       );
                     })}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
               <div className="flex items-center gap-2 mt-2">
                 <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[job.tier] || "bg-gray-100 text-gray-600"}`}>{job.tier}</span>
                 {getStatusLabel(job.status, locale) !== "" && <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_STYLE[job.status] || ""}`}>{getStatusLabel(job.status, locale)}</span>}
+                {job.actionNeeded && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-50 text-red-700">Action Needed</span>}
                 {job.earnings && <span className="text-xs font-bold text-gray-700">{job.earnings}</span>}
               </div>
             </div>

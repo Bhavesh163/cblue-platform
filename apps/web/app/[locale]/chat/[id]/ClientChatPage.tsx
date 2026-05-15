@@ -45,7 +45,9 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) setMessages(parsed);
+        else localStorage.setItem(key, JSON.stringify(messages));
       }
+      else localStorage.setItem(key, JSON.stringify(messages));
     } catch {}
 
     // BroadcastChannel for real-time cross-tab sync
@@ -64,12 +66,20 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
         } catch {}
       }
     };
+    const handleChatUpdate = () => {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+        if (Array.isArray(parsed) && parsed.length > 0) setMessages(parsed);
+      } catch {}
+    };
     window.addEventListener("storage", handleStorage);
+    window.addEventListener("cblue-chat-updated", handleChatUpdate as EventListener);
     return () => {
       bc.close();
       window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("cblue-chat-updated", handleChatUpdate as EventListener);
     };
-  }, [orderId]);
+  }, [orderId, messages]);
 
   useEffect(() => {
     const listEl = chatListRef.current;
@@ -86,11 +96,12 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
         id: Date.now(),
         sender: currentEmailRef.current,
         text: inputText.trim(),
-        time: new Date().toLocaleTimeString()
+        time: new Date().toLocaleString()
       }];
       try {
         localStorage.setItem(key, JSON.stringify(updated));
         bcRef.current?.postMessage(updated);
+        window.dispatchEvent(new Event("storage"));
         window.dispatchEvent(new CustomEvent("cblue-chat-updated", { detail: { orderId } }));
       } catch {}
       return updated;

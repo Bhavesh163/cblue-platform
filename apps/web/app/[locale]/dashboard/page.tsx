@@ -728,6 +728,24 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
   const buildChatFeed = () => {
     if (typeof window === "undefined") return [];
+    let viewerEmail = "";
+    try {
+      viewerEmail = JSON.parse(localStorage.getItem("subscriber") || "{}")?.email || "";
+    } catch {}
+    const parseChatSort = (msg: any) => {
+      const numericId = Number(String(msg?.id || "").replace(/[^0-9]/g, ""));
+      if (Number.isFinite(numericId) && numericId > 0) return numericId;
+      const timeTs = new Date(msg?.time || 0).getTime();
+      return Number.isFinite(timeTs) ? timeTs : 0;
+    };
+    const isVisibleMessage = (m: any) => {
+      if (!m || typeof m.text !== "string") return false;
+      if (!m.text.trim()) return false;
+      if (m.sender === "system") return false;
+      if (m.text.includes("just be paid by customer to notify to proceed and let both meet")) return false;
+      return true;
+    };
+    const isIncomingMessage = (m: any) => isVisibleMessage(m) && m.sender !== viewerEmail && m.sender !== "customer";
     const keys = Object.keys(localStorage).filter((k) => k.startsWith("chat_messages_"));
     const items: any[] = [];
     for (const key of keys) {
@@ -736,22 +754,20 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         const parsed = JSON.parse(localStorage.getItem(key) || "[]");
         if (!Array.isArray(parsed) || parsed.length === 0) continue;
         const reversed = [...parsed].reverse();
-        const latest = reversed.find((m: any) => {
-          if (!m || typeof m.text !== "string") return false;
-          if (!m.text.trim()) return false;
-          if (m.sender === "system") return false;
-          if (m.text.includes("just be paid by customer to notify to proceed and let both meet")) return false;
-          return true;
-        });
-        if (!latest) continue;
+        const latestVisible = reversed.find((m: any) => isVisibleMessage(m));
+        if (!latestVisible) continue;
+        const latestIncoming = reversed.find((m: any) => isIncomingMessage(m));
         const title = localStorage.getItem(`chat_title_${po}`) || `Chat - ${po}`;
         items.push({
           id: po,
           po,
           name: title,
-          lastMsg: latest.text,
-          time: latest.time || "",
-          sort: Number(latest.id) || 0,
+          lastMsg: latestVisible.text,
+          time: latestVisible.time || "",
+          incomingMsg: latestIncoming?.text || "",
+          incomingTime: latestIncoming?.time || "",
+          hasIncoming: Boolean(latestIncoming),
+          sort: parseChatSort(latestVisible),
         });
       } catch {}
     }
@@ -805,20 +821,19 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     .sort((a: any, b: any) => parseDateMs(a.date) - parseDateMs(b.date));
   const workflowAlerts = mockDynRequests
     .map((x: any) => {
+      if (x.type === "payment_pending") return { id: `a-${x.id}`, msg: "Partner accepted PO — please proceed to pay fee.", time: x.date || "", dot: "bg-blue-500" };
+      if (x.type === "chat_ready") return { id: `a-${x.id}`, msg: "Chat is active — send meeting invitation when ready.", time: x.date || "", dot: "bg-sky-500" };
+      if (x.type === "meeting_pending_partner") return { id: `a-${x.id}`, msg: "Meeting invitation sent — waiting for partner confirmation.", time: x.date || "", dot: "bg-amber-500" };
       if (x.type === "meeting_scheduled") return { id: `a-${x.id}`, msg: "Confirm meeting at site", time: x.date || new Date().toLocaleString(), dot: "bg-teal-500" };
       if (x.type === "variation_pending") return { id: `a-${x.id}`, msg: "Request for Approval of Variation", time: x.date || new Date().toLocaleString(), dot: "bg-purple-500" };
       if (x.type === "complete_pending") return { id: `a-${x.id}`, msg: "Request for job complete", time: x.date || new Date().toLocaleString(), dot: "bg-green-500" };
       return null;
     })
     .filter(Boolean) as any[];
-  const baseAlerts = subscriber?.email?.includes("ghis")
-    ? [
-        { id: "base-1", msg: "Partner accepted PO — please proceed to pay fee.", time: new Date(Date.now() - 2 * 60 * 60 * 1000).toLocaleString(), dot: "bg-blue-500" },
-        { id: "base-2", msg: "New meeting request — confirm your availability.", time: new Date(Date.now() - 3 * 60 * 60 * 1000).toLocaleString(), dot: "bg-amber-500" },
-      ]
-    : [];
+  const baseAlerts: any[] = [];
   const allAlerts = [...workflowAlerts, ...baseAlerts].sort((a, b) => parseDateMs(b.time) - parseDateMs(a.time));
   const overviewAlerts = allAlerts.slice(0, 3);
+  const overviewIncomingChats = chatFeed.filter((c: any) => c.hasIncoming).slice(0, 2);
 
   const STEPS_FULL = ["Match", "Select", "PO", "Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"];
   const STEPS = ["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"];
@@ -873,7 +888,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 const pendingId = `meet-pending-${item.po}`;
                 setMockDynRequests(prev => {
                   const f = prev.filter((x: any) => x.id !== item.id && x.id !== pendingId);
-                  return [...f, { id: pendingId, po: item.po, title: item.title, customer: item.customer, date: new Date().toLocaleString(), budget: item.budget, tier: item.tier, desc: 'Waiting for partner to confirm meeting time...', type: 'meeting_pending_partner', step: 8 }];
+                  return [...f, { id: pendingId, po: item.po, title: item.title, customer: item.customer, date: new Date().toLocaleString(), budget: item.budget, tier: item.tier, desc: 'Meeting invitation sent. Waiting for partner to confirm date and time.', type: 'meeting_pending_partner', step: 8 }];
                 });
               }}>Send Meeting Invitation</button>
             </div>
@@ -1050,7 +1065,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         <div className="flex items-center gap-4">
            <div className="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">{(item.title || "R").charAt(0)}</div>
            <div>
-             <h3 className="font-bold text-gray-900">{item.title} <span className="text-sm font-normal text-gray-500">· {item.po}</span></h3>
+             <h3 className="font-bold text-gray-900">{item.title} <span className="text-sm font-normal text-gray-500">· {item.po}{item.step ? ` · Step ${item.step} of 11` : ''}</span></h3>
              <p className="text-sm text-gray-600 mt-0.5">{item.customer} · {item.date}</p>
              <p className="text-xs text-gray-500 mt-1">{item.desc}</p>
            </div>
@@ -1075,7 +1090,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
          <div className="w-10 h-10 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center font-bold">{(item.title || item.service || "C").charAt(0)}</div>
          <div>
            <h3 className="font-bold text-gray-900">{item.title || item.service} <span className="text-sm font-normal text-gray-400">· {item.po || `PO-${item.id?.slice(0,8) || '2605-8471'}`} | {item.subdistrict || 'Saphansong'}</span></h3>
-           <p className="text-sm text-gray-600 mt-0.5">{item.customer || "Customer"} · {item.date || "11/5/2026 14:30"} · Budget: {item.budget || ('฿' + Number(item.price || 0).toLocaleString())}</p>
+           <p className="text-sm text-gray-600 mt-0.5">{item.fixerAlias || item.partnerName || item.customer || "Customer"} · {item.date || "11/5/2026 14:30"} · Budget: {item.budget || ('฿' + Number(item.price || 0).toLocaleString())}</p>
          </div>
       </div>
       <div className="w-full xl:w-[620px] shrink-0 mt-2 xl:mt-0">
@@ -1138,10 +1153,8 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
               <h2 className="text-xl font-bold text-gray-800">Active Jobs</h2>
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 divide-y divide-gray-50 mt-4 min-w-[900px]">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 divide-y divide-gray-50 mt-4">
               {combinedActive.map((m, i) => renderActiveCard(m, i))}
-            </div>
           </div>
         </div>
       )}
@@ -1267,12 +1280,12 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                 <h3 className="font-bold text-gray-800 mb-4 flex items-center justify-between">Recent Incoming Chats <span className="text-xs text-sky-600 cursor-pointer" onClick={() => setActiveTab("chat")}>View All</span></h3>
                 <div className="space-y-4">
-                      {chatFeed.length > 0 ? (
+                      {overviewIncomingChats.length > 0 ? (
                     <>
-                      {chatFeed.slice(0, 2).map((c: any) => (
+                      {overviewIncomingChats.map((c: any) => (
                         <div key={c.id} className="bg-white rounded-lg p-4 border border-gray-100 shadow-sm">
-                          <p className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-2"><span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">C</span> {c.name} <span className="text-xs text-gray-400 font-normal ml-auto">{c.time || new Date().toLocaleString()}</span></p>
-                          <p className="text-sm text-gray-600">{c.lastMsg}</p>
+                          <p className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-2"><span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">C</span> {c.name} <span className="text-xs text-gray-400 font-normal ml-auto">{c.incomingTime || ""}</span></p>
+                          <p className="text-sm text-gray-600">{c.incomingMsg}</p>
                         </div>
                       ))}
                     </>
@@ -1425,6 +1438,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
               <button
                 className="mt-4 px-6 py-3 w-full bg-sky-100 border border-sky-300 text-sky-800 font-bold rounded-xl shadow-sm hover:bg-sky-200 transition"
                 onClick={() => {
+                  const now = new Date().toLocaleString();
                   setMockPayments(prev => ({...prev, [waitModalOrder.id]: true}));
                   setMockActiveItems(prev => [
                     ...prev.filter((x: any) => x.po !== waitModalOrder.request?.po),
@@ -1433,23 +1447,24 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                   const po = waitModalOrder.request?.po;
                   const chatReqId = `chat-${po}`;
                   setMockDynRequests(prev => [
-                    ...prev.filter((x: any) => x.id !== chatReqId),
-                    { id: chatReqId, po, title: waitModalOrder.request?.title, customer: waitModalOrder.request?.customer || 'Suppadesh', date: new Date().toLocaleString(), budget: waitModalOrder.request?.budget, tier: waitModalOrder.request?.tier, desc: 'Chat is active. Send meeting invitation when you are ready.', type: 'chat_ready', step: 7 }
+                    ...prev.filter((x: any) => x.po !== po && x.id !== chatReqId),
+                    { id: chatReqId, po, title: waitModalOrder.request?.title, customer: waitModalOrder.request?.customer || 'Suppadesh', date: now, budget: waitModalOrder.request?.budget, tier: waitModalOrder.request?.tier, desc: 'Chat is active. Send meeting invitation when you are ready.', type: 'chat_ready', step: 7 }
                   ]);
                   try {
                     const chatKey = `chat_messages_${waitModalOrder.request?.po}`;
                     const existing = JSON.parse(localStorage.getItem(chatKey) || '[]');
-                    if (existing.length === 0) localStorage.setItem(chatKey, JSON.stringify([{ id: Date.now(), sender: 'system', text: 'Payment confirmed. Your project chat is now active. Please coordinate with your partner here.', time: new Date().toLocaleTimeString() }]));
+                    if (existing.length === 0) localStorage.setItem(chatKey, JSON.stringify([{ id: Date.now(), sender: 'system', text: 'Payment confirmed. Your project chat is now active. Please coordinate with your partner here.', time: now }]));
                     const title = waitModalOrder.request?.title || '';
                     const budget = waitModalOrder.request?.budget || '';
                     if (po) {
                       localStorage.setItem(`chat_title_${po}`, `${title} - ${po} - ${budget}`);
                       localStorage.setItem(`chat_from_${po}`, "dashboard");
+                      window.dispatchEvent(new Event("storage"));
                       window.dispatchEvent(new CustomEvent("cblue-chat-updated", { detail: { orderId: po } }));
                     }
                   } catch {}
                   setWaitModalOrder(null);
-                  setActiveTab("chat");
+                  setActiveTab("requests");
                 }}
               >
                 🚧 Testing Period Payment Pill 🚧
