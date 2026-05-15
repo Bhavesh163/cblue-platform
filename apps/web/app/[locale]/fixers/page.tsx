@@ -376,6 +376,11 @@ export default function FixerProPage() {
   });
   const completedJobs = mappedOrders.filter(o => o.status === 'COMPLETED');
   let incomingJobs = mappedOrders.filter(o => ['CREATED', 'PENDING', 'MATCHING'].includes(o.status));
+
+  const parseTs = (v: any) => {
+    const ts = new Date(v || 0).getTime();
+    return Number.isFinite(ts) ? ts : 0;
+  };
   
   const pendingMeetings = mockDynReqs.filter(r => r.type === 'meeting_pending_partner').map(r => ({
     id: r.id,
@@ -392,6 +397,16 @@ export default function FixerProPage() {
     mock: true
   }));
   incomingJobs = [...pendingMeetings, ...incomingJobs] as any[];
+
+  const dynamicNotifications = mockDynReqs.map((r: any) => {
+    if (r.type === "meeting_scheduled") return { id: `dyn-${r.id}`, msg: "Confirm meeting at site", unread: true, time: r.date || new Date().toLocaleString(), dot: "bg-teal-500" };
+    if (r.type === "variation_pending") return { id: `dyn-${r.id}`, msg: "Request for Approval of Variation", unread: true, time: r.date || new Date().toLocaleString(), dot: "bg-purple-500" };
+    if (r.type === "complete_pending") return { id: `dyn-${r.id}`, msg: "Request for job complete", unread: true, time: r.date || new Date().toLocaleString(), dot: "bg-green-500" };
+    return null;
+  }).filter(Boolean) as any[];
+
+  const displayNotifications = [...dynamicNotifications, ...notifications]
+    .sort((a: any, b: any) => parseTs(b.time) - parseTs(a.time));
 
   const tabs: { key: TabKey; label: string; icon: string; badge?: number }[] = [
     { key: "overview", label: locale === "th" ? "ภาพรวม" : locale === "zh" ? "概览" : "Overview", icon: "" },
@@ -426,18 +441,41 @@ export default function FixerProPage() {
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Budget</span><span className="font-bold text-amber-600">฿{waitModalOrder.budget || waitModalOrder.estimatedPrice || waitModalOrder.finalPrice || '0'}</span></div>
               <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">Project Details</span><span className="font-bold text-gray-800 bg-white p-2 rounded border border-gray-100">{(waitModalOrder.description || waitModalOrder.service || "").replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?/, "")}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Uploaded Files</span><span className="font-semibold text-sky-600 cursor-pointer hover:underline" onClick={() => { 
-                let url = waitModalOrder?.issueImage || waitModalOrder?.image || waitModalOrder?.fileUrl || (waitModalOrder?.projectImages && waitModalOrder?.projectImages[0]) || (waitModalOrder?.images && waitModalOrder?.images[0]) || (waitModalOrder?.metadata?.images && waitModalOrder?.metadata.images[0]) || (waitModalOrder?.metadata?.issueImageUrl) || (waitModalOrder?.metadata?.issueImage); 
+                let url = waitModalOrder?.issueImage || waitModalOrder?.image || waitModalOrder?.fileUrl || (waitModalOrder?.projectImages && waitModalOrder?.projectImages[0]) || (waitModalOrder?.images && waitModalOrder?.images[0]) || (waitModalOrder?.metadata?.images && waitModalOrder?.metadata.images[0]) || (waitModalOrder?.metadata?.issueImageUrl) || (waitModalOrder?.metadata?.issueImage);
+                if (!url) {
+                  try {
+                    const poMap = JSON.parse(localStorage.getItem("cblue_po_attachments") || "{}");
+                    const poUrl = waitModalOrder?.po ? poMap[waitModalOrder.po]?.[0] : "";
+                    if (poUrl) url = poUrl;
+                  } catch {}
+                }
+                if (!url) {
+                  try {
+                    const orderMap = JSON.parse(localStorage.getItem("cblue_order_attachments") || "{}");
+                    const orderUrl = waitModalOrder?.id ? orderMap[waitModalOrder.id]?.[0] : "";
+                    if (orderUrl) url = orderUrl;
+                  } catch {}
+                }
                 if(!url) {
                     try {
                         const localData = JSON.parse(localStorage.getItem("jobData") || "{}");
                         if(localData && localData.image) url = localData.image;
                         else if(localData && localData.projectImages && localData.projectImages.length > 0) url = localData.projectImages[0];
-                    } catch(e) {}
+                    } catch {}
                 }
                 if(url) window.open(url, "_blank"); 
-                else { alert("No uploaded file found for this order."); } 
+                else { alert("No uploaded file found for this order. Please re-submit from booking so file can be attached to this PO."); } 
               }}>
-                {(waitModalOrder?.image || (waitModalOrder?.images && waitModalOrder?.images.length > 0) || waitModalOrder?.fileUrl || (waitModalOrder?.projectImages && waitModalOrder?.projectImages.length > 0) || waitModalOrder?.metadata?.images || (typeof window !== 'undefined' && localStorage.getItem("jobData") && JSON.parse(localStorage.getItem("jobData") || "{}").image)) ? "1 file attached (Click to View)" : "No file attached"}
+                {(() => {
+                  const hasDirect = !!(waitModalOrder?.image || (waitModalOrder?.images && waitModalOrder?.images.length > 0) || waitModalOrder?.fileUrl || (waitModalOrder?.projectImages && waitModalOrder?.projectImages.length > 0) || waitModalOrder?.metadata?.images);
+                  let hasMapped = false;
+                  try {
+                    const poMap = JSON.parse(localStorage.getItem("cblue_po_attachments") || "{}");
+                    const orderMap = JSON.parse(localStorage.getItem("cblue_order_attachments") || "{}");
+                    hasMapped = Boolean((waitModalOrder?.po && poMap[waitModalOrder.po]?.length) || (waitModalOrder?.id && orderMap[waitModalOrder.id]?.length));
+                  } catch {}
+                  return (hasDirect || hasMapped) ? "1 file attached (Click to View)" : "No file attached";
+                })()}
               </span></div>
             </div>
 
@@ -602,7 +640,7 @@ export default function FixerProPage() {
 
         {/* Tab Content */}
         <div className={`mt-6 ${activeTab !== 'overview' ? 'hidden' : ''}`}>
-          <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={incomingJobs} completedJobs={completedJobs} earnings={EARNINGS_MOCK} stats={stats} notifications={notifications} chats={chatFeed} onJobClick={handleJobClick} onTabChange={(tab) => setActiveTab(tab as TabKey)} />
+          <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={incomingJobs} completedJobs={completedJobs} earnings={EARNINGS_MOCK} stats={stats} notifications={displayNotifications} chats={chatFeed} onJobClick={handleJobClick} onTabChange={(tab) => setActiveTab(tab as TabKey)} />
         </div>
         {activeTab === "requests" && <PartnerRequests locale={locale} incomingJobs={incomingJobs} onJobClick={handleJobClick} />}
         {activeTab === "active" && <PartnerJobs locale={locale} activeJobs={activeJobs} onJobClick={handleJobClick} />}
@@ -610,7 +648,7 @@ export default function FixerProPage() {
         {activeTab === "properties" && <PartnerProperties locale={locale} prefix={prefix} properties={myProperties} />}
         {activeTab === "history" && <PartnerHistory locale={locale} completedJobs={completedJobs} />}
         {activeTab === "chat" && <PartnerChats locale={locale} chats={chatFeed} />}
-        {activeTab === "notifications" && <PartnerNotifications locale={locale} notifications={notifications} />}
+        {activeTab === "notifications" && <PartnerNotifications locale={locale} notifications={displayNotifications} />}
         {activeTab === "profile" && <PartnerProfile locale={locale} prefix={prefix} partner={partner} />}
           </>
         )}

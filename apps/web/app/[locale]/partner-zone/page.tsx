@@ -404,15 +404,28 @@ export default function PartnerZonePage() {
               <div className="flex justify-between"><span className="text-gray-500">Project Details</span><span className="font-bold text-gray-800">{waitModalJob.description}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Uploaded Files</span><span className="font-semibold text-sky-600 cursor-pointer hover:underline" onClick={() => { 
                 let url = (waitModalJob as any)?.issueImage || (waitModalJob as any)?.image || (waitModalJob as any)?.fileUrl || ((waitModalJob as any)?.projectImages && (waitModalJob as any)?.projectImages[0]) || ((waitModalJob as any)?.images && (waitModalJob as any)?.images[0]) || ((waitModalJob as any)?.metadata?.images && (waitModalJob as any)?.metadata.images[0]) || ((waitModalJob as any)?.metadata?.issueImageUrl) || ((waitModalJob as any)?.metadata?.issueImage); 
+                if (!url) {
+                  try {
+                    const poMap = JSON.parse(localStorage.getItem("cblue_po_attachments") || "{}");
+                    const poKey = `PO-2605-${waitModalJob.id.slice(0, 4)}`;
+                    if (poMap[poKey] && poMap[poKey][0]) url = poMap[poKey][0];
+                  } catch {}
+                }
+                if (!url) {
+                  try {
+                    const orderMap = JSON.parse(localStorage.getItem("cblue_order_attachments") || "{}");
+                    if (orderMap[waitModalJob.id] && orderMap[waitModalJob.id][0]) url = orderMap[waitModalJob.id][0];
+                  } catch {}
+                }
                 if(!url) {
                     try {
                         const localData = JSON.parse(localStorage.getItem("jobData") || "{}");
                         if(localData && localData.image) url = localData.image;
                         else if(localData && localData.projectImages && localData.projectImages.length > 0) url = localData.projectImages[0];
-                    } catch(e) {}
+                  } catch {}
                 }
                 if(url) window.open(url, "_blank"); 
-                else { window.open("", "_blank"); } 
+                else { alert("No uploaded file found for this order."); } 
               }}>
                 {((waitModalJob as any)?.image || ((waitModalJob as any)?.images && (waitModalJob as any)?.images.length > 0) || (waitModalJob as any)?.fileUrl || ((waitModalJob as any)?.projectImages && (waitModalJob as any)?.projectImages.length > 0) || (waitModalJob as any)?.metadata?.images || (typeof window !== 'undefined' && localStorage.getItem("jobData") && JSON.parse(localStorage.getItem("jobData") || "{}").image)) ? "1 file attached (Click to View)" : "No file attached"}
               </span></div>

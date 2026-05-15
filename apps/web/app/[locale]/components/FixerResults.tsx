@@ -412,6 +412,15 @@ const getTierColor = (tier: string) => tierColors[tier] ?? tierColors["standard"
 
 type Step = "matching" | "select" | "po" | "notify" | "confirm" | "payment" | "chat" | "meeting" | "variation" | "complete" | "rate" | "done";
 
+async function fileToDataUrl(file: File): Promise<string> {
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
+}
+
 
 
 
@@ -629,6 +638,24 @@ export default function FixerResults({
   };
 
   const handlePOAcknowledge = async () => {
+    let createdOrderId = "";
+    let storedAttachments: string[] = [];
+
+    // Persist uploaded files per-PO/order for partner PO modal retrieval.
+    try {
+      if (issueImages && issueImages.length > 0) {
+        const limited = issueImages.slice(0, 5);
+        storedAttachments = await Promise.all(limited.map((f) => fileToDataUrl(f)));
+
+        const byPoRaw = localStorage.getItem("cblue_po_attachments") || "{}";
+        const byPo = JSON.parse(byPoRaw);
+        byPo[poNumber] = storedAttachments;
+        localStorage.setItem("cblue_po_attachments", JSON.stringify(byPo));
+      }
+    } catch {
+      // Non-blocking for demo flow
+    }
+
     // Attempt to persist the order to database
     try {
       const token = localStorage.getItem("subscriber_token");
@@ -637,7 +664,7 @@ export default function FixerResults({
         const estStr = String(selectedFixer.price || 0).replace(/[^0-9.]/g, '');
         const estPrice = parseFloat(estStr) || 0;
 
-        await fetch("/api/v1/orders", {
+        const createRes = await fetch("/api/v1/orders", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -651,6 +678,26 @@ export default function FixerResults({
             estimatedPrice: estPrice,
           })
         });
+
+        if (createRes.ok) {
+          try {
+            const created = await createRes.json();
+            createdOrderId = created?.id || "";
+          } catch {
+            createdOrderId = "";
+          }
+        }
+
+        if (createdOrderId && storedAttachments.length > 0) {
+          try {
+            const byOrderRaw = localStorage.getItem("cblue_order_attachments") || "{}";
+            const byOrder = JSON.parse(byOrderRaw);
+            byOrder[createdOrderId] = storedAttachments;
+            localStorage.setItem("cblue_order_attachments", JSON.stringify(byOrder));
+          } catch {
+            // Non-blocking for demo flow
+          }
+        }
       }
     } catch (e) {
       console.error("Order creation non-blocking fail", e);
