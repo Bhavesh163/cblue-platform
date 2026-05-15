@@ -54,12 +54,14 @@ const stats = {
 
 const chats: any[] = [];
 
+const _n = new Date();
+const _fmt = (d: Date) => d.toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 const notifications: any[] = [
-    { id: 1, msg: "Review PO Details for GREEN CONSTRUCTION", unread: true, time: "Just now", dot: "bg-purple-500" },
-    { id: 2, msg: "Review PO Details for FIT OUT", unread: true, time: "2 mins ago", dot: "bg-purple-500" },
-    { id: 3, msg: "Confirm meeting at site", unread: false, time: "1 hr ago", dot: "bg-gray-300" },
-    { id: 4, msg: "Request for Approval of Variation", unread: false, time: "Yesterday", dot: "bg-gray-300" },
-    { id: 5, msg: "Request for job complete", unread: false, time: "Yesterday", dot: "bg-gray-300" },
+    { id: 1, msg: "Review PO Details for GREEN CONSTRUCTION", unread: true, time: _fmt(_n), dot: "bg-purple-500" },
+    { id: 2, msg: "Review PO Details for FIT OUT", unread: true, time: _fmt(new Date(_n.getTime() - 2 * 60 * 1000)), dot: "bg-purple-500" },
+    { id: 3, msg: "Confirm meeting at site", unread: false, time: _fmt(new Date(_n.getTime() - 60 * 60 * 1000)), dot: "bg-gray-300" },
+    { id: 4, msg: "Request for Approval of Variation", unread: false, time: _fmt(new Date(_n.getTime() - 24 * 60 * 60 * 1000)), dot: "bg-gray-300" },
+    { id: 5, msg: "Request for job complete", unread: false, time: _fmt(new Date(_n.getTime() - 25 * 60 * 60 * 1000)), dot: "bg-gray-300" },
   ];
 
 const STATUS_STYLE: Record<string, string> = {
@@ -85,7 +87,7 @@ const STATUS_LABEL: Record<string, Record<string, string>> = {
   ACCEPTED: { en: "", th: "", zh: "" },
   MATCHING: { en: "Action needed", th: "Action needed", zh: "Action needed" },
 };
-const getStatusLabel = (status: string, locale: string) => STATUS_LABEL[status]?.[locale] || status.replace(/_/g, " ");
+const getStatusLabel = (status: string, locale: string) => { const lbl = STATUS_LABEL[status]; if (lbl !== undefined) return lbl[locale as keyof typeof lbl] ?? ""; return status.replace(/_/g, " "); };
 
 type TabKey = "overview" | "requests" | "active" | "properties" | "history" | "chat" | "notifications" | "profile";
 
@@ -334,7 +336,7 @@ export default function FixerProPage() {
                     } catch(e) {}
                 }
                 if(url) window.open(url, "_blank"); 
-                else { window.open("https://images.unsplash.com/photo-1541888081622-3866d939b4b9?q=80&w=2670&auto=format&fit=crop", "_blank"); } 
+                else { alert("No uploaded file found for this order."); } 
               }}>
                 {(waitModalOrder?.image || (waitModalOrder?.images && waitModalOrder?.images.length > 0) || waitModalOrder?.fileUrl || (waitModalOrder?.projectImages && waitModalOrder?.projectImages.length > 0) || waitModalOrder?.metadata?.images || (typeof window !== 'undefined' && localStorage.getItem("jobData") && JSON.parse(localStorage.getItem("jobData") || "{}").image)) ? "1 file attached (Click to View)" : "No file attached"}
               </span></div>
@@ -714,7 +716,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
         )}
 
         {/* Earnings Chart */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:col-span-2">
           <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">{locale === "th" ? "รายได้รายเดือน" : locale === "zh" ? "月收入" : "Monthly Earnings"}</h3>
           <div className="flex items-end gap-2 overflow-x-auto pb-4 h-36 min-w-full">
             {earnings.map((e) => (
@@ -737,7 +739,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
           <span className="text-xs bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full font-bold">{incomingJobs.length}</span>
         </div>
         <div className="divide-y divide-gray-50">
-          {incomingJobs.slice(0, 3).map((req) => (
+          {incomingJobs.map((req) => (
             <div key={req.id} className="px-6 py-4 flex items-center gap-4 hover:bg-amber-50 transition cursor-pointer" onClick={() => onJobClick && onJobClick(req)}>
               <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center text-lg"></div>
               <div className="flex-1 min-w-0">
@@ -819,7 +821,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
                       <div className="absolute left-4 right-4 top-3 -translate-y-1/2 h-1 bg-gray-200 rounded-full"></div>
                       <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, (( (job.status==='IN_PROGRESS' || job.status==='CONFIRMED' || job.status==='ACCEPTED' ? 5 : job.status==='COMPLETED' ? 12 : 5) - 4) / (8)) * 100))}%` }}></div>
                       
-                      {["Notify", "Confirm", "Pay", "Chat", "Meet", "Variation", "Complete", "Rate", "Done"].map((s, i) => {
+                      {["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate", "Done"].map((s, i) => {
                         const stepNum = i + 4; // Notify starts at 4
                         const currentStep = job.status === 'COMPLETED' ? 12 : 5;
                         const isCompleted = stepNum < currentStep;
@@ -902,8 +904,29 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? job.serviceTh : locale === "zh" ? job.serviceZh : job.service}</p>
               <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"} &middot; {job.po} | {job.subdistrict || "Saphansong"}</p>
-              <div className="mt-1.5 w-full bg-gray-100 rounded-full h-1.5">
-                <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${job.progress}%` }} />
+              <div className="mt-2 w-full pt-1">
+                <div className="w-full overflow-x-auto pb-2 hide-scrollbar">
+                  <div className="flex items-center min-w-max relative px-2">
+                    <div className="absolute left-4 right-4 top-3 -translate-y-1/2 h-1 bg-gray-200 rounded-full"></div>
+                    <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, (((job.status==='IN_PROGRESS' || job.status==='CONFIRMED' || job.status==='ACCEPTED' ? 5 : job.status==='COMPLETED' ? 12 : 5) - 4) / 8) * 100))}%` }}></div>
+                    {["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate", "Done"].map((s, i) => {
+                      const stepNum = i + 4;
+                      const currentStep = job.status === 'COMPLETED' ? 12 : 5;
+                      const isCompleted = stepNum < currentStep;
+                      const isCurrent = stepNum === currentStep;
+                      return (
+                        <div key={s} className="relative z-10 flex flex-col items-center flex-1 px-1">
+                          <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors ${isCompleted ? 'bg-sky-500 text-white' : isCurrent ? 'bg-sky-500 text-white shadow-[0_0_0_4px_rgba(14,165,233,0.2)]' : 'bg-gray-300'}`}>
+                            {isCompleted ? '✓' : ''}
+                          </div>
+                          <span className={`text-[10px] mt-2 whitespace-nowrap ${isCurrent ? 'text-sky-600 font-bold' : isCompleted ? 'text-sky-500' : 'text-gray-400'}`}>
+                            {s}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-2">
