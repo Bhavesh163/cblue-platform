@@ -16,9 +16,11 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
   ]);
   const [inputText, setInputText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const currentEmailRef = useRef<string>("guest");
   
   useEffect(() => {
     setMounted(true);
+    try { const sub = JSON.parse(localStorage.getItem("subscriber") || "{}"); currentEmailRef.current = sub?.email || "guest"; } catch {}
     const key = `chat_messages_${orderId}`;
     try {
       const stored = localStorage.getItem(key);
@@ -50,7 +52,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
     setMessages(prev => {
       const updated = [...prev, {
         id: Date.now(),
-        sender: "me",
+        sender: currentEmailRef.current,
         text: inputText.trim(),
         time: new Date().toLocaleTimeString()
       }];
@@ -73,8 +75,10 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
         <button
           onClick={() => {
             try {
-              const isFixer = !!localStorage.getItem("fixer_profile_cache");
-              router.push(`/${locale}/${isFixer ? 'fixers' : 'dashboard'}`);
+              const sub = JSON.parse(localStorage.getItem("subscriber") || "{}");
+              const fixerCache = (() => { try { return JSON.parse(localStorage.getItem("fixer_profile_cache") || "null"); } catch { return null; } })();
+              const isActualFixer = fixerCache && fixerCache.email === sub?.email;
+              router.push(`/${locale}/${isActualFixer ? 'fixers' : 'dashboard'}`);
             } catch { router.back(); }
           }}
           className="text-gray-400 hover:text-gray-800 transition text-2xl font-light leading-none"
@@ -86,14 +90,16 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
 
       {/* Chat Area */}
       <div className="flex-1 p-4 overflow-y-auto space-y-4">
-        {messages.map(msg => (
-          <div key={msg.id} className={`flex ${msg.sender === 'me' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${msg.sender === 'me' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none shadow-sm'}`}>
+        {messages.map(msg => {
+          const isMine = msg.sender === currentEmailRef.current || msg.sender === "me";
+          return (
+          <div key={msg.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${isMine ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none shadow-sm'}`}>
               <p>{msg.text}</p>
-              <div className={`text-[10px] mt-1 text-right ${msg.sender === 'me' ? 'text-blue-100' : 'text-gray-400'}`}>{msg.time}</div>
+              <div className={`text-[10px] mt-1 text-right ${isMine ? 'text-blue-100' : 'text-gray-400'}`}>{msg.time}</div>
             </div>
           </div>
-        ))}
+        );})}
         <div ref={bottomRef} />
       </div>
 

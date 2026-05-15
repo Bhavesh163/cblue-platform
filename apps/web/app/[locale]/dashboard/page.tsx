@@ -236,7 +236,7 @@ export default function DashboardPage() {
                   <p className="text-sky-200 text-xs">{subscriber.email}</p>
                 </div>
                 <button
-                  onClick={() => { localStorage.removeItem("subscriber"); localStorage.removeItem("subscriber_token"); localStorage.removeItem("pdpa_consent_customer"); window.dispatchEvent(new Event("storage")); router.push(prefix); }}
+                  onClick={() => { localStorage.removeItem("subscriber"); localStorage.removeItem("subscriber_token"); localStorage.removeItem("pdpa_consent_customer"); localStorage.removeItem("ghis_mock_payments"); localStorage.removeItem("ghis_mock_active"); localStorage.removeItem("ghis_mock_dyn_req"); window.dispatchEvent(new Event("storage")); router.push(prefix); }}
                   className="ml-2 px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold rounded-lg transition"
                 >
                   {locale === "th" ? "ออกจากระบบ" : locale === "zh" ? "退出登录" : "Logout"}
@@ -294,6 +294,9 @@ export default function DashboardPage() {
             localStorage.removeItem("subscriber"); 
             localStorage.removeItem("subscriber_token"); 
             localStorage.removeItem("pdpa_consent_customer"); 
+            localStorage.removeItem("ghis_mock_payments");
+            localStorage.removeItem("ghis_mock_active");
+            localStorage.removeItem("ghis_mock_dyn_req");
             window.dispatchEvent(new Event("storage"));
             router.push(prefix);
           }} />
@@ -665,9 +668,19 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const [waitModalOrder, setWaitModalOrder] = useState<any>(null);
   const handleOrderClick = (o: any) => { if (o.status && ['MATCHING', 'CREATED', 'PENDING'].includes(o.status.trim().toUpperCase())) window.location.href = `${prefix}/booking/resume/${o.id}`; else window.location.href = `${prefix}/chat/${o.id}`; };
 
-    // MOCK CARDS
-  const [mockPayments, setMockPayments] = useState<Record<string, boolean>>({});
-  const [mockActiveItems, setMockActiveItems] = useState<any[]>([]);
+    // MOCK CARDS - persisted across refreshes
+  const [mockPayments, setMockPayments] = useState<Record<string, boolean>>(() => {
+    try { return JSON.parse(localStorage.getItem("ghis_mock_payments") || "{}"); } catch { return {}; }
+  });
+  const [mockActiveItems, setMockActiveItems] = useState<any[]>(() => {
+    try { return JSON.parse(localStorage.getItem("ghis_mock_active") || "[]"); } catch { return []; }
+  });
+  const [mockDynRequests, setMockDynRequests] = useState<any[]>(() => {
+    try { return JSON.parse(localStorage.getItem("ghis_mock_dyn_req") || "[]"); } catch { return []; }
+  });
+  useEffect(() => { try { localStorage.setItem("ghis_mock_payments", JSON.stringify(mockPayments)); } catch {} }, [mockPayments]);
+  useEffect(() => { try { localStorage.setItem("ghis_mock_active", JSON.stringify(mockActiveItems)); } catch {} }, [mockActiveItems]);
+  useEffect(() => { try { localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(mockDynRequests)); } catch {} }, [mockDynRequests]);
 
   const REQUESTS_MOCK = [
     { 
@@ -734,6 +747,33 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   
   const renderRequestCard = (item: any) => {
     if (mockPayments[item.id]) return null;
+    if (item.type === 'meeting_invite') {
+      return (
+        <div key={item.id} className="bg-white border border-amber-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-lg"></div>
+            <div>
+              <h3 className="font-bold text-gray-900">{item.title} <span className="text-sm font-normal text-gray-500">· {item.po} · Step 8 of 11</span></h3>
+              <p className="text-sm text-gray-600 mt-0.5">{item.customer} · {item.date}</p>
+              <p className="text-xs text-gray-500 mt-1">{item.desc}</p>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-end">
+            <div className="text-left sm:text-right flex flex-col gap-1">
+              <span className="font-bold text-gray-900 pr-2">Budget: {item.budget}</span>
+              <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-amber-50 text-amber-700 uppercase self-start sm:self-end w-max">{item.tier}</span>
+            </div>
+            <div className="flex gap-2">
+              <button className="bg-amber-600 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-amber-700 transition shadow-sm whitespace-nowrap" onClick={() => {
+                setMockActiveItems(prev => prev.map((x: any) => x.po === item.po ? { ...x, step: 8, actionNeeded: false } : x));
+                setMockDynRequests(prev => prev.filter((x: any) => x.id !== item.id));
+                setActiveTab("active");
+              }}>Invite to Meet</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
       return (
       <div key={item.id} className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -811,10 +851,10 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6 pb-6">
           <div className="px-6 py-4 border-b border-gray-100">
             <h2 className="font-bold text-gray-900">Incoming Requests</h2>
-            <div className="text-sm text-gray-500 font-bold">{(subscriber?.email?.includes('ghis') ? REQUESTS_MOCK : []).filter(m => !mockPayments[m.id]).length}</div>
+            <div className="text-sm text-gray-500 font-bold">{[...(subscriber?.email?.includes('ghis') ? REQUESTS_MOCK : []), ...mockDynRequests].filter(m => !mockPayments[m.id]).length}</div>
           </div>
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50 mt-4 mx-6">
-              {(subscriber?.email?.includes('ghis') ? REQUESTS_MOCK : []).map(m => renderRequestCard(m))}
+              {[...(subscriber?.email?.includes('ghis') ? REQUESTS_MOCK : []), ...mockDynRequests].map(m => renderRequestCard(m))}
           </div>
         </div>
       )}
@@ -982,7 +1022,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
               <button className="text-sm font-bold text-sky-600 hover:text-sky-700" onClick={() => setActiveTab("requests")}>View All</button>
             </div>
             <div className="flex flex-col gap-3">
-              {(subscriber?.email?.includes('ghis') ? REQUESTS_MOCK : []).map(m => renderRequestCard(m))}
+              {[...(subscriber?.email?.includes('ghis') ? REQUESTS_MOCK : []), ...mockDynRequests].map(m => renderRequestCard(m))}
             </div>
           </div>
 
@@ -1100,11 +1140,20 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                 className="mt-4 px-6 py-3 w-full bg-sky-100 border border-sky-300 text-sky-800 font-bold rounded-xl shadow-sm hover:bg-sky-200 transition"
                 onClick={() => {
                   setMockPayments(prev => ({...prev, [waitModalOrder.id]: true}));
-                  // update existing ACTIVE_MOCK item to step 7 by overriding it
                   setMockActiveItems(prev => [
                     ...prev.filter((x: any) => x.po !== waitModalOrder.request?.po),
-                    { ...waitModalOrder.request, actionNeeded: false, step: 7 }
+                    { ...waitModalOrder.request, actionNeeded: true, step: 7 }
                   ]);
+                  const meetId = `meet-${waitModalOrder.id}`;
+                  setMockDynRequests(prev => [
+                    ...prev.filter((x: any) => x.id !== meetId),
+                    { id: meetId, po: waitModalOrder.request?.po, title: waitModalOrder.request?.title, customer: waitModalOrder.request?.customer || 'Suppadesh', date: new Date().toLocaleString(), budget: waitModalOrder.request?.budget, tier: waitModalOrder.request?.tier, desc: 'Please schedule a jobsite meeting with your partner.', type: 'meeting_invite', step: 8 }
+                  ]);
+                  try {
+                    const chatKey = `chat_messages_${waitModalOrder.request?.po}`;
+                    const existing = JSON.parse(localStorage.getItem(chatKey) || '[]');
+                    if (existing.length === 0) localStorage.setItem(chatKey, JSON.stringify([{ id: Date.now(), sender: 'system', text: 'Payment confirmed. Your project chat is now active. Please coordinate with your partner here.', time: new Date().toLocaleTimeString() }]));
+                  } catch {}
                   setWaitModalOrder(null);
                   setActiveTab("chat");
                 }}
