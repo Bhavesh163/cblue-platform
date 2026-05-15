@@ -696,15 +696,15 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   useEffect(() => { if (mockReady) try { localStorage.setItem("ghis_mock_history", JSON.stringify(mockHistory)); } catch {} }, [mockHistory, mockReady]);
 
   const REQUESTS_MOCK = [
-    { id: "req1", title: "REINSTATEMENT", customer: "Suppadesh", date: "5/11/2026, 2:30:00 PM", budget: "฿5,000,000", po: "PO-b01d-c200", tier: "ECONOMY", desc: "I want a team to carry out a 3000 sq.m. housing project." },
-    { id: "req2", title: "FITOUT", customer: "Suppadesh", date: "5/11/2026, 2:35:00 PM", budget: "฿25,000,000", po: "PO-3a68-12e3", tier: "STANDARD", desc: "I want to have a project team to carry out a 1000 sq.m. office fitout in Bangkok" },
+    { id: "req1", title: "REINSTATEMENT", customer: "Suppadesh", date: "5/11/2026, 2:30:00 PM", budget: "฿5,000,000", po: "PO-2605-1200", tier: "ECONOMY", desc: "I want a team to carry out a 3000 sq.m. housing project." },
+    { id: "req2", title: "FITOUT", customer: "Suppadesh", date: "5/11/2026, 2:35:00 PM", budget: "฿25,000,000", po: "PO-2605-6812", tier: "STANDARD", desc: "I want to have a project team to carry out a 1000 sq.m. office fitout in Bangkok" },
     { id: "req3", title: "GREEN CONSTRUCTION", customer: "Suppadesh", date: "5/11/2026, 2:40:00 PM", budget: "฿45,000,000", po: "PO-2605-8471", tier: "ECONOMY", desc: "I want a team to carry out a 3000 sq.m. green housing project in Bangkok." },
   ];
 
   const ACTIVE_MOCK = [
-    { title: "REINSTATEMENT", customer: "Suppadesh", date: "5/11/2026, 2:30:00 PM", budget: "฿5,000,000", po: "PO-b01d-c200", location: "Saphansong", tier: "ECONOMY", actionNeeded: true, step: 6 },
-    { title: "FITOUT", customer: "Suppadesh", date: "5/11/2026, 2:32:00 PM", budget: "฿25,000,000", po: "PO-0265-fa84", location: "Saphansong", tier: "Standard", actionNeeded: false, step: 6 },
-    { title: "FITOUT", customer: "Suppadesh", date: "5/11/2026, 2:35:00 PM", budget: "฿25,000,000", po: "PO-3a68-12e3", location: "Saphansong", tier: "Standard", actionNeeded: true, step: 6 },
+    { title: "REINSTATEMENT", customer: "Suppadesh", date: "5/11/2026, 2:30:00 PM", budget: "฿5,000,000", po: "PO-2605-1200", location: "Saphansong", tier: "ECONOMY", actionNeeded: true, step: 6 },
+    { title: "FITOUT", customer: "Suppadesh", date: "5/11/2026, 2:32:00 PM", budget: "฿25,000,000", po: "PO-2605-0265", location: "Saphansong", tier: "Standard", actionNeeded: false, step: 6 },
+    { title: "FITOUT", customer: "Suppadesh", date: "5/11/2026, 2:35:00 PM", budget: "฿25,000,000", po: "PO-2605-6812", location: "Saphansong", tier: "Standard", actionNeeded: true, step: 6 },
     { title: "GREEN CONSTRUCTION", customer: "Suppadesh", date: "5/11/2026, 2:40:00 PM", budget: "฿45,000,000", po: "PO-2605-8471", location: "Saphansong", tier: "ECONOMY", actionNeeded: true, step: 6 },
     { title: "FITOUT", customer: "Suppadesh", date: "5/11/2026, 2:45:00 PM", budget: "฿25,000,000", po: "PO-2605-6716", location: "Saphansong", tier: "Standard", actionNeeded: false, step: 5 },
     { title: "REINSTATEMENT", customer: "Suppadesh", date: "5/11/2026, 2:50:00 PM", budget: "฿5,000,000", po: "PO-2605-9605", location: "Saphansong", tier: "ECONOMY", actionNeeded: false, step: 7 },
@@ -767,9 +767,32 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               <button className="bg-amber-600 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-amber-700 transition shadow-sm whitespace-nowrap" onClick={() => {
                 setMockActiveItems(prev => prev.map((x: any) => x.po === item.po ? { ...x, step: 8, actionNeeded: false } : x));
                 const schedId = `sched-${item.po}`;
-                setMockDynRequests(prev => { const f = prev.filter((x: any) => x.id !== item.id && x.id !== schedId); return [...f, { id: schedId, po: item.po, title: item.title, customer: item.customer, date: new Date().toLocaleString(), budget: item.budget, tier: item.tier, desc: 'Meeting invitation sent. Partner has confirmed the meeting time. Tap below after the site meeting is complete.', type: 'meeting_scheduled', step: 8 }]; });
+                setMockDynRequests(prev => { const f = prev.filter((x: any) => x.id !== item.id && x.id !== schedId); return [...f, { id: schedId, po: item.po, title: item.title, customer: item.customer, date: new Date().toLocaleString(), budget: item.budget, tier: item.tier, desc: 'Waiting for partner to confirm meeting time...', type: 'meeting_pending_partner', step: 8 }]; });
                 setActiveTab("requests");
               }}>Invite to Meet</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    if (item.type === 'meeting_pending_partner') {
+      return (
+        <div key={item.id} className="bg-white border border-amber-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 border-2 border-amber-200 border-dashed rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-lg animate-pulse">⏳</div>
+            <div>
+              <h3 className="font-bold text-gray-900">{item.title} <span className="text-sm font-normal text-gray-500">· {item.po} · Step 8 of 11</span></h3>
+              <p className="text-sm text-gray-600 mt-0.5">{item.customer} · {item.date}</p>
+              <p className="text-xs text-gray-500 mt-1">Waiting for partner to confirm meeting time...</p>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-end">
+            <div className="text-left sm:text-right flex flex-col gap-1">
+              <span className="font-bold text-gray-900 pr-2">Budget: {item.budget}</span>
+              <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-amber-50 text-amber-700 uppercase self-start sm:self-end w-max">{item.tier}</span>
+            </div>
+            <div className="flex gap-2">
+              <button disabled className="bg-gray-300 text-gray-500 px-5 py-2 rounded-lg text-sm font-bold shadow-sm whitespace-nowrap cursor-not-allowed">Pending Partner</button>
             </div>
           </div>
         </div>
@@ -1057,17 +1080,17 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                 className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer"
                 onClick={() => {
                   try {
-                    localStorage.setItem("chat_title_PO-3a68-12e3", "FITOUT - PO-3a68-12e3 - ฿25,000,000");
-                    localStorage.setItem("chat_from_PO-3a68-12e3", "dashboard");
+                    localStorage.setItem("chat_title_PO-2605-6812", "FITOUT - PO-2605-6812 - ฿25,000,000");
+                    localStorage.setItem("chat_from_PO-2605-6812", "dashboard");
                   } catch {}
-                  window.location.href = `${prefix}/chat/PO-3a68-12e3`;
+                  window.location.href = `${prefix}/chat/PO-2605-6812`;
                 }}
               >
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-xl font-bold text-white">C</div>
                   <div>
-                    <h3 className="font-bold text-gray-900">Fitout - PO-3a68-12e3 - ฿25,000,000</h3>
-                    <p className="text-sm text-sky-600 mt-1 font-medium">PO-3a68-12e3 just be paid by customer to notify to proceed and let both meet.</p>
+                    <h3 className="font-bold text-gray-900">Fitout - PO-2605-6812 - ฿25,000,000</h3>
+                    <p className="text-sm text-sky-600 mt-1 font-medium">PO-2605-6812 just be paid by customer to notify to proceed and let both meet.</p>
                   </div>
                 </div>
                 <div className="text-right">
@@ -1113,11 +1136,11 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                       {subscriber?.email?.includes('ghis') ? (
                     <>
                       <div className="bg-sky-50 rounded-lg p-4 border border-sky-100 shadow-sm mt-3">
-                        <p className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-2"><span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">C</span> Fitout - PO-3a68-12e3 - ฿25,000,000 <span className="text-xs text-gray-400 font-normal ml-auto">{new Date().toLocaleString()}</span></p>
-                        <p className="text-sm text-sky-800 font-medium">PO-3a68-12e3 just be paid by customer to notify to proceed and let both meet.</p>
+                        <p className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-2"><span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">C</span> Fitout - PO-2605-6812 - ฿25,000,000 <span className="text-xs text-gray-400 font-normal ml-auto">{new Date().toLocaleString()}</span></p>
+                        <p className="text-sm text-sky-800 font-medium">PO-2605-6812 just be paid by customer to notify to proceed and let both meet.</p>
                       </div>
                       <div className="bg-white rounded-lg p-4 border border-gray-100 shadow-sm">
-                        <p className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-2"><span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">C</span> Fitout - PO-3a68-12e3 - ฿25,000,000 <span className="text-xs text-gray-400 font-normal ml-auto">{new Date(Date.now()-120000).toLocaleString()}</span></p>
+                        <p className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-2"><span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">C</span> Fitout - PO-2605-6812 - ฿25,000,000 <span className="text-xs text-gray-400 font-normal ml-auto">{new Date(Date.now()-120000).toLocaleString()}</span></p>
                         <p className="text-sm text-gray-600">Please inform us of your available time to meet at the jobsite. The chat is now active for both to use for this project.</p>
                       </div>
                     </>
@@ -1165,7 +1188,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
             {subscriber?.email?.includes('ghis') ? (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mt-4">
                 <div className="flex justify-between items-center mb-2">
-                   <span className="text-gray-900 font-bold">FITOUT (PO-3a68-12e3)</span>
+                   <span className="text-gray-900 font-bold">FITOUT (PO-2605-6812)</span>
                    <span className="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-bold">Tomorrow, 10:00 AM</span>
                 </div>
                 <p className="text-sm text-gray-600">Location: Saphansong | Provider: Suppadesh</p>

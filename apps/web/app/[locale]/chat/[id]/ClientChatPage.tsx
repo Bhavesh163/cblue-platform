@@ -97,7 +97,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
   if (!mounted) return <div className="h-screen w-full flex items-center justify-center">Loading...</div>;
 
   return (
-    <div className="max-w-2xl mx-auto h-[calc(100vh-6.5rem)] mt-4 flex flex-col bg-gray-50 border-x border-gray-200 shadow-xl rounded-t-2xl overflow-hidden">
+    <div className="max-w-2xl mx-auto h-[calc(100vh-6.5rem)] mt-4 flex flex-col transition-none bg-gray-50 border-x border-gray-200 shadow-xl rounded-t-2xl overflow-hidden">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 p-4 shrink-0 flex items-center gap-4">
         <div className="flex-1">
@@ -110,7 +110,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
               const returnTo = localStorage.getItem(`chat_from_${orderId}`);
               if (returnTo === "fixers") router.push(`/${locale}/fixers`);
               else router.push(`/${locale}/dashboard`);
-            } catch { router.back(); }
+            } catch { router.push('/' + locale + '/' + 'dashboard' + '?tab=chat'); }
           }}
           className="text-gray-400 hover:text-gray-800 transition text-2xl font-light leading-none"
           aria-label="Close"

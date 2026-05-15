@@ -302,9 +302,44 @@ export default function FixerProPage() {
     { id: 5, msg: "Request for job complete", unread: false, time: "Yesterday", dot: "bg-gray-300" },
   ];
 
-  const activeJobs = mappedOrders.filter(o => !['COMPLETED', 'CANCELLED'].includes(o.status));
+  let activeJobs = mappedOrders.filter(o => !['COMPLETED', 'CANCELLED'].includes(o.status));
+  activeJobs = activeJobs.map(job => {
+      const stepLookup = mockActiveState.find((x: any) => x.po === job.po);
+      if (stepLookup) return { ...job, mockStep: stepLookup.step };
+      return job;
+  });
   const completedJobs = mappedOrders.filter(o => o.status === 'COMPLETED');
-  const incomingJobs = mappedOrders.filter(o => ['CREATED', 'PENDING', 'MATCHING'].includes(o.status));
+  const [mockDynReqs, setMockDynReqs] = useState<any[]>([]);
+  const [mockActiveState, setMockActiveState] = useState<any[]>([]);
+  useEffect(() => {
+    const checkMock = () => {
+      try {
+        const d = localStorage.getItem("ghis_mock_dyn_req"); if (d) setMockDynReqs(JSON.parse(d));
+        const a = localStorage.getItem("ghis_mock_active"); if (a) setMockActiveState(JSON.parse(a));
+      } catch {}
+    };
+    checkMock();
+    const interval = setInterval(checkMock, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  let incomingJobs = mappedOrders.filter(o => ['CREATED', 'PENDING', 'MATCHING'].includes(o.status));
+  
+  const pendingMeetings = mockDynReqs.filter(r => r.type === 'meeting_pending_partner').map(r => ({
+    id: r.id,
+    service: r.title,
+    serviceTh: r.title,
+    serviceZh: r.title,
+    customer: r.customer,
+    budget: r.budget?.replace(/[^0-9]/g, ''),
+    date: r.date,
+    tier: r.tier,
+    po: r.po,
+    status: 'MEETING_REQUESTED',
+    description: r.desc,
+    mock: true
+  }));
+  incomingJobs = [...pendingMeetings, ...incomingJobs] as any[];
 
   const tabs: { key: TabKey; label: string; icon: string; badge?: number }[] = [
     { key: "overview", label: locale === "th" ? "ภาพรวม" : locale === "zh" ? "概览" : "Overview", icon: "" },
@@ -366,6 +401,19 @@ export default function FixerProPage() {
                         localStorage.setItem("cblue_workflow", JSON.stringify(wf));
                       }
                     } catch(e) {}
+                    if (waitModalOrder.status === 'MEETING_REQUESTED') {
+                      try {
+                        const d = localStorage.getItem("ghis_mock_dyn_req");
+                        if (d) {
+                          let reqs = JSON.parse(d);
+                          reqs = reqs.map((r: any) => r.id === waitModalOrder.id ? { ...r, type: 'meeting_scheduled', desc: 'Meeting invitation sent. Partner has confirmed the meeting time. Tap below after the site meeting is complete.' } : r);
+                          localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(reqs));
+                        }
+                        alert("Meeting confirmed!");
+                        window.location.reload();
+                        return;
+                      } catch(e) {}
+                    }
                     const res = await fetch(`/api/v1/orders/${waitModalOrder.id}/status`, {
                       method: 'PUT',
                       headers: {
@@ -376,7 +424,7 @@ export default function FixerProPage() {
                     });
                     if (!res.ok) {
                         const errorText = await res.text();
-                        console.error('Accept PO Error:', errorText);
+                {waitModalOrder.status === 'MEETING_REQUESTED' ? 'Confirm Meeting Time' : 'Accept PO'}
                         alert(`Error accepting PO: ${res.status} - ${errorText}`);
                         return;
                     }
@@ -387,7 +435,7 @@ export default function FixerProPage() {
                 }} 
                 className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl transition shadow-md"
               >
-                Accept PO
+                {waitModalOrder.status === 'MEETING_REQUESTED' ? 'Confirm Meeting Time' : 'Accept PO'}
               </button>
               <button 
                 onClick={() => setWaitModalOrder(null)} 
@@ -835,7 +883,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
                       
                       {["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"].map((s, i) => {
                         const stepNum = i + 4; // Notify starts at 4
-                        const currentStep = job.status === 'COMPLETED' ? 12 : 5;
+                        const currentStep = job.mockStep || (job.status === 'COMPLETED' ? 12 : 5);
                         const isCompleted = stepNum < currentStep;
                         const isCurrent = job.status === 'MATCHING' && stepNum === currentStep;
                         return (
@@ -923,7 +971,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
                     <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${job.status === 'MATCHING' ? Math.min(100, Math.max(0, ((5 - 4) / 7) * 100)) : 0}%` }}></div>
                     {["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"].map((s, i) => {
                       const stepNum = i + 4;
-                      const currentStep = job.status === 'COMPLETED' ? 12 : 5;
+                        const currentStep = job.mockStep || (job.status === 'COMPLETED' ? 12 : 5);
                       const isCompleted = stepNum < currentStep;
                       const isCurrent = job.status === 'MATCHING' && stepNum === currentStep;
                       return (
@@ -1036,10 +1084,10 @@ function PartnerChats({ locale, chats }: { locale: string; chats: any[] }) {
           className="flex items-center gap-4 px-6 py-4 cursor-pointer transition hover:bg-gray-50"
           onClick={() => {
             try {
-              localStorage.setItem("chat_title_PO-3a68-12e3", "FITOUT - PO-3a68-12e3 - ฿25,000,000");
-              localStorage.setItem("chat_from_PO-3a68-12e3", "fixers");
+              localStorage.setItem("chat_title_PO-2605-6812", "FITOUT - PO-2605-6812 - ฿25,000,000");
+              localStorage.setItem("chat_from_PO-2605-6812", "fixers");
             } catch {}
-            window.location.href = `/${locale}/chat/PO-3a68-12e3`;
+            window.location.href = `/${locale}/chat/PO-2605-6812`;
           }}
         >
           <div className="relative">
@@ -1051,7 +1099,7 @@ function PartnerChats({ locale, chats }: { locale: string; chats: any[] }) {
               <p className="font-bold text-gray-900">Ghis Cafe · FITOUT</p>
               <span className="text-xs text-gray-400 whitespace-nowrap ml-2">Active</span>
             </div>
-            <p className="text-sm truncate text-gray-500">PO-3a68-12e3 · ฿25,000,000 · {locale === "th" ? "คลิกเพื่อเปิดแชท" : "Click to open chat"}</p>
+            <p className="text-sm truncate text-gray-500">PO-2605-6812 · ฿25,000,000 · {locale === "th" ? "คลิกเพื่อเปิดแชท" : "Click to open chat"}</p>
           </div>
         </div>
         {chats && chats.length > 0 && chats.slice(0, 4).map((c: any) => (
