@@ -739,6 +739,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         const latest = reversed.find((m: any) => {
           if (!m || typeof m.text !== "string") return false;
           if (!m.text.trim()) return false;
+          if (m.sender === "system") return false;
           if (m.text.includes("just be paid by customer to notify to proceed and let both meet")) return false;
           return true;
         });

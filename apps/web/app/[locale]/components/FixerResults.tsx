@@ -39,12 +39,12 @@ const T: Record<string, Record<string, string>> = {
     years: "yrs",
     priceListTitle: "Processing Fee Schedule",
     selectFixer: "Select",
-    confirmTitle: "Confirm Booking",
-    confirmDesc: "You selected {fixer} ({tier} tier). A processing fee of {fee} is required to confirm.",
-    confirmBtn: "Confirm & Send to Partner",
+    confirmTitle: "Accept PO",
+    confirmDesc: "You selected {fixer} ({tier} tier). A processing fee of {fee} is required to proceed.",
+    confirmBtn: "Accept & Notify Partner",
     cancel: "Cancel",
-    paymentTitle: "PromptPay Payment",
-    paymentDesc: "Scan the QR code to pay the processing fee",
+    paymentTitle: "Fee & Proceed",
+    paymentDesc: "Pay the processing fee to begin chatting with your partner",
     paymentAmount: "Amount",
     paymentRef: "Reference",
     paymentComplete: "I have paid",
@@ -116,12 +116,12 @@ const T: Record<string, Record<string, string>> = {
     years: "ปี",
     priceListTitle: "ตารางค่าประสานงาน",
     selectFixer: "เลือก",
-    confirmTitle: "ยืนยันการจอง",
-    confirmDesc: "คุณเลือก {fixer} (ระดับ {tier}) ค่าธรรมเนียม {fee} เพื่อยืนยัน",
-    confirmBtn: "ยืนยันและส่งให้พาร์ทเนอร์",
+    confirmTitle: "ยืนยันการยอมรับ",
+    confirmDesc: "คุณเลือก {fixer} (ระดับ {tier}) ค่าธรรมเนียม {fee} เพื่อดำเนินการต่อ",
+    confirmBtn: "ยืนยันและแจ้งพาร์ทเนอร์",
     cancel: "ยกเลิก",
-    paymentTitle: "ชำระเงินผ่าน PromptPay",
-    paymentDesc: "สแกน QR code เพื่อชำระค่าธรรมเนียม",
+    paymentTitle: "ค่าธรรมเนียมและดำเนินการ",
+    paymentDesc: "ชำระค่าธรรมเนียมเพื่อเริ่มแชทกับพาร์ทเนอร์",
     paymentAmount: "จำนวนเงิน",
     paymentRef: "อ้างอิง",
     paymentComplete: "ชำระเงินแล้ว",
@@ -190,12 +190,12 @@ const T: Record<string, Record<string, string>> = {
     years: "年",
     priceListTitle: "服务费价格表",
     selectFixer: "选择",
-    confirmTitle: "确认预约",
-    confirmDesc: "您选择了 {fixer}（{tier} 等级）。需支付 {fee} 处理费确认。",
+    confirmTitle: "确认接受",
+    confirmDesc: "您选择了 {fixer}（{tier} 等级）。需支付 {fee} 处理费才能继续。",
     confirmBtn: "确认并通知合作伙伴",
     cancel: "取消",
-    paymentTitle: "PromptPay 支付",
-    paymentDesc: "扫描二维码支付处理费",
+    paymentTitle: "费用和继续",
+    paymentDesc: "支付处理费以开始与合作伙伴聊天",
     paymentAmount: "金额",
     paymentRef: "参考号",
     paymentComplete: "我已支付",
@@ -410,7 +410,7 @@ const tierColors: Record<string, { bg: string; text: string; border: string }> =
 
 const getTierColor = (tier: string) => tierColors[tier] ?? tierColors["standard"]!;
 
-type Step = "matching" | "select" | "po" | "notify" | "confirm" | "payment" | "chat" | "meeting" | "variation" | "complete" | "rate" | "done";
+type Step = "matching" | "select" | "po" | "notify" | "confirm" | "payment" | "chat" | "meeting" | "variation" | "complete" | "rate";
 
 async function fileToDataUrl(file: File): Promise<string> {
   return await new Promise((resolve, reject) => {
@@ -591,11 +591,11 @@ export default function FixerResults({
         }));
       } catch { /* ignore */ }
     }
-    // Clean up on done step
-    if (step === "done") {
+    // Clean up after work complete
+    if (step === "rate" && customerRated) {
       try { localStorage.removeItem("cblue_workflow"); } catch { /* ignore */ }
     }
-  }, [step, selectedFixer, poNumber, customerRating, customerComment, variationApproved, meetingDate, meetingTime, meetingNotes, service, bookingType]);
+  }, [step, selectedFixer, poNumber, customerRating, customerComment, variationApproved, meetingDate, meetingTime, meetingNotes, service, bookingType, customerRated]);
 
   // AI Matching animation sequence
   useEffect(() => {
@@ -706,6 +706,36 @@ export default function FixerResults({
   };
 
   const handleProceedPayment = () => {
+    if (selectedFixer && bookingType && poNumber) {
+      try {
+        const subscriber = localStorage.getItem('subscriber') ? JSON.parse(localStorage.getItem('subscriber')!) : null;
+        const customerEmail = subscriber?.email || '';
+        if (customerEmail.includes('ghis')) {
+          const mockActiveKey = 'ghis_mock_active';
+          const existing = JSON.parse(localStorage.getItem(mockActiveKey) || '[]');
+          const newBooking = {
+            po: poNumber,
+            title: service,
+            customer: subscriber?.name || 'Ghis Cafe',
+            date: new Date().toLocaleString(),
+            budget: selectedFixer.estimatedTotal ? `฿${selectedFixer.estimatedTotal.toLocaleString()}` : '฿0',
+            location: 'Saphansong',
+            tier: selectedFixer.tier,
+            actionNeeded: true,
+            step: 5,
+            fixerAlias: selectedFixer.alias,
+            fixerId: selectedFixer.id,
+          };
+          const idx = existing.findIndex((x: any) => x.po === poNumber);
+          if (idx >= 0) existing[idx] = newBooking;
+          else existing.push(newBooking);
+          localStorage.setItem(mockActiveKey, JSON.stringify(existing));
+          window.dispatchEvent(new Event('storage'));
+        }
+      } catch (e) {
+        console.error('Failed to save booking:', e);
+      }
+    }
     setStep("confirm");
   };
 
@@ -714,7 +744,39 @@ export default function FixerResults({
   };
 
   const handlePaymentComplete = () => {
-    // Avoid simulating fake chat messages answering on behalf of users
+    // After payment (step 6), ONLY create step 7 (chat_ready), NOT steps 7+8 together
+    if (selectedFixer && bookingType && poNumber) {
+      try {
+        const subscriber = localStorage.getItem('subscriber') ? JSON.parse(localStorage.getItem('subscriber')!) : null;
+        const customerEmail = subscriber?.email || '';
+        if (customerEmail.includes('ghis')) {
+          const mockDynReqKey = 'ghis_mock_dyn_req';
+          const existing = JSON.parse(localStorage.getItem(mockDynReqKey) || '[]');
+          const filtered = existing.filter((x: any) => x.po !== poNumber);
+          const newRequest = {
+            id: `chat-${Date.now()}`,
+            po: poNumber,
+            type: 'chat_ready',
+            message: 'Chat room opened. Please coordinate meeting details.',
+            date: new Date().toLocaleString(),
+          };
+          filtered.push(newRequest);
+          localStorage.setItem(mockDynReqKey, JSON.stringify(filtered));
+          window.dispatchEvent(new Event('storage'));
+          const mockActiveKey = 'ghis_mock_active';
+          const active = JSON.parse(localStorage.getItem(mockActiveKey) || '[]');
+          const jobIdx = active.findIndex((x: any) => x.po === poNumber);
+          if (jobIdx >= 0) {
+            active[jobIdx].step = 7;
+            active[jobIdx].actionNeeded = true;
+            localStorage.setItem(mockActiveKey, JSON.stringify(active));
+            window.dispatchEvent(new Event('storage'));
+          }
+        }
+      } catch (e) {
+        console.error('Failed to create chat workflow:', e);
+      }
+    }
     setChatMessages([]);
     setStep("chat");
   };
@@ -758,14 +820,14 @@ export default function FixerResults({
   const tierLabel = selectedFixer ? t(selectedFixer.tier) : "";
 
   // Step progress bar for the 12-step flow (visible after matching)
-  const flowSteps: Step[] = ["matching", "select", "po", "notify", "confirm", "payment", "chat", "meeting", "variation", "complete", "rate", "done"];
+  const flowSteps: Step[] = ["matching", "select", "po", "notify", "confirm", "payment", "chat", "meeting", "variation", "complete", "rate"];
   const flowLabels: Record<string, Record<Step, string>> = {
-    en: { matching: "Match", select: "Select", confirm: "Confirm", po: "PO", notify: "Notify", payment: "Pay", chat: "Chat", meeting: "Meet", variation: "Variation", complete: "Complete", rate: "Rate", done: "Done" },
-    th: { matching: "จับคู่", select: "เลือก", confirm: "ยืนยัน", po: "PO", notify: "แจ้ง", payment: "จ่าย", chat: "แชท", meeting: "นัดหมาย", variation: "เปลี่ยนแปลง", complete: "เสร็จ", rate: "คะแนน", done: "จบ" },
-    zh: { matching: "匹配", select: "选择", confirm: "确认", po: "PO", notify: "通知", payment: "支付", chat: "聊天", meeting: "会面", variation: "变更", complete: "完工", rate: "评分", done: "完成" },
+    en: { matching: "Match", select: "Select", confirm: "Accept", po: "PO", notify: "Notify", payment: "Fee & Proceed", chat: "Chat", meeting: "Meet", variation: "Variation", complete: "Complete", rate: "Rate" },
+    th: { matching: "จับคู่", select: "เลือก", confirm: "ยอมรับ", po: "PO", notify: "แจ้ง", payment: "ค่าธรรมเนียมและดำเนินการ", chat: "แชท", meeting: "นัดหมาย", variation: "เปลี่ยนแปลง", complete: "เสร็จ", rate: "คะแนน" },
+    zh: { matching: "匹配", select: "选择", confirm: "接受", po: "PO", notify: "通知", payment: "费用和继续", chat: "聊天", meeting: "会面", variation: "变更", complete: "完工", rate: "评分" },
   };
-  const hideVariation = false; // Always show variation to be strictly 12 steps
-  const visibleSteps = hideVariation ? flowSteps.filter(s => s !== "variation") : flowSteps;
+  const hideVariation = false;
+  const visibleSteps = flowSteps;
   const visibleIndex = visibleSteps.indexOf(step);
   const StepProgressBar = () => step === "matching" ? null : (
     <div className="mx-auto max-w-2xl px-4 mb-4">
@@ -784,7 +846,7 @@ export default function FixerResults({
           })}
         </div>
         <p className="text-center text-[10px] text-gray-400 mt-1">
-          {locale === "th" ? `ขั้นตอนที่ ${visibleIndex + 1} จาก ${visibleSteps.length}` : locale === "zh" ? `第 ${visibleIndex + 1} 步，共 ${visibleSteps.length} 步` : `Step ${visibleIndex + 1} of ${visibleSteps.length}`}
+          {locale === "th" ? `ขั้นตอนที่ ${visibleIndex + 1} จาก 11` : locale === "zh" ? `第 ${visibleIndex + 1} 步，共 11 步` : `Step ${visibleIndex + 1} of 11`}
         </p>
       </div>
     </div>
@@ -856,8 +918,8 @@ export default function FixerResults({
     );
   }
 
-  // Step: Done — Final summary with both ratings
-  if (step === "done") {
+  // Step: Rating & Completion (final step 11)
+  if (step === "rate" && customerRated) {
     return (
       <><StepProgressBar />
       <div className="mx-auto max-w-2xl px-4 py-16">
@@ -1027,11 +1089,11 @@ export default function FixerResults({
               )}
 
               <button
-                onClick={() => setStep("done")}
                 disabled={!partnerRateReady}
-                className="w-full py-3 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-xl shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => {}} 
+                className="w-full py-3 bg-gray-400 text-white font-semibold rounded-xl shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {locale === "th" ? "ดูสรุป" : locale === "zh" ? "查看摘要" : "View Summary"}
+                {locale === "th" ? "รอสรุปด้านล่าง" : locale === "zh" ? "见下方总结" : "See summary below"}
               </button>
             </>
           )}

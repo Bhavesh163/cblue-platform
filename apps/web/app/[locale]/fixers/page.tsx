@@ -378,8 +378,12 @@ export default function FixerProPage() {
   let incomingJobs = mappedOrders.filter(o => ['CREATED', 'PENDING', 'MATCHING'].includes(o.status));
 
   const parseTs = (v: any) => {
-    const ts = new Date(v || 0).getTime();
-    return Number.isFinite(ts) ? ts : 0;
+    if (typeof v === "string") {
+      const parsed = parseInt(v, 10);
+      if (!isNaN(parsed)) return parsed;
+      return new Date(v).getTime();
+    }
+    return 0;
   };
   
   const pendingMeetings = mockDynReqs.filter(r => r.type === 'meeting_pending_partner').map(r => ({
@@ -399,9 +403,10 @@ export default function FixerProPage() {
   incomingJobs = [...pendingMeetings, ...incomingJobs] as any[];
 
   const dynamicNotifications = mockDynReqs.map((r: any) => {
-    if (r.type === "meeting_scheduled") return { id: `dyn-${r.id}`, msg: "Confirm meeting at site", unread: true, time: r.date || new Date().toLocaleString(), dot: "bg-teal-500" };
-    if (r.type === "variation_pending") return { id: `dyn-${r.id}`, msg: "Request for Approval of Variation", unread: true, time: r.date || new Date().toLocaleString(), dot: "bg-purple-500" };
-    if (r.type === "complete_pending") return { id: `dyn-${r.id}`, msg: "Request for job complete", unread: true, time: r.date || new Date().toLocaleString(), dot: "bg-green-500" };
+    const displayTime = typeof r.date === "string" && r.date.includes(":") ? r.date : (r.date ? new Date(r.date).toLocaleString() : new Date().toLocaleString());
+    if (r.type === "meeting_scheduled") return { id: `dyn-${r.id}`, msg: "Confirm meeting at site", unread: true, time: displayTime, dot: "bg-teal-500" };
+    if (r.type === "variation_pending") return { id: `dyn-${r.id}`, msg: "Request for Approval of Variation", unread: true, time: displayTime, dot: "bg-purple-500" };
+    if (r.type === "complete_pending") return { id: `dyn-${r.id}`, msg: "Request for job complete", unread: true, time: displayTime, dot: "bg-green-500" };
     return null;
   }).filter(Boolean) as any[];
 
