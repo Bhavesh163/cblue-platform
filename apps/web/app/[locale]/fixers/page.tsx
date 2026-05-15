@@ -105,7 +105,17 @@ export default function FixerProPage() {
 
   const [orders, setOrders] = useState<any[]>([]);
   const [waitModalOrder, setWaitModalOrder] = useState<any>(null);
-  const handleJobClick = (job: any) => { if (job.status && ['MATCHING', 'CREATED'].includes(job.status.toUpperCase())) setWaitModalOrder(job); else window.location.href = `/${locale}/chat/${job.id}`; };
+  const handleJobClick = (job: any) => {
+    if (job.status && ['MATCHING', 'CREATED'].includes(job.status.toUpperCase())) {
+      setWaitModalOrder(job);
+    } else {
+      try {
+        localStorage.setItem(`chat_from_${job.id}`, "fixers");
+        localStorage.setItem(`chat_title_${job.id}`, `${job.service || job.serviceTh || ''} - ${job.po || job.id} - ฿${job.budget || '0'}`);
+      } catch {}
+      window.location.href = `/${locale}/chat/${job.id}`;
+    }
+  };
   const [myProperties, setMyProperties] = useState<any[]>([]);
 
 
@@ -842,11 +852,11 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, completedJ
                     </div>
                   </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[job.tier] || ""}`}>{job.tier}</span>
-                {getStatusLabel(job.status, locale) !== "" && <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_STYLE[job.status] || ""}`}>{getStatusLabel(job.status, locale)}</span>}
-                <span className="text-xs font-bold text-gray-700">{job.earnings}</span>
+                <div className="flex items-center gap-2 mt-2">
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[job.tier] || "bg-gray-100 text-gray-600"}`}>{job.tier}</span>
+                  {getStatusLabel(job.status, locale) !== "" && <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_STYLE[job.status] || ""}`}>{getStatusLabel(job.status, locale)}</span>}
+                  {job.earnings && <span className="text-xs font-bold text-gray-700">{job.earnings}</span>}
+                </div>
               </div>
             </div>
           ))}
@@ -930,11 +940,11 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
                   </div>
                 </div>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[job.tier] || ""}`}>{job.tier}</span>
-              {getStatusLabel(job.status, locale) !== "" && <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_STYLE[job.status] || ""}`}>{getStatusLabel(job.status, locale)}</span>}
-              <span className="text-xs font-bold text-gray-700">{job.earnings}</span>
+              <div className="flex items-center gap-2 mt-2">
+                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[job.tier] || "bg-gray-100 text-gray-600"}`}>{job.tier}</span>
+                {getStatusLabel(job.status, locale) !== "" && <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_STYLE[job.status] || ""}`}>{getStatusLabel(job.status, locale)}</span>}
+                {job.earnings && <span className="text-xs font-bold text-gray-700">{job.earnings}</span>}
+              </div>
             </div>
           </div>
         ))}
@@ -1021,7 +1031,30 @@ function PartnerChats({ locale, chats }: { locale: string; chats: any[] }) {
         <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "แชท" : locale === "zh" ? "聊天" : "Chats"}</h2>
       </div>
       <div className="divide-y divide-gray-50">
-        {chats && chats.length > 0 ? chats.slice(0, 4).map((c: any) => (
+        {/* Mock chat entry for Suppadesh ↔ Ghis demo */}
+        <div
+          className="flex items-center gap-4 px-6 py-4 cursor-pointer transition hover:bg-gray-50"
+          onClick={() => {
+            try {
+              localStorage.setItem("chat_title_PO-3a68-12e3", "FITOUT - PO-3a68-12e3 - ฿25,000,000");
+              localStorage.setItem("chat_from_PO-3a68-12e3", "fixers");
+            } catch {}
+            window.location.href = `/${locale}/chat/PO-3a68-12e3`;
+          }}
+        >
+          <div className="relative">
+            <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-sm font-bold text-blue-700">GH</div>
+            <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-400 rounded-full border-2 border-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex justify-between items-baseline mb-1">
+              <p className="font-bold text-gray-900">Ghis Cafe · FITOUT</p>
+              <span className="text-xs text-gray-400 whitespace-nowrap ml-2">Active</span>
+            </div>
+            <p className="text-sm truncate text-gray-500">PO-3a68-12e3 · ฿25,000,000 · {locale === "th" ? "คลิกเพื่อเปิดแชท" : "Click to open chat"}</p>
+          </div>
+        </div>
+        {chats && chats.length > 0 && chats.slice(0, 4).map((c: any) => (
           <div key={c.id} className={`flex items-center gap-4 px-6 py-4 cursor-pointer transition hover:bg-gray-50`}>
             <div className="relative">
               <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-sm font-bold text-gray-600">{c.customerId || c.customerName?.slice(0, 2) || "C"}</div>
@@ -1035,16 +1068,10 @@ function PartnerChats({ locale, chats }: { locale: string; chats: any[] }) {
                 </div>
                 <span className="text-xs text-gray-400 whitespace-nowrap ml-2">Active</span>
               </div>
-              <div className="flex justify-between items-center mt-1">
-                <p className={`text-sm truncate text-gray-500`}>
-                  {locale === "th" ? "คลิกเพื่อดูแชท" : "Click to open chat"}
-                </p>
-              </div>
+              <p className={`text-sm truncate text-gray-500`}>{locale === "th" ? "คลิกเพื่อดูแชท" : "Click to open chat"}</p>
             </div>
           </div>
-        )) : (
-          <p className="text-sm text-gray-500 p-6 text-center">{locale === "th" ? "ไม่มีแชทล่าสุด" : locale === "zh" ? "没有最近的聊天" : "No active chats"}</p>
-        )}
+        ))}
       </div>
     </div>
   );

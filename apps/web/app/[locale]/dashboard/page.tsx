@@ -921,11 +921,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
            <p className="text-sm text-gray-600 mt-0.5">{item.customer || "Customer"} · {item.date || "11/5/2026 14:30"} · Budget: {item.budget || ('฿' + Number(item.price || 0).toLocaleString())}</p>
          </div>
       </div>
-      <div className="flex items-center gap-4 w-full xl:w-auto mt-2 xl:mt-0 justify-between xl:justify-end overflow-hidden">
-        <div className="flex flex-col gap-1 w-full min-w-[300px] xl:w-[600px]">
-           <Progress12Steps currentStep={item.step || 5} showCurrent={item.actionNeeded !== false} />
-        </div>
-        <div className="text-right whitespace-nowrap">
+      <div className="w-full xl:w-[620px] shrink-0 mt-2 xl:mt-0">
+        <Progress12Steps currentStep={item.step || 5} showCurrent={true} />
+        <div className="flex items-center gap-2 mt-2">
+          <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${item.tier === 'ECONOMY' || item.tier === 'Economy' ? 'bg-green-50 text-green-700' : item.tier === 'Standard' || item.tier === 'STANDARD' ? 'bg-blue-50 text-blue-700' : item.tier === 'Corporate' ? 'bg-purple-50 text-purple-700' : item.tier === 'Specialist' ? 'bg-amber-50 text-amber-700' : item.tier === 'Expert' ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-600'}`}>{item.tier || 'Standard'}</span>
           {item.actionNeeded && <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-red-50 text-red-700">Action Needed</span>}
         </div>
       </div>
@@ -982,8 +981,10 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
               <h2 className="text-xl font-bold text-gray-800">Active Jobs</h2>
             </div>
           </div>
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50 mt-4">
-            {combinedActive.map((m, i) => renderActiveCard(m, i))}
+          <div className="overflow-x-auto">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 divide-y divide-gray-50 mt-4 min-w-[900px]">
+              {combinedActive.map((m, i) => renderActiveCard(m, i))}
+            </div>
           </div>
         </div>
       )}
@@ -1052,7 +1053,16 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
           </div>
           <div className="divide-y divide-gray-50">
             {subscriber?.email?.includes('ghis') ? (
-              <Link href={`${prefix}/chat/PO-3a68-12e3`} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer block">
+              <div
+                className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer"
+                onClick={() => {
+                  try {
+                    localStorage.setItem("chat_title_PO-3a68-12e3", "FITOUT - PO-3a68-12e3 - ฿25,000,000");
+                    localStorage.setItem("chat_from_PO-3a68-12e3", "dashboard");
+                  } catch {}
+                  window.location.href = `${prefix}/chat/PO-3a68-12e3`;
+                }}
+              >
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-xl font-bold text-white">C</div>
                   <div>
@@ -1063,7 +1073,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                 <div className="text-right">
                   <span className="text-xs text-gray-400">{new Date().toLocaleString()}</span>
                 </div>
-              </Link>
+              </div>
             ) : (
               <p className="text-sm text-gray-500 p-6 text-center">No recent chats.</p>
             )}
@@ -1269,6 +1279,13 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                     const chatKey = `chat_messages_${waitModalOrder.request?.po}`;
                     const existing = JSON.parse(localStorage.getItem(chatKey) || '[]');
                     if (existing.length === 0) localStorage.setItem(chatKey, JSON.stringify([{ id: Date.now(), sender: 'system', text: 'Payment confirmed. Your project chat is now active. Please coordinate with your partner here.', time: new Date().toLocaleTimeString() }]));
+                    const po = waitModalOrder.request?.po;
+                    const title = waitModalOrder.request?.title || '';
+                    const budget = waitModalOrder.request?.budget || '';
+                    if (po) {
+                      localStorage.setItem(`chat_title_${po}`, `${title} - ${po} - ${budget}`);
+                      localStorage.setItem(`chat_from_${po}`, "dashboard");
+                    }
                   } catch {}
                   setWaitModalOrder(null);
                   setActiveTab("chat");

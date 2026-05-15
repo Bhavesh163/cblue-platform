@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 export default function ClientChatPage({ orderId, locale }: { orderId: string, locale: string }) {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
+  const [chatTitle, setChatTitle] = useState(`Chat - ${orderId}`);
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -17,10 +18,26 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
   const [inputText, setInputText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const currentEmailRef = useRef<string>("guest");
+  const bcRef = useRef<BroadcastChannel | null>(null);
   
   useEffect(() => {
     setMounted(true);
     try { const sub = JSON.parse(localStorage.getItem("subscriber") || "{}"); currentEmailRef.current = sub?.email || "guest"; } catch {}
+
+    // Load chat title
+    try {
+      const storedTitle = localStorage.getItem(`chat_title_${orderId}`);
+      if (storedTitle) {
+        setChatTitle(storedTitle);
+      } else {
+        // Try to construct from mock active items
+        const mockActive = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
+        const found = mockActive.find((x: any) => x.po === orderId);
+        if (found) setChatTitle(`${found.title} - ${found.po} - ${found.budget}`);
+      }
+    } catch {}
+
+    // Load messages
     const key = `chat_messages_${orderId}`;
     try {
       const stored = localStorage.getItem(key);
@@ -29,6 +46,15 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
         if (Array.isArray(parsed) && parsed.length > 0) setMessages(parsed);
       }
     } catch {}
+
+    // BroadcastChannel for real-time cross-tab sync
+    const bc = new BroadcastChannel(`chat_${orderId}`);
+    bcRef.current = bc;
+    bc.onmessage = (e) => {
+      if (Array.isArray(e.data)) setMessages(e.data);
+    };
+
+    // Storage event fallback for cross-window sync (different browser windows)
     const handleStorage = (e: StorageEvent) => {
       if (e.key === key && e.newValue) {
         try {
@@ -38,7 +64,10 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
       }
     };
     window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
+    return () => {
+      bc.close();
+      window.removeEventListener("storage", handleStorage);
+    };
   }, [orderId]);
 
   useEffect(() => {
@@ -56,7 +85,10 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
         text: inputText.trim(),
         time: new Date().toLocaleTimeString()
       }];
-      try { localStorage.setItem(key, JSON.stringify(updated)); } catch {}
+      try {
+        localStorage.setItem(key, JSON.stringify(updated));
+        bcRef.current?.postMessage(updated);
+      } catch {}
       return updated;
     });
     setInputText("");
@@ -65,20 +97,19 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
   if (!mounted) return <div className="h-screen w-full flex items-center justify-center">Loading...</div>;
 
   return (
-    <div className="max-w-2xl mx-auto h-[calc(100vh-5rem)] flex flex-col bg-gray-50 border-x border-gray-200 shadow-xl">
+    <div className="max-w-2xl mx-auto h-[calc(100vh-6.5rem)] mt-4 flex flex-col bg-gray-50 border-x border-gray-200 shadow-xl rounded-t-2xl overflow-hidden">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 p-4 shrink-0 flex items-center gap-4">
         <div className="flex-1">
-          <h2 className="font-bold text-gray-900 text-lg">Chat - {orderId}</h2>
+          <h2 className="font-bold text-gray-900 text-lg">{chatTitle}</h2>
           <p className="text-xs text-green-600 font-medium">Online</p>
         </div>
         <button
           onClick={() => {
             try {
-              const sub = JSON.parse(localStorage.getItem("subscriber") || "{}");
-              const fixerCache = (() => { try { return JSON.parse(localStorage.getItem("fixer_profile_cache") || "null"); } catch { return null; } })();
-              const isActualFixer = fixerCache && fixerCache.email === sub?.email;
-              router.push(`/${locale}/${isActualFixer ? 'fixers' : 'dashboard'}`);
+              const returnTo = localStorage.getItem(`chat_from_${orderId}`);
+              if (returnTo === "fixers") router.push(`/${locale}/fixers`);
+              else router.push(`/${locale}/dashboard`);
             } catch { router.back(); }
           }}
           className="text-gray-400 hover:text-gray-800 transition text-2xl font-light leading-none"
