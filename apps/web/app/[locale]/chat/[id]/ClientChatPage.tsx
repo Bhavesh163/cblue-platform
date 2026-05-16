@@ -7,13 +7,16 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [chatTitle, setChatTitle] = useState(`Chat - ${orderId}`);
-  const [messages, setMessages] = useState([
+  const defaultMessages = useRef([
     {
       id: 1,
       sender: "system",
       text: "Dear Khun Ghis, Please inform us of your available time to meet at the jobsite. This chat room is now created for you to connect",
       time: "Just now"
     }
+  ]);
+  const [messages, setMessages] = useState([
+    ...defaultMessages.current
   ]);
   const [inputText, setInputText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -38,16 +41,16 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
       }
     } catch {}
 
-    // Load messages
+    // Load messages once per room.
     const key = `chat_messages_${orderId}`;
     try {
       const stored = localStorage.getItem(key);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) setMessages(parsed);
-        else localStorage.setItem(key, JSON.stringify(messages));
+        else localStorage.setItem(key, JSON.stringify(defaultMessages.current));
       }
-      else localStorage.setItem(key, JSON.stringify(messages));
+      else localStorage.setItem(key, JSON.stringify(defaultMessages.current));
     } catch {}
 
     // BroadcastChannel for real-time cross-tab sync
@@ -79,7 +82,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
       window.removeEventListener("storage", handleStorage);
       window.removeEventListener("cblue-chat-updated", handleChatUpdate as EventListener);
     };
-  }, [orderId, messages]);
+  }, [orderId]);
 
   useEffect(() => {
     const listEl = chatListRef.current;
@@ -123,9 +126,21 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
           onClick={() => {
             try {
               const returnTo = localStorage.getItem(`chat_from_${orderId}`);
-              if (returnTo === "fixers") router.push(`/${locale}/fixers?tab=chat`);
-              else router.push(`/${locale}/dashboard?tab=chat`);
-            } catch { router.push('/' + locale + '/' + 'dashboard' + '?tab=chat'); }
+              localStorage.removeItem(`chat_from_${orderId}`);
+              if (returnTo === "fixers") {
+                router.push(`/${locale}/fixers?tab=chat`);
+                return;
+              }
+              if (returnTo === "dashboard") {
+                router.push(`/${locale}/dashboard?tab=chat`);
+                return;
+              }
+              const sub = JSON.parse(localStorage.getItem("subscriber") || "{}");
+              const hasPartnerSignals = Boolean(sub?.company || sub?.credentialStatus || sub?.tier);
+              router.push(`/${locale}/${hasPartnerSignals ? "fixers" : "dashboard"}?tab=chat`);
+            } catch {
+              router.push('/' + locale + '/' + 'dashboard' + '?tab=chat');
+            }
           }}
           className="text-gray-400 hover:text-gray-800 transition text-2xl font-light leading-none"
           aria-label="Close"

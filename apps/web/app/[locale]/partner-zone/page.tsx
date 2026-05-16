@@ -394,7 +394,7 @@ export default function PartnerZonePage() {
       {waitModalJob && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200">
-            <div className="mb-2 text-sm font-semibold text-amber-600 bg-amber-50 inline-block px-3 py-1 rounded-full">Step 5 of 12 (Partner)</div>
+            <div className="mb-2 text-sm font-semibold text-amber-600 bg-amber-50 inline-block px-3 py-1 rounded-full">Step 5 of 11 (Partner)</div>
             <h2 className="text-2xl font-bold text-gray-900 mt-2">New PO Details</h2>
             <p className="text-gray-500 mt-2">Customer #{waitModalJob.customerAlias} has placed a new request.</p>
             

@@ -39,9 +39,9 @@ const T: Record<string, Record<string, string>> = {
     years: "yrs",
     priceListTitle: "Processing Fee Schedule",
     selectFixer: "Select",
-    confirmTitle: "Accept PO",
-    confirmDesc: "You selected {fixer} ({tier} tier). A processing fee of {fee} is required to proceed.",
-    confirmBtn: "Accept & Notify Partner",
+    confirmTitle: "Partner Accepted PO",
+    confirmDesc: "{fixer} has accepted this PO ({tier} tier). A processing fee of {fee} is required to proceed.",
+    confirmBtn: "Fee & Proceed",
     cancel: "Cancel",
     paymentTitle: "Fee & Proceed",
     paymentDesc: "Pay the processing fee to begin chatting with your partner",
@@ -116,9 +116,9 @@ const T: Record<string, Record<string, string>> = {
     years: "ปี",
     priceListTitle: "ตารางค่าประสานงาน",
     selectFixer: "เลือก",
-    confirmTitle: "ยืนยันการยอมรับ",
-    confirmDesc: "คุณเลือก {fixer} (ระดับ {tier}) ค่าธรรมเนียม {fee} เพื่อดำเนินการต่อ",
-    confirmBtn: "ยืนยันและแจ้งพาร์ทเนอร์",
+    confirmTitle: "พาร์ทเนอร์ยอมรับ PO แล้ว",
+    confirmDesc: "{fixer} ยอมรับ PO นี้แล้ว (ระดับ {tier}) กรุณาชำระค่าธรรมเนียม {fee} เพื่อดำเนินการต่อ",
+    confirmBtn: "ค่าธรรมเนียมและดำเนินการ",
     cancel: "ยกเลิก",
     paymentTitle: "ค่าธรรมเนียมและดำเนินการ",
     paymentDesc: "ชำระค่าธรรมเนียมเพื่อเริ่มแชทกับพาร์ทเนอร์",
@@ -190,9 +190,9 @@ const T: Record<string, Record<string, string>> = {
     years: "年",
     priceListTitle: "服务费价格表",
     selectFixer: "选择",
-    confirmTitle: "确认接受",
-    confirmDesc: "您选择了 {fixer}（{tier} 等级）。需支付 {fee} 处理费才能继续。",
-    confirmBtn: "确认并通知合作伙伴",
+    confirmTitle: "合作伙伴已接受 PO",
+    confirmDesc: "{fixer} 已接受该 PO（{tier} 等级）。需支付 {fee} 处理费才能继续。",
+    confirmBtn: "费用和继续",
     cancel: "取消",
     paymentTitle: "费用和继续",
     paymentDesc: "支付处理费以开始与合作伙伴聊天",
@@ -772,6 +772,7 @@ export default function FixerResults({
             fixerAlias: selectedFixer.alias,
             partnerName: selectedFixer.alias,
             date: new Date().toLocaleString(),
+            createdAt: Date.now(),
             budget: totalBudget > 0 ? `฿${totalBudget.toLocaleString()}` : "฿0",
             location: "Saphansong",
             tier: selectedFixer.tier,
@@ -848,6 +849,7 @@ export default function FixerResults({
           const existing = JSON.parse(localStorage.getItem(mockDynReqKey) || '[]');
           const filtered = existing.filter((x: any) => x.po !== poNumber);
           const totalBudget = Number(selectedFixer.estimatedTotal ?? selectedFixer.price ?? 0);
+          const createdAt = Date.now();
           const newRequest = {
             id: `chat-${poNumber}`,
             po: poNumber,
@@ -857,7 +859,8 @@ export default function FixerResults({
             tier: selectedFixer.tier,
             desc: 'Chat is active. Send meeting invitation when you are ready.',
             type: 'chat_ready',
-            date: new Date().toLocaleString(),
+            date: new Date(createdAt).toLocaleString(),
+            createdAt,
             step: 7,
           };
           filtered.push(newRequest);

@@ -323,19 +323,36 @@ export default function FixerProPage() {
     try {
       viewerEmail = JSON.parse(localStorage.getItem("subscriber") || "{}")?.email || "";
     } catch {}
+    const normalizedViewerEmail = String(viewerEmail || "").trim().toLowerCase();
+    const isPoCode = (value: string) => /^PO-[A-Za-z0-9-]+$/.test(value);
     const parseChatSort = (msg: any) => {
       const numericId = Number(String(msg?.id || "").replace(/[^0-9]/g, ""));
       if (Number.isFinite(numericId) && numericId > 0) return numericId;
       const timeTs = new Date(msg?.time || 0).getTime();
       return Number.isFinite(timeTs) ? timeTs : 0;
     };
-    const isVisibleMessage = (m: any) => m && typeof m.text === "string" && m.text.trim() && m.sender !== "system";
-    const isIncomingMessage = (m: any) => isVisibleMessage(m) && m.sender !== viewerEmail && m.sender !== "fixer" && m.sender !== "partner";
+    const isOwnSender = (sender: any) => {
+      const normalizedSender = String(sender || "").trim().toLowerCase();
+      if (!normalizedSender) return true;
+      if (normalizedSender === normalizedViewerEmail) return true;
+      return ["fixer", "partner", "me", "guest", "system"].includes(normalizedSender);
+    };
+    const isVisibleMessage = (m: any) => {
+      if (!m || typeof m.text !== "string") return false;
+      if (!m.text.trim()) return false;
+      if (m.sender === "system") return false;
+      const lowerText = m.text.toLowerCase();
+      if (lowerText.includes("just be paid by customer")) return false;
+      if (lowerText.includes("notify to proceed")) return false;
+      return true;
+    };
+    const isIncomingMessage = (m: any) => isVisibleMessage(m) && !isOwnSender(m.sender);
     const keys = Object.keys(localStorage).filter((k) => k.startsWith("chat_messages_"));
     const items: any[] = [];
     for (const key of keys) {
       try {
         const po = key.replace("chat_messages_", "");
+        if (!isPoCode(po)) continue;
         const parsed = JSON.parse(localStorage.getItem(key) || "[]");
         if (!Array.isArray(parsed) || parsed.length === 0) continue;
         const reversed = [...parsed].reverse();
@@ -401,6 +418,7 @@ export default function FixerProPage() {
     let incomingJobs = mappedOrders.filter(o => ['CREATED', 'PENDING', 'MATCHING'].includes(o.status) && !acceptedPos.has(o.po));
 
   const parseTs = (v: any) => {
+    if (typeof v === "number") return v;
     if (typeof v === "string") {
       const parsed = parseInt(v, 10);
       if (!isNaN(parsed)) return parsed;
@@ -474,10 +492,12 @@ export default function FixerProPage() {
               <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">Project Details</span><span className="font-bold text-gray-800 bg-white p-2 rounded border border-gray-100">{(waitModalOrder.description || waitModalOrder.service || "").replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?/, "")}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Uploaded Files</span><span className="font-semibold text-sky-600 cursor-pointer hover:underline" onClick={() => { 
                 let url = waitModalOrder?.issueImage || waitModalOrder?.image || waitModalOrder?.fileUrl || (waitModalOrder?.projectImages && waitModalOrder?.projectImages[0]) || (waitModalOrder?.images && waitModalOrder?.images[0]) || (waitModalOrder?.metadata?.images && waitModalOrder?.metadata.images[0]) || (waitModalOrder?.metadata?.issueImageUrl) || (waitModalOrder?.metadata?.issueImage);
+                const poFromDesc = String(waitModalOrder?.description || "").match(/PO-[A-Za-z0-9-]+/)?.[0] || "";
+                const poKey = waitModalOrder?.po || poFromDesc;
                 if (!url) {
                   try {
                     const poMap = JSON.parse(localStorage.getItem("cblue_po_attachments") || "{}");
-                    const poUrl = waitModalOrder?.po ? poMap[waitModalOrder.po]?.[0] : "";
+                    const poUrl = poKey ? poMap[poKey]?.[0] : "";
                     if (poUrl) url = poUrl;
                   } catch {}
                 }
@@ -497,7 +517,9 @@ export default function FixerProPage() {
                   try {
                     const poMap = JSON.parse(localStorage.getItem("cblue_po_attachments") || "{}");
                     const orderMap = JSON.parse(localStorage.getItem("cblue_order_attachments") || "{}");
-                    hasMapped = Boolean((waitModalOrder?.po && poMap[waitModalOrder.po]?.length) || (waitModalOrder?.id && orderMap[waitModalOrder.id]?.length));
+                    const poFromDesc = String(waitModalOrder?.description || "").match(/PO-[A-Za-z0-9-]+/)?.[0] || "";
+                    const poKey = waitModalOrder?.po || poFromDesc;
+                    hasMapped = Boolean((poKey && poMap[poKey]?.length) || (waitModalOrder?.id && orderMap[waitModalOrder.id]?.length));
                   } catch {}
                   return (hasDirect || hasMapped) ? "1 file attached (Click to View)" : "No file attached";
                 })()}
@@ -1668,14 +1690,13 @@ function PartnerDashboard({ locale, partner, prefix, onLogout, orders }: { local
                       <p className="text-sm text-gray-500 mt-1">{o.user?.name || "Customer"} &middot; {new Date(o.createdAt).toLocaleDateString()} &middot; Budget: ฿{o.estimatedPrice || "0"} &middot; {o.po || `PO-2605-${o.id?.slice(0, 4)}`} | {o.user?.subdistrict || "Saphansong"}</p><div className="mt-2 w-full">
 <div className="flex justify-between text-[10px] text-gray-500 mb-1 px-1">
   <span className={['PENDING',''].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Notify</span>
-  <span className={['CONFIRMED'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Confirm</span>
-  <span className={['ACCEPTED'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Pay</span>
+  <span className={['CONFIRMED'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Accept</span>
+  <span className={['ACCEPTED'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Fee & Proceed</span>
   <span className={['IN_PROGRESS'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Chat</span>
   <span className={['MEETING'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Meet</span>
   <span className={['VARIATION'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Variation</span>
   <span className={['WORKING'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Complete</span>
   <span className={['RATING'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Rate</span>
-  <span className={['COMPLETED'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Done</span>
 </div>
 <div className="w-full bg-gray-100 rounded-full h-1.5"><div className="bg-purple-500 h-1.5 rounded-full transition-all duration-500" style={{ width: (o.status === 'COMPLETED' ? '100%' : o.status === 'RATING' ? '88%' : o.status === 'WORKING' ? '77%' : o.status === 'VARIATION' ? '66%' : o.status === 'MEETING' ? '55%' : o.status === 'IN_PROGRESS' ? '44%' : o.status === 'ACCEPTED' ? '33%' : o.status === 'CONFIRMED' ? '22%' : '11%') }} /></div>
 </div>
@@ -1746,14 +1767,13 @@ function PartnerActiveJobs({ locale, prefix, orders }: { locale: string; prefix:
                 <p className="text-sm text-gray-500 mt-1">{o.user?.name || "Customer"} &middot; {new Date(o.createdAt).toLocaleDateString()} &middot; Budget: ฿{o.estimatedPrice || "0"} &middot; {o.po || `PO-2605-${o.id?.slice(0, 4)}`} | {o.user?.subdistrict || "Saphansong"}</p><div className="mt-2 w-full">
 <div className="flex justify-between text-[10px] text-gray-500 mb-1 px-1">
   <span className={['PENDING',''].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Notify</span>
-  <span className={['CONFIRMED'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Confirm</span>
-  <span className={['ACCEPTED'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Pay</span>
+  <span className={['CONFIRMED'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Accept</span>
+  <span className={['ACCEPTED'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Fee & Proceed</span>
   <span className={['IN_PROGRESS'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Chat</span>
   <span className={['MEETING'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Meet</span>
   <span className={['VARIATION'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Variation</span>
   <span className={['WORKING'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Complete</span>
   <span className={['RATING'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Rate</span>
-  <span className={['COMPLETED'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Done</span>
 </div>
 <div className="w-full bg-gray-100 rounded-full h-1.5"><div className="bg-purple-500 h-1.5 rounded-full transition-all duration-500" style={{ width: (o.status === 'COMPLETED' ? '100%' : o.status === 'RATING' ? '88%' : o.status === 'WORKING' ? '77%' : o.status === 'VARIATION' ? '66%' : o.status === 'MEETING' ? '55%' : o.status === 'IN_PROGRESS' ? '44%' : o.status === 'ACCEPTED' ? '33%' : o.status === 'CONFIRMED' ? '22%' : '11%') }} /></div>
 </div>

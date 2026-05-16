@@ -668,7 +668,42 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const [activeTab, setActiveTab] = useState<"overview"|"requests"|"profile"|"active"|"properties"|"history"|"chat"|"alerts">("overview");
   const [waitModalOrder, setWaitModalOrder] = useState<any>(null);
   const [chatFeed, setChatFeed] = useState<any[]>([]);
-  const handleOrderClick = (o: any) => { if (o.status && ['MATCHING', 'CREATED', 'PENDING'].includes(o.status.trim().toUpperCase())) window.location.href = `${prefix}/booking/resume/${o.id}`; else window.location.href = `${prefix}/chat/${o.id}`; };
+  const toDisplayDateTime = (value: any) => {
+    const ts = typeof value === "number" ? value : new Date(value || 0).getTime();
+    if (!Number.isFinite(ts) || ts <= 0) return "";
+    return new Date(ts).toLocaleString();
+  };
+  const parseDateMs = (value: any) => {
+    if (typeof value === "number") return value;
+    if (typeof value === "string") {
+      const asNum = Number(value);
+      if (Number.isFinite(asNum) && asNum > 0) return asNum;
+    }
+    const ts = new Date(value || 0).getTime();
+    return Number.isFinite(ts) ? ts : 0;
+  };
+  const extractPo = (orderLike: any) => {
+    if (!orderLike) return "";
+    if (typeof orderLike.po === "string" && orderLike.po.trim()) return orderLike.po.trim();
+    const desc = String(orderLike.description || orderLike.desc || "");
+    const fromDesc = desc.match(/PO-[A-Za-z0-9-]+/)?.[0] || "";
+    return fromDesc;
+  };
+  const isPoCode = (value: string) => /^PO-[A-Za-z0-9-]+$/.test(value);
+  const handleOrderClick = (o: any) => {
+    const status = String(o?.status || "").trim().toUpperCase();
+    if (["MATCHING", "CREATED", "PENDING"].includes(status)) {
+      window.location.href = `${prefix}/booking/resume/${o.id}`;
+      return;
+    }
+    const chatId = extractPo(o) || o.id;
+    try {
+      localStorage.setItem(`chat_from_${chatId}`, "dashboard");
+    } catch {
+      // Non-blocking fallback for demo mode.
+    }
+    window.location.href = `${prefix}/chat/${chatId}`;
+  };
 
     // MOCK CARDS - SSR-safe: never read localStorage in useState init (runs on server → throws)
   const [mockPayments, setMockPayments] = useState<Record<string, boolean>>({});
@@ -732,25 +767,34 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     try {
       viewerEmail = JSON.parse(localStorage.getItem("subscriber") || "{}")?.email || "";
     } catch {}
+    const normalizedViewerEmail = String(viewerEmail || "").trim().toLowerCase();
     const parseChatSort = (msg: any) => {
       const numericId = Number(String(msg?.id || "").replace(/[^0-9]/g, ""));
       if (Number.isFinite(numericId) && numericId > 0) return numericId;
-      const timeTs = new Date(msg?.time || 0).getTime();
-      return Number.isFinite(timeTs) ? timeTs : 0;
+      return parseDateMs(msg?.createdAt || msg?.time || 0);
+    };
+    const isOwnSender = (sender: any) => {
+      const normalizedSender = String(sender || "").trim().toLowerCase();
+      if (!normalizedSender) return true;
+      if (normalizedSender === normalizedViewerEmail) return true;
+      return ["customer", "me", "guest", "system"].includes(normalizedSender);
     };
     const isVisibleMessage = (m: any) => {
       if (!m || typeof m.text !== "string") return false;
       if (!m.text.trim()) return false;
       if (m.sender === "system") return false;
-      if (m.text.includes("just be paid by customer to notify to proceed and let both meet")) return false;
+      const lowerText = m.text.toLowerCase();
+      if (lowerText.includes("just be paid by customer")) return false;
+      if (lowerText.includes("notify to proceed")) return false;
       return true;
     };
-    const isIncomingMessage = (m: any) => isVisibleMessage(m) && m.sender !== viewerEmail && m.sender !== "customer";
+    const isIncomingMessage = (m: any) => isVisibleMessage(m) && !isOwnSender(m.sender);
     const keys = Object.keys(localStorage).filter((k) => k.startsWith("chat_messages_"));
     const items: any[] = [];
     for (const key of keys) {
       try {
         const po = key.replace("chat_messages_", "");
+        if (!isPoCode(po)) continue;
         const parsed = JSON.parse(localStorage.getItem(key) || "[]");
         if (!Array.isArray(parsed) || parsed.length === 0) continue;
         const reversed = [...parsed].reverse();
@@ -763,9 +807,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           po,
           name: title,
           lastMsg: latestVisible.text,
-          time: latestVisible.time || "",
+          time: latestVisible.time || toDisplayDateTime(latestVisible.createdAt) || "",
           incomingMsg: latestIncoming?.text || "",
-          incomingTime: latestIncoming?.time || "",
+          incomingTime: latestIncoming?.time || toDisplayDateTime(latestIncoming?.createdAt) || "",
           hasIncoming: Boolean(latestIncoming),
           sort: parseChatSort(latestVisible),
         });
@@ -807,31 +851,73 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const paidPOs = new Set(mockActiveItems.map((x: any) => x.po));
   const completedPOs = new Set(mockHistory.map((x: any) => x.po));
   const filteredStaticMock = (subscriber?.email?.includes('ghis') ? ACTIVE_MOCK : []).filter((item: any) => !paidPOs.has(item.po) && !completedPOs.has(item.po));
-  const combinedActive = [...filteredStaticMock, ...mockActiveItems.filter((x: any) => !completedPOs.has(x.po))];
-  const parseDateMs = (v: any) => {
-    const ts = new Date(v || 0).getTime();
-    return Number.isFinite(ts) ? ts : 0;
-  };
+  const backendActiveItems = (orders || [])
+    .filter((o: any) => !['COMPLETED', 'CANCELLED', 'DONE'].includes(String(o?.status || '').toUpperCase()))
+    .map((o: any) => {
+      const status = String(o?.status || '').toUpperCase();
+      const po = extractPo(o) || `PO-${String(o?.id || '').slice(0, 8).toUpperCase()}`;
+      const tier = String(o?.description || '').match(/TIER:([A-Za-z]+)/)?.[1] || "Standard";
+      const stepByStatus: Record<string, number> = {
+        CREATED: 5,
+        MATCHING: 5,
+        PENDING: 5,
+        CONFIRMED: 6,
+        ACCEPTED: 6,
+        IN_PROGRESS: 7,
+        CHAT_READY: 7,
+        MEETING_REQUESTED: 8,
+        MEETING_CONFIRMED: 8,
+        VARIATION_PENDING: 9,
+        COMPLETE_PENDING: 10,
+        WORKING: 10,
+        RATING_PENDING: 11,
+      };
+      const step = stepByStatus[status] || 5;
+      return {
+        id: o.id,
+        orderId: o.id,
+        po,
+        title: (o.serviceCategory || '').replace(/_/g, ' '),
+        customer: o.fixer?.user?.name || o.partnerName || 'Suppadesh',
+        customerName: o.fixer?.user?.name || o.partnerName || 'Suppadesh',
+        fixerAlias: o.fixer?.user?.name || o.partnerName || 'Suppadesh',
+        partnerName: o.fixer?.user?.name || o.partnerName || 'Suppadesh',
+        date: toDisplayDateTime(o.createdAt),
+        createdAt: parseDateMs(o.createdAt),
+        budget: o.estimatedPrice ? `฿${Number(o.estimatedPrice).toLocaleString()}` : '฿0',
+        location: o.subdistrict || 'Saphansong',
+        tier,
+        actionNeeded: [6, 8, 9, 10, 11].includes(step),
+        step,
+        description: o.description || '',
+      };
+    });
+  const existingActivePos = new Set([...filteredStaticMock, ...mockActiveItems].map((x: any) => x.po));
+  const mergedBackendActive = backendActiveItems.filter((x: any) => !completedPOs.has(x.po) && !existingActivePos.has(x.po));
+  const combinedActive = [...filteredStaticMock, ...mockActiveItems.filter((x: any) => !completedPOs.has(x.po)), ...mergedBackendActive]
+    .sort((a: any, b: any) => parseDateMs(b.createdAt || b.date) - parseDateMs(a.createdAt || a.date));
   const allRequestItems = [...(subscriber?.email?.includes('ghis') ? REQUESTS_MOCK : []), ...mockDynRequests]
     .filter((m: any) => !mockPayments[m.id])
-    .sort((a: any, b: any) => parseDateMs(b.date) - parseDateMs(a.date));
+    .sort((a: any, b: any) => parseDateMs(b.createdAt || b.date) - parseDateMs(a.createdAt || a.date));
   const overviewRequestItems = allRequestItems.slice(0, 3);
   const upcomingMeetings = mockDynRequests
     .filter((x: any) => x.type === "meeting_scheduled")
-    .sort((a: any, b: any) => parseDateMs(a.date) - parseDateMs(b.date));
+    .sort((a: any, b: any) => parseDateMs(a.createdAt || a.date) - parseDateMs(b.createdAt || b.date));
   const workflowAlerts = mockDynRequests
     .map((x: any) => {
-      if (x.type === "payment_pending") return { id: `a-${x.id}`, msg: "Partner accepted PO — please proceed to pay fee.", time: x.date || "", dot: "bg-blue-500" };
-      if (x.type === "chat_ready") return { id: `a-${x.id}`, msg: "Chat is active — send meeting invitation when ready.", time: x.date || "", dot: "bg-sky-500" };
-      if (x.type === "meeting_pending_partner") return { id: `a-${x.id}`, msg: "Meeting invitation sent — waiting for partner confirmation.", time: x.date || "", dot: "bg-amber-500" };
-      if (x.type === "meeting_scheduled") return { id: `a-${x.id}`, msg: "Confirm meeting at site", time: x.date || new Date().toLocaleString(), dot: "bg-teal-500" };
-      if (x.type === "variation_pending") return { id: `a-${x.id}`, msg: "Request for Approval of Variation", time: x.date || new Date().toLocaleString(), dot: "bg-purple-500" };
-      if (x.type === "complete_pending") return { id: `a-${x.id}`, msg: "Request for job complete", time: x.date || new Date().toLocaleString(), dot: "bg-green-500" };
+      const stableTime = x.date || toDisplayDateTime(x.createdAt) || "";
+      const createdAt = x.createdAt || parseDateMs(x.date);
+      if (x.type === "payment_pending") return { id: `a-${x.id}`, msg: "Partner accepted PO — please proceed to pay fee.", time: stableTime, createdAt, dot: "bg-blue-500" };
+      if (x.type === "chat_ready") return { id: `a-${x.id}`, msg: "Chat is active — send meeting invitation when ready.", time: stableTime, createdAt, dot: "bg-sky-500" };
+      if (x.type === "meeting_pending_partner") return { id: `a-${x.id}`, msg: "Meeting invitation sent — waiting for partner confirmation.", time: stableTime, createdAt, dot: "bg-amber-500" };
+      if (x.type === "meeting_scheduled") return { id: `a-${x.id}`, msg: "Confirm meeting at site", time: stableTime, createdAt, dot: "bg-teal-500" };
+      if (x.type === "variation_pending") return { id: `a-${x.id}`, msg: "Request for Approval of Variation", time: stableTime, createdAt, dot: "bg-purple-500" };
+      if (x.type === "complete_pending") return { id: `a-${x.id}`, msg: "Request for job complete", time: stableTime, createdAt, dot: "bg-green-500" };
       return null;
     })
     .filter(Boolean) as any[];
   const baseAlerts: any[] = [];
-  const allAlerts = [...workflowAlerts, ...baseAlerts].sort((a, b) => parseDateMs(b.time) - parseDateMs(a.time));
+  const allAlerts = [...workflowAlerts, ...baseAlerts].sort((a: any, b: any) => parseDateMs(b.createdAt || b.time) - parseDateMs(a.createdAt || a.time));
   const overviewAlerts = allAlerts.slice(0, 3);
   const overviewIncomingChats = chatFeed.filter((c: any) => c.hasIncoming).slice(0, 2);
 
@@ -886,9 +972,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               <button className="bg-sky-600 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-sky-700 transition shadow-sm whitespace-nowrap" onClick={() => {
                 setMockActiveItems(prev => prev.map((x: any) => x.po === item.po ? { ...x, step: 8, actionNeeded: false } : x));
                 const pendingId = `meet-pending-${item.po}`;
+                const createdAt = Date.now();
                 setMockDynRequests(prev => {
                   const f = prev.filter((x: any) => x.id !== item.id && x.id !== pendingId);
-                  return [...f, { id: pendingId, po: item.po, title: item.title, customer: item.customer, date: new Date().toLocaleString(), budget: item.budget, tier: item.tier, desc: 'Meeting invitation sent. Waiting for partner to confirm date and time.', type: 'meeting_pending_partner', step: 8 }];
+                  return [...f, { id: pendingId, po: item.po, title: item.title, customer: item.customer, date: new Date(createdAt).toLocaleString(), createdAt, budget: item.budget, tier: item.tier, desc: 'Meeting invitation sent. Waiting for partner to confirm date and time.', type: 'meeting_pending_partner', step: 8 }];
                 });
               }}>Send Meeting Invitation</button>
             </div>
@@ -916,7 +1003,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               <button className="bg-amber-600 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-amber-700 transition shadow-sm whitespace-nowrap" onClick={() => {
                 setMockActiveItems(prev => prev.map((x: any) => x.po === item.po ? { ...x, step: 8, actionNeeded: false } : x));
                 const schedId = `sched-${item.po}`;
-                setMockDynRequests(prev => { const f = prev.filter((x: any) => x.id !== item.id && x.id !== schedId); return [...f, { id: schedId, po: item.po, title: item.title, customer: item.customer, date: new Date().toLocaleString(), budget: item.budget, tier: item.tier, desc: 'Waiting for partner to confirm meeting time...', type: 'meeting_pending_partner', step: 8 }]; });
+                const createdAt = Date.now();
+                setMockDynRequests(prev => { const f = prev.filter((x: any) => x.id !== item.id && x.id !== schedId); return [...f, { id: schedId, po: item.po, title: item.title, customer: item.customer, date: new Date(createdAt).toLocaleString(), createdAt, budget: item.budget, tier: item.tier, desc: 'Waiting for partner to confirm meeting time...', type: 'meeting_pending_partner', step: 8 }]; });
                 setActiveTab("requests");
               }}>Invite to Meet</button>
             </div>
@@ -967,7 +1055,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               <button className="bg-teal-600 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-teal-700 transition shadow-sm whitespace-nowrap" onClick={() => {
                 setMockActiveItems(prev => prev.map((x: any) => x.po === item.po ? { ...x, step: 9, actionNeeded: true } : x));
                 const varId = `variation-${item.po}`;
-                setMockDynRequests(prev => { const f = prev.filter((x: any) => x.id !== item.id && x.id !== varId); return [...f, { id: varId, po: item.po, title: item.title, customer: item.customer, date: new Date().toLocaleString(), budget: item.budget, tier: item.tier, desc: 'Your partner has submitted a variation for your approval. Please review and confirm to proceed.', type: 'variation_pending', step: 9 }]; });
+                const createdAt = Date.now();
+                setMockDynRequests(prev => { const f = prev.filter((x: any) => x.id !== item.id && x.id !== varId); return [...f, { id: varId, po: item.po, title: item.title, customer: item.customer, date: new Date(createdAt).toLocaleString(), createdAt, budget: item.budget, tier: item.tier, desc: 'Your partner has submitted a variation for your approval. Please review and confirm to proceed.', type: 'variation_pending', step: 9 }]; });
                 setActiveTab("requests");
               }}>Meeting Complete ✓</button>
             </div>
@@ -995,7 +1084,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               <button className="bg-purple-600 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-purple-700 transition shadow-sm whitespace-nowrap" onClick={() => {
                 setMockActiveItems(prev => prev.map((x: any) => x.po === item.po ? { ...x, step: 9, actionNeeded: false } : x));
                 const complId = `complete-${item.po}`;
-                setMockDynRequests(prev => { const f = prev.filter((x: any) => x.id !== item.id && x.id !== complId); return [...f, { id: complId, po: item.po, title: item.title, customer: item.customer, date: new Date().toLocaleString(), budget: item.budget, tier: item.tier, desc: 'Work is completed. Please review and mark as complete to close this project.', type: 'complete_pending', step: 10 }]; });
+                const createdAt = Date.now();
+                setMockDynRequests(prev => { const f = prev.filter((x: any) => x.id !== item.id && x.id !== complId); return [...f, { id: complId, po: item.po, title: item.title, customer: item.customer, date: new Date(createdAt).toLocaleString(), createdAt, budget: item.budget, tier: item.tier, desc: 'Work is completed. Please review and mark as complete to close this project.', type: 'complete_pending', step: 10 }]; });
                 setActiveTab("requests");
               }}>Approve Variation</button>
             </div>
@@ -1023,7 +1113,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               <button className="bg-green-600 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-green-700 transition shadow-sm whitespace-nowrap" onClick={() => {
                 setMockActiveItems(prev => prev.map((x: any) => x.po === item.po ? { ...x, step: 10, actionNeeded: false } : x));
                 const rateId = `rate-${item.po}`;
-                setMockDynRequests(prev => { const f = prev.filter((x: any) => x.id !== item.id && x.id !== rateId); return [...f, { id: rateId, po: item.po, title: item.title, customer: item.customer, date: new Date().toLocaleString(), budget: item.budget, tier: item.tier, desc: 'Job complete! Please rate your partner and close this project.', type: 'rate_pending', step: 11 }]; });
+                const createdAt = Date.now();
+                setMockDynRequests(prev => { const f = prev.filter((x: any) => x.id !== item.id && x.id !== rateId); return [...f, { id: rateId, po: item.po, title: item.title, customer: item.customer, date: new Date(createdAt).toLocaleString(), createdAt, budget: item.budget, tier: item.tier, desc: 'Job complete! Please rate your partner and close this project.', type: 'rate_pending', step: 11 }]; });
                 setActiveTab("requests");
               }}>Mark Complete</button>
             </div>
@@ -1240,7 +1331,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                     </div>
                   </div>
                   <div className="text-right">
-                    <span className="text-xs text-gray-400">{c.time || new Date().toLocaleString()}</span>
+                    <span className="text-xs text-gray-400">{c.time || "-"}</span>
                   </div>
                 </div>
               ))
@@ -1438,22 +1529,23 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
               <button
                 className="mt-4 px-6 py-3 w-full bg-sky-100 border border-sky-300 text-sky-800 font-bold rounded-xl shadow-sm hover:bg-sky-200 transition"
                 onClick={() => {
-                  const now = new Date().toLocaleString();
+                  const createdAt = Date.now();
+                  const now = new Date(createdAt).toLocaleString();
                   setMockPayments(prev => ({...prev, [waitModalOrder.id]: true}));
                   setMockActiveItems(prev => [
                     ...prev.filter((x: any) => x.po !== waitModalOrder.request?.po),
-                    { ...waitModalOrder.request, actionNeeded: true, step: 7 }
+                    { ...waitModalOrder.request, actionNeeded: true, step: 7, createdAt }
                   ]);
                   const po = waitModalOrder.request?.po;
                   const chatReqId = `chat-${po}`;
                   setMockDynRequests(prev => [
                     ...prev.filter((x: any) => x.po !== po && x.id !== chatReqId),
-                    { id: chatReqId, po, title: waitModalOrder.request?.title, customer: waitModalOrder.request?.customer || 'Suppadesh', date: now, budget: waitModalOrder.request?.budget, tier: waitModalOrder.request?.tier, desc: 'Chat is active. Send meeting invitation when you are ready.', type: 'chat_ready', step: 7 }
+                    { id: chatReqId, po, title: waitModalOrder.request?.title, customer: waitModalOrder.request?.customer || 'Suppadesh', date: now, createdAt, budget: waitModalOrder.request?.budget, tier: waitModalOrder.request?.tier, desc: 'Chat is active. Send meeting invitation when you are ready.', type: 'chat_ready', step: 7 }
                   ]);
                   try {
                     const chatKey = `chat_messages_${waitModalOrder.request?.po}`;
                     const existing = JSON.parse(localStorage.getItem(chatKey) || '[]');
-                    if (existing.length === 0) localStorage.setItem(chatKey, JSON.stringify([{ id: Date.now(), sender: 'system', text: 'Payment confirmed. Your project chat is now active. Please coordinate with your partner here.', time: now }]));
+                    if (existing.length === 0) localStorage.setItem(chatKey, JSON.stringify([{ id: Date.now(), sender: 'system', text: 'Payment confirmed. Your project chat is now active. Please coordinate with your partner here.', time: now, createdAt }]));
                     const title = waitModalOrder.request?.title || '';
                     const budget = waitModalOrder.request?.budget || '';
                     if (po) {
