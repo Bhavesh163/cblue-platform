@@ -764,10 +764,14 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const buildChatFeed = () => {
     if (typeof window === "undefined") return [];
     let viewerEmail = "";
+    let viewerUserId = "";
     try {
-      viewerEmail = JSON.parse(localStorage.getItem("subscriber") || "{}")?.email || "";
+      const sub = JSON.parse(localStorage.getItem("subscriber") || "{}");
+      viewerEmail = sub?.email || "";
+      viewerUserId = sub?.id || "";
     } catch {}
     const normalizedViewerEmail = String(viewerEmail || "").trim().toLowerCase();
+    const normalizedViewerUserId = String(viewerUserId || "").trim().toLowerCase();
     const parseChatSort = (msg: any) => {
       const numericId = Number(String(msg?.id || "").replace(/[^0-9]/g, ""));
       if (Number.isFinite(numericId) && numericId > 0) return numericId;
@@ -777,6 +781,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       const normalizedSender = String(sender || "").trim().toLowerCase();
       if (!normalizedSender) return true;
       if (normalizedSender === normalizedViewerEmail) return true;
+      if (normalizedViewerUserId && normalizedSender === normalizedViewerUserId) return true;
       return ["customer", "me", "guest", "system"].includes(normalizedSender);
     };
     const isVisibleMessage = (m: any) => {
@@ -819,18 +824,100 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     return items;
   };
 
+  const buildBackendChatFeed = async () => {
+    if (typeof window === "undefined") return [];
+    const token = localStorage.getItem("subscriber_token") || "";
+    if (!token) return [];
+
+    const viewerUserId = String(subscriber?.id || "");
+    const items: any[] = [];
+
+    for (const order of (orders || [])) {
+      const orderId = order?.id;
+      if (!orderId) continue;
+
+      try {
+        const res = await fetch(`/api/v1/orders/${orderId}/chat`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) continue;
+
+        const messages = await res.json();
+        if (!Array.isArray(messages) || messages.length === 0) continue;
+
+        const po = extractPo(order) || `PO-${String(orderId).slice(0, 8).toUpperCase()}`;
+        if (!isPoCode(po)) continue;
+
+        const visible = messages.filter((m: any) => {
+          const text = String(m?.text || "").trim();
+          if (!text) return false;
+          const lowerText = text.toLowerCase();
+          if (lowerText.includes("just be paid by customer")) return false;
+          if (lowerText.includes("notify to proceed")) return false;
+          return true;
+        });
+        if (visible.length === 0) continue;
+
+        const latestVisible = visible[visible.length - 1];
+        const incoming = [...visible].reverse().find((m: any) => String(m?.senderUserId || "") !== viewerUserId);
+        const title =
+          localStorage.getItem(`chat_title_${po}`) ||
+          `${String(order?.serviceCategory || "Service").replace(/_/g, " ")} - ${po} - ${order?.estimatedPrice ? `฿${Number(order.estimatedPrice).toLocaleString()}` : "฿0"}`;
+
+        items.push({
+          id: po,
+          po,
+          name: title,
+          lastMsg: String(latestVisible?.text || ""),
+          time: toDisplayDateTime(latestVisible?.createdAt) || "",
+          incomingMsg: incoming ? String(incoming?.text || "") : "",
+          incomingTime: incoming ? (toDisplayDateTime(incoming?.createdAt) || "") : "",
+          hasIncoming: Boolean(incoming),
+          sort: parseDateMs(latestVisible?.createdAt),
+          source: "backend",
+        });
+      } catch {
+        // Ignore per-order failures and continue with available data.
+      }
+    }
+
+    items.sort((a, b) => b.sort - a.sort);
+    return items;
+  };
+
   useEffect(() => {
-    const syncChats = () => setChatFeed(buildChatFeed());
-    syncChats();
-    window.addEventListener("storage", syncChats);
-    window.addEventListener("cblue-chat-updated", syncChats as EventListener);
-    const timer = setInterval(syncChats, 1200);
+    let isMounted = true;
+
+    const syncChats = async () => {
+      const localItems = buildChatFeed();
+      const backendItems = await buildBackendChatFeed();
+
+      const merged = new Map<string, any>();
+      for (const item of localItems) merged.set(item.po, item);
+      for (const item of backendItems) merged.set(item.po, item);
+
+      const mergedList = Array.from(merged.values()).sort((a: any, b: any) => Number(b.sort || 0) - Number(a.sort || 0));
+      if (isMounted) setChatFeed(mergedList);
+    };
+
+    void syncChats();
+
+    const syncEvent = () => {
+      void syncChats();
+    };
+
+    window.addEventListener("storage", syncEvent);
+    window.addEventListener("cblue-chat-updated", syncEvent as EventListener);
+    const timer = setInterval(() => {
+      void syncChats();
+    }, 5000);
     return () => {
-      window.removeEventListener("storage", syncChats);
-      window.removeEventListener("cblue-chat-updated", syncChats as EventListener);
+      isMounted = false;
+      window.removeEventListener("storage", syncEvent);
+      window.removeEventListener("cblue-chat-updated", syncEvent as EventListener);
       clearInterval(timer);
     };
-  }, []);
+  }, [orders, subscriber?.id]);
 
   const REQUESTS_MOCK = [
     { id: "req1", title: "REINSTATEMENT", customer: "Suppadesh", date: "5/11/2026, 2:30:00 PM", budget: "฿5,000,000", po: "PO-2605-1200", tier: "ECONOMY", desc: "I want a team to carry out a 3000 sq.m. housing project." },

@@ -122,6 +122,7 @@ model User {
   reviews       Review[]
   notifications Notification[]
   properties    Property[]
+  chatMessages  OrderChatMessage[] @relation("OrderChatSender")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -256,6 +257,7 @@ model Order {
   payment       Payment?
   review        Review?
   images        Image[]
+  chatMessages  OrderChatMessage[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -265,6 +267,24 @@ model Order {
   @@index([status])
   @@index([serviceCategory])
   @@map("orders")
+}
+
+model OrderChatMessage {
+  id           String   @id @default(uuid())
+  orderId      String
+  order        Order    @relation(fields: [orderId], references: [id])
+
+  senderUserId String
+  senderUser   User     @relation("OrderChatSender", fields: [senderUserId], references: [id])
+  senderRole   UserRole?
+
+  text         String
+  createdAt    DateTime @default(now())
+
+  @@index([orderId])
+  @@index([senderUserId])
+  @@index([createdAt])
+  @@map("order_chat_messages")
 }
 
 model OrderStatusHistory {

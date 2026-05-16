@@ -745,6 +745,23 @@ export default function FixerResults({
             const byOrder = JSON.parse(byOrderRaw);
             byOrder[createdOrderId] = storedAttachments;
             localStorage.setItem("cblue_order_attachments", JSON.stringify(byOrder));
+
+            // Persist attachments to backend for cross-device visibility.
+            await Promise.allSettled(
+              storedAttachments.map((url, idx) =>
+                fetch(`/api/v1/orders/${createdOrderId}/attachments`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                  },
+                  body: JSON.stringify({
+                    url,
+                    key: `order/${createdOrderId}/attachment-${idx + 1}`,
+                  }),
+                }),
+              ),
+            );
           } catch {
             // Non-blocking for demo flow
           }

@@ -2,12 +2,15 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
-import { OrderStatus } from '@prisma/client';
+import { OrderStatus, UserRole } from '@prisma/client';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
+import { CreateOrderChatMessageDto } from './dto/create-order-chat-message.dto';
+import { UploadOrderAttachmentDto } from './dto/upload-order-attachment.dto';
 
 // Valid status transitions
 const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
@@ -110,6 +113,11 @@ export class OrderService {
       include: {
         address: true,
         fixer: { include: { user: true } },
+        images: {
+          where: { type: { in: ['order_attachment', 'order_photo'] } },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        },
         statusHistory: { orderBy: { createdAt: 'desc' }, take: 1 },
       },
       orderBy: { createdAt: 'desc' },
@@ -135,9 +143,144 @@ export class OrderService {
       include: {
         address: true,
         user: true,
+        images: {
+          where: { type: { in: ['order_attachment', 'order_photo'] } },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        },
         statusHistory: { orderBy: { createdAt: 'desc' }, take: 1 },
       },
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  private async getOrderForParticipant(orderId: string, userId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        fixer: {
+          select: {
+            id: true,
+            userId: true,
+          },
+        },
+      },
+    });
+
+    if (!order) throw new NotFoundException('Order not found');
+
+    const isCustomer = order.userId === userId;
+    const isFixer = order.fixer?.userId === userId;
+    if (!isCustomer && !isFixer) {
+      throw new ForbiddenException('You do not have access to this order');
+    }
+
+    return { order, isCustomer, isFixer };
+  }
+
+  async getOrderChatMessages(orderId: string, userId: string) {
+    await this.getOrderForParticipant(orderId, userId);
+
+    const messages = await this.prisma.orderChatMessage.findMany({
+      where: { orderId },
+      include: {
+        senderUser: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return messages.map((m) => ({
+      id: m.id,
+      orderId: m.orderId,
+      senderUserId: m.senderUserId,
+      senderRole: m.senderRole,
+      senderName: m.senderUser?.name || m.senderUser?.email || 'User',
+      text: m.text,
+      createdAt: m.createdAt,
+    }));
+  }
+
+  async createOrderChatMessage(
+    orderId: string,
+    userId: string,
+    dto: CreateOrderChatMessageDto,
+  ) {
+    await this.getOrderForParticipant(orderId, userId);
+
+    const sender = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+
+    const created = await this.prisma.orderChatMessage.create({
+      data: {
+        orderId,
+        senderUserId: userId,
+        senderRole: sender?.role ?? UserRole.USER,
+        text: dto.text.trim(),
+      },
+      include: {
+        senderUser: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+          },
+        },
+      },
+    });
+
+    return {
+      id: created.id,
+      orderId: created.orderId,
+      senderUserId: created.senderUserId,
+      senderRole: created.senderRole,
+      senderName: created.senderUser?.name || created.senderUser?.email || 'User',
+      text: created.text,
+      createdAt: created.createdAt,
+    };
+  }
+
+  async getOrderAttachments(orderId: string, userId: string) {
+    await this.getOrderForParticipant(orderId, userId);
+
+    return this.prisma.image.findMany({
+      where: {
+        orderId,
+        type: {
+          in: ['order_attachment', 'order_photo'],
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async uploadOrderAttachment(
+    orderId: string,
+    userId: string,
+    dto: UploadOrderAttachmentDto,
+  ) {
+    await this.getOrderForParticipant(orderId, userId);
+
+    const safeKey =
+      dto.key?.trim() ||
+      `order/${orderId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    return this.prisma.image.create({
+      data: {
+        orderId,
+        type: 'order_attachment',
+        url: dto.url,
+        key: safeKey,
+      },
     });
   }
 

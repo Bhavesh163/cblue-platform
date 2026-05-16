@@ -10,6 +10,8 @@ import {
 import { OrderService } from './order.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
+import { CreateOrderChatMessageDto } from './dto/create-order-chat-message.dto';
+import { UploadOrderAttachmentDto } from './dto/upload-order-attachment.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -34,6 +36,40 @@ export class OrderController {
   @Get('my')
   findMyOrders(@CurrentUser('id') userId: string) {
     return this.orderService.findByUser(userId);
+  }
+
+  @Get(':orderId/chat')
+  getOrderChat(
+    @Param('orderId') orderId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.orderService.getOrderChatMessages(orderId, userId);
+  }
+
+  @Post(':orderId/chat')
+  postOrderChat(
+    @Param('orderId') orderId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: CreateOrderChatMessageDto,
+  ) {
+    return this.orderService.createOrderChatMessage(orderId, userId, dto);
+  }
+
+  @Get(':orderId/attachments')
+  getOrderAttachments(
+    @Param('orderId') orderId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.orderService.getOrderAttachments(orderId, userId);
+  }
+
+  @Post(':orderId/attachments')
+  uploadOrderAttachment(
+    @Param('orderId') orderId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: UploadOrderAttachmentDto,
+  ) {
+    return this.orderService.uploadOrderAttachment(orderId, userId, dto);
   }
 
   @Get(':orderId')

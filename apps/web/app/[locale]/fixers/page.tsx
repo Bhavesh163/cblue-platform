@@ -250,6 +250,7 @@ export default function FixerProPage() {
     return {
       id: o.id,
       po: extractedPo,
+      hasAttachment: Array.isArray(o.images) && o.images.length > 0,
       subdistrict: o.location ? o.location.split(' ')[0] : "Saphansong",
       customer: o.user?.name || "Customer",
       type: o.orderType?.toLowerCase() || "household",
@@ -320,10 +321,14 @@ export default function FixerProPage() {
   const buildChatFeed = () => {
     if (typeof window === "undefined") return [];
     let viewerEmail = "";
+    let viewerUserId = "";
     try {
-      viewerEmail = JSON.parse(localStorage.getItem("subscriber") || "{}")?.email || "";
+      const sub = JSON.parse(localStorage.getItem("subscriber") || "{}");
+      viewerEmail = sub?.email || "";
+      viewerUserId = sub?.id || "";
     } catch {}
     const normalizedViewerEmail = String(viewerEmail || "").trim().toLowerCase();
+    const normalizedViewerUserId = String(viewerUserId || "").trim().toLowerCase();
     const isPoCode = (value: string) => /^PO-[A-Za-z0-9-]+$/.test(value);
     const parseChatSort = (msg: any) => {
       const numericId = Number(String(msg?.id || "").replace(/[^0-9]/g, ""));
@@ -335,6 +340,7 @@ export default function FixerProPage() {
       const normalizedSender = String(sender || "").trim().toLowerCase();
       if (!normalizedSender) return true;
       if (normalizedSender === normalizedViewerEmail) return true;
+      if (normalizedViewerUserId && normalizedSender === normalizedViewerUserId) return true;
       return ["fixer", "partner", "me", "guest", "system"].includes(normalizedSender);
     };
     const isVisibleMessage = (m: any) => {
@@ -380,18 +386,102 @@ export default function FixerProPage() {
     return items;
   };
 
+  const buildBackendChatFeed = async () => {
+    if (typeof window === "undefined") return [];
+    const token = localStorage.getItem("subscriber_token") || "";
+    if (!token) return [];
+
+    const viewerUserId = String(partner?.id || "");
+    const isPoCode = (value: string) => /^PO-[A-Za-z0-9-]+$/.test(value);
+    const items: any[] = [];
+
+    for (const order of (orders || [])) {
+      const orderId = order?.id;
+      if (!orderId) continue;
+
+      try {
+        const res = await fetch(`/api/v1/orders/${orderId}/chat`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) continue;
+
+        const messages = await res.json();
+        if (!Array.isArray(messages) || messages.length === 0) continue;
+
+        const desc = String(order?.description || "");
+        const po = desc.match(/PO-[A-Za-z0-9-]+/)?.[0] || `PO-${String(orderId).slice(0, 8).toUpperCase()}`;
+        if (!isPoCode(po)) continue;
+
+        const visible = messages.filter((m: any) => {
+          const text = String(m?.text || "").trim();
+          if (!text) return false;
+          const lowerText = text.toLowerCase();
+          if (lowerText.includes("just be paid by customer")) return false;
+          if (lowerText.includes("notify to proceed")) return false;
+          return true;
+        });
+        if (visible.length === 0) continue;
+
+        const latestVisible = visible[visible.length - 1];
+        const incoming = [...visible].reverse().find((m: any) => String(m?.senderUserId || "") !== viewerUserId);
+        const title =
+          localStorage.getItem(`chat_title_${po}`) ||
+          `${String(order?.serviceCategory || "Service").replace(/_/g, " ")} - ${po} - ${order?.estimatedPrice ? `฿${Number(order.estimatedPrice).toLocaleString()}` : "฿0"}`;
+
+        items.push({
+          id: po,
+          po,
+          name: title,
+          service: po,
+          lastMsg: String(latestVisible?.text || ""),
+          time: latestVisible?.createdAt ? new Date(latestVisible.createdAt).toLocaleString() : "",
+          incomingMsg: incoming ? String(incoming?.text || "") : "",
+          incomingTime: incoming?.createdAt ? new Date(incoming.createdAt).toLocaleString() : "",
+          hasIncoming: Boolean(incoming),
+          sort: latestVisible?.createdAt ? new Date(latestVisible.createdAt).getTime() : 0,
+          unread: incoming ? 1 : 0,
+          online: true,
+          source: "backend",
+        });
+      } catch {
+        // Ignore per-order failures and continue.
+      }
+    }
+
+    items.sort((a, b) => b.sort - a.sort);
+    return items;
+  };
+
   useEffect(() => {
-    const syncChats = () => setChatFeed(buildChatFeed());
-    syncChats();
-    window.addEventListener("storage", syncChats);
-    window.addEventListener("cblue-chat-updated", syncChats as EventListener);
-    const timer = setInterval(syncChats, 1200);
+    let isMounted = true;
+    const syncChats = async () => {
+      const localItems = buildChatFeed();
+      const backendItems = await buildBackendChatFeed();
+      const merged = new Map<string, any>();
+      for (const item of localItems) merged.set(item.po, item);
+      for (const item of backendItems) merged.set(item.po, item);
+      const mergedList = Array.from(merged.values()).sort((a: any, b: any) => Number(b.sort || 0) - Number(a.sort || 0));
+      if (isMounted) setChatFeed(mergedList);
+    };
+
+    void syncChats();
+
+    const syncEvent = () => {
+      void syncChats();
+    };
+
+    window.addEventListener("storage", syncEvent);
+    window.addEventListener("cblue-chat-updated", syncEvent as EventListener);
+    const timer = setInterval(() => {
+      void syncChats();
+    }, 5000);
     return () => {
-      window.removeEventListener("storage", syncChats);
-      window.removeEventListener("cblue-chat-updated", syncChats as EventListener);
+      isMounted = false;
+      window.removeEventListener("storage", syncEvent);
+      window.removeEventListener("cblue-chat-updated", syncEvent as EventListener);
       clearInterval(timer);
     };
-  }, []);
+  }, [orders, partner?.id]);
 
   const [mockDynReqs, setMockDynReqs] = useState<any[]>([]);
   const [mockActiveState, setMockActiveState] = useState<any[]>([]);
@@ -490,7 +580,7 @@ export default function FixerProPage() {
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Customer</span><span className="font-bold text-gray-800">{waitModalOrder.customer || waitModalOrder.customerAlias || 'Customer'}</span></div>
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Budget</span><span className="font-bold text-amber-600">฿{waitModalOrder.budget || waitModalOrder.estimatedPrice || waitModalOrder.finalPrice || '0'}</span></div>
               <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">Project Details</span><span className="font-bold text-gray-800 bg-white p-2 rounded border border-gray-100">{(waitModalOrder.description || waitModalOrder.service || "").replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?/, "")}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Uploaded Files</span><span className="font-semibold text-sky-600 cursor-pointer hover:underline" onClick={() => { 
+              <div className="flex justify-between"><span className="text-gray-500">Uploaded Files</span><span className="font-semibold text-sky-600 cursor-pointer hover:underline" onClick={async () => { 
                 let url = waitModalOrder?.issueImage || waitModalOrder?.image || waitModalOrder?.fileUrl || (waitModalOrder?.projectImages && waitModalOrder?.projectImages[0]) || (waitModalOrder?.images && waitModalOrder?.images[0]) || (waitModalOrder?.metadata?.images && waitModalOrder?.metadata.images[0]) || (waitModalOrder?.metadata?.issueImageUrl) || (waitModalOrder?.metadata?.issueImage);
                 const poFromDesc = String(waitModalOrder?.description || "").match(/PO-[A-Za-z0-9-]+/)?.[0] || "";
                 const poKey = waitModalOrder?.po || poFromDesc;
@@ -508,11 +598,30 @@ export default function FixerProPage() {
                     if (orderUrl) url = orderUrl;
                   } catch {}
                 }
+                if (!url && waitModalOrder?.id) {
+                  try {
+                    const token = localStorage.getItem("subscriber_token") || "";
+                    if (token) {
+                      const res = await fetch(`/api/v1/orders/${waitModalOrder.id}/attachments`, {
+                        headers: { Authorization: `Bearer ${token}` },
+                      });
+                      if (res.ok) {
+                        const attachments = await res.json();
+                        if (Array.isArray(attachments) && attachments.length > 0) {
+                          url = attachments[0]?.url || "";
+                        }
+                      }
+                    }
+                  } catch {
+                    // Ignore and keep local fallback behavior.
+                  }
+                }
                 if(url) window.open(url, "_blank"); 
                 else { alert("No uploaded file found for this order. Please re-submit from booking so file can be attached to this PO."); } 
               }}>
                 {(() => {
                   const hasDirect = !!(waitModalOrder?.image || (waitModalOrder?.images && waitModalOrder?.images.length > 0) || waitModalOrder?.fileUrl || (waitModalOrder?.projectImages && waitModalOrder?.projectImages.length > 0) || waitModalOrder?.metadata?.images);
+                  const hasBackend = !!waitModalOrder?.hasAttachment;
                   let hasMapped = false;
                   try {
                     const poMap = JSON.parse(localStorage.getItem("cblue_po_attachments") || "{}");
@@ -521,7 +630,7 @@ export default function FixerProPage() {
                     const poKey = waitModalOrder?.po || poFromDesc;
                     hasMapped = Boolean((poKey && poMap[poKey]?.length) || (waitModalOrder?.id && orderMap[waitModalOrder.id]?.length));
                   } catch {}
-                  return (hasDirect || hasMapped) ? "1 file attached (Click to View)" : "No file attached";
+                  return (hasDirect || hasMapped || hasBackend) ? "1 file attached (Click to View)" : "No file attached";
                 })()}
               </span></div>
             </div>

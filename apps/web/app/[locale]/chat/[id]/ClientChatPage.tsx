@@ -19,6 +19,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
     ...defaultMessages.current
   ]);
   const [inputText, setInputText] = useState("");
+  const [orderDbId, setOrderDbId] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const chatListRef = useRef<HTMLDivElement>(null);
   const currentEmailRef = useRef<string>("guest");
@@ -41,6 +42,44 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
       }
     } catch {}
 
+    const token = localStorage.getItem("subscriber_token") || "";
+
+    const isUuid = (v: string) => /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(v);
+    const toLocalMessage = (m: any) => ({
+      id: m?.id || Date.now(),
+      sender: m?.senderUserId || m?.sender || "system",
+      text: m?.text || "",
+      time: m?.createdAt ? new Date(m.createdAt).toLocaleString() : (m?.time || ""),
+      createdAt: m?.createdAt ? new Date(m.createdAt).getTime() : Date.now(),
+    });
+
+    const resolveOrderDbId = async () => {
+      if (isUuid(orderId)) return orderId;
+      if (!token) return "";
+
+      const endpoints = ["/api/v1/orders/my", "/api/v1/orders/fixer"];
+      for (const endpoint of endpoints) {
+        try {
+          const res = await fetch(endpoint, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) continue;
+          const orders = await res.json();
+          if (!Array.isArray(orders)) continue;
+          const found = orders.find((o: any) => {
+            const desc = String(o?.description || "");
+            const poFromDesc = desc.match(/PO-[A-Za-z0-9-]+/)?.[0] || "";
+            return o?.id === orderId || poFromDesc === orderId || o?.po === orderId;
+          });
+          if (found?.id) return found.id;
+        } catch {
+          // Ignore and continue to local fallback.
+        }
+      }
+
+      return "";
+    };
+
     // Load messages once per room.
     const key = `chat_messages_${orderId}`;
     try {
@@ -52,6 +91,36 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
       }
       else localStorage.setItem(key, JSON.stringify(defaultMessages.current));
     } catch {}
+
+    const syncFromApi = async () => {
+      if (!token) return;
+      const resolvedOrderId = await resolveOrderDbId();
+      if (!resolvedOrderId) return;
+      setOrderDbId(resolvedOrderId);
+
+      try {
+        const res = await fetch(`/api/v1/orders/${resolvedOrderId}/chat`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const apiMessages = await res.json();
+        if (!Array.isArray(apiMessages)) return;
+
+        const mapped = apiMessages.map((m: any) => toLocalMessage(m));
+        if (mapped.length > 0) {
+          setMessages(mapped);
+          localStorage.setItem(key, JSON.stringify(mapped));
+          window.dispatchEvent(new CustomEvent("cblue-chat-updated", { detail: { orderId } }));
+        }
+      } catch {
+        // API offline: local fallback remains available.
+      }
+    };
+
+    void syncFromApi();
+    const apiTimer = setInterval(() => {
+      void syncFromApi();
+    }, 2500);
 
     // BroadcastChannel for real-time cross-tab sync
     const bc = new BroadcastChannel(`chat_${orderId}`);
@@ -79,6 +148,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
     window.addEventListener("cblue-chat-updated", handleChatUpdate as EventListener);
     return () => {
       bc.close();
+      clearInterval(apiTimer);
       window.removeEventListener("storage", handleStorage);
       window.removeEventListener("cblue-chat-updated", handleChatUpdate as EventListener);
     };
@@ -90,16 +160,59 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
     listEl.scrollTop = listEl.scrollHeight;
   }, [messages]);
 
-  const handleSend = (e: React.FormEvent) => {
+  const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if(!inputText.trim()) return;
     const key = `chat_messages_${orderId}`;
+    const messageText = inputText.trim();
+    const token = localStorage.getItem("subscriber_token") || "";
+
+    if (token && orderDbId) {
+      try {
+        const res = await fetch(`/api/v1/orders/${orderDbId}/chat`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ text: messageText }),
+        });
+
+        if (res.ok) {
+          const created = await res.json();
+          const createdMessage = {
+            id: created?.id || Date.now(),
+            sender: created?.senderUserId || currentEmailRef.current,
+            text: created?.text || messageText,
+            time: created?.createdAt ? new Date(created.createdAt).toLocaleString() : new Date().toLocaleString(),
+            createdAt: created?.createdAt ? new Date(created.createdAt).getTime() : Date.now(),
+          };
+
+          setMessages(prev => {
+            const updated = [...prev, createdMessage];
+            try {
+              localStorage.setItem(key, JSON.stringify(updated));
+              bcRef.current?.postMessage(updated);
+              window.dispatchEvent(new Event("storage"));
+              window.dispatchEvent(new CustomEvent("cblue-chat-updated", { detail: { orderId } }));
+            } catch {}
+            return updated;
+          });
+          setInputText("");
+          return;
+        }
+      } catch {
+        // API fallback to local-only message below.
+      }
+    }
+
     setMessages(prev => {
       const updated = [...prev, {
         id: Date.now(),
         sender: currentEmailRef.current,
-        text: inputText.trim(),
-        time: new Date().toLocaleString()
+        text: messageText,
+        time: new Date().toLocaleString(),
+        createdAt: Date.now(),
       }];
       try {
         localStorage.setItem(key, JSON.stringify(updated));
