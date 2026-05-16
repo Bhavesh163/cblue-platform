@@ -31,7 +31,7 @@ import configuration from './config/configuration';
 
     // Rate limiting
     ThrottlerModule.forRoot({
-      throttlers: [{ ttl: 60000, limit: 60 }],
+      throttlers: [{ ttl: 60000, limit: 3000 }],
     }),
 
     // Event-driven communication between modules
