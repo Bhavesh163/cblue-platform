@@ -78,13 +78,12 @@ export class OrderController {
   }
 
   @Put(':orderId/status')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.FIXER)
   updateStatus(
     @Param('orderId') orderId: string,
     @Body() dto: UpdateOrderStatusDto,
     @CurrentUser('id') userId: string,
+    @CurrentUser('role') userRole: UserRole,
   ) {
-    return this.orderService.updateStatus(orderId, dto, userId);
+    return this.orderService.updateStatus(orderId, dto, userId, userRole);
   }
 }

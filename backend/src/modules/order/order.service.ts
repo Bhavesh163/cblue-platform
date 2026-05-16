@@ -19,7 +19,8 @@ const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   ASSIGNED: [OrderStatus.DEPOSIT_PENDING, OrderStatus.CANCELLED],
   DEPOSIT_PENDING: [OrderStatus.CONFIRMED, OrderStatus.CANCELLED],
   CONFIRMED: [OrderStatus.IN_PROGRESS, OrderStatus.CANCELLED],
-  IN_PROGRESS: [OrderStatus.COMPLETED, OrderStatus.CANCELLED],
+  IN_PROGRESS: [OrderStatus.MEETING_REQUESTED, OrderStatus.COMPLETED, OrderStatus.CANCELLED],
+  MEETING_REQUESTED: [OrderStatus.IN_PROGRESS, OrderStatus.COMPLETED, OrderStatus.CANCELLED],
   COMPLETED: [],
   CANCELLED: [],
 };
@@ -288,11 +289,24 @@ export class OrderService {
     orderId: string,
     dto: UpdateOrderStatusDto,
     changedBy: string,
+    callerRole?: string,
   ) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
+      include: { fixer: { select: { userId: true } } },
     });
     if (!order) throw new NotFoundException('Order not found');
+
+    // Role-based access: USER can only advance their own order for specific transitions
+    if (callerRole === UserRole.USER) {
+      if (order.userId !== changedBy) {
+        throw new ForbiddenException('You do not have access to this order');
+      }
+      const customerAllowed: OrderStatus[] = [OrderStatus.IN_PROGRESS, OrderStatus.MEETING_REQUESTED, OrderStatus.CANCELLED];
+      if (!customerAllowed.includes(dto.status)) {
+        throw new ForbiddenException(`Customers may only transition to IN_PROGRESS, MEETING_REQUESTED, or CANCELLED`);
+      }
+    }
 
     // Validate state transition
     const allowed = VALID_TRANSITIONS[order.status];

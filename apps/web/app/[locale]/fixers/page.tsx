@@ -297,17 +297,8 @@ export default function FixerProPage() {
   ];
 
   const chats: any[] = [];
-  const [staticNotifications] = useState<any[]>(() => {
-    const now = new Date();
-    const fmt = (date: Date) => date.toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
-    return [
-      { id: 1, msg: "Review PO Details for GREEN CONSTRUCTION", unread: true, time: fmt(now), dot: "bg-purple-500" },
-      { id: 2, msg: "Review PO Details for FIT OUT", unread: true, time: fmt(new Date(now.getTime() - 2 * 60 * 1000)), dot: "bg-purple-500" },
-      { id: 3, msg: "Confirm meeting at site", unread: false, time: fmt(new Date(now.getTime() - 60 * 60 * 1000)), dot: "bg-gray-300" },
-      { id: 4, msg: "Request for Approval of Variation", unread: false, time: fmt(new Date(now.getTime() - 24 * 60 * 60 * 1000)), dot: "bg-gray-300" },
-      { id: 5, msg: "Request for job complete", unread: false, time: fmt(new Date(now.getTime() - 25 * 60 * 60 * 1000)), dot: "bg-gray-300" },
-    ];
-  });
+  // Use module-level frozen array — avoids re-computing timestamps on remount.
+  const staticNotifications = notifications;
 
   useEffect(() => {
     try {
@@ -505,7 +496,7 @@ export default function FixerProPage() {
   });
   const completedJobs = mappedOrders.filter(o => o.status === 'COMPLETED');
     const acceptedPos = new Set(mockActiveState.filter((x: any) => Number(x.step || 0) >= 6).map((x: any) => x.po));
-    let incomingJobs = mappedOrders.filter(o => ['CREATED', 'PENDING', 'MATCHING'].includes(o.status) && !acceptedPos.has(o.po));
+    let incomingJobs = mappedOrders.filter(o => ['CREATED', 'PENDING', 'MATCHING', 'MEETING_REQUESTED'].includes(o.status) && !acceptedPos.has(o.po));
 
   const parseTs = (v: any) => {
     if (typeof v === "number") return v;
@@ -660,6 +651,14 @@ export default function FixerProPage() {
                       setMockDynReqs(nextReqs);
                       setMockActiveState(nextActive);
                       window.dispatchEvent(new Event("storage"));
+                      // Update backend: MEETING_REQUESTED → IN_PROGRESS (meeting confirmed)
+                      if (waitModalOrder.id && !waitModalOrder.mock && token) {
+                        fetch(`/api/v1/orders/${waitModalOrder.id}/status`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                          body: JSON.stringify({ status: 'IN_PROGRESS', note: 'Partner confirmed meeting time' }),
+                        }).catch(() => {});
+                      }
                       alert("Meeting confirmed!");
                       setWaitModalOrder(null);
                       return;
@@ -1079,17 +1078,22 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
 
         {/* Earnings Chart */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:col-span-2">
-          <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">{locale === "th" ? "รายได้รายเดือน" : locale === "zh" ? "月收入" : "Monthly Earnings"}</h3>
-          <div className="grid grid-cols-[repeat(12,minmax(0,1fr))] gap-1 items-end h-40">
-            {earnings12.map((e) => (
-              <div key={e.month} className="flex-1 flex flex-col items-center">
-                <span className="text-xs font-bold text-gray-700 mb-1">฿{(e.amount / 1000).toFixed(1)}k</span>
-                <div className="w-full bg-purple-100 rounded-t-lg relative" style={{ height: `${(e.amount / maxEarning) * 100}%` }}>
-                  <div className="absolute inset-0 bg-gradient-to-t from-purple-500 to-indigo-500 rounded-t-lg" />
+          <h3 className="font-bold text-gray-900 mb-1 flex items-center gap-2">{locale === "th" ? "รายได้รายเดือน" : locale === "zh" ? "月收入" : "Monthly Earnings"}</h3>
+          <p className="text-xs text-gray-400 mb-4">{locale === "th" ? "12 เดือนล่าสุด" : locale === "zh" ? "近12个月" : "Last 12 months"}</p>
+          {/* Bar chart — heights in px relative to 120px max bar */}
+          <div className="flex items-end gap-px" style={{ height: "9rem" }}>
+            {earnings12.map((e) => {
+              const pct = maxEarning > 0 ? e.amount / maxEarning : 0;
+              const barPx = Math.max(6, Math.round(pct * 96));
+              const label = locale === "th" ? e.monthTh : locale === "zh" ? e.monthZh : e.month;
+              return (
+                <div key={e.month} className="flex-1 flex flex-col items-center justify-end" style={{ height: "100%" }}>
+                  <span className="text-[8px] font-bold text-gray-500 mb-0.5 leading-none">฿{(e.amount / 1000).toFixed(0)}k</span>
+                  <div className="w-full rounded-t-sm" style={{ height: `${barPx}px`, background: "linear-gradient(to top,#9333ea,#818cf8)" }} />
+                  <span className="text-[7px] text-gray-400 mt-0.5 leading-none truncate w-full text-center">{label}</span>
                 </div>
-                <span className="text-xs text-gray-500 mt-1">{locale === "th" ? e.monthTh : locale === "zh" ? e.monthZh : e.month}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>

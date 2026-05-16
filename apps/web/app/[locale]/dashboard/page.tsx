@@ -1008,6 +1008,46 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const overviewAlerts = allAlerts.slice(0, 3);
   const overviewIncomingChats = chatFeed.filter((c: any) => c.hasIncoming).slice(0, 2);
 
+  // Auto-create chat_ready requests for active jobs stuck at step 7 with no pending workflow request.
+  // This repairs the dashboard for users whose payment completed but the dynamic request wasn't written.
+  useEffect(() => {
+    if (!mockReady) return;
+    if (!subscriber?.email?.includes('ghis')) return;
+    try {
+      const dynReqs = JSON.parse(localStorage.getItem('ghis_mock_dyn_req') || '[]');
+      const active = JSON.parse(localStorage.getItem('ghis_mock_active') || '[]');
+      const existingPos = new Set(dynReqs.map((x: any) => x.po));
+      // Gather all step-7 (or higher) jobs from static mock that aren't already in dynamic requests
+      const step7StaticJobs = ACTIVE_MOCK.filter(
+        (j: any) => Number(j.step) >= 7 && !existingPos.has(j.po) && !active.find((a: any) => a.po === j.po)
+      );
+      const step7ActiveJobs = active.filter((j: any) => Number(j.step) >= 7 && !existingPos.has(j.po));
+      const toCreate: any[] = [];
+      for (const job of [...step7StaticJobs, ...step7ActiveJobs]) {
+        const createdAt = job.createdAt || Date.now();
+        toCreate.push({
+          id: `chat-${job.po}`,
+          po: job.po,
+          title: job.title,
+          customer: job.fixerAlias || job.customer || 'Suppadesh',
+          budget: job.budget || '฿0',
+          tier: job.tier || 'Standard',
+          desc: 'Chat is active. Send meeting invitation when you are ready.',
+          type: 'chat_ready',
+          date: new Date(createdAt).toLocaleString(),
+          createdAt,
+          step: 7,
+        });
+      }
+      if (toCreate.length > 0) {
+        const updated = [...dynReqs, ...toCreate];
+        localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(updated));
+        setMockDynRequests(updated);
+      }
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mockReady]);
+
   const STEPS_FULL = ["Match", "Select", "PO", "Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"];
   const STEPS = ["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"];
 
@@ -1064,6 +1104,18 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   const f = prev.filter((x: any) => x.id !== item.id && x.id !== pendingId);
                   return [...f, { id: pendingId, po: item.po, title: item.title, customer: item.customer, date: new Date(createdAt).toLocaleString(), createdAt, budget: item.budget, tier: item.tier, desc: 'Meeting invitation sent. Waiting for partner to confirm date and time.', type: 'meeting_pending_partner', step: 8 }];
                 });
+                // Push MEETING_REQUESTED to backend so partner sees it cross-browser
+                try {
+                  const token = localStorage.getItem('subscriber_token');
+                  const backendOrder = (orders || []).find((o: any) => extractPo(o) === item.po);
+                  if (token && backendOrder?.id) {
+                    fetch(`/api/v1/orders/${backendOrder.id}/status`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                      body: JSON.stringify({ status: 'MEETING_REQUESTED', note: 'Customer sent meeting invitation' }),
+                    }).catch(() => { /* non-blocking */ });
+                  }
+                } catch {}
               }}>Send Meeting Invitation</button>
             </div>
           </div>
@@ -1327,12 +1379,15 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
       {activeTab === "active" && (
         <div className="mt-6">
           <div className="flex justify-between items-center mb-4">
-            <div className="flex flex-col">
-              <h2 className="text-xl font-bold text-gray-800">Active Jobs</h2>
-            </div>
+            <h2 className="text-xl font-bold text-gray-800">Active Jobs <span className="text-sm font-normal text-gray-400 ml-2">{combinedActive.length}</span></h2>
           </div>
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 divide-y divide-gray-50 mt-4">
-              {combinedActive.map((m, i) => renderActiveCard(m, i))}
+          {/* Pill container — each job is its own card, scrollable horizontally on small screens */}
+          <div className="flex flex-col gap-4">
+            {combinedActive.map((m, i) => (
+              <div key={i} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                {renderActiveCard(m, i)}
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -1640,6 +1695,20 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                       localStorage.setItem(`chat_from_${po}`, "dashboard");
                       window.dispatchEvent(new Event("storage"));
                       window.dispatchEvent(new CustomEvent("cblue-chat-updated", { detail: { orderId: po } }));
+                    }
+                  } catch {}
+                  // Push backend order to IN_PROGRESS so partner sees step 7 cross-browser
+                  try {
+                    const token = localStorage.getItem('subscriber_token');
+                    if (token && po) {
+                      const backendOrder = (orders || []).find((o: any) => extractPo(o) === po);
+                      if (backendOrder?.id) {
+                        fetch(`/api/v1/orders/${backendOrder.id}/status`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                          body: JSON.stringify({ status: 'IN_PROGRESS', note: 'Customer paid processing fee' }),
+                        }).catch(() => { /* non-blocking */ });
+                      }
                     }
                   } catch {}
                   setWaitModalOrder(null);

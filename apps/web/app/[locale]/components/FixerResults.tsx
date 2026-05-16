@@ -893,6 +893,16 @@ export default function FixerResults({
             active[jobIdx].partnerName = selectedFixer.alias;
             localStorage.setItem(mockActiveKey, JSON.stringify(active));
             window.dispatchEvent(new Event('storage'));
+            // Push backend status to IN_PROGRESS so partner can see step 7
+            const backendOrderId = active[jobIdx].orderId;
+            const token = typeof window !== 'undefined' ? localStorage.getItem('subscriber_token') : null;
+            if (backendOrderId && token) {
+              fetch(`/api/v1/orders/${backendOrderId}/status`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ status: 'IN_PROGRESS', note: 'Customer paid processing fee' }),
+              }).catch(() => { /* Non-blocking — local state already updated */ });
+            }
           }
 
           const chatKey = `chat_messages_${poNumber}`;

@@ -23,11 +23,12 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
   const bottomRef = useRef<HTMLDivElement>(null);
   const chatListRef = useRef<HTMLDivElement>(null);
   const currentEmailRef = useRef<string>("guest");
+  const currentUserIdRef = useRef<string>("");
   const bcRef = useRef<BroadcastChannel | null>(null);
   
   useEffect(() => {
     setMounted(true);
-    try { const sub = JSON.parse(localStorage.getItem("subscriber") || "{}"); currentEmailRef.current = sub?.email || "guest"; } catch {}
+    try { const sub = JSON.parse(localStorage.getItem("subscriber") || "{}"); currentEmailRef.current = sub?.email || "guest"; currentUserIdRef.current = sub?.id || ""; } catch {}
 
     // Load chat title
     try {
@@ -228,7 +229,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
   if (!mounted) return <div className="h-screen w-full flex items-center justify-center">Loading...</div>;
 
   return (
-    <div className="max-w-2xl mx-auto h-[calc(100dvh-6.5rem)] mt-4 flex flex-col transition-none bg-gray-50 border-x border-gray-200 shadow-xl rounded-t-2xl overflow-hidden">
+    <div className="max-w-2xl mx-auto h-[calc(100dvh-6.5rem)] flex flex-col transition-none bg-gray-50 border-x border-gray-200 shadow-xl overflow-hidden">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 p-4 shrink-0 flex items-center gap-4">
         <div className="flex-1">
@@ -249,8 +250,8 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
                 return;
               }
               const sub = JSON.parse(localStorage.getItem("subscriber") || "{}");
-              const hasPartnerSignals = Boolean(sub?.company || sub?.credentialStatus || sub?.tier);
-              router.push(`/${locale}/${hasPartnerSignals ? "fixers" : "dashboard"}?tab=chat`);
+              const isPartner = String(sub?.role || "").toUpperCase() === "FIXER";
+              router.push(`/${locale}/${isPartner ? "fixers" : "dashboard"}?tab=chat`);
             } catch {
               router.push('/' + locale + '/' + 'dashboard' + '?tab=chat');
             }
@@ -265,7 +266,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
       {/* Chat Area */}
       <div ref={chatListRef} className="flex-1 p-4 overflow-y-auto space-y-4">
         {messages.map(msg => {
-          const isMine = msg.sender === currentEmailRef.current || msg.sender === "me";
+          const isMine = msg.sender === currentEmailRef.current || (currentUserIdRef.current !== "" && msg.sender === currentUserIdRef.current) || msg.sender === "me";
           return (
           <div key={msg.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${isMine ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none shadow-sm'}`}>
