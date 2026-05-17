@@ -554,7 +554,20 @@ export default function FixerProPage() {
     return null;
   }).filter(Boolean) as any[];
 
-  const displayNotifications = [...dynamicNotifications, ...staticNotifications]
+  // Generate alerts from backend orders with actionable statuses
+  const orderAlertPos = new Set<string>();
+  const orderAlerts = mappedOrders.flatMap((o: any) => {
+    const po = o.po || "";
+    if (!po || orderAlertPos.has(po)) return [];
+    orderAlertPos.add(po);
+    const svc = o.service || "Project";
+    const displayTime = o.date || "";
+    if (['CREATED','PENDING','MATCHING'].includes(o.status)) return [{ id: `order-pending-${po}`, msg: `Review PO Details for ${svc}`, unread: true, time: displayTime, dot: "bg-purple-500" }];
+    if (o.status === 'IN_PROGRESS') return [{ id: `order-inprogress-${po}`, msg: `Chat room active for ${svc} — coordinate meeting`, unread: false, time: displayTime, dot: "bg-sky-400" }];
+    return [];
+  });
+
+  const displayNotifications = [...orderAlerts, ...dynamicNotifications]
     .sort((a: any, b: any) => parseTs(b.time) - parseTs(a.time));
 
   const tabs: { key: TabKey; label: string; icon: string; badge?: number }[] = [
@@ -1309,6 +1322,8 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
   const [variationDesc, setVariationDesc] = React.useState("");
   const [ratingModal, setRatingModal] = React.useState<any>(null);
   const [ratingStars, setRatingStars] = React.useState(5);
+  const [completeModal, setCompleteModal] = React.useState<any>(null);
+  const [completeNote, setCompleteNote] = React.useState("");
   const handlePartnerAction = (job: any, action: 'variation' | 'complete' | 'rate', extraData?: string) => {
     try {
       const po = job.po || job.id;
@@ -1417,7 +1432,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
                 )}
                 {/* Step 10: Partner marks complete */}
                 {(job.mockStep === 10 || (job.step === 10)) && (
-                  <button onClick={() => handlePartnerAction(job, 'complete')} className="text-xs px-3 py-1 bg-green-600 hover:bg-green-700 text-white font-bold rounded-full transition">Mark Complete</button>
+                  <button onClick={() => { setCompleteNote(""); setCompleteModal(job); }} className="text-xs px-3 py-1 bg-green-600 hover:bg-green-700 text-white font-bold rounded-full transition">Mark Complete</button>
                 )}
                 {/* Step 11: Partner rates customer */}
                 {(job.mockStep === 11 || (job.step === 11)) && (
@@ -1503,6 +1518,42 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
                 className="flex-1 bg-sky-600 hover:bg-sky-700 text-white font-bold py-2.5 rounded-xl transition text-sm"
               >Submit Rating</button>
               <button onClick={() => setRatingModal(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+    {completeModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+        <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden">
+          <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4">
+            <h3 className="text-white font-bold text-lg">Mark Job Complete</h3>
+            <p className="text-green-100 text-sm mt-1">{completeModal.po} · {completeModal.service}</p>
+          </div>
+          <div className="px-6 py-5 space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Customer</label>
+              <p className="text-sm text-gray-800">{completeModal.customer}</p>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-2">Completion Note <span className="text-gray-400 font-normal">(optional)</span></label>
+              <textarea
+                value={completeNote}
+                onChange={e => setCompleteNote(e.target.value)}
+                rows={3}
+                placeholder="e.g. All tasks finished, site cleaned, client signed off..."
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 resize-none"
+              />
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => {
+                  handlePartnerAction(completeModal, 'complete', completeNote.trim() || 'Job marked complete by partner');
+                  setCompleteModal(null);
+                }}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-xl transition text-sm"
+              >Confirm Complete</button>
+              <button onClick={() => setCompleteModal(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">Cancel</button>
             </div>
           </div>
         </div>

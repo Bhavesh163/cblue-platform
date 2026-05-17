@@ -684,6 +684,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const [meetingDate, setMeetingDate] = useState("");
   const [meetingTime, setMeetingTime] = useState("");
   const [chatFeed, setChatFeed] = useState<any[]>([]);
+  const [rateModal, setRateModal] = useState<any>(null);
+  const [rateStars, setRateStars] = useState(5);
   // Tracks previous backend order statuses to detect MEETING_REQUESTED → IN_PROGRESS transitions
   const prevOrderStatuses = useRef<Record<string, string>>({});
   const toDisplayDateTime = (value: any) => {
@@ -1364,11 +1366,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             </div>
             <div className="flex gap-2">
               <button className="bg-yellow-500 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-yellow-600 transition shadow-sm whitespace-nowrap" onClick={() => {
-                const job = mockActiveItems.find((x: any) => x.po === item.po);
-                if (job) setMockHistory(prev => [...prev, { ...job, step: 11, completedAt: new Date().toISOString(), status: 'COMPLETED' }]);
-                setMockActiveItems(prev => prev.filter((x: any) => x.po !== item.po));
-                setMockDynRequests(prev => prev.filter((x: any) => x.id !== item.id));
-                setActiveTab("history");
+                setRateStars(5);
+                setRateModal(item);
               }}>Rate & Close ⭐</button>
             </div>
           </div>
@@ -1709,6 +1708,52 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
             </div>
           </div>
         </div>
+      {/* Rate & Close Modal */}
+      {rateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden">
+            <div className="bg-gradient-to-r from-yellow-500 to-amber-500 px-6 py-4">
+              <h3 className="text-white font-bold text-lg">Rate Your Partner ⭐</h3>
+              <p className="text-yellow-100 text-sm mt-1">{rateModal.po} · Step 11 of 11</p>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Project</label>
+                <p className="text-sm text-gray-800 font-semibold">{rateModal.title}</p>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Partner</label>
+                <p className="text-sm text-gray-800">{rateModal.customer}</p>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-2">Your Rating</label>
+                <div className="flex gap-2 text-3xl">
+                  {[1,2,3,4,5].map(n => (
+                    <button key={n} onClick={() => setRateStars(n)} className={`transition-transform hover:scale-110 ${n <= rateStars ? 'text-amber-400' : 'text-gray-300'}`}>★</button>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-400 mt-1">{rateStars} out of 5 stars</p>
+              </div>
+              <div className="flex gap-3 pt-1">
+                <button
+                  onClick={() => {
+                    const po = rateModal.po;
+                    const job = mockActiveItems.find((x: any) => x.po === po);
+                    if (job) setMockHistory(prev => [...prev, { ...job, step: 11, completedAt: new Date().toISOString(), status: 'COMPLETED', rating: rateStars }]);
+                    setMockActiveItems(prev => prev.filter((x: any) => x.po !== po));
+                    setMockDynRequests(prev => prev.filter((x: any) => x.po !== po));
+                    setRateModal(null);
+                    setActiveTab("history");
+                  }}
+                  className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2.5 rounded-xl transition text-sm"
+                >Submit Rating & Close</button>
+                <button onClick={() => setRateModal(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {waitModalOrder && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto pt-24 pb-10">
           <div className="w-full max-w-lg bg-white rounded-3xl shadow-xl flex flex-col p-6 relative">
@@ -1807,6 +1852,13 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                           method: 'PUT',
                           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                           body: JSON.stringify({ status: 'IN_PROGRESS', note: 'Customer paid processing fee' }),
+                        }).catch(() => { /* non-blocking */ });
+                        // Post a CBLUE welcome message to the backend chat so partner sees the room cross-browser
+                        const svcName = waitModalOrder.request?.title || 'your project';
+                        fetch(`/api/v1/orders/${backendOrder.id}/chat`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                          body: JSON.stringify({ text: `[CBLUE] Payment confirmed for ${svcName} (${po}). Chat room is now active — please coordinate your site meeting here.` }),
                         }).catch(() => { /* non-blocking */ });
                       }
                     }
