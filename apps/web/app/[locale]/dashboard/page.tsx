@@ -734,6 +734,14 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   // Load from localStorage AFTER mount (useEffect never runs on server)
   useEffect(() => {
     try {
+      // One-time cleanup of stale chat keys with invalid PO format (e.g. UUID-like keys from old builds)
+      const isPo = (v: string) => /^PO-[A-Za-z0-9-]+$/.test(v);
+      Object.keys(localStorage)
+        .filter(k => k.startsWith('chat_messages_') || k.startsWith('chat_title_') || k.startsWith('po_to_order_'))
+        .forEach(k => {
+          const suffix = k.replace(/^chat_messages_|^chat_title_|^po_to_order_/, '');
+          if (!isPo(suffix)) { try { localStorage.removeItem(k); } catch {} }
+        });
       const p = localStorage.getItem("ghis_mock_payments");
       const a = localStorage.getItem("ghis_mock_active");
       const d = localStorage.getItem("ghis_mock_dyn_req");
@@ -1022,6 +1030,44 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orders, mockReady]);
 
+  // F6: Cross-browser detection of partner variation/complete/rate actions via backend chat messages.
+  // When partner posts [SYSTEM] messages, customer's chatFeed picks them up (5s poll) and this
+  // effect auto-creates the appropriate UI items in mockDynRequests.
+  useEffect(() => {
+    if (!chatFeed || !mockReady || !subscriber?.email?.includes('ghis')) return;
+    for (const chatItem of chatFeed) {
+      if (chatItem.source !== 'backend') continue;
+      const po = chatItem.po;
+      if (!po) continue;
+      const lastMsg = String(chatItem.lastMsg || '').toLowerCase();
+      const backendOrder = (orders || []).find((o: any) => extractPo(o) === po);
+      const title = String(backendOrder?.serviceCategory || '').replace(/_/g, ' ') || po;
+      const budget = backendOrder?.estimatedPrice ? `฿${Number(backendOrder.estimatedPrice).toLocaleString()}` : '฿0';
+      const tier = String(backendOrder?.description || '').match(/TIER:([A-Za-z]+)/)?.[1] || 'Standard';
+      // Variation detection
+      if (lastMsg.includes('[system] partner has submitted a variation')) {
+        setMockDynRequests(prev => {
+          if (prev.some((x: any) => x.po === po && x.type === 'variation_pending')) return prev;
+          const item = { id: `var-${po}`, po, title, customer: 'Suppadesh', date: fmtDateTime(Date.now()), createdAt: Date.now(), budget, tier, desc: 'Partner has submitted a variation for your approval. Please review and confirm to proceed.', type: 'variation_pending', step: 9 };
+          const merged = [...prev.filter((x: any) => !(x.po === po && x.type === 'variation_pending')), item];
+          try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(merged)); } catch {}
+          return merged;
+        });
+      }
+      // Complete detection
+      if (lastMsg.includes('[system] partner has marked the job as complete')) {
+        setMockDynRequests(prev => {
+          if (prev.some((x: any) => x.po === po && x.type === 'complete_pending')) return prev;
+          const item = { id: `compl-${po}`, po, title, customer: 'Suppadesh', date: fmtDateTime(Date.now()), createdAt: Date.now(), budget, tier, desc: 'Work is completed. Please review and mark as complete to close this project.', type: 'complete_pending', step: 10 };
+          const merged = [...prev.filter((x: any) => !(x.po === po && x.type === 'complete_pending')), item];
+          try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(merged)); } catch {}
+          return merged;
+        });
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatFeed, mockReady]);
+
   const REQUESTS_MOCK = [
     { id: "req1", title: "REINSTATEMENT", customer: "Suppadesh", date: "5/11/2026, 2:30:00 PM", budget: "฿5,000,000", po: "PO-2605-1200", tier: "ECONOMY", desc: "I want a team to carry out a 3000 sq.m. housing project." },
     { id: "req2", title: "FITOUT", customer: "Suppadesh", date: "5/11/2026, 2:35:00 PM", budget: "฿25,000,000", po: "PO-2605-6812", tier: "STANDARD", desc: "I want to have a project team to carry out a 1000 sq.m. office fitout in Bangkok" },
@@ -1030,10 +1076,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
   const ACTIVE_MOCK = [
     { title: "REINSTATEMENT", customer: "Suppadesh", date: "5/11/2026, 2:30:00 PM", budget: "฿5,000,000", po: "PO-2605-1200", location: "Saphansong", tier: "ECONOMY", actionNeeded: true, step: 6 },
-    { title: "FITOUT", customer: "Suppadesh", date: "5/11/2026, 2:32:00 PM", budget: "฿25,000,000", po: "PO-2605-0265", location: "Saphansong", tier: "Standard", actionNeeded: false, step: 6 },
     { title: "FITOUT", customer: "Suppadesh", date: "5/11/2026, 2:35:00 PM", budget: "฿25,000,000", po: "PO-2605-6812", location: "Saphansong", tier: "Standard", actionNeeded: true, step: 6 },
     { title: "GREEN CONSTRUCTION", customer: "Suppadesh", date: "5/11/2026, 2:40:00 PM", budget: "฿45,000,000", po: "PO-2605-8471", location: "Saphansong", tier: "ECONOMY", actionNeeded: true, step: 6 },
-    { title: "FITOUT", customer: "Suppadesh", date: "5/11/2026, 2:45:00 PM", budget: "฿25,000,000", po: "PO-2605-6716", location: "Saphansong", tier: "Standard", actionNeeded: false, step: 5 },
     { title: "REINSTATEMENT", customer: "Suppadesh", date: "5/11/2026, 2:50:00 PM", budget: "฿5,000,000", po: "PO-2605-9605", location: "Saphansong", tier: "ECONOMY", actionNeeded: false, step: 7 },
   ];
 
@@ -1844,7 +1888,13 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                   try {
                     const token = localStorage.getItem('subscriber_token');
                     if (token && po) {
-                      const backendOrder = (orders || []).find((o: any) => extractPo(o) === po);
+                      // Try multiple methods to find backend order: PO in description, direct orderId from F4 item, description includes PO
+                      const directOrderId = waitModalOrder.request?.orderId || waitModalOrder.request?.id;
+                      const backendOrder = (orders || []).find((o: any) =>
+                        extractPo(o) === po ||
+                        (directOrderId && o.id === directOrderId) ||
+                        String(o?.description || '').includes(po)
+                      ) || (directOrderId && !directOrderId.startsWith('req') && !directOrderId.startsWith('pay-') ? { id: directOrderId } : null);
                       if (backendOrder?.id) {
                         // Store PO→UUID mapping so ClientChatPage resolves to backend API
                         localStorage.setItem(`po_to_order_${po}`, backendOrder.id);

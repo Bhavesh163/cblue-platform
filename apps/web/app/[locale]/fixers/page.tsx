@@ -397,7 +397,9 @@ export default function FixerProPage() {
     const token = localStorage.getItem("subscriber_token") || "";
     if (!token) return [];
 
-    const viewerUserId = String(partner?.id || "");
+    // Use user entity ID (from subscriber) to correctly identify own messages
+    let viewerUserId = "";
+    try { viewerUserId = JSON.parse(localStorage.getItem("subscriber") || "{}")?.id || ""; } catch {}
     const isPoCode = (value: string) => /^PO-[A-Za-z0-9-]+$/.test(value);
     const items: any[] = [];
 
@@ -514,7 +516,11 @@ export default function FixerProPage() {
   });
   const completedJobs = mappedOrders.filter(o => o.status === 'COMPLETED');
     const acceptedPos = new Set(mockActiveState.filter((x: any) => Number(x.step || 0) >= 6).map((x: any) => x.po));
-    let incomingJobs = mappedOrders.filter(o => ['CREATED', 'PENDING', 'MATCHING', 'MEETING_REQUESTED'].includes(o.status) && !acceptedPos.has(o.po));
+    // MEETING_REQUESTED always shows for partner to confirm, regardless of mock step state
+    let incomingJobs = mappedOrders.filter(o =>
+      (['CREATED', 'PENDING', 'MATCHING'].includes(o.status) && !acceptedPos.has(o.po)) ||
+      o.status === 'MEETING_REQUESTED'
+    );
 
   const parseTs = (v: any) => {
     if (typeof v === "number") return v;
@@ -1237,13 +1243,13 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
                 <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"} &middot; {job.po} | {job.subdistrict || "Saphansong"}</p>
                 <div className="mt-2 w-full pt-1">
                   <div className="w-full overflow-x-auto pb-2 hide-scrollbar">
-<div className="flex items-center min-w-max relative px-2">
+<div className="flex items-start min-w-max relative px-2">
                     {(() => {
                         const currentStep = job.mockStep || (job.status === 'COMPLETED' ? 11 : 5);
                         return (
                           <>
-                      <div className="absolute left-4 right-4 top-3 -translate-y-1/2 h-1 bg-gray-200 rounded-full"></div>
-                      <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, ((currentStep - 4) / 7) * 100))}%` }}></div>
+                      <div className="absolute left-4 right-4 top-2 h-1 bg-gray-200 rounded-full"></div>
+                      <div className="absolute left-4 top-2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, ((currentStep - 4) / 7) * 100))}%` }}></div>
                       
                       {["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"].map((s, i) => {
                         const stepNum = i + 4; // Notify starts at 4
@@ -1364,6 +1370,14 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
         localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
         window.dispatchEvent(new Event("storage"));
         postSystemMsg(`[SYSTEM] Partner has marked the job as complete for ${po}. Please review and confirm in your Requests tab.`);
+        // Cross-browser: PUT backend status to COMPLETED so customer detects it
+        if (token && orderDbId) {
+          fetch(`/api/v1/orders/${orderDbId}/status`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ status: 'COMPLETED', note: `Partner marked job complete: ${extraData || ''}` }),
+          }).catch(() => {});
+        }
       } else if (action === 'rate') {
         const rating = extraData || '5';
         const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
@@ -1393,13 +1407,13 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
               <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"} &middot; {job.po} | {job.subdistrict || "Saphansong"}</p>
               <div className="mt-2 w-full pt-1">
                 <div className="w-full overflow-x-auto pb-2 hide-scrollbar">
-                  <div className="flex items-center min-w-max relative px-2">
+                  <div className="flex items-start min-w-max relative px-2">
                     {(() => {
                       const currentStep = job.mockStep || (job.status === 'COMPLETED' ? 11 : 5);
                       return (
                         <>
-                    <div className="absolute left-4 right-4 top-3 -translate-y-1/2 h-1 bg-gray-200 rounded-full"></div>
-                    <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, ((currentStep - 4) / 7) * 100))}%` }}></div>
+                    <div className="absolute left-4 right-4 top-2 h-1 bg-gray-200 rounded-full"></div>
+                    <div className="absolute left-4 top-2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, ((currentStep - 4) / 7) * 100))}%` }}></div>
                     {["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"].map((s, i) => {
                       const stepNum = i + 4;
                       const isCompleted = stepNum < currentStep;
