@@ -29,6 +29,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
   ]);
   const [inputText, setInputText] = useState("");
   const [orderDbId, setOrderDbId] = useState("");
+  const [isChatClosed, setIsChatClosed] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const chatListRef = useRef<HTMLDivElement>(null);
   const currentEmailRef = useRef<string>("guest");
@@ -62,6 +63,13 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
       time: m?.createdAt ? fmtDateTime(m.createdAt) : (m?.time || ""),
       createdAt: m?.createdAt ? new Date(m.createdAt).getTime() : Date.now(),
     });
+    const detectClosed = (items: any[]) => {
+      if (localStorage.getItem(`chat_closed_${orderId}`) === "1") return true;
+      return items.some((m: any) => {
+        const text = String(m?.text || "").toLowerCase();
+        return text.includes('chat room is now closed') || text.includes('customer confirmed job complete');
+      });
+    };
 
     const resolveOrderDbId = async () => {
       if (isUuid(orderId)) return orderId;
@@ -99,7 +107,10 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
       const stored = localStorage.getItem(key);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) setMessages(parsed);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setMessages(parsed);
+            setIsChatClosed(detectClosed(parsed));
+          }
         else localStorage.setItem(key, JSON.stringify(defaultMessages.current));
       }
       else localStorage.setItem(key, JSON.stringify(defaultMessages.current));
@@ -122,6 +133,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
         const mapped = apiMessages.map((m: any) => toLocalMessage(m));
         if (mapped.length > 0) {
           setMessages(mapped);
+          setIsChatClosed(detectClosed(mapped));
           localStorage.setItem(key, JSON.stringify(mapped));
           window.dispatchEvent(new CustomEvent("cblue-chat-updated", { detail: { orderId } }));
         }
@@ -147,7 +159,10 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
       if (e.key === key && e.newValue) {
         try {
           const parsed = JSON.parse(e.newValue);
-          if (Array.isArray(parsed)) setMessages(parsed);
+          if (Array.isArray(parsed)) {
+            setMessages(parsed);
+            setIsChatClosed(detectClosed(parsed));
+          }
         } catch {}
       }
     };
@@ -155,6 +170,10 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
       try {
         const parsed = JSON.parse(localStorage.getItem(key) || "[]");
         if (Array.isArray(parsed) && parsed.length > 0) setMessages(parsed);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed);
+          setIsChatClosed(detectClosed(parsed));
+        }
       } catch {}
     };
     window.addEventListener("storage", handleStorage);
@@ -175,7 +194,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if(!inputText.trim()) return;
+    if (isChatClosed || !inputText.trim()) return;
     const key = `chat_messages_${orderId}`;
     const messageText = inputText.trim();
     const token = localStorage.getItem("subscriber_token") || "";
@@ -291,6 +310,12 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
         <div ref={bottomRef} />
       </div>
 
+      {isChatClosed && (
+        <div className="mx-4 mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          This chat room is now inactive because the job was confirmed complete. Rating can still be completed from the Requests page.
+        </div>
+      )}
+
       {/* Input Area */}
       <div className="bg-white border-t border-gray-200 p-4 shrink-0">
         <form onSubmit={handleSend} className="flex items-center gap-2">
@@ -298,11 +323,13 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
             type="text" 
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            placeholder="Type your message..." 
+            placeholder={isChatClosed ? "Chat closed after completion" : "Type your message..."}
+            disabled={isChatClosed}
             className="flex-1 bg-gray-100 border-transparent focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 rounded-full px-4 py-2 outline-none transition"
           />
           <button type="submit" className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-700 transition shrink-0">
             <svg className="w-5 h-5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+            disabled={isChatClosed}
           </button>
         </form>
       </div>

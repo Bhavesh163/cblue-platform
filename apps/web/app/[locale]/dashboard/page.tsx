@@ -180,6 +180,34 @@ export default function DashboardPage() {
       return () => { isMounted = false; };
   }, [router, prefix]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const syncOrders = async () => {
+      try {
+        const token = localStorage.getItem("subscriber_token");
+        if (!token) return;
+        const ordersRes = await fetch("/api/v1/orders/my", {
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(() => null);
+        if (!ordersRes || !ordersRes.ok || !isMounted) return;
+        setOrders(await ordersRes.json());
+      } catch {
+        // Keep last known dashboard data if polling fails.
+      }
+    };
+
+    void syncOrders();
+    const timer = setInterval(() => {
+      void syncOrders();
+    }, 5000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(timer);
+    };
+  }, [subscriber?.id]);
+
 
   
   const mappedOrders = orders.map(o => ({
@@ -686,6 +714,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const [chatFeed, setChatFeed] = useState<any[]>([]);
   const [rateModal, setRateModal] = useState<any>(null);
   const [rateStars, setRateStars] = useState(5);
+  const [variationApproveModal, setVariationApproveModal] = useState<any>(null);
+  const [completeApproveModal, setCompleteApproveModal] = useState<any>(null);
   // Tracks previous backend order statuses to detect MEETING_REQUESTED → IN_PROGRESS transitions
   const prevOrderStatuses = useRef<Record<string, string>>({});
   const toDisplayDateTime = (value: any) => {
@@ -710,6 +740,27 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     return fromDesc;
   };
   const isPoCode = (value: string) => /^PO-[A-Za-z0-9-]+$/.test(value);
+  const postBackendWorkflowMessage = async (po: string, text: string) => {
+    try {
+      const token = localStorage.getItem("subscriber_token") || "";
+      if (!token || !po) return;
+      const orderId =
+        localStorage.getItem(`po_to_order_${po}`) ||
+        (orders || []).find((o: any) => extractPo(o) === po)?.id ||
+        "";
+      if (!orderId) return;
+      await fetch(`/api/v1/orders/${orderId}/chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ text }),
+      }).catch(() => {});
+    } catch {
+      // Non-blocking for workflow UI.
+    }
+  };
   const handleOrderClick = (o: any) => {
     const status = String(o?.status || "").trim().toUpperCase();
     if (["MATCHING", "CREATED", "PENDING"].includes(status)) {
@@ -741,6 +792,21 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         .forEach(k => {
           const suffix = k.replace(/^chat_messages_|^chat_title_|^po_to_order_/, '');
           if (!isPo(suffix)) { try { localStorage.removeItem(k); } catch {} }
+        });
+      Object.keys(localStorage)
+        .filter(k => k.startsWith('chat_messages_'))
+        .forEach(k => {
+          try {
+            const parsed = JSON.parse(localStorage.getItem(k) || '[]');
+            if (!Array.isArray(parsed)) return;
+            const cleaned = parsed.filter((msg: any) => {
+              const text = String(msg?.text || '').toLowerCase();
+              return !text.includes('just be paid by customer') && !text.includes('notify to proceed');
+            });
+            if (cleaned.length !== parsed.length) {
+              localStorage.setItem(k, JSON.stringify(cleaned));
+            }
+          } catch {}
         });
       const p = localStorage.getItem("ghis_mock_payments");
       const a = localStorage.getItem("ghis_mock_active");
@@ -1046,6 +1112,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       const tier = String(backendOrder?.description || '').match(/TIER:([A-Za-z]+)/)?.[1] || 'Standard';
       // Variation detection
       if (lastMsg.includes('[system] partner has submitted a variation')) {
+        setMockActiveItems(prev => {
+          const next = prev.map((x: any) => x.po === po ? { ...x, step: 9, actionNeeded: true } : x);
+          try { localStorage.setItem('ghis_mock_active', JSON.stringify(next)); } catch {}
+          return next;
+        });
         setMockDynRequests(prev => {
           if (prev.some((x: any) => x.po === po && x.type === 'variation_pending')) return prev;
           const item = { id: `var-${po}`, po, title, customer: 'Suppadesh', date: fmtDateTime(Date.now()), createdAt: Date.now(), budget, tier, desc: 'Partner has submitted a variation for your approval. Please review and confirm to proceed.', type: 'variation_pending', step: 9 };
@@ -1056,6 +1127,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       }
       // Complete detection
       if (lastMsg.includes('[system] partner has marked the job as complete')) {
+        setMockActiveItems(prev => {
+          const next = prev.map((x: any) => x.po === po ? { ...x, step: 10, actionNeeded: true } : x);
+          try { localStorage.setItem('ghis_mock_active', JSON.stringify(next)); } catch {}
+          return next;
+        });
         setMockDynRequests(prev => {
           if (prev.some((x: any) => x.po === po && x.type === 'complete_pending')) return prev;
           const item = { id: `compl-${po}`, po, title, customer: 'Suppadesh', date: fmtDateTime(Date.now()), createdAt: Date.now(), budget, tier, desc: 'Work is completed. Please review and mark as complete to close this project.', type: 'complete_pending', step: 10 };
@@ -1084,7 +1160,6 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   // Merge: mockActiveItems overrides ACTIVE_MOCK items with same po (for step progression)
   const paidPOs = new Set(mockActiveItems.map((x: any) => x.po));
   const completedPOs = new Set(mockHistory.map((x: any) => x.po));
-  const filteredStaticMock = (subscriber?.email?.includes('ghis') ? ACTIVE_MOCK : []).filter((item: any) => !paidPOs.has(item.po) && !completedPOs.has(item.po));
   const backendActiveItems = (orders || [])
     .filter((o: any) => !['COMPLETED', 'CANCELLED', 'DONE'].includes(String(o?.status || '').toUpperCase()))
     .map((o: any) => {
@@ -1126,6 +1201,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         description: o.description || '',
       };
     });
+  const backendActivePOs = new Set(backendActiveItems.map((item: any) => item.po));
+  const filteredStaticMock = (subscriber?.email?.includes('ghis') ? ACTIVE_MOCK : []).filter((item: any) => !paidPOs.has(item.po) && !completedPOs.has(item.po) && !backendActivePOs.has(item.po));
   const existingActivePos = new Set([...filteredStaticMock, ...mockActiveItems].map((x: any) => x.po));
   const mergedBackendActive = backendActiveItems.filter((x: any) => !completedPOs.has(x.po) && !existingActivePos.has(x.po));
   const combinedActive = [...filteredStaticMock, ...mockActiveItems.filter((x: any) => !completedPOs.has(x.po)), ...mergedBackendActive]
@@ -1144,6 +1221,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     .map((x: any) => {
       const stableTime = x.date || toDisplayDateTime(x.createdAt) || "";
       const createdAt = x.createdAt || parseDateMs(x.date);
+      if (x.type === "notice") return { id: `a-${x.id}`, msg: x.desc || "Workflow updated.", time: stableTime, createdAt, dot: "bg-indigo-400" };
       if (x.type === "payment_pending") return { id: `a-${x.id}`, msg: "Partner accepted PO — please proceed to pay fee.", time: stableTime, createdAt, dot: "bg-blue-500" };
       if (x.type === "chat_ready") return { id: `a-${x.id}`, msg: "Chat is active — send meeting invitation when ready.", time: stableTime, createdAt, dot: "bg-sky-500" };
       if (x.type === "meeting_pending_partner") return { id: `a-${x.id}`, msg: "Meeting invitation sent — waiting for partner confirmation.", time: stableTime, createdAt, dot: "bg-amber-500" };
@@ -1229,6 +1307,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   
   const renderRequestCard = (item: any) => {
     if (mockPayments[item.id]) return null;
+    if (item.type === 'notice') return null;
     if (item.type === 'chat_ready') {
       return (
         <div key={item.id} className="bg-white border border-sky-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -1352,11 +1431,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             </div>
             <div className="flex gap-2">
               <button className="bg-purple-600 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-purple-700 transition shadow-sm whitespace-nowrap" onClick={() => {
-                setMockActiveItems(prev => prev.map((x: any) => x.po === item.po ? { ...x, step: 9, actionNeeded: false } : x));
-                const complId = `complete-${item.po}`;
-                const createdAt = Date.now();
-                setMockDynRequests(prev => { const f = prev.filter((x: any) => x.id !== item.id && x.id !== complId); return [...f, { id: complId, po: item.po, title: item.title, customer: item.customer, date: fmtDateTime(createdAt), createdAt, budget: item.budget, tier: item.tier, desc: 'Work is completed. Please review and mark as complete to close this project.', type: 'complete_pending', step: 10 }]; });
-                setActiveTab("requests");
+                setVariationApproveModal(item);
               }}>Approve Variation</button>
             </div>
           </div>
@@ -1381,12 +1456,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             </div>
             <div className="flex gap-2">
               <button className="bg-green-600 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-green-700 transition shadow-sm whitespace-nowrap" onClick={() => {
-                setMockActiveItems(prev => prev.map((x: any) => x.po === item.po ? { ...x, step: 10, actionNeeded: false } : x));
-                const rateId = `rate-${item.po}`;
-                const createdAt = Date.now();
-                setMockDynRequests(prev => { const f = prev.filter((x: any) => x.id !== item.id && x.id !== rateId); return [...f, { id: rateId, po: item.po, title: item.title, customer: item.customer, date: fmtDateTime(createdAt), createdAt, budget: item.budget, tier: item.tier, desc: 'Job complete! Please rate your partner and close this project.', type: 'rate_pending', step: 11 }]; });
-                setActiveTab("requests");
-              }}>Mark Complete</button>
+                setCompleteApproveModal(item);
+              }}>Confirm Complete</button>
             </div>
           </div>
         </div>
@@ -1786,6 +1857,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                     if (job) setMockHistory(prev => [...prev, { ...job, step: 11, completedAt: new Date().toISOString(), status: 'COMPLETED', rating: rateStars }]);
                     setMockActiveItems(prev => prev.filter((x: any) => x.po !== po));
                     setMockDynRequests(prev => prev.filter((x: any) => x.po !== po));
+                    void postBackendWorkflowMessage(po, `[SYSTEM] Customer rated this project ${rateStars}/5 stars. Workflow completed.`);
                     setRateModal(null);
                     setActiveTab("history");
                   }}
@@ -2006,11 +2078,123 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                         body: JSON.stringify({ status: 'MEETING_REQUESTED', note: `Customer sent meeting invitation: ${dateLabel} ${meetingTime} at ${meetingVenue}` }),
                       }).catch(() => {});
+                      fetch(`/api/v1/orders/${backendOrder.id}/chat`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                        body: JSON.stringify({ text: `[SYSTEM] Customer sent meeting invitation for ${meetingModal.po}: ${dateLabel} ${meetingTime} at ${meetingVenue}.` }),
+                      }).catch(() => {});
                     }
                   } catch {}
                   setMeetingModal(null);
                 }}
               >Send Invitation</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {variationApproveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden">
+            <div className="bg-gradient-to-r from-purple-600 to-fuchsia-600 px-6 py-4">
+              <h3 className="text-white font-bold text-lg">Approve Variation</h3>
+              <p className="text-purple-100 text-sm mt-1">{variationApproveModal.po} · Step 9 of 11</p>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Project</label>
+                <p className="text-sm text-gray-800 font-semibold">{variationApproveModal.title}</p>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Partner Request</label>
+                <p className="text-sm text-gray-700 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3">{variationApproveModal.desc}</p>
+              </div>
+              <div className="flex gap-3 pt-1">
+                <button
+                  onClick={() => {
+                    const createdAt = Date.now();
+                    const po = variationApproveModal.po;
+                    const notice = {
+                      id: `notice-var-${po}-${createdAt}`,
+                      po,
+                      title: variationApproveModal.title,
+                      customer: variationApproveModal.customer,
+                      date: fmtDateTime(createdAt),
+                      createdAt,
+                      budget: variationApproveModal.budget,
+                      tier: variationApproveModal.tier,
+                      desc: 'Variation approved. Partner may now submit project complete.',
+                      type: 'notice',
+                      step: 10,
+                    };
+                    setMockActiveItems(prev => prev.map((x: any) => x.po === po ? { ...x, step: 10, actionNeeded: false } : x));
+                    setMockDynRequests(prev => {
+                      const next = [...prev.filter((x: any) => !(x.po === po && x.type === 'variation_pending')), notice];
+                      try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(next)); } catch {}
+                      return next;
+                    });
+                    void postBackendWorkflowMessage(po, `[SYSTEM] Customer approved variation for ${po}. Partner may now submit project complete.`);
+                    setVariationApproveModal(null);
+                    setActiveTab('requests');
+                  }}
+                  className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 rounded-xl transition text-sm"
+                >Approve Variation</button>
+                <button onClick={() => setVariationApproveModal(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {completeApproveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden">
+            <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4">
+              <h3 className="text-white font-bold text-lg">Confirm Job Complete</h3>
+              <p className="text-green-100 text-sm mt-1">{completeApproveModal.po} · Step 10 of 11</p>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Project</label>
+                <p className="text-sm text-gray-800 font-semibold">{completeApproveModal.title}</p>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Completion Note</label>
+                <p className="text-sm text-gray-700 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3">{completeApproveModal.desc}</p>
+              </div>
+              <div className="flex gap-3 pt-1">
+                <button
+                  onClick={() => {
+                    const createdAt = Date.now();
+                    const po = completeApproveModal.po;
+                    const rateReq = {
+                      id: `rate-${po}`,
+                      po,
+                      title: completeApproveModal.title,
+                      customer: completeApproveModal.customer,
+                      date: fmtDateTime(createdAt),
+                      createdAt,
+                      budget: completeApproveModal.budget,
+                      tier: completeApproveModal.tier,
+                      desc: 'Job complete! Please rate your partner and close this project.',
+                      type: 'rate_pending',
+                      step: 11,
+                    };
+                    try { localStorage.setItem(`chat_closed_${po}`, '1'); } catch {}
+                    setMockActiveItems(prev => prev.map((x: any) => x.po === po ? { ...x, step: 11, actionNeeded: true } : x));
+                    setMockDynRequests(prev => {
+                      const next = [...prev.filter((x: any) => !(x.po === po && x.type === 'complete_pending')), rateReq];
+                      try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(next)); } catch {}
+                      return next;
+                    });
+                    void postBackendWorkflowMessage(po, `[SYSTEM] Customer confirmed job complete for ${po}. Rating is now open for both parties. Chat room is now closed.`);
+                    setCompleteApproveModal(null);
+                    setActiveTab('requests');
+                  }}
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-xl transition text-sm"
+                >Confirm Complete</button>
+                <button onClick={() => setCompleteApproveModal(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">Cancel</button>
+              </div>
             </div>
           </div>
         </div>

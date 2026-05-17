@@ -249,6 +249,45 @@ export default function FixerProPage() {
     return () => { isMounted = false; };
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const syncPartnerData = async () => {
+      try {
+        const token = localStorage.getItem("subscriber_token");
+        if (!token) return;
+
+        const [ordersRes, propRes] = await Promise.all([
+          fetch("/api/v1/orders/fixer", {
+            headers: { Authorization: `Bearer ${token}` },
+          }).catch(() => null),
+          fetch("/api/v1/properties/my", {
+            headers: { Authorization: `Bearer ${token}` },
+          }).catch(() => null),
+        ]);
+
+        if (ordersRes && ordersRes.ok && isMounted) {
+          setOrders(await ordersRes.json());
+        }
+        if (propRes && propRes.ok && isMounted) {
+          setMyProperties(await propRes.json());
+        }
+      } catch {
+        // Preserve last visible partner data during transient polling failures.
+      }
+    };
+
+    void syncPartnerData();
+    const timer = setInterval(() => {
+      void syncPartnerData();
+    }, 5000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(timer);
+    };
+  }, [partner?.id]);
+
   const isSubscribed = !!partner;
 
 
@@ -267,15 +306,17 @@ export default function FixerProPage() {
       id: o.id,
       po: extractedPo,
       hasAttachment: Array.isArray(o.images) && o.images.length > 0,
-      subdistrict: o.location ? o.location.split(' ')[0] : "Saphansong",
+      subdistrict: o.address?.subdistrict || o.subdistrict || "Saphansong",
+      createdAt: o.createdAt,
       customer: o.user?.name || "Customer",
       type: o.orderType?.toLowerCase() || "household",
       phone: o.user?.phone || "",
       service: (o.serviceCategory || "").replace(/_/g, " "),
       serviceTh: (o.serviceCategory || "").replace(/_/g, " "),
       serviceZh: (o.serviceCategory || "").replace(/_/g, " "),
-      date: fmtDate(o.createdAt),
+      date: fmtDateTime(o.createdAt),
       description: desc,
+      statusNote: o.statusHistory?.[0]?.note || "",
       tier: desc.includes('TIER:') ? desc.split('TIER:')[1].split(' |')[0] : "Standard",
       status: o.status,
       progress: o.status === 'COMPLETED' ? 100 : (['IN_PROGRESS', 'CONFIRMED', 'ACCEPTED'].includes(o.status) ? 40 : 15),
@@ -417,7 +458,7 @@ export default function FixerProPage() {
         if (!Array.isArray(messages) || messages.length === 0) continue;
 
         const desc = String(order?.description || "");
-        const po = desc.match(/PO-\d{4}-\d{4}/i)?.[0] || desc.match(/PO-[A-Z0-9]{4}-[A-Z0-9]{4}/)?.[0];
+        const po = order?.po || desc.match(/PO-[A-Za-z0-9-]+/)?.[0] || "";
         if (!po || !isPoCode(po)) continue;
 
         // Cache PO→UUID so ClientChatPage.resolveOrderDbId() works in Suppadesh's browser
@@ -496,11 +537,14 @@ export default function FixerProPage() {
 
   const [mockDynReqs, setMockDynReqs] = useState<any[]>([]);
   const [mockActiveState, setMockActiveState] = useState<any[]>([]);
+  const [partnerDynReqs, setPartnerDynReqs] = useState<any[]>([]);
   useEffect(() => {
     const checkMock = () => {
       try {
         const d = localStorage.getItem("ghis_mock_dyn_req"); if (d) setMockDynReqs(JSON.parse(d));
         const a = localStorage.getItem("ghis_mock_active"); if (a) setMockActiveState(JSON.parse(a));
+        const p = localStorage.getItem("partner_mock_dyn_req");
+        setPartnerDynReqs(p ? JSON.parse(p) : []);
       } catch {}
     };
     checkMock();
@@ -515,6 +559,59 @@ export default function FixerProPage() {
       return job;
   });
   const completedJobs = mappedOrders.filter(o => o.status === 'COMPLETED');
+  const earningsSeries = (() => {
+    const seedByMonth: Record<string, number> = {
+      '2025-05': 18500,
+      '2025-06': 16000,
+      '2025-07': 20000,
+      '2025-08': 22000,
+      '2025-09': 19500,
+      '2025-10': 23000,
+      '2025-11': 21000,
+      '2025-12': 18000,
+      '2026-01': 25000,
+      '2026-02': 24000,
+      '2026-03': 26500,
+      '2026-04': 22000,
+      '2026-05': 26500,
+    };
+    const enMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const thMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+    const completedByMonth = new Map<string, number>();
+
+    for (const job of completedJobs) {
+      const ts = new Date(job.createdAt || job.date || 0).getTime();
+      if (!ts) continue;
+      const dt = new Date(ts);
+      const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+      const amount = Number(String(job.budget || job.fee || '0').replace(/[^0-9.]/g, '')) || 0;
+      completedByMonth.set(key, (completedByMonth.get(key) || 0) + amount);
+    }
+
+    const now = new Date();
+    const items: any[] = [];
+    for (let offset = 12; offset >= 0; offset -= 1) {
+      const dt = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+      const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+      const monthIdx = dt.getMonth();
+      const yy = String(dt.getFullYear()).slice(-2);
+      items.push({
+        month: `${enMonths[monthIdx]} ${yy}`,
+        monthTh: `${thMonths[monthIdx]} ${yy}`,
+        monthZh: `${monthIdx + 1}月 ${yy}`,
+        amount: completedByMonth.get(key) || seedByMonth[key] || 0,
+      });
+    }
+    return items;
+  })();
+  const stats = {
+    activeJobs: activeJobs.length,
+    completedJobs: completedJobs.length,
+    monthlyEarnings: `฿${(earningsSeries[earningsSeries.length - 1]?.amount || 0).toLocaleString()}`,
+    rating: 0,
+    responseRate: '0%',
+    repeatClients: 0,
+  };
     const acceptedPos = new Set(mockActiveState.filter((x: any) => Number(x.step || 0) >= 6).map((x: any) => x.po));
     // MEETING_REQUESTED always shows for partner to confirm, regardless of mock step state
     let incomingJobs = mappedOrders.filter(o =>
@@ -531,25 +628,112 @@ export default function FixerProPage() {
     }
     return 0;
   };
-  
-  const pendingMeetings = mockDynReqs.filter(r => r.type === 'meeting_pending_partner').map(r => ({
-    id: r.id,
-    service: r.title,
-    serviceTh: r.title,
-    serviceZh: r.title,
-    customer: r.customer,
-    budget: r.budget?.replace(/[^0-9]/g, ''),
-    date: r.date,
-    tier: r.tier,
-    po: r.po,
-    status: 'MEETING_REQUESTED',
-    description: r.desc,
-    mock: true
-  }));
+
   const scheduledMeetings = mockDynReqs
     .filter((r: any) => r.type === 'meeting_scheduled')
     .sort((a: any, b: any) => parseTs(a.date) - parseTs(b.date));
-  incomingJobs = [...pendingMeetings, ...incomingJobs] as any[];
+
+  useEffect(() => {
+    if (!chatFeed || chatFeed.length === 0) return;
+
+    setPartnerDynReqs(prev => {
+      let next = [...prev];
+      let changed = false;
+
+      const upsert = (item: any) => {
+        const exists = next.some((x: any) => x.po === item.po && x.type === item.type);
+        if (exists) return;
+        next = [...next.filter((x: any) => !(x.po === item.po && x.type === item.type)), item];
+        changed = true;
+      };
+
+      for (const chat of chatFeed) {
+        const po = chat.po;
+        const lower = String(chat.lastMsg || "").toLowerCase();
+        const order = mappedOrders.find((x: any) => x.po === po);
+        if (!po || !order) continue;
+
+        if (lower.includes('partner confirmed site meeting') || lower.includes('meeting confirmed by partner')) {
+          try {
+            const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
+            const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 9, mockStep: 9, actionNeeded: true } : x);
+            localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
+          } catch {}
+          upsert({
+            id: `variation-${po}`,
+            po,
+            service: order.service,
+            serviceTh: order.serviceTh,
+            serviceZh: order.serviceZh,
+            customer: order.customer,
+            date: fmtDateTime(Date.now()),
+            createdAt: Date.now(),
+            fee: order.fee,
+            budget: order.budget,
+            tier: order.tier,
+            description: 'Proceed to submit variation request if extra work or price adjustment is required.',
+            type: 'variation_partner',
+            step: 9,
+          });
+        }
+        if (lower.includes('customer approved variation')) {
+          try {
+            const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
+            const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 10, mockStep: 10, actionNeeded: true } : x);
+            localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
+          } catch {}
+          next = next.filter((x: any) => !(x.po === po && x.type === 'variation_partner'));
+          upsert({
+            id: `complete-${po}`,
+            po,
+            service: order.service,
+            serviceTh: order.serviceTh,
+            serviceZh: order.serviceZh,
+            customer: order.customer,
+            date: fmtDateTime(Date.now()),
+            createdAt: Date.now(),
+            fee: order.fee,
+            budget: order.budget,
+            tier: order.tier,
+            description: 'Customer approved the variation. Please submit project complete for confirmation.',
+            type: 'complete_partner',
+            step: 10,
+          });
+        }
+        if (lower.includes('customer confirmed job complete')) {
+          try {
+            const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
+            const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 11, mockStep: 11, actionNeeded: true } : x);
+            localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
+          } catch {}
+          next = next.filter((x: any) => !(x.po === po && x.type === 'complete_partner'));
+          upsert({
+            id: `rate-${po}`,
+            po,
+            service: order.service,
+            serviceTh: order.serviceTh,
+            serviceZh: order.serviceZh,
+            customer: order.customer,
+            date: fmtDateTime(Date.now()),
+            createdAt: Date.now(),
+            fee: order.fee,
+            budget: order.budget,
+            tier: order.tier,
+            description: 'Customer confirmed completion. Please rate the customer to close this job.',
+            type: 'rate_partner',
+            step: 11,
+          });
+        }
+      }
+
+      if (!changed) return prev;
+      try { localStorage.setItem("partner_mock_dyn_req", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, [chatFeed, mappedOrders]);
+
+  const partnerRequestItems = [...partnerDynReqs, ...incomingJobs]
+    .sort((a: any, b: any) => parseTs(b.createdAt || b.date) - parseTs(a.createdAt || a.date));
 
   const dynamicNotifications = mockDynReqs.map((r: any) => {
     const displayTime = typeof r.date === "string" && r.date.includes(":") ? r.date : (r.date ? fmtDateTime(r.date) : "");
@@ -557,6 +741,14 @@ export default function FixerProPage() {
     if (r.type === "meeting_scheduled") return { id: `dyn-${r.id}`, msg: "Confirm meeting at site", unread: true, time: displayTime, dot: "bg-teal-500" };
     if (r.type === "variation_pending") return { id: `dyn-${r.id}`, msg: "Request for Approval of Variation", unread: true, time: displayTime, dot: "bg-purple-500" };
     if (r.type === "complete_pending") return { id: `dyn-${r.id}`, msg: "Request for job complete", unread: true, time: displayTime, dot: "bg-green-500" };
+    return null;
+  }).filter(Boolean) as any[];
+
+  const partnerWorkflowNotifications = partnerDynReqs.map((r: any) => {
+    const displayTime = typeof r.date === "string" && r.date.includes(":") ? r.date : (r.date ? fmtDateTime(r.date) : "");
+    if (r.type === "variation_partner") return { id: `p-${r.id}`, msg: "Request for Approval of Variation", unread: true, time: displayTime, dot: "bg-purple-500" };
+    if (r.type === "complete_partner") return { id: `p-${r.id}`, msg: "Request for job complete", unread: true, time: displayTime, dot: "bg-green-500" };
+    if (r.type === "rate_partner") return { id: `p-${r.id}`, msg: "Rate customer to close job", unread: true, time: displayTime, dot: "bg-sky-500" };
     return null;
   }).filter(Boolean) as any[];
 
@@ -569,16 +761,17 @@ export default function FixerProPage() {
     const svc = o.service || "Project";
     const displayTime = o.date || "";
     if (['CREATED','PENDING','MATCHING'].includes(o.status)) return [{ id: `order-pending-${po}`, msg: `Review PO Details for ${svc}`, unread: true, time: displayTime, dot: "bg-purple-500" }];
+    if (o.status === 'MEETING_REQUESTED') return [{ id: `order-meeting-${po}`, msg: `Confirm meeting at site for ${svc}`, unread: true, time: displayTime, dot: "bg-amber-500" }];
     if (o.status === 'IN_PROGRESS') return [{ id: `order-inprogress-${po}`, msg: `Chat room active for ${svc} — coordinate meeting`, unread: false, time: displayTime, dot: "bg-sky-400" }];
     return [];
   });
 
-  const displayNotifications = [...orderAlerts, ...dynamicNotifications]
+  const displayNotifications = [...orderAlerts, ...dynamicNotifications, ...partnerWorkflowNotifications]
     .sort((a: any, b: any) => parseTs(b.time) - parseTs(a.time));
 
   const tabs: { key: TabKey; label: string; icon: string; badge?: number }[] = [
     { key: "overview", label: locale === "th" ? "ภาพรวม" : locale === "zh" ? "概览" : "Overview", icon: "" },
-    { key: "requests", label: locale === "th" ? "คำขอใหม่" : locale === "zh" ? "新请求" : "Requests", icon: "📋", badge: incomingJobs.length || undefined },
+    { key: "requests", label: locale === "th" ? "คำขอใหม่" : locale === "zh" ? "新请求" : "Requests", icon: "📋", badge: partnerRequestItems.length || undefined },
         { key: "active", label: locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "当前工作" : "Active Jobs", icon: "", badge: activeJobs.length || undefined },
     
     { key: "properties", label: locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房产" : "Properties", icon: "" },
@@ -691,8 +884,14 @@ export default function FixerProPage() {
                       const nextActive = mockActiveState.map((x: any) => x.po === po ? { ...x, step: 8, actionNeeded: true } : x);
                       localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(nextReqs));
                       localStorage.setItem("ghis_mock_active", JSON.stringify(nextActive));
+                      const nextPartnerReqs = [
+                        ...partnerDynReqs.filter((r: any) => !(r.po === po && r.type === 'variation_partner')),
+                        { id: `variation-${po}`, po, service: waitModalOrder.service || serviceTitle, serviceTh: waitModalOrder.service || serviceTitle, serviceZh: waitModalOrder.service || serviceTitle, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), fee: budgetLabel, budget: String(budgetLabel).replace(/[^0-9]/g, ''), tier: waitModalOrder.tier, description: 'Proceed to submit variation request if extra work or price adjustment is required.', type: 'variation_partner', step: 9 },
+                      ];
+                      localStorage.setItem("partner_mock_dyn_req", JSON.stringify(nextPartnerReqs));
                       setMockDynReqs(nextReqs);
                       setMockActiveState(nextActive);
+                      setPartnerDynReqs(nextPartnerReqs);
                       window.dispatchEvent(new Event("storage"));
                       // Update backend: MEETING_REQUESTED → IN_PROGRESS (meeting confirmed; customer page polls and auto-detects)
                       if (waitModalOrder.id && !waitModalOrder.mock && token) {
@@ -700,6 +899,11 @@ export default function FixerProPage() {
                           method: 'PUT',
                           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                           body: JSON.stringify({ status: 'IN_PROGRESS', note: 'Partner confirmed meeting time' }),
+                        }).catch(() => {});
+                        fetch(`/api/v1/orders/${waitModalOrder.id}/chat`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                          body: JSON.stringify({ text: `[SYSTEM] Partner confirmed site meeting for ${po}. Variation request can now be submitted if needed.` }),
                         }).catch(() => {});
                       }
                       setWaitModalOrder(null);
@@ -891,9 +1095,9 @@ export default function FixerProPage() {
 
         {/* Tab Content */}
         <div className={`mt-6 ${activeTab !== 'overview' ? 'hidden' : ''}`}>
-          <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={incomingJobs} scheduledMeetings={scheduledMeetings} completedJobs={completedJobs} earnings={EARNINGS_MOCK} stats={stats} notifications={displayNotifications} chats={chatFeed} onJobClick={handleJobClick} onTabChange={(tab) => setActiveTab(tab as TabKey)} />
+          <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={partnerRequestItems} scheduledMeetings={scheduledMeetings} completedJobs={completedJobs} earnings={earningsSeries} stats={stats} notifications={displayNotifications} chats={chatFeed} onJobClick={handleJobClick} onTabChange={(tab) => setActiveTab(tab as TabKey)} />
         </div>
-        {activeTab === "requests" && <PartnerRequests locale={locale} incomingJobs={incomingJobs} onJobClick={handleJobClick} />}
+        {activeTab === "requests" && <PartnerRequests locale={locale} incomingJobs={partnerRequestItems} onJobClick={handleJobClick} />}
         {activeTab === "active" && <PartnerJobs locale={locale} activeJobs={activeJobs} onJobClick={handleJobClick} />}
         
         {activeTab === "properties" && <PartnerProperties locale={locale} prefix={prefix} properties={myProperties} />}
@@ -1155,14 +1359,20 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
               <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center text-lg"></div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? req.serviceTh : locale === "zh" ? req.serviceZh : req.service}</p>
-                <p className="text-xs text-gray-500">{req.customer} &middot; {req.date} &middot; {locale === "th" ? "งบ" : locale === "zh" ? "预算" : "Budget"}: {req.fee}</p>
-                <p className="text-xs text-gray-500 mt-1" style={{ whiteSpace: "pre-wrap" }}>{req.description}</p>
+                <p className="text-xs text-gray-500">{req.customer} &middot; {req.date} &middot; {locale === "th" ? "งบ" : locale === "zh" ? "预算" : "Budget"}: {req.fee || `฿${req.budget || '0'}`}</p>
+                <p className="text-xs text-gray-500 mt-1" style={{ whiteSpace: "pre-wrap" }}>{req.description || req.desc || req.statusNote}</p>
               </div>
               <div className="flex items-center gap-2">
                 <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[req.tier] || ""}`}>{req.tier}</span>
-                {req.urgency === "urgent" && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-700">{locale === "th" ? "เร่งด่วน" : locale === "zh" ? "紧急" : "Urgent"}</span>}
-                <button onClick={(e) => { e.stopPropagation(); onJobClick && onJobClick(req); }} className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition">{locale === "th" ? "รับ" : locale === "zh" ? "接受" : "Accept"}</button>
-                <button className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">{locale === "th" ? "ปฏิเสธ" : locale === "zh" ? "拒绝" : "Decline"}</button>
+                {req.type ? (
+                  <button onClick={(e) => { e.stopPropagation(); onTabChange && onTabChange("requests"); }} className="px-3 py-1 bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold rounded-lg transition">Open Request</button>
+                ) : (
+                  <>
+                    {req.urgency === "urgent" && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-700">{locale === "th" ? "เร่งด่วน" : locale === "zh" ? "紧急" : "Urgent"}</span>}
+                    <button onClick={(e) => { e.stopPropagation(); onJobClick && onJobClick(req); }} className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition">{locale === "th" ? "รับ" : locale === "zh" ? "接受" : "Accept"}</button>
+                    <button className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">{locale === "th" ? "ปฏิเสธ" : locale === "zh" ? "拒绝" : "Decline"}</button>
+                  </>
+                )}
               </div>
             </div>
           ))}
@@ -1578,7 +1788,88 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
 }
 
 function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string; incomingJobs: any[]; onJobClick?: (job: any) => void; }) {
+  const [variationModal, setVariationModal] = React.useState<any>(null);
+  const [variationDesc, setVariationDesc] = React.useState("");
+  const [completeModal, setCompleteModal] = React.useState<any>(null);
+  const [completeNote, setCompleteNote] = React.useState("");
+  const [ratingModal, setRatingModal] = React.useState<any>(null);
+  const [ratingStars, setRatingStars] = React.useState(5);
+
+  const writePartnerReqs = (updater: (items: any[]) => any[]) => {
+    try {
+      const current = JSON.parse(localStorage.getItem("partner_mock_dyn_req") || "[]");
+      const next = updater(Array.isArray(current) ? current : []);
+      localStorage.setItem("partner_mock_dyn_req", JSON.stringify(next));
+      window.dispatchEvent(new Event("storage"));
+    } catch {}
+  };
+
+  const handlePartnerAction = (job: any, action: 'variation' | 'complete' | 'rate', extraData?: string) => {
+    try {
+      const po = job.po || job.id;
+      const createdAt = Date.now();
+      const token = localStorage.getItem("subscriber_token") || "";
+      const orderDbId = localStorage.getItem(`po_to_order_${po}`) || job.id || "";
+      const fmtDt = (d: number) => {
+        const dt = new Date(d);
+        return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+      };
+      const postSystemMsg = (text: string) => {
+        if (token && orderDbId) {
+          fetch(`/api/v1/orders/${orderDbId}/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ text }),
+          }).catch(() => {});
+        }
+      };
+      const dynReqs = JSON.parse(localStorage.getItem("ghis_mock_dyn_req") || "[]");
+      if (action === 'variation') {
+        const varId = `var-${po}`;
+        const varNote = extraData || 'Your partner has submitted a variation for your approval. Please review and confirm to proceed.';
+        const next = [...dynReqs.filter((x: any) => x.po !== po), { id: varId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: varNote, type: 'variation_pending', step: 9 }];
+        localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
+        writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && x.type === 'variation_partner')));
+        const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
+        const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 9, mockStep: 9, actionNeeded: false } : x);
+        localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
+        window.dispatchEvent(new Event("storage"));
+        postSystemMsg(`[SYSTEM] Partner has submitted a variation request for ${po}. Please review in your Requests tab.`);
+      } else if (action === 'complete') {
+        const complId = `compl-${po}`;
+        const completeDesc = extraData?.trim() ? `Partner completion request: ${extraData.trim()}` : 'Work is completed. Please review and mark as complete to close this project.';
+        const next = [...dynReqs.filter((x: any) => x.po !== po), { id: complId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: completeDesc, type: 'complete_pending', step: 10 }];
+        localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
+        writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && x.type === 'complete_partner')));
+        const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
+        const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 10, mockStep: 10, actionNeeded: false } : x);
+        localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
+        window.dispatchEvent(new Event("storage"));
+        postSystemMsg(`[SYSTEM] Partner has marked the job as complete for ${po}. Please review and confirm in your Requests tab.`);
+        if (token && orderDbId) {
+          fetch(`/api/v1/orders/${orderDbId}/status`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ status: 'COMPLETED', note: `Partner marked job complete: ${extraData || ''}` }),
+          }).catch(() => {});
+        }
+      } else if (action === 'rate') {
+        const rating = extraData || '5';
+        writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && x.type === 'rate_partner')));
+        const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
+        const hist = JSON.parse(localStorage.getItem("ghis_mock_history") || "[]");
+        const updated = active.filter((x: any) => x.po !== po);
+        const completed = { ...(active.find((x: any) => x.po === po) || job), step: 11, completedAt: createdAt, partnerRating: Number(rating) };
+        localStorage.setItem("ghis_mock_active", JSON.stringify(updated));
+        localStorage.setItem("ghis_mock_history", JSON.stringify([...hist, completed]));
+        window.dispatchEvent(new Event("storage"));
+        postSystemMsg(`[SYSTEM] Partner has rated this project ${rating}/5 stars. The job is now complete.`);
+      }
+    } catch (e) { console.error(e); }
+  };
+
   return (
+    <>
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
         <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "คำขอใหม่" : locale === "zh" ? "新订单" : "Incoming Requests"}</h2>
@@ -1590,20 +1881,107 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
             <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center text-lg"></div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? req.serviceTh : locale === "zh" ? req.serviceZh : req.service}</p>
-              <p className="text-xs text-amber-600 font-semibold mt-0.5">{locale === "th" ? "โปรดพิจารณาและรับงานนี้เพื่อดำเนินการต่อ" : locale === "zh" ? "请审核并接受此工作以继续" : "Please review and accept this job to proceed"}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{req.customer} &middot; {req.date} &middot; {locale === "th" ? "งบ" : locale === "zh" ? "预算" : "Budget"}: {req.fee}</p>
-              <p className="text-xs text-gray-500 mt-1" style={{ whiteSpace: "pre-wrap" }}>{req.description}</p>
+              <p className="text-xs text-amber-600 font-semibold mt-0.5">{req.type === 'variation_partner' ? 'Please decide whether to submit a variation request.' : req.type === 'complete_partner' ? 'Please send project complete request to customer.' : req.type === 'rate_partner' ? 'Please rate the customer to close this job.' : String(req.status || '').toUpperCase() === 'MEETING_REQUESTED' ? 'Please review and confirm the site meeting invitation.' : locale === "th" ? "โปรดพิจารณาและรับงานนี้เพื่อดำเนินการต่อ" : locale === "zh" ? "请审核并接受此工作以继续" : "Please review and accept this job to proceed"}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{req.customer} &middot; {req.date} &middot; {locale === "th" ? "งบ" : locale === "zh" ? "预算" : "Budget"}: {req.fee || `฿${req.budget || '0'}`}</p>
+              <p className="text-xs text-gray-500 mt-1" style={{ whiteSpace: "pre-wrap" }}>{req.description || req.desc || req.statusNote}</p>
             </div>
             <div className="flex items-center gap-2">
               <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[req.tier] || ""}`}>{req.tier}</span>
-              {req.urgency === "urgent" && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-700">{locale === "th" ? "เร่งด่วน" : locale === "zh" ? "紧急" : "Urgent"}</span>}
-              <button onClick={(e) => { e.stopPropagation(); onJobClick && onJobClick(req); }} className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition">{locale === "th" ? "รับ" : locale === "zh" ? "接受" : "Accept"}</button>
-              <button className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">{locale === "th" ? "ปฏิเสธ" : locale === "zh" ? "拒绝" : "Decline"}</button>
+              {req.type === 'variation_partner' ? (
+                <>
+                  <button onClick={(e) => { e.stopPropagation(); setVariationDesc(''); setVariationModal(req); }} className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg transition">Yes</button>
+                  <button onClick={(e) => { e.stopPropagation(); writePartnerReqs(prev => prev.filter((x: any) => !(x.po === req.po && x.type === 'variation_partner'))); }} className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">No</button>
+                </>
+              ) : req.type === 'complete_partner' ? (
+                <>
+                  <button onClick={(e) => { e.stopPropagation(); setCompleteNote(''); setCompleteModal(req); }} className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition">Send</button>
+                  <button onClick={(e) => { e.stopPropagation(); writePartnerReqs(prev => prev.filter((x: any) => !(x.po === req.po && x.type === 'complete_partner'))); }} className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">No</button>
+                </>
+              ) : req.type === 'rate_partner' ? (
+                <button onClick={(e) => { e.stopPropagation(); setRatingStars(5); setRatingModal(req); }} className="px-3 py-1 bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold rounded-lg transition">Start</button>
+              ) : String(req.status || '').toUpperCase() === 'MEETING_REQUESTED' ? (
+                <button onClick={(e) => { e.stopPropagation(); onJobClick && onJobClick(req); }} className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg transition">Confirm</button>
+              ) : (
+                <>
+                  {req.urgency === "urgent" && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-700">{locale === "th" ? "เร่งด่วน" : locale === "zh" ? "紧急" : "Urgent"}</span>}
+                  <button onClick={(e) => { e.stopPropagation(); onJobClick && onJobClick(req); }} className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition">{locale === "th" ? "รับ" : locale === "zh" ? "接受" : "Accept"}</button>
+                  <button className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">{locale === "th" ? "ปฏิเสธ" : locale === "zh" ? "拒绝" : "Decline"}</button>
+                </>
+              )}
             </div>
           </div>
         ))}
       </div>
     </div>
+    {variationModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+          <div className="bg-amber-500 px-6 py-4">
+            <h3 className="text-white font-bold text-lg">Submit Variation</h3>
+            <p className="text-amber-100 text-sm mt-1">{variationModal.po} · {variationModal.service}</p>
+          </div>
+          <div className="px-6 py-5 space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Customer</label>
+              <p className="text-sm text-gray-800">{variationModal.customer}</p>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Variation Description <span className="text-red-500">*</span></label>
+              <textarea className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none" rows={4} placeholder="Describe the variation scope, extra work, or cost changes..." value={variationDesc} onChange={e => setVariationDesc(e.target.value)} />
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => { if (!variationDesc.trim()) return; handlePartnerAction(variationModal, 'variation', `Partner variation request: ${variationDesc.trim()}`); setVariationModal(null); }} disabled={!variationDesc.trim()} className="flex-1 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition text-sm">Submit Variation</button>
+              <button onClick={() => setVariationModal(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+    {completeModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+        <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden">
+          <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4">
+            <h3 className="text-white font-bold text-lg">Mark Job Complete</h3>
+            <p className="text-green-100 text-sm mt-1">{completeModal.po} · {completeModal.service}</p>
+          </div>
+          <div className="px-6 py-5 space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-2">Completion Note <span className="text-gray-400 font-normal">(optional)</span></label>
+              <textarea value={completeNote} onChange={e => setCompleteNote(e.target.value)} rows={3} placeholder="e.g. All tasks finished, site cleaned, client signed off..." className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 resize-none" />
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => { handlePartnerAction(completeModal, 'complete', completeNote.trim() || 'Job marked complete by partner'); setCompleteModal(null); }} className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-xl transition text-sm">Confirm Complete</button>
+              <button onClick={() => setCompleteModal(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+    {ratingModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+          <div className="bg-sky-600 px-6 py-4">
+            <h3 className="text-white font-bold text-lg">Rate Customer</h3>
+            <p className="text-sky-200 text-sm mt-1">{ratingModal.po} · {ratingModal.service}</p>
+          </div>
+          <div className="px-6 py-5 space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-2">Your Rating</label>
+              <div className="flex gap-2 text-3xl">
+                {[1,2,3,4,5].map(n => (
+                  <button key={n} onClick={() => setRatingStars(n)} className={`transition-transform hover:scale-110 ${n <= ratingStars ? 'text-amber-400' : 'text-gray-300'}`}>★</button>
+                ))}
+              </div>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => { handlePartnerAction(ratingModal, 'rate', String(ratingStars)); setRatingModal(null); }} className="flex-1 bg-sky-600 hover:bg-sky-700 text-white font-bold py-2.5 rounded-xl transition text-sm">Submit Rating</button>
+              <button onClick={() => setRatingModal(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
