@@ -676,6 +676,7 @@ function PropertyTab({ locale, prefix, properties }: { locale: string; prefix: s
 
 /* ===== DASHBOARD LOGGED IN STATE ===== */
 function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { locale: string; subscriber: any; prefix: string; onLogout: () => void, orders: any[] }) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<"overview"|"requests"|"profile"|"active"|"properties"|"history"|"chat"|"alerts">("overview");
   const [waitModalOrder, setWaitModalOrder] = useState<any>(null);
   const [meetingModal, setMeetingModal] = useState<any>(null); // { item } — for meeting invitation modal
