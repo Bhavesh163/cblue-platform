@@ -864,6 +864,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         const po = extractPo(order);
         if (!po || !isPoCode(po)) continue;
 
+        // Cache PO→UUID so ClientChatPage.resolveOrderDbId() works cross-browser
+        try { localStorage.setItem(`po_to_order_${po}`, orderId); } catch {}
+
         const visible = messages.filter((m: any) => {
           const text = String(m?.text || "").trim();
           if (!text) return false;

@@ -241,7 +241,8 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
   if (!mounted) return <div className="h-screen w-full flex items-center justify-center">Loading...</div>;
 
   return (
-    <div className="max-w-2xl mx-auto h-[calc(100dvh-6.5rem)] flex flex-col transition-none bg-gray-50 border-x border-gray-200 shadow-xl overflow-hidden">
+    <div className="min-h-screen bg-slate-800/85 flex flex-col">
+      <div className="max-w-2xl w-full mx-auto mt-6 flex flex-col transition-none bg-gray-50 border border-gray-200 shadow-2xl overflow-hidden rounded-t-2xl" style={{ height: "calc(100dvh - 8rem)" }}>
       {/* Header */}
       <div className="bg-white border-b border-gray-200 p-4 shrink-0 flex items-center gap-4">
         <div className="flex-1">
@@ -305,6 +306,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
           </button>
         </form>
       </div>
+    </div>
     </div>
   );
 }

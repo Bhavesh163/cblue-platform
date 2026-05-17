@@ -48,7 +48,7 @@ const stats = {
     { month: "Feb 26", monthTh: "ก.พ. 26", monthZh: "2月 26", amount: 24000 },
     { month: "Mar 26", monthTh: "มี.ค. 26", monthZh: "3月 26", amount: 26500 },
     { month: "Apr 26", monthTh: "เม.ย. 26", monthZh: "4月 26", amount: 22000 },
-    { month: "May 26", monthTh: "พ.ค. 26", monthZh: "5月 26", amount: 8500 },
+    { month: "May 26", monthTh: "พ.ค. 26", monthZh: "5月 26", amount: 26500 },
   ];
 
 const chats: any[] = [];
@@ -124,7 +124,10 @@ export default function FixerProPage() {
         localStorage.setItem(`chat_from_${chatId}`, "fixers");
         localStorage.setItem(`chat_title_${chatId}`, `${job.service || job.serviceTh || ''} - ${displayId} - ฿${job.budget || '0'}`);
         // Store PO→UUID mapping so ClientChatPage can resolve to backend order
-        if (poFromDesc && job.id && chatId === poFromDesc) {
+        if (chatId && job.id && chatId !== job.id) {
+          localStorage.setItem(`po_to_order_${chatId}`, job.id);
+        }
+        if (poFromDesc && job.id && poFromDesc !== chatId) {
           localStorage.setItem(`po_to_order_${poFromDesc}`, job.id);
         }
       } catch {}
@@ -305,7 +308,7 @@ export default function FixerProPage() {
     { month: "Feb 26", monthTh: "ก.พ. 26", monthZh: "2月 26", amount: 24000 },
     { month: "Mar 26", monthTh: "มี.ค. 26", monthZh: "3月 26", amount: 26500 },
     { month: "Apr 26", monthTh: "เม.ย. 26", monthZh: "4月 26", amount: 22000 },
-    { month: "May 26", monthTh: "พ.ค. 26", monthZh: "5月 26", amount: 8500 },
+    { month: "May 26", monthTh: "พ.ค. 26", monthZh: "5月 26", amount: 26500 },
   ];
 
   const chats: any[] = [];
@@ -414,6 +417,9 @@ export default function FixerProPage() {
         const desc = String(order?.description || "");
         const po = desc.match(/PO-\d{4}-\d{4}/i)?.[0] || desc.match(/PO-[A-Z0-9]{4}-[A-Z0-9]{4}/)?.[0];
         if (!po || !isPoCode(po)) continue;
+
+        // Cache PO→UUID so ClientChatPage.resolveOrderDbId() works in Suppadesh's browser
+        try { localStorage.setItem(`po_to_order_${po}`, orderId); } catch {}
 
         const visible = messages.filter((m: any) => {
           const text = String(m?.text || "").trim();
@@ -1199,7 +1205,10 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="font-bold text-gray-900 flex items-center gap-2"> {locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "进行中的工作" : "Active Jobs"}</h2>
-          <span className="text-xs bg-sky-100 text-sky-700 px-2.5 py-1 rounded-full font-bold">{activeJobs.length}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("active")}>View All</span>
+            <span className="text-xs bg-sky-100 text-sky-700 px-2.5 py-1 rounded-full font-bold">{activeJobs.length}</span>
+          </div>
         </div>
         <div className="divide-y divide-gray-50">
           {activeJobs.slice(0, 5).map((job) => (
@@ -1827,7 +1836,7 @@ function PartnerDashboard({ locale, partner, prefix, onLogout, orders }: { local
               </div>
               <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
                 <p className="text-xs text-gray-500 font-medium mb-1">Monthly Earn</p>
-                <p className="text-lg font-bold text-sky-600">฿8,500</p>
+                <p className="text-lg font-bold text-sky-600">฿26,500</p>
               </div>
             </div>
             <button onClick={onLogout} className="w-full py-2 bg-gray-100 text-gray-600 hover:bg-gray-200 text-sm font-bold rounded-lg transition">
@@ -1839,7 +1848,7 @@ function PartnerDashboard({ locale, partner, prefix, onLogout, orders }: { local
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center">
               <h3 className="font-bold text-gray-900 flex items-center gap-2">Monthly Earnings</h3>
-              <span className="text-sky-600 font-bold text-sm">฿8,500 (May 26)</span>
+              <span className="text-sky-600 font-bold text-sm">฿26,500 (May 26)</span>
             </div>
             <div className="p-5 flex items-end justify-between h-32">
               <div className="flex flex-col items-center gap-2">
