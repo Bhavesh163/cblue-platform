@@ -861,8 +861,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         const messages = await res.json();
         if (!Array.isArray(messages) || messages.length === 0) continue;
 
-        const po = extractPo(order) || `PO-${String(orderId).slice(0, 8).toUpperCase()}`;
-        if (!isPoCode(po)) continue;
+        const po = extractPo(order);
+        if (!po || !isPoCode(po)) continue;
 
         const visible = messages.filter((m: any) => {
           const text = String(m?.text || "").trim();
@@ -1589,7 +1589,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
               </div>
               <button className="text-sm font-bold text-sky-600 hover:text-sky-700" onClick={() => setActiveTab("active")}>View All</button>
             </div>
-            <div className="flex flex-col gap-3 mt-4">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50 mt-4">
               {combinedActive.slice(0, 5).map((m, i) => renderActiveCard(m, i))}
             </div>
           </div>
@@ -1673,21 +1673,32 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                 onClick={() => {
                   const createdAt = Date.now();
                   const now = fmtDateTime(createdAt);
-                  setMockPayments(prev => ({...prev, [waitModalOrder.id]: true}));
-                  setMockActiveItems(prev => [
-                    ...prev.filter((x: any) => x.po !== waitModalOrder.request?.po),
-                    { ...waitModalOrder.request, actionNeeded: true, step: 7, createdAt }
-                  ]);
                   const po = waitModalOrder.request?.po;
                   const chatReqId = `chat-${po}`;
                   const meetReqId = `meet-invite-${po}`;
-                  setMockDynRequests(prev => [
-                    ...prev.filter((x: any) => x.po !== po && x.id !== chatReqId && x.id !== meetReqId),
+                  // Compute new arrays eagerly so we can write to localStorage before React state
+                  // updates — prevents the 1.2s syncMockState interval from overwriting new state
+                  const newActiveItems = [
+                    ...mockActiveItems.filter((x: any) => x.po !== po),
+                    { ...waitModalOrder.request, actionNeeded: true, step: 7, createdAt },
+                  ];
+                  const newDynReqs = [
+                    ...mockDynRequests.filter((x: any) => x.po !== po && x.id !== chatReqId && x.id !== meetReqId),
                     { id: chatReqId, po, title: waitModalOrder.request?.title, customer: waitModalOrder.request?.customer || 'Suppadesh', date: now, createdAt, budget: waitModalOrder.request?.budget, tier: waitModalOrder.request?.tier, desc: 'Chat room is now active. Open the Chat page to connect with your partner.', type: 'chat_ready', step: 7 },
                     { id: meetReqId, po, title: waitModalOrder.request?.title, customer: waitModalOrder.request?.customer || 'Suppadesh', date: now, createdAt, budget: waitModalOrder.request?.budget, tier: waitModalOrder.request?.tier, desc: 'Please send a meeting invitation to your partner. Fill in the venue and proposed date/time.', type: 'meeting_invite', step: 8, location: waitModalOrder.request?.location || 'Saphansong' },
-                  ]);
+                  ];
+                  const newPayments = { ...mockPayments, [waitModalOrder.id]: true };
+                  // Write to localStorage synchronously BEFORE setState so interval reads fresh data
                   try {
-                    const chatKey = `chat_messages_${waitModalOrder.request?.po}`;
+                    localStorage.setItem('ghis_mock_active', JSON.stringify(newActiveItems));
+                    localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(newDynReqs));
+                    localStorage.setItem('ghis_mock_payments', JSON.stringify(newPayments));
+                  } catch {}
+                  setMockPayments(newPayments);
+                  setMockActiveItems(newActiveItems);
+                  setMockDynRequests(newDynReqs);
+                  try {
+                    const chatKey = `chat_messages_${po}`;
                     const existing = JSON.parse(localStorage.getItem(chatKey) || '[]');
                     if (existing.length === 0) localStorage.setItem(chatKey, JSON.stringify([{ id: Date.now(), sender: 'system', text: 'Payment confirmed. Your project chat is now active. Please coordinate with your partner here.', time: now, createdAt }]));
                     const title = waitModalOrder.request?.title || '';
@@ -1705,6 +1716,8 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                     if (token && po) {
                       const backendOrder = (orders || []).find((o: any) => extractPo(o) === po);
                       if (backendOrder?.id) {
+                        // Store PO→UUID mapping so ClientChatPage resolves to backend API
+                        localStorage.setItem(`po_to_order_${po}`, backendOrder.id);
                         fetch(`/api/v1/orders/${backendOrder.id}/status`, {
                           method: 'PUT',
                           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },

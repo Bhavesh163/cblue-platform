@@ -412,8 +412,8 @@ export default function FixerProPage() {
         if (!Array.isArray(messages) || messages.length === 0) continue;
 
         const desc = String(order?.description || "");
-        const po = desc.match(/PO-[A-Za-z0-9-]+/)?.[0] || `PO-${String(orderId).slice(0, 8).toUpperCase()}`;
-        if (!isPoCode(po)) continue;
+        const po = desc.match(/PO-\d{4}-\d{4}/i)?.[0] || desc.match(/PO-[A-Z0-9]{4}-[A-Z0-9]{4}/)?.[0];
+        if (!po || !isPoCode(po)) continue;
 
         const visible = messages.filter((m: any) => {
           const text = String(m?.text || "").trim();
@@ -1210,13 +1210,13 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
                 <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"} &middot; {job.po} | {job.subdistrict || "Saphansong"}</p>
                 <div className="mt-2 w-full pt-1">
                   <div className="w-full overflow-x-auto pb-2 hide-scrollbar">
-                    <div className="flex items-center min-w-max relative px-2">
-                      {(() => {
+<div className="flex items-start min-w-max relative px-2">
+                    {(() => {
                         const currentStep = job.mockStep || (job.status === 'COMPLETED' ? 11 : 5);
                         return (
                           <>
-                      <div className="absolute left-4 right-4 top-3 -translate-y-1/2 h-1 bg-gray-200 rounded-full"></div>
-                      <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, ((currentStep - 4) / 7) * 100))}%` }}></div>
+                      <div className="absolute left-4 right-4 top-2 h-1 bg-gray-200 rounded-full"></div>
+                      <div className="absolute left-4 top-2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, ((currentStep - 4) / 7) * 100))}%` }}></div>
                       
                       {["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"].map((s, i) => {
                         const stepNum = i + 4; // Notify starts at 4
@@ -1362,13 +1362,13 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
               <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"} &middot; {job.po} | {job.subdistrict || "Saphansong"}</p>
               <div className="mt-2 w-full pt-1">
                 <div className="w-full overflow-x-auto pb-2 hide-scrollbar">
-                  <div className="flex items-center min-w-max relative px-2">
+                  <div className="flex items-start min-w-max relative px-2">
                     {(() => {
                       const currentStep = job.mockStep || (job.status === 'COMPLETED' ? 11 : 5);
                       return (
                         <>
-                    <div className="absolute left-4 right-4 top-3 -translate-y-1/2 h-1 bg-gray-200 rounded-full"></div>
-                    <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, ((currentStep - 4) / 7) * 100))}%` }}></div>
+                    <div className="absolute left-4 right-4 top-2 h-1 bg-gray-200 rounded-full"></div>
+                    <div className="absolute left-4 top-2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, ((currentStep - 4) / 7) * 100))}%` }}></div>
                     {["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"].map((s, i) => {
                       const stepNum = i + 4;
                       const isCompleted = stepNum < currentStep;
