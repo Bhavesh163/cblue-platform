@@ -734,6 +734,9 @@ export default function FixerResults({
           try {
             const created = await createRes.json();
             createdOrderId = created?.id || "";
+            if (createdOrderId && poNumber) {
+              localStorage.setItem(`po_to_order_${poNumber}`, createdOrderId);
+            }
           } catch {
             createdOrderId = "";
           }
@@ -867,20 +870,33 @@ export default function FixerResults({
           const filtered = existing.filter((x: any) => x.po !== poNumber);
           const totalBudget = Number(selectedFixer.estimatedTotal ?? selectedFixer.price ?? 0);
           const createdAt = Date.now();
-          const newRequest = {
+          const newChatRequest = {
             id: `chat-${poNumber}`,
             po: poNumber,
             title: service,
             customer: selectedFixer.alias,
             budget: totalBudget > 0 ? `฿${totalBudget.toLocaleString()}` : '฿0',
             tier: selectedFixer.tier,
-            desc: 'Chat is active. Send meeting invitation when you are ready.',
+            desc: 'Chat room is now active. Open the Chat page to connect with your partner.',
             type: 'chat_ready',
             date: new Date(createdAt).toLocaleString(),
             createdAt,
             step: 7,
           };
-          filtered.push(newRequest);
+          const newMeetRequest = {
+            id: `meet-invite-${poNumber}`,
+            po: poNumber,
+            title: service,
+            customer: selectedFixer.alias,
+            budget: totalBudget > 0 ? `฿${totalBudget.toLocaleString()}` : '฿0',
+            tier: selectedFixer.tier,
+            desc: 'Please send a meeting invitation to your partner. Fill in the venue and proposed date/time.',
+            type: 'meeting_invite',
+            date: new Date(createdAt).toLocaleString(),
+            createdAt,
+            step: 8,
+          };
+          filtered.push(newChatRequest, newMeetRequest);
           localStorage.setItem(mockDynReqKey, JSON.stringify(filtered));
           window.dispatchEvent(new Event('storage'));
           const mockActiveKey = 'ghis_mock_active';
@@ -981,7 +997,7 @@ export default function FixerResults({
   const fee = selectedFixer ? getProcessingFee(bookingType, selectedFixer.tier) : 100;
   const tierLabel = selectedFixer ? t(selectedFixer.tier) : "";
 
-  // Step progress bar for the 12-step flow (visible after matching)
+  // Step progress bar for the 11-step flow (visible after matching)
   const flowSteps: Step[] = ["matching", "select", "po", "notify", "confirm", "payment", "chat", "meeting", "variation", "complete", "rate"];
   const flowLabels: Record<string, Record<Step, string>> = {
     en: { matching: "Match", select: "Select", confirm: "Accept", po: "PO", notify: "Notify", payment: "Fee & Proceed", chat: "Chat", meeting: "Meet", variation: "Variation", complete: "Complete", rate: "Rate" },

@@ -26,6 +26,17 @@ const notifications: any[] = [];
 
 const chats: any[] = [];
 
+const fmtDate = (d: Date | number | string) => {
+  const dt = new Date(d);
+  return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
+};
+const fmtDateTime = (d: Date | number | string) => {
+  const dt = new Date(d);
+  const hh = String(dt.getHours()).padStart(2,'0');
+  const mm = String(dt.getMinutes()).padStart(2,'0');
+  return `${fmtDate(dt)} ${hh}:${mm}`;
+};
+
 const ICON_MAP: Record<string, string> = { household: "", project: "", professional: "", property: "" };
 const STATUS_STYLE: Record<string, string> = {
   IN_PROGRESS: "bg-purple-100 text-purple-700",
@@ -178,7 +189,7 @@ export default function DashboardPage() {
     serviceTh: (o.serviceCategory || "").replace(/_/g, " "),
     serviceZh: (o.serviceCategory || "").replace(/_/g, " "),
     partner: o.fixer?.user?.name || "Pending matching",
-    date: new Date(o.createdAt).toLocaleDateString(),
+    date: fmtDate(o.createdAt),
     progress: o.status === 'COMPLETED' ? 100 : o.status === 'IN_PROGRESS' ? 50 : 20,
     tier: o.description?.toUpperCase().includes("TIER:ECONOMY") ? "ECONOMY" : o.description?.toUpperCase().includes("TIER:STANDARD") ? "Standard" : o.description?.toUpperCase().includes("TIER:CORPORATE") ? "Corporate" : o.description?.toUpperCase().includes("TIER:SPECIALIST") ? "Specialist" : o.description?.toUpperCase().includes("TIER:EXPERT") ? "Expert" : "Standard",
     status: o.status,
@@ -538,7 +549,7 @@ function ProfileTab({ locale, prefix, subscriber, activeOrders, historyOrders }:
             </div>
             <div>
               <h3 className="text-sm font-semibold text-gray-400 mb-1">{locale === "th" ? "วันที่สมัคร" : locale === "zh" ? "注册日期" : "Member Since"}</h3>
-              <p className="text-gray-900 font-medium">{new Date().toLocaleDateString()}</p>
+              <p className="text-gray-900 font-medium">{fmtDate(new Date())}</p>
             </div>
           </div>
         </div>
@@ -667,11 +678,15 @@ function PropertyTab({ locale, prefix, properties }: { locale: string; prefix: s
 function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { locale: string; subscriber: any; prefix: string; onLogout: () => void, orders: any[] }) {
   const [activeTab, setActiveTab] = useState<"overview"|"requests"|"profile"|"active"|"properties"|"history"|"chat"|"alerts">("overview");
   const [waitModalOrder, setWaitModalOrder] = useState<any>(null);
+  const [meetingModal, setMeetingModal] = useState<any>(null); // { item } — for meeting invitation modal
+  const [meetingVenue, setMeetingVenue] = useState("");
+  const [meetingDate, setMeetingDate] = useState("");
+  const [meetingTime, setMeetingTime] = useState("");
   const [chatFeed, setChatFeed] = useState<any[]>([]);
   const toDisplayDateTime = (value: any) => {
     const ts = typeof value === "number" ? value : new Date(value || 0).getTime();
     if (!Number.isFinite(ts) || ts <= 0) return "";
-    return new Date(ts).toLocaleString();
+    return fmtDateTime(ts);
   };
   const parseDateMs = (value: any) => {
     if (typeof value === "number") return value;
@@ -983,7 +998,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const mergedBackendActive = backendActiveItems.filter((x: any) => !completedPOs.has(x.po) && !existingActivePos.has(x.po));
   const combinedActive = [...filteredStaticMock, ...mockActiveItems.filter((x: any) => !completedPOs.has(x.po)), ...mergedBackendActive]
     .sort((a: any, b: any) => parseDateMs(b.createdAt || b.date) - parseDateMs(a.createdAt || a.date));
-  const allRequestItems = [...(subscriber?.email?.includes('ghis') ? REQUESTS_MOCK : []), ...mockDynRequests]
+  // Filter static requests: hide items whose PO already has a dynamic entry (already progressed past step 6)
+  const progressedPos = new Set(mockDynRequests.map((x: any) => x.po));
+  const filteredStaticRequests = REQUESTS_MOCK.filter((x: any) => !progressedPos.has(x.po));
+  const allRequestItems = [...(subscriber?.email?.includes('ghis') ? filteredStaticRequests : []), ...mockDynRequests]
     .filter((m: any) => !mockPayments[m.id])
     .sort((a: any, b: any) => parseDateMs(b.createdAt || b.date) - parseDateMs(a.createdAt || a.date));
   const overviewRequestItems = allRequestItems.slice(0, 3);
@@ -1034,7 +1052,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           tier: job.tier || 'Standard',
           desc: 'Chat is active. Send meeting invitation when you are ready.',
           type: 'chat_ready',
-          date: new Date(createdAt).toLocaleString(),
+          date: fmtDateTime(createdAt),
           createdAt,
           step: 7,
         });
@@ -1052,7 +1070,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const STEPS = ["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"];
 
     const Progress12Steps = ({ currentStep, showCurrent = true }: { currentStep: number; showCurrent?: boolean }) => (
-    <div className="w-full mt-4 overflow-x-auto pb-4 hide-scrollbar">
+    <div className="w-2/3 mt-4 overflow-x-auto pb-4 hide-scrollbar">
       <div className="flex items-center min-w-max relative px-2">
         <div className="absolute left-4 right-4 top-3 -translate-y-1/2 h-1 bg-gray-200 rounded-full"></div>
         <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, ((currentStep - 4) / (STEPS.length - 1)) * 100))}%` }}></div>
@@ -1087,7 +1105,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div>
               <h3 className="font-bold text-gray-900">{item.title} <span className="text-sm font-normal text-gray-500">· {item.po} · Step 7 of 11</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{item.customer} · {item.date}</p>
-              <p className="text-xs text-gray-500 mt-1">Chat is now active. Send a meeting invitation when ready.</p>
+              <p className="text-xs text-gray-500 mt-1">Chat room is now active. Connect with your partner via the Chat page.</p>
             </div>
           </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-end">
@@ -1097,26 +1115,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             </div>
             <div className="flex gap-2">
               <button className="bg-sky-600 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-sky-700 transition shadow-sm whitespace-nowrap" onClick={() => {
-                setMockActiveItems(prev => prev.map((x: any) => x.po === item.po ? { ...x, step: 8, actionNeeded: false } : x));
-                const pendingId = `meet-pending-${item.po}`;
-                const createdAt = Date.now();
-                setMockDynRequests(prev => {
-                  const f = prev.filter((x: any) => x.id !== item.id && x.id !== pendingId);
-                  return [...f, { id: pendingId, po: item.po, title: item.title, customer: item.customer, date: new Date(createdAt).toLocaleString(), createdAt, budget: item.budget, tier: item.tier, desc: 'Meeting invitation sent. Waiting for partner to confirm date and time.', type: 'meeting_pending_partner', step: 8 }];
-                });
-                // Push MEETING_REQUESTED to backend so partner sees it cross-browser
-                try {
-                  const token = localStorage.getItem('subscriber_token');
-                  const backendOrder = (orders || []).find((o: any) => extractPo(o) === item.po);
-                  if (token && backendOrder?.id) {
-                    fetch(`/api/v1/orders/${backendOrder.id}/status`, {
-                      method: 'PUT',
-                      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                      body: JSON.stringify({ status: 'MEETING_REQUESTED', note: 'Customer sent meeting invitation' }),
-                    }).catch(() => { /* non-blocking */ });
-                  }
-                } catch {}
-              }}>Send Meeting Invitation</button>
+                router.push(`${prefix}/chat/${item.po}`);
+              }}>Open Chat</button>
             </div>
           </div>
         </div>
@@ -1130,7 +1130,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div>
               <h3 className="font-bold text-gray-900">{item.title} <span className="text-sm font-normal text-gray-500">· {item.po} · Step 8 of 11</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{item.customer} · {item.date}</p>
-              <p className="text-xs text-gray-500 mt-1">{item.desc}</p>
+              <p className="text-xs text-gray-500 mt-1">Please send a meeting invitation to your partner with venue, date and time.</p>
             </div>
           </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-end">
@@ -1140,12 +1140,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             </div>
             <div className="flex gap-2">
               <button className="bg-amber-600 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-amber-700 transition shadow-sm whitespace-nowrap" onClick={() => {
-                setMockActiveItems(prev => prev.map((x: any) => x.po === item.po ? { ...x, step: 8, actionNeeded: false } : x));
-                const schedId = `sched-${item.po}`;
-                const createdAt = Date.now();
-                setMockDynRequests(prev => { const f = prev.filter((x: any) => x.id !== item.id && x.id !== schedId); return [...f, { id: schedId, po: item.po, title: item.title, customer: item.customer, date: new Date(createdAt).toLocaleString(), createdAt, budget: item.budget, tier: item.tier, desc: 'Waiting for partner to confirm meeting time...', type: 'meeting_pending_partner', step: 8 }]; });
-                setActiveTab("requests");
-              }}>Invite to Meet</button>
+                setMeetingModal(item);
+                setMeetingVenue(item.location || item.subdistrict || 'Saphansong');
+                setMeetingDate("");
+                setMeetingTime("");
+              }}>Send Meeting Invitation</button>
             </div>
           </div>
         </div>
@@ -1195,7 +1194,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 setMockActiveItems(prev => prev.map((x: any) => x.po === item.po ? { ...x, step: 9, actionNeeded: true } : x));
                 const varId = `variation-${item.po}`;
                 const createdAt = Date.now();
-                setMockDynRequests(prev => { const f = prev.filter((x: any) => x.id !== item.id && x.id !== varId); return [...f, { id: varId, po: item.po, title: item.title, customer: item.customer, date: new Date(createdAt).toLocaleString(), createdAt, budget: item.budget, tier: item.tier, desc: 'Your partner has submitted a variation for your approval. Please review and confirm to proceed.', type: 'variation_pending', step: 9 }]; });
+                setMockDynRequests(prev => { const f = prev.filter((x: any) => x.id !== item.id && x.id !== varId); return [...f, { id: varId, po: item.po, title: item.title, customer: item.customer, date: fmtDateTime(createdAt), createdAt, budget: item.budget, tier: item.tier, desc: 'Your partner has submitted a variation for your approval. Please review and confirm to proceed.', type: 'variation_pending', step: 9 }]; });
                 setActiveTab("requests");
               }}>Meeting Complete ✓</button>
             </div>
@@ -1224,7 +1223,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 setMockActiveItems(prev => prev.map((x: any) => x.po === item.po ? { ...x, step: 9, actionNeeded: false } : x));
                 const complId = `complete-${item.po}`;
                 const createdAt = Date.now();
-                setMockDynRequests(prev => { const f = prev.filter((x: any) => x.id !== item.id && x.id !== complId); return [...f, { id: complId, po: item.po, title: item.title, customer: item.customer, date: new Date(createdAt).toLocaleString(), createdAt, budget: item.budget, tier: item.tier, desc: 'Work is completed. Please review and mark as complete to close this project.', type: 'complete_pending', step: 10 }]; });
+                setMockDynRequests(prev => { const f = prev.filter((x: any) => x.id !== item.id && x.id !== complId); return [...f, { id: complId, po: item.po, title: item.title, customer: item.customer, date: fmtDateTime(createdAt), createdAt, budget: item.budget, tier: item.tier, desc: 'Work is completed. Please review and mark as complete to close this project.', type: 'complete_pending', step: 10 }]; });
                 setActiveTab("requests");
               }}>Approve Variation</button>
             </div>
@@ -1253,7 +1252,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 setMockActiveItems(prev => prev.map((x: any) => x.po === item.po ? { ...x, step: 10, actionNeeded: false } : x));
                 const rateId = `rate-${item.po}`;
                 const createdAt = Date.now();
-                setMockDynRequests(prev => { const f = prev.filter((x: any) => x.id !== item.id && x.id !== rateId); return [...f, { id: rateId, po: item.po, title: item.title, customer: item.customer, date: new Date(createdAt).toLocaleString(), createdAt, budget: item.budget, tier: item.tier, desc: 'Job complete! Please rate your partner and close this project.', type: 'rate_pending', step: 11 }]; });
+                setMockDynRequests(prev => { const f = prev.filter((x: any) => x.id !== item.id && x.id !== rateId); return [...f, { id: rateId, po: item.po, title: item.title, customer: item.customer, date: fmtDateTime(createdAt), createdAt, budget: item.budget, tier: item.tier, desc: 'Job complete! Please rate your partner and close this project.', type: 'rate_pending', step: 11 }]; });
                 setActiveTab("requests");
               }}>Mark Complete</button>
             </div>
@@ -1381,10 +1380,10 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold text-gray-800">Active Jobs <span className="text-sm font-normal text-gray-400 ml-2">{combinedActive.length}</span></h2>
           </div>
-          {/* Pill container — each job is its own card, scrollable horizontally on small screens */}
-          <div className="flex flex-col gap-4">
+          {/* Pill container — all jobs in one grouped container with dividers */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50">
             {combinedActive.map((m, i) => (
-              <div key={i} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div key={i}>
                 {renderActiveCard(m, i)}
               </div>
             ))}
@@ -1407,7 +1406,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                     <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-2xl shadow-sm"></div>
                     <div>
                       <h3 className="font-bold text-gray-900">{o.service} <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">{o.description?.toUpperCase().includes('TIER:ECONOMY') ? 'ECONOMY' : o.description?.toUpperCase().includes('TIER:STANDARD') ? 'Standard' : (o.tier || 'Standard')}</span></h3>
-                      <p className="text-sm text-gray-500 mt-1">{o.status} &middot; {new Date(o.createdAt || Date.now()).toLocaleDateString()}</p>
+                      <p className="text-sm text-gray-500 mt-1">{o.status} &middot; {fmtDate(o.createdAt || Date.now())}</p>
                     </div>
                   </div>
                   <div>
@@ -1435,7 +1434,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                     <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-2xl shadow-sm"></div>
                     <div>
                       <h3 className="font-bold text-gray-900">{o.service}</h3>
-                      <p className="text-sm text-gray-500 mt-1">{o.fixerName || 'Partner'} &middot; {new Date(o.createdAt || Date.now()).toLocaleDateString()}</p>
+                      <p className="text-sm text-gray-500 mt-1">{o.fixerName || 'Partner'} &middot; {fmtDate(o.createdAt || Date.now())}</p>
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1">
@@ -1611,7 +1610,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                       <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-2xl shadow-sm"></div>
                       <div>
                         <h3 className="font-bold text-gray-900">{o.service}</h3>
-                        <p className="text-sm text-gray-500 mt-1">{o.fixerName || 'Partner'} &middot; {new Date(o.createdAt || Date.now()).toLocaleDateString()}</p>
+                        <p className="text-sm text-gray-500 mt-1">{o.fixerName || 'Partner'} &middot; {fmtDate(o.createdAt || Date.now())}</p>
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1">
@@ -1672,7 +1671,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                 className="mt-4 px-6 py-3 w-full bg-sky-100 border border-sky-300 text-sky-800 font-bold rounded-xl shadow-sm hover:bg-sky-200 transition"
                 onClick={() => {
                   const createdAt = Date.now();
-                  const now = new Date(createdAt).toLocaleString();
+                  const now = fmtDateTime(createdAt);
                   setMockPayments(prev => ({...prev, [waitModalOrder.id]: true}));
                   setMockActiveItems(prev => [
                     ...prev.filter((x: any) => x.po !== waitModalOrder.request?.po),
@@ -1680,9 +1679,11 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                   ]);
                   const po = waitModalOrder.request?.po;
                   const chatReqId = `chat-${po}`;
+                  const meetReqId = `meet-invite-${po}`;
                   setMockDynRequests(prev => [
-                    ...prev.filter((x: any) => x.po !== po && x.id !== chatReqId),
-                    { id: chatReqId, po, title: waitModalOrder.request?.title, customer: waitModalOrder.request?.customer || 'Suppadesh', date: now, createdAt, budget: waitModalOrder.request?.budget, tier: waitModalOrder.request?.tier, desc: 'Chat is active. Send meeting invitation when you are ready.', type: 'chat_ready', step: 7 }
+                    ...prev.filter((x: any) => x.po !== po && x.id !== chatReqId && x.id !== meetReqId),
+                    { id: chatReqId, po, title: waitModalOrder.request?.title, customer: waitModalOrder.request?.customer || 'Suppadesh', date: now, createdAt, budget: waitModalOrder.request?.budget, tier: waitModalOrder.request?.tier, desc: 'Chat room is now active. Open the Chat page to connect with your partner.', type: 'chat_ready', step: 7 },
+                    { id: meetReqId, po, title: waitModalOrder.request?.title, customer: waitModalOrder.request?.customer || 'Suppadesh', date: now, createdAt, budget: waitModalOrder.request?.budget, tier: waitModalOrder.request?.tier, desc: 'Please send a meeting invitation to your partner. Fill in the venue and proposed date/time.', type: 'meeting_invite', step: 8, location: waitModalOrder.request?.location || 'Saphansong' },
                   ]);
                   try {
                     const chatKey = `chat_messages_${waitModalOrder.request?.po}`;
@@ -1717,6 +1718,89 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
               >
                 🚧 Testing Period Payment Pill 🚧
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Meeting Invitation Modal */}
+      {meetingModal && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto pt-24 pb-10">
+          <div className="w-full max-w-lg bg-white rounded-3xl shadow-xl flex flex-col p-6 relative">
+            <div className="text-center text-sm font-bold text-amber-700 bg-amber-50 rounded-xl px-4 py-2 mb-2">Step 8 of 11</div>
+            <h3 className="text-center font-bold text-gray-800 text-lg mt-2">Send Meeting Invitation</h3>
+            <p className="text-center text-sm text-gray-500 mt-1 mb-4">Fill in the meeting details below. Your partner will confirm the time.</p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-gray-500 font-semibold uppercase tracking-wider block mb-1">Project</label>
+                <div className="bg-gray-50 rounded-xl px-4 py-2 text-sm font-bold text-gray-800">{meetingModal.title} · {meetingModal.po}</div>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 font-semibold uppercase tracking-wider block mb-1">Venue / Jobsite Address</label>
+                <input
+                  type="text"
+                  value={meetingVenue}
+                  onChange={(e) => setMeetingVenue(e.target.value)}
+                  placeholder="Enter venue or jobsite address"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-500 font-semibold uppercase tracking-wider block mb-1">Proposed Date</label>
+                  <input
+                    type="date"
+                    value={meetingDate}
+                    onChange={(e) => setMeetingDate(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 font-semibold uppercase tracking-wider block mb-1">Proposed Time</label>
+                  <input
+                    type="time"
+                    value={meetingTime}
+                    onChange={(e) => setMeetingTime(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  />
+                </div>
+              </div>
+              <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-2 text-xs text-amber-700">
+                <strong>Budget:</strong> {meetingModal.budget} &nbsp;|&nbsp; <strong>Tier:</strong> {meetingModal.tier}
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-5">
+              <button onClick={() => setMeetingModal(null)} className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition">Cancel</button>
+              <button
+                disabled={!meetingDate || !meetingTime || !meetingVenue}
+                className="flex-1 py-3 bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold rounded-xl transition shadow-md"
+                onClick={() => {
+                  const createdAt = Date.now();
+                  const dateLabel = meetingDate ? fmtDate(meetingDate + 'T' + (meetingTime || '09:00')) : '';
+                  const desc = `Meeting invitation sent. Proposed: ${dateLabel} ${meetingTime} at ${meetingVenue}. Waiting for partner confirmation.`;
+                  const pendingId = `meet-pending-${meetingModal.po}`;
+                  setMockActiveItems(prev => prev.map((x: any) => x.po === meetingModal.po ? { ...x, step: 8, actionNeeded: false } : x));
+                  setMockDynRequests(prev => {
+                    const f = prev.filter((x: any) => x.id !== meetingModal.id && x.id !== pendingId);
+                    return [...f, { id: pendingId, po: meetingModal.po, title: meetingModal.title, customer: meetingModal.customer, date: fmtDateTime(createdAt), createdAt, budget: meetingModal.budget, tier: meetingModal.tier, desc, type: 'meeting_pending_partner', step: 8, venue: meetingVenue, meetingDate, meetingTime }];
+                  });
+                  // Notify backend: MEETING_REQUESTED
+                  try {
+                    const token = localStorage.getItem('subscriber_token');
+                    const backendOrder = (orders || []).find((o: any) => extractPo(o) === meetingModal.po);
+                    if (token && backendOrder?.id) {
+                      fetch(`/api/v1/orders/${backendOrder.id}/status`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                        body: JSON.stringify({ status: 'MEETING_REQUESTED', note: `Customer sent meeting invitation: ${dateLabel} ${meetingTime} at ${meetingVenue}` }),
+                      }).catch(() => {});
+                    }
+                  } catch {}
+                  setMeetingModal(null);
+                }}
+              >Send Invitation</button>
             </div>
           </div>
         </div>

@@ -3,6 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+const fmtDateTime = (d: Date | number | string) => {
+  const dt = new Date(d);
+  const dd = String(dt.getDate()).padStart(2,'0');
+  const mm = String(dt.getMonth()+1).padStart(2,'0');
+  const hh = String(dt.getHours()).padStart(2,'0');
+  const mi = String(dt.getMinutes()).padStart(2,'0');
+  return `${dd}/${mm}/${dt.getFullYear()} ${hh}:${mi}`;
+};
+
 export default function ClientChatPage({ orderId, locale }: { orderId: string, locale: string }) {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
@@ -50,12 +59,15 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
       id: m?.id || Date.now(),
       sender: m?.senderUserId || m?.sender || "system",
       text: m?.text || "",
-      time: m?.createdAt ? new Date(m.createdAt).toLocaleString() : (m?.time || ""),
+      time: m?.createdAt ? fmtDateTime(m.createdAt) : (m?.time || ""),
       createdAt: m?.createdAt ? new Date(m.createdAt).getTime() : Date.now(),
     });
 
     const resolveOrderDbId = async () => {
       if (isUuid(orderId)) return orderId;
+      // Check cached PO→UUID mapping stored at booking time
+      const cached = localStorage.getItem(`po_to_order_${orderId}`);
+      if (cached) return cached;
       if (!token) return "";
 
       const endpoints = ["/api/v1/orders/my", "/api/v1/orders/fixer"];
@@ -185,7 +197,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
             id: created?.id || Date.now(),
             sender: created?.senderUserId || currentEmailRef.current,
             text: created?.text || messageText,
-            time: created?.createdAt ? new Date(created.createdAt).toLocaleString() : new Date().toLocaleString(),
+            time: created?.createdAt ? fmtDateTime(created.createdAt) : fmtDateTime(new Date()),
             createdAt: created?.createdAt ? new Date(created.createdAt).getTime() : Date.now(),
           };
 
@@ -212,7 +224,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
         id: Date.now(),
         sender: currentEmailRef.current,
         text: messageText,
-        time: new Date().toLocaleString(),
+        time: fmtDateTime(new Date()),
         createdAt: Date.now(),
       }];
       try {

@@ -36,9 +36,6 @@ const stats = {
 
 
   const EARNINGS_MOCK = [
-    { month: "Feb 25", monthTh: "ก.พ. 25", monthZh: "2月 25", amount: 12000 },
-    { month: "Mar 25", monthTh: "มี.ค. 25", monthZh: "3月 25", amount: 15400 },
-    { month: "Apr 25", monthTh: "เม.ย. 25", monthZh: "4月 25", amount: 11000 },
     { month: "May 25", monthTh: "พ.ค. 25", monthZh: "5月 25", amount: 18500 },
     { month: "Jun 25", monthTh: "มิ.ย. 25", monthZh: "6月 25", amount: 16000 },
     { month: "Jul 25", monthTh: "ก.ค. 25", monthZh: "7月 25", amount: 20000 },
@@ -50,12 +47,22 @@ const stats = {
     { month: "Jan 26", monthTh: "ม.ค. 26", monthZh: "1月 26", amount: 25000 },
     { month: "Feb 26", monthTh: "ก.พ. 26", monthZh: "2月 26", amount: 24000 },
     { month: "Mar 26", monthTh: "มี.ค. 26", monthZh: "3月 26", amount: 26500 },
+    { month: "Apr 26", monthTh: "เม.ย. 26", monthZh: "4月 26", amount: 22000 },
+    { month: "May 26", monthTh: "พ.ค. 26", monthZh: "5月 26", amount: 8500 },
   ];
 
 const chats: any[] = [];
 
+const fmtDate = (d: Date | number | string) => {
+  const dt = new Date(d);
+  return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
+};
+const fmtDateTime = (d: Date | number | string) => {
+  const dt = new Date(d);
+  return `${fmtDate(dt)} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+};
 const _n = new Date();
-const _fmt = (d: Date) => d.toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+const _fmt = (d: Date) => fmtDateTime(d);
 const notifications: any[] = [
     { id: 1, msg: "Review PO Details for GREEN CONSTRUCTION", unread: true, time: _fmt(_n), dot: "bg-purple-500" },
     { id: 2, msg: "Review PO Details for FIT OUT", unread: true, time: _fmt(new Date(_n.getTime() - 2 * 60 * 1000)), dot: "bg-purple-500" },
@@ -110,10 +117,16 @@ export default function FixerProPage() {
     if (job.status && ['MATCHING', 'CREATED', 'MEETING_REQUESTED'].includes(job.status.toUpperCase())) {
       setWaitModalOrder(job);
     } else {
-      const chatId = job.po || job.id;
+      const poFromDesc = String(job.description || "").match(/PO-[A-Za-z0-9-]+/)?.[0] || "";
+      const chatId = job.po || poFromDesc || job.id;
+      const displayId = job.po || poFromDesc || (job.id ? `PO-${String(job.id).slice(0,4)}-${String(job.id).slice(4,8)}` : job.id);
       try {
         localStorage.setItem(`chat_from_${chatId}`, "fixers");
-        localStorage.setItem(`chat_title_${chatId}`, `${job.service || job.serviceTh || ''} - ${chatId} - ฿${job.budget || '0'}`);
+        localStorage.setItem(`chat_title_${chatId}`, `${job.service || job.serviceTh || ''} - ${displayId} - ฿${job.budget || '0'}`);
+        // Store PO→UUID mapping so ClientChatPage can resolve to backend order
+        if (poFromDesc && job.id && chatId === poFromDesc) {
+          localStorage.setItem(`po_to_order_${poFromDesc}`, job.id);
+        }
       } catch {}
       window.location.href = `/${locale}/chat/${chatId}`;
     }
@@ -258,7 +271,7 @@ export default function FixerProPage() {
       service: (o.serviceCategory || "").replace(/_/g, " "),
       serviceTh: (o.serviceCategory || "").replace(/_/g, " "),
       serviceZh: (o.serviceCategory || "").replace(/_/g, " "),
-      date: new Date(o.createdAt).toLocaleDateString(),
+      date: fmtDate(o.createdAt),
       description: desc,
       tier: desc.includes('TIER:') ? desc.split('TIER:')[1].split(' |')[0] : "Standard",
       status: o.status,
@@ -280,9 +293,6 @@ export default function FixerProPage() {
     fee: p.price ? `฿${p.price.toLocaleString()}` : "N/A"
   }));
   const EARNINGS_MOCK = [
-    { month: "Feb 25", monthTh: "ก.พ. 25", monthZh: "2月 25", amount: 12000 },
-    { month: "Mar 25", monthTh: "มี.ค. 25", monthZh: "3月 25", amount: 15400 },
-    { month: "Apr 25", monthTh: "เม.ย. 25", monthZh: "4月 25", amount: 11000 },
     { month: "May 25", monthTh: "พ.ค. 25", monthZh: "5月 25", amount: 18500 },
     { month: "Jun 25", monthTh: "มิ.ย. 25", monthZh: "6月 25", amount: 16000 },
     { month: "Jul 25", monthTh: "ก.ค. 25", monthZh: "7月 25", amount: 20000 },
@@ -294,6 +304,8 @@ export default function FixerProPage() {
     { month: "Jan 26", monthTh: "ม.ค. 26", monthZh: "1月 26", amount: 25000 },
     { month: "Feb 26", monthTh: "ก.พ. 26", monthZh: "2月 26", amount: 24000 },
     { month: "Mar 26", monthTh: "มี.ค. 26", monthZh: "3月 26", amount: 26500 },
+    { month: "Apr 26", monthTh: "เม.ย. 26", monthZh: "4月 26", amount: 22000 },
+    { month: "May 26", monthTh: "พ.ค. 26", monthZh: "5月 26", amount: 8500 },
   ];
 
   const chats: any[] = [];
@@ -425,9 +437,9 @@ export default function FixerProPage() {
           name: title,
           service: po,
           lastMsg: String(latestVisible?.text || ""),
-          time: latestVisible?.createdAt ? new Date(latestVisible.createdAt).toLocaleString() : "",
+          time: latestVisible?.createdAt ? fmtDateTime(latestVisible.createdAt) : "",
           incomingMsg: incoming ? String(incoming?.text || "") : "",
-          incomingTime: incoming?.createdAt ? new Date(incoming.createdAt).toLocaleString() : "",
+          incomingTime: incoming?.createdAt ? fmtDateTime(incoming.createdAt) : "",
           hasIncoming: Boolean(incoming),
           sort: latestVisible?.createdAt ? new Date(latestVisible.createdAt).getTime() : 0,
           unread: incoming ? 1 : 0,
@@ -528,7 +540,7 @@ export default function FixerProPage() {
   incomingJobs = [...pendingMeetings, ...incomingJobs] as any[];
 
   const dynamicNotifications = mockDynReqs.map((r: any) => {
-    const displayTime = typeof r.date === "string" && r.date.includes(":") ? r.date : (r.date ? new Date(r.date).toLocaleString() : "");
+    const displayTime = typeof r.date === "string" && r.date.includes(":") ? r.date : (r.date ? fmtDateTime(r.date) : "");
     if (r.type === "meeting_pending_partner") return { id: `dyn-${r.id}`, msg: "Confirm meeting at site", unread: true, time: displayTime, dot: "bg-amber-500" };
     if (r.type === "meeting_scheduled") return { id: `dyn-${r.id}`, msg: "Confirm meeting at site", unread: true, time: displayTime, dot: "bg-teal-500" };
     if (r.type === "variation_pending") return { id: `dyn-${r.id}`, msg: "Request for Approval of Variation", unread: true, time: displayTime, dot: "bg-purple-500" };
@@ -630,7 +642,7 @@ export default function FixerProPage() {
               <button 
                 onClick={async () => {
                   const po = waitModalOrder.po || `PO-2605-${waitModalOrder.id?.slice(0, 4)}`;
-                  const now = new Date().toLocaleString();
+                  const now = fmtDateTime(new Date());
                   const partnerName = partner?.name || partner?.company || 'Partner';
                   const serviceTitle = waitModalOrder.serviceTh || waitModalOrder.service;
                   const budgetLabel = waitModalOrder.fee || (waitModalOrder.budget ? `฿${String(waitModalOrder.budget).replace(/^฿/, '')}` : '฿0');
@@ -1031,7 +1043,7 @@ export default function FixerProPage() {
 
 /* ===== PARTNER OVERVIEW ===== */
 function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledMeetings, completedJobs, earnings, stats, notifications, chats = [], onJobClick, onTabChange }: { locale: string; partner: PartnerInfo | null; activeJobs: any[]; incomingJobs: any[]; scheduledMeetings: any[]; completedJobs: any[]; earnings: any[]; stats: any; notifications: any[]; chats?: any[]; onJobClick?: (job: any) => void; onTabChange?: (tab: string) => void; }) {
-  const earnings12 = earnings.slice(-12);
+  const earnings12 = earnings;
   const maxEarning = earnings12.length > 0 ? Math.max(...earnings12.map(e => e.amount)) : 0;
   const recentIncomingChats = chats.filter((c: any) => c.hasIncoming).slice(0, 2);
   return (
@@ -1079,7 +1091,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
         {/* Earnings Chart */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:col-span-2">
           <h3 className="font-bold text-gray-900 mb-1 flex items-center gap-2">{locale === "th" ? "รายได้รายเดือน" : locale === "zh" ? "月收入" : "Monthly Earnings"}</h3>
-          <p className="text-xs text-gray-400 mb-4">{locale === "th" ? "12 เดือนล่าสุด" : locale === "zh" ? "近12个月" : "Last 12 months"}</p>
+          <p className="text-xs text-gray-400 mb-4">{locale === "th" ? "เดือนนี้ + 12 เดือนล่าสุด" : locale === "zh" ? "本月 + 近12个月" : "This month & last 12 months"}</p>
           {/* Bar chart — heights in px relative to 120px max bar */}
           <div className="flex items-end gap-px" style={{ height: "9rem" }}>
             {earnings12.map((e) => {
@@ -1279,6 +1291,62 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
 
 /* ===== PARTNER JOBS (Active) ===== */
 function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activeJobs: any[]; onJobClick?: (job: any) => void; }) {
+  const handlePartnerAction = (job: any, action: 'variation' | 'complete' | 'rate') => {
+    try {
+      const po = job.po || job.id;
+      const createdAt = Date.now();
+      const token = localStorage.getItem("subscriber_token") || "";
+      const orderDbId = localStorage.getItem(`po_to_order_${po}`) || job.id || "";
+      const fmtDt = (d: number) => {
+        const dt = new Date(d);
+        return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+      };
+      const postSystemMsg = (text: string) => {
+        if (token && orderDbId) {
+          fetch(`/api/v1/orders/${orderDbId}/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ text }),
+          }).catch(() => {});
+        }
+      };
+      const dynReqs = JSON.parse(localStorage.getItem("ghis_mock_dyn_req") || "[]");
+      if (action === 'variation') {
+        const varId = `var-${po}`;
+        const next = [...dynReqs.filter((x: any) => x.po !== po), { id: varId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: 'Your partner has submitted a variation for your approval. Please review and confirm to proceed.', type: 'variation_pending', step: 9 }];
+        localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
+        // Update partner's own active job step
+        const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
+        const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 9, mockStep: 9, actionNeeded: false } : x);
+        localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
+        window.dispatchEvent(new Event("storage"));
+        postSystemMsg(`[SYSTEM] Partner has submitted a variation request for ${po}. Please review in your Requests tab.`);
+        alert("Variation submitted! Customer will review and approve.");
+      } else if (action === 'complete') {
+        const complId = `compl-${po}`;
+        const next = [...dynReqs.filter((x: any) => x.po !== po), { id: complId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: 'Work is completed. Please review and mark as complete to close this project.', type: 'complete_pending', step: 10 }];
+        localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
+        const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
+        const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 10, mockStep: 10, actionNeeded: false } : x);
+        localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
+        window.dispatchEvent(new Event("storage"));
+        postSystemMsg(`[SYSTEM] Partner has marked the job as complete for ${po}. Please review and confirm in your Requests tab.`);
+        alert("Completion submitted! Customer will review and confirm.");
+      } else if (action === 'rate') {
+        const rating = prompt("Rate the customer (1-5 stars):", "5");
+        if (!rating) return;
+        const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
+        const hist = JSON.parse(localStorage.getItem("ghis_mock_history") || "[]");
+        const updated = active.filter((x: any) => x.po !== po);
+        const completed = { ...(active.find((x: any) => x.po === po) || job), step: 11, completedAt: createdAt, partnerRating: Number(rating) };
+        localStorage.setItem("ghis_mock_active", JSON.stringify(updated));
+        localStorage.setItem("ghis_mock_history", JSON.stringify([...hist, completed]));
+        window.dispatchEvent(new Event("storage"));
+        postSystemMsg(`[SYSTEM] Partner has rated this project ${rating}/5 stars. The job is now complete.`);
+        alert("Thank you for rating the customer! Job is now complete.");
+      }
+    } catch (e) { console.error(e); }
+  };
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
@@ -1322,11 +1390,23 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2 mt-2">
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
                 <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[job.tier] || "bg-gray-100 text-gray-600"}`}>{job.tier}</span>
                 {getStatusLabel(job.status, locale) !== "" && <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_STYLE[job.status] || ""}`}>{getStatusLabel(job.status, locale)}</span>}
                 {job.actionNeeded && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-50 text-red-700">Action Needed</span>}
                 {job.earnings && <span className="text-xs font-bold text-gray-700">{job.earnings}</span>}
+                {/* Step 9: Partner submits variation */}
+                {(job.mockStep === 9 || (job.step === 9)) && (
+                  <button onClick={() => handlePartnerAction(job, 'variation')} className="text-xs px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-full transition">Submit Variation</button>
+                )}
+                {/* Step 10: Partner marks complete */}
+                {(job.mockStep === 10 || (job.step === 10)) && (
+                  <button onClick={() => handlePartnerAction(job, 'complete')} className="text-xs px-3 py-1 bg-green-600 hover:bg-green-700 text-white font-bold rounded-full transition">Mark Complete</button>
+                )}
+                {/* Step 11: Partner rates customer */}
+                {(job.mockStep === 11 || (job.step === 11)) && (
+                  <button onClick={() => handlePartnerAction(job, 'rate')} className="text-xs px-3 py-1 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-full transition">Rate Customer</button>
+                )}
               </div>
             </div>
           </div>
@@ -1390,7 +1470,7 @@ function PartnerHistory({ locale, completedJobs }: { locale: string; completedJo
                 <td className="py-3 px-4 text-gray-600">#{h.customerId || 'Customer'}</td>
                 <td className="py-3 px-4 text-center"><span className="px-2 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-700">{h.tier || 'Standard'}</span></td>
                 <td className="py-3 px-4 text-center font-bold text-green-700">{h.fee || '฿0'}</td>
-                <td className="py-3 px-4 text-center text-gray-500">{new Date(h.updatedAt || Date.now()).toLocaleDateString()}</td>
+                <td className="py-3 px-4 text-center text-gray-500">{fmtDate(h.updatedAt || Date.now())}</td>
               </tr>
             )) : (
               <tr>
@@ -1535,7 +1615,7 @@ function PartnerProfile({ locale, prefix, partner }: { locale: string; prefix: s
               </div>
               <div>
                 <h3 className="text-xs font-semibold text-gray-400 uppercase mb-1">{locale === "th" ? "วันที่สมัคร" : "Member Since"}</h3>
-                <p className="text-sm font-medium text-gray-900">{new Date(partner.createdAt || Date.now()).toLocaleDateString()}</p>
+                <p className="text-sm font-medium text-gray-900">{fmtDate(partner.createdAt || Date.now())}</p>
               </div>
             </div>
           </div>
@@ -1747,7 +1827,7 @@ function PartnerDashboard({ locale, partner, prefix, onLogout, orders }: { local
               </div>
               <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
                 <p className="text-xs text-gray-500 font-medium mb-1">Monthly Earn</p>
-                <p className="text-lg font-bold text-sky-600">฿18,500</p>
+                <p className="text-lg font-bold text-sky-600">฿8,500</p>
               </div>
             </div>
             <button onClick={onLogout} className="w-full py-2 bg-gray-100 text-gray-600 hover:bg-gray-200 text-sm font-bold rounded-lg transition">
@@ -1759,7 +1839,7 @@ function PartnerDashboard({ locale, partner, prefix, onLogout, orders }: { local
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center">
               <h3 className="font-bold text-gray-900 flex items-center gap-2">Monthly Earnings</h3>
-              <span className="text-sky-600 font-bold text-sm">฿18,500 (Apr)</span>
+              <span className="text-sky-600 font-bold text-sm">฿8,500 (May 26)</span>
             </div>
             <div className="p-5 flex items-end justify-between h-32">
               <div className="flex flex-col items-center gap-2">
@@ -1800,7 +1880,7 @@ function PartnerDashboard({ locale, partner, prefix, onLogout, orders }: { local
                     <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl shadow-sm"></div>
                     <div>
                       <h3 className="font-bold text-gray-900">{o.service}</h3>
-                      <p className="text-sm text-gray-500 mt-1">{o.user?.name || "Customer"} &middot; {new Date(o.createdAt).toLocaleDateString()} &middot; Budget: ฿{o.estimatedPrice || "0"} &middot; {o.po || `PO-2605-${o.id?.slice(0, 4)}`} | {o.user?.subdistrict || "Saphansong"}</p><div className="mt-2 w-full">
+                      <p className="text-sm text-gray-500 mt-1">{o.user?.name || "Customer"} &middot; {fmtDate(o.createdAt)} &middot; Budget: ฿{o.estimatedPrice || "0"} &middot; {o.po || `PO-2605-${o.id?.slice(0, 4)}`} | {o.user?.subdistrict || "Saphansong"}</p><div className="mt-2 w-full">
 <div className="flex justify-between text-[10px] text-gray-500 mb-1 px-1">
   <span className={['PENDING',''].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Notify</span>
   <span className={['CONFIRMED'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Accept</span>
@@ -1877,7 +1957,7 @@ function PartnerActiveJobs({ locale, prefix, orders }: { locale: string; prefix:
               <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl shadow-sm"></div>
               <div>
                 <h3 className="font-bold text-gray-900">{o.service} <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">{o.tier || 'Standard'}</span></h3>
-                <p className="text-sm text-gray-500 mt-1">{o.user?.name || "Customer"} &middot; {new Date(o.createdAt).toLocaleDateString()} &middot; Budget: ฿{o.estimatedPrice || "0"} &middot; {o.po || `PO-2605-${o.id?.slice(0, 4)}`} | {o.user?.subdistrict || "Saphansong"}</p><div className="mt-2 w-full">
+                <p className="text-sm text-gray-500 mt-1">{o.user?.name || "Customer"} &middot; {fmtDate(o.createdAt)} &middot; Budget: ฿{o.estimatedPrice || "0"} &middot; {o.po || `PO-2605-${o.id?.slice(0, 4)}`} | {o.user?.subdistrict || "Saphansong"}</p><div className="mt-2 w-full">
 <div className="flex justify-between text-[10px] text-gray-500 mb-1 px-1">
   <span className={['PENDING',''].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Notify</span>
   <span className={['CONFIRMED'].includes(o.status) ? 'text-purple-600 font-bold' : ''}>Accept</span>
@@ -1919,7 +1999,7 @@ function PartnerIncomingRequests({ locale, prefix, orders }: { locale: string; p
               <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center text-2xl shadow-sm"></div>
               <div>
                 <h3 className="font-bold text-gray-900">{o.service} <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">{o.tier || 'Standard'}</span></h3>
-                <p className="text-sm text-gray-500 mt-1">Customer #{o.id.slice(-4)} &middot; {new Date(o.createdAt).toLocaleDateString()} &middot; Est: ฿{o.estimatedPrice || 0}</p>
+                <p className="text-sm text-gray-500 mt-1">Customer #{o.id.slice(-4)} &middot; {fmtDate(o.createdAt)} &middot; Est: ฿{o.estimatedPrice || 0}</p>
                 <p className="text-xs text-gray-400 mt-1">Status: {o.status}</p>
               </div>
             </div>
