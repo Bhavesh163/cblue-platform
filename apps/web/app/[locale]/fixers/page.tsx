@@ -61,6 +61,32 @@ const fmtDateTime = (d: Date | number | string) => {
   const dt = new Date(d);
   return `${fmtDate(dt)} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
 };
+const PO_CODE_PATTERN = /PO-(?:\d{8}|\d{4}-\d{4,})/i;
+const PO_CODE_EXACT_PATTERN = /^PO-(?:\d{8}|\d{4}-\d{4,})$/i;
+const isPoCode = (value: string) => PO_CODE_EXACT_PATTERN.test(String(value || "").trim());
+const extractPoCode = (value: any) => {
+  if (!value) return "";
+  const direct = String(value?.po || "").trim();
+  if (direct && isPoCode(direct)) return direct;
+  const desc = String(value?.description || value?.desc || "");
+  return desc.match(PO_CODE_PATTERN)?.[0] || "";
+};
+const getWorkflowStepFromStatus = (status?: string) => {
+  switch (String(status || '').toUpperCase()) {
+    case 'ASSIGNED':
+    case 'DEPOSIT_PENDING':
+    case 'CONFIRMED':
+      return 6;
+    case 'IN_PROGRESS':
+      return 7;
+    case 'MEETING_REQUESTED':
+      return 8;
+    case 'COMPLETED':
+      return 11;
+    default:
+      return 5;
+  }
+};
 const _n = new Date();
 const _fmt = (d: Date) => fmtDateTime(d);
 const notifications: any[] = [
@@ -117,7 +143,7 @@ export default function FixerProPage() {
     if (job.status && ['MATCHING', 'CREATED', 'MEETING_REQUESTED'].includes(job.status.toUpperCase())) {
       setWaitModalOrder(job);
     } else {
-      const poFromDesc = String(job.description || "").match(/PO-[A-Za-z0-9-]+/)?.[0] || "";
+      const poFromDesc = extractPoCode(job);
       const chatId = job.po || poFromDesc || job.id;
       const displayId = job.po || poFromDesc || (job.id ? `PO-${String(job.id).slice(0,4)}-${String(job.id).slice(4,8)}` : job.id);
       try {
@@ -294,22 +320,30 @@ export default function FixerProPage() {
   
   const mappedOrders = orders.map(o => {
     const desc = o.description || "";
-    let extractedPo = "";
-    if (desc.includes("PO-")) {
-      extractedPo = desc.match(/PO-[a-zA-Z0-9-]+/)?.[0] || "";
-    }
+    let extractedPo = extractPoCode(o);
     if (!extractedPo) {
-      extractedPo = `PO-2605-${o.id?.slice(0, 4)}`;
+      const created = new Date(o.createdAt || Date.now());
+      const yy = String(created.getFullYear()).slice(-2);
+      const mm = String(created.getMonth() + 1).padStart(2, '0');
+      const numericSeed = String(o.id || '').replace(/\D/g, '').slice(0, 4) || String(created.getTime()).slice(-4);
+      extractedPo = `PO-${yy}${mm}-${numericSeed.padStart(4, '0')}`;
     }
+    const attachmentUrls = Array.isArray(o.images)
+      ? o.images
+          .map((image: any) => (typeof image === 'string' ? image : image?.url || ''))
+          .filter(Boolean)
+      : [];
     
     return {
       id: o.id,
       po: extractedPo,
-      hasAttachment: Array.isArray(o.images) && o.images.length > 0,
-      subdistrict: o.address?.subdistrict || o.subdistrict || "Saphansong",
+      hasAttachment: attachmentUrls.length > 0,
+      images: attachmentUrls,
+      issueImage: attachmentUrls[0] || "",
+      subdistrict: o.address?.subdistrict || o.address?.district || o.address?.province || o.subdistrict || "Unknown",
       createdAt: o.createdAt,
       customer: o.user?.name || "Customer",
-      type: o.orderType?.toLowerCase() || "household",
+      orderType: o.orderType?.toLowerCase() || "household",
       phone: o.user?.phone || "",
       service: (o.serviceCategory || "").replace(/_/g, " "),
       serviceTh: (o.serviceCategory || "").replace(/_/g, " "),
@@ -317,6 +351,7 @@ export default function FixerProPage() {
       date: fmtDateTime(o.createdAt),
       description: desc,
       statusNote: o.statusHistory?.[0]?.note || "",
+      statusChangedAt: o.statusHistory?.[0]?.createdAt || o.updatedAt || o.createdAt,
       tier: desc.includes('TIER:') ? desc.split('TIER:')[1].split(' |')[0] : "Standard",
       status: o.status,
       progress: o.status === 'COMPLETED' ? 100 : (['IN_PROGRESS', 'CONFIRMED', 'ACCEPTED'].includes(o.status) ? 40 : 15),
@@ -376,7 +411,6 @@ export default function FixerProPage() {
     } catch {}
     const normalizedViewerEmail = String(viewerEmail || "").trim().toLowerCase();
     const normalizedViewerUserId = String(viewerUserId || "").trim().toLowerCase();
-    const isPoCode = (value: string) => /^PO-[A-Za-z0-9-]+$/.test(value);
     const parseChatSort = (msg: any) => {
       const numericId = Number(String(msg?.id || "").replace(/[^0-9]/g, ""));
       if (Number.isFinite(numericId) && numericId > 0) return numericId;
@@ -441,7 +475,6 @@ export default function FixerProPage() {
     // Use user entity ID (from subscriber) to correctly identify own messages
     let viewerUserId = "";
     try { viewerUserId = JSON.parse(localStorage.getItem("subscriber") || "{}")?.id || ""; } catch {}
-    const isPoCode = (value: string) => /^PO-[A-Za-z0-9-]+$/.test(value);
     const items: any[] = [];
 
     for (const order of (orders || [])) {
@@ -457,8 +490,7 @@ export default function FixerProPage() {
         const messages = await res.json();
         if (!Array.isArray(messages) || messages.length === 0) continue;
 
-        const desc = String(order?.description || "");
-        const po = order?.po || desc.match(/PO-[A-Za-z0-9-]+/)?.[0] || "";
+        const po = extractPoCode(order);
         if (!po || !isPoCode(po)) continue;
 
         // Cache PO→UUID so ClientChatPage.resolveOrderDbId() works in Suppadesh's browser
@@ -544,7 +576,16 @@ export default function FixerProPage() {
         const d = localStorage.getItem("ghis_mock_dyn_req"); if (d) setMockDynReqs(JSON.parse(d));
         const a = localStorage.getItem("ghis_mock_active"); if (a) setMockActiveState(JSON.parse(a));
         const p = localStorage.getItem("partner_mock_dyn_req");
-        setPartnerDynReqs(p ? JSON.parse(p) : []);
+        setPartnerDynReqs(
+          p
+            ? JSON.parse(p).map((item: any) => ({
+                ...item,
+                workflowType:
+                  item?.workflowType ||
+                  (['variation_partner', 'complete_partner', 'rate_partner'].includes(item?.type) ? item.type : undefined),
+              }))
+            : [],
+        );
       } catch {}
     };
     checkMock();
@@ -555,32 +596,18 @@ export default function FixerProPage() {
   let activeJobs = mappedOrders.filter(o => !['COMPLETED', 'CANCELLED'].includes(o.status));
   activeJobs = activeJobs.map(job => {
       const stepLookup = mockActiveState.find((x: any) => x.po === job.po);
-      if (stepLookup) return { ...job, mockStep: stepLookup.step, actionNeeded: stepLookup.actionNeeded };
-      return job;
+      const backendStep = getWorkflowStepFromStatus(job.status);
+      if (stepLookup) return { ...job, step: stepLookup.step, mockStep: stepLookup.step, actionNeeded: stepLookup.actionNeeded };
+      return { ...job, step: backendStep, mockStep: backendStep, actionNeeded: [5, 8].includes(backendStep) };
   });
   const completedJobs = mappedOrders.filter(o => o.status === 'COMPLETED');
   const earningsSeries = (() => {
-    const seedByMonth: Record<string, number> = {
-      '2025-05': 18500,
-      '2025-06': 16000,
-      '2025-07': 20000,
-      '2025-08': 22000,
-      '2025-09': 19500,
-      '2025-10': 23000,
-      '2025-11': 21000,
-      '2025-12': 18000,
-      '2026-01': 25000,
-      '2026-02': 24000,
-      '2026-03': 26500,
-      '2026-04': 22000,
-      '2026-05': 26500,
-    };
     const enMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const thMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
     const completedByMonth = new Map<string, number>();
 
     for (const job of completedJobs) {
-      const ts = new Date(job.createdAt || job.date || 0).getTime();
+      const ts = new Date(job.statusChangedAt || job.createdAt || job.date || 0).getTime();
       if (!ts) continue;
       const dt = new Date(ts);
       const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
@@ -599,7 +626,7 @@ export default function FixerProPage() {
         month: `${enMonths[monthIdx]} ${yy}`,
         monthTh: `${thMonths[monthIdx]} ${yy}`,
         monthZh: `${monthIdx + 1}月 ${yy}`,
-        amount: completedByMonth.get(key) || seedByMonth[key] || 0,
+        amount: completedByMonth.get(key) || 0,
       });
     }
     return items;
@@ -673,6 +700,7 @@ export default function FixerProPage() {
             tier: order.tier,
             description: 'Proceed to submit variation request if extra work or price adjustment is required.',
             type: 'variation_partner',
+            workflowType: 'variation_partner',
             step: 9,
           });
         }
@@ -697,6 +725,7 @@ export default function FixerProPage() {
             tier: order.tier,
             description: 'Customer approved the variation. Please submit project complete for confirmation.',
             type: 'complete_partner',
+            workflowType: 'complete_partner',
             step: 10,
           });
         }
@@ -721,6 +750,7 @@ export default function FixerProPage() {
             tier: order.tier,
             description: 'Customer confirmed completion. Please rate the customer to close this job.',
             type: 'rate_partner',
+            workflowType: 'rate_partner',
             step: 11,
           });
         }
@@ -803,7 +833,7 @@ export default function FixerProPage() {
               <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">Project Details</span><span className="font-bold text-gray-800 bg-white p-2 rounded border border-gray-100">{(waitModalOrder.description || waitModalOrder.service || "").replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?/, "")}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Uploaded Files</span><span className="font-semibold text-sky-600 cursor-pointer hover:underline" onClick={async () => { 
                 let url = waitModalOrder?.issueImage || waitModalOrder?.image || waitModalOrder?.fileUrl || (waitModalOrder?.projectImages && waitModalOrder?.projectImages[0]) || (waitModalOrder?.images && waitModalOrder?.images[0]) || (waitModalOrder?.metadata?.images && waitModalOrder?.metadata.images[0]) || (waitModalOrder?.metadata?.issueImageUrl) || (waitModalOrder?.metadata?.issueImage);
-                const poFromDesc = String(waitModalOrder?.description || "").match(/PO-[A-Za-z0-9-]+/)?.[0] || "";
+                const poFromDesc = extractPoCode(waitModalOrder);
                 const poKey = waitModalOrder?.po || poFromDesc;
                 if (!url) {
                   try {
@@ -847,7 +877,7 @@ export default function FixerProPage() {
                   try {
                     const poMap = JSON.parse(localStorage.getItem("cblue_po_attachments") || "{}");
                     const orderMap = JSON.parse(localStorage.getItem("cblue_order_attachments") || "{}");
-                    const poFromDesc = String(waitModalOrder?.description || "").match(/PO-[A-Za-z0-9-]+/)?.[0] || "";
+                    const poFromDesc = extractPoCode(waitModalOrder);
                     const poKey = waitModalOrder?.po || poFromDesc;
                     hasMapped = Boolean((poKey && poMap[poKey]?.length) || (waitModalOrder?.id && orderMap[waitModalOrder.id]?.length));
                   } catch {}
@@ -912,16 +942,27 @@ export default function FixerProPage() {
 
                     let backendAcceptError = "";
                     if (waitModalOrder.id && !waitModalOrder.mock) {
-                      const res = await fetch(`/api/v1/orders/${waitModalOrder.id}/status`, {
-                        method: 'PUT',
-                        headers: {
-                          'Content-Type': 'application/json',
-                          ...(token ? { Authorization: `Bearer ${token}` } : {})
-                        },
-                        body: JSON.stringify({ status: "CONFIRMED" })
-                      });
-                      if (!res.ok) {
-                        backendAcceptError = await res.text();
+                      const currentStatus = String(waitModalOrder.status || '').toUpperCase();
+                      const acceptancePath: Record<string, string[]> = {
+                        CREATED: ['MATCHING', 'ASSIGNED', 'DEPOSIT_PENDING', 'CONFIRMED'],
+                        MATCHING: ['ASSIGNED', 'DEPOSIT_PENDING', 'CONFIRMED'],
+                        ASSIGNED: ['DEPOSIT_PENDING', 'CONFIRMED'],
+                        DEPOSIT_PENDING: ['CONFIRMED'],
+                        CONFIRMED: [],
+                      };
+                      for (const nextStatus of acceptancePath[currentStatus] || []) {
+                        const hopRes = await fetch(`/api/v1/orders/${waitModalOrder.id}/status`, {
+                          method: 'PUT',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                          },
+                          body: JSON.stringify({ status: nextStatus, note: 'Partner accepted draft PO' }),
+                        });
+                        if (!hopRes.ok) {
+                          backendAcceptError = await hopRes.text();
+                          break;
+                        }
                       }
                     }
 
@@ -1364,7 +1405,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
               </div>
               <div className="flex items-center gap-2">
                 <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[req.tier] || ""}`}>{req.tier}</span>
-                {req.type ? (
+                {req.workflowType ? (
                   <button onClick={(e) => { e.stopPropagation(); onTabChange && onTabChange("requests"); }} className="px-3 py-1 bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold rounded-lg transition">Open Request</button>
                 ) : (
                   <>

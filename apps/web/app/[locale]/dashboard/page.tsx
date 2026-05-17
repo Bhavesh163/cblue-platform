@@ -36,6 +36,16 @@ const fmtDateTime = (d: Date | number | string) => {
   const mm = String(dt.getMinutes()).padStart(2,'0');
   return `${fmtDate(dt)} ${hh}:${mm}`;
 };
+const PO_CODE_PATTERN = /PO-(?:\d{8}|\d{4}-\d{4,})/i;
+const PO_CODE_EXACT_PATTERN = /^PO-(?:\d{8}|\d{4}-\d{4,})$/i;
+const isValidPoCode = (value: string) => PO_CODE_EXACT_PATTERN.test(String(value || '').trim());
+const extractPoCode = (orderLike: any) => {
+  if (!orderLike) return "";
+  const direct = String(orderLike?.po || "").trim();
+  if (direct && isValidPoCode(direct)) return direct;
+  const desc = String(orderLike?.description || orderLike?.desc || "");
+  return desc.match(PO_CODE_PATTERN)?.[0] || "";
+};
 
 const ICON_MAP: Record<string, string> = { household: "", project: "", professional: "", property: "" };
 const STATUS_STYLE: Record<string, string> = {
@@ -733,13 +743,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     return Number.isFinite(ts) ? ts : 0;
   };
   const extractPo = (orderLike: any) => {
-    if (!orderLike) return "";
-    if (typeof orderLike.po === "string" && orderLike.po.trim()) return orderLike.po.trim();
-    const desc = String(orderLike.description || orderLike.desc || "");
-    const fromDesc = desc.match(/PO-[A-Za-z0-9-]+/)?.[0] || "";
-    return fromDesc;
+    return extractPoCode(orderLike);
   };
-  const isPoCode = (value: string) => /^PO-[A-Za-z0-9-]+$/.test(value);
+  const isPoCode = (value: string) => isValidPoCode(value);
   const postBackendWorkflowMessage = async (po: string, text: string) => {
     try {
       const token = localStorage.getItem("subscriber_token") || "";
@@ -786,12 +792,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   useEffect(() => {
     try {
       // One-time cleanup of stale chat keys with invalid PO format (e.g. UUID-like keys from old builds)
-      const isPo = (v: string) => /^PO-[A-Za-z0-9-]+$/.test(v);
       Object.keys(localStorage)
         .filter(k => k.startsWith('chat_messages_') || k.startsWith('chat_title_') || k.startsWith('po_to_order_'))
         .forEach(k => {
           const suffix = k.replace(/^chat_messages_|^chat_title_|^po_to_order_/, '');
-          if (!isPo(suffix)) { try { localStorage.removeItem(k); } catch {} }
+          if (!isValidPoCode(suffix)) { try { localStorage.removeItem(k); } catch {} }
         });
       Object.keys(localStorage)
         .filter(k => k.startsWith('chat_messages_'))
@@ -1027,7 +1032,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     const toCreate: any[] = [];
     for (const order of orders) {
       const status = String(order?.status || '').toUpperCase();
-      if (!['CONFIRMED', 'ACCEPTED'].includes(status)) continue;
+      if (!['ASSIGNED', 'DEPOSIT_PENDING', 'CONFIRMED', 'ACCEPTED'].includes(status)) continue;
       const po = extractPo(order);
       if (!po || !isPoCode(po)) continue;
       if (existingDynPos.has(po)) continue;
@@ -1157,9 +1162,21 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     { title: "REINSTATEMENT", customer: "Suppadesh", date: "5/11/2026, 2:50:00 PM", budget: "฿5,000,000", po: "PO-2605-9605", location: "Saphansong", tier: "ECONOMY", actionNeeded: false, step: 7 },
   ];
 
+  const backendOrderPos = new Set((orders || []).map((o: any) => extractPo(o)).filter((po: string) => isPoCode(po)));
+  const useStaticDemoData = backendOrderPos.size === 0 && subscriber?.email?.includes('ghis');
+  const visibleMockActiveItems = backendOrderPos.size > 0
+    ? mockActiveItems.filter((x: any) => backendOrderPos.has(x.po))
+    : mockActiveItems;
+  const visibleMockDynRequests = backendOrderPos.size > 0
+    ? mockDynRequests.filter((x: any) => backendOrderPos.has(x.po))
+    : mockDynRequests;
+  const visibleMockHistory = backendOrderPos.size > 0
+    ? mockHistory.filter((x: any) => backendOrderPos.has(x.po))
+    : mockHistory;
+
   // Merge: mockActiveItems overrides ACTIVE_MOCK items with same po (for step progression)
-  const paidPOs = new Set(mockActiveItems.map((x: any) => x.po));
-  const completedPOs = new Set(mockHistory.map((x: any) => x.po));
+  const paidPOs = new Set(visibleMockActiveItems.map((x: any) => x.po));
+  const completedPOs = new Set(visibleMockHistory.map((x: any) => x.po));
   const backendActiveItems = (orders || [])
     .filter((o: any) => !['COMPLETED', 'CANCELLED', 'DONE'].includes(String(o?.status || '').toUpperCase()))
     .map((o: any) => {
@@ -1202,22 +1219,22 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       };
     });
   const backendActivePOs = new Set(backendActiveItems.map((item: any) => item.po));
-  const filteredStaticMock = (subscriber?.email?.includes('ghis') ? ACTIVE_MOCK : []).filter((item: any) => !paidPOs.has(item.po) && !completedPOs.has(item.po) && !backendActivePOs.has(item.po));
-  const existingActivePos = new Set([...filteredStaticMock, ...mockActiveItems].map((x: any) => x.po));
+  const filteredStaticMock = (useStaticDemoData ? ACTIVE_MOCK : []).filter((item: any) => !paidPOs.has(item.po) && !completedPOs.has(item.po) && !backendActivePOs.has(item.po));
+  const existingActivePos = new Set([...filteredStaticMock, ...visibleMockActiveItems].map((x: any) => x.po));
   const mergedBackendActive = backendActiveItems.filter((x: any) => !completedPOs.has(x.po) && !existingActivePos.has(x.po));
-  const combinedActive = [...filteredStaticMock, ...mockActiveItems.filter((x: any) => !completedPOs.has(x.po)), ...mergedBackendActive]
+  const combinedActive = [...filteredStaticMock, ...visibleMockActiveItems.filter((x: any) => !completedPOs.has(x.po)), ...mergedBackendActive]
     .sort((a: any, b: any) => parseDateMs(b.createdAt || b.date) - parseDateMs(a.createdAt || a.date));
   // Filter static requests: hide items whose PO already has a dynamic entry (already progressed past step 6)
-  const progressedPos = new Set(mockDynRequests.map((x: any) => x.po));
-  const filteredStaticRequests = REQUESTS_MOCK.filter((x: any) => !progressedPos.has(x.po));
-  const allRequestItems = [...(subscriber?.email?.includes('ghis') ? filteredStaticRequests : []), ...mockDynRequests]
+  const progressedPos = new Set(visibleMockDynRequests.map((x: any) => x.po));
+  const filteredStaticRequests = (useStaticDemoData ? REQUESTS_MOCK : []).filter((x: any) => !progressedPos.has(x.po));
+  const allRequestItems = [...filteredStaticRequests, ...visibleMockDynRequests]
     .filter((m: any) => !mockPayments[m.id])
     .sort((a: any, b: any) => parseDateMs(b.createdAt || b.date) - parseDateMs(a.createdAt || a.date));
   const overviewRequestItems = allRequestItems.slice(0, 3);
-  const upcomingMeetings = mockDynRequests
+  const upcomingMeetings = visibleMockDynRequests
     .filter((x: any) => x.type === "meeting_scheduled")
     .sort((a: any, b: any) => parseDateMs(a.createdAt || a.date) - parseDateMs(b.createdAt || b.date));
-  const workflowAlerts = mockDynRequests
+  const workflowAlerts = visibleMockDynRequests
     .map((x: any) => {
       const stableTime = x.date || toDisplayDateTime(x.createdAt) || "";
       const createdAt = x.createdAt || parseDateMs(x.date);
@@ -1245,11 +1262,12 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       const dynReqs = JSON.parse(localStorage.getItem('ghis_mock_dyn_req') || '[]');
       const active = JSON.parse(localStorage.getItem('ghis_mock_active') || '[]');
       const existingPos = new Set(dynReqs.map((x: any) => x.po));
+      const liveBackendPOs = new Set((orders || []).map((o: any) => extractPo(o)).filter((po: string) => isPoCode(po)));
       // Gather all step-7 (or higher) jobs from static mock that aren't already in dynamic requests
-      const step7StaticJobs = ACTIVE_MOCK.filter(
+      const step7StaticJobs = liveBackendPOs.size === 0 ? ACTIVE_MOCK.filter(
         (j: any) => Number(j.step) >= 7 && !existingPos.has(j.po) && !active.find((a: any) => a.po === j.po)
-      );
-      const step7ActiveJobs = active.filter((j: any) => Number(j.step) >= 7 && !existingPos.has(j.po));
+      ) : [];
+      const step7ActiveJobs = active.filter((j: any) => Number(j.step) >= 7 && !existingPos.has(j.po) && (liveBackendPOs.size === 0 || liveBackendPOs.has(j.po)));
       const toCreate: any[] = [];
       for (const job of [...step7StaticJobs, ...step7ActiveJobs]) {
         const createdAt = job.createdAt || Date.now();
@@ -1274,7 +1292,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       }
     } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mockReady]);
+  }, [mockReady, orders, subscriber?.email]);
 
   const STEPS_FULL = ["Match", "Select", "PO", "Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"];
   const STEPS = ["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"];
@@ -1533,7 +1551,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   );
 const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLED', 'DONE'].includes(o.status)) : [];
   const historyOrders = orders ? orders.filter((o: any) => ['COMPLETED', 'CANCELLED', 'DONE'].includes(o.status)) : [];
-  const allHistory = [...historyOrders, ...mockHistory.map((x: any) => ({ service: x.title, fixerName: x.customer, createdAt: x.completedAt || new Date().toISOString(), fee: x.budget, status: 'COMPLETED', id: x.po }))];
+  const allHistory = [...historyOrders, ...visibleMockHistory.map((x: any) => ({ service: x.title, fixerName: x.customer, createdAt: x.completedAt || new Date().toISOString(), fee: x.budget, status: 'COMPLETED', id: x.po }))];
   const propertiesCount = orders ? orders.filter((o: any) => o.type === "property").length : 0;
   const stats = { active: activeOrders.length, completed: historyOrders.length, messages: 0, rating: "4.8" };
   const totalReqCount = allRequestItems.length;
