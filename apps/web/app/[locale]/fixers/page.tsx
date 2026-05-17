@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useLocale } from "next-intl";
@@ -662,14 +662,20 @@ export default function FixerProPage() {
                       }
                     } catch(e) {}
                     if (waitModalOrder.status === 'MEETING_REQUESTED') {
-                      const nextReqs = mockDynReqs.map((r: any) => r.id === waitModalOrder.id ? { ...r, type: 'meeting_scheduled', date: r.date || now, desc: 'Meeting invitation confirmed. Proceed after the site meeting is complete.' } : r);
+                      const schedId = `meet-scheduled-${po}`;
+                      // Use PO-based matching (not waitModalOrder.id) because mockDynReqs IDs are
+                      // 'meet-pending-{po}', not the backend UUID stored in waitModalOrder.id
+                      const nextReqs = [
+                        ...mockDynReqs.filter((r: any) => !(r.po === po && r.type === 'meeting_pending_partner') && r.id !== schedId),
+                        { id: schedId, po, title: waitModalOrder.service || serviceTitle, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), budget: budgetLabel, tier: waitModalOrder.tier, type: 'meeting_scheduled', step: 8, desc: 'Meeting confirmed by partner. Proceed after the site meeting then mark variation.' },
+                      ];
                       const nextActive = mockActiveState.map((x: any) => x.po === po ? { ...x, step: 8, actionNeeded: true } : x);
                       localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(nextReqs));
                       localStorage.setItem("ghis_mock_active", JSON.stringify(nextActive));
                       setMockDynReqs(nextReqs);
                       setMockActiveState(nextActive);
                       window.dispatchEvent(new Event("storage"));
-                      // Update backend: MEETING_REQUESTED → IN_PROGRESS (meeting confirmed)
+                      // Update backend: MEETING_REQUESTED → IN_PROGRESS (meeting confirmed; customer page polls and auto-detects)
                       if (waitModalOrder.id && !waitModalOrder.mock && token) {
                         fetch(`/api/v1/orders/${waitModalOrder.id}/status`, {
                           method: 'PUT',
@@ -677,7 +683,6 @@ export default function FixerProPage() {
                           body: JSON.stringify({ status: 'IN_PROGRESS', note: 'Partner confirmed meeting time' }),
                         }).catch(() => {});
                       }
-                      alert("Meeting confirmed!");
                       setWaitModalOrder(null);
                       return;
                     }
@@ -1219,13 +1224,13 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
                 <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"} &middot; {job.po} | {job.subdistrict || "Saphansong"}</p>
                 <div className="mt-2 w-full pt-1">
                   <div className="w-full overflow-x-auto pb-2 hide-scrollbar">
-<div className="flex items-start min-w-max relative px-2">
+<div className="flex items-center min-w-max relative px-2">
                     {(() => {
                         const currentStep = job.mockStep || (job.status === 'COMPLETED' ? 11 : 5);
                         return (
                           <>
-                      <div className="absolute left-4 right-4 top-2 h-1 bg-gray-200 rounded-full"></div>
-                      <div className="absolute left-4 top-2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, ((currentStep - 4) / 7) * 100))}%` }}></div>
+                      <div className="absolute left-4 right-4 top-3 -translate-y-1/2 h-1 bg-gray-200 rounded-full"></div>
+                      <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, ((currentStep - 4) / 7) * 100))}%` }}></div>
                       
                       {["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"].map((s, i) => {
                         const stepNum = i + 4; // Notify starts at 4
@@ -1300,7 +1305,11 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
 
 /* ===== PARTNER JOBS (Active) ===== */
 function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activeJobs: any[]; onJobClick?: (job: any) => void; }) {
-  const handlePartnerAction = (job: any, action: 'variation' | 'complete' | 'rate') => {
+  const [variationModal, setVariationModal] = React.useState<any>(null);
+  const [variationDesc, setVariationDesc] = React.useState("");
+  const [ratingModal, setRatingModal] = React.useState<any>(null);
+  const [ratingStars, setRatingStars] = React.useState(5);
+  const handlePartnerAction = (job: any, action: 'variation' | 'complete' | 'rate', extraData?: string) => {
     try {
       const po = job.po || job.id;
       const createdAt = Date.now();
@@ -1322,7 +1331,8 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
       const dynReqs = JSON.parse(localStorage.getItem("ghis_mock_dyn_req") || "[]");
       if (action === 'variation') {
         const varId = `var-${po}`;
-        const next = [...dynReqs.filter((x: any) => x.po !== po), { id: varId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: 'Your partner has submitted a variation for your approval. Please review and confirm to proceed.', type: 'variation_pending', step: 9 }];
+        const varNote = extraData || 'Your partner has submitted a variation for your approval. Please review and confirm to proceed.';
+        const next = [...dynReqs.filter((x: any) => x.po !== po), { id: varId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: varNote, type: 'variation_pending', step: 9 }];
         localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
         // Update partner's own active job step
         const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
@@ -1330,7 +1340,6 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
         localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
         window.dispatchEvent(new Event("storage"));
         postSystemMsg(`[SYSTEM] Partner has submitted a variation request for ${po}. Please review in your Requests tab.`);
-        alert("Variation submitted! Customer will review and approve.");
       } else if (action === 'complete') {
         const complId = `compl-${po}`;
         const next = [...dynReqs.filter((x: any) => x.po !== po), { id: complId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: 'Work is completed. Please review and mark as complete to close this project.', type: 'complete_pending', step: 10 }];
@@ -1340,10 +1349,8 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
         localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
         window.dispatchEvent(new Event("storage"));
         postSystemMsg(`[SYSTEM] Partner has marked the job as complete for ${po}. Please review and confirm in your Requests tab.`);
-        alert("Completion submitted! Customer will review and confirm.");
       } else if (action === 'rate') {
-        const rating = prompt("Rate the customer (1-5 stars):", "5");
-        if (!rating) return;
+        const rating = extraData || '5';
         const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
         const hist = JSON.parse(localStorage.getItem("ghis_mock_history") || "[]");
         const updated = active.filter((x: any) => x.po !== po);
@@ -1352,11 +1359,11 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
         localStorage.setItem("ghis_mock_history", JSON.stringify([...hist, completed]));
         window.dispatchEvent(new Event("storage"));
         postSystemMsg(`[SYSTEM] Partner has rated this project ${rating}/5 stars. The job is now complete.`);
-        alert("Thank you for rating the customer! Job is now complete.");
       }
     } catch (e) { console.error(e); }
   };
   return (
+    <>
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
         <h2 className="font-bold text-gray-900 flex items-center gap-2"> {locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "进行中的工作" : "Active Jobs"}</h2>
@@ -1371,13 +1378,13 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
               <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"} &middot; {job.po} | {job.subdistrict || "Saphansong"}</p>
               <div className="mt-2 w-full pt-1">
                 <div className="w-full overflow-x-auto pb-2 hide-scrollbar">
-                  <div className="flex items-start min-w-max relative px-2">
+                  <div className="flex items-center min-w-max relative px-2">
                     {(() => {
                       const currentStep = job.mockStep || (job.status === 'COMPLETED' ? 11 : 5);
                       return (
                         <>
-                    <div className="absolute left-4 right-4 top-2 h-1 bg-gray-200 rounded-full"></div>
-                    <div className="absolute left-4 top-2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, ((currentStep - 4) / 7) * 100))}%` }}></div>
+                    <div className="absolute left-4 right-4 top-3 -translate-y-1/2 h-1 bg-gray-200 rounded-full"></div>
+                    <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, ((currentStep - 4) / 7) * 100))}%` }}></div>
                     {["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"].map((s, i) => {
                       const stepNum = i + 4;
                       const isCompleted = stepNum < currentStep;
@@ -1406,7 +1413,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
                 {job.earnings && <span className="text-xs font-bold text-gray-700">{job.earnings}</span>}
                 {/* Step 9: Partner submits variation */}
                 {(job.mockStep === 9 || (job.step === 9)) && (
-                  <button onClick={() => handlePartnerAction(job, 'variation')} className="text-xs px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-full transition">Submit Variation</button>
+                  <button onClick={() => { setVariationModal(job); setVariationDesc(""); }} className="text-xs px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-full transition">Submit Variation</button>
                 )}
                 {/* Step 10: Partner marks complete */}
                 {(job.mockStep === 10 || (job.step === 10)) && (
@@ -1414,7 +1421,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
                 )}
                 {/* Step 11: Partner rates customer */}
                 {(job.mockStep === 11 || (job.step === 11)) && (
-                  <button onClick={() => handlePartnerAction(job, 'rate')} className="text-xs px-3 py-1 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-full transition">Rate Customer</button>
+                  <button onClick={() => { setRatingModal(job); setRatingStars(5); }} className="text-xs px-3 py-1 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-full transition">Rate Customer</button>
                 )}
               </div>
             </div>
@@ -1422,6 +1429,86 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
         ))}
       </div>
     </div>
+    {/* Variation Modal */}
+    {variationModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+          <div className="bg-amber-500 px-6 py-4">
+            <h3 className="text-white font-bold text-lg">Submit Variation</h3>
+            <p className="text-amber-100 text-sm mt-1">{variationModal.po} &middot; {variationModal.service}</p>
+          </div>
+          <div className="px-6 py-5 space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Customer</label>
+              <p className="text-sm text-gray-800">{variationModal.customer}</p>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Budget</label>
+              <p className="text-sm text-gray-800">฿{variationModal.budget || '0'}</p>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Variation Description <span className="text-red-500">*</span></label>
+              <textarea
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
+                rows={4}
+                placeholder="Describe the variation scope, extra work, or cost changes..."
+                value={variationDesc}
+                onChange={e => setVariationDesc(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => {
+                  if (!variationDesc.trim()) return;
+                  handlePartnerAction(variationModal, 'variation', `Partner variation request: ${variationDesc.trim()}`);
+                  setVariationModal(null);
+                }}
+                disabled={!variationDesc.trim()}
+                className="flex-1 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition text-sm"
+              >Submit Variation</button>
+              <button onClick={() => setVariationModal(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+    {/* Rating Modal */}
+    {ratingModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+          <div className="bg-sky-600 px-6 py-4">
+            <h3 className="text-white font-bold text-lg">Rate Customer</h3>
+            <p className="text-sky-200 text-sm mt-1">{ratingModal.po} &middot; {ratingModal.service}</p>
+          </div>
+          <div className="px-6 py-5 space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Customer</label>
+              <p className="text-sm text-gray-800">{ratingModal.customer}</p>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-2">Your Rating</label>
+              <div className="flex gap-2 text-3xl">
+                {[1,2,3,4,5].map(n => (
+                  <button key={n} onClick={() => setRatingStars(n)} className={`transition-transform hover:scale-110 ${n <= ratingStars ? 'text-amber-400' : 'text-gray-300'}`}>★</button>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400 mt-1">{ratingStars} out of 5 stars</p>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => {
+                  handlePartnerAction(ratingModal, 'rate', String(ratingStars));
+                  setRatingModal(null);
+                }}
+                className="flex-1 bg-sky-600 hover:bg-sky-700 text-white font-bold py-2.5 rounded-xl transition text-sm"
+              >Submit Rating</button>
+              <button onClick={() => setRatingModal(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 

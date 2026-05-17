@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useTranslations, useLocale } from "next-intl";
@@ -684,6 +684,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const [meetingDate, setMeetingDate] = useState("");
   const [meetingTime, setMeetingTime] = useState("");
   const [chatFeed, setChatFeed] = useState<any[]>([]);
+  // Tracks previous backend order statuses to detect MEETING_REQUESTED → IN_PROGRESS transitions
+  const prevOrderStatuses = useRef<Record<string, string>>({});
   const toDisplayDateTime = (value: any) => {
     const ts = typeof value === "number" ? value : new Date(value || 0).getTime();
     if (!Number.isFinite(ts) || ts <= 0) return "";
@@ -937,6 +939,86 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       clearInterval(timer);
     };
   }, [orders, subscriber?.id]);
+
+  // F4: Auto-create payment_pending requests for backend CONFIRMED orders (cross-browser bridge).
+  // When Suppadesh accepts a PO on their browser, the backend order goes CONFIRMED. Ghis's page
+  // polls orders and detects this, auto-creating a payment_pending card in requests.
+  useEffect(() => {
+    if (!orders || !mockReady || !subscriber?.email?.includes('ghis')) return;
+    const existingDynPos = new Set(mockDynRequests.map((x: any) => x.po));
+    const existingActivePos = new Set(mockActiveItems.map((x: any) => x.po));
+    const completedPos = new Set(mockHistory.map((x: any) => x.po));
+    const toCreate: any[] = [];
+    for (const order of orders) {
+      const status = String(order?.status || '').toUpperCase();
+      if (!['CONFIRMED', 'ACCEPTED'].includes(status)) continue;
+      const po = extractPo(order);
+      if (!po || !isPoCode(po)) continue;
+      if (existingDynPos.has(po)) continue;
+      if (existingActivePos.has(po)) continue;
+      if (completedPos.has(po)) continue;
+      const createdAt = typeof order.createdAt === 'number' ? order.createdAt : new Date(order.createdAt || 0).getTime() || Date.now();
+      const tier = String(order?.description || '').match(/TIER:([A-Za-z]+)/)?.[1] || 'STANDARD';
+      toCreate.push({
+        id: `pay-${po}`,
+        po,
+        orderId: order.id,
+        title: String(order.serviceCategory || order.serviceTh || 'Service').replace(/_/g, ' '),
+        customer: order.fixerName || order.fixerAlias || 'Suppadesh',
+        date: fmtDateTime(createdAt),
+        createdAt,
+        budget: order.estimatedPrice ? `฿${Number(order.estimatedPrice).toLocaleString()}` : '฿0',
+        tier,
+        desc: 'Partner accepted the PO. Please pay the processing fee and notify to proceed.',
+        type: 'payment_pending',
+        step: 6,
+      });
+    }
+    if (toCreate.length > 0) {
+      setMockDynRequests(prev => {
+        const existingIds = new Set(prev.map((x: any) => x.id));
+        const newItems = toCreate.filter((x: any) => !existingIds.has(x.id));
+        if (newItems.length === 0) return prev;
+        const merged = [...prev, ...newItems];
+        try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(merged)); } catch {}
+        return merged;
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders, mockReady]);
+
+  // F5: Auto-upgrade meeting_pending_partner → meeting_scheduled when backend order transitions
+  // from MEETING_REQUESTED → IN_PROGRESS (cross-browser: partner confirms meeting on their browser,
+  // backend status changes, customer page detects and updates the request card automatically).
+  useEffect(() => {
+    if (!orders || !mockReady) return;
+    const toSchedule: string[] = [];
+    for (const order of orders) {
+      const po = extractPo(order);
+      if (!po) continue;
+      const prevStatus = prevOrderStatuses.current[order.id];
+      if (prevStatus === 'MEETING_REQUESTED' && String(order.status || '').toUpperCase() === 'IN_PROGRESS') {
+        toSchedule.push(po);
+      }
+      prevOrderStatuses.current[order.id] = String(order.status || '').toUpperCase();
+    }
+    if (toSchedule.length > 0) {
+      setMockDynRequests(prev => {
+        let changed = false;
+        const updated = prev.map((r: any) => {
+          if (r.type === 'meeting_pending_partner' && toSchedule.includes(r.po)) {
+            changed = true;
+            return { ...r, id: `meet-scheduled-${r.po}`, type: 'meeting_scheduled', desc: 'Meeting confirmed by partner. Proceed to site meeting, then mark variation when done.' };
+          }
+          return r;
+        });
+        if (!changed) return prev;
+        try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(updated)); } catch {}
+        return updated;
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders, mockReady]);
 
   const REQUESTS_MOCK = [
     { id: "req1", title: "REINSTATEMENT", customer: "Suppadesh", date: "5/11/2026, 2:30:00 PM", budget: "฿5,000,000", po: "PO-2605-1200", tier: "ECONOMY", desc: "I want a team to carry out a 3000 sq.m. housing project." },
@@ -1798,12 +1880,21 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                   const dateLabel = meetingDate ? fmtDate(meetingDate + 'T' + (meetingTime || '09:00')) : '';
                   const desc = `Meeting invitation sent. Proposed: ${dateLabel} ${meetingTime} at ${meetingVenue}. Waiting for partner confirmation.`;
                   const pendingId = `meet-pending-${meetingModal.po}`;
-                  setMockActiveItems(prev => prev.map((x: any) => x.po === meetingModal.po ? { ...x, step: 8, actionNeeded: false } : x));
-                  setMockDynRequests(prev => {
-                    const f = prev.filter((x: any) => x.id !== meetingModal.id && x.id !== pendingId);
-                    return [...f, { id: pendingId, po: meetingModal.po, title: meetingModal.title, customer: meetingModal.customer, date: fmtDateTime(createdAt), createdAt, budget: meetingModal.budget, tier: meetingModal.tier, desc, type: 'meeting_pending_partner', step: 8, venue: meetingVenue, meetingDate, meetingTime }];
-                  });
-                  // Notify backend: MEETING_REQUESTED
+                  // Compute new arrays eagerly and write to localStorage BEFORE setState
+                  // (same pattern as payment pill — prevents syncMockState interval from overwriting)
+                  const updatedMeetActive = mockActiveItems.map((x: any) => x.po === meetingModal.po ? { ...x, step: 8, actionNeeded: false } : x);
+                  const updatedMeetReqs = [
+                    ...mockDynRequests.filter((x: any) => x.id !== meetingModal.id && x.id !== pendingId),
+                    { id: pendingId, po: meetingModal.po, title: meetingModal.title, customer: meetingModal.customer, date: fmtDateTime(createdAt), createdAt, budget: meetingModal.budget, tier: meetingModal.tier, desc, type: 'meeting_pending_partner', step: 8, venue: meetingVenue, meetingDate, meetingTime },
+                  ];
+                  try {
+                    localStorage.setItem('ghis_mock_active', JSON.stringify(updatedMeetActive));
+                    localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(updatedMeetReqs));
+                    window.dispatchEvent(new Event('storage'));
+                  } catch {}
+                  setMockActiveItems(updatedMeetActive);
+                  setMockDynRequests(updatedMeetReqs);
+                  // Notify backend: MEETING_REQUESTED (cross-browser: partner page polls and sees MEETING_REQUESTED status)
                   try {
                     const token = localStorage.getItem('subscriber_token');
                     const backendOrder = (orders || []).find((o: any) => extractPo(o) === meetingModal.po);
