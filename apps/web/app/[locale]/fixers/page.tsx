@@ -604,6 +604,14 @@ export default function FixerProPage() {
   const earningsSeries = (() => {
     const enMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const thMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+    const seedByMonth = Object.fromEntries(EARNINGS_MOCK.map((item) => {
+      const [monthLabel = 'Jan', yearLabel = '26'] = item.month.split(' ');
+      const monthNumber = enMonths.indexOf(monthLabel) + 1;
+      return [
+        `20${yearLabel}-${String(monthNumber > 0 ? monthNumber : 1).padStart(2, '0')}`,
+        item.amount,
+      ];
+    }));
     const completedByMonth = new Map<string, number>();
 
     for (const job of completedJobs) {
@@ -626,7 +634,7 @@ export default function FixerProPage() {
         month: `${enMonths[monthIdx]} ${yy}`,
         monthTh: `${thMonths[monthIdx]} ${yy}`,
         monthZh: `${monthIdx + 1}月 ${yy}`,
-        amount: completedByMonth.get(key) || 0,
+        amount: completedByMonth.size > 0 ? (completedByMonth.get(key) || 0) : (seedByMonth[key] || 0),
       });
     }
     return items;
@@ -680,7 +688,29 @@ export default function FixerProPage() {
         const order = mappedOrders.find((x: any) => x.po === po);
         if (!po || !order) continue;
 
+        if (lower.includes('customer sent meeting invitation')) {
+          upsert({
+            id: `meeting-confirm-${po}`,
+            po,
+            service: order.service,
+            serviceTh: order.serviceTh,
+            serviceZh: order.serviceZh,
+            customer: order.customer,
+            date: fmtDateTime(Date.now()),
+            createdAt: Date.now(),
+            fee: order.fee,
+            budget: order.budget,
+            tier: order.tier,
+            description: 'Customer sent a site meeting invitation. Please review and confirm the meeting time.',
+            type: 'meeting_confirm_partner',
+            workflowType: 'meeting_confirm_partner',
+            status: 'MEETING_REQUESTED',
+            step: 8,
+          });
+        }
+
         if (lower.includes('partner confirmed site meeting') || lower.includes('meeting confirmed by partner')) {
+          next = next.filter((x: any) => !(x.po === po && x.workflowType === 'meeting_confirm_partner'));
           try {
             const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
             const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 9, mockStep: 9, actionNeeded: true } : x);
@@ -762,7 +792,10 @@ export default function FixerProPage() {
     });
   }, [chatFeed, mappedOrders]);
 
-  const partnerRequestItems = [...partnerDynReqs, ...incomingJobs]
+  const partnerRequestItems = [
+    ...partnerDynReqs,
+    ...incomingJobs.filter((job: any) => !(String(job.status || '').toUpperCase() === 'MEETING_REQUESTED' && partnerDynReqs.some((req: any) => req.po === job.po && req.workflowType === 'meeting_confirm_partner'))),
+  ]
     .sort((a: any, b: any) => parseTs(b.createdAt || b.date) - parseTs(a.createdAt || a.date));
 
   const dynamicNotifications = mockDynReqs.map((r: any) => {
@@ -776,6 +809,7 @@ export default function FixerProPage() {
 
   const partnerWorkflowNotifications = partnerDynReqs.map((r: any) => {
     const displayTime = typeof r.date === "string" && r.date.includes(":") ? r.date : (r.date ? fmtDateTime(r.date) : "");
+    if (r.workflowType === "meeting_confirm_partner" || r.type === "meeting_confirm_partner") return { id: `p-${r.id}`, msg: "Confirm meeting at site", unread: true, time: displayTime, dot: "bg-amber-500" };
     if (r.type === "variation_partner") return { id: `p-${r.id}`, msg: "Request for Approval of Variation", unread: true, time: displayTime, dot: "bg-purple-500" };
     if (r.type === "complete_partner") return { id: `p-${r.id}`, msg: "Request for job complete", unread: true, time: displayTime, dot: "bg-green-500" };
     if (r.type === "rate_partner") return { id: `p-${r.id}`, msg: "Rate customer to close job", unread: true, time: displayTime, dot: "bg-sky-500" };

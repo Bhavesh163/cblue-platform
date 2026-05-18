@@ -3,6 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+type ChatMessage = {
+  id: string | number;
+  sender: string;
+  senderName?: string;
+  text: string;
+  time: string;
+  createdAt?: number;
+};
+
 const fmtDateTime = (d: Date | number | string) => {
   const dt = new Date(d);
   const dd = String(dt.getDate()).padStart(2,'0');
@@ -24,7 +33,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
       time: "Just now"
     }
   ]);
-  const [messages, setMessages] = useState([
+  const [messages, setMessages] = useState<ChatMessage[]>([
     ...defaultMessages.current
   ]);
   const [inputText, setInputText] = useState("");
@@ -34,11 +43,27 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
   const chatListRef = useRef<HTMLDivElement>(null);
   const currentEmailRef = useRef<string>("guest");
   const currentUserIdRef = useRef<string>("");
+  const currentNameRef = useRef<string>("You");
+  const currentRoleRef = useRef<string>("");
   const bcRef = useRef<BroadcastChannel | null>(null);
+  const getInitials = (label: string) => {
+    const normalized = String(label || "").trim();
+    if (!normalized) return "CB";
+    const parts = normalized.split(/\s+/).filter(Boolean);
+    if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+    return `${parts[0]![0] || ""}${parts[1]![0] || ""}`.toUpperCase();
+  };
+  const getOtherPartyLabel = () => currentRoleRef.current === "FIXER" ? "Customer" : "Partner";
   
   useEffect(() => {
     setMounted(true);
-    try { const sub = JSON.parse(localStorage.getItem("subscriber") || "{}"); currentEmailRef.current = sub?.email || "guest"; currentUserIdRef.current = sub?.id || ""; } catch {}
+    try {
+      const sub = JSON.parse(localStorage.getItem("subscriber") || "{}");
+      currentEmailRef.current = sub?.email || "guest";
+      currentUserIdRef.current = sub?.id || "";
+      currentNameRef.current = sub?.name || (String(sub?.role || "").toUpperCase() === "FIXER" ? "Partner" : "Customer");
+      currentRoleRef.current = String(sub?.role || "").toUpperCase();
+    } catch {}
 
     // Load chat title
     try {
@@ -59,6 +84,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
     const toLocalMessage = (m: any) => ({
       id: m?.id || Date.now(),
       sender: m?.senderUserId || m?.sender || "system",
+      senderName: m?.senderName || m?.senderUser?.name || m?.user?.name || undefined,
       text: m?.text || "",
       time: m?.createdAt ? fmtDateTime(m.createdAt) : (m?.time || ""),
       createdAt: m?.createdAt ? new Date(m.createdAt).getTime() : Date.now(),
@@ -215,6 +241,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
           const createdMessage = {
             id: created?.id || Date.now(),
             sender: created?.senderUserId || currentEmailRef.current,
+            senderName: created?.senderName || created?.senderUser?.name || currentNameRef.current,
             text: created?.text || messageText,
             time: created?.createdAt ? fmtDateTime(created.createdAt) : fmtDateTime(new Date()),
             createdAt: created?.createdAt ? new Date(created.createdAt).getTime() : Date.now(),
@@ -242,6 +269,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
       const updated = [...prev, {
         id: Date.now(),
         sender: currentEmailRef.current,
+        senderName: currentNameRef.current,
         text: messageText,
         time: fmtDateTime(new Date()),
         createdAt: Date.now(),
@@ -299,12 +327,46 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
       <div ref={chatListRef} className="flex-1 p-4 overflow-y-auto space-y-4">
         {messages.map(msg => {
           const isMine = msg.sender === currentEmailRef.current || (currentUserIdRef.current !== "" && msg.sender === currentUserIdRef.current) || msg.sender === "me";
+          const isSystem = msg.sender === "system" || /^\[(cblue|system)\]/i.test(String(msg.text || ""));
+          const senderLabel = isSystem ? "CBLUE" : (isMine ? (msg.senderName || currentNameRef.current) : (msg.senderName || getOtherPartyLabel()));
+          const avatarClasses = isSystem
+            ? "bg-violet-100 text-violet-700"
+            : isMine
+              ? "bg-blue-100 text-blue-700"
+              : "bg-emerald-100 text-emerald-700";
+          if (isSystem) {
+            return (
+              <div key={msg.id} className="flex justify-center">
+                <div className="max-w-[90%] rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900 shadow-sm">
+                  <div className="flex items-center justify-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-violet-600">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-violet-600 text-[10px] font-bold text-white">CB</span>
+                    <span>{senderLabel}</span>
+                  </div>
+                  <p className="mt-2 text-center">{msg.text}</p>
+                  <div className="mt-2 text-center text-[10px] text-violet-500">{msg.time}</div>
+                </div>
+              </div>
+            );
+          }
           return (
-          <div key={msg.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${isMine ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none shadow-sm'}`}>
-              <p>{msg.text}</p>
-              <div className={`text-[10px] mt-1 text-right ${isMine ? 'text-blue-100' : 'text-gray-400'}`}>{msg.time}</div>
+          <div key={msg.id} className={`flex items-end gap-2 ${isMine ? 'justify-end' : 'justify-start'}`}>
+            {!isMine && (
+              <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${avatarClasses}`}>
+                {getInitials(senderLabel)}
+              </div>
+            )}
+            <div className={`max-w-[80%] ${isMine ? 'items-end' : 'items-start'} flex flex-col`}>
+              <div className={`mb-1 text-[11px] font-semibold ${isMine ? 'text-blue-700' : 'text-emerald-700'}`}>{senderLabel}</div>
+              <div className={`rounded-2xl px-4 py-2 text-sm ${isMine ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none shadow-sm'}`}>
+                <p>{msg.text}</p>
+                <div className={`text-[10px] mt-1 text-right ${isMine ? 'text-blue-100' : 'text-gray-400'}`}>{msg.time}</div>
+              </div>
             </div>
+            {isMine && (
+              <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${avatarClasses}`}>
+                {getInitials(senderLabel)}
+              </div>
+            )}
           </div>
         );})}
         <div ref={bottomRef} />
@@ -327,9 +389,8 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
             disabled={isChatClosed}
             className="flex-1 bg-gray-100 border-transparent focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 rounded-full px-4 py-2 outline-none transition"
           />
-          <button type="submit" className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-700 transition shrink-0">
+          <button type="submit" disabled={isChatClosed} className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300 transition shrink-0">
             <svg className="w-5 h-5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
-            disabled={isChatClosed}
           </button>
         </form>
       </div>

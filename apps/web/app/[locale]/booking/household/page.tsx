@@ -344,6 +344,20 @@ function HouseholdBookingContent() {
         service={form.serviceCategory}
         tier={form.tier}
         description={form.description}
+        bookingAddress={{
+          province: form.province,
+          district: form.district,
+          subdistrict: form.subdistrict,
+          postalCode: form.postalCode,
+          houseNumber: form.houseNumber,
+          building: form.building,
+          floor: form.floor,
+          road: form.road,
+          soi: form.soi,
+          addressText: form.addressText,
+          latitude: gpsCoords?.lat,
+          longitude: gpsCoords?.lng,
+        }}
         issueImages={images}
         onNewBooking={() => {
           setSuccess(false);

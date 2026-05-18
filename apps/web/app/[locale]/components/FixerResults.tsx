@@ -24,6 +24,21 @@ interface ChatMessage {
   time: string;
 }
 
+interface BookingAddress {
+  province: string;
+  district: string;
+  subdistrict: string;
+  postalCode: string;
+  houseNumber?: string;
+  building?: string;
+  floor?: string;
+  road?: string;
+  soi?: string;
+  addressText?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
 type BookingType = "household" | "project" | "professional" | "property";
 
 const T: Record<string, Record<string, string>> = {
@@ -421,6 +436,32 @@ async function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
+async function fileToUploadDataUrl(file: File): Promise<string> {
+  const rawDataUrl = await fileToDataUrl(file);
+  if (!file.type.startsWith("image/")) return rawDataUrl;
+  if (rawDataUrl.length <= 1_400_000) return rawDataUrl;
+
+  return await new Promise((resolve) => {
+    const image = new window.Image();
+    image.onload = () => {
+      const longestSide = Math.max(image.width, image.height);
+      const scale = longestSide > 1600 ? 1600 / longestSide : 1;
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(image.width * scale));
+      canvas.height = Math.max(1, Math.round(image.height * scale));
+      const context = canvas.getContext("2d");
+      if (!context) {
+        resolve(rawDataUrl);
+        return;
+      }
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.78));
+    };
+    image.onerror = () => resolve(rawDataUrl);
+    image.src = rawDataUrl;
+  });
+}
+
 
 
 
@@ -430,6 +471,7 @@ export default function FixerResults({
   service,
   tier,
   description,
+  bookingAddress,
   issueImages,
   onNewBooking,
   initialStep,
@@ -440,6 +482,7 @@ export default function FixerResults({
   service: string;
   tier?: string;
   description?: string;
+  bookingAddress?: BookingAddress;
   issueImages?: File[];
   onNewBooking: () => void;
   initialStep?: string;
@@ -501,6 +544,66 @@ export default function FixerResults({
   };
 
   const getCurrentSenderId = () => readSubscriber()?.email || "customer";
+  const bookingLocation = bookingAddress?.subdistrict || bookingAddress?.district || bookingAddress?.province || "Saphansong";
+  const ensureOrderAddressId = async (token: string) => {
+    if (!bookingAddress?.province || !bookingAddress?.district || !bookingAddress?.subdistrict || !bookingAddress?.postalCode) {
+      return "";
+    }
+
+    const streetParts = [bookingAddress.houseNumber, bookingAddress.road, bookingAddress.soi]
+      .map((part) => String(part || "").trim())
+      .filter(Boolean);
+    const street = streetParts.join(" ") || undefined;
+    const notes = String(bookingAddress.addressText || "").trim() || undefined;
+
+    try {
+      const existingRes = await fetch("/api/v1/users/me/addresses", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (existingRes.ok) {
+        const existing = await existingRes.json();
+        if (Array.isArray(existing)) {
+          const matched = existing.find((address: any) =>
+            String(address?.province || "") === bookingAddress.province &&
+            String(address?.district || "") === bookingAddress.district &&
+            String(address?.subdistrict || "") === bookingAddress.subdistrict &&
+            String(address?.postalCode || "") === bookingAddress.postalCode,
+          );
+          if (matched?.id) return matched.id;
+        }
+      }
+    } catch {
+      // Fall through to create a fresh address below.
+    }
+
+    try {
+      const createRes = await fetch("/api/v1/users/me/addresses", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          label: bookingType === "project" ? "Project Site" : bookingType === "professional" ? "Professional Service Location" : "Service Location",
+          province: bookingAddress.province,
+          district: bookingAddress.district,
+          subdistrict: bookingAddress.subdistrict,
+          postalCode: bookingAddress.postalCode,
+          street,
+          building: bookingAddress.building || undefined,
+          unit: bookingAddress.floor || undefined,
+          notes,
+          latitude: bookingAddress.latitude,
+          longitude: bookingAddress.longitude,
+        }),
+      });
+      if (!createRes.ok) return "";
+      const created = await createRes.json();
+      return created?.id || "";
+    } catch {
+      return "";
+    }
+  };
 
     // Poll order status to auto-advance when partner accepts
   useEffect(() => {
@@ -696,7 +799,7 @@ export default function FixerResults({
     try {
       if (issueImages && issueImages.length > 0) {
         const limited = issueImages.slice(0, 5);
-        storedAttachments = await Promise.all(limited.map((f) => fileToDataUrl(f)));
+        storedAttachments = await Promise.all(limited.map((f) => fileToUploadDataUrl(f)));
 
         const byPoRaw = localStorage.getItem("cblue_po_attachments") || "{}";
         const byPo = JSON.parse(byPoRaw);
@@ -714,6 +817,7 @@ export default function FixerResults({
         // Extract plain number from string logic (e.g. ฿25,000,000 or similar)
         const estStr = String(selectedFixer.price || 0).replace(/[^0-9.]/g, '');
         const estPrice = parseFloat(estStr) || 0;
+        const addressId = await ensureOrderAddressId(token);
 
         const createRes = await fetch("/api/v1/orders", {
           method: "POST",
@@ -722,6 +826,7 @@ export default function FixerResults({
             Authorization: `Bearer ${token}`
           },
           body: JSON.stringify({
+            ...(addressId ? { addressId } : {}),
             orderType: bookingType === "household" ? "HOUSEHOLD" : "PROJECT",
             serviceCategory: service,
             description: `${poNumber} | TIER:${typeof selectedFixer?.tier === "string" ? selectedFixer.tier.toUpperCase() : "STANDARD"} | ${description}`,
@@ -794,7 +899,7 @@ export default function FixerResults({
             date: new Date().toLocaleString(),
             createdAt: Date.now(),
             budget: totalBudget > 0 ? `฿${totalBudget.toLocaleString()}` : "฿0",
-            location: "Saphansong",
+            location: bookingLocation,
             tier: selectedFixer.tier,
             actionNeeded: false,
             step: 5,
@@ -836,7 +941,7 @@ export default function FixerResults({
             partnerName: selectedFixer.alias,
             date: current?.date || new Date().toLocaleString(),
             budget: totalBudget > 0 ? `฿${totalBudget.toLocaleString()}` : '฿0',
-            location: 'Saphansong',
+            location: bookingLocation,
             tier: selectedFixer.tier,
             actionNeeded: true,
             step: 6,
