@@ -302,9 +302,9 @@ export class OrderService {
       if (order.userId !== changedBy) {
         throw new ForbiddenException('You do not have access to this order');
       }
-      const customerAllowed: OrderStatus[] = [OrderStatus.IN_PROGRESS, OrderStatus.MEETING_REQUESTED, OrderStatus.CANCELLED];
+      const customerAllowed: OrderStatus[] = [OrderStatus.IN_PROGRESS, OrderStatus.MEETING_REQUESTED, OrderStatus.COMPLETED, OrderStatus.CANCELLED];
       if (!customerAllowed.includes(dto.status)) {
-        throw new ForbiddenException(`Customers may only transition to IN_PROGRESS, MEETING_REQUESTED, or CANCELLED`);
+        throw new ForbiddenException(`Customers may only transition to IN_PROGRESS, MEETING_REQUESTED, COMPLETED, or CANCELLED`);
       }
     }
 

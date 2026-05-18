@@ -871,6 +871,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     } catch {}
     const normalizedViewerEmail = String(viewerEmail || "").trim().toLowerCase();
     const normalizedViewerUserId = String(viewerUserId || "").trim().toLowerCase();
+    if (!normalizedViewerEmail.includes('ghis')) return [];
     const parseChatSort = (msg: any) => {
       const numericId = Number(String(msg?.id || "").replace(/[^0-9]/g, ""));
       if (Number.isFinite(numericId) && numericId > 0) return numericId;
@@ -1107,8 +1108,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           return r;
         });
         if (!changed) return prev;
-        try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(updated)); } catch {}
-        return updated;
+        const cleaned = updated.filter((r: any) => !(toSchedule.has(r.po) && r.type === 'chat_ready'));
+        try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(cleaned)); } catch {}
+        return cleaned;
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1138,7 +1140,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         setMockDynRequests(prev => {
           if (prev.some((x: any) => x.po === po && x.type === 'variation_pending')) return prev;
           const item = { id: `var-${po}`, po, title, customer: 'Suppadesh', date: fmtDateTime(Date.now()), createdAt: Date.now(), budget, tier, desc: 'Partner has submitted a variation for your approval. Please review and confirm to proceed.', type: 'variation_pending', step: 9 };
-          const merged = [...prev.filter((x: any) => !(x.po === po && ['variation_pending', 'meeting_pending_partner', 'meeting_scheduled'].includes(x.type))), item];
+          const merged = [...prev.filter((x: any) => !(x.po === po && ['variation_pending', 'meeting_pending_partner', 'meeting_scheduled', 'chat_ready'].includes(x.type))), item];
           try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(merged)); } catch {}
           return merged;
         });
@@ -1153,7 +1155,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         setMockDynRequests(prev => {
           if (prev.some((x: any) => x.po === po && x.type === 'complete_pending')) return prev;
           const item = { id: `compl-${po}`, po, title, customer: 'Suppadesh', date: fmtDateTime(Date.now()), createdAt: Date.now(), budget, tier, desc: 'Work is completed. Please review and mark as complete to close this project.', type: 'complete_pending', step: 10 };
-          const merged = [...prev.filter((x: any) => !(x.po === po && ['complete_pending', 'variation_pending', 'meeting_pending_partner', 'meeting_scheduled'].includes(x.type))), item];
+          const merged = [...prev.filter((x: any) => !(x.po === po && ['complete_pending', 'variation_pending', 'meeting_pending_partner', 'meeting_scheduled', 'chat_ready'].includes(x.type))), item];
           try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(merged)); } catch {}
           return merged;
         });
@@ -1176,16 +1178,23 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   ];
 
   const backendOrderPos = new Set((orders || []).map((o: any) => extractPo(o)).filter((po: string) => isPoCode(po)));
-  const useStaticDemoData = backendOrderPos.size === 0 && subscriber?.email?.includes('ghis');
-  const visibleMockActiveItems = backendOrderPos.size > 0
-    ? mockActiveItems.filter((x: any) => backendOrderPos.has(x.po))
-    : mockActiveItems;
-  const visibleMockDynRequests = backendOrderPos.size > 0
-    ? mockDynRequests.filter((x: any) => backendOrderPos.has(x.po))
-    : mockDynRequests;
-  const visibleMockHistory = backendOrderPos.size > 0
-    ? mockHistory.filter((x: any) => backendOrderPos.has(x.po))
-    : mockHistory;
+  const allowLocalCustomerWorkflow = Boolean(subscriber?.email?.toLowerCase().includes('ghis'));
+  const useStaticDemoData = allowLocalCustomerWorkflow && backendOrderPos.size === 0;
+  const visibleMockActiveItems = !allowLocalCustomerWorkflow
+    ? []
+    : backendOrderPos.size > 0
+      ? mockActiveItems.filter((x: any) => backendOrderPos.has(x.po))
+      : mockActiveItems;
+  const visibleMockDynRequests = !allowLocalCustomerWorkflow
+    ? []
+    : backendOrderPos.size > 0
+      ? mockDynRequests.filter((x: any) => backendOrderPos.has(x.po))
+      : mockDynRequests;
+  const visibleMockHistory = !allowLocalCustomerWorkflow
+    ? []
+    : backendOrderPos.size > 0
+      ? mockHistory.filter((x: any) => backendOrderPos.has(x.po))
+      : mockHistory;
 
   // Merge: mockActiveItems overrides ACTIVE_MOCK items with same po (for step progression)
   const paidPOs = new Set(visibleMockActiveItems.map((x: any) => x.po));
@@ -1271,7 +1280,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const progressedPos = new Set(visibleMockDynRequests.map((x: any) => x.po));
   const filteredStaticRequests = (useStaticDemoData ? REQUESTS_MOCK : []).filter((x: any) => !progressedPos.has(x.po));
   const allRequestItems = [...filteredStaticRequests, ...visibleMockDynRequests]
-    .filter((m: any) => !mockPayments[m.id])
+    .filter((m: any) => !mockPayments[m.id] && !['notice', 'meeting_scheduled'].includes(String(m.type || '')))
     .sort((a: any, b: any) => parseDateMs(b.createdAt || b.date) - parseDateMs(a.createdAt || a.date));
   const overviewRequestItems = allRequestItems.slice(0, 3);
   const upcomingMeetings = visibleMockDynRequests
@@ -2238,6 +2247,8 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                   onClick={() => {
                     const createdAt = Date.now();
                     const po = completeApproveModal.po;
+                    const backendOrder = (orders || []).find((o: any) => extractPo(o) === po);
+                    const token = localStorage.getItem('subscriber_token') || '';
                     const rateReq = {
                       id: `rate-${po}`,
                       po,
@@ -2258,6 +2269,13 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                       try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(next)); } catch {}
                       return next;
                     });
+                    if (token && backendOrder?.id) {
+                      fetch(`/api/v1/orders/${backendOrder.id}/status`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                        body: JSON.stringify({ status: 'COMPLETED', note: 'Customer confirmed project complete.' }),
+                      }).catch(() => {});
+                    }
                     void postBackendWorkflowMessage(po, `[SYSTEM] Customer confirmed job complete for ${po}. Rating is now open for both parties. Chat room is now closed.`);
                     setCompleteApproveModal(null);
                     setActiveTab('requests');

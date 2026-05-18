@@ -122,6 +122,7 @@ const TIER_STYLE: Record<string, string> = {
   Specialist: "bg-amber-50 text-amber-700",
   Expert: "bg-red-50 text-red-700",
 };
+const stripWorkflowPrefix = (value: any) => String(value || '').replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?/i, '').trim();
 
 const STATUS_LABEL: Record<string, Record<string, string>> = {
   IN_PROGRESS: { en: "In Progress", th: "กำลังดำเนินการ", zh: "进行中" },
@@ -451,7 +452,12 @@ export default function FixerProPage() {
     for (const key of keys) {
       try {
         const po = key.replace("chat_messages_", "");
-        if (!isPoCode(po)) continue;
+        if (!isPoCode(po)) {
+          localStorage.removeItem(key);
+          localStorage.removeItem(`chat_title_${po}`);
+          localStorage.removeItem(`chat_from_${po}`);
+          continue;
+        }
         const parsed = JSON.parse(localStorage.getItem(key) || "[]");
         if (!Array.isArray(parsed) || parsed.length === 0) continue;
         const reversed = [...parsed].reverse();
@@ -705,6 +711,7 @@ export default function FixerProPage() {
           const createdAt = Number(chat.sort || 0) || Date.now();
           upsert({
             id: `meeting-confirm-${po}`,
+            orderId: order.id,
             po,
             service: order.service,
             serviceTh: order.serviceTh,
@@ -730,7 +737,7 @@ export default function FixerProPage() {
         }
 
         if (lower.includes('partner confirmed site meeting') || lower.includes('meeting confirmed by partner')) {
-          next = next.filter((x: any) => !(x.po === po && x.workflowType === 'meeting_confirm_partner'));
+          next = next.filter((x: any) => !(x.po === po && (x.workflowType === 'meeting_confirm_partner' || x.type === 'meeting_confirm_partner')));
           try {
             const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
             const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 9, mockStep: 9, actionNeeded: true } : x);
@@ -738,6 +745,7 @@ export default function FixerProPage() {
           } catch {}
           upsert({
             id: `variation-${po}`,
+            orderId: order.id,
             po,
             service: order.service,
             serviceTh: order.serviceTh,
@@ -760,9 +768,10 @@ export default function FixerProPage() {
             const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 10, mockStep: 10, actionNeeded: true } : x);
             localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
           } catch {}
-          next = next.filter((x: any) => !(x.po === po && x.type === 'variation_partner'));
+          next = next.filter((x: any) => !(x.po === po && (x.type === 'variation_partner' || x.type === 'meeting_confirm_partner' || x.workflowType === 'meeting_confirm_partner')));
           upsert({
             id: `complete-${po}`,
+            orderId: order.id,
             po,
             service: order.service,
             serviceTh: order.serviceTh,
@@ -785,9 +794,10 @@ export default function FixerProPage() {
             const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 11, mockStep: 11, actionNeeded: true } : x);
             localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
           } catch {}
-          next = next.filter((x: any) => !(x.po === po && x.type === 'complete_partner'));
+          next = next.filter((x: any) => !(x.po === po && (x.type === 'complete_partner' || x.type === 'variation_partner' || x.type === 'meeting_confirm_partner' || x.workflowType === 'meeting_confirm_partner')));
           upsert({
             id: `rate-${po}`,
+            orderId: order.id,
             po,
             service: order.service,
             serviceTh: order.serviceTh,
@@ -812,10 +822,25 @@ export default function FixerProPage() {
     });
   }, [chatFeed, mappedOrders]);
 
-  const partnerRequestItems = [
+  const partnerRequestItems = Array.from([
     ...partnerDynReqs,
     ...incomingJobs.filter((job: any) => !(String(job.status || '').toUpperCase() === 'MEETING_REQUESTED' && partnerDynReqs.some((req: any) => req.po === job.po && req.workflowType === 'meeting_confirm_partner'))),
-  ]
+  ].reduce((map: Map<string, any>, item: any) => {
+    const key = item.po || item.id;
+    const current = map.get(key);
+    if (!current) {
+      map.set(key, item);
+      return map;
+    }
+    const currentStep = Number(current.step || 0);
+    const nextStep = Number(item.step || 0);
+    const currentTs = parseTs(current.createdAt || current.date);
+    const nextTs = parseTs(item.createdAt || item.date);
+    if (nextStep > currentStep || (nextStep === currentStep && nextTs >= currentTs)) {
+      map.set(key, item);
+    }
+    return map;
+  }, new Map<string, any>()).values())
     .sort((a: any, b: any) => parseTs(b.createdAt || b.date) - parseTs(a.createdAt || a.date));
 
   const dynamicNotifications = mockDynReqs.map((r: any) => {
@@ -882,7 +907,7 @@ export default function FixerProPage() {
       {/* PO Accept/Decline Modal */}
       {waitModalOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-3xl p-8 max-w-lg w-full max-h-[calc(100dvh-6rem)] overflow-y-auto shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-start mb-4">
               <div className="mb-2 text-sm font-semibold text-purple-600 bg-purple-50 inline-block px-3 py-1 rounded-full">{isMeetingConfirmation ? 'Step 8 of 11' : 'Step 5 of 11'}</div>
               <button onClick={() => setWaitModalOrder(null)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
@@ -908,6 +933,7 @@ export default function FixerProPage() {
                 let url = waitModalOrder?.issueImage || waitModalOrder?.image || waitModalOrder?.fileUrl || (waitModalOrder?.projectImages && waitModalOrder?.projectImages[0]) || (waitModalOrder?.images && waitModalOrder?.images[0]) || (waitModalOrder?.metadata?.images && waitModalOrder?.metadata.images[0]) || (waitModalOrder?.metadata?.issueImageUrl) || (waitModalOrder?.metadata?.issueImage);
                 const poFromDesc = extractPoCode(waitModalOrder);
                 const poKey = waitModalOrder?.po || poFromDesc;
+                const attachmentOrderId = waitModalOrder?.orderId || (poKey ? localStorage.getItem(`po_to_order_${poKey}`) : "") || waitModalOrder?.id;
                 if (!url) {
                   try {
                     const poMap = JSON.parse(localStorage.getItem("cblue_po_attachments") || "{}");
@@ -918,15 +944,15 @@ export default function FixerProPage() {
                 if (!url) {
                   try {
                     const orderMap = JSON.parse(localStorage.getItem("cblue_order_attachments") || "{}");
-                    const orderUrl = waitModalOrder?.id ? orderMap[waitModalOrder.id]?.[0] : "";
+                    const orderUrl = attachmentOrderId ? orderMap[attachmentOrderId]?.[0] : "";
                     if (orderUrl) url = orderUrl;
                   } catch {}
                 }
-                if (!url && waitModalOrder?.id) {
+                if (!url && attachmentOrderId) {
                   try {
                     const token = localStorage.getItem("subscriber_token") || "";
                     if (token) {
-                      const res = await fetch(`/api/v1/orders/${waitModalOrder.id}/attachments`, {
+                      const res = await fetch(`/api/v1/orders/${attachmentOrderId}/attachments`, {
                         headers: { Authorization: `Bearer ${token}` },
                       });
                       if (res.ok) {
@@ -952,7 +978,8 @@ export default function FixerProPage() {
                     const orderMap = JSON.parse(localStorage.getItem("cblue_order_attachments") || "{}");
                     const poFromDesc = extractPoCode(waitModalOrder);
                     const poKey = waitModalOrder?.po || poFromDesc;
-                    hasMapped = Boolean((poKey && poMap[poKey]?.length) || (waitModalOrder?.id && orderMap[waitModalOrder.id]?.length));
+                    const attachmentOrderId = waitModalOrder?.orderId || (poKey ? localStorage.getItem(`po_to_order_${poKey}`) : "") || waitModalOrder?.id;
+                    hasMapped = Boolean((poKey && poMap[poKey]?.length) || (attachmentOrderId && orderMap[attachmentOrderId]?.length));
                   } catch {}
                   return (hasDirect || hasMapped || hasBackend) ? "1 file attached (Click to View)" : "No file attached";
                 })()}
@@ -963,6 +990,7 @@ export default function FixerProPage() {
               <button 
                 onClick={async () => {
                   const po = waitModalOrder.po || `PO-2605-${waitModalOrder.id?.slice(0, 4)}`;
+                  const backendOrderId = waitModalOrder.orderId || localStorage.getItem(`po_to_order_${po}`) || waitModalOrder.id;
                   const now = fmtDateTime(new Date());
                   const partnerName = partner?.name || partner?.company || 'Partner';
                   const serviceTitle = waitModalOrder.serviceTh || waitModalOrder.service;
@@ -989,7 +1017,7 @@ export default function FixerProPage() {
                       localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(nextReqs));
                       localStorage.setItem("ghis_mock_active", JSON.stringify(nextActive));
                       const nextPartnerReqs = [
-                        ...partnerDynReqs.filter((r: any) => !(r.po === po && r.type === 'variation_partner')),
+                        ...partnerDynReqs.filter((r: any) => !(r.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(r.type))),
                         { id: `variation-${po}`, po, service: waitModalOrder.service || serviceTitle, serviceTh: waitModalOrder.service || serviceTitle, serviceZh: waitModalOrder.service || serviceTitle, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), fee: budgetLabel, budget: String(budgetLabel).replace(/[^0-9]/g, ''), tier: waitModalOrder.tier, description: 'Proceed to submit variation request if extra work or price adjustment is required.', type: 'variation_partner', step: 9 },
                       ];
                       localStorage.setItem("partner_mock_dyn_req", JSON.stringify(nextPartnerReqs));
@@ -998,13 +1026,13 @@ export default function FixerProPage() {
                       setPartnerDynReqs(nextPartnerReqs);
                       window.dispatchEvent(new Event("storage"));
                       // Update backend: MEETING_REQUESTED → IN_PROGRESS (meeting confirmed; customer page polls and auto-detects)
-                      if (waitModalOrder.id && !waitModalOrder.mock && token) {
-                        fetch(`/api/v1/orders/${waitModalOrder.id}/status`, {
+                      if (backendOrderId && !waitModalOrder.mock && token) {
+                        fetch(`/api/v1/orders/${backendOrderId}/status`, {
                           method: 'PUT',
                           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                           body: JSON.stringify({ status: 'IN_PROGRESS', note: 'Partner confirmed meeting time' }),
                         }).catch(() => {});
-                        fetch(`/api/v1/orders/${waitModalOrder.id}/chat`, {
+                        fetch(`/api/v1/orders/${backendOrderId}/chat`, {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                           body: JSON.stringify({ text: `[SYSTEM] Partner confirmed site meeting for ${po}. Variation request can now be submitted if needed.` }),
@@ -1475,8 +1503,8 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? req.serviceTh : locale === "zh" ? req.serviceZh : req.service} {req.po ? <span className="text-xs font-normal text-gray-400">· {req.po}</span> : null}</p>
                 <p className="text-xs text-gray-500">{req.customer} &middot; {req.date} &middot; {locale === "th" ? "งบ" : locale === "zh" ? "预算" : "Budget"}: {req.fee || `฿${req.budget || '0'}`}</p>
-                {(req.po || req.meetingVenue || req.subdistrict) && <p className="text-xs text-gray-500 mt-0.5">{[req.po, req.meetingVenue || req.subdistrict].filter(Boolean).join(' · ')}</p>}
-                <p className="text-xs text-gray-500 mt-1" style={{ whiteSpace: "pre-wrap" }}>{req.description || req.desc || req.statusNote}</p>
+                {(req.meetingVenue || req.subdistrict) && <p className="text-xs text-gray-500 mt-0.5">{[req.meetingVenue || req.subdistrict].filter(Boolean).join(' · ')}</p>}
+                <p className="text-xs text-gray-500 mt-1" style={{ whiteSpace: "pre-wrap" }}>{stripWorkflowPrefix(req.description || req.desc || req.statusNote)}</p>
               </div>
               <div className="flex items-center gap-2">
                 <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[req.tier] || ""}`}>{req.tier}</span>
@@ -1537,7 +1565,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
                   {c.online && <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-400 rounded-full border-2 border-white" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-800">{c.name} <span className="text-gray-400 font-normal">· {c.service || c.po || "Chat"}</span></p>
+                  <p className="text-sm font-semibold text-gray-800">{c.name}{c.service && c.service !== c.po && c.service !== c.name && !String(c.name || '').includes(String(c.service || '')) ? <span className="text-gray-400 font-normal"> · {c.service}</span> : null}</p>
                   <p className="text-xs text-gray-500 truncate">{c.incomingMsg}</p>
                 </div>
                 <div className="text-right">
@@ -1565,8 +1593,9 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
             <div key={job.id} className="px-6 py-4 flex items-center gap-4 hover:bg-gray-50/50 transition">
               <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center text-lg"></div>
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? job.serviceTh : locale === "zh" ? job.serviceZh : job.service}</p>
-                <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"} &middot; {job.po} | {job.subdistrict || "Saphansong"}</p>
+                <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? job.serviceTh : locale === "zh" ? job.serviceZh : job.service}{job.po ? <span className="text-xs font-normal text-gray-400"> · {job.po}</span> : null}</p>
+                <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"}</p>
+                {job.subdistrict && <p className="text-xs text-gray-500 mt-0.5">{job.subdistrict}</p>}
                 <div className="mt-2 w-full pt-1">
                   <div className="w-full overflow-x-auto pb-2 hide-scrollbar">
 <div className="flex items-start min-w-max relative px-2">
@@ -1627,7 +1656,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
               <tbody className="text-sm">
                 {completedJobs.slice(0, 3).length > 0 ? completedJobs.slice(0, 3).map((h) => (
                   <tr key={h.id} className="border-b border-gray-50">
-                    <td className="py-3 px-4 font-medium">{h.service}</td>
+                    <td className="py-3 px-4 font-medium">{h.service}{h.po ? <span className="text-xs font-normal text-gray-400"> · {h.po}</span> : null}</td>
                     <td className="py-3 px-4 text-gray-600">{h.customer}</td>
                     <td className="py-3 px-4 text-gray-500">{h.date}</td>
                   </tr>
@@ -1729,8 +1758,9 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
           <div key={job.id} className="px-6 py-4 flex items-center gap-4 hover:bg-gray-50/50 transition">
             <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center text-lg"></div>
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? job.serviceTh : locale === "zh" ? job.serviceZh : job.service}</p>
-              <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"} &middot; {job.po} | {job.subdistrict || "Saphansong"}</p>
+              <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? job.serviceTh : locale === "zh" ? job.serviceZh : job.service}{job.po ? <span className="text-xs font-normal text-gray-400"> · {job.po}</span> : null}</p>
+              <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"}</p>
+              {job.subdistrict && <p className="text-xs text-gray-500 mt-0.5">{job.subdistrict}</p>}
               <div className="mt-2 w-full pt-1">
                 <div className="w-full md:w-2/3 overflow-x-auto pb-4 hide-scrollbar">
                   <div className="flex items-center min-w-max relative px-2">
@@ -1945,7 +1975,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
         const varNote = extraData || 'Your partner has submitted a variation for your approval. Please review and confirm to proceed.';
         const next = [...dynReqs.filter((x: any) => x.po !== po), { id: varId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: varNote, type: 'variation_pending', step: 9 }];
         localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
-        writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && x.type === 'variation_partner')));
+        writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
         const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 9, mockStep: 9, actionNeeded: false } : x);
         localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
@@ -1956,7 +1986,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
         const completeDesc = extraData?.trim() ? `Partner completion request: ${extraData.trim()}` : 'Work is completed. Please review and mark as complete to close this project.';
         const next = [...dynReqs.filter((x: any) => x.po !== po), { id: complId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: completeDesc, type: 'complete_pending', step: 10 }];
         localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
-        writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && x.type === 'complete_partner')));
+        writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['complete_partner', 'variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
         const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 10, mockStep: 10, actionNeeded: false } : x);
         localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
@@ -1999,8 +2029,8 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
               <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? req.serviceTh : locale === "zh" ? req.serviceZh : req.service} {req.po ? <span className="text-xs font-normal text-gray-400">· {req.po}</span> : null}</p>
               <p className="text-xs text-amber-600 font-semibold mt-0.5">{req.type === 'variation_partner' ? 'Please decide whether to submit a variation request.' : req.type === 'complete_partner' ? 'Please send project complete request to customer.' : req.type === 'rate_partner' ? 'Please rate the customer to close this job.' : String(req.status || '').toUpperCase() === 'MEETING_REQUESTED' ? 'Please review and confirm the site meeting invitation.' : locale === "th" ? "โปรดพิจารณาและรับงานนี้เพื่อดำเนินการต่อ" : locale === "zh" ? "请审核并接受此工作以继续" : "Please review and accept this job to proceed"}</p>
               <p className="text-xs text-gray-500 mt-0.5">{req.customer} &middot; {req.date} &middot; {locale === "th" ? "งบ" : locale === "zh" ? "预算" : "Budget"}: {req.fee || `฿${req.budget || '0'}`}</p>
-              {(req.po || req.meetingVenue || req.subdistrict) && <p className="text-xs text-gray-500 mt-0.5">{[req.po, req.meetingVenue || req.subdistrict].filter(Boolean).join(' · ')}</p>}
-              <p className="text-xs text-gray-500 mt-1" style={{ whiteSpace: "pre-wrap" }}>{req.description || req.desc || req.statusNote}</p>
+              {(req.meetingVenue || req.subdistrict) && <p className="text-xs text-gray-500 mt-0.5">{[req.meetingVenue || req.subdistrict].filter(Boolean).join(' · ')}</p>}
+              <p className="text-xs text-gray-500 mt-1" style={{ whiteSpace: "pre-wrap" }}>{stripWorkflowPrefix(req.description || req.desc || req.statusNote)}</p>
             </div>
             <div className="flex items-center gap-2">
               <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[req.tier] || ""}`}>{req.tier}</span>
@@ -2122,8 +2152,8 @@ function PartnerHistory({ locale, completedJobs }: { locale: string; completedJo
           <tbody className="text-sm">
             {completedJobs.length > 0 ? completedJobs.map((h) => (
               <tr key={h.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition">
-                <td className="py-3 px-4 font-medium text-gray-900">{h.service}</td>
-                <td className="py-3 px-4 text-gray-600">#{h.customerId || 'Customer'}</td>
+                <td className="py-3 px-4 font-medium text-gray-900">{h.service}{h.po ? <span className="text-xs font-normal text-gray-400"> · {h.po}</span> : null}</td>
+                <td className="py-3 px-4 text-gray-600">{h.customer || h.customerName || `#${h.customerId || 'Customer'}`}</td>
                 <td className="py-3 px-4 text-center"><span className="px-2 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-700">{h.tier || 'Standard'}</span></td>
                 <td className="py-3 px-4 text-center font-bold text-green-700">{h.fee || '฿0'}</td>
                 <td className="py-3 px-4 text-center text-gray-500">{fmtDate(h.updatedAt || Date.now())}</td>
