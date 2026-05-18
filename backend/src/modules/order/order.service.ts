@@ -24,6 +24,9 @@ const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   COMPLETED: [],
   CANCELLED: [],
 };
+const HIDDEN_TEST_PO_MARKERS = ['PO-2605-6716', 'PO-2605-9605'];
+const isHiddenTestOrder = (description?: string | null) =>
+  HIDDEN_TEST_PO_MARKERS.some((po) => String(description || '').toUpperCase().includes(po));
 
 @Injectable()
 export class OrderService {
@@ -109,7 +112,7 @@ export class OrderService {
   }
 
   async findByUser(userId: string) {
-    return this.prisma.order.findMany({
+    const orders = await this.prisma.order.findMany({
       where: { userId },
       include: {
         address: true,
@@ -123,6 +126,8 @@ export class OrderService {
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    return orders.filter((order) => !isHiddenTestOrder(order.description));
   }
 
   async findMyFixerOrders(userId: string) {
@@ -139,7 +144,7 @@ export class OrderService {
   }
 
   async findByFixer(fixerId: string) {
-    return this.prisma.order.findMany({
+    const orders = await this.prisma.order.findMany({
       where: { fixerId },
       include: {
         address: true,
@@ -153,6 +158,8 @@ export class OrderService {
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    return orders.filter((order) => !isHiddenTestOrder(order.description));
   }
 
   private async getOrderForParticipant(orderId: string, userId: string) {

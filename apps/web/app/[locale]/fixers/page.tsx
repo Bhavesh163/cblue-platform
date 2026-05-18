@@ -129,6 +129,9 @@ const firstNameOnly = (value: any, fallback = 'User') => {
   const cleaned = String(value || '').trim();
   return cleaned ? cleaned.split(/\s+/)[0] : fallback;
 };
+const HIDDEN_TEST_POS = new Set(["PO-2605-6716", "PO-2605-9605"]);
+const isHiddenTestPo = (value: any) => HIDDEN_TEST_POS.has(String(value || '').trim().toUpperCase());
+const filterVisibleWorkflowItems = (items: any[]) => items.filter((item: any) => !isHiddenTestPo(item?.po));
 
 const STATUS_LABEL: Record<string, Record<string, string>> = {
   IN_PROGRESS: { en: "In Progress", th: "กำลังดำเนินการ", zh: "进行中" },
@@ -429,6 +432,7 @@ export default function FixerProPage() {
       const numericSeed = String(o.id || '').replace(/\D/g, '').slice(0, 4) || String(created.getTime()).slice(-4);
       extractedPo = `PO-${yy}${mm}-${numericSeed.padStart(4, '0')}`;
     }
+    if (isHiddenTestPo(extractedPo)) return null;
     const attachmentUrls = Array.isArray(o.images)
       ? o.images
           .map((image: any) => (typeof image === 'string' ? image : image?.url || ''))
@@ -459,7 +463,7 @@ export default function FixerProPage() {
       fee: o.estimatedPrice ? `฿${o.estimatedPrice.toLocaleString()}` : "0", 
       budget: o.estimatedPrice ? o.estimatedPrice.toLocaleString() : "0"
     };
-  });
+  }).filter(Boolean) as any[];
 
   
   const properties = myProperties.map(p => ({
@@ -680,13 +684,13 @@ export default function FixerProPage() {
   useEffect(() => {
     const checkMock = () => {
       try {
-        const d = localStorage.getItem("ghis_mock_dyn_req"); if (d) setMockDynReqs(JSON.parse(d));
-        const a = localStorage.getItem("ghis_mock_active"); if (a) setMockActiveState(JSON.parse(a));
-        const h = localStorage.getItem("ghis_mock_history"); if (h) setMockHistory(JSON.parse(h));
+        const d = localStorage.getItem("ghis_mock_dyn_req"); if (d) setMockDynReqs(filterVisibleWorkflowItems(JSON.parse(d)));
+        const a = localStorage.getItem("ghis_mock_active"); if (a) setMockActiveState(filterVisibleWorkflowItems(JSON.parse(a)));
+        const h = localStorage.getItem("ghis_mock_history"); if (h) setMockHistory(filterVisibleWorkflowItems(JSON.parse(h)));
         const p = localStorage.getItem("partner_mock_dyn_req");
         setPartnerDynReqs(
           p
-            ? JSON.parse(p).map((item: any) => ({
+            ? filterVisibleWorkflowItems(JSON.parse(p)).map((item: any) => ({
                 ...item,
                 workflowType:
                   item?.workflowType ||
@@ -705,14 +709,14 @@ export default function FixerProPage() {
   activeJobs = activeJobs.map(job => {
       const stepLookup = mockActiveState.find((x: any) => x.po === job.po);
       const backendStep = getWorkflowStepFromStatus(job.status);
-      const step = stepLookup ? stepLookup.step : backendStep;
+      const partnerWorkflowStep = Math.max(0, ...partnerDynReqs.filter((x: any) => x.po === job.po).map((x: any) => Number(x.step || 0)));
+      const step = Math.max(Number(stepLookup?.step || 0), backendStep, partnerWorkflowStep);
       // For partner view: actionNeeded = partner has a pending workflow request OR backend requires partner action
       const hasPartnerDynAction = partnerDynReqs.some((r: any) => r.po === job.po);
       const partnerActionNeeded = hasPartnerDynAction ||
         String(job.status || '').toUpperCase() === 'MEETING_REQUESTED' ||
         backendStep === 5;
-      if (stepLookup) return { ...job, step, mockStep: step, actionNeeded: partnerActionNeeded };
-      return { ...job, step: backendStep, mockStep: backendStep, actionNeeded: partnerActionNeeded };
+      return { ...job, step, mockStep: step, actionNeeded: partnerActionNeeded };
   });
   const backendCompletedJobs = mappedOrders.filter(o => o.status === 'COMPLETED');
   // Merge localStorage history (same-browser simulation) with backend completed orders
@@ -804,6 +808,7 @@ export default function FixerProPage() {
   };
 
   const scheduledMeetings = mockDynReqs
+    .filter((r: any) => !isHiddenTestPo(r.po))
     .filter((r: any) => r.type === 'meeting_scheduled')
     .sort((a: any, b: any) => parseTs(a.date) - parseTs(b.date));
 
@@ -1103,7 +1108,7 @@ export default function FixerProPage() {
                         ...mockDynReqs.filter((r: any) => !(r.po === po && r.type === 'meeting_pending_partner') && r.id !== schedId),
                         { id: schedId, po, title: waitModalOrder.service || serviceTitle, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), budget: budgetLabel, tier: waitModalOrder.tier, type: 'meeting_scheduled', step: 8, venue: waitModalMeetingDetails.meetingVenue, meetingDate: waitModalOrder.meetingDate || waitModalMeetingDetails.meetingDateLabel, meetingTime: waitModalOrder.meetingTime || waitModalMeetingDetails.meetingTimeLabel, desc: `Meeting confirmed by partner${meetingSummary ? ` for ${meetingSummary}` : ''}${waitModalMeetingDetails.meetingVenue ? ` at ${waitModalMeetingDetails.meetingVenue}` : ''}. Proceed after the site meeting then mark variation.` },
                       ];
-                      const nextActive = mockActiveState.map((x: any) => x.po === po ? { ...x, step: 8, actionNeeded: true } : x);
+                      const nextActive = mockActiveState.map((x: any) => x.po === po ? { ...x, step: 9, mockStep: 9, actionNeeded: true } : x);
                       localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(nextReqs));
                       localStorage.setItem("ghis_mock_active", JSON.stringify(nextActive));
                       const nextPartnerReqs = [
@@ -2264,7 +2269,7 @@ function PartnerHistory({ locale, completedJobs }: { locale: string; completedJo
                 <td className="py-3 px-4 text-gray-600">{h.customer || h.customerName || `#${h.customerId || 'Customer'}`}</td>
                 <td className="py-3 px-4 text-center"><span className="px-2 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-700">{h.tier || 'Standard'}</span></td>
                 <td className="py-3 px-4 text-center font-bold text-green-700">{h.fee || '฿0'}</td>
-                <td className="py-3 px-4 text-center text-gray-500">{fmtDate(h.updatedAt || Date.now())}</td>
+                <td className="py-3 px-4 text-center text-gray-500">{fmtDate(h.updatedAt || h.statusChangedAt || h.completedAt || h.createdAt || h.date || Date.now())}</td>
               </tr>
             )) : (
               <tr>

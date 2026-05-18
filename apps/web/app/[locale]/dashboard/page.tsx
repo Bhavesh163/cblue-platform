@@ -50,6 +50,8 @@ const firstNameOnly = (value: any, fallback = 'User') => {
   const cleaned = String(value || '').trim();
   return cleaned ? cleaned.split(/\s+/)[0] : fallback;
 };
+const HIDDEN_TEST_POS = new Set(["PO-2605-6716", "PO-2605-9605"]);
+const isHiddenTestPo = (value: any) => HIDDEN_TEST_POS.has(String(value || '').trim().toUpperCase());
 
 const ICON_MAP: Record<string, string> = { household: "", project: "", professional: "", property: "" };
 const STATUS_STYLE: Record<string, string> = {
@@ -754,13 +756,15 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     return extractPoCode(orderLike);
   };
   const isPoCode = (value: string) => isValidPoCode(value);
+  const workflowOrders = (orders || []).filter((order: any) => !isHiddenTestPo(extractPo(order)));
+  const filterVisibleWorkflowItems = (items: any[]) => items.filter((item: any) => !isHiddenTestPo(item?.po));
   const postBackendWorkflowMessage = async (po: string, text: string) => {
     try {
       const token = localStorage.getItem("subscriber_token") || "";
       if (!token || !po) return;
       const orderId =
         localStorage.getItem(`po_to_order_${po}`) ||
-        (orders || []).find((o: any) => extractPo(o) === po)?.id ||
+        workflowOrders.find((o: any) => extractPo(o) === po)?.id ||
         "";
       if (!orderId) return;
       await fetch(`/api/v1/orders/${orderId}/chat`, {
@@ -826,9 +830,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       const d = localStorage.getItem("ghis_mock_dyn_req");
       const h = localStorage.getItem("ghis_mock_history");
       if (p) setMockPayments(JSON.parse(p));
-      if (a) setMockActiveItems(JSON.parse(a));
-      if (d) setMockDynRequests(JSON.parse(d));
-      if (h) setMockHistory(JSON.parse(h));
+      if (a) setMockActiveItems(filterVisibleWorkflowItems(JSON.parse(a)));
+      if (d) setMockDynRequests(filterVisibleWorkflowItems(JSON.parse(d)));
+      if (h) setMockHistory(filterVisibleWorkflowItems(JSON.parse(h)));
     } catch {}
     setMockReady(true);
   }, []);
@@ -855,9 +859,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         const d = localStorage.getItem("ghis_mock_dyn_req");
         const h = localStorage.getItem("ghis_mock_history");
         if (p) setMockPayments(JSON.parse(p));
-        if (a) setMockActiveItems(JSON.parse(a));
-        if (d) setMockDynRequests(JSON.parse(d));
-        if (h) setMockHistory(JSON.parse(h));
+        if (a) setMockActiveItems(filterVisibleWorkflowItems(JSON.parse(a)));
+        if (d) setMockDynRequests(filterVisibleWorkflowItems(JSON.parse(d)));
+        if (h) setMockHistory(filterVisibleWorkflowItems(JSON.parse(h)));
       } catch {}
     };
     window.addEventListener("storage", syncMockState);
@@ -1034,12 +1038,12 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   // When Suppadesh accepts a PO on their browser, the backend order goes CONFIRMED. Ghis's page
   // polls orders and detects this, auto-creating a payment_pending card in requests.
   useEffect(() => {
-    if (!orders || !mockReady || !subscriber?.email?.includes('ghis')) return;
+    if (!mockReady || !subscriber?.email?.includes('ghis')) return;
     const existingDynPos = new Set(mockDynRequests.map((x: any) => x.po));
     const existingActivePos = new Set(mockActiveItems.map((x: any) => x.po));
     const completedPos = new Set(mockHistory.map((x: any) => x.po));
     const toCreate: any[] = [];
-    for (const order of orders) {
+    for (const order of workflowOrders) {
       const status = String(order?.status || '').toUpperCase();
       if (!['ASSIGNED', 'DEPOSIT_PENDING', 'CONFIRMED', 'ACCEPTED'].includes(status)) continue;
       const po = extractPo(order);
@@ -1081,9 +1085,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   // from MEETING_REQUESTED → IN_PROGRESS (cross-browser: partner confirms meeting on their browser,
   // backend status changes, customer page detects and updates the request card automatically).
   useEffect(() => {
-    if (!orders || !mockReady) return;
+    if (!mockReady) return;
     const toSchedule = new Set<string>();
-    for (const order of orders) {
+    for (const order of workflowOrders) {
       const po = extractPo(order);
       if (!po) continue;
       const currentStatus = String(order.status || '').toUpperCase();
@@ -1136,7 +1140,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       const po = chatItem.po;
       if (!po) continue;
       const lastMsg = String(chatItem.lastMsg || '').toLowerCase();
-      const backendOrder = (orders || []).find((o: any) => extractPo(o) === po);
+      const backendOrder = workflowOrders.find((o: any) => extractPo(o) === po);
       const title = String(backendOrder?.serviceCategory || '').replace(/_/g, ' ') || po;
       const budget = backendOrder?.estimatedPrice ? `฿${Number(backendOrder.estimatedPrice).toLocaleString()}` : '฿0';
       const tier = String(backendOrder?.description || '').match(/TIER:([A-Za-z]+)/)?.[1] || 'Standard';
@@ -1184,32 +1188,31 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     { title: "REINSTATEMENT", customer: "Suppadesh", date: "5/11/2026, 2:30:00 PM", budget: "฿5,000,000", po: "PO-2605-1200", location: "Saphansong", tier: "ECONOMY", actionNeeded: true, step: 6 },
     { title: "FITOUT", customer: "Suppadesh", date: "5/11/2026, 2:35:00 PM", budget: "฿25,000,000", po: "PO-2605-6812", location: "Saphansong", tier: "Standard", actionNeeded: true, step: 6 },
     { title: "GREEN CONSTRUCTION", customer: "Suppadesh", date: "5/11/2026, 2:40:00 PM", budget: "฿45,000,000", po: "PO-2605-8471", location: "Saphansong", tier: "ECONOMY", actionNeeded: true, step: 6 },
-    { title: "REINSTATEMENT", customer: "Suppadesh", date: "5/11/2026, 2:50:00 PM", budget: "฿5,000,000", po: "PO-2605-9605", location: "Saphansong", tier: "ECONOMY", actionNeeded: false, step: 7 },
   ];
 
-  const backendOrderPos = new Set((orders || []).map((o: any) => extractPo(o)).filter((po: string) => isPoCode(po)));
+  const backendOrderPos = new Set(workflowOrders.map((o: any) => extractPo(o)).filter((po: string) => isPoCode(po)));
   const allowLocalCustomerWorkflow = Boolean(subscriber?.email?.toLowerCase().includes('ghis'));
   const useStaticDemoData = allowLocalCustomerWorkflow && backendOrderPos.size === 0;
   const visibleMockActiveItems = !allowLocalCustomerWorkflow
     ? []
     : backendOrderPos.size > 0
-      ? mockActiveItems.filter((x: any) => backendOrderPos.has(x.po))
-      : mockActiveItems;
+      ? mockActiveItems.filter((x: any) => backendOrderPos.has(x.po) && !isHiddenTestPo(x.po))
+      : mockActiveItems.filter((x: any) => !isHiddenTestPo(x.po));
   const visibleMockDynRequests = !allowLocalCustomerWorkflow
     ? []
     : backendOrderPos.size > 0
-      ? mockDynRequests.filter((x: any) => backendOrderPos.has(x.po))
-      : mockDynRequests;
+      ? mockDynRequests.filter((x: any) => backendOrderPos.has(x.po) && !isHiddenTestPo(x.po))
+      : mockDynRequests.filter((x: any) => !isHiddenTestPo(x.po));
   const visibleMockHistory = !allowLocalCustomerWorkflow
     ? []
     : backendOrderPos.size > 0
-      ? mockHistory.filter((x: any) => backendOrderPos.has(x.po))
-      : mockHistory;
+      ? mockHistory.filter((x: any) => backendOrderPos.has(x.po) && !isHiddenTestPo(x.po))
+      : mockHistory.filter((x: any) => !isHiddenTestPo(x.po));
 
   // Merge: mockActiveItems overrides ACTIVE_MOCK items with same po (for step progression)
   const paidPOs = new Set(visibleMockActiveItems.map((x: any) => x.po));
   const completedPOs = new Set(visibleMockHistory.map((x: any) => x.po));
-  const backendActiveItems = (orders || [])
+  const backendActiveItems = workflowOrders
     .filter((o: any) => !['COMPLETED', 'CANCELLED', 'DONE'].includes(String(o?.status || '').toUpperCase()))
     .map((o: any) => {
       const status = String(o?.status || '').toUpperCase();
@@ -1359,12 +1362,21 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       const dynReqs = JSON.parse(localStorage.getItem('ghis_mock_dyn_req') || '[]');
       const active = JSON.parse(localStorage.getItem('ghis_mock_active') || '[]');
       const existingPos = new Set(dynReqs.map((x: any) => x.po));
-      const liveBackendPOs = new Set((orders || []).map((o: any) => extractPo(o)).filter((po: string) => isPoCode(po)));
+      const liveBackendPOs = new Set(workflowOrders.map((o: any) => extractPo(o)).filter((po: string) => isPoCode(po)));
+      const advancedWorkflowPos = new Set(
+        chatFeed
+          .filter((chatItem: any) => {
+            const workflowText = `${String(chatItem?.lastMsg || '')} ${String(chatItem?.incomingMsg || '')}`.toLowerCase();
+            return /customer sent meeting invitation|partner confirmed site meeting|meeting confirmed by partner|submitted a variation|marked the job as complete|confirmed job complete/.test(workflowText);
+          })
+          .map((chatItem: any) => chatItem.po)
+          .filter((po: string) => isPoCode(po)),
+      );
       // Gather all step-7 (or higher) jobs from static mock that aren't already in dynamic requests
       const step7StaticJobs = liveBackendPOs.size === 0 ? ACTIVE_MOCK.filter(
-        (j: any) => Number(j.step) >= 7 && !existingPos.has(j.po) && !active.find((a: any) => a.po === j.po)
+        (j: any) => Number(j.step) === 7 && !existingPos.has(j.po) && !advancedWorkflowPos.has(j.po) && !active.find((a: any) => a.po === j.po)
       ) : [];
-      const step7ActiveJobs = active.filter((j: any) => Number(j.step) >= 7 && !existingPos.has(j.po) && (liveBackendPOs.size === 0 || liveBackendPOs.has(j.po)));
+      const step7ActiveJobs = active.filter((j: any) => Number(j.step) === 7 && !existingPos.has(j.po) && !advancedWorkflowPos.has(j.po) && (liveBackendPOs.size === 0 || liveBackendPOs.has(j.po)));
       const toCreate: any[] = [];
       for (const job of [...step7StaticJobs, ...step7ActiveJobs]) {
         const createdAt = job.createdAt || Date.now();
@@ -1389,7 +1401,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       }
     } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mockReady, orders, subscriber?.email]);
+  }, [mockReady, orders, subscriber?.email, chatFeed]);
 
   const STEPS_FULL = ["Match", "Select", "PO", "Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"];
   const STEPS = ["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"];
@@ -2207,7 +2219,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                   // Notify backend: MEETING_REQUESTED (cross-browser: partner page polls and sees MEETING_REQUESTED status)
                   try {
                     const token = localStorage.getItem('subscriber_token');
-                    const backendOrder = (orders || []).find((o: any) => extractPo(o) === meetingModal.po);
+                      const backendOrder = workflowOrders.find((o: any) => extractPo(o) === meetingModal.po);
                     if (token && backendOrder?.id) {
                       fetch(`/api/v1/orders/${backendOrder.id}/status`, {
                         method: 'PUT',
@@ -2303,7 +2315,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                   onClick={() => {
                     const createdAt = Date.now();
                     const po = completeApproveModal.po;
-                    const backendOrder = (orders || []).find((o: any) => extractPo(o) === po);
+                    const backendOrder = workflowOrders.find((o: any) => extractPo(o) === po);
                     const token = localStorage.getItem('subscriber_token') || '';
                     const rateReq = {
                       id: `rate-${po}`,
