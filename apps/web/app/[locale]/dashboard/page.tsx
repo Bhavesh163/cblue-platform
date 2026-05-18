@@ -1073,23 +1073,36 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   // backend status changes, customer page detects and updates the request card automatically).
   useEffect(() => {
     if (!orders || !mockReady) return;
-    const toSchedule: string[] = [];
+    const toSchedule = new Set<string>();
     for (const order of orders) {
       const po = extractPo(order);
       if (!po) continue;
+      const currentStatus = String(order.status || '').toUpperCase();
       const prevStatus = prevOrderStatuses.current[order.id];
-      if (prevStatus === 'MEETING_REQUESTED' && String(order.status || '').toUpperCase() === 'IN_PROGRESS') {
-        toSchedule.push(po);
+      if (
+        (prevStatus === 'MEETING_REQUESTED' && currentStatus === 'IN_PROGRESS') ||
+        (['IN_PROGRESS', 'COMPLETED'].includes(currentStatus) && currentStatus !== 'MEETING_REQUESTED')
+      ) {
+        toSchedule.add(po);
       }
-      prevOrderStatuses.current[order.id] = String(order.status || '').toUpperCase();
+      prevOrderStatuses.current[order.id] = currentStatus;
     }
-    if (toSchedule.length > 0) {
+    if (toSchedule.size > 0) {
       setMockDynRequests(prev => {
         let changed = false;
         const updated = prev.map((r: any) => {
-          if (r.type === 'meeting_pending_partner' && toSchedule.includes(r.po)) {
+          if (r.type === 'meeting_pending_partner' && toSchedule.has(r.po)) {
             changed = true;
-            return { ...r, id: `meet-scheduled-${r.po}`, type: 'meeting_scheduled', desc: 'Meeting confirmed by partner. Proceed to site meeting, then mark variation when done.' };
+            const meetingLabel = r.meetingDate
+              ? `${fmtDate(`${r.meetingDate}T${r.meetingTime || '00:00'}`)}${r.meetingTime ? ` ${r.meetingTime}` : ''}`
+              : '';
+            const venueLabel = r.venue ? ` at ${r.venue}` : '';
+            return {
+              ...r,
+              id: `meet-scheduled-${r.po}`,
+              type: 'meeting_scheduled',
+              desc: `Meeting confirmed by partner${meetingLabel ? ` for ${meetingLabel}` : ''}${venueLabel}. Proceed to site meeting, then mark variation when done.`,
+            };
           }
           return r;
         });
@@ -1125,7 +1138,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         setMockDynRequests(prev => {
           if (prev.some((x: any) => x.po === po && x.type === 'variation_pending')) return prev;
           const item = { id: `var-${po}`, po, title, customer: 'Suppadesh', date: fmtDateTime(Date.now()), createdAt: Date.now(), budget, tier, desc: 'Partner has submitted a variation for your approval. Please review and confirm to proceed.', type: 'variation_pending', step: 9 };
-          const merged = [...prev.filter((x: any) => !(x.po === po && x.type === 'variation_pending')), item];
+          const merged = [...prev.filter((x: any) => !(x.po === po && ['variation_pending', 'meeting_pending_partner', 'meeting_scheduled'].includes(x.type))), item];
           try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(merged)); } catch {}
           return merged;
         });
@@ -1140,7 +1153,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         setMockDynRequests(prev => {
           if (prev.some((x: any) => x.po === po && x.type === 'complete_pending')) return prev;
           const item = { id: `compl-${po}`, po, title, customer: 'Suppadesh', date: fmtDateTime(Date.now()), createdAt: Date.now(), budget, tier, desc: 'Work is completed. Please review and mark as complete to close this project.', type: 'complete_pending', step: 10 };
-          const merged = [...prev.filter((x: any) => !(x.po === po && x.type === 'complete_pending')), item];
+          const merged = [...prev.filter((x: any) => !(x.po === po && ['complete_pending', 'variation_pending', 'meeting_pending_partner', 'meeting_scheduled'].includes(x.type))), item];
           try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(merged)); } catch {}
           return merged;
         });
@@ -1220,9 +1233,39 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     });
   const backendActivePOs = new Set(backendActiveItems.map((item: any) => item.po));
   const filteredStaticMock = (useStaticDemoData ? ACTIVE_MOCK : []).filter((item: any) => !paidPOs.has(item.po) && !completedPOs.has(item.po) && !backendActivePOs.has(item.po));
-  const existingActivePos = new Set([...filteredStaticMock, ...visibleMockActiveItems].map((x: any) => x.po));
-  const mergedBackendActive = backendActiveItems.filter((x: any) => !completedPOs.has(x.po) && !existingActivePos.has(x.po));
-  const combinedActive = [...filteredStaticMock, ...visibleMockActiveItems.filter((x: any) => !completedPOs.has(x.po)), ...mergedBackendActive]
+  const activeByPo = new Map<string, any>();
+  for (const item of filteredStaticMock) {
+    activeByPo.set(item.po, item);
+  }
+  for (const item of backendActiveItems) {
+    if (!completedPOs.has(item.po)) {
+      activeByPo.set(item.po, item);
+    }
+  }
+  for (const item of visibleMockActiveItems.filter((x: any) => !completedPOs.has(x.po))) {
+    const existing = activeByPo.get(item.po);
+    if (!existing) {
+      activeByPo.set(item.po, item);
+      continue;
+    }
+    activeByPo.set(item.po, {
+      ...existing,
+      ...item,
+      title: item.title || existing.title,
+      customer: item.customer || existing.customer,
+      customerName: item.customerName || existing.customerName,
+      fixerAlias: item.fixerAlias || existing.fixerAlias,
+      partnerName: item.partnerName || existing.partnerName,
+      budget: item.budget || existing.budget,
+      location: item.location || item.subdistrict || existing.location || existing.subdistrict,
+      subdistrict: item.subdistrict || item.location || existing.subdistrict || existing.location,
+      date: item.date || existing.date,
+      createdAt: parseDateMs(item.createdAt || item.date || existing.createdAt || existing.date),
+      actionNeeded: typeof item.actionNeeded === 'boolean' ? item.actionNeeded : existing.actionNeeded,
+      step: Math.max(Number(existing.step || 0), Number(item.step || 0)) || existing.step || item.step,
+    });
+  }
+  const combinedActive = Array.from(activeByPo.values())
     .sort((a: any, b: any) => parseDateMs(b.createdAt || b.date) - parseDateMs(a.createdAt || a.date));
   // Filter static requests: hide items whose PO already has a dynamic entry (already progressed past step 6)
   const progressedPos = new Set(visibleMockDynRequests.map((x: any) => x.po));
@@ -1233,7 +1276,17 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const overviewRequestItems = allRequestItems.slice(0, 3);
   const upcomingMeetings = visibleMockDynRequests
     .filter((x: any) => x.type === "meeting_scheduled")
-    .sort((a: any, b: any) => parseDateMs(a.createdAt || a.date) - parseDateMs(b.createdAt || b.date));
+    .filter((x: any) => {
+      const meetingTs = x.meetingDate
+        ? parseDateMs(`${x.meetingDate}T${x.meetingTime || '00:00'}`)
+        : parseDateMs(x.createdAt || x.date);
+      return meetingTs >= Date.now() - (3 * 24 * 60 * 60 * 1000);
+    })
+    .sort((a: any, b: any) => {
+      const aTs = a.meetingDate ? parseDateMs(`${a.meetingDate}T${a.meetingTime || '00:00'}`) : parseDateMs(a.createdAt || a.date);
+      const bTs = b.meetingDate ? parseDateMs(`${b.meetingDate}T${b.meetingTime || '00:00'}`) : parseDateMs(b.createdAt || b.date);
+      return aTs - bTs;
+    });
   const workflowAlerts = visibleMockDynRequests
     .map((x: any) => {
       const stableTime = x.date || toDisplayDateTime(x.createdAt) || "";
@@ -1251,7 +1304,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const baseAlerts: any[] = [];
   const allAlerts = [...workflowAlerts, ...baseAlerts].sort((a: any, b: any) => parseDateMs(b.createdAt || b.time) - parseDateMs(a.createdAt || a.time));
   const overviewAlerts = allAlerts.slice(0, 3);
-  const overviewIncomingChats = chatFeed.filter((c: any) => c.hasIncoming).slice(0, 2);
+  const overviewIncomingChats = chatFeed.filter((c: any) => c.hasIncoming).slice(0, 3);
 
   // Auto-create chat_ready requests for active jobs stuck at step 7 with no pending workflow request.
   // This repairs the dashboard for users whose payment completed but the dynamic request wasn't written.
@@ -2147,7 +2200,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                     };
                     setMockActiveItems(prev => prev.map((x: any) => x.po === po ? { ...x, step: 10, actionNeeded: false } : x));
                     setMockDynRequests(prev => {
-                      const next = [...prev.filter((x: any) => !(x.po === po && x.type === 'variation_pending')), notice];
+                      const next = [...prev.filter((x: any) => !(x.po === po && ['variation_pending', 'meeting_pending_partner', 'meeting_scheduled'].includes(x.type))), notice];
                       try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(next)); } catch {}
                       return next;
                     });
@@ -2201,7 +2254,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                     try { localStorage.setItem(`chat_closed_${po}`, '1'); } catch {}
                     setMockActiveItems(prev => prev.map((x: any) => x.po === po ? { ...x, step: 11, actionNeeded: true } : x));
                     setMockDynRequests(prev => {
-                      const next = [...prev.filter((x: any) => !(x.po === po && x.type === 'complete_pending')), rateReq];
+                      const next = [...prev.filter((x: any) => !(x.po === po && ['complete_pending', 'variation_pending', 'meeting_pending_partner', 'meeting_scheduled'].includes(x.type))), rateReq];
                       try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(next)); } catch {}
                       return next;
                     });

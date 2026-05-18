@@ -71,6 +71,16 @@ const extractPoCode = (value: any) => {
   const desc = String(value?.description || value?.desc || "");
   return desc.match(PO_CODE_PATTERN)?.[0] || "";
 };
+const parseMeetingInviteDetails = (value: string) => {
+  const text = String(value || "");
+  const match = text.match(/customer sent meeting invitation(?: for (PO-(?:\d{8}|\d{4}-\d{4,})))?:\s*(\d{2}\/\d{2}\/\d{4})\s+(\d{2}:\d{2})\s+at\s+(.+?)(?:\.|$)/i);
+  return {
+    po: match?.[1] || "",
+    meetingDateLabel: match?.[2] || "",
+    meetingTimeLabel: match?.[3] || "",
+    meetingVenue: String(match?.[4] || "").trim(),
+  };
+};
 const getWorkflowStepFromStatus = (status?: string) => {
   switch (String(status || '').toUpperCase()) {
     case 'ASSIGNED':
@@ -140,7 +150,9 @@ export default function FixerProPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [waitModalOrder, setWaitModalOrder] = useState<any>(null);
   const handleJobClick = (job: any) => {
-    if (job.status && ['MATCHING', 'CREATED', 'MEETING_REQUESTED'].includes(job.status.toUpperCase())) {
+    const workflowType = String(job?.workflowType || job?.type || '').toLowerCase();
+    const jobStatus = String(job?.status || '').toUpperCase();
+    if (workflowType === 'meeting_confirm_partner' || ['MATCHING', 'CREATED', 'MEETING_REQUESTED'].includes(jobStatus)) {
       setWaitModalOrder(job);
     } else {
       const poFromDesc = extractPoCode(job);
@@ -689,6 +701,8 @@ export default function FixerProPage() {
         if (!po || !order) continue;
 
         if (lower.includes('customer sent meeting invitation')) {
+          const inviteDetails = parseMeetingInviteDetails(String(chat.lastMsg || order.statusNote || ''));
+          const createdAt = Number(chat.sort || 0) || Date.now();
           upsert({
             id: `meeting-confirm-${po}`,
             po,
@@ -696,12 +710,18 @@ export default function FixerProPage() {
             serviceTh: order.serviceTh,
             serviceZh: order.serviceZh,
             customer: order.customer,
-            date: fmtDateTime(Date.now()),
-            createdAt: Date.now(),
+            date: chat.time || fmtDateTime(createdAt),
+            createdAt,
             fee: order.fee,
             budget: order.budget,
             tier: order.tier,
             description: 'Customer sent a site meeting invitation. Please review and confirm the meeting time.',
+            projectDetails: String(order.description || '').replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?/, '').trim(),
+            meetingMessage: String(chat.lastMsg || ''),
+            meetingDateLabel: inviteDetails.meetingDateLabel,
+            meetingTimeLabel: inviteDetails.meetingTimeLabel,
+            meetingVenue: inviteDetails.meetingVenue || order.subdistrict || 'Unknown',
+            subdistrict: order.subdistrict || 'Unknown',
             type: 'meeting_confirm_partner',
             workflowType: 'meeting_confirm_partner',
             status: 'MEETING_REQUESTED',
@@ -844,6 +864,16 @@ export default function FixerProPage() {
     { key: "notifications", label: locale === "th" ? "แจ้งเตือน" : locale === "zh" ? "通知" : "Alerts", icon: "", badge: 0 },
     { key: "profile", label: locale === "th" ? "โปรไฟล์" : locale === "zh" ? "个人资料" : "Profile", icon: "" },
   ];
+  const isMeetingConfirmation = waitModalOrder
+    ? String(waitModalOrder?.workflowType || waitModalOrder?.type || '').toLowerCase() === 'meeting_confirm_partner' || String(waitModalOrder?.status || '').toUpperCase() === 'MEETING_REQUESTED'
+    : false;
+  const parsedWaitModalMeeting = parseMeetingInviteDetails(String(waitModalOrder?.meetingMessage || waitModalOrder?.statusNote || waitModalOrder?.description || waitModalOrder?.desc || ''));
+  const waitModalMeetingDetails = {
+    meetingDateLabel: waitModalOrder?.meetingDateLabel || parsedWaitModalMeeting.meetingDateLabel,
+    meetingTimeLabel: waitModalOrder?.meetingTimeLabel || parsedWaitModalMeeting.meetingTimeLabel,
+    meetingVenue: waitModalOrder?.meetingVenue || parsedWaitModalMeeting.meetingVenue || waitModalOrder?.subdistrict || 'Unknown',
+    meetingMessage: waitModalOrder?.meetingMessage || '',
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50/30">
@@ -854,17 +884,26 @@ export default function FixerProPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-start mb-4">
-              <div className="mb-2 text-sm font-semibold text-purple-600 bg-purple-50 inline-block px-3 py-1 rounded-full">Step 5 of 11</div>
+              <div className="mb-2 text-sm font-semibold text-purple-600 bg-purple-50 inline-block px-3 py-1 rounded-full">{isMeetingConfirmation ? 'Step 8 of 11' : 'Step 5 of 11'}</div>
               <button onClick={() => setWaitModalOrder(null)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
             </div>
-            <h2 className="text-2xl font-bold text-gray-900 mt-2">Review PO Details</h2>
-            <p className="text-gray-500 mt-2">Customer has placed a request for {waitModalOrder.serviceTh || waitModalOrder.service}. Please review the PO details below and accept or decline.</p>
+            <h2 className="text-2xl font-bold text-gray-900 mt-2">{isMeetingConfirmation ? 'Confirm Site Meeting' : 'Review PO Details'}</h2>
+            <p className="text-gray-500 mt-2">{isMeetingConfirmation ? `Customer sent a site meeting invitation for ${waitModalOrder.serviceTh || waitModalOrder.service}. Please review the proposed venue, date, and time before confirming.` : `Customer has placed a request for ${waitModalOrder.serviceTh || waitModalOrder.service}. Please review the PO details below and accept or decline.`}</p>
             
             <div className="w-full bg-gray-50 rounded-xl p-5 mt-6 space-y-3 text-sm text-left border border-gray-100 shadow-inner">
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">PO Number</span><span className="font-mono font-bold text-gray-800">{waitModalOrder.po || `PO-2605-${waitModalOrder.id?.slice(0, 4)}`}</span></div>
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Customer</span><span className="font-bold text-gray-800">{waitModalOrder.customer || waitModalOrder.customerAlias || 'Customer'}</span></div>
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Budget</span><span className="font-bold text-amber-600">฿{waitModalOrder.budget || waitModalOrder.estimatedPrice || waitModalOrder.finalPrice || '0'}</span></div>
-              <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">Project Details</span><span className="font-bold text-gray-800 bg-white p-2 rounded border border-gray-100">{(waitModalOrder.description || waitModalOrder.service || "").replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?/, "")}</span></div>
+              <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Project Location</span><span className="font-bold text-gray-800 text-right">{waitModalOrder.meetingVenue || waitModalOrder.subdistrict || 'Unknown'}</span></div>
+              {isMeetingConfirmation && (
+                <>
+                  <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Proposed Date</span><span className="font-bold text-gray-800">{waitModalMeetingDetails.meetingDateLabel || '-'}</span></div>
+                  <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Proposed Time</span><span className="font-bold text-gray-800">{waitModalMeetingDetails.meetingTimeLabel || '-'}</span></div>
+                  <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Venue</span><span className="font-bold text-gray-800 text-right">{waitModalMeetingDetails.meetingVenue}</span></div>
+                </>
+              )}
+              <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">Project Details</span><span className="font-bold text-gray-800 bg-white p-2 rounded border border-gray-100">{(waitModalOrder.projectDetails || waitModalOrder.description || waitModalOrder.service || "").replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?/, "")}</span></div>
+              {isMeetingConfirmation && waitModalMeetingDetails.meetingMessage && <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">Customer Invitation</span><span className="text-gray-800 bg-white p-2 rounded border border-gray-100">{waitModalMeetingDetails.meetingMessage}</span></div>}
               <div className="flex justify-between"><span className="text-gray-500">Uploaded Files</span><span className="font-semibold text-sky-600 cursor-pointer hover:underline" onClick={async () => { 
                 let url = waitModalOrder?.issueImage || waitModalOrder?.image || waitModalOrder?.fileUrl || (waitModalOrder?.projectImages && waitModalOrder?.projectImages[0]) || (waitModalOrder?.images && waitModalOrder?.images[0]) || (waitModalOrder?.metadata?.images && waitModalOrder?.metadata.images[0]) || (waitModalOrder?.metadata?.issueImageUrl) || (waitModalOrder?.metadata?.issueImage);
                 const poFromDesc = extractPoCode(waitModalOrder);
@@ -933,17 +972,18 @@ export default function FixerProPage() {
                     try {
                       let wf = JSON.parse(localStorage.getItem("cblue_workflow") || "{}");
                       if(wf) {
-                        wf.step = waitModalOrder.status === 'MEETING_REQUESTED' ? 8 : 6;
+                        wf.step = isMeetingConfirmation ? 8 : 6;
                         localStorage.setItem("cblue_workflow", JSON.stringify(wf));
                       }
                     } catch(e) {}
-                    if (waitModalOrder.status === 'MEETING_REQUESTED') {
+                    if (isMeetingConfirmation) {
                       const schedId = `meet-scheduled-${po}`;
+                      const meetingSummary = [waitModalMeetingDetails.meetingDateLabel, waitModalMeetingDetails.meetingTimeLabel].filter(Boolean).join(' ');
                       // Use PO-based matching (not waitModalOrder.id) because mockDynReqs IDs are
                       // 'meet-pending-{po}', not the backend UUID stored in waitModalOrder.id
                       const nextReqs = [
                         ...mockDynReqs.filter((r: any) => !(r.po === po && r.type === 'meeting_pending_partner') && r.id !== schedId),
-                        { id: schedId, po, title: waitModalOrder.service || serviceTitle, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), budget: budgetLabel, tier: waitModalOrder.tier, type: 'meeting_scheduled', step: 8, desc: 'Meeting confirmed by partner. Proceed after the site meeting then mark variation.' },
+                        { id: schedId, po, title: waitModalOrder.service || serviceTitle, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), budget: budgetLabel, tier: waitModalOrder.tier, type: 'meeting_scheduled', step: 8, venue: waitModalMeetingDetails.meetingVenue, meetingDate: waitModalOrder.meetingDate || waitModalMeetingDetails.meetingDateLabel, meetingTime: waitModalOrder.meetingTime || waitModalMeetingDetails.meetingTimeLabel, desc: `Meeting confirmed by partner${meetingSummary ? ` for ${meetingSummary}` : ''}${waitModalMeetingDetails.meetingVenue ? ` at ${waitModalMeetingDetails.meetingVenue}` : ''}. Proceed after the site meeting then mark variation.` },
                       ];
                       const nextActive = mockActiveState.map((x: any) => x.po === po ? { ...x, step: 8, actionNeeded: true } : x);
                       localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(nextReqs));
@@ -1055,7 +1095,7 @@ export default function FixerProPage() {
                 }} 
                 className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl transition shadow-md"
               >
-                {waitModalOrder.status === 'MEETING_REQUESTED' ? 'Confirm Meeting Time' : 'Accept PO'}
+                {isMeetingConfirmation ? 'Confirm Meeting Time' : 'Accept PO'}
               </button>
               <button 
                 onClick={() => setWaitModalOrder(null)} 
@@ -1354,7 +1394,7 @@ export default function FixerProPage() {
 function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledMeetings, completedJobs, earnings, stats, notifications, chats = [], onJobClick, onTabChange }: { locale: string; partner: PartnerInfo | null; activeJobs: any[]; incomingJobs: any[]; scheduledMeetings: any[]; completedJobs: any[]; earnings: any[]; stats: any; notifications: any[]; chats?: any[]; onJobClick?: (job: any) => void; onTabChange?: (tab: string) => void; }) {
   const earnings12 = earnings;
   const maxEarning = earnings12.length > 0 ? Math.max(...earnings12.map(e => e.amount)) : 0;
-  const recentIncomingChats = chats.filter((c: any) => c.hasIncoming).slice(0, 2);
+  const recentIncomingChats = chats.filter((c: any) => c.hasIncoming).slice(0, 3);
   return (
     <div className="space-y-6">
       {/* Stats Row */}
@@ -1433,8 +1473,9 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
             <div key={req.id} className="px-6 py-4 flex items-center gap-4 hover:bg-amber-50 transition cursor-pointer" onClick={() => onJobClick && onJobClick(req)}>
               <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center text-lg"></div>
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? req.serviceTh : locale === "zh" ? req.serviceZh : req.service}</p>
+                <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? req.serviceTh : locale === "zh" ? req.serviceZh : req.service} {req.po ? <span className="text-xs font-normal text-gray-400">· {req.po}</span> : null}</p>
                 <p className="text-xs text-gray-500">{req.customer} &middot; {req.date} &middot; {locale === "th" ? "งบ" : locale === "zh" ? "预算" : "Budget"}: {req.fee || `฿${req.budget || '0'}`}</p>
+                {(req.po || req.meetingVenue || req.subdistrict) && <p className="text-xs text-gray-500 mt-0.5">{[req.po, req.meetingVenue || req.subdistrict].filter(Boolean).join(' · ')}</p>}
                 <p className="text-xs text-gray-500 mt-1" style={{ whiteSpace: "pre-wrap" }}>{req.description || req.desc || req.statusNote}</p>
               </div>
               <div className="flex items-center gap-2">
@@ -1691,14 +1732,14 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
               <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? job.serviceTh : locale === "zh" ? job.serviceZh : job.service}</p>
               <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"} &middot; {job.po} | {job.subdistrict || "Saphansong"}</p>
               <div className="mt-2 w-full pt-1">
-                <div className="w-full overflow-x-auto pb-2 hide-scrollbar">
-                  <div className="flex items-start min-w-max relative px-2">
+                <div className="w-full md:w-2/3 overflow-x-auto pb-4 hide-scrollbar">
+                  <div className="flex items-center min-w-max relative px-2">
                     {(() => {
                       const currentStep = job.mockStep || (job.status === 'COMPLETED' ? 11 : 5);
                       return (
                         <>
-                    <div className="absolute left-4 right-4 top-2 h-1 bg-gray-200 rounded-full"></div>
-                    <div className="absolute left-4 top-2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, ((currentStep - 4) / 7) * 100))}%` }}></div>
+                    <div className="absolute left-4 right-4 top-3 -translate-y-1/2 h-1 bg-gray-200 rounded-full"></div>
+                    <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, ((currentStep - 4) / 7) * 100))}%` }}></div>
                     {["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"].map((s, i) => {
                       const stepNum = i + 4;
                       const isCompleted = stepNum < currentStep;
@@ -1955,9 +1996,10 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
           <div key={req.id} className="px-6 py-4 flex items-center gap-4 hover:bg-amber-50 transition cursor-pointer" onClick={() => onJobClick && onJobClick(req)}>
             <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center text-lg"></div>
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? req.serviceTh : locale === "zh" ? req.serviceZh : req.service}</p>
+              <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? req.serviceTh : locale === "zh" ? req.serviceZh : req.service} {req.po ? <span className="text-xs font-normal text-gray-400">· {req.po}</span> : null}</p>
               <p className="text-xs text-amber-600 font-semibold mt-0.5">{req.type === 'variation_partner' ? 'Please decide whether to submit a variation request.' : req.type === 'complete_partner' ? 'Please send project complete request to customer.' : req.type === 'rate_partner' ? 'Please rate the customer to close this job.' : String(req.status || '').toUpperCase() === 'MEETING_REQUESTED' ? 'Please review and confirm the site meeting invitation.' : locale === "th" ? "โปรดพิจารณาและรับงานนี้เพื่อดำเนินการต่อ" : locale === "zh" ? "请审核并接受此工作以继续" : "Please review and accept this job to proceed"}</p>
               <p className="text-xs text-gray-500 mt-0.5">{req.customer} &middot; {req.date} &middot; {locale === "th" ? "งบ" : locale === "zh" ? "预算" : "Budget"}: {req.fee || `฿${req.budget || '0'}`}</p>
+              {(req.po || req.meetingVenue || req.subdistrict) && <p className="text-xs text-gray-500 mt-0.5">{[req.po, req.meetingVenue || req.subdistrict].filter(Boolean).join(' · ')}</p>}
               <p className="text-xs text-gray-500 mt-1" style={{ whiteSpace: "pre-wrap" }}>{req.description || req.desc || req.statusNote}</p>
             </div>
             <div className="flex items-center gap-2">
@@ -2113,6 +2155,9 @@ function PartnerChats({ locale, chats }: { locale: string; chats: any[] }) {
             try {
               if (c.po) {
                 localStorage.setItem(`chat_from_${c.po}`, "fixers");
+                if (c.name) {
+                  localStorage.setItem(`chat_title_${c.po}`, c.name);
+                }
               }
             } catch {}
             window.location.href = `/${locale}/chat/${c.po || c.id}`;
@@ -2125,7 +2170,7 @@ function PartnerChats({ locale, chats }: { locale: string; chats: any[] }) {
               <div className="flex justify-between items-baseline mb-1">
                 <div className="flex items-center gap-2">
                   <p className="font-bold text-gray-900 truncate">{c.name}</p>
-                  <span className="text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-500">{c.service || c.po || "Chat"}</span>
+                  {c.service && c.service !== c.po && c.service !== c.name ? <span className="text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-500">{c.service}</span> : null}
                 </div>
                 <span className="text-xs text-gray-400 whitespace-nowrap ml-2">{c.time || ""}</span>
               </div>
