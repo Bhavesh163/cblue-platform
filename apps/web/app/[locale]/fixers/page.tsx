@@ -812,7 +812,8 @@ export default function FixerProPage() {
     return () => clearInterval(interval);
   }, []);
 
-  let activeJobs = mappedOrders.filter(o => !['COMPLETED', 'CANCELLED'].includes(o.status));
+  const completedHistoryPos = new Set(mockHistory.map((h: any) => h.po));
+  let activeJobs = mappedOrders.filter(o => !['COMPLETED', 'CANCELLED'].includes(o.status) && !completedHistoryPos.has(o.po));
   activeJobs = activeJobs.map(job => {
       const stepLookup = mockActiveState.find((x: any) => x.po === job.po);
       const backendStep = getWorkflowStepFromStatus(job.status);
@@ -964,6 +965,8 @@ export default function FixerProPage() {
         const completeAlreadySubmitted = Number(localActive?.step || 0) >= 10 && localActive?.actionNeeded === false;
         const partnerAlreadyRated = Boolean(historyEntry?.partnerRating);
         if (!po || !order) continue;
+        // Skip ALL reconstruction for completed jobs - prevents step 8 from reappearing after partner rates
+        if (historyEntry) continue;
 
         if (lower.includes('customer sent meeting invitation')) {
           const inviteDetails = parseMeetingInviteDetails(String(chat.lastMsg || order.statusNote || ''));
@@ -1195,7 +1198,6 @@ export default function FixerProPage() {
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">What You Need To Do</span><span className="font-bold text-gray-800 text-right max-w-[60%]">{waitModalInstruction}</span></div>
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Customer</span><span className="font-bold text-gray-800">{waitModalCounterpart}</span></div>
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Budget</span><span className="font-bold text-amber-600">{waitModalBudgetDisplay}</span></div>
-              <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Budget Calculation</span><span className="font-bold text-gray-800 text-right">Matched PO total based on the selected partner price list.</span></div>
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Project Location</span><span className="font-bold text-gray-800 text-right">{waitModalOrder.meetingVenue || waitModalOrder.subdistrict || 'Unknown'}</span></div>
               {isMeetingConfirmation && (
                 <>

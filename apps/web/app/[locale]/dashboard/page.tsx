@@ -1363,7 +1363,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const filteredStaticRequests = (useStaticDemoData ? REQUESTS_MOCK : []).filter((x: any) => !progressedPos.has(x.po));
   const dedupedRequestMap = new Map<string, any>();
   for (const requestItem of [...filteredStaticRequests, ...visibleMockDynRequests].filter(
-    (m: any) => !mockPayments[m.id] && !['notice', 'meeting_scheduled'].includes(String(m.type || '')),
+    (m: any) => !mockPayments[m.id] && !['notice', 'meeting_scheduled', 'chat_ready'].includes(String(m.type || '')),
   )) {
     const requestType = String(requestItem.type || '');
     const dedupeKey = requestItem.po && ['chat_ready', 'meeting_invite', 'meeting_pending_partner'].includes(requestType)
@@ -2149,7 +2149,6 @@ const activeOrders = workflowOrders.filter((o: any) => !['COMPLETED', 'CANCELLED
                 <div className="flex justify-between items-center"><span className="text-gray-500 text-xs">What You Need To Do</span><span className="font-bold text-gray-800 text-right">Pay the processing fee, activate chat, and proceed to site meeting.</span></div>
                 <div className="flex justify-between items-center"><span className="text-gray-500 text-xs">Project Location</span><span className="font-bold text-gray-800">{waitModalOrder.request?.location || waitModalOrder.request?.subdistrict || 'Saphansong'}</span></div>
                 <div className="flex flex-col"><span className="text-gray-500 text-xs">Project Details</span><span className="font-bold text-gray-800">{String(waitModalOrder.request?.description || waitModalOrder.request?.desc || '').replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?/, '') || 'Project details from the draft PO.'}</span></div>
-                <div className="flex justify-between items-center"><span className="text-gray-500 text-xs">Budget Calculation</span><span className="font-bold text-gray-800 text-right">Matched PO total based on the selected partner price list.</span></div>
               </div>
               
               <div className="bg-sky-50 text-sky-800 text-[13px] p-3 rounded-xl mb-4 border border-sky-100 text-center font-medium">
@@ -2310,7 +2309,7 @@ const activeOrders = workflowOrders.filter((o: any) => !['COMPLETED', 'CANCELLED
                 </div>
               </div>
               <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-2 text-xs text-amber-700">
-                <strong>Budget:</strong> {meetingModal.budget} &nbsp;|&nbsp; <strong>Tier:</strong> {meetingModal.tier} &nbsp;|&nbsp; <strong>Budget Calculation:</strong> Matched PO total from the selected partner price list.
+                <strong>Budget:</strong> {meetingModal.budget} &nbsp;|&nbsp; <strong>Tier:</strong> {meetingModal.tier}
               </div>
             </div>
 
