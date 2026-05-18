@@ -150,6 +150,7 @@ export default function FixerProPage() {
 
   const [orders, setOrders] = useState<any[]>([]);
   const [waitModalOrder, setWaitModalOrder] = useState<any>(null);
+  const [waitModalAttachmentUrls, setWaitModalAttachmentUrls] = useState<string[]>([]);
   const handleJobClick = (job: any) => {
     const workflowType = String(job?.workflowType || job?.type || '').toLowerCase();
     const jobStatus = String(job?.status || '').toUpperCase();
@@ -174,6 +175,84 @@ export default function FixerProPage() {
     }
   };
   const [myProperties, setMyProperties] = useState<any[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const resolveWaitModalAttachments = async () => {
+      if (!waitModalOrder) {
+        if (isMounted) setWaitModalAttachmentUrls([]);
+        return;
+      }
+
+      const directUrls = [
+        waitModalOrder?.issueImage,
+        waitModalOrder?.image,
+        waitModalOrder?.fileUrl,
+        ...(Array.isArray(waitModalOrder?.projectImages) ? waitModalOrder.projectImages : []),
+        ...(Array.isArray(waitModalOrder?.images) ? waitModalOrder.images : []),
+        ...(Array.isArray(waitModalOrder?.metadata?.images) ? waitModalOrder.metadata.images : []),
+        waitModalOrder?.metadata?.issueImageUrl,
+        waitModalOrder?.metadata?.issueImage,
+      ].filter(Boolean);
+
+      const poFromDesc = extractPoCode(waitModalOrder);
+      const poKey = waitModalOrder?.po || poFromDesc;
+      const attachmentOrderId = waitModalOrder?.orderId || (poKey ? localStorage.getItem(`po_to_order_${poKey}`) : '') || waitModalOrder?.id;
+
+      try {
+        const poMap = JSON.parse(localStorage.getItem('cblue_po_attachments') || '{}');
+        const orderMap = JSON.parse(localStorage.getItem('cblue_order_attachments') || '{}');
+        if (poKey && Array.isArray(poMap[poKey])) {
+          directUrls.push(...poMap[poKey]);
+        }
+        if (attachmentOrderId && Array.isArray(orderMap[attachmentOrderId])) {
+          directUrls.push(...orderMap[attachmentOrderId]);
+        }
+      } catch {}
+
+      const uniqueDirectUrls = Array.from(new Set(directUrls.filter(Boolean)));
+      if (uniqueDirectUrls.length > 0) {
+        if (isMounted) setWaitModalAttachmentUrls(uniqueDirectUrls);
+        return;
+      }
+
+      if (!attachmentOrderId) {
+        if (isMounted) setWaitModalAttachmentUrls([]);
+        return;
+      }
+
+      try {
+        const token = localStorage.getItem('subscriber_token') || '';
+        if (!token) {
+          if (isMounted) setWaitModalAttachmentUrls([]);
+          return;
+        }
+
+        const res = await fetch(`/api/v1/orders/${attachmentOrderId}/attachments`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) {
+          if (isMounted) setWaitModalAttachmentUrls([]);
+          return;
+        }
+
+        const attachments = await res.json();
+        const backendUrls = Array.isArray(attachments)
+          ? attachments.map((attachment: any) => attachment?.url).filter(Boolean)
+          : [];
+        if (isMounted) setWaitModalAttachmentUrls(Array.from(new Set(backendUrls)));
+      } catch {
+        if (isMounted) setWaitModalAttachmentUrls([]);
+      }
+    };
+
+    void resolveWaitModalAttachments();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [waitModalOrder]);
 
 
 
@@ -647,7 +726,11 @@ export default function FixerProPage() {
         status: 'COMPLETED',
         step: 11,
       })),
-  ];
+  ].sort((a: any, b: any) => {
+    const aTs = new Date(a.statusChangedAt || a.completedAt || a.createdAt || a.date || 0).getTime();
+    const bTs = new Date(b.statusChangedAt || b.completedAt || b.createdAt || b.date || 0).getTime();
+    return bTs - aTs;
+  });
   const earningsSeries = (() => {
     const enMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const thMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
@@ -958,60 +1041,17 @@ export default function FixerProPage() {
               )}
               <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">Project Details</span><span className="font-bold text-gray-800 bg-white p-2 rounded border border-gray-100">{(waitModalOrder.projectDetails || waitModalOrder.description || waitModalOrder.service || "").replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?/, "")}</span></div>
               {isMeetingConfirmation && waitModalMeetingDetails.meetingMessage && <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">Customer Invitation</span><span className="text-gray-800 bg-white p-2 rounded border border-gray-100">{waitModalMeetingDetails.meetingMessage}</span></div>}
-              <div className="flex justify-between"><span className="text-gray-500">Uploaded Files</span><span className="font-semibold text-sky-600 cursor-pointer hover:underline" onClick={async () => { 
-                let url = waitModalOrder?.issueImage || waitModalOrder?.image || waitModalOrder?.fileUrl || (waitModalOrder?.projectImages && waitModalOrder?.projectImages[0]) || (waitModalOrder?.images && waitModalOrder?.images[0]) || (waitModalOrder?.metadata?.images && waitModalOrder?.metadata.images[0]) || (waitModalOrder?.metadata?.issueImageUrl) || (waitModalOrder?.metadata?.issueImage);
-                const poFromDesc = extractPoCode(waitModalOrder);
-                const poKey = waitModalOrder?.po || poFromDesc;
-                const attachmentOrderId = waitModalOrder?.orderId || (poKey ? localStorage.getItem(`po_to_order_${poKey}`) : "") || waitModalOrder?.id;
-                if (!url) {
-                  try {
-                    const poMap = JSON.parse(localStorage.getItem("cblue_po_attachments") || "{}");
-                    const poUrl = poKey ? poMap[poKey]?.[0] : "";
-                    if (poUrl) url = poUrl;
-                  } catch {}
+              <div className="flex justify-between"><span className="text-gray-500">Uploaded Files</span><span className="font-semibold text-sky-600 cursor-pointer hover:underline" onClick={() => {
+                const url = waitModalAttachmentUrls[0] || '';
+                if (url) {
+                  window.open(url, "_blank");
+                  return;
                 }
-                if (!url) {
-                  try {
-                    const orderMap = JSON.parse(localStorage.getItem("cblue_order_attachments") || "{}");
-                    const orderUrl = attachmentOrderId ? orderMap[attachmentOrderId]?.[0] : "";
-                    if (orderUrl) url = orderUrl;
-                  } catch {}
-                }
-                if (!url && attachmentOrderId) {
-                  try {
-                    const token = localStorage.getItem("subscriber_token") || "";
-                    if (token) {
-                      const res = await fetch(`/api/v1/orders/${attachmentOrderId}/attachments`, {
-                        headers: { Authorization: `Bearer ${token}` },
-                      });
-                      if (res.ok) {
-                        const attachments = await res.json();
-                        if (Array.isArray(attachments) && attachments.length > 0) {
-                          url = attachments[0]?.url || "";
-                        }
-                      }
-                    }
-                  } catch {
-                    // Ignore and keep local fallback behavior.
-                  }
-                }
-                if(url) window.open(url, "_blank"); 
-                else { alert("No uploaded file found for this order. Please re-submit from booking so file can be attached to this PO."); } 
+                alert("No uploaded file found for this order. Please re-submit from booking so file can be attached to this PO.");
               }}>
-                {(() => {
-                  const hasDirect = !!(waitModalOrder?.image || (waitModalOrder?.images && waitModalOrder?.images.length > 0) || waitModalOrder?.fileUrl || (waitModalOrder?.projectImages && waitModalOrder?.projectImages.length > 0) || waitModalOrder?.metadata?.images);
-                  const hasBackend = !!waitModalOrder?.hasAttachment;
-                  let hasMapped = false;
-                  try {
-                    const poMap = JSON.parse(localStorage.getItem("cblue_po_attachments") || "{}");
-                    const orderMap = JSON.parse(localStorage.getItem("cblue_order_attachments") || "{}");
-                    const poFromDesc = extractPoCode(waitModalOrder);
-                    const poKey = waitModalOrder?.po || poFromDesc;
-                    const attachmentOrderId = waitModalOrder?.orderId || (poKey ? localStorage.getItem(`po_to_order_${poKey}`) : "") || waitModalOrder?.id;
-                    hasMapped = Boolean((poKey && poMap[poKey]?.length) || (attachmentOrderId && orderMap[attachmentOrderId]?.length));
-                  } catch {}
-                  return (hasDirect || hasMapped || hasBackend) ? "1 file attached (Click to View)" : "No file attached";
-                })()}
+                {waitModalAttachmentUrls.length > 0
+                  ? `${waitModalAttachmentUrls.length} file${waitModalAttachmentUrls.length > 1 ? 's' : ''} attached (Click to View)`
+                  : (waitModalOrder?.hasAttachment ? '1 file attached (Click to View)' : 'No file attached')}
               </span></div>
             </div>
 
@@ -1530,7 +1570,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
             <div key={req.id} className="px-6 py-4 flex items-center gap-4 hover:bg-amber-50 transition cursor-pointer" onClick={() => onJobClick && onJobClick(req)}>
               <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center text-lg"></div>
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? req.serviceTh : locale === "zh" ? req.serviceZh : req.service} {req.po ? <span className="text-xs font-normal text-gray-400">· {req.po}</span> : null}</p>
+                <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? req.serviceTh : locale === "zh" ? req.serviceZh : req.service}{(req.po || req.step) ? <span className="text-xs font-normal text-gray-400">{req.po ? ` · ${req.po}` : ''}{req.step ? ` · Step ${req.step} of 11` : ''}</span> : null}</p>
                 <p className="text-xs text-gray-500">{req.customer} &middot; {req.date} &middot; {locale === "th" ? "งบ" : locale === "zh" ? "预算" : "Budget"}: {req.fee || `฿${req.budget || '0'}`}</p>
                 {(req.meetingVenue || req.subdistrict) && <p className="text-xs text-gray-500 mt-0.5">{[req.meetingVenue || req.subdistrict].filter(Boolean).join(' · ')}</p>}
                 <p className="text-xs text-gray-500 mt-1" style={{ whiteSpace: "pre-wrap" }}>{stripWorkflowPrefix(req.description || req.desc || req.statusNote)}</p>
@@ -1562,7 +1602,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
                 <div key={meeting.id} className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
                   <p className="text-sm font-bold text-gray-800">{meeting.title} ({meeting.po})</p>
                   <p className="text-xs text-gray-500 mt-1">{meeting.date}</p>
-                  <p className="text-xs text-gray-500 mt-1">Location: Saphansong | Customer: {meeting.customer}</p>
+                  <p className="text-xs text-gray-500 mt-1">Location: {meeting.meetingVenue || meeting.venue || meeting.subdistrict || '-'} | Customer: {meeting.customer}</p>
                 </div>
               ))}
             </div>
@@ -1626,14 +1666,14 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
                 <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"}</p>
                 {job.subdistrict && <p className="text-xs text-gray-500 mt-0.5">{job.subdistrict}</p>}
                 <div className="mt-2 w-full pt-1">
-                  <div className="w-full overflow-x-auto pb-2 hide-scrollbar">
-<div className="flex items-start min-w-max relative px-2">
+                  <div className="w-2/3 overflow-x-auto pb-4 hide-scrollbar">
+                    <div className="flex items-center min-w-max relative px-2">
                     {(() => {
                         const currentStep = job.mockStep || (job.status === 'COMPLETED' ? 11 : 5);
                         return (
                           <>
-                      <div className="absolute left-4 right-4 top-2 h-1 bg-gray-200 rounded-full"></div>
-                      <div className="absolute left-4 top-2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, ((currentStep - 4) / 7) * 100))}%` }}></div>
+                      <div className="absolute left-4 right-4 top-3 -translate-y-1/2 h-1 bg-gray-200 rounded-full"></div>
+                      <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, ((currentStep - 4) / 7) * 100))}%` }}></div>
                       
                       {["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"].map((s, i) => {
                         const stepNum = i + 4; // Notify starts at 4
@@ -1671,7 +1711,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
             <h2 className="font-bold text-gray-900">Recent History</h2>
-            <span className="text-xs text-purple-600 font-bold cursor-pointer hover:underline">View All →</span>
+            <span className="text-xs text-purple-600 font-bold cursor-pointer hover:underline" onClick={() => onTabChange && onTabChange("history")}>View All →</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
@@ -1687,7 +1727,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
                   <tr key={h.id} className="border-b border-gray-50">
                     <td className="py-3 px-4 font-medium">{h.service}{h.po ? <span className="text-xs font-normal text-gray-400"> · {h.po}</span> : null}</td>
                     <td className="py-3 px-4 text-gray-600">{h.customer}</td>
-                    <td className="py-3 px-4 text-gray-500">{h.date}</td>
+                    <td className="py-3 px-4 text-gray-500">{h.date || fmtDateTime(h.statusChangedAt || h.completedAt || h.createdAt)}</td>
                   </tr>
                 )) : (
                   <tr>
@@ -2055,7 +2095,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
           <div key={req.id} className="px-6 py-4 flex items-center gap-4 hover:bg-amber-50 transition cursor-pointer" onClick={() => onJobClick && onJobClick(req)}>
             <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center text-lg"></div>
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? req.serviceTh : locale === "zh" ? req.serviceZh : req.service} {req.po ? <span className="text-xs font-normal text-gray-400">· {req.po}</span> : null}</p>
+              <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? req.serviceTh : locale === "zh" ? req.serviceZh : req.service}{(req.po || req.step) ? <span className="text-xs font-normal text-gray-400">{req.po ? ` · ${req.po}` : ''}{req.step ? ` · Step ${req.step} of 11` : ''}</span> : null}</p>
               <p className="text-xs text-amber-600 font-semibold mt-0.5">{req.type === 'variation_partner' ? 'Please decide whether to submit a variation request.' : req.type === 'complete_partner' ? 'Please send project complete request to customer.' : req.type === 'rate_partner' ? 'Please rate the customer to close this job.' : String(req.status || '').toUpperCase() === 'MEETING_REQUESTED' ? 'Please review and confirm the site meeting invitation.' : locale === "th" ? "โปรดพิจารณาและรับงานนี้เพื่อดำเนินการต่อ" : locale === "zh" ? "请审核并接受此工作以继续" : "Please review and accept this job to proceed"}</p>
               <p className="text-xs text-gray-500 mt-0.5">{req.customer} &middot; {req.date} &middot; {locale === "th" ? "งบ" : locale === "zh" ? "预算" : "Budget"}: {req.fee || `฿${req.budget || '0'}`}</p>
               {(req.meetingVenue || req.subdistrict) && <p className="text-xs text-gray-500 mt-0.5">{[req.meetingVenue || req.subdistrict].filter(Boolean).join(' · ')}</p>}

@@ -1281,9 +1281,34 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   // Filter static requests: hide items whose PO already has a dynamic entry (already progressed past step 6)
   const progressedPos = new Set(visibleMockDynRequests.map((x: any) => x.po));
   const filteredStaticRequests = (useStaticDemoData ? REQUESTS_MOCK : []).filter((x: any) => !progressedPos.has(x.po));
-  const allRequestItems = [...filteredStaticRequests, ...visibleMockDynRequests]
-    .filter((m: any) => !mockPayments[m.id] && !['notice', 'meeting_scheduled'].includes(String(m.type || '')))
+  const dedupedRequestMap = new Map<string, any>();
+  for (const requestItem of [...filteredStaticRequests, ...visibleMockDynRequests].filter(
+    (m: any) => !mockPayments[m.id] && !['notice', 'meeting_scheduled'].includes(String(m.type || '')),
+  )) {
+    const requestType = String(requestItem.type || '');
+    const dedupeKey = requestItem.po && ['chat_ready', 'meeting_invite', 'meeting_pending_partner'].includes(requestType)
+      ? `${requestItem.po}:${requestType === 'chat_ready' ? 'chat' : 'meeting'}`
+      : requestItem.po || requestItem.id;
+    const existing = dedupedRequestMap.get(dedupeKey);
+    if (!existing) {
+      dedupedRequestMap.set(dedupeKey, requestItem);
+      continue;
+    }
+    const existingStep = Number(existing.step || 0);
+    const nextStep = Number(requestItem.step || 0);
+    const existingTs = parseDateMs(existing.createdAt || existing.date);
+    const nextTs = parseDateMs(requestItem.createdAt || requestItem.date);
+    if (nextStep > existingStep || (nextStep === existingStep && nextTs >= existingTs)) {
+      dedupedRequestMap.set(dedupeKey, requestItem);
+    }
+  }
+  const allRequestItems = Array.from(dedupedRequestMap.values())
     .sort((a: any, b: any) => parseDateMs(b.createdAt || b.date) - parseDateMs(a.createdAt || a.date));
+  const actionableRequestPos = new Set(
+    allRequestItems
+      .filter((requestItem: any) => !['notice', 'meeting_scheduled'].includes(String(requestItem.type || '')))
+      .map((requestItem: any) => requestItem.po),
+  );
   const overviewRequestItems = allRequestItems.slice(0, 3);
   const upcomingMeetings = visibleMockDynRequests
     .filter((x: any) => x.type === "meeting_scheduled")
@@ -1608,7 +1633,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         <Progress12Steps currentStep={item.step || 5} showCurrent={true} />
         <div className="flex items-center gap-2 mt-2">
           <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${item.tier === 'ECONOMY' || item.tier === 'Economy' ? 'bg-green-50 text-green-700' : item.tier === 'Standard' || item.tier === 'STANDARD' ? 'bg-blue-50 text-blue-700' : item.tier === 'Corporate' ? 'bg-purple-50 text-purple-700' : item.tier === 'Specialist' ? 'bg-amber-50 text-amber-700' : item.tier === 'Expert' ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-600'}`}>{item.tier || 'Standard'}</span>
-          {item.actionNeeded && <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-red-50 text-red-700">Action Needed</span>}
+          {(item.actionNeeded || actionableRequestPos.has(item.po)) && <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-red-50 text-red-700">Action Needed</span>}
         </div>
       </div>
     </div>
