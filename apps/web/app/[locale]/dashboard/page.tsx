@@ -1107,8 +1107,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           }
           return r;
         });
-        if (!changed) return prev;
-        const cleaned = updated.filter((r: any) => !(toSchedule.has(r.po) && r.type === 'chat_ready'));
+        // Always remove chat_ready and meeting_invite for confirmed POs even if meeting_pending_partner
+        // was already converted by a direct localStorage write from the partner's browser.
+        const cleaned = updated.filter((r: any) => !(toSchedule.has(r.po) && (r.type === 'chat_ready' || r.type === 'meeting_invite')));
+        if (!changed && cleaned.length === prev.length) return prev;
         try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(cleaned)); } catch {}
         return cleaned;
       });

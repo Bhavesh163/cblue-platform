@@ -353,7 +353,7 @@ export default function FixerProPage() {
       hasAttachment: attachmentUrls.length > 0,
       images: attachmentUrls,
       issueImage: attachmentUrls[0] || "",
-      subdistrict: o.address?.subdistrict || o.address?.district || o.address?.province || o.subdistrict || "Unknown",
+      subdistrict: o.address?.subdistrict || o.address?.district || o.address?.province || o.subdistrict || "",
       createdAt: o.createdAt,
       customer: o.user?.name || "Customer",
       orderType: o.orderType?.toLowerCase() || "household",
@@ -588,11 +588,13 @@ export default function FixerProPage() {
   const [mockDynReqs, setMockDynReqs] = useState<any[]>([]);
   const [mockActiveState, setMockActiveState] = useState<any[]>([]);
   const [partnerDynReqs, setPartnerDynReqs] = useState<any[]>([]);
+  const [mockHistory, setMockHistory] = useState<any[]>([]);
   useEffect(() => {
     const checkMock = () => {
       try {
         const d = localStorage.getItem("ghis_mock_dyn_req"); if (d) setMockDynReqs(JSON.parse(d));
         const a = localStorage.getItem("ghis_mock_active"); if (a) setMockActiveState(JSON.parse(a));
+        const h = localStorage.getItem("ghis_mock_history"); if (h) setMockHistory(JSON.parse(h));
         const p = localStorage.getItem("partner_mock_dyn_req");
         setPartnerDynReqs(
           p
@@ -615,10 +617,37 @@ export default function FixerProPage() {
   activeJobs = activeJobs.map(job => {
       const stepLookup = mockActiveState.find((x: any) => x.po === job.po);
       const backendStep = getWorkflowStepFromStatus(job.status);
-      if (stepLookup) return { ...job, step: stepLookup.step, mockStep: stepLookup.step, actionNeeded: stepLookup.actionNeeded };
-      return { ...job, step: backendStep, mockStep: backendStep, actionNeeded: [5, 8].includes(backendStep) };
+      const step = stepLookup ? stepLookup.step : backendStep;
+      // For partner view: actionNeeded = partner has a pending workflow request OR backend requires partner action
+      const hasPartnerDynAction = partnerDynReqs.some((r: any) => r.po === job.po);
+      const partnerActionNeeded = hasPartnerDynAction ||
+        String(job.status || '').toUpperCase() === 'MEETING_REQUESTED' ||
+        backendStep === 5;
+      if (stepLookup) return { ...job, step, mockStep: step, actionNeeded: partnerActionNeeded };
+      return { ...job, step: backendStep, mockStep: backendStep, actionNeeded: partnerActionNeeded };
   });
-  const completedJobs = mappedOrders.filter(o => o.status === 'COMPLETED');
+  const backendCompletedJobs = mappedOrders.filter(o => o.status === 'COMPLETED');
+  // Merge localStorage history (same-browser simulation) with backend completed orders
+  const backendCompletedPos = new Set(backendCompletedJobs.map((j: any) => j.po));
+  const completedJobs = [
+    ...backendCompletedJobs,
+    ...mockHistory
+      .filter((h: any) => h.po && !backendCompletedPos.has(h.po))
+      .map((h: any) => ({
+        id: h.po,
+        po: h.po,
+        service: h.title || h.service || h.po,
+        serviceTh: h.title || h.service || h.po,
+        serviceZh: h.title || h.service || h.po,
+        customer: h.customer || h.fixerAlias || '',
+        date: h.date || '',
+        budget: h.budget || '฿0',
+        fee: h.budget || '฿0',
+        tier: h.tier || '',
+        status: 'COMPLETED',
+        step: 11,
+      })),
+  ];
   const earningsSeries = (() => {
     const enMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const thMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
@@ -632,8 +661,8 @@ export default function FixerProPage() {
     }));
     const completedByMonth = new Map<string, number>();
 
-    for (const job of completedJobs) {
-      const ts = new Date(job.statusChangedAt || job.createdAt || job.date || 0).getTime();
+    for (const job of (completedJobs as any[])) {
+      const ts = new Date((job as any).statusChangedAt || (job as any).createdAt || (job as any).date || 0).getTime();
       if (!ts) continue;
       const dt = new Date(ts);
       const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
@@ -727,8 +756,8 @@ export default function FixerProPage() {
             meetingMessage: String(chat.lastMsg || ''),
             meetingDateLabel: inviteDetails.meetingDateLabel,
             meetingTimeLabel: inviteDetails.meetingTimeLabel,
-            meetingVenue: inviteDetails.meetingVenue || order.subdistrict || 'Unknown',
-            subdistrict: order.subdistrict || 'Unknown',
+            meetingVenue: inviteDetails.meetingVenue || order.subdistrict || '',
+            subdistrict: order.subdistrict || '',
             type: 'meeting_confirm_partner',
             workflowType: 'meeting_confirm_partner',
             status: 'MEETING_REQUESTED',
@@ -1762,7 +1791,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
               <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"}</p>
               {job.subdistrict && <p className="text-xs text-gray-500 mt-0.5">{job.subdistrict}</p>}
               <div className="mt-2 w-full pt-1">
-                <div className="w-full md:w-2/3 overflow-x-auto pb-4 hide-scrollbar">
+                <div className="w-2/3 overflow-x-auto pb-4 hide-scrollbar">
                   <div className="flex items-center min-w-max relative px-2">
                     {(() => {
                       const currentStep = job.mockStep || (job.status === 'COMPLETED' ? 11 : 5);
