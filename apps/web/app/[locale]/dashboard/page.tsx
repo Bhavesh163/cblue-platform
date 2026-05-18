@@ -46,12 +46,64 @@ const extractPoCode = (orderLike: any) => {
   const desc = String(orderLike?.description || orderLike?.desc || "");
   return desc.match(PO_CODE_PATTERN)?.[0] || "";
 };
+const stripWorkflowPrefix = (value: any) => String(value || '').replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?/i, '').trim();
 const firstNameOnly = (value: any, fallback = 'User') => {
   const cleaned = String(value || '').trim();
-  return cleaned ? cleaned.split(/\s+/)[0] : fallback;
+  return cleaned ? cleaned.split(/\s+/)[0] || fallback : fallback;
 };
-const HIDDEN_TEST_POS = new Set(["PO-2605-6716", "PO-2605-9605"]);
+const HIDDEN_TEST_POS = new Set(["PO-2605-6716", "PO-2605-9605", "PO-2605-8699"]);
 const isHiddenTestPo = (value: any) => HIDDEN_TEST_POS.has(String(value || '').trim().toUpperCase());
+const WORKFLOW_STEP_NAMES: Record<number, string> = {
+  5: 'Accept',
+  6: 'Fee & Proceed',
+  7: 'Chat',
+  8: 'Meet',
+  9: 'Variation',
+  10: 'Complete',
+  11: 'Rate',
+};
+const getWorkflowStepName = (step?: number) => WORKFLOW_STEP_NAMES[Number(step || 0)] || 'Rate';
+const toCurrencyLabel = (value: any, fallback = '฿0') => {
+  const raw = String(value || '').trim();
+  if (!raw) return fallback;
+  return raw.startsWith('฿') ? raw : `฿${raw.replace(/^฿/, '')}`;
+};
+
+function CustomerWorkflowModalMeta({
+  step,
+  typeOfWork,
+  actionText,
+  po,
+  partnerName,
+  budget,
+  location,
+  projectDetails,
+}: {
+  step: number;
+  typeOfWork: string;
+  actionText: string;
+  po: string;
+  partnerName: string;
+  budget: string;
+  location: string;
+  projectDetails: string;
+}) {
+  return (
+    <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 space-y-2 text-sm text-gray-800">
+      <div className="flex justify-between gap-3"><span className="text-gray-500">Step Name</span><span className="font-bold text-right">{getWorkflowStepName(step)}</span></div>
+      <div className="flex justify-between gap-3"><span className="text-gray-500">Type of Work</span><span className="font-bold text-right">{typeOfWork}</span></div>
+      <div className="flex justify-between gap-3"><span className="text-gray-500">What You Need To Do</span><span className="font-bold text-right max-w-[65%]">{actionText}</span></div>
+      <div className="flex justify-between gap-3"><span className="text-gray-500">PO Number</span><span className="font-mono font-bold text-right">{po}</span></div>
+      <div className="flex justify-between gap-3"><span className="text-gray-500">Selected Partner</span><span className="font-bold text-right">{partnerName}</span></div>
+      <div className="flex justify-between gap-3"><span className="text-gray-500">Budget</span><span className="font-bold text-right">{budget}</span></div>
+      <div className="flex justify-between gap-3"><span className="text-gray-500">Project Location</span><span className="font-bold text-right">{location || 'Unknown'}</span></div>
+      <div>
+        <span className="text-gray-500">Project Details</span>
+        <p className="mt-1 rounded-lg border border-gray-100 bg-white px-3 py-2 font-bold text-gray-800">{projectDetails || 'Project details from the draft PO.'}</p>
+      </div>
+    </div>
+  );
+}
 
 const ICON_MAP: Record<string, string> = { household: "", project: "", professional: "", property: "" };
 const STATUS_STYLE: Record<string, string> = {
@@ -751,6 +803,23 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     }
     const ts = new Date(value || 0).getTime();
     return Number.isFinite(ts) ? ts : 0;
+  };
+  const readStoredChatHistory = (po: any) => {
+    if (!mockReady || typeof window === 'undefined' || !po) return [];
+    try {
+      const parsed = JSON.parse(localStorage.getItem(`chat_messages_${po}`) || '[]');
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .map((message: any) => ({
+          id: message?.id || `${po}-${message?.createdAt || message?.time || Math.random()}`,
+          sender: String(message?.sender || 'system'),
+          text: String(message?.text || '').trim(),
+          time: String(message?.time || ''),
+        }))
+        .filter((message: any) => message.text);
+    } catch {
+      return [];
+    }
   };
   const extractPo = (orderLike: any) => {
     return extractPoCode(orderLike);
@@ -1658,12 +1727,91 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       </div>
     </div>
   );
-const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLED', 'DONE'].includes(o.status)) : [];
-  const historyOrders = orders ? orders.filter((o: any) => ['COMPLETED', 'CANCELLED', 'DONE'].includes(o.status)) : [];
-  const allHistory = [...historyOrders, ...visibleMockHistory.map((x: any) => ({ service: x.title, fixerName: x.customer, createdAt: x.completedAt || new Date().toISOString(), fee: x.budget, status: 'COMPLETED', id: x.po }))];
+  const renderHistoryCard = (item: any, idx: number, compact = false) => {
+    const chatPreview = Array.isArray(item.chatHistory) ? item.chatHistory.slice(compact ? -2 : -4) : [];
+    return (
+      <div key={`${item.po || item.id || idx}`} className="p-5 hover:bg-gray-50 transition">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+          <div>
+            <h3 className="font-bold text-gray-900">{item.service} <span className="text-sm font-normal text-gray-400">· {item.po} · {item.counterpartName || item.fixerName || 'Partner'}</span></h3>
+            <p className="text-sm text-gray-500 mt-1">Completed {toDisplayDateTime(item.completedAt || item.statusChangedAt || item.createdAt || item.date)}</p>
+          </div>
+          <div className="flex flex-col items-start sm:items-end gap-1">
+            <span className="font-bold text-gray-900">{item.fee || item.budget || '฿0'}</span>
+            <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">Step 11 of 11 · {item.stepName || getWorkflowStepName(item.step)}</span>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 text-sm text-gray-700">
+          <div><span className="text-gray-500">Project Location:</span> {item.location || item.subdistrict || 'Unknown'}</div>
+          <div><span className="text-gray-500">Budget:</span> {item.fee || item.budget || '฿0'}</div>
+          <div className="sm:col-span-2"><span className="text-gray-500">Project Details:</span> {item.projectDetails || 'Project details not available.'}</div>
+        </div>
+        {chatPreview.length > 0 && (
+          <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Chat History</p>
+            <div className="space-y-2">
+              {chatPreview.map((message: any) => (
+                <div key={message.id} className="text-sm text-gray-700">
+                  <span className="font-semibold capitalize text-gray-900">{message.sender}</span>
+                  {message.time ? <span className="text-xs text-gray-400"> · {message.time}</span> : null}
+                  <p className="mt-0.5">{message.text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+const activeOrders = workflowOrders.filter((o: any) => !['COMPLETED', 'CANCELLED', 'DONE'].includes(String(o.status || '').toUpperCase()));
+  const historyOrders = workflowOrders.filter((o: any) => ['COMPLETED', 'CANCELLED', 'DONE'].includes(String(o.status || '').toUpperCase()));
+  const allHistory = Array.from(
+    [...historyOrders, ...visibleMockHistory.filter((x: any) => x.po)].reduce((map: Map<string, any>, entry: any) => {
+      const po = extractPo(entry) || entry.po || entry.id;
+      if (!po || isHiddenTestPo(po)) return map;
+      const existing = map.get(po) || {};
+      const service = String(entry.serviceCategory || entry.service || entry.title || existing.service || po).replace(/_/g, ' ');
+      const counterpartName = firstNameOnly(entry.fixer?.user?.name || entry.fixerName || entry.partnerName || entry.customer || existing.counterpartName, 'Partner');
+      const completedAt = entry.completedAt || entry.updatedAt || entry.statusChangedAt || entry.createdAt || entry.date || existing.completedAt || Date.now();
+      const fee = entry.fee || entry.budget || (entry.estimatedPrice ? `฿${Number(entry.estimatedPrice).toLocaleString()}` : existing.fee || '฿0');
+      const projectDetails = stripWorkflowPrefix(entry.description || entry.desc || existing.projectDetails || '');
+      map.set(po, {
+        ...existing,
+        ...entry,
+        id: existing.id || entry.id || po,
+        po,
+        service,
+        counterpartName,
+        fixerName: counterpartName,
+        completedAt,
+        createdAt: existing.createdAt || entry.createdAt || completedAt,
+        statusChangedAt: entry.statusChangedAt || existing.statusChangedAt || completedAt,
+        fee,
+        budget: entry.budget || existing.budget || fee,
+        status: 'COMPLETED',
+        step: 11,
+        stepName: getWorkflowStepName(11),
+        location: entry.address?.subdistrict || entry.subdistrict || entry.location || existing.location || 'Unknown',
+        subdistrict: entry.address?.subdistrict || entry.subdistrict || entry.location || existing.subdistrict || 'Unknown',
+        projectDetails,
+        description: projectDetails,
+        tier: entry.tier || existing.tier || 'Standard',
+        chatHistory: readStoredChatHistory(po),
+      });
+      return map;
+    }, new Map<string, any>()).values(),
+  ).sort((a: any, b: any) => parseDateMs(b.completedAt || b.statusChangedAt || b.createdAt || b.date) - parseDateMs(a.completedAt || a.statusChangedAt || a.createdAt || a.date));
   const propertiesCount = orders ? orders.filter((o: any) => o.type === "property").length : 0;
-  const stats = { active: activeOrders.length, completed: historyOrders.length, messages: 0, rating: "4.8" };
+  const stats = { active: activeOrders.length, completed: allHistory.length, messages: 0, rating: "4.8" };
   const totalReqCount = allRequestItems.length;
+  const getWorkflowOrderSnapshot = (po: any) =>
+    workflowOrders.find((order: any) => extractPo(order) === po) ||
+    combinedActive.find((item: any) => item.po === po) ||
+    visibleMockHistory.find((item: any) => item.po === po) ||
+    {};
+  const rateModalOrder = rateModal ? getWorkflowOrderSnapshot(rateModal.po) : null;
+  const variationApproveOrder = variationApproveModal ? getWorkflowOrderSnapshot(variationApproveModal.po) : null;
+  const completeApproveOrder = completeApproveModal ? getWorkflowOrderSnapshot(completeApproveModal.po) : null;
 
     return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 relative z-10 pb-12 -mt-6">
@@ -1755,21 +1903,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
             {allHistory.length === 0 ? (
               <div className="p-8 text-center text-gray-500">No history found.</div>
             ) : (
-              allHistory.map((o: any, i: number) => (
-                <div key={i} className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50 transition cursor-pointer">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-2xl shadow-sm"></div>
-                    <div>
-                      <h3 className="font-bold text-gray-900">{o.service}</h3>
-                      <p className="text-sm text-gray-500 mt-1">{o.fixerName || 'Partner'} &middot; {fmtDate(o.createdAt || Date.now())}</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <span className="text-sm font-bold text-gray-900">{o.fee || '฿0'}</span>
-                    <span className="px-2 py-0.5 bg-gray-200 text-gray-700 text-[10px] font-bold rounded-full">{o.status}</span>
-                  </div>
-                </div>
-              ))
+              allHistory.map((o: any, i: number) => renderHistoryCard(o, i))
             )}
           </div>
         </div>
@@ -1931,21 +2065,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
               {allHistory.slice(0, 3).length === 0 ? (
                 <div className="p-8 text-center text-gray-500">No history found.</div>
               ) : (
-                allHistory.slice(0, 3).map((o: any, i: number) => (
-                  <div key={i} className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50 transition cursor-pointer">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-2xl shadow-sm"></div>
-                      <div>
-                        <h3 className="font-bold text-gray-900">{o.service}</h3>
-                        <p className="text-sm text-gray-500 mt-1">{o.fixerName || 'Partner'} &middot; {fmtDate(o.createdAt || Date.now())}</p>
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <span className="text-sm font-bold text-gray-900">{o.fee || '฿0'}</span>
-                      <span className="px-2 py-0.5 bg-gray-200 text-gray-700 text-[10px] font-bold rounded-full">{o.status}</span>
-                    </div>
-                  </div>
-                ))
+                allHistory.slice(0, 3).map((o: any, i: number) => renderHistoryCard(o, i, true))
               )}
             </div>
           </div>
@@ -1959,14 +2079,16 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
               <p className="text-yellow-100 text-sm mt-1">{rateModal.po} · Step 11 of 11</p>
             </div>
             <div className="px-6 py-5 space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Project</label>
-                <p className="text-sm text-gray-800 font-semibold">{rateModal.title}</p>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Partner</label>
-                <p className="text-sm text-gray-800">{rateModal.customer}</p>
-              </div>
+              <CustomerWorkflowModalMeta
+                step={11}
+                typeOfWork={rateModal.title || String(rateModalOrder?.serviceCategory || rateModalOrder?.service || 'Project').replace(/_/g, ' ')}
+                actionText="Rate the selected partner to close this project and move it to history."
+                po={rateModal.po || '-'}
+                partnerName={firstNameOnly(rateModal.customer || rateModalOrder?.customer || rateModalOrder?.fixerName, 'Partner')}
+                budget={toCurrencyLabel(rateModal.budget || rateModalOrder?.budget || rateModalOrder?.fee)}
+                location={rateModalOrder?.address?.subdistrict || rateModalOrder?.subdistrict || rateModalOrder?.location || 'Unknown'}
+                projectDetails={stripWorkflowPrefix(rateModalOrder?.description || rateModal.desc || rateModal.title || '')}
+              />
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-2">Your Rating</label>
                 <div className="flex gap-2 text-3xl">
@@ -2249,10 +2371,16 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
               <p className="text-purple-100 text-sm mt-1">{variationApproveModal.po} · Step 9 of 11</p>
             </div>
             <div className="px-6 py-5 space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Project</label>
-                <p className="text-sm text-gray-800 font-semibold">{variationApproveModal.title}</p>
-              </div>
+              <CustomerWorkflowModalMeta
+                step={9}
+                typeOfWork={variationApproveModal.title || String(variationApproveOrder?.serviceCategory || variationApproveOrder?.service || 'Project').replace(/_/g, ' ')}
+                actionText="Review the partner variation request and approve it if you agree to proceed."
+                po={variationApproveModal.po || '-'}
+                partnerName={firstNameOnly(variationApproveModal.customer || variationApproveOrder?.customer || variationApproveOrder?.fixerName, 'Partner')}
+                budget={toCurrencyLabel(variationApproveModal.budget || variationApproveOrder?.budget || variationApproveOrder?.fee)}
+                location={variationApproveOrder?.address?.subdistrict || variationApproveOrder?.subdistrict || variationApproveOrder?.location || 'Unknown'}
+                projectDetails={stripWorkflowPrefix(variationApproveOrder?.description || variationApproveModal.desc || variationApproveModal.title || '')}
+              />
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Partner Request</label>
                 <p className="text-sm text-gray-700 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3">{variationApproveModal.desc}</p>
@@ -2302,10 +2430,16 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
               <p className="text-green-100 text-sm mt-1">{completeApproveModal.po} · Step 10 of 11</p>
             </div>
             <div className="px-6 py-5 space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Project</label>
-                <p className="text-sm text-gray-800 font-semibold">{completeApproveModal.title}</p>
-              </div>
+              <CustomerWorkflowModalMeta
+                step={10}
+                typeOfWork={completeApproveModal.title || String(completeApproveOrder?.serviceCategory || completeApproveOrder?.service || 'Project').replace(/_/g, ' ')}
+                actionText="Review the completion request and confirm it when the project is truly complete."
+                po={completeApproveModal.po || '-'}
+                partnerName={firstNameOnly(completeApproveModal.customer || completeApproveOrder?.customer || completeApproveOrder?.fixerName, 'Partner')}
+                budget={toCurrencyLabel(completeApproveModal.budget || completeApproveOrder?.budget || completeApproveOrder?.fee)}
+                location={completeApproveOrder?.address?.subdistrict || completeApproveOrder?.subdistrict || completeApproveOrder?.location || 'Unknown'}
+                projectDetails={stripWorkflowPrefix(completeApproveOrder?.description || completeApproveModal.desc || completeApproveModal.title || '')}
+              />
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Completion Note</label>
                 <p className="text-sm text-gray-700 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3">{completeApproveModal.desc}</p>

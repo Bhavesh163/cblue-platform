@@ -127,11 +127,118 @@ const ORDER_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9
 const isOrderUuid = (value: any) => ORDER_UUID_PATTERN.test(String(value || '').trim());
 const firstNameOnly = (value: any, fallback = 'User') => {
   const cleaned = String(value || '').trim();
-  return cleaned ? cleaned.split(/\s+/)[0] : fallback;
+  return cleaned ? cleaned.split(/\s+/)[0] || fallback : fallback;
 };
-const HIDDEN_TEST_POS = new Set(["PO-2605-6716", "PO-2605-9605"]);
+const HIDDEN_TEST_POS = new Set(["PO-2605-6716", "PO-2605-9605", "PO-2605-8699"]);
 const isHiddenTestPo = (value: any) => HIDDEN_TEST_POS.has(String(value || '').trim().toUpperCase());
 const filterVisibleWorkflowItems = (items: any[]) => items.filter((item: any) => !isHiddenTestPo(item?.po));
+const WORKFLOW_STEP_NAMES: Record<number, string> = {
+  5: 'Accept',
+  6: 'Fee & Proceed',
+  7: 'Chat',
+  8: 'Meet',
+  9: 'Variation',
+  10: 'Complete',
+  11: 'Rate',
+};
+const getWorkflowStepName = (step?: number) => WORKFLOW_STEP_NAMES[Number(step || 0)] || 'Rate';
+const toCurrencyLabel = (value: any, fallback = '฿0') => {
+  const raw = String(value || '').trim();
+  if (!raw) return fallback;
+  return raw.startsWith('฿') ? raw : `฿${raw.replace(/^฿/, '')}`;
+};
+const getLocalChatHistory = (po: any) => {
+  if (typeof window === 'undefined' || !po) return [];
+  try {
+    const parsed = JSON.parse(localStorage.getItem(`chat_messages_${po}`) || '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((message: any) => ({
+        id: message?.id || `${po}-${message?.createdAt || message?.time || Math.random()}`,
+        sender: String(message?.sender || 'system'),
+        text: String(message?.text || '').trim(),
+        time: String(message?.time || ''),
+      }))
+      .filter((message: any) => message.text);
+  } catch {
+    return [];
+  }
+};
+
+function WorkflowModalMeta({
+  step,
+  typeOfWork,
+  actionText,
+  po,
+  counterpartLabel,
+  counterpartName,
+  budget,
+  location,
+  projectDetails,
+}: {
+  step: number;
+  typeOfWork: string;
+  actionText: string;
+  po: string;
+  counterpartLabel: string;
+  counterpartName: string;
+  budget: string;
+  location: string;
+  projectDetails: string;
+}) {
+  return (
+    <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 space-y-2 text-sm text-gray-800">
+      <div className="flex justify-between gap-3"><span className="text-gray-500">Step Name</span><span className="font-bold text-right">{getWorkflowStepName(step)}</span></div>
+      <div className="flex justify-between gap-3"><span className="text-gray-500">Type of Work</span><span className="font-bold text-right">{typeOfWork}</span></div>
+      <div className="flex justify-between gap-3"><span className="text-gray-500">What You Need To Do</span><span className="font-bold text-right max-w-[65%]">{actionText}</span></div>
+      <div className="flex justify-between gap-3"><span className="text-gray-500">PO Number</span><span className="font-mono font-bold text-right">{po}</span></div>
+      <div className="flex justify-between gap-3"><span className="text-gray-500">{counterpartLabel}</span><span className="font-bold text-right">{counterpartName}</span></div>
+      <div className="flex justify-between gap-3"><span className="text-gray-500">Budget</span><span className="font-bold text-right">{budget}</span></div>
+      <div className="flex justify-between gap-3"><span className="text-gray-500">Project Location</span><span className="font-bold text-right">{location || 'Unknown'}</span></div>
+      <div>
+        <span className="text-gray-500">Project Details</span>
+        <p className="mt-1 rounded-lg border border-gray-100 bg-white px-3 py-2 font-bold text-gray-800">{projectDetails || 'Project details from the draft PO.'}</p>
+      </div>
+    </div>
+  );
+}
+
+function WorkflowHistoryCard({ item, compact = false }: { item: any; compact?: boolean }) {
+  const chatPreview = Array.isArray(item.chatHistory) ? item.chatHistory.slice(compact ? -2 : -4) : [];
+  return (
+    <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm hover:bg-gray-50/60 transition">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div>
+          <h3 className="font-bold text-gray-900">{item.service} <span className="text-sm font-normal text-gray-400">· {item.po} · {item.counterpartName || item.customer || 'Customer'}</span></h3>
+          <p className="text-sm text-gray-500 mt-1">Completed {fmtDateTime(item.completedAt || item.statusChangedAt || item.createdAt || item.date || Date.now())}</p>
+        </div>
+        <div className="flex flex-col items-start sm:items-end gap-1">
+          <span className="font-bold text-gray-900">{item.fee || item.budget || '฿0'}</span>
+          <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">Step 11 of 11 · {item.stepName || getWorkflowStepName(item.step)}</span>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 text-sm text-gray-700">
+        <div><span className="text-gray-500">Project Location:</span> {item.location || item.subdistrict || 'Unknown'}</div>
+        <div><span className="text-gray-500">Tier:</span> {item.tier || 'Standard'}</div>
+        <div className="sm:col-span-2"><span className="text-gray-500">Project Details:</span> {item.projectDetails || item.description || 'Project details not available.'}</div>
+      </div>
+      {chatPreview.length > 0 && (
+        <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Chat History</p>
+          <div className="space-y-2">
+            {chatPreview.map((message: any) => (
+              <div key={message.id} className="text-sm text-gray-700">
+                <span className="font-semibold capitalize text-gray-900">{message.sender}</span>
+                {message.time ? <span className="text-xs text-gray-400"> · {message.time}</span> : null}
+                <p className="mt-0.5">{message.text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const STATUS_LABEL: Record<string, Record<string, string>> = {
   IN_PROGRESS: { en: "In Progress", th: "กำลังดำเนินการ", zh: "进行中" },
@@ -721,25 +828,46 @@ export default function FixerProPage() {
   const backendCompletedJobs = mappedOrders.filter(o => o.status === 'COMPLETED');
   // Merge localStorage history (same-browser simulation) with backend completed orders
   const backendCompletedPos = new Set(backendCompletedJobs.map((j: any) => j.po));
-  const completedJobs = [
-    ...backendCompletedJobs,
-    ...mockHistory
-      .filter((h: any) => h.po && !backendCompletedPos.has(h.po))
-      .map((h: any) => ({
-        id: h.po,
-        po: h.po,
-        service: h.title || h.service || h.po,
-        serviceTh: h.title || h.service || h.po,
-        serviceZh: h.title || h.service || h.po,
-        customer: h.customer || h.fixerAlias || '',
-        date: h.date || '',
-        budget: h.budget || '฿0',
-        fee: h.budget || '฿0',
-        tier: h.tier || '',
+  const completedJobs = Array.from(
+    [...backendCompletedJobs, ...mockHistory.filter((h: any) => h.po)].reduce((map: Map<string, any>, entry: any) => {
+      const po = entry.po || entry.id;
+      if (!po || isHiddenTestPo(po)) return map;
+      const existing = map.get(po) || {};
+      const service = entry.service || entry.title || existing.service || po;
+      const customer = firstNameOnly(entry.customer || entry.customerName || entry.fixerAlias || existing.customer, 'Customer');
+      const completedAt = entry.completedAt || entry.statusChangedAt || entry.updatedAt || entry.createdAt || entry.date || existing.completedAt || existing.statusChangedAt || existing.createdAt || Date.now();
+      const description = stripWorkflowPrefix(entry.description || entry.desc || existing.description || existing.projectDetails || '');
+      map.set(po, {
+        ...existing,
+        ...entry,
+        id: existing.id || entry.id || po,
+        po,
+        service,
+        serviceTh: entry.serviceTh || existing.serviceTh || service,
+        serviceZh: entry.serviceZh || existing.serviceZh || service,
+        customer,
+        customerName: customer,
+        counterpartName: customer,
+        date: fmtDateTime(completedAt),
+        createdAt: existing.createdAt || entry.createdAt || completedAt,
+        completedAt,
+        statusChangedAt: entry.statusChangedAt || existing.statusChangedAt || completedAt,
+        budget: entry.budget || existing.budget || toCurrencyLabel(entry.fee || existing.fee),
+        fee: toCurrencyLabel(entry.fee || entry.budget || existing.fee || existing.budget),
+        tier: entry.tier || existing.tier || 'Standard',
         status: 'COMPLETED',
         step: 11,
-      })),
-  ].sort((a: any, b: any) => {
+        stepName: getWorkflowStepName(11),
+        location: entry.location || entry.subdistrict || existing.location || existing.subdistrict || '',
+        subdistrict: entry.subdistrict || entry.location || existing.subdistrict || existing.location || '',
+        projectDetails: description,
+        description: description || existing.description || '',
+        chatHistory: getLocalChatHistory(po),
+        partnerRating: entry.partnerRating ?? existing.partnerRating,
+      });
+      return map;
+    }, new Map<string, any>()).values(),
+  ).sort((a: any, b: any) => {
     const aTs = new Date(a.statusChangedAt || a.completedAt || a.createdAt || a.date || 0).getTime();
     const bTs = new Date(b.statusChangedAt || b.completedAt || b.createdAt || b.date || 0).getTime();
     return bTs - aTs;
@@ -830,6 +958,11 @@ export default function FixerProPage() {
         const po = chat.po;
         const lower = String(chat.lastMsg || "").toLowerCase();
         const order = mappedOrders.find((x: any) => x.po === po);
+        const localActive = mockActiveState.find((x: any) => x.po === po);
+        const historyEntry = mockHistory.find((x: any) => x.po === po);
+        const variationAlreadySubmitted = Number(localActive?.step || 0) >= 9 && localActive?.actionNeeded === false;
+        const completeAlreadySubmitted = Number(localActive?.step || 0) >= 10 && localActive?.actionNeeded === false;
+        const partnerAlreadyRated = Boolean(historyEntry?.partnerRating);
         if (!po || !order) continue;
 
         if (lower.includes('customer sent meeting invitation')) {
@@ -869,24 +1002,26 @@ export default function FixerProPage() {
             const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 9, mockStep: 9, actionNeeded: true } : x);
             localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
           } catch {}
-          upsert({
-            id: `variation-${po}`,
-            orderId: order.id,
-            po,
-            service: order.service,
-            serviceTh: order.serviceTh,
-            serviceZh: order.serviceZh,
-            customer: order.customer,
-            date: fmtDateTime(Date.now()),
-            createdAt: Date.now(),
-            fee: order.fee,
-            budget: order.budget,
-            tier: order.tier,
-            description: 'Proceed to submit variation request if extra work or price adjustment is required.',
-            type: 'variation_partner',
-            workflowType: 'variation_partner',
-            step: 9,
-          });
+          if (!variationAlreadySubmitted && !partnerAlreadyRated) {
+            upsert({
+              id: `variation-${po}`,
+              orderId: order.id,
+              po,
+              service: order.service,
+              serviceTh: order.serviceTh,
+              serviceZh: order.serviceZh,
+              customer: order.customer,
+              date: fmtDateTime(Date.now()),
+              createdAt: Date.now(),
+              fee: order.fee,
+              budget: order.budget,
+              tier: order.tier,
+              description: 'Proceed to submit variation request if extra work or price adjustment is required.',
+              type: 'variation_partner',
+              workflowType: 'variation_partner',
+              step: 9,
+            });
+          }
         }
         if (lower.includes('customer approved variation')) {
           try {
@@ -895,24 +1030,26 @@ export default function FixerProPage() {
             localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
           } catch {}
           next = next.filter((x: any) => !(x.po === po && (x.type === 'variation_partner' || x.type === 'meeting_confirm_partner' || x.workflowType === 'meeting_confirm_partner')));
-          upsert({
-            id: `complete-${po}`,
-            orderId: order.id,
-            po,
-            service: order.service,
-            serviceTh: order.serviceTh,
-            serviceZh: order.serviceZh,
-            customer: order.customer,
-            date: fmtDateTime(Date.now()),
-            createdAt: Date.now(),
-            fee: order.fee,
-            budget: order.budget,
-            tier: order.tier,
-            description: 'Customer approved the variation. Please submit project complete for confirmation.',
-            type: 'complete_partner',
-            workflowType: 'complete_partner',
-            step: 10,
-          });
+          if (!completeAlreadySubmitted && !partnerAlreadyRated) {
+            upsert({
+              id: `complete-${po}`,
+              orderId: order.id,
+              po,
+              service: order.service,
+              serviceTh: order.serviceTh,
+              serviceZh: order.serviceZh,
+              customer: order.customer,
+              date: fmtDateTime(Date.now()),
+              createdAt: Date.now(),
+              fee: order.fee,
+              budget: order.budget,
+              tier: order.tier,
+              description: 'Customer approved the variation. Please submit project complete for confirmation.',
+              type: 'complete_partner',
+              workflowType: 'complete_partner',
+              step: 10,
+            });
+          }
         }
         if (lower.includes('customer confirmed job complete')) {
           try {
@@ -921,24 +1058,26 @@ export default function FixerProPage() {
             localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
           } catch {}
           next = next.filter((x: any) => !(x.po === po && (x.type === 'complete_partner' || x.type === 'variation_partner' || x.type === 'meeting_confirm_partner' || x.workflowType === 'meeting_confirm_partner')));
-          upsert({
-            id: `rate-${po}`,
-            orderId: order.id,
-            po,
-            service: order.service,
-            serviceTh: order.serviceTh,
-            serviceZh: order.serviceZh,
-            customer: order.customer,
-            date: fmtDateTime(Date.now()),
-            createdAt: Date.now(),
-            fee: order.fee,
-            budget: order.budget,
-            tier: order.tier,
-            description: 'Customer confirmed completion. Please rate the customer to close this job.',
-            type: 'rate_partner',
-            workflowType: 'rate_partner',
-            step: 11,
-          });
+          if (!partnerAlreadyRated) {
+            upsert({
+              id: `rate-${po}`,
+              orderId: order.id,
+              po,
+              service: order.service,
+              serviceTh: order.serviceTh,
+              serviceZh: order.serviceZh,
+              customer: order.customer,
+              date: fmtDateTime(Date.now()),
+              createdAt: Date.now(),
+              fee: order.fee,
+              budget: order.budget,
+              tier: order.tier,
+              description: 'Customer confirmed completion. Please rate the customer to close this job.',
+              type: 'rate_partner',
+              workflowType: 'rate_partner',
+              step: 11,
+            });
+          }
         }
       }
 
@@ -946,7 +1085,7 @@ export default function FixerProPage() {
       try { localStorage.setItem("partner_mock_dyn_req", JSON.stringify(next)); } catch {}
       return next;
     });
-  }, [chatFeed, mappedOrders]);
+  }, [chatFeed, mappedOrders, mockActiveState, mockHistory]);
 
   const partnerRequestItems = Array.from([
     ...partnerDynReqs,
@@ -1739,29 +1878,12 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
             <h2 className="font-bold text-gray-900">Recent History</h2>
             <span className="text-xs text-purple-600 font-bold cursor-pointer hover:underline" onClick={() => onTabChange && onTabChange("history")}>View All →</span>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-gray-50/50 text-gray-500 text-xs uppercase tracking-wider">
-                <tr>
-                  <th className="py-2 px-4">Service</th>
-                  <th className="py-2 px-4">Customer</th>
-                  <th className="py-2 px-4">Date</th>
-                </tr>
-              </thead>
-              <tbody className="text-sm">
-                {completedJobs.slice(0, 3).length > 0 ? completedJobs.slice(0, 3).map((h) => (
-                  <tr key={h.id} className="border-b border-gray-50">
-                    <td className="py-3 px-4 font-medium">{h.service}{h.po ? <span className="text-xs font-normal text-gray-400"> · {h.po}</span> : null}</td>
-                    <td className="py-3 px-4 text-gray-600">{h.customer}</td>
-                    <td className="py-3 px-4 text-gray-500">{h.date || fmtDateTime(h.statusChangedAt || h.completedAt || h.createdAt)}</td>
-                  </tr>
-                )) : (
-                  <tr>
-                    <td colSpan={5} className="py-6 text-center text-gray-500">No completed jobs yet.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+          <div className="space-y-3 p-4">
+            {completedJobs.slice(0, 3).length > 0 ? completedJobs.slice(0, 3).map((h) => (
+              <WorkflowHistoryCard key={h.id || h.po} item={h} compact />
+            )) : (
+              <div className="py-6 text-center text-gray-500">No completed jobs yet.</div>
+            )}
           </div>
         </div>
     </div>
@@ -1780,6 +1902,14 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
   const [ratingStars, setRatingStars] = React.useState(5);
   const [completeModal, setCompleteModal] = React.useState<any>(null);
   const [completeNote, setCompleteNote] = React.useState("");
+  const writePartnerReqs = (updater: (items: any[]) => any[]) => {
+    try {
+      const current = JSON.parse(localStorage.getItem("partner_mock_dyn_req") || "[]");
+      const next = updater(Array.isArray(current) ? current : []);
+      localStorage.setItem("partner_mock_dyn_req", JSON.stringify(next));
+      window.dispatchEvent(new Event("storage"));
+    } catch {}
+  };
   const handlePartnerAction = (job: any, action: 'variation' | 'complete' | 'rate', extraData?: string) => {
     try {
       const po = job.po || job.id;
@@ -1805,6 +1935,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
         const varNote = extraData || 'Your partner has submitted a variation for your approval. Please review and confirm to proceed.';
         const next = [...dynReqs.filter((x: any) => x.po !== po), { id: varId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: varNote, type: 'variation_pending', step: 9 }];
         localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
+        writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         // Update partner's own active job step
         const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
         const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 9, mockStep: 9, actionNeeded: false } : x);
@@ -1815,21 +1946,15 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
         const complId = `compl-${po}`;
         const next = [...dynReqs.filter((x: any) => x.po !== po), { id: complId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: 'Work is completed. Please review and mark as complete to close this project.', type: 'complete_pending', step: 10 }];
         localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
+        writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['complete_partner', 'variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
         const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 10, mockStep: 10, actionNeeded: false } : x);
         localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
         window.dispatchEvent(new Event("storage"));
         postSystemMsg(`[SYSTEM] Partner has marked the job as complete for ${po}. Please review and confirm in your Requests tab.`);
-        // Cross-browser: PUT backend status to COMPLETED so customer detects it
-        if (token && orderDbId) {
-          fetch(`/api/v1/orders/${orderDbId}/status`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ status: 'COMPLETED', note: `Partner marked job complete: ${extraData || ''}` }),
-          }).catch(() => {});
-        }
       } else if (action === 'rate') {
         const rating = extraData || '5';
+        writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && x.type === 'rate_partner')));
         const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
         const hist = JSON.parse(localStorage.getItem("ghis_mock_history") || "[]");
         const updated = active.filter((x: any) => x.po !== po);
@@ -1921,14 +2046,17 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
             <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-800">
               <strong>Step 9 of 11 • Variation.</strong> Review the original PO budget, describe the extra scope or revised pricing, and send it to the customer for approval.
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Customer</label>
-              <p className="text-sm text-gray-800">{firstNameOnly(variationModal.customer, 'Customer')}</p>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Original PO Budget</label>
-              <p className="text-sm text-gray-800">฿{variationModal.budget || '0'}</p>
-            </div>
+            <WorkflowModalMeta
+              step={9}
+              typeOfWork={variationModal.service || 'Project'}
+              actionText="Review the original PO and send your variation request to the customer for approval."
+              po={variationModal.po || '-'}
+              counterpartLabel="Customer"
+              counterpartName={firstNameOnly(variationModal.customer, 'Customer')}
+              budget={toCurrencyLabel(variationModal.budget)}
+              location={variationModal.location || variationModal.subdistrict || 'Unknown'}
+              projectDetails={stripWorkflowPrefix(variationModal.description || variationModal.desc || variationModal.projectDetails || variationModal.service || '')}
+            />
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Budget Calculation</label>
               <p className="text-sm text-gray-800">Use the original PO total above as the base amount and describe any extra scope or revised total in the variation request below.</p>
@@ -1968,10 +2096,17 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
             <p className="text-sky-200 text-sm mt-1">{ratingModal.po} &middot; {ratingModal.service}</p>
           </div>
           <div className="px-6 py-5 space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Customer</label>
-              <p className="text-sm text-gray-800">{ratingModal.customer}</p>
-            </div>
+            <WorkflowModalMeta
+              step={11}
+              typeOfWork={ratingModal.service || 'Project'}
+              actionText="Rate the customer to close this job and move it to history."
+              po={ratingModal.po || '-'}
+              counterpartLabel="Customer"
+              counterpartName={firstNameOnly(ratingModal.customer, 'Customer')}
+              budget={toCurrencyLabel(ratingModal.budget || ratingModal.fee)}
+              location={ratingModal.location || ratingModal.subdistrict || 'Unknown'}
+              projectDetails={stripWorkflowPrefix(ratingModal.description || ratingModal.desc || ratingModal.projectDetails || ratingModal.service || '')}
+            />
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-2">Your Rating</label>
               <div className="flex gap-2 text-3xl">
@@ -2003,10 +2138,17 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
             <p className="text-green-100 text-sm mt-1">{completeModal.po} · {completeModal.service}</p>
           </div>
           <div className="px-6 py-5 space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Customer</label>
-              <p className="text-sm text-gray-800">{completeModal.customer}</p>
-            </div>
+            <WorkflowModalMeta
+              step={10}
+              typeOfWork={completeModal.service || 'Project'}
+              actionText="Send the project complete request to the customer for final confirmation."
+              po={completeModal.po || '-'}
+              counterpartLabel="Customer"
+              counterpartName={firstNameOnly(completeModal.customer, 'Customer')}
+              budget={toCurrencyLabel(completeModal.budget || completeModal.fee)}
+              location={completeModal.location || completeModal.subdistrict || 'Unknown'}
+              projectDetails={stripWorkflowPrefix(completeModal.description || completeModal.desc || completeModal.projectDetails || completeModal.service || '')}
+            />
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-2">Completion Note <span className="text-gray-400 font-normal">(optional)</span></label>
               <textarea
@@ -2094,13 +2236,6 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
         localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
         window.dispatchEvent(new Event("storage"));
         postSystemMsg(`[SYSTEM] Partner has marked the job as complete for ${po}. Please review and confirm in your Requests tab.`);
-        if (token && orderDbId) {
-          fetch(`/api/v1/orders/${orderDbId}/status`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ status: 'COMPLETED', note: `Partner marked job complete: ${extraData || ''}` }),
-          }).catch(() => {});
-        }
       } else if (action === 'rate') {
         const rating = extraData || '5';
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && x.type === 'rate_partner')));
@@ -2173,14 +2308,17 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
             <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-800">
               <strong>Step 9 of 11 • Variation.</strong> Review the original PO budget, describe the extra scope or revised pricing, and send it to the customer for approval.
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Customer</label>
-              <p className="text-sm text-gray-800">{firstNameOnly(variationModal.customer, 'Customer')}</p>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Original PO Budget</label>
-              <p className="text-sm text-gray-800">฿{variationModal.budget || '0'}</p>
-            </div>
+            <WorkflowModalMeta
+              step={9}
+              typeOfWork={variationModal.service || 'Project'}
+              actionText="Review the original PO and send your variation request to the customer for approval."
+              po={variationModal.po || '-'}
+              counterpartLabel="Customer"
+              counterpartName={firstNameOnly(variationModal.customer, 'Customer')}
+              budget={toCurrencyLabel(variationModal.budget)}
+              location={variationModal.location || variationModal.subdistrict || 'Unknown'}
+              projectDetails={stripWorkflowPrefix(variationModal.description || variationModal.desc || variationModal.projectDetails || variationModal.service || '')}
+            />
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Budget Calculation</label>
               <p className="text-sm text-gray-800">Use the original PO total above as the base amount and describe any extra scope or revised total in the variation request below.</p>
@@ -2205,6 +2343,17 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
             <p className="text-green-100 text-sm mt-1">{completeModal.po} · {completeModal.service}</p>
           </div>
           <div className="px-6 py-5 space-y-4">
+            <WorkflowModalMeta
+              step={10}
+              typeOfWork={completeModal.service || 'Project'}
+              actionText="Send the project complete request to the customer for final confirmation."
+              po={completeModal.po || '-'}
+              counterpartLabel="Customer"
+              counterpartName={firstNameOnly(completeModal.customer, 'Customer')}
+              budget={toCurrencyLabel(completeModal.budget || completeModal.fee)}
+              location={completeModal.location || completeModal.subdistrict || 'Unknown'}
+              projectDetails={stripWorkflowPrefix(completeModal.description || completeModal.desc || completeModal.projectDetails || completeModal.service || '')}
+            />
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-2">Completion Note <span className="text-gray-400 font-normal">(optional)</span></label>
               <textarea value={completeNote} onChange={e => setCompleteNote(e.target.value)} rows={3} placeholder="e.g. All tasks finished, site cleaned, client signed off..." className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 resize-none" />
@@ -2225,6 +2374,17 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
             <p className="text-sky-200 text-sm mt-1">{ratingModal.po} · {ratingModal.service}</p>
           </div>
           <div className="px-6 py-5 space-y-4">
+            <WorkflowModalMeta
+              step={11}
+              typeOfWork={ratingModal.service || 'Project'}
+              actionText="Rate the customer to close this job and move it to history."
+              po={ratingModal.po || '-'}
+              counterpartLabel="Customer"
+              counterpartName={firstNameOnly(ratingModal.customer, 'Customer')}
+              budget={toCurrencyLabel(ratingModal.budget || ratingModal.fee)}
+              location={ratingModal.location || ratingModal.subdistrict || 'Unknown'}
+              projectDetails={stripWorkflowPrefix(ratingModal.description || ratingModal.desc || ratingModal.projectDetails || ratingModal.service || '')}
+            />
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-2">Your Rating</label>
               <div className="flex gap-2 text-3xl">
@@ -2251,33 +2411,12 @@ function PartnerHistory({ locale, completedJobs }: { locale: string; completedJo
       <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
         <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "ประวัติการทำงาน" : locale === "zh" ? "工作历史" : "Job History"}</h2>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 text-xs uppercase tracking-wider">
-              <th className="py-3 px-4 font-semibold">{locale === "th" ? "บริการ" : "Service"}</th>
-              <th className="py-3 px-4 font-semibold">{locale === "th" ? "ลูกค้า" : "Customer"}</th>
-              <th className="py-3 px-4 font-semibold text-center">{locale === "th" ? "ระดับ" : "Tier"}</th>
-              <th className="py-3 px-4 font-semibold text-center">{locale === "th" ? "รายได้" : "Fee"}</th>
-              <th className="py-3 px-4 font-semibold text-center">{locale === "th" ? "วันที่" : "Date"}</th>
-            </tr>
-          </thead>
-          <tbody className="text-sm">
-            {completedJobs.length > 0 ? completedJobs.map((h) => (
-              <tr key={h.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition">
-                <td className="py-3 px-4 font-medium text-gray-900">{h.service}{h.po ? <span className="text-xs font-normal text-gray-400"> · {h.po}</span> : null}</td>
-                <td className="py-3 px-4 text-gray-600">{h.customer || h.customerName || `#${h.customerId || 'Customer'}`}</td>
-                <td className="py-3 px-4 text-center"><span className="px-2 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-700">{h.tier || 'Standard'}</span></td>
-                <td className="py-3 px-4 text-center font-bold text-green-700">{h.fee || '฿0'}</td>
-                <td className="py-3 px-4 text-center text-gray-500">{fmtDate(h.updatedAt || h.statusChangedAt || h.completedAt || h.createdAt || h.date || Date.now())}</td>
-              </tr>
-            )) : (
-              <tr>
-                <td colSpan={5} className="py-8 text-center text-gray-500">No completed jobs yet.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+      <div className="space-y-4 p-4">
+        {completedJobs.length > 0 ? completedJobs.map((h) => (
+          <WorkflowHistoryCard key={h.id || h.po} item={h} />
+        )) : (
+          <div className="py-8 text-center text-gray-500">No completed jobs yet.</div>
+        )}
       </div>
     </div>
   );
