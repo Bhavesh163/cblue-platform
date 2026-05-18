@@ -808,8 +808,9 @@ export default function FixerProPage() {
       } catch {}
     };
     checkMock();
+    window.addEventListener('storage', checkMock);
     const interval = setInterval(checkMock, 1000);
-    return () => clearInterval(interval);
+    return () => { clearInterval(interval); window.removeEventListener('storage', checkMock); };
   }, []);
 
   const completedHistoryPos = new Set(mockHistory.map((h: any) => h.po));
@@ -955,12 +956,15 @@ export default function FixerProPage() {
         changed = true;
       };
 
+      let histFromStorage: any[] = [];
+      try { histFromStorage = filterVisibleWorkflowItems(JSON.parse(localStorage.getItem('ghis_mock_history') || '[]')); } catch {}
+
       for (const chat of chatFeed) {
         const po = chat.po;
         const lower = String(chat.lastMsg || "").toLowerCase();
         const order = mappedOrders.find((x: any) => x.po === po);
         const localActive = mockActiveState.find((x: any) => x.po === po);
-        const historyEntry = mockHistory.find((x: any) => x.po === po);
+        const historyEntry = mockHistory.find((x: any) => x.po === po) || histFromStorage.find((x: any) => x.po === po);
         const variationAlreadySubmitted = Number(localActive?.step || 0) >= 9 && localActive?.actionNeeded === false;
         const completeAlreadySubmitted = Number(localActive?.step || 0) >= 10 && localActive?.actionNeeded === false;
         const partnerAlreadyRated = Boolean(historyEntry?.partnerRating);

@@ -1188,9 +1188,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           }
           return r;
         });
-        // Always remove chat_ready and meeting_invite for confirmed POs even if meeting_pending_partner
-        // was already converted by a direct localStorage write from the partner's browser.
-        const cleaned = updated.filter((r: any) => !(toSchedule.has(r.po) && (r.type === 'chat_ready' || r.type === 'meeting_invite')));
+        // Only remove chat_ready and meeting_invite for POs where a meeting was confirmed
+        // (i.e., had meeting_pending_partner). This prevents erasing meeting_invite for jobs
+        // that are simply IN_PROGRESS after step 6 payment (before any meeting is sent).
+        const posWith_meeting_pending = new Set(prev.filter((r: any) => r.type === 'meeting_pending_partner').map((r: any) => r.po));
+        const cleaned = updated.filter((r: any) => !(toSchedule.has(r.po) && posWith_meeting_pending.has(r.po) && (r.type === 'chat_ready' || r.type === 'meeting_invite')));
         if (!changed && cleaned.length === prev.length) return prev;
         try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(cleaned)); } catch {}
         return cleaned;
@@ -1430,7 +1432,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     try {
       const dynReqs = JSON.parse(localStorage.getItem('ghis_mock_dyn_req') || '[]');
       const active = JSON.parse(localStorage.getItem('ghis_mock_active') || '[]');
-      const existingPos = new Set(dynReqs.map((x: any) => x.po));
+      const existingChatPos = new Set(dynReqs.filter((x: any) => x.type === 'chat_ready').map((x: any) => x.po));
+      const existingMeetingPos = new Set(dynReqs.filter((x: any) => ['meeting_invite', 'meeting_pending_partner', 'meeting_scheduled'].includes(x.type)).map((x: any) => x.po));
       const liveBackendPOs = new Set(workflowOrders.map((o: any) => extractPo(o)).filter((po: string) => isPoCode(po)));
       const advancedWorkflowPos = new Set(
         chatFeed
@@ -1441,26 +1444,42 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           .map((chatItem: any) => chatItem.po)
           .filter((po: string) => isPoCode(po)),
       );
-      // Gather all step-7 (or higher) jobs from static mock that aren't already in dynamic requests
+      // Gather all step-7 jobs missing a meeting_invite (repairs dashboard after F5 incorrectly removed it)
       const step7StaticJobs = liveBackendPOs.size === 0 ? ACTIVE_MOCK.filter(
-        (j: any) => Number(j.step) === 7 && !existingPos.has(j.po) && !advancedWorkflowPos.has(j.po) && !active.find((a: any) => a.po === j.po)
+        (j: any) => Number(j.step) === 7 && !existingMeetingPos.has(j.po) && !advancedWorkflowPos.has(j.po) && !active.find((a: any) => a.po === j.po)
       ) : [];
-      const step7ActiveJobs = active.filter((j: any) => Number(j.step) === 7 && !existingPos.has(j.po) && !advancedWorkflowPos.has(j.po) && (liveBackendPOs.size === 0 || liveBackendPOs.has(j.po)));
+      const step7ActiveJobs = active.filter((j: any) => Number(j.step) === 7 && !existingMeetingPos.has(j.po) && !advancedWorkflowPos.has(j.po) && (liveBackendPOs.size === 0 || liveBackendPOs.has(j.po)));
       const toCreate: any[] = [];
       for (const job of [...step7StaticJobs, ...step7ActiveJobs]) {
         const createdAt = job.createdAt || Date.now();
+        if (!existingChatPos.has(job.po)) {
+          toCreate.push({
+            id: `chat-${job.po}`,
+            po: job.po,
+            title: job.title,
+            customer: job.fixerAlias || job.customer || 'Suppadesh',
+            budget: job.budget || '฿0',
+            tier: job.tier || 'Standard',
+            desc: 'Chat is active. Send meeting invitation when you are ready.',
+            type: 'chat_ready',
+            date: fmtDateTime(createdAt),
+            createdAt,
+            step: 7,
+          });
+        }
         toCreate.push({
-          id: `chat-${job.po}`,
+          id: `meet-invite-${job.po}`,
           po: job.po,
           title: job.title,
           customer: job.fixerAlias || job.customer || 'Suppadesh',
           budget: job.budget || '฿0',
           tier: job.tier || 'Standard',
-          desc: 'Chat is active. Send meeting invitation when you are ready.',
-          type: 'chat_ready',
+          desc: 'Please send a meeting invitation to your partner. Fill in the venue and proposed date/time.',
+          type: 'meeting_invite',
           date: fmtDateTime(createdAt),
           createdAt,
-          step: 7,
+          step: 8,
+          location: job.location || job.subdistrict || 'Saphansong',
         });
       }
       if (toCreate.length > 0) {
