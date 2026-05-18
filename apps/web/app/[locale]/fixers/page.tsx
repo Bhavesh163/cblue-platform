@@ -123,6 +123,12 @@ const TIER_STYLE: Record<string, string> = {
   Expert: "bg-red-50 text-red-700",
 };
 const stripWorkflowPrefix = (value: any) => String(value || '').replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?/i, '').trim();
+const ORDER_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const isOrderUuid = (value: any) => ORDER_UUID_PATTERN.test(String(value || '').trim());
+const firstNameOnly = (value: any, fallback = 'User') => {
+  const cleaned = String(value || '').trim();
+  return cleaned ? cleaned.split(/\s+/)[0] : fallback;
+};
 
 const STATUS_LABEL: Record<string, Record<string, string>> = {
   IN_PROGRESS: { en: "In Progress", th: "กำลังดำเนินการ", zh: "进行中" },
@@ -131,7 +137,7 @@ const STATUS_LABEL: Record<string, Record<string, string>> = {
   COMPLETED: { en: "Completed", th: "เสร็จสิ้น", zh: "已完成" },
   ASSIGNED: { en: "", th: "", zh: "" },
   ACCEPTED: { en: "", th: "", zh: "" },
-  MATCHING: { en: "Action needed", th: "Action needed", zh: "Action needed" },
+  MATCHING: { en: "PO Pending", th: "รอตรวจสอบ PO", zh: "待审PO" },
 };
 const getStatusLabel = (status: string, locale: string) => { const lbl = STATUS_LABEL[status]; if (lbl !== undefined) return lbl[locale as keyof typeof lbl] ?? ""; return status.replace(/_/g, " "); };
 
@@ -265,6 +271,9 @@ export default function FixerProPage() {
       if (!token) {
         setPartner(null);
         setIsFixer(false);
+        setOrders([]);
+        setMyProperties([]);
+        setChatFeed([]);
       } else {
         const stored = localStorage.getItem("subscriber");
         if (stored) setPartner(JSON.parse(stored));
@@ -1011,6 +1020,14 @@ export default function FixerProPage() {
     meetingVenue: waitModalOrder?.meetingVenue || parsedWaitModalMeeting.meetingVenue || waitModalOrder?.subdistrict || 'Unknown',
     meetingMessage: waitModalOrder?.meetingMessage || '',
   };
+  const waitModalServiceName = waitModalOrder?.serviceTh || waitModalOrder?.service || 'Project';
+  const waitModalCounterpart = firstNameOnly(waitModalOrder?.customer || waitModalOrder?.customerAlias, 'Customer');
+  const waitModalBudgetDisplay = waitModalOrder?.fee || (waitModalOrder?.budget ? `฿${String(waitModalOrder.budget).replace(/^฿/, '')}` : `฿${waitModalOrder?.estimatedPrice || waitModalOrder?.finalPrice || '0'}`);
+  const waitModalStepName = isMeetingConfirmation ? 'Meeting Confirmation' : 'PO Acceptance';
+  const waitModalInstruction = isMeetingConfirmation
+    ? 'Review the proposed site meeting time and confirm it for the customer.'
+    : 'Review the draft PO, project details, budget basis, and uploaded files before accepting.';
+  const waitModalProjectDetails = stripWorkflowPrefix(waitModalOrder?.projectDetails || waitModalOrder?.description || waitModalOrder?.service || '');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50/30">
@@ -1029,8 +1046,12 @@ export default function FixerProPage() {
             
             <div className="w-full bg-gray-50 rounded-xl p-5 mt-6 space-y-3 text-sm text-left border border-gray-100 shadow-inner">
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">PO Number</span><span className="font-mono font-bold text-gray-800">{waitModalOrder.po || `PO-2605-${waitModalOrder.id?.slice(0, 4)}`}</span></div>
-              <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Customer</span><span className="font-bold text-gray-800">{waitModalOrder.customer || waitModalOrder.customerAlias || 'Customer'}</span></div>
-              <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Budget</span><span className="font-bold text-amber-600">฿{waitModalOrder.budget || waitModalOrder.estimatedPrice || waitModalOrder.finalPrice || '0'}</span></div>
+              <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Step Name</span><span className="font-bold text-gray-800">{waitModalStepName}</span></div>
+              <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Type of Work</span><span className="font-bold text-gray-800 text-right">{waitModalServiceName}</span></div>
+              <div className="flex justify-between border-b pb-2"><span className="text-gray-500">What You Need To Do</span><span className="font-bold text-gray-800 text-right max-w-[60%]">{waitModalInstruction}</span></div>
+              <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Customer</span><span className="font-bold text-gray-800">{waitModalCounterpart}</span></div>
+              <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Budget</span><span className="font-bold text-amber-600">{waitModalBudgetDisplay}</span></div>
+              <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Budget Calculation</span><span className="font-bold text-gray-800 text-right">Matched PO total based on the selected partner price list.</span></div>
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Project Location</span><span className="font-bold text-gray-800 text-right">{waitModalOrder.meetingVenue || waitModalOrder.subdistrict || 'Unknown'}</span></div>
               {isMeetingConfirmation && (
                 <>
@@ -1039,7 +1060,7 @@ export default function FixerProPage() {
                   <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Venue</span><span className="font-bold text-gray-800 text-right">{waitModalMeetingDetails.meetingVenue}</span></div>
                 </>
               )}
-              <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">Project Details</span><span className="font-bold text-gray-800 bg-white p-2 rounded border border-gray-100">{(waitModalOrder.projectDetails || waitModalOrder.description || waitModalOrder.service || "").replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?/, "")}</span></div>
+              <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">Project Details</span><span className="font-bold text-gray-800 bg-white p-2 rounded border border-gray-100">{waitModalProjectDetails}</span></div>
               {isMeetingConfirmation && waitModalMeetingDetails.meetingMessage && <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">Customer Invitation</span><span className="text-gray-800 bg-white p-2 rounded border border-gray-100">{waitModalMeetingDetails.meetingMessage}</span></div>}
               <div className="flex justify-between"><span className="text-gray-500">Uploaded Files</span><span className="font-semibold text-sky-600 cursor-pointer hover:underline" onClick={() => {
                 const url = waitModalAttachmentUrls[0] || '';
@@ -1059,7 +1080,7 @@ export default function FixerProPage() {
               <button 
                 onClick={async () => {
                   const po = waitModalOrder.po || `PO-2605-${waitModalOrder.id?.slice(0, 4)}`;
-                  const backendOrderId = waitModalOrder.orderId || localStorage.getItem(`po_to_order_${po}`) || waitModalOrder.id;
+                  const backendOrderId = waitModalOrder.orderId || localStorage.getItem(`po_to_order_${po}`) || (isOrderUuid(waitModalOrder.id) ? waitModalOrder.id : '');
                   const now = fmtDateTime(new Date());
                   const partnerName = partner?.name || partner?.company || 'Partner';
                   const serviceTitle = waitModalOrder.serviceTh || waitModalOrder.service;
@@ -1087,7 +1108,7 @@ export default function FixerProPage() {
                       localStorage.setItem("ghis_mock_active", JSON.stringify(nextActive));
                       const nextPartnerReqs = [
                         ...partnerDynReqs.filter((r: any) => !(r.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(r.type))),
-                        { id: `variation-${po}`, po, service: waitModalOrder.service || serviceTitle, serviceTh: waitModalOrder.service || serviceTitle, serviceZh: waitModalOrder.service || serviceTitle, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), fee: budgetLabel, budget: String(budgetLabel).replace(/[^0-9]/g, ''), tier: waitModalOrder.tier, description: 'Proceed to submit variation request if extra work or price adjustment is required.', type: 'variation_partner', step: 9 },
+                        { id: `variation-${po}`, orderId: backendOrderId || waitModalOrder.orderId || undefined, po, service: waitModalOrder.service || serviceTitle, serviceTh: waitModalOrder.service || serviceTitle, serviceZh: waitModalOrder.service || serviceTitle, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), fee: budgetLabel, budget: String(budgetLabel).replace(/[^0-9]/g, ''), tier: waitModalOrder.tier, description: 'Proceed to submit variation request if extra work or price adjustment is required.', type: 'variation_partner', step: 9 },
                       ];
                       localStorage.setItem("partner_mock_dyn_req", JSON.stringify(nextPartnerReqs));
                       setMockDynReqs(nextReqs);
@@ -1095,7 +1116,7 @@ export default function FixerProPage() {
                       setPartnerDynReqs(nextPartnerReqs);
                       window.dispatchEvent(new Event("storage"));
                       // Update backend: MEETING_REQUESTED → IN_PROGRESS (meeting confirmed; customer page polls and auto-detects)
-                      if (backendOrderId && !waitModalOrder.mock && token) {
+                      if (backendOrderId && !waitModalOrder.mock && token && String(waitModalOrder.status || '').toUpperCase() !== 'IN_PROGRESS') {
                         fetch(`/api/v1/orders/${backendOrderId}/status`, {
                           method: 'PUT',
                           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -1122,7 +1143,7 @@ export default function FixerProPage() {
                         CONFIRMED: [],
                       };
                       for (const nextStatus of acceptancePath[currentStatus] || []) {
-                        const hopRes = await fetch(`/api/v1/orders/${waitModalOrder.id}/status`, {
+                        const hopRes = await fetch(`/api/v1/orders/${backendOrderId || waitModalOrder.id}/status`, {
                           method: 'PUT',
                           headers: {
                             'Content-Type': 'application/json',
@@ -1145,8 +1166,8 @@ export default function FixerProPage() {
                     const nextActive = [
                       ...activeState.filter((x: any) => x.po !== po),
                       {
-                        id: waitModalOrder.id,
-                        orderId: waitModalOrder.id,
+                        id: backendOrderId || waitModalOrder.id,
+                        orderId: backendOrderId || waitModalOrder.id,
                         po,
                         title: serviceTitle,
                         customer: waitModalOrder.customer || 'Ghis Cafe',
@@ -1167,7 +1188,7 @@ export default function FixerProPage() {
                       {
                         id: `pay-${po}`,
                         po,
-                        orderId: waitModalOrder.id,
+                        orderId: backendOrderId || waitModalOrder.id,
                         title: serviceTitle,
                         customer: partnerName,
                         date: now,
@@ -1759,7 +1780,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
       const po = job.po || job.id;
       const createdAt = Date.now();
       const token = localStorage.getItem("subscriber_token") || "";
-      const orderDbId = localStorage.getItem(`po_to_order_${po}`) || job.id || "";
+      const orderDbId = job.orderId || localStorage.getItem(`po_to_order_${po}`) || (isOrderUuid(job.id) ? job.id : "");
       const fmtDt = (d: number) => {
         const dt = new Date(d);
         return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
@@ -1892,13 +1913,20 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
             <p className="text-amber-100 text-sm mt-1">{variationModal.po} &middot; {variationModal.service}</p>
           </div>
           <div className="px-6 py-5 space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Customer</label>
-              <p className="text-sm text-gray-800">{variationModal.customer}</p>
+            <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+              <strong>Step 9 of 11 • Variation.</strong> Review the original PO budget, describe the extra scope or revised pricing, and send it to the customer for approval.
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Budget</label>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Customer</label>
+              <p className="text-sm text-gray-800">{firstNameOnly(variationModal.customer, 'Customer')}</p>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Original PO Budget</label>
               <p className="text-sm text-gray-800">฿{variationModal.budget || '0'}</p>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Budget Calculation</label>
+              <p className="text-sm text-gray-800">Use the original PO total above as the base amount and describe any extra scope or revised total in the variation request below.</p>
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Variation Description <span className="text-red-500">*</span></label>
@@ -2024,7 +2052,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
       const po = job.po || job.id;
       const createdAt = Date.now();
       const token = localStorage.getItem("subscriber_token") || "";
-      const orderDbId = localStorage.getItem(`po_to_order_${po}`) || job.id || "";
+      const orderDbId = job.orderId || localStorage.getItem(`po_to_order_${po}`) || (isOrderUuid(job.id) ? job.id : "");
       const fmtDt = (d: number) => {
         const dt = new Date(d);
         return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
@@ -2137,9 +2165,20 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
             <p className="text-amber-100 text-sm mt-1">{variationModal.po} · {variationModal.service}</p>
           </div>
           <div className="px-6 py-5 space-y-4">
+            <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+              <strong>Step 9 of 11 • Variation.</strong> Review the original PO budget, describe the extra scope or revised pricing, and send it to the customer for approval.
+            </div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Customer</label>
-              <p className="text-sm text-gray-800">{variationModal.customer}</p>
+              <p className="text-sm text-gray-800">{firstNameOnly(variationModal.customer, 'Customer')}</p>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Original PO Budget</label>
+              <p className="text-sm text-gray-800">฿{variationModal.budget || '0'}</p>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Budget Calculation</label>
+              <p className="text-sm text-gray-800">Use the original PO total above as the base amount and describe any extra scope or revised total in the variation request below.</p>
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Variation Description <span className="text-red-500">*</span></label>

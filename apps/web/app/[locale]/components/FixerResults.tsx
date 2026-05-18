@@ -855,9 +855,9 @@ export default function FixerResults({
             localStorage.setItem("cblue_order_attachments", JSON.stringify(byOrder));
 
             // Persist attachments to backend for cross-device visibility.
-            await Promise.allSettled(
-              storedAttachments.map((url, idx) =>
-                fetch(`/api/v1/orders/${createdOrderId}/attachments`, {
+            const uploadAttachment = async (url: string, idx: number, attempt = 0): Promise<boolean> => {
+              try {
+                const res = await fetch(`/api/v1/orders/${createdOrderId}/attachments`, {
                   method: "POST",
                   headers: {
                     "Content-Type": "application/json",
@@ -867,9 +867,23 @@ export default function FixerResults({
                     url,
                     key: `order/${createdOrderId}/attachment-${idx + 1}`,
                   }),
-                }),
-              ),
-            );
+                });
+                if (res.ok) return true;
+                if (attempt < 1) return uploadAttachment(url, idx, attempt + 1);
+              } catch {
+                if (attempt < 1) return uploadAttachment(url, idx, attempt + 1);
+              }
+              return false;
+            };
+
+            const uploadResults = await Promise.all(storedAttachments.map((url, idx) => uploadAttachment(url, idx)));
+            if (uploadResults.some((result) => !result)) {
+              console.error("One or more order attachments failed to persist to backend", {
+                orderId: createdOrderId,
+                poNumber,
+                failedCount: uploadResults.filter((result) => !result).length,
+              });
+            }
           } catch {
             // Non-blocking for demo flow
           }

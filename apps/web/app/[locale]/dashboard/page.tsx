@@ -46,6 +46,10 @@ const extractPoCode = (orderLike: any) => {
   const desc = String(orderLike?.description || orderLike?.desc || "");
   return desc.match(PO_CODE_PATTERN)?.[0] || "";
 };
+const firstNameOnly = (value: any, fallback = 'User') => {
+  const cleaned = String(value || '').trim();
+  return cleaned ? cleaned.split(/\s+/)[0] : fallback;
+};
 
 const ICON_MAP: Record<string, string> = { household: "", project: "", professional: "", property: "" };
 const STATUS_STYLE: Record<string, string> = {
@@ -106,6 +110,7 @@ export default function DashboardPage() {
       const token = localStorage.getItem("subscriber_token");
       if (!token) {
         setSubscriber(null);
+        setOrders([]);
       } else {
         const stored = localStorage.getItem("subscriber");
         if (stored) setSubscriber(JSON.parse(stored));
@@ -121,6 +126,7 @@ export default function DashboardPage() {
       try {
         const token = localStorage.getItem("subscriber_token");
         if (!token) {
+          setOrders([]);
           setLoading(false);
           return;
         }
@@ -146,6 +152,7 @@ export default function DashboardPage() {
         if (!res) {
           if (isMounted) {
             setSubscriber(null);
+            setOrders([]);
             setLoading(false);
           }
           return;
@@ -181,6 +188,7 @@ export default function DashboardPage() {
           localStorage.removeItem("subscriber");
           if (isMounted) {
             setSubscriber(null);
+            setOrders([]);
           }
         }
       } catch { /* ignore */ }
@@ -1142,7 +1150,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         setMockDynRequests(prev => {
           if (prev.some((x: any) => x.po === po && x.type === 'variation_pending')) return prev;
           const item = { id: `var-${po}`, po, title, customer: 'Suppadesh', date: fmtDateTime(Date.now()), createdAt: Date.now(), budget, tier, desc: 'Partner has submitted a variation for your approval. Please review and confirm to proceed.', type: 'variation_pending', step: 9 };
-          const merged = [...prev.filter((x: any) => !(x.po === po && ['variation_pending', 'meeting_pending_partner', 'meeting_scheduled', 'chat_ready'].includes(x.type))), item];
+          const merged = [...prev.filter((x: any) => !(x.po === po && ['variation_pending', 'meeting_invite', 'meeting_pending_partner', 'meeting_scheduled', 'chat_ready'].includes(x.type))), item];
           try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(merged)); } catch {}
           return merged;
         });
@@ -1157,7 +1165,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         setMockDynRequests(prev => {
           if (prev.some((x: any) => x.po === po && x.type === 'complete_pending')) return prev;
           const item = { id: `compl-${po}`, po, title, customer: 'Suppadesh', date: fmtDateTime(Date.now()), createdAt: Date.now(), budget, tier, desc: 'Work is completed. Please review and mark as complete to close this project.', type: 'complete_pending', step: 10 };
-          const merged = [...prev.filter((x: any) => !(x.po === po && ['complete_pending', 'variation_pending', 'meeting_pending_partner', 'meeting_scheduled', 'chat_ready'].includes(x.type))), item];
+          const merged = [...prev.filter((x: any) => !(x.po === po && ['complete_pending', 'variation_pending', 'meeting_invite', 'meeting_pending_partner', 'meeting_scheduled', 'chat_ready'].includes(x.type))), item];
           try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(merged)); } catch {}
           return merged;
         });
@@ -1988,6 +1996,8 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
               {/* Type of service and provider details added */}
               <div className="w-full flex justify-between border-b border-gray-100 pb-3 mb-3">
                 <div className="flex flex-col">
+                  <span className="text-gray-500 text-xs uppercase tracking-wider">Step Name</span>
+                  <span className="font-bold text-gray-900 mb-2">Fee &amp; Proceed</span>
                   <span className="text-gray-500 text-xs uppercase tracking-wider">Service</span>
                   <span className="font-bold text-gray-900">{waitModalOrder.request?.title || 'Fit out'}</span>
                 </div>
@@ -1998,8 +2008,14 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
               </div>
               
               <div className="w-full flex justify-between items-center mb-4">
-                 <span className="text-gray-600 text-sm">Provider</span>
-                 <span className="text-gray-900 font-semibold">{waitModalOrder.request?.customer || 'Suppadesh'}</span>
+                 <span className="text-gray-600 text-sm">Selected Partner</span>
+                 <span className="text-gray-900 font-semibold">{firstNameOnly(waitModalOrder.request?.customer, 'Suppadesh')}</span>
+              </div>
+              <div className="w-full bg-gray-50 rounded-xl p-3 space-y-2 text-sm text-left mb-4">
+                <div className="flex justify-between items-center"><span className="text-gray-500 text-xs">What You Need To Do</span><span className="font-bold text-gray-800 text-right">Pay the processing fee, activate chat, and proceed to site meeting.</span></div>
+                <div className="flex justify-between items-center"><span className="text-gray-500 text-xs">Project Location</span><span className="font-bold text-gray-800">{waitModalOrder.request?.location || waitModalOrder.request?.subdistrict || 'Saphansong'}</span></div>
+                <div className="flex flex-col"><span className="text-gray-500 text-xs">Project Details</span><span className="font-bold text-gray-800">{String(waitModalOrder.request?.description || waitModalOrder.request?.desc || '').replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?/, '') || 'Project details from the draft PO.'}</span></div>
+                <div className="flex justify-between items-center"><span className="text-gray-500 text-xs">Budget Calculation</span><span className="font-bold text-gray-800 text-right">Matched PO total based on the selected partner price list.</span></div>
               </div>
               
               <div className="bg-sky-50 text-sky-800 text-[13px] p-3 rounded-xl mb-4 border border-sky-100 text-center font-medium">
@@ -2112,9 +2128,22 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
             <p className="text-center text-sm text-gray-500 mt-1 mb-4">Fill in the meeting details below. Your partner will confirm the time.</p>
 
             <div className="space-y-3">
+              <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+                <strong>Step Name:</strong> Meeting Invitation. Send your available site meeting time and venue to the selected partner for confirmation.
+              </div>
               <div>
                 <label className="text-xs text-gray-500 font-semibold uppercase tracking-wider block mb-1">Project</label>
                 <div className="bg-gray-50 rounded-xl px-4 py-2 text-sm font-bold text-gray-800">{meetingModal.title} · {meetingModal.po}</div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-500 font-semibold uppercase tracking-wider block mb-1">Selected Partner</label>
+                  <div className="bg-gray-50 rounded-xl px-4 py-2 text-sm font-bold text-gray-800">{firstNameOnly(meetingModal.customer, 'Partner')}</div>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 font-semibold uppercase tracking-wider block mb-1">Project Location</label>
+                  <div className="bg-gray-50 rounded-xl px-4 py-2 text-sm font-bold text-gray-800">{meetingModal.location || meetingModal.subdistrict || 'Saphansong'}</div>
+                </div>
               </div>
               <div>
                 <label className="text-xs text-gray-500 font-semibold uppercase tracking-wider block mb-1">Venue / Jobsite Address</label>
@@ -2147,7 +2176,7 @@ const activeOrders = orders ? orders.filter((o: any) => !['COMPLETED', 'CANCELLE
                 </div>
               </div>
               <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-2 text-xs text-amber-700">
-                <strong>Budget:</strong> {meetingModal.budget} &nbsp;|&nbsp; <strong>Tier:</strong> {meetingModal.tier}
+                <strong>Budget:</strong> {meetingModal.budget} &nbsp;|&nbsp; <strong>Tier:</strong> {meetingModal.tier} &nbsp;|&nbsp; <strong>Budget Calculation:</strong> Matched PO total from the selected partner price list.
               </div>
             </div>
 
