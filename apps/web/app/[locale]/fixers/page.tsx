@@ -977,8 +977,8 @@ export default function FixerProPage() {
         const order = mappedOrders.find((x: any) => x.po === po);
         const localActive = mockActiveState.find((x: any) => x.po === po);
         const historyEntry = mockHistory.find((x: any) => x.po === po) || histFromStorage.find((x: any) => x.po === po);
-        const variationAlreadySubmitted = Number(localActive?.step || 0) >= 9 && localActive?.actionNeeded === false;
-        const completeAlreadySubmitted = Number(localActive?.step || 0) >= 10 && localActive?.actionNeeded === false;
+        const variationAlreadySubmitted = (Number(localActive?.step || 0) >= 9 && localActive?.actionNeeded === false) || Boolean(localStorage.getItem(`partner_variation_sent_${po}`));
+        const completeAlreadySubmitted = (Number(localActive?.step || 0) >= 10 && localActive?.actionNeeded === false) || Boolean(localStorage.getItem(`partner_complete_sent_${po}`));
         const partnerAlreadyRated = Boolean(historyEntry?.partnerRating);
         const meetingAlreadyConfirmed = Number(localActive?.step || 0) >= 9;
         if (!po || !order) continue;
@@ -1975,6 +1975,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
         const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
         const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 9, mockStep: 9, actionNeeded: false } : x);
         localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
+        try { localStorage.setItem(`partner_variation_sent_${po}`, '1'); } catch {}
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
         postSystemMsg(`[SYSTEM] Partner has submitted a variation request for ${po}. Please review in your Requests tab.`);
@@ -1986,6 +1987,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
         const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
         const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 10, mockStep: 10, actionNeeded: false } : x);
         localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
+        try { localStorage.setItem(`partner_complete_sent_${po}`, '1'); } catch {}
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['complete_partner', 'variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
         postSystemMsg(`[SYSTEM] Partner has marked the job as complete for ${po}. Please review and confirm in your Requests tab.`);
@@ -1999,6 +2001,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
         localStorage.setItem("ghis_mock_active", JSON.stringify(updated));
         localStorage.setItem("ghis_mock_history", JSON.stringify([...hist, completed]));
         try { localStorage.setItem(`chat_closed_${po}`, '1'); } catch {}
+        try { localStorage.removeItem(`partner_variation_sent_${po}`); localStorage.removeItem(`partner_complete_sent_${po}`); } catch {}
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && x.type === 'rate_partner')));
         window.dispatchEvent(new Event("storage"));
         postSystemMsg(`[SYSTEM] Partner has rated this project ${rating}/5 stars. The job is now complete.`);
@@ -2269,6 +2272,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
         const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
         const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 9, mockStep: 9, actionNeeded: false } : x);
         localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
+        try { localStorage.setItem(`partner_variation_sent_${po}`, '1'); } catch {}
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
         postSystemMsg(`[SYSTEM] Partner has submitted a variation request for ${po}. Please review in your Requests tab.`);
@@ -2281,6 +2285,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
         const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
         const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 10, mockStep: 10, actionNeeded: false } : x);
         localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
+        try { localStorage.setItem(`partner_complete_sent_${po}`, '1'); } catch {}
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['complete_partner', 'variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
         postSystemMsg(`[SYSTEM] Partner has marked the job as complete for ${po}. Please review and confirm in your Requests tab.`);
@@ -2294,6 +2299,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
         localStorage.setItem("ghis_mock_active", JSON.stringify(updated));
         localStorage.setItem("ghis_mock_history", JSON.stringify([...hist, completed]));
         try { localStorage.setItem(`chat_closed_${po}`, '1'); } catch {}
+        try { localStorage.removeItem(`partner_variation_sent_${po}`); localStorage.removeItem(`partner_complete_sent_${po}`); } catch {}
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && x.type === 'rate_partner')));
         window.dispatchEvent(new Event("storage"));
         postSystemMsg(`[SYSTEM] Partner has rated this project ${rating}/5 stars. The job is now complete.`);
@@ -2324,12 +2330,12 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
               {req.type === 'variation_partner' ? (
                 <>
                   <button onClick={(e) => { e.stopPropagation(); setVariationDesc(''); setVariationModal(req); }} className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg transition">Yes</button>
-                  <button onClick={(e) => { e.stopPropagation(); writePartnerReqs(prev => prev.filter((x: any) => !(x.po === req.po && x.type === 'variation_partner'))); }} className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">No</button>
+                  <button onClick={(e) => { e.stopPropagation(); try { localStorage.setItem(`partner_variation_sent_${req.po}`, '1'); } catch {} writePartnerReqs(prev => prev.filter((x: any) => !(x.po === req.po && x.type === 'variation_partner'))); }} className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">No</button>
                 </>
               ) : req.type === 'complete_partner' ? (
                 <>
                   <button onClick={(e) => { e.stopPropagation(); setCompleteNote(''); setCompleteModal(req); }} className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition">Send</button>
-                  <button onClick={(e) => { e.stopPropagation(); writePartnerReqs(prev => prev.filter((x: any) => !(x.po === req.po && x.type === 'complete_partner'))); }} className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">No</button>
+                  <button onClick={(e) => { e.stopPropagation(); try { localStorage.setItem(`partner_complete_sent_${req.po}`, '1'); } catch {} writePartnerReqs(prev => prev.filter((x: any) => !(x.po === req.po && x.type === 'complete_partner'))); }} className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">No</button>
                 </>
               ) : req.type === 'rate_partner' ? (
                 <button onClick={(e) => { e.stopPropagation(); setRatingStars(5); setRatingModal(req); }} className="px-3 py-1 bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold rounded-lg transition">Start</button>
