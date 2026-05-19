@@ -772,6 +772,48 @@ function PropertyTab({ locale, prefix, properties }: { locale: string; prefix: s
   );
 }
 
+function CustomerHistoryCard({ item, idx, compact = false }: { item: any; idx: number; compact?: boolean }) {
+  const [collapsed, setCollapsed] = React.useState(true);
+  const chatPreview = collapsed ? [] : (Array.isArray(item.chatHistory) ? item.chatHistory.slice(compact ? -2 : -4) : []);
+  return (
+    <div key={`${item.po || item.id || idx}`} className="p-5 hover:bg-gray-50 transition cursor-pointer" onClick={() => setCollapsed(c => !c)}>
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <h3 className="font-bold text-gray-900">{item.service} <span className="text-sm font-normal text-gray-400">· {item.po} · {item.counterpartName || item.fixerName || 'Partner'}</span></h3>
+          <p className="text-sm text-gray-500 mt-1">Completed {toDisplayDateTime(item.completedAt || item.statusChangedAt || item.createdAt || item.date)}</p>
+        </div>
+        <div className="flex flex-col items-start sm:items-end gap-1 flex-shrink-0">
+          <span className="font-bold text-gray-900">{item.fee || item.budget || '฿0'}</span>
+          <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">Step 11 of 11 · {item.stepName || getWorkflowStepName(item.step)}</span>
+          <span className="text-xs text-sky-600 font-semibold">{collapsed ? '▼ Show details' : '▲ Hide details'}</span>
+        </div>
+      </div>
+      {!collapsed && (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 text-sm text-gray-700">
+            <div><span className="text-gray-500">Project Location:</span> {item.location || item.subdistrict || 'Unknown'}</div>
+            <div><span className="text-gray-500">Budget:</span> {item.fee || item.budget || '฿0'}</div>
+            <div className="sm:col-span-2"><span className="text-gray-500">Project Details:</span> {item.projectDetails || 'Project details not available.'}</div>
+          </div>
+          {chatPreview.length > 0 && (
+            <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Chat History</p>
+              <div className="space-y-2">
+                {chatPreview.map((message: any) => (
+                  <div key={message.id} className="text-sm text-gray-700">
+                    <span className="font-semibold capitalize text-gray-900">{message.sender}</span>
+                    {message.time ? <span className="text-xs text-gray-400"> · {message.time}</span> : null}
+                    <p className="mt-0.5">{message.text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
 
 
 /* ===== DASHBOARD LOGGED IN STATE ===== */
@@ -1746,43 +1788,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       </div>
     </div>
   );
-  const renderHistoryCard = (item: any, idx: number, compact = false) => {
-    const chatPreview = Array.isArray(item.chatHistory) ? item.chatHistory.slice(compact ? -2 : -4) : [];
-    return (
-      <div key={`${item.po || item.id || idx}`} className="p-5 hover:bg-gray-50 transition">
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-          <div>
-            <h3 className="font-bold text-gray-900">{item.service} <span className="text-sm font-normal text-gray-400">· {item.po} · {item.counterpartName || item.fixerName || 'Partner'}</span></h3>
-            <p className="text-sm text-gray-500 mt-1">Completed {toDisplayDateTime(item.completedAt || item.statusChangedAt || item.createdAt || item.date)}</p>
-          </div>
-          <div className="flex flex-col items-start sm:items-end gap-1">
-            <span className="font-bold text-gray-900">{item.fee || item.budget || '฿0'}</span>
-            <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">Step 11 of 11 · {item.stepName || getWorkflowStepName(item.step)}</span>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 text-sm text-gray-700">
-          <div><span className="text-gray-500">Project Location:</span> {item.location || item.subdistrict || 'Unknown'}</div>
-          <div><span className="text-gray-500">Budget:</span> {item.fee || item.budget || '฿0'}</div>
-          <div className="sm:col-span-2"><span className="text-gray-500">Project Details:</span> {item.projectDetails || 'Project details not available.'}</div>
-        </div>
-        {chatPreview.length > 0 && (
-          <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Chat History</p>
-            <div className="space-y-2">
-              {chatPreview.map((message: any) => (
-                <div key={message.id} className="text-sm text-gray-700">
-                  <span className="font-semibold capitalize text-gray-900">{message.sender}</span>
-                  {message.time ? <span className="text-xs text-gray-400"> · {message.time}</span> : null}
-                  <p className="mt-0.5">{message.text}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
-const activeOrders = workflowOrders.filter((o: any) => !['COMPLETED', 'CANCELLED', 'DONE'].includes(String(o.status || '').toUpperCase()));
+  const activeOrders = workflowOrders.filter((o: any) => !['COMPLETED', 'CANCELLED', 'DONE'].includes(String(o.status || '').toUpperCase()));
   const historyOrders = workflowOrders.filter((o: any) => ['COMPLETED', 'CANCELLED', 'DONE'].includes(String(o.status || '').toUpperCase()));
   const allHistory = Array.from(
     [...historyOrders, ...visibleMockHistory.filter((x: any) => x.po)].reduce((map: Map<string, any>, entry: any) => {
@@ -1922,7 +1928,7 @@ const activeOrders = workflowOrders.filter((o: any) => !['COMPLETED', 'CANCELLED
             {allHistory.length === 0 ? (
               <div className="p-8 text-center text-gray-500">No history found.</div>
             ) : (
-              allHistory.map((o: any, i: number) => renderHistoryCard(o, i))
+              allHistory.map((o: any, i: number) => <CustomerHistoryCard key={o.po || o.id || i} item={o} idx={i} />)
             )}
           </div>
         </div>
@@ -2081,10 +2087,10 @@ const activeOrders = workflowOrders.filter((o: any) => !['COMPLETED', 'CANCELLED
               <button className="text-sm font-bold text-sky-600 hover:text-sky-700" onClick={() => setActiveTab("history")}>View All</button>
             </div>
             <div className="divide-y divide-gray-50 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-4">
-              {allHistory.slice(0, 3).length === 0 ? (
+              {allHistory.slice(0, 2).length === 0 ? (
                 <div className="p-8 text-center text-gray-500">No history found.</div>
               ) : (
-                allHistory.slice(0, 3).map((o: any, i: number) => renderHistoryCard(o, i, true))
+                allHistory.slice(0, 2).map((o: any, i: number) => <CustomerHistoryCard key={o.po || o.id || i} item={o} idx={i} compact={true} />)
               )}
             </div>
           </div>
@@ -2382,8 +2388,8 @@ const activeOrders = workflowOrders.filter((o: any) => !['COMPLETED', 'CANCELLED
       )}
 
       {variationApproveModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-y-auto max-h-[90dvh] my-auto">
             <div className="bg-gradient-to-r from-purple-600 to-fuchsia-600 px-6 py-4">
               <h3 className="text-white font-bold text-lg">Approve Variation</h3>
               <p className="text-purple-100 text-sm mt-1">{variationApproveModal.po} · Step 9 of 11</p>

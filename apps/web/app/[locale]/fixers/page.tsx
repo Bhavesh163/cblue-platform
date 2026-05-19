@@ -204,38 +204,46 @@ function WorkflowModalMeta({
 }
 
 function WorkflowHistoryCard({ item, compact = false }: { item: any; compact?: boolean }) {
-  const chatPreview = Array.isArray(item.chatHistory) ? item.chatHistory.slice(compact ? -2 : -4) : [];
+  const [collapsed, setCollapsed] = React.useState(true);
+  const chatPreview = collapsed ? [] : (Array.isArray(item.chatHistory) ? item.chatHistory.slice(compact ? -2 : -4) : []);
   return (
-    <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm hover:bg-gray-50/60 transition">
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-        <div>
-          <h3 className="font-bold text-gray-900">{item.service} <span className="text-sm font-normal text-gray-400">· {item.po} · {item.counterpartName || item.customer || 'Customer'}</span></h3>
-          <p className="text-sm text-gray-500 mt-1">Completed {fmtDateTime(item.completedAt || item.statusChangedAt || item.createdAt || item.date || Date.now())}</p>
-        </div>
-        <div className="flex flex-col items-start sm:items-end gap-1">
-          <span className="font-bold text-gray-900">{item.fee || item.budget || '฿0'}</span>
-          <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">Step 11 of 11 · {item.stepName || getWorkflowStepName(item.step)}</span>
-        </div>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 text-sm text-gray-700">
-        <div><span className="text-gray-500">Project Location:</span> {item.location || item.subdistrict || 'Unknown'}</div>
-        <div><span className="text-gray-500">Tier:</span> {item.tier || 'Standard'}</div>
-        <div className="sm:col-span-2"><span className="text-gray-500">Project Details:</span> {item.projectDetails || item.description || 'Project details not available.'}</div>
-      </div>
-      {chatPreview.length > 0 && (
-        <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Chat History</p>
-          <div className="space-y-2">
-            {chatPreview.map((message: any) => (
-              <div key={message.id} className="text-sm text-gray-700">
-                <span className="font-semibold capitalize text-gray-900">{message.sender}</span>
-                {message.time ? <span className="text-xs text-gray-400"> · {message.time}</span> : null}
-                <p className="mt-0.5">{message.text}</p>
-              </div>
-            ))}
+    <div className="rounded-xl border border-gray-100 bg-white shadow-sm hover:bg-gray-50/60 transition cursor-pointer" onClick={() => setCollapsed(c => !c)}>
+      <div className="p-5">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <h3 className="font-bold text-gray-900">{item.service} <span className="text-sm font-normal text-gray-400">· {item.po} · {item.counterpartName || item.customer || 'Customer'}</span></h3>
+            <p className="text-sm text-gray-500 mt-1">Completed {fmtDateTime(item.completedAt || item.statusChangedAt || item.createdAt || item.date || Date.now())}</p>
+          </div>
+          <div className="flex flex-col items-start sm:items-end gap-1 flex-shrink-0">
+            <span className="font-bold text-gray-900">{item.fee || item.budget || '฿0'}</span>
+            <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">Step 11 of 11 · {item.stepName || getWorkflowStepName(item.step)}</span>
+            <span className="text-xs text-sky-600 font-semibold">{collapsed ? '▼ Show details' : '▲ Hide details'}</span>
           </div>
         </div>
-      )}
+        {!collapsed && (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 text-sm text-gray-700">
+              <div><span className="text-gray-500">Project Location:</span> {item.location || item.subdistrict || 'Unknown'}</div>
+              <div><span className="text-gray-500">Tier:</span> {item.tier || 'Standard'}</div>
+              <div className="sm:col-span-2"><span className="text-gray-500">Project Details:</span> {item.projectDetails || item.description || 'Project details not available.'}</div>
+            </div>
+            {chatPreview.length > 0 && (
+              <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Chat History</p>
+                <div className="space-y-2">
+                  {chatPreview.map((message: any) => (
+                    <div key={message.id} className="text-sm text-gray-700">
+                      <span className="font-semibold capitalize text-gray-900">{message.sender}</span>
+                      {message.time ? <span className="text-xs text-gray-400"> · {message.time}</span> : null}
+                      <p className="mt-0.5">{message.text}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -1430,7 +1438,7 @@ export default function FixerProPage() {
                 <p className="text-purple-100 mt-2">{locale === "th" ? "รับงาน จัดการแดชบอร์ด และเพิ่มรายได้" : locale === "zh" ? "接受工作、管理仪表板、增加收入" : "Receive jobs, manage your dashboard, and grow earnings"}</p>
               </div>
               <div className="flex gap-3">
-                <Link href={`subscription/login`} className="px-6 py-3 bg-white text-purple-700 rounded-xl font-bold text-sm hover:bg-purple-50 transition shadow-lg whitespace-nowrap">
+                <Link href={`subscription/login?redirect=/fixers`} className="px-6 py-3 bg-white text-purple-700 rounded-xl font-bold text-sm hover:bg-purple-50 transition shadow-lg whitespace-nowrap">
                   {locale === "th" ? "เข้าสู่ระบบ" : locale === "zh" ? "登录" : "Log In"}
                 </Link>
                 <Link href={`fixers/register`} className="px-6 py-3 border-2 border-white/40 text-white rounded-xl font-bold text-sm hover:bg-white/10 transition whitespace-nowrap">
@@ -1738,7 +1746,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
         </div>
         <div className="divide-y divide-gray-50">
           {incomingJobs.slice(0, 3).map((req) => (
-            <div key={req.id} className="px-6 py-4 flex items-center gap-4 hover:bg-amber-50 transition cursor-pointer" onClick={() => onJobClick && onJobClick(req)}>
+            <div key={req.id} className="px-6 py-4 flex items-center gap-4 hover:bg-amber-50 transition cursor-default" onClick={() => onJobClick && onJobClick(req)}>
               <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center text-lg"></div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? req.serviceTh : locale === "zh" ? req.serviceZh : req.service}{(req.po || req.step) ? <span className="text-xs font-normal text-gray-400">{req.po ? ` · ${req.po}` : ''}{req.step ? ` · Step ${req.step} of 11` : ''}</span> : null}</p>
@@ -1830,12 +1838,21 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
         </div>
         <div className="divide-y divide-gray-50">
           {activeJobs.slice(0, 5).map((job) => (
-            <div key={job.id} className="px-6 py-4 flex items-center gap-4 hover:bg-gray-50/50 transition">
-              <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center text-lg"></div>
+            <div key={job.id} className="px-6 py-4 flex items-start gap-4 hover:bg-gray-50/50 transition">
+              <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center text-lg flex-shrink-0"></div>
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? job.serviceTh : locale === "zh" ? job.serviceZh : job.service}{job.po ? <span className="text-xs font-normal text-gray-400"> · {job.po}</span> : null}</p>
-                <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"}</p>
-                {job.subdistrict && <p className="text-xs text-gray-500 mt-0.5">{job.subdistrict}</p>}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? job.serviceTh : locale === "zh" ? job.serviceZh : job.service}{job.po ? <span className="text-xs font-normal text-gray-400"> · {job.po}</span> : null}</p>
+                    <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"}</p>
+                    {job.subdistrict && <p className="text-xs text-gray-500 mt-0.5">{job.subdistrict}</p>}
+                  </div>
+                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[job.tier] || "bg-gray-100 text-gray-600"}`}>{job.tier}</span>
+                    {job.actionNeeded && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-50 text-red-700">Action Needed</span>}
+                    {job.earnings && <span className="text-xs font-bold text-gray-700">{job.earnings}</span>}
+                  </div>
+                </div>
                 <div className="mt-2 w-full pt-1">
                   <div className="w-2/3 overflow-x-auto pb-4 hide-scrollbar">
                     <div className="flex items-center min-w-max relative px-2">
@@ -1867,12 +1884,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 mt-2">
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[job.tier] || "bg-gray-100 text-gray-600"}`}>{job.tier}</span>
-                  {getStatusLabel(job.status, locale) !== "" && <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_STYLE[job.status] || ""}`}>{getStatusLabel(job.status, locale)}</span>}
-                  {job.actionNeeded && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-50 text-red-700">Action Needed</span>}
-                  {job.earnings && <span className="text-xs font-bold text-gray-700">{job.earnings}</span>}
-                </div>
+                {getStatusLabel(job.status, locale) !== "" && <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_STYLE[job.status] || ""}`}>{getStatusLabel(job.status, locale)}</span>}
               </div>
             </div>
           ))}
@@ -1885,7 +1897,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
             <span className="text-xs text-purple-600 font-bold cursor-pointer hover:underline" onClick={() => onTabChange && onTabChange("history")}>View All →</span>
           </div>
           <div className="space-y-3 p-4">
-            {completedJobs.slice(0, 3).length > 0 ? completedJobs.slice(0, 3).map((h) => (
+            {completedJobs.slice(0, 2).length > 0 ? completedJobs.slice(0, 2).map((h) => (
               <WorkflowHistoryCard key={h.id || h.po} item={h} compact />
             )) : (
               <div className="py-6 text-center text-gray-500">No completed jobs yet.</div>
@@ -1981,12 +1993,21 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
       </div>
       <div className="divide-y divide-gray-50">
         {activeJobs.map((job) => (
-          <div key={job.id} className="px-6 py-4 flex items-center gap-4 hover:bg-gray-50/50 transition">
-            <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center text-lg"></div>
+          <div key={job.id} className="px-6 py-4 flex items-start gap-4 hover:bg-gray-50/50 transition">
+            <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center text-lg flex-shrink-0"></div>
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? job.serviceTh : locale === "zh" ? job.serviceZh : job.service}{job.po ? <span className="text-xs font-normal text-gray-400"> · {job.po}</span> : null}</p>
-              <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"}</p>
-              {job.subdistrict && <p className="text-xs text-gray-500 mt-0.5">{job.subdistrict}</p>}
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? job.serviceTh : locale === "zh" ? job.serviceZh : job.service}{job.po ? <span className="text-xs font-normal text-gray-400"> · {job.po}</span> : null}</p>
+                  <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"}</p>
+                  {job.subdistrict && <p className="text-xs text-gray-500 mt-0.5">{job.subdistrict}</p>}
+                </div>
+                <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[job.tier] || "bg-gray-100 text-gray-600"}`}>{job.tier}</span>
+                  {job.actionNeeded && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-50 text-red-700">Action Needed</span>}
+                  {job.earnings && <span className="text-xs font-bold text-gray-700">{job.earnings}</span>}
+                </div>
+              </div>
               <div className="mt-2 w-full pt-1">
                 <div className="w-2/3 overflow-x-auto pb-4 hide-scrollbar">
                   <div className="flex items-center min-w-max relative px-2">
@@ -2018,10 +2039,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
                 </div>
               </div>
               <div className="flex items-center gap-2 mt-2 flex-wrap">
-                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[job.tier] || "bg-gray-100 text-gray-600"}`}>{job.tier}</span>
                 {getStatusLabel(job.status, locale) !== "" && <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_STYLE[job.status] || ""}`}>{getStatusLabel(job.status, locale)}</span>}
-                {job.actionNeeded && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-50 text-red-700">Action Needed</span>}
-                {job.earnings && <span className="text-xs font-bold text-gray-700">{job.earnings}</span>}
                 {/* Step 9: Partner submits variation */}
                 {(job.mockStep === 9 || (job.step === 9)) && (
                   <button onClick={() => { setVariationModal(job); setVariationDesc(""); }} className="text-xs px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-full transition">Submit Variation</button>
@@ -2042,8 +2060,8 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
     </div>
     {/* Variation Modal */}
     {variationModal && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto my-auto max-h-[90dvh] overflow-y-auto">
           <div className="bg-amber-500 px-6 py-4">
             <h3 className="text-white font-bold text-lg">Submit Variation</h3>
             <p className="text-amber-100 text-sm mt-1">{variationModal.po} &middot; {variationModal.service}</p>
@@ -2064,8 +2082,9 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
               projectDetails={stripWorkflowPrefix(variationModal.description || variationModal.desc || variationModal.projectDetails || variationModal.service || '')}
             />
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Budget Calculation</label>
-              <p className="text-sm text-gray-800">Use the original PO total above as the base amount and describe any extra scope or revised total in the variation request below.</p>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Budget</label>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 font-bold text-amber-800">{toCurrencyLabel(variationModal.budget)}</div>
+              <p className="text-xs text-gray-500 mt-1">Original PO total. Describe extra scope or revised amount in the variation below.</p>
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Variation Description <span className="text-red-500">*</span></label>
@@ -2266,7 +2285,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
       </div>
       <div className="divide-y divide-gray-50">
         {incomingJobs.map((req) => (
-          <div key={req.id} className="px-6 py-4 flex items-center gap-4 hover:bg-amber-50 transition cursor-pointer" onClick={() => onJobClick && onJobClick(req)}>
+          <div key={req.id} className="px-6 py-4 flex items-center gap-4 hover:bg-amber-50 transition cursor-default" onClick={() => onJobClick && onJobClick(req)}>
             <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center text-lg"></div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? req.serviceTh : locale === "zh" ? req.serviceZh : req.service}{(req.po || req.step) ? <span className="text-xs font-normal text-gray-400">{req.po ? ` · ${req.po}` : ''}{req.step ? ` · Step ${req.step} of 11` : ''}</span> : null}</p>
@@ -2304,8 +2323,8 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
       </div>
     </div>
     {variationModal && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto my-auto max-h-[90dvh] overflow-y-auto">
           <div className="bg-amber-500 px-6 py-4">
             <h3 className="text-white font-bold text-lg">Submit Variation</h3>
             <p className="text-amber-100 text-sm mt-1">{variationModal.po} · {variationModal.service}</p>
@@ -2326,8 +2345,9 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
               projectDetails={stripWorkflowPrefix(variationModal.description || variationModal.desc || variationModal.projectDetails || variationModal.service || '')}
             />
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Budget Calculation</label>
-              <p className="text-sm text-gray-800">Use the original PO total above as the base amount and describe any extra scope or revised total in the variation request below.</p>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Budget</label>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 font-bold text-amber-800">{toCurrencyLabel(variationModal.budget)}</div>
+              <p className="text-xs text-gray-500 mt-1">Original PO total. Describe extra scope or revised amount in the variation below.</p>
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Variation Description <span className="text-red-500">*</span></label>
