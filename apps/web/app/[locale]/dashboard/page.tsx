@@ -51,7 +51,7 @@ const firstNameOnly = (value: any, fallback = 'User') => {
   const cleaned = String(value || '').trim();
   return cleaned ? cleaned.split(/\s+/)[0] || fallback : fallback;
 };
-const HIDDEN_TEST_POS = new Set(["PO-2605-6716", "PO-2605-9605", "PO-2605-8699", "PO-2605-9701"]);
+const HIDDEN_TEST_POS = new Set(["PO-2605-6716", "PO-2605-9605", "PO-2605-8699", "PO-2605-9701", "PO-2605-6146"]);
 const isHiddenTestPo = (value: any) => HIDDEN_TEST_POS.has(String(value || '').trim().toUpperCase());
 const WORKFLOW_STEP_NAMES: Record<number, string> = {
   5: 'Accept',
@@ -797,7 +797,7 @@ function CustomerHistoryCard({ item, idx, compact = false }: { item: any; idx: n
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 text-sm text-gray-700">
             <div><span className="text-gray-500">Project Location:</span> {item.location || item.subdistrict || 'Unknown'}</div>
-            <div><span className="text-gray-500">Budget:</span> {item.fee || item.budget || '฿0'}</div>
+            <div><span className="text-gray-500">{locale === "th" ? "งบประมาณ:" : locale === "zh" ? "预算:" : "Budget:"}</span> {item.fee || item.budget || '฿0'}</div>
             <div className="sm:col-span-2"><span className="text-gray-500">Project Details:</span> {item.projectDetails || 'Project details not available.'}</div>
           </div>
           {chatPreview.length > 0 && (
@@ -1461,13 +1461,13 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     .map((x: any) => {
       const stableTime = x.date || toDisplayDateTime(x.createdAt) || "";
       const createdAt = x.createdAt || parseDateMs(x.date);
-      if (x.type === "notice") return { id: `a-${x.id}`, msg: x.desc || "Workflow updated.", time: stableTime, createdAt, dot: "bg-indigo-400" };
-      if (x.type === "payment_pending") return { id: `a-${x.id}`, msg: "Partner accepted PO — please proceed to pay fee.", time: stableTime, createdAt, dot: "bg-blue-500" };
-      if (x.type === "chat_ready") return { id: `a-${x.id}`, msg: "Chat is active — send meeting invitation when ready.", time: stableTime, createdAt, dot: "bg-sky-500" };
-      if (x.type === "meeting_pending_partner") return { id: `a-${x.id}`, msg: "Meeting invitation sent — waiting for partner confirmation.", time: stableTime, createdAt, dot: "bg-amber-500" };
-      if (x.type === "meeting_scheduled") return { id: `a-${x.id}`, msg: "Confirm meeting at site", time: stableTime, createdAt, dot: "bg-teal-500" };
-      if (x.type === "variation_pending") return { id: `a-${x.id}`, msg: "Request for Approval of Variation", time: stableTime, createdAt, dot: "bg-purple-500" };
-      if (x.type === "complete_pending") return { id: `a-${x.id}`, msg: "Request for job complete", time: stableTime, createdAt, dot: "bg-green-500" };
+      if (x.type === "notice") return { id: `a-${x.id}`, msg: x.desc || "Workflow updated.", msgTh: x.descTh || "อัปเดตขั้นตอนการทำงาน", msgZh: x.descZh || "工作流程已更新。", time: stableTime, createdAt, dot: "bg-indigo-400" };
+      if (x.type === "payment_pending") return { id: `a-${x.id}`, msg: "Partner accepted PO — please proceed to pay fee.", msgTh: "พาร์ทเนอร์ยอมรับ PO — กรุณาชำระค่าธรรมเนียม", msgZh: "合作伙伴已接受PO — 请支付费用。", time: stableTime, createdAt, dot: "bg-blue-500" };
+      if (x.type === "chat_ready") return { id: `a-${x.id}`, msg: "Chat is active — send meeting invitation when ready.", msgTh: "แชทพร้อมใช้งาน — ส่งคำเชิญนัดหมายเมื่อพร้อม", msgZh: "聊天已激活 — 准备好后发送会议邀请。", time: stableTime, createdAt, dot: "bg-sky-500" };
+      if (x.type === "meeting_pending_partner") return { id: `a-${x.id}`, msg: "Meeting invitation sent — waiting for partner confirmation.", msgTh: "ส่งคำเชิญนัดหมายแล้ว — รอการยืนยันจากพาร์ทเนอร์", msgZh: "会议邀请已发送 — 等待合作伙伴确认。", time: stableTime, createdAt, dot: "bg-amber-500" };
+      if (x.type === "meeting_scheduled") return { id: `a-${x.id}`, msg: "Confirm meeting at site", msgTh: "ยืนยันนัดหมายที่สถานที่", msgZh: "确认现场会议", time: stableTime, createdAt, dot: "bg-teal-500" };
+      if (x.type === "variation_pending") return { id: `a-${x.id}`, msg: "Request for Approval of Variation", msgTh: "คำขออนุมัติการเปลี่ยนแปลง", msgZh: "申请变更审批", time: stableTime, createdAt, dot: "bg-purple-500" };
+      if (x.type === "complete_pending") return { id: `a-${x.id}`, msg: "Request for job complete", msgTh: "คำขอยืนยันงานเสร็จสิ้น", msgZh: "申请完工确认", time: stableTime, createdAt, dot: "bg-green-500" };
       return null;
     })
     .filter(Boolean) as any[];
@@ -1588,7 +1588,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-end">
             <div className="text-left sm:text-right flex flex-col gap-1">
-              <span className="font-bold text-gray-900 pr-2">Budget: {item.budget}</span>
+              <span className="font-bold text-gray-900 pr-2">{locale === "th" ? "งบประมาณ:" : locale === "zh" ? "预算:" : "Budget:"} {item.budget}</span>
               <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-sky-50 text-sky-700 uppercase self-start sm:self-end w-max">{item.tier}</span>
             </div>
             <div className="flex gap-2">
@@ -1613,7 +1613,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-end">
             <div className="text-left sm:text-right flex flex-col gap-1">
-              <span className="font-bold text-gray-900 pr-2">Budget: {item.budget}</span>
+              <span className="font-bold text-gray-900 pr-2">{locale === "th" ? "งบประมาณ:" : locale === "zh" ? "预算:" : "Budget:"} {item.budget}</span>
               <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-amber-50 text-amber-700 uppercase self-start sm:self-end w-max">{item.tier}</span>
             </div>
             <div className="flex gap-2">
@@ -1641,7 +1641,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-end">
             <div className="text-left sm:text-right flex flex-col gap-1">
-              <span className="font-bold text-gray-900 pr-2">Budget: {item.budget}</span>
+              <span className="font-bold text-gray-900 pr-2">{locale === "th" ? "งบประมาณ:" : locale === "zh" ? "预算:" : "Budget:"} {item.budget}</span>
               <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-amber-50 text-amber-700 uppercase self-start sm:self-end w-max">{item.tier}</span>
             </div>
             <div className="flex gap-2">
@@ -1664,7 +1664,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-end">
             <div className="text-left sm:text-right flex flex-col gap-1">
-              <span className="font-bold text-gray-900 pr-2">Budget: {item.budget}</span>
+              <span className="font-bold text-gray-900 pr-2">{locale === "th" ? "งบประมาณ:" : locale === "zh" ? "预算:" : "Budget:"} {item.budget}</span>
               <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-teal-50 text-teal-700 uppercase self-start sm:self-end w-max">{item.tier}</span>
             </div>
             <div className="flex gap-2">
@@ -1698,7 +1698,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-end">
             <div className="text-left sm:text-right flex flex-col gap-1">
-              <span className="font-bold text-gray-900 pr-2">Budget: {item.budget}</span>
+              <span className="font-bold text-gray-900 pr-2">{locale === "th" ? "งบประมาณ:" : locale === "zh" ? "预算:" : "Budget:"} {item.budget}</span>
               <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-purple-50 text-purple-700 uppercase self-start sm:self-end w-max">{item.tier}</span>
             </div>
             <div className="flex gap-2">
@@ -1723,7 +1723,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-end">
             <div className="text-left sm:text-right flex flex-col gap-1">
-              <span className="font-bold text-gray-900 pr-2">Budget: {item.budget}</span>
+              <span className="font-bold text-gray-900 pr-2">{locale === "th" ? "งบประมาณ:" : locale === "zh" ? "预算:" : "Budget:"} {item.budget}</span>
               <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-green-50 text-green-700 uppercase self-start sm:self-end w-max">{item.tier}</span>
             </div>
             <div className="flex gap-2">
@@ -1748,7 +1748,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-end">
             <div className="text-left sm:text-right flex flex-col gap-1">
-              <span className="font-bold text-gray-900 pr-2">Budget: {item.budget}</span>
+              <span className="font-bold text-gray-900 pr-2">{locale === "th" ? "งบประมาณ:" : locale === "zh" ? "预算:" : "Budget:"} {item.budget}</span>
               <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-yellow-50 text-yellow-700 uppercase self-start sm:self-end w-max">{item.tier}</span>
             </div>
             <div className="flex gap-2">
@@ -1773,7 +1773,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         </div>
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-end">
           <div className="text-left sm:text-right flex flex-col gap-1">
-             <span className="font-bold text-gray-900 pr-2">Budget: {item.budget}</span>
+             <span className="font-bold text-gray-900 pr-2">{locale === "th" ? "งบประมาณ:" : locale === "zh" ? "预算:" : "Budget:"} {item.budget}</span>
              <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-blue-50 text-blue-700 uppercase self-start sm:self-end w-max">{item.tier}</span>
           </div>
           <div className="flex gap-2">
@@ -1788,10 +1788,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const renderActiveCard = (item: any, idx: number) => (
     <div key={idx} className="p-5 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
       <div className="flex items-start gap-4 flex-1 min-w-0">
-         <div className="w-10 h-10 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center font-bold shrink-0">{(item.title || item.service || "C").charAt(0)}</div>
+         <div className="w-10 h-10 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center font-bold shrink-0">{(locale === "th" ? (item.titleTh || item.serviceTh || item.title || item.service || "C") : locale === "zh" ? (item.titleZh || item.serviceZh || item.title || item.service || "C") : (item.title || item.service || "C")).charAt(0)}</div>
          <div className="min-w-0">
-           <h3 className="font-bold text-gray-900">{item.title || item.service} <span className="text-sm font-normal text-gray-400">· {item.po || `PO-${item.id?.slice(0,8) || '2605-8471'}`} | {item.subdistrict || 'Saphansong'}</span></h3>
-           <p className="text-sm text-gray-600 mt-0.5">{item.fixerAlias || item.partnerName || item.customer || "Customer"} · {item.date || "11/5/2026 14:30"} · Budget: {item.budget || ('฿' + Number(item.price || 0).toLocaleString())}</p>
+           <h3 className="font-bold text-gray-900">{locale === "th" ? (item.titleTh || item.serviceTh || item.title || item.service) : locale === "zh" ? (item.titleZh || item.serviceZh || item.title || item.service) : (item.title || item.service)} <span className="text-sm font-normal text-gray-400">· {item.po || `PO-${item.id?.slice(0,8) || '2605-8471'}`} | {item.subdistrict || 'Saphansong'}</span></h3>
+           <p className="text-sm text-gray-600 mt-0.5">{item.fixerAlias || item.partnerName || item.customer || "Customer"} · {item.date || "11/5/2026 14:30"} · {locale === "th" ? "งบประมาณ:" : locale === "zh" ? "预算:" : "Budget:"} {item.budget || ('฿' + Number(item.price || 0).toLocaleString())}</p>
          </div>
       </div>
       <div className="w-full xl:w-[560px] shrink-0 mt-2 xl:mt-0">
@@ -1799,7 +1799,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       </div>
       <div className="flex flex-col items-end gap-1 flex-shrink-0">
         <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${item.tier === 'ECONOMY' || item.tier === 'Economy' ? 'bg-green-50 text-green-700' : item.tier === 'Standard' || item.tier === 'STANDARD' ? 'bg-blue-50 text-blue-700' : item.tier === 'Corporate' ? 'bg-purple-50 text-purple-700' : item.tier === 'Specialist' ? 'bg-amber-50 text-amber-700' : item.tier === 'Expert' ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-600'}`}>{item.tier || 'Standard'}</span>
-        {(item.actionNeeded || actionableRequestPos.has(item.po)) && <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-red-50 text-red-700">Action Needed</span>}
+        {(item.actionNeeded || actionableRequestPos.has(item.po)) && <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-red-50 text-red-700">{locale === "th" ? "ต้องดำเนินการ" : locale === "zh" ? "需要操作" : "Action Needed"}</span>}
       </div>
     </div>
   );
@@ -1987,17 +1987,17 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       {activeTab === "alerts" && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
           <div className="px-6 py-4 border-b border-gray-100">
-            <h2 className="font-bold text-gray-900">Alerts</h2>
+            <h2 className="font-bold text-gray-900">{locale === "th" ? "การแจ้งเตือน" : locale === "zh" ? "通知" : "Alerts"}</h2>
           </div>
           <div className="divide-y divide-gray-50">
             {allAlerts.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">No recent alerts.</div>
+              <div className="p-8 text-center text-gray-500">{locale === "th" ? "ไม่มีการแจ้งเตือนล่าสุด" : locale === "zh" ? "暂无最近通知。" : "No recent alerts."}</div>
             ) : (
               allAlerts.map((a: any, i: number) => (
                 <div key={i} className="p-6 flex items-center gap-4 hover:bg-gray-50 transition cursor-pointer">
                   <span className={`w-3 h-3 rounded-full flex-shrink-0 ${a.dot}`}></span>
                   <div>
-                    <p className="text-sm text-gray-800">{a.msg}</p>
+                    <p className="text-sm text-gray-800">{locale === "th" ? (a.msgTh || a.msg) : locale === "zh" ? (a.msgZh || a.msg) : a.msg}</p>
                     <p className="text-xs text-gray-400 mt-1">{a.time}</p>
                   </div>
                 </div>
@@ -2011,7 +2011,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 my-6">
               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                <h3 className="font-bold text-gray-800 mb-4 flex items-center justify-between">Recent Incoming Chats <span className="text-xs text-sky-600 cursor-pointer" onClick={() => setActiveTab("chat")}>View All</span></h3>
+                <h3 className="font-bold text-gray-800 mb-4 flex items-center justify-between">{locale === "th" ? "แชทที่เข้ามาล่าสุด" : locale === "zh" ? "最近收到的消息" : "Recent Incoming Chats"} <span className="text-xs text-sky-600 cursor-pointer" onClick={() => setActiveTab("chat")}>{locale === "th" ? "ดูทั้งหมด" : locale === "zh" ? "查看全部" : "View All"}</span></h3>
                 <div className="space-y-4">
                       {overviewIncomingChats.length > 0 ? (
                     <>
@@ -2023,21 +2023,21 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                       ))}
                     </>
                   ) : (
-                    <p className="text-sm text-gray-400 text-center py-4">No recent incoming chats.</p>
+                    <p className="text-sm text-gray-400 text-center py-4">{locale === "th" ? "ไม่มีแชทล่าสุด" : locale === "zh" ? "暂无最近聊天。" : "No recent incoming chats."}</p>
                   )}
                 </div>
               </div>
               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                <h3 className="font-bold text-gray-800 mb-4 flex items-center justify-between">Recent Alerts <span className="text-xs text-sky-600 cursor-pointer" onClick={() => setActiveTab("alerts")}>View All</span></h3>
+                <h3 className="font-bold text-gray-800 mb-4 flex items-center justify-between">{locale === "th" ? "การแจ้งเตือนล่าสุด" : locale === "zh" ? "最近通知" : "Recent Alerts"} <span className="text-xs text-sky-600 cursor-pointer" onClick={() => setActiveTab("alerts")}>{locale === "th" ? "ดูทั้งหมด" : locale === "zh" ? "查看全部" : "View All"}</span></h3>
                 <div className="space-y-4">
                   {overviewAlerts.length > 0 ? (
                     <>
                       {overviewAlerts.map((a: any) => (
-                        <div key={a.id} className="flex items-start gap-3 text-sm text-gray-700"><div className={`w-2 h-2 mt-1.5 rounded-full ${a.dot} flex-shrink-0`}></div><p>{a.msg} <span className="text-xs text-gray-400 ml-1">{a.time}</span></p></div>
+                        <div key={a.id} className="flex items-start gap-3 text-sm text-gray-700"><div className={`w-2 h-2 mt-1.5 rounded-full ${a.dot} flex-shrink-0`}></div><p>{locale === "th" ? (a.msgTh || a.msg) : locale === "zh" ? (a.msgZh || a.msg) : a.msg} <span className="text-xs text-gray-400 ml-1">{a.time}</span></p></div>
                       ))}
                     </>
                   ) : (
-                    <p className="text-sm text-gray-400 text-center py-4">No recent alerts.</p>
+                    <p className="text-sm text-gray-400 text-center py-4">{locale === "th" ? "ไม่มีการแจ้งเตือนล่าสุด" : locale === "zh" ? "暂无最近通知。" : "No recent alerts."}</p>
                   )}
                 </div>
               </div>
@@ -2059,10 +2059,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           <div>
             <div className="flex justify-between items-center mb-4 mt-6">
               <div className="flex flex-col">
-                <h2 className="text-xl font-bold text-gray-800">⏰ Upcoming Meetings</h2>
+                <h2 className="text-xl font-bold text-gray-800">⏰ {locale === "th" ? "การนัดหมายที่จะมาถึง" : locale === "zh" ? "即将到来的会议" : "Upcoming Meetings"}</h2>
                 <span className="text-gray-500 font-bold text-sm">{upcomingMeetings.length}</span>
               </div>
-              <button className="text-sm font-bold text-sky-600 hover:text-sky-700" onClick={() => setActiveTab("requests")}>View All</button>
+              <button className="text-sm font-bold text-sky-600 hover:text-sky-700" onClick={() => setActiveTab("requests")}>{locale === "th" ? "ดูทั้งหมด" : locale === "zh" ? "查看全部" : "View All"}</button>
             </div>
             {upcomingMeetings.length > 0 ? (
               <div className="space-y-3 mt-4">
@@ -2072,12 +2072,12 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                        <span className="text-gray-900 font-bold">{m.title} ({m.po})</span>
                        <span className="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-bold">{m.meetingDate || m.date}{m.meetingTime ? ` · ${m.meetingTime}` : ''}</span>
                     </div>
-                    <p className="text-sm text-gray-600">Location: {m.venue || m.meetingVenue || m.subdistrict || 'TBD'} | Provider: {m.customer}</p>
+                    <p className="text-sm text-gray-600">{locale === "th" ? "สถานที่:" : locale === "zh" ? "地点:" : "Location:"} {m.venue || m.meetingVenue || m.subdistrict || 'TBD'} | {locale === "th" ? "ผู้ให้บริการ:" : locale === "zh" ? "服务提供商:" : "Provider:"} {m.customer}</p>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mt-4 text-center text-sm text-gray-400">No upcoming meetings</div>
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mt-4 text-center text-sm text-gray-400">{locale === "th" ? "ไม่มีการนัดหมายที่จะมาถึง" : locale === "zh" ? "暂无会议" : "No upcoming meetings"}</div>
             )}
           </div>
 

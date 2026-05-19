@@ -100,11 +100,11 @@ const getWorkflowStepFromStatus = (status?: string) => {
 const _n = new Date();
 const _fmt = (d: Date) => fmtDateTime(d);
 const notifications: any[] = [
-    { id: 1, msg: "Review PO Details for FIT OUT", unread: true, time: _fmt(_n), dot: "bg-purple-500" },
-    { id: 2, msg: "Review PO Details for FIT OUT", unread: true, time: _fmt(new Date(_n.getTime() - 2 * 60 * 1000)), dot: "bg-purple-500" },
-    { id: 3, msg: "Confirm meeting at site", unread: false, time: _fmt(new Date(_n.getTime() - 60 * 60 * 1000)), dot: "bg-gray-300" },
-    { id: 4, msg: "Request for Approval of Variation", unread: false, time: _fmt(new Date(_n.getTime() - 24 * 60 * 60 * 1000)), dot: "bg-gray-300" },
-    { id: 5, msg: "Request for job complete", unread: false, time: _fmt(new Date(_n.getTime() - 25 * 60 * 60 * 1000)), dot: "bg-gray-300" },
+    { id: 1, msg: "Review PO Details for FIT OUT", msgTh: "ตรวจสอบรายละเอียด PO สำหรับ FIT OUT", msgZh: "查看FIT OUT的PO详情", unread: true, time: _fmt(_n), dot: "bg-purple-500" },
+    { id: 2, msg: "Review PO Details for FIT OUT", msgTh: "ตรวจสอบรายละเอียด PO สำหรับ FIT OUT", msgZh: "查看FIT OUT的PO详情", unread: true, time: _fmt(new Date(_n.getTime() - 2 * 60 * 1000)), dot: "bg-purple-500" },
+    { id: 3, msg: "Confirm meeting at site", msgTh: "ยืนยันนัดหมายที่สถานที่", msgZh: "确认现场会议", unread: false, time: _fmt(new Date(_n.getTime() - 60 * 60 * 1000)), dot: "bg-gray-300" },
+    { id: 4, msg: "Request for Approval of Variation", msgTh: "คำขออนุมัติการเปลี่ยนแปลง", msgZh: "申请变更审批", unread: false, time: _fmt(new Date(_n.getTime() - 24 * 60 * 60 * 1000)), dot: "bg-gray-300" },
+    { id: 5, msg: "Request for job complete", msgTh: "คำขอยืนยันงานเสร็จสิ้น", msgZh: "申请完工确认", unread: false, time: _fmt(new Date(_n.getTime() - 25 * 60 * 60 * 1000)), dot: "bg-gray-300" },
   ];
 
 const STATUS_STYLE: Record<string, string> = {
@@ -129,7 +129,7 @@ const firstNameOnly = (value: any, fallback = 'User') => {
   const cleaned = String(value || '').trim();
   return cleaned ? cleaned.split(/\s+/)[0] || fallback : fallback;
 };
-const HIDDEN_TEST_POS = new Set(["PO-2605-6716", "PO-2605-9605", "PO-2605-8699", "PO-2605-9701"]);
+const HIDDEN_TEST_POS = new Set(["PO-2605-6716", "PO-2605-9605", "PO-2605-8699", "PO-2605-9701", "PO-2605-9593"]);
 const isHiddenTestPo = (value: any) => HIDDEN_TEST_POS.has(String(value || '').trim().toUpperCase());
 const filterVisibleWorkflowItems = (items: any[]) => items.filter((item: any) => !isHiddenTestPo(item?.po));
 const WORKFLOW_STEP_NAMES: Record<number, string> = {
@@ -1184,19 +1184,19 @@ export default function FixerProPage() {
 
   const dynamicNotifications = mockDynReqs.map((r: any) => {
     const displayTime = typeof r.date === "string" && r.date.includes(":") ? r.date : (r.date ? fmtDateTime(r.date) : "");
-    if (r.type === "meeting_pending_partner") return { id: `dyn-${r.id}`, msg: "Confirm meeting at site", unread: true, time: displayTime, dot: "bg-amber-500" };
-    if (r.type === "meeting_scheduled") return { id: `dyn-${r.id}`, msg: "Confirm meeting at site", unread: true, time: displayTime, dot: "bg-teal-500" };
-    if (r.type === "variation_pending") return { id: `dyn-${r.id}`, msg: "Request for Approval of Variation", unread: true, time: displayTime, dot: "bg-purple-500" };
-    if (r.type === "complete_pending") return { id: `dyn-${r.id}`, msg: "Request for job complete", unread: true, time: displayTime, dot: "bg-green-500" };
+    if (r.type === "meeting_pending_partner") return { id: `dyn-${r.id}`, msg: "Confirm meeting at site", msgTh: "ยืนยันนัดหมายที่สถานที่", msgZh: "确认现场会议", unread: true, time: displayTime, dot: "bg-amber-500" };
+    if (r.type === "meeting_scheduled") return { id: `dyn-${r.id}`, msg: "Confirm meeting at site", msgTh: "ยืนยันนัดหมายที่สถานที่", msgZh: "确认现场会议", unread: true, time: displayTime, dot: "bg-teal-500" };
+    if (r.type === "variation_pending") return { id: `dyn-${r.id}`, msg: "Request for Approval of Variation", msgTh: "คำขออนุมัติการเปลี่ยนแปลง", msgZh: "申请变更审批", unread: true, time: displayTime, dot: "bg-purple-500" };
+    if (r.type === "complete_pending") return { id: `dyn-${r.id}`, msg: "Request for job complete", msgTh: "คำขอยืนยันงานเสร็จสิ้น", msgZh: "申请完工确认", unread: true, time: displayTime, dot: "bg-green-500" };
     return null;
   }).filter(Boolean) as any[];
 
   const partnerWorkflowNotifications = partnerDynReqs.map((r: any) => {
     const displayTime = typeof r.date === "string" && r.date.includes(":") ? r.date : (r.date ? fmtDateTime(r.date) : "");
-    if (r.workflowType === "meeting_confirm_partner" || r.type === "meeting_confirm_partner") return { id: `p-${r.id}`, msg: "Confirm meeting at site", unread: true, time: displayTime, dot: "bg-amber-500" };
-    if (r.type === "variation_partner") return { id: `p-${r.id}`, msg: "Request for Approval of Variation", unread: true, time: displayTime, dot: "bg-purple-500" };
-    if (r.type === "complete_partner") return { id: `p-${r.id}`, msg: "Request for job complete", unread: true, time: displayTime, dot: "bg-green-500" };
-    if (r.type === "rate_partner") return { id: `p-${r.id}`, msg: "Rate customer to close job", unread: true, time: displayTime, dot: "bg-sky-500" };
+    if (r.workflowType === "meeting_confirm_partner" || r.type === "meeting_confirm_partner") return { id: `p-${r.id}`, msg: "Confirm meeting at site", msgTh: "ยืนยันนัดหมายที่สถานที่", msgZh: "确认现场会议", unread: true, time: displayTime, dot: "bg-amber-500" };
+    if (r.type === "variation_partner") return { id: `p-${r.id}`, msg: "Request for Approval of Variation", msgTh: "คำขออนุมัติการเปลี่ยนแปลง", msgZh: "申请变更审批", unread: true, time: displayTime, dot: "bg-purple-500" };
+    if (r.type === "complete_partner") return { id: `p-${r.id}`, msg: "Request for job complete", msgTh: "คำขอยืนยันงานเสร็จสิ้น", msgZh: "申请完工确认", unread: true, time: displayTime, dot: "bg-green-500" };
+    if (r.type === "rate_partner") return { id: `p-${r.id}`, msg: "Rate customer to close job", msgTh: "ให้คะแนนลูกค้าเพื่อปิดงาน", msgZh: "评价客户以关闭工作", unread: true, time: displayTime, dot: "bg-sky-500" };
     return null;
   }).filter(Boolean) as any[];
 
@@ -1208,9 +1208,9 @@ export default function FixerProPage() {
     orderAlertPos.add(po);
     const svc = o.service || "Project";
     const displayTime = o.date || "";
-    if (['CREATED','PENDING','MATCHING'].includes(o.status)) return [{ id: `order-pending-${po}`, msg: `Review PO Details for ${svc}`, unread: true, time: displayTime, dot: "bg-purple-500" }];
-    if (o.status === 'MEETING_REQUESTED') return [{ id: `order-meeting-${po}`, msg: `Confirm meeting at site for ${svc}`, unread: true, time: displayTime, dot: "bg-amber-500" }];
-    if (o.status === 'IN_PROGRESS') return [{ id: `order-inprogress-${po}`, msg: `Chat room active for ${svc} — coordinate meeting`, unread: false, time: displayTime, dot: "bg-sky-400" }];
+    if (['CREATED','PENDING','MATCHING'].includes(o.status)) return [{ id: `order-pending-${po}`, msg: `Review PO Details for ${svc}`, msgTh: `ตรวจสอบรายละเอียด PO สำหรับ ${svc}`, msgZh: `查看${svc}的PO详情`, unread: true, time: displayTime, dot: "bg-purple-500" }];
+    if (o.status === 'MEETING_REQUESTED') return [{ id: `order-meeting-${po}`, msg: `Confirm meeting at site for ${svc}`, msgTh: `ยืนยันนัดหมายสถานที่สำหรับ ${svc}`, msgZh: `确认${svc}现场会议`, unread: true, time: displayTime, dot: "bg-amber-500" }];
+    if (o.status === 'IN_PROGRESS') return [{ id: `order-inprogress-${po}`, msg: `Chat room active for ${svc} — coordinate meeting`, msgTh: `ห้องแชทพร้อมสำหรับ ${svc} — นัดหมายกับลูกค้า`, msgZh: `${svc}聊天室已激活 — 协调会议`, unread: false, time: displayTime, dot: "bg-sky-400" }];
     return [];
   });
 
@@ -1833,20 +1833,20 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
       {/* Notifications + Chat side by side */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-          <h3 className="font-bold text-gray-900 mb-3 flex items-center justify-between">⏰ Upcoming Meetings <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("requests")}>View All</span></h3>
+          <h3 className="font-bold text-gray-900 mb-3 flex items-center justify-between">⏰ {locale === "th" ? "การนัดหมายที่จะมาถึง" : locale === "zh" ? "即将到来的会议" : "Upcoming Meetings"} <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("requests")}>{locale === "th" ? "ดูทั้งหมด" : locale === "zh" ? "查看全部" : "View All"}</span></h3>
           {scheduledMeetings.length > 0 ? (
             <div className="space-y-2">
               {scheduledMeetings.slice(0, 3).map((meeting: any) => (
                 <div key={meeting.id} className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
                   <p className="text-sm font-bold text-gray-800">{meeting.title} ({meeting.po})</p>
                   <p className="text-xs text-gray-500 mt-1">{meeting.meetingDate || meeting.date}{meeting.meetingTime ? ` · ${meeting.meetingTime}` : ''}</p>
-                  <p className="text-xs text-gray-500 mt-1">Location: {meeting.meetingVenue || meeting.venue || meeting.subdistrict || '-'} | Customer: {meeting.customer}</p>
+                  <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "สถานที่:" : locale === "zh" ? "地点:" : "Location:"} {meeting.meetingVenue || meeting.venue || meeting.subdistrict || '-'} | {locale === "th" ? "ลูกค้า:" : locale === "zh" ? "客户:" : "Customer:"} {meeting.customer}</p>
                 </div>
               ))}
             </div>
           ) : (
             <div className="text-gray-500 text-sm italic">
-              No upcoming meetings
+              {locale === "th" ? "ไม่มีการนัดหมายที่จะมาถึง" : locale === "zh" ? "暂无会议" : "No upcoming meetings"}
             </div>
           )}
         </div>
@@ -1908,7 +1908,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
                   </div>
                   <div className="flex flex-col items-end gap-1 flex-shrink-0">
                     <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[job.tier] || "bg-gray-100 text-gray-600"}`}>{job.tier}</span>
-                    {job.actionNeeded && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-50 text-red-700">Action Needed</span>}
+                    {job.actionNeeded && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-50 text-red-700">{locale === "th" ? "ต้องดำเนินการ" : locale === "zh" ? "需要操作" : "Action Needed"}</span>}
                     {job.earnings && <span className="text-xs font-bold text-gray-700">{job.earnings}</span>}
                   </div>
                 </div>
@@ -2072,7 +2072,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
                 </div>
                 <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
                   <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[job.tier] || "bg-gray-100 text-gray-600"}`}>{job.tier}</span>
-                  {job.actionNeeded && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-50 text-red-700">Action Needed</span>}
+                  {job.actionNeeded && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-50 text-red-700">{locale === "th" ? "ต้องดำเนินการ" : locale === "zh" ? "需要操作" : "Action Needed"}</span>}
                   {job.earnings && <span className="text-xs font-bold text-gray-700">{job.earnings}</span>}
                   {getStatusLabel(job.status, locale) !== "" && <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_STYLE[job.status] || ""}`}>{getStatusLabel(job.status, locale)}</span>}
                   {(job.mockStep === 9 || (job.step === 9)) && (
