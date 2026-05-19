@@ -1212,8 +1212,8 @@ export default function FixerProPage() {
 
       {/* PO Accept/Decline Modal */}
       {waitModalOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl p-8 max-w-lg w-full max-h-[calc(100dvh-6rem)] overflow-y-auto shadow-2xl animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto pt-[76px]">
+          <div className="bg-white rounded-3xl p-8 max-w-lg w-full max-h-[calc(100dvh-6rem)] overflow-y-auto shadow-2xl animate-in zoom-in-95 duration-200 my-4">
             <div className="flex justify-between items-start mb-4">
               <div className="mb-2 text-sm font-semibold text-purple-600 bg-purple-50 inline-block px-3 py-1 rounded-full">{isMeetingConfirmation ? 'Step 8 of 11' : 'Step 5 of 11'}</div>
               <button onClick={() => setWaitModalOrder(null)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
@@ -1227,7 +1227,7 @@ export default function FixerProPage() {
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Type of Work</span><span className="font-bold text-gray-800 text-right">{waitModalServiceName}</span></div>
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">What You Need To Do</span><span className="font-bold text-gray-800 text-right max-w-[60%]">{waitModalInstruction}</span></div>
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Customer</span><span className="font-bold text-gray-800">{waitModalCounterpart}</span></div>
-              <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Budget</span><span className="font-bold text-amber-600">{waitModalBudgetDisplay}</span></div>
+              <div className="flex justify-between items-start border-b pb-2"><span className="text-gray-500">Budget</span><span className="font-bold text-amber-600 text-right">{(() => { const desc = String(waitModalProjectDetails || waitModalOrder?.description || ''); const m = desc.match(/(\d[\d,]*\.?\d*)\s*(sq\.?m\.?|sqm|m²|ตร\.?ม\.?|ตารางเมตร|sq\.?ft\.?|unit)/i); const qty = m ? parseFloat((m[1] ?? '').replace(/,/g, '')) : null; const raw = String(waitModalBudgetDisplay || '').replace(/[฿,]/g, ''); const total = parseFloat(raw) || 0; const unit = m ? m[2] : null; const rate = qty && qty > 0 && total > 0 ? Math.round(total / qty) : null; return rate ? `${qty!.toLocaleString()} ${unit} × ฿${rate.toLocaleString()} = ฿${total.toLocaleString()}` : waitModalBudgetDisplay; })()}</span></div>
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Project Location</span><span className="font-bold text-gray-800 text-right">{waitModalOrder.meetingVenue || waitModalOrder.subdistrict || 'Unknown'}</span></div>
               {isMeetingConfirmation && (
                 <>
@@ -1764,7 +1764,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
         </div>
         <div className="divide-y divide-gray-50">
           {incomingJobs.slice(0, 3).map((req) => (
-            <div key={req.id} className="px-6 py-4 flex items-center gap-4 hover:bg-amber-50 transition cursor-default" onClick={() => onJobClick && onJobClick(req)}>
+            <div key={req.id} className="px-6 py-4 flex items-center gap-4 transition cursor-default">
               <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center text-lg"></div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? req.serviceTh : locale === "zh" ? req.serviceZh : req.service}{(req.po || req.step) ? <span className="text-xs font-normal text-gray-400">{req.po ? ` · ${req.po}` : ''}{req.step ? ` · Step ${req.step} of 11` : ''}</span> : null}</p>
@@ -2081,8 +2081,8 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
     </div>
     {/* Variation Modal */}
     {variationModal && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto my-auto max-h-[90dvh] overflow-y-auto">
+      <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto pt-[76px]">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto max-h-[calc(100dvh-6rem)] overflow-y-auto my-4">
           <div className="bg-amber-500 px-6 py-4">
             <h3 className="text-white font-bold text-lg">Submit Variation</h3>
             <p className="text-amber-100 text-sm mt-1">{variationModal.po} &middot; {variationModal.service}</p>
@@ -2104,7 +2104,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
             />
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Budget</label>
-              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 font-bold text-amber-800">{toCurrencyLabel(variationModal.budget)}</div>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 font-bold text-amber-800">{(() => { const desc = String(variationModal.description || variationModal.desc || variationModal.projectDetails || ''); const m = desc.match(/(\d[\d,]*\.?\d*)\s*(sq\.?m\.?|sqm|m²|ตร\.?ม\.?|ตารางเมตร|sq\.?ft\.?|unit)/i); const qty = m ? parseFloat((m[1] ?? '').replace(/,/g, '')) : null; const raw = String(variationModal.budget || '').replace(/[฿,]/g, ''); const total = parseFloat(raw) || 0; const unit = m ? m[2] : null; const rate = qty && qty > 0 && total > 0 ? Math.round(total / qty) : null; return rate ? `${qty!.toLocaleString()} ${unit} × ฿${rate.toLocaleString()} = ฿${total.toLocaleString()}` : toCurrencyLabel(variationModal.budget); })()}</div>
               <p className="text-xs text-gray-500 mt-1">Original PO total. Describe extra scope or revised amount in the variation below.</p>
             </div>
             <div>
@@ -2310,7 +2310,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
       </div>
       <div className="divide-y divide-gray-50">
         {incomingJobs.map((req) => (
-          <div key={req.id} className="px-6 py-4 flex items-center gap-4 hover:bg-amber-50 transition cursor-default" onClick={() => onJobClick && onJobClick(req)}>
+          <div key={req.id} className="px-6 py-4 flex items-center gap-4 transition cursor-default">
             <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center text-lg"></div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? req.serviceTh : locale === "zh" ? req.serviceZh : req.service}{(req.po || req.step) ? <span className="text-xs font-normal text-gray-400">{req.po ? ` · ${req.po}` : ''}{req.step ? ` · Step ${req.step} of 11` : ''}</span> : null}</p>
@@ -2348,8 +2348,8 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
       </div>
     </div>
     {variationModal && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto my-auto max-h-[90dvh] overflow-y-auto">
+      <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto pt-[76px]">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto max-h-[calc(100dvh-6rem)] overflow-y-auto my-4">
           <div className="bg-amber-500 px-6 py-4">
             <h3 className="text-white font-bold text-lg">Submit Variation</h3>
             <p className="text-amber-100 text-sm mt-1">{variationModal.po} · {variationModal.service}</p>
@@ -2371,7 +2371,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
             />
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Budget</label>
-              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 font-bold text-amber-800">{toCurrencyLabel(variationModal.budget)}</div>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 font-bold text-amber-800">{(() => { const desc = String(variationModal.description || variationModal.desc || variationModal.projectDetails || ''); const m = desc.match(/(\d[\d,]*\.?\d*)\s*(sq\.?m\.?|sqm|m²|ตร\.?ม\.?|ตารางเมตร|sq\.?ft\.?|unit)/i); const qty = m ? parseFloat((m[1] ?? '').replace(/,/g, '')) : null; const raw = String(variationModal.budget || '').replace(/[฿,]/g, ''); const total = parseFloat(raw) || 0; const unit = m ? m[2] : null; const rate = qty && qty > 0 && total > 0 ? Math.round(total / qty) : null; return rate ? `${qty!.toLocaleString()} ${unit} × ฿${rate.toLocaleString()} = ฿${total.toLocaleString()}` : toCurrencyLabel(variationModal.budget); })()}</div>
               <p className="text-xs text-gray-500 mt-1">Original PO total. Describe extra scope or revised amount in the variation below.</p>
             </div>
             <div>

@@ -2417,8 +2417,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       )}
 
       {variationApproveModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-y-auto max-h-[90dvh] my-auto">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto pt-[76px]">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-y-auto max-h-[calc(100dvh-6rem)] mx-auto my-4">
             <div className="bg-gradient-to-r from-purple-600 to-fuchsia-600 px-6 py-4">
               <h3 className="text-white font-bold text-lg">Approve Variation</h3>
               <p className="text-purple-100 text-sm mt-1">{variationApproveModal.po} · Step 9 of 11</p>
@@ -2430,7 +2430,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 actionText="Review the partner variation request and approve it if you agree to proceed."
                 po={variationApproveModal.po || '-'}
                 partnerName={firstNameOnly(variationApproveModal.customer || variationApproveOrder?.customer || variationApproveOrder?.fixerName, 'Partner')}
-                budget={toCurrencyLabel(variationApproveModal.budget || variationApproveOrder?.budget || variationApproveOrder?.fee)}
+                budget={(() => { const rawBudget = variationApproveModal.budget || variationApproveOrder?.budget || variationApproveOrder?.fee; const desc = String(variationApproveOrder?.description || variationApproveModal.desc || variationApproveModal.title || ''); const m = desc.match(/(\d[\d,]*\.?\d*)\s*(sq\.?m\.?|sqm|m²|ตร\.?ม\.?|ตารางเมตร|sq\.?ft\.?|unit)/i); const qty = m ? parseFloat((m[1] ?? '').replace(/,/g, '')) : null; const raw = String(rawBudget || '').replace(/[฿,]/g, ''); const total = parseFloat(raw) || 0; const unit = m ? m[2] : null; const rate = qty && qty > 0 && total > 0 ? Math.round(total / qty) : null; return rate ? `${qty!.toLocaleString()} ${unit} × ฿${rate.toLocaleString()} = ฿${total.toLocaleString()}` : toCurrencyLabel(rawBudget); })()}
                 location={variationApproveOrder?.address?.subdistrict || variationApproveOrder?.subdistrict || variationApproveOrder?.location || 'Unknown'}
                 projectDetails={stripWorkflowPrefix(variationApproveOrder?.description || variationApproveModal.desc || variationApproveModal.title || '')}
               />
