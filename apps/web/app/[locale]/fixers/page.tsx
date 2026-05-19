@@ -665,6 +665,7 @@ export default function FixerProPage() {
           localStorage.removeItem(`chat_from_${po}`);
           continue;
         }
+        if (localStorage.getItem(`chat_closed_${po}`)) continue;
         const parsed = JSON.parse(localStorage.getItem(key) || "[]");
         if (!Array.isArray(parsed) || parsed.length === 0) continue;
         const reversed = [...parsed].reverse();
@@ -2114,8 +2115,8 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
     )}
     {/* Rating Modal */}
     {ratingModal && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+      <div className="fixed inset-0 z-50 flex items-center justify-start pt-[76px] bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-y-auto max-h-[calc(100dvh-6rem)]">
           <div className="bg-sky-600 px-6 py-4">
             <h3 className="text-white font-bold text-lg">Rate Customer</h3>
             <p className="text-sky-200 text-sm mt-1">{ratingModal.po} &middot; {ratingModal.service}</p>
@@ -2156,8 +2157,8 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
       </div>
     )}
     {completeModal && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
-        <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden">
+      <div className="fixed inset-0 z-50 flex items-center justify-start pt-[76px] bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+        <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-y-auto max-h-[calc(100dvh-6rem)] mx-auto">
           <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4">
             <h3 className="text-white font-bold text-lg">Mark Job Complete</h3>
             <p className="text-green-100 text-sm mt-1">{completeModal.po} · {completeModal.service}</p>
@@ -2362,8 +2363,8 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
       </div>
     )}
     {completeModal && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
-        <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden">
+      <div className="fixed inset-0 z-50 flex items-center justify-start pt-[76px] bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+        <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-y-auto max-h-[calc(100dvh-6rem)] mx-auto">
           <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4">
             <h3 className="text-white font-bold text-lg">Mark Job Complete</h3>
             <p className="text-green-100 text-sm mt-1">{completeModal.po} · {completeModal.service}</p>
@@ -2393,8 +2394,8 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
       </div>
     )}
     {ratingModal && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+      <div className="fixed inset-0 z-50 flex items-center justify-start pt-[76px] bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-y-auto max-h-[calc(100dvh-6rem)]">
           <div className="bg-sky-600 px-6 py-4">
             <h3 className="text-white font-bold text-lg">Rate Customer</h3>
             <p className="text-sky-200 text-sm mt-1">{ratingModal.po} · {ratingModal.service}</p>

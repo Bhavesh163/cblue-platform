@@ -1028,6 +1028,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       try {
         const po = key.replace("chat_messages_", "");
         if (!isPoCode(po)) continue;
+        if (localStorage.getItem(`chat_closed_${po}`)) continue;
         const parsed = JSON.parse(localStorage.getItem(key) || "[]");
         if (!Array.isArray(parsed) || parsed.length === 0) continue;
         const reversed = [...parsed].reverse();
@@ -1321,11 +1322,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     : backendOrderPos.size > 0
       ? mockDynRequests.filter((x: any) => backendOrderPos.has(x.po) && !isHiddenTestPo(x.po))
       : mockDynRequests.filter((x: any) => !isHiddenTestPo(x.po));
-  const visibleMockHistory = !allowLocalCustomerWorkflow
-    ? []
-    : backendOrderPos.size > 0
-      ? mockHistory.filter((x: any) => backendOrderPos.has(x.po) && !isHiddenTestPo(x.po))
-      : mockHistory.filter((x: any) => !isHiddenTestPo(x.po));
+  const visibleMockHistory = mockHistory.filter((x: any) => !isHiddenTestPo(x.po));
 
   // Merge: mockActiveItems overrides ACTIVE_MOCK items with same po (for step progression)
   const paidPOs = new Set(visibleMockActiveItems.map((x: any) => x.po));
@@ -1777,19 +1774,21 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
   const renderActiveCard = (item: any, idx: number) => (
     <div key={idx} className="p-5 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
-      <div className="flex items-center gap-4">
-         <div className="w-10 h-10 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center font-bold">{(item.title || item.service || "C").charAt(0)}</div>
-         <div>
-           <h3 className="font-bold text-gray-900">{item.title || item.service} <span className="text-sm font-normal text-gray-400">· {item.po || `PO-${item.id?.slice(0,8) || '2605-8471'}`} | {item.subdistrict || 'Saphansong'}</span></h3>
-           <p className="text-sm text-gray-600 mt-0.5">{item.fixerAlias || item.partnerName || item.customer || "Customer"} · {item.date || "11/5/2026 14:30"} · Budget: {item.budget || ('฿' + Number(item.price || 0).toLocaleString())}</p>
+      <div className="flex items-start gap-4 flex-1 min-w-0">
+         <div className="w-10 h-10 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center font-bold shrink-0">{(item.title || item.service || "C").charAt(0)}</div>
+         <div className="flex items-start justify-between gap-2 flex-1 min-w-0">
+           <div className="min-w-0">
+             <h3 className="font-bold text-gray-900">{item.title || item.service} <span className="text-sm font-normal text-gray-400">· {item.po || `PO-${item.id?.slice(0,8) || '2605-8471'}`} | {item.subdistrict || 'Saphansong'}</span></h3>
+             <p className="text-sm text-gray-600 mt-0.5">{item.fixerAlias || item.partnerName || item.customer || "Customer"} · {item.date || "11/5/2026 14:30"} · Budget: {item.budget || ('฿' + Number(item.price || 0).toLocaleString())}</p>
+           </div>
+           <div className="flex flex-col items-end gap-1 flex-shrink-0">
+             <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${item.tier === 'ECONOMY' || item.tier === 'Economy' ? 'bg-green-50 text-green-700' : item.tier === 'Standard' || item.tier === 'STANDARD' ? 'bg-blue-50 text-blue-700' : item.tier === 'Corporate' ? 'bg-purple-50 text-purple-700' : item.tier === 'Specialist' ? 'bg-amber-50 text-amber-700' : item.tier === 'Expert' ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-600'}`}>{item.tier || 'Standard'}</span>
+             {(item.actionNeeded || actionableRequestPos.has(item.po)) && <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-red-50 text-red-700">Action Needed</span>}
+           </div>
          </div>
       </div>
       <div className="w-full xl:w-[620px] shrink-0 mt-2 xl:mt-0">
         <Progress12Steps currentStep={item.step || 5} showCurrent={true} />
-        <div className="flex items-center gap-2 mt-2">
-          <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${item.tier === 'ECONOMY' || item.tier === 'Economy' ? 'bg-green-50 text-green-700' : item.tier === 'Standard' || item.tier === 'STANDARD' ? 'bg-blue-50 text-blue-700' : item.tier === 'Corporate' ? 'bg-purple-50 text-purple-700' : item.tier === 'Specialist' ? 'bg-amber-50 text-amber-700' : item.tier === 'Expert' ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-600'}`}>{item.tier || 'Standard'}</span>
-          {(item.actionNeeded || actionableRequestPos.has(item.po)) && <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-red-50 text-red-700">Action Needed</span>}
-        </div>
       </div>
     </div>
   );
@@ -2102,8 +2101,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         </div>
       {/* Rate & Close Modal */}
       {rateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-start pt-[76px] bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-y-auto max-h-[calc(100dvh-6rem)] mx-auto">
             <div className="bg-gradient-to-r from-yellow-500 to-amber-500 px-6 py-4">
               <h3 className="text-white font-bold text-lg">Rate Your Partner ⭐</h3>
               <p className="text-yellow-100 text-sm mt-1">{rateModal.po} · Step 11 of 11</p>
@@ -2150,58 +2149,72 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       )}
 
       {waitModalOrder && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto pt-24 pb-10">
-          <div className="w-full max-w-lg bg-white rounded-3xl shadow-xl flex flex-col p-6 relative">
-            
-            <div className="text-center text-sm font-bold text-sky-700 bg-sky-50 rounded-xl px-4 py-2 mb-2">Step 6 of 11</div>
-            <h3 className="text-center font-bold text-gray-800 text-lg mt-4">Pay Fee & Notification to Proceed</h3>
-            
-            <div className="mt-4 flex flex-col items-center mx-auto">
-              {/* Type of service and provider details added */}
-              <div className="w-full flex justify-between border-b border-gray-100 pb-3 mb-3">
-                <div className="flex flex-col">
-                  <span className="text-gray-500 text-xs uppercase tracking-wider">Step Name</span>
-                  <span className="font-bold text-gray-900 mb-2">Fee &amp; Proceed</span>
-                  <span className="text-gray-500 text-xs uppercase tracking-wider">Service</span>
-                  <span className="font-bold text-gray-900">{waitModalOrder.request?.title || 'Fit out'}</span>
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-start bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto pt-[76px] pb-10">
+          <div className="w-full max-w-lg bg-white rounded-3xl shadow-xl flex flex-col overflow-y-auto max-h-[calc(100dvh-6rem)] relative">
+            <div className="sticky top-0 bg-white rounded-t-3xl z-10 px-6 pt-5 pb-3 border-b border-gray-100">
+              <div className="text-center text-xs font-bold text-sky-700 bg-sky-50 rounded-xl px-4 py-1.5 mb-3">Step 6 of 11</div>
+              <h3 className="text-center font-bold text-gray-800 text-base">Fee &amp; Proceed</h3>
+            </div>
+            <div className="px-6 py-4 flex flex-col gap-3">
+              {/* Clean header grid */}
+              <div className="space-y-0 rounded-xl border border-gray-100 overflow-hidden">
+                <div className="flex justify-between items-center px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+                  <span className="text-xs text-gray-500 uppercase tracking-wider">Step Name</span>
+                  <span className="font-bold text-gray-900 text-sm">Fee &amp; Proceed</span>
                 </div>
-                <div className="flex flex-col text-right">
-                  <span className="text-gray-500 text-xs uppercase tracking-wider">Budget</span>
-                  <span className="font-bold text-sky-600">{waitModalOrder.request?.budget || '฿25,000,000'}</span>
+                <div className="flex justify-between items-center px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+                  <span className="text-xs text-gray-500 uppercase tracking-wider">Service</span>
+                  <span className="font-bold text-gray-900 text-sm">{waitModalOrder.request?.title || 'Fit out'}</span>
                 </div>
-              </div>
-              
-              <div className="w-full flex justify-between items-center mb-4">
-                 <span className="text-gray-600 text-sm">Selected Partner</span>
-                 <span className="text-gray-900 font-semibold">{firstNameOnly(waitModalOrder.request?.customer, 'Suppadesh')}</span>
-              </div>
-              <div className="w-full bg-gray-50 rounded-xl p-3 space-y-2 text-sm text-left mb-4">
-                <div className="flex justify-between items-center"><span className="text-gray-500 text-xs">What You Need To Do</span><span className="font-bold text-gray-800 text-right">Pay the processing fee, activate chat, and proceed to site meeting.</span></div>
-                <div className="flex justify-between items-center"><span className="text-gray-500 text-xs">Project Location</span><span className="font-bold text-gray-800">{waitModalOrder.request?.location || waitModalOrder.request?.subdistrict || 'Saphansong'}</span></div>
-                <div className="flex flex-col"><span className="text-gray-500 text-xs">Project Details</span><span className="font-bold text-gray-800">{String(waitModalOrder.request?.description || waitModalOrder.request?.desc || '').replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?/, '') || 'Project details from the draft PO.'}</span></div>
-              </div>
-              
-              <div className="bg-sky-50 text-sky-800 text-[13px] p-3 rounded-xl mb-4 border border-sky-100 text-center font-medium">
-                Please pay the processing fee and notify to proceed.
-              </div>
-              
-              <div className="w-full bg-gray-50 rounded-xl p-3 space-y-2 text-sm text-left mb-4">
-                <div className="flex justify-between items-center"><span className="text-gray-500 text-xs">PO Number</span><span className="font-mono font-bold text-gray-800">{waitModalOrder.request?.po || 'PO-SYS-202'}</span></div>
-                <div className="flex justify-between items-center"><span className="text-gray-500 text-xs">Processing Fee</span><span className="font-bold text-gray-800">฿100</span></div>
+                <div className="flex justify-between items-center px-4 py-2.5 bg-sky-50">
+                  <span className="text-xs text-gray-500 uppercase tracking-wider">Budget</span>
+                  <div className="text-right">
+                    {(() => {
+                      const desc = String(waitModalOrder.request?.description || waitModalOrder.request?.desc || '');
+                      const m = desc.match(/(\d[\d,]*\.?\d*)\s*(sq\.?m\.?|sqm|m²|ตร\.?ม\.?|ตารางเมตร|sq\.?ft\.?|unit)/i);
+                      const qty = m ? parseFloat((m[1] ?? '').replace(/,/g, '')) : null;
+                      const raw = String(waitModalOrder.request?.budget || '').replace(/[฿,]/g, '');
+                      const total = parseFloat(raw) || 0;
+                      const unit = m ? m[2] : null;
+                      const rate = qty && qty > 0 && total > 0 ? Math.round(total / qty) : null;
+                      return rate ? (
+                        <span className="font-bold text-sky-700 text-sm">{qty!.toLocaleString()} {unit} × ฿{rate.toLocaleString()} = ฿{total.toLocaleString()}</span>
+                      ) : (
+                        <span className="font-bold text-sky-700 text-sm">{waitModalOrder.request?.budget || '฿25,000,000'}</span>
+                      );
+                    })()}
+                  </div>
+                </div>
               </div>
 
-              <div className="w-full text-center text-[10px] text-gray-400 mt-2 px-2">
+              <div className="w-full bg-gray-50 rounded-xl p-3 space-y-2 text-sm">
+                <div className="flex justify-between items-center"><span className="text-gray-500 text-xs">Selected Partner</span><span className="font-bold text-gray-800">{firstNameOnly(waitModalOrder.request?.customer, 'Suppadesh')}</span></div>
+                <div className="flex justify-between items-center"><span className="text-gray-500 text-xs">PO Number</span><span className="font-mono font-bold text-gray-800">{waitModalOrder.request?.po || 'PO-SYS-202'}</span></div>
+                <div className="flex justify-between items-center"><span className="text-gray-500 text-xs">Project Location</span><span className="font-bold text-gray-800">{waitModalOrder.request?.location || waitModalOrder.request?.subdistrict || 'Saphansong'}</span></div>
+                <div className="flex flex-col gap-0.5"><span className="text-gray-500 text-xs">Project Details</span><span className="font-bold text-gray-800 text-sm">{String(waitModalOrder.request?.description || waitModalOrder.request?.desc || '').replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?/, '') || 'Project details from the draft PO.'}</span></div>
+              </div>
+
+              <div className="bg-sky-50 text-sky-800 text-[13px] p-3 rounded-xl border border-sky-100 text-center font-medium">
+                Pay the processing fee to activate chat &amp; notify your partner to proceed.
+              </div>
+
+              <div className="flex justify-between items-center px-4 py-2 bg-gray-50 rounded-xl text-sm">
+                <span className="text-gray-500">Processing Fee</span>
+                <span className="font-bold text-gray-800">฿100</span>
+              </div>
+
+              <div className="text-center text-[10px] text-gray-400 px-2">
                 Processing fee is non-refundable. CBLUE acts solely as a matching platform.
               </div>
 
               <button 
                 onClick={() => setWaitModalOrder(null)} 
-                className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition mt-4"
+                className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition"
               >
                 Cancel
               </button>
               <button
-                className="mt-4 px-6 py-3 w-full bg-sky-100 border border-sky-300 text-sky-800 font-bold rounded-xl shadow-sm hover:bg-sky-200 transition"
+                className="py-3 w-full bg-sky-50 border border-sky-300 text-sky-800 font-bold rounded-2xl shadow-sm hover:bg-sky-100 active:scale-95 transition"
                 onClick={() => {
                   const createdAt = Date.now();
                   const now = fmtDateTime(createdAt);
@@ -2275,7 +2288,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   setActiveTab("requests");
                 }}
               >
-                🚧 Testing Period Payment Pill 🚧
+                ✓ Testing period - Free Pass
               </button>
             </div>
           </div>
@@ -2284,13 +2297,15 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
       {/* Meeting Invitation Modal */}
       {meetingModal && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto pt-24 pb-10">
-          <div className="w-full max-w-lg bg-white rounded-3xl shadow-xl flex flex-col p-6 relative">
-            <div className="text-center text-sm font-bold text-amber-700 bg-amber-50 rounded-xl px-4 py-2 mb-2">Step 8 of 11</div>
-            <h3 className="text-center font-bold text-gray-800 text-lg mt-2">Send Meeting Invitation</h3>
-            <p className="text-center text-sm text-gray-500 mt-1 mb-4">Fill in the meeting details below. Your partner will confirm the time.</p>
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-start bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto pt-[76px] pb-10">
+          <div className="w-full max-w-lg bg-white rounded-3xl shadow-xl flex flex-col overflow-y-auto max-h-[calc(100dvh-6rem)] relative">
+            <div className="sticky top-0 bg-white rounded-t-3xl z-10 px-6 pt-5 pb-3 border-b border-gray-100">
+              <div className="text-center text-xs font-bold text-amber-700 bg-amber-50 rounded-xl px-4 py-1.5">Step 8 of 11</div>
+              <h3 className="text-center font-bold text-gray-800 text-base mt-2">Send Meeting Invitation</h3>
+              <p className="text-center text-sm text-gray-500 mt-1">Fill in the meeting details below. Your partner will confirm the time.</p>
+            </div>
 
-            <div className="space-y-3">
+            <div className="px-6 py-4 space-y-3">
               <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-800">
                 <strong>Step Name:</strong> Meeting Invitation. Send your available site meeting time and venue to the selected partner for confirmation.
               </div>
@@ -2343,7 +2358,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               </div>
             </div>
 
-            <div className="flex gap-3 mt-5">
+            <div className="flex gap-3 px-6 pb-6 pt-2">
               <button onClick={() => setMeetingModal(null)} className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition">Cancel</button>
               <button
                 disabled={!meetingDate || !meetingTime || !meetingVenue}
@@ -2452,8 +2467,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       )}
 
       {completeApproveModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-start pt-[76px] bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-y-auto max-h-[calc(100dvh-6rem)] mx-auto">
             <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4">
               <h3 className="text-white font-bold text-lg">Confirm Job Complete</h3>
               <p className="text-green-100 text-sm mt-1">{completeApproveModal.po} · Step 10 of 11</p>

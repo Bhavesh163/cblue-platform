@@ -1680,9 +1680,9 @@ export default function FixerResults({
           <h2 className="text-xl font-bold text-gray-800 mb-2">{t("paymentTitle")}</h2>
           <p className="text-gray-500 text-sm mb-6">{t("paymentDesc")}</p>
 
-          <div className="mx-auto bg-yellow-100 text-yellow-800 rounded-xl border-2 border-yellow-200 flex flex-col items-center justify-center mb-6 p-6 shadow-sm cursor-pointer hover:bg-yellow-200 transition" onClick={handlePaymentComplete}>
-            <span className="font-bold text-lg mb-2">🚧 Testing Period Payment Pill 🚧</span>
-            <span className="text-sm text-center font-bold">Click here to pass free payment simulation</span>
+          <div className="mx-auto bg-sky-50 text-sky-800 rounded-2xl border-2 border-sky-200 flex flex-col items-center justify-center mb-6 p-5 shadow-sm cursor-pointer hover:bg-sky-100 active:scale-95 transition" onClick={handlePaymentComplete}>
+            <span className="font-bold text-base mb-1">✓ Testing period - Free Pass</span>
+            <span className="text-xs text-center text-sky-600">Click to confirm free payment for testing period</span>
           </div>
 
           <div className="bg-gray-50 rounded-xl p-4 mb-6 space-y-2 text-sm">
@@ -1737,9 +1737,15 @@ export default function FixerResults({
         customerAddress = sub.address || sub.province || "";
       } catch { /* safe fallback */ }
     }
+    // Budget math: extract quantity from description (e.g. "1000 sq.m.")
+    const qtyMatch = (description || "").match(/(\d[\d,]*\.?\d*)\s*(sq\.?m\.?|sqm|m²|ตร\.?ม\.?|ตารางเมตร|sq\.?ft\.?|sqft|unit|ชิ้น|จุด|ชุด)/i);
+    const qtyVal = qtyMatch ? parseFloat((qtyMatch[1] ?? '').replace(/,/g, "")) : null;
+    const qtyUnit = qtyMatch ? qtyMatch[2] : null;
+    const totalPrice = selectedFixer.price || 0;
+    const unitRate = qtyVal && qtyVal > 0 ? Math.round(totalPrice / qtyVal) : null;
     return (
       <><StepProgressBar />
-      <div className="mx-auto max-w-lg px-4 py-12">
+      <div className="mx-auto max-w-lg px-4 py-6 overflow-y-auto max-h-[calc(100dvh-4rem)]">
         <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8">
           <div className="text-center mb-6">
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-100 flex items-center justify-center">
@@ -1784,9 +1790,14 @@ export default function FixerResults({
                 <p className="text-gray-700 text-xs mt-0.5 line-clamp-3">{description}</p>
               </div>
             )}
-            <div className="flex justify-between">
-              <span className="text-gray-500">{locale === "th" ? "ราคาเริ่มต้นของผู้ให้บริการ" : locale === "zh" ? "服务商起始价" : "Provider Est. Price"}</span>
-              <span className="text-gray-800">฿{selectedFixer.price}</span>
+            {/* Budget Math Calculation */}
+            <div className="bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">
+              <span className="text-gray-500 text-xs block mb-1">{locale === "th" ? "งบประมาณ" : locale === "zh" ? "预算计算" : "Budget"}</span>
+              {qtyVal && unitRate ? (
+                <span className="font-bold text-sky-800">{qtyVal.toLocaleString()} {qtyUnit} × ฿{unitRate.toLocaleString()} = ฿{totalPrice.toLocaleString()}</span>
+              ) : (
+                <span className="font-bold text-sky-800">฿{selectedFixer.price.toLocaleString()}</span>
+              )}
             </div>
             <div className="flex justify-between items-center">
               <span className="text-gray-500">{t("poTier")}</span>
