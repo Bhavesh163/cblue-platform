@@ -773,14 +773,19 @@ function PropertyTab({ locale, prefix, properties }: { locale: string; prefix: s
 }
 
 function CustomerHistoryCard({ item, idx, compact = false }: { item: any; idx: number; compact?: boolean }) {
-  const [collapsed, setCollapsed] = React.useState(true);
+  const [collapsed, setCollapsed] = useState(true);
   const chatPreview = collapsed ? [] : (Array.isArray(item.chatHistory) ? item.chatHistory.slice(compact ? -2 : -4) : []);
+  const fmtDate = (value: any) => {
+    const ts = typeof value === "number" ? value : new Date(value || 0).getTime();
+    if (!Number.isFinite(ts) || ts <= 0) return "";
+    return fmtDateTime(ts);
+  };
   return (
     <div key={`${item.po || item.id || idx}`} className="p-5 hover:bg-gray-50 transition cursor-pointer" onClick={() => setCollapsed(c => !c)}>
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <h3 className="font-bold text-gray-900">{item.service} <span className="text-sm font-normal text-gray-400">· {item.po} · {item.counterpartName || item.fixerName || 'Partner'}</span></h3>
-          <p className="text-sm text-gray-500 mt-1">Completed {toDisplayDateTime(item.completedAt || item.statusChangedAt || item.createdAt || item.date)}</p>
+          <p className="text-sm text-gray-500 mt-1">Completed {fmtDate(item.completedAt || item.statusChangedAt || item.createdAt || item.date)}</p>
         </div>
         <div className="flex flex-col items-start sm:items-end gap-1 flex-shrink-0">
           <span className="font-bold text-gray-900">{item.fee || item.budget || '฿0'}</span>
