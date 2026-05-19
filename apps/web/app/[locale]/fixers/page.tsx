@@ -278,7 +278,7 @@ export default function FixerProPage() {
   const handleJobClick = (job: any) => {
     const workflowType = String(job?.workflowType || job?.type || '').toLowerCase();
     const jobStatus = String(job?.status || '').toUpperCase();
-    if (workflowType === 'meeting_confirm_partner' || ['MATCHING', 'CREATED', 'MEETING_REQUESTED'].includes(jobStatus)) {
+    if (workflowType === 'meeting_confirm_partner' || workflowType === 'pending_accept' || ['MATCHING', 'CREATED', 'MEETING_REQUESTED'].includes(jobStatus)) {
       setWaitModalOrder(job);
     } else {
       const poFromDesc = extractPoCode(job);
@@ -857,6 +857,22 @@ export default function FixerProPage() {
             try { localStorage.setItem('partner_mock_dyn_req', JSON.stringify(partnerReqs)); } catch {}
           }
         }
+        // Hourly reminder for pending_accept items: refresh notifyAt so alert badge appears fresh
+        const nowMs = Date.now();
+        let hourlyChanged = false;
+        partnerReqs = partnerReqs.map((r: any) => {
+          if (r.type === 'pending_accept') {
+            const lastNotify = r.notifyAt || r.createdAt || 0;
+            if (nowMs - lastNotify >= 60 * 60 * 1000) {
+              hourlyChanged = true;
+              return { ...r, notifyAt: nowMs, date: new Date().toLocaleString() };
+            }
+          }
+          return r;
+        });
+        if (hourlyChanged) {
+          try { localStorage.setItem('partner_mock_dyn_req', JSON.stringify(partnerReqs)); } catch {}
+        }
         setPartnerDynReqs(partnerReqs);
       } catch {}
     };
@@ -1197,6 +1213,7 @@ export default function FixerProPage() {
     if (r.type === "variation_partner") return { id: `p-${r.id}`, msg: "Request for Approval of Variation", msgTh: "คำขออนุมัติการเปลี่ยนแปลง", msgZh: "申请变更审批", unread: true, time: displayTime, dot: "bg-purple-500" };
     if (r.type === "complete_partner") return { id: `p-${r.id}`, msg: "Request for job complete", msgTh: "คำขอยืนยันงานเสร็จสิ้น", msgZh: "申请完工确认", unread: true, time: displayTime, dot: "bg-green-500" };
     if (r.type === "rate_partner") return { id: `p-${r.id}`, msg: "Rate customer to close job", msgTh: "ให้คะแนนลูกค้าเพื่อปิดงาน", msgZh: "评价客户以关闭工作", unread: true, time: displayTime, dot: "bg-sky-500" };
+    if (r.type === "pending_accept") return { id: `p-${r.id}-${r.notifyAt || r.createdAt || '0'}`, msg: `New job request: ${r.service || "Project"} — please review and accept`, msgTh: `คำของานใหม่: ${r.service || "โครงการ"} — กรุณาตรวจสอบและรับงาน`, msgZh: `新工作请求: ${r.service || "项目"} — 请审核并接受`, unread: true, time: displayTime, dot: "bg-amber-500" };
     return null;
   }).filter(Boolean) as any[];
 
@@ -1419,6 +1436,10 @@ export default function FixerProPage() {
 
                     localStorage.setItem("ghis_mock_active", JSON.stringify(nextActive));
                     localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(nextReqs));
+                    // Remove the pending_accept entry from partner's queue now that it's accepted
+                    const currentPartnerReqs = JSON.parse(localStorage.getItem("partner_mock_dyn_req") || "[]");
+                    const updatedPartnerReqs = currentPartnerReqs.filter((r: any) => !(r.po === po && r.type === "pending_accept"));
+                    localStorage.setItem("partner_mock_dyn_req", JSON.stringify(updatedPartnerReqs));
                     setMockActiveState(nextActive);
                     setMockDynReqs(nextReqs);
                     window.dispatchEvent(new Event("storage"));

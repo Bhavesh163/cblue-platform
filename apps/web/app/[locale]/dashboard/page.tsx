@@ -1800,6 +1800,29 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       <div className="flex flex-col items-end gap-1 flex-shrink-0">
         <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${item.tier === 'ECONOMY' || item.tier === 'Economy' ? 'bg-green-50 text-green-700' : item.tier === 'Standard' || item.tier === 'STANDARD' ? 'bg-blue-50 text-blue-700' : item.tier === 'Corporate' ? 'bg-purple-50 text-purple-700' : item.tier === 'Specialist' ? 'bg-amber-50 text-amber-700' : item.tier === 'Expert' ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-600'}`}>{item.tier || 'Standard'}</span>
         {(item.actionNeeded || actionableRequestPos.has(item.po)) && <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-red-50 text-red-700">{locale === "th" ? "ต้องดำเนินการ" : locale === "zh" ? "需要操作" : "Action Needed"}</span>}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!confirm(locale === "th" ? "ยืนยันการยกเลิกงาน? ข้อมูลงานจะถูกย้ายไปยังประวัติ" : locale === "zh" ? "确认取消此工作？工作信息将移至历史记录。" : "Cancel this job? All job info will be moved to history.")) return;
+            const po = item.po;
+            try {
+              const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
+              localStorage.setItem("ghis_mock_active", JSON.stringify(active.filter((x: any) => x.po !== po)));
+              const reqs = JSON.parse(localStorage.getItem("ghis_mock_dyn_req") || "[]");
+              localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(reqs.filter((x: any) => x.po !== po)));
+              const partnerReqs = JSON.parse(localStorage.getItem("partner_mock_dyn_req") || "[]");
+              localStorage.setItem("partner_mock_dyn_req", JSON.stringify(partnerReqs.filter((x: any) => x.po !== po)));
+              try { localStorage.removeItem(`chat_messages_${po}`); } catch {}
+              const hist = JSON.parse(localStorage.getItem("ghis_mock_history") || "[]");
+              hist.push({ ...item, status: "CANCELLED", statusName: "Cancelled", stepName: "Cancelled", completedAt: Date.now() });
+              localStorage.setItem("ghis_mock_history", JSON.stringify(hist));
+              window.dispatchEvent(new Event("storage"));
+            } catch (cancelErr) { console.error("Cancel job error:", cancelErr); }
+          }}
+          className="text-xs px-2.5 py-1 rounded-full font-bold bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition"
+        >
+          {locale === "th" ? "ยกเลิกงาน" : locale === "zh" ? "取消工作" : "Cancel Job"}
+        </button>
       </div>
     </div>
   );

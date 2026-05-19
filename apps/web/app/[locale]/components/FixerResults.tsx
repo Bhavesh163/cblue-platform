@@ -924,6 +924,53 @@ export default function FixerResults({
           if (idx >= 0) existing[idx] = { ...existing[idx], ...pendingAcceptJob };
           else existing.push(pendingAcceptJob);
           localStorage.setItem(mockActiveKey, JSON.stringify(existing));
+          // Notify customer: job submitted, awaiting partner acceptance
+          try {
+            const dynKey = "ghis_mock_dyn_req";
+            const existingDyn = JSON.parse(localStorage.getItem(dynKey) || "[]");
+            if (!existingDyn.some((x: any) => x.id === `notify-sent-${poNumber}`)) {
+              existingDyn.push({
+                id: `notify-sent-${poNumber}`,
+                po: poNumber,
+                type: "notice",
+                msg: `Your request for ${service} (${poNumber}) has been sent to ${selectedFixer.alias}. Awaiting partner acceptance.`,
+                msgTh: `คำขอของคุณสำหรับ ${service} (${poNumber}) ถูกส่งให้ ${selectedFixer.alias} แล้ว รอการยอมรับจากพาร์ทเนอร์`,
+                msgZh: `您的 ${service} (${poNumber}) 请求已发送给 ${selectedFixer.alias}，等待合作伙伴接受。`,
+                date: new Date().toLocaleString(),
+                createdAt: Date.now(),
+                dot: "bg-amber-400",
+              });
+              localStorage.setItem(dynKey, JSON.stringify(existingDyn));
+            }
+          } catch (e2) { console.error("Failed to write customer notice:", e2); }
+          // Write pending_accept entry to partner's request queue
+          try {
+            const partnerReqKey = "partner_mock_dyn_req";
+            const existingPartnerReqs = JSON.parse(localStorage.getItem(partnerReqKey) || "[]");
+            if (!existingPartnerReqs.some((x: any) => x.po === poNumber && x.type === "pending_accept")) {
+              existingPartnerReqs.push({
+                id: `accept-${poNumber}`,
+                po: poNumber,
+                service,
+                serviceTh: service,
+                serviceZh: service,
+                title: service,
+                customer: subscriber?.name || "Ghis Cafe",
+                date: new Date().toLocaleString(),
+                createdAt: Date.now(),
+                notifyAt: Date.now(),
+                fee: totalBudget > 0 ? `฿${totalBudget.toLocaleString()}` : "฿0",
+                budget: String(totalBudget),
+                tier: selectedFixer.tier,
+                description: description || `New project request. Please review and accept.`,
+                location: bookingLocation,
+                type: "pending_accept",
+                status: "CREATED",
+                step: 5,
+              });
+              localStorage.setItem(partnerReqKey, JSON.stringify(existingPartnerReqs));
+            }
+          } catch (e3) { console.error("Failed to write partner accept req:", e3); }
           window.dispatchEvent(new Event("storage"));
         }
       } catch (e) {
