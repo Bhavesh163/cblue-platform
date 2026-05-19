@@ -830,6 +830,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const [meetingVenue, setMeetingVenue] = useState("");
   const [meetingDate, setMeetingDate] = useState("");
   const [meetingTime, setMeetingTime] = useState("");
+  const [meetingNote, setMeetingNote] = useState("");
   const [chatFeed, setChatFeed] = useState<any[]>([]);
   const [rateModal, setRateModal] = useState<any>(null);
   const [rateStars, setRateStars] = useState(5);
@@ -1860,7 +1861,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           { key: "active", icon: "", label: locale === "th" ? "งานที่ใช้งานอยู่" : "Active Jobs", count: combinedActive.length || null },
           
           { key: "properties", icon: "", label: locale === "th" ? "อสังหาฯ" : "Properties", count: propertiesCount || null },
-          { key: "history", icon: "", label: locale === "th" ? "ประวัติ" : "History", count: historyOrders.length || null },
+          { key: "history", icon: "", label: locale === "th" ? "ประวัติ" : "History", count: allHistory.length || null },
           { key: "chat", icon: "", label: locale === "th" ? "แชท" : "Chat", count: null },
           { key: "alerts", icon: "", label: locale === "th" ? "การแจ้งเตือน" : "Alerts", count: null },
           { key: "profile", icon: "", label: locale === "th" ? "โปรไฟล์" : "Profile", count: null },
@@ -2108,7 +2109,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         </div>
       {/* Rate & Close Modal */}
       {rateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-start pt-[76px] bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-y-auto max-h-[calc(100dvh-6rem)] mx-auto">
             <div className="bg-gradient-to-r from-yellow-500 to-amber-500 px-6 py-4">
               <h3 className="text-white font-bold text-lg">Rate Your Partner ⭐</h3>
@@ -2165,24 +2166,36 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       )}
 
       {waitModalOrder && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-start bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto pt-[76px] pb-10">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto pt-20 pb-10">
           <div className="w-full max-w-lg bg-white rounded-3xl shadow-xl flex flex-col overflow-y-auto max-h-[calc(100dvh-6rem)] relative">
             <div className="sticky top-0 bg-white rounded-t-3xl z-10 px-6 pt-5 pb-3 border-b border-gray-100">
               <div className="text-center text-xs font-bold text-sky-700 bg-sky-50 rounded-xl px-4 py-1.5 mb-3">Step 6 of 11</div>
               <h3 className="text-center font-bold text-gray-800 text-base">Fee &amp; Proceed</h3>
             </div>
             <div className="px-6 py-4 flex flex-col gap-3">
-              {/* Clean header grid */}
-              <div className="space-y-0 rounded-xl border border-gray-100 overflow-hidden">
+              {/* Unified PO details — follows Step 5 of 11 layout */}
+              <div className="space-y-0 rounded-xl border border-gray-100 overflow-hidden text-sm">
+                <div className="flex justify-between items-center px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+                  <span className="text-xs text-gray-500 uppercase tracking-wider">PO Number</span>
+                  <span className="font-mono font-bold text-gray-900">{waitModalOrder.request?.po || 'PO-SYS-202'}</span>
+                </div>
                 <div className="flex justify-between items-center px-4 py-2.5 bg-gray-50 border-b border-gray-100">
                   <span className="text-xs text-gray-500 uppercase tracking-wider">Step Name</span>
-                  <span className="font-bold text-gray-900 text-sm">Fee &amp; Proceed</span>
+                  <span className="font-bold text-gray-900">Fee &amp; Proceed</span>
                 </div>
                 <div className="flex justify-between items-center px-4 py-2.5 bg-gray-50 border-b border-gray-100">
-                  <span className="text-xs text-gray-500 uppercase tracking-wider">Service</span>
-                  <span className="font-bold text-gray-900 text-sm">{waitModalOrder.request?.title || 'Fit out'}</span>
+                  <span className="text-xs text-gray-500 uppercase tracking-wider">Type of Work</span>
+                  <span className="font-bold text-gray-900">{waitModalOrder.request?.title || 'Fit out'}</span>
                 </div>
-                <div className="flex justify-between items-center px-4 py-2.5 bg-sky-50">
+                <div className="flex justify-between items-start px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+                  <span className="text-xs text-gray-500 uppercase tracking-wider flex-shrink-0 mr-3">What You Need To Do</span>
+                  <span className="font-bold text-gray-900 text-right text-xs max-w-[60%]">Pay the processing fee to activate the chat room and notify your partner to proceed.</span>
+                </div>
+                <div className="flex justify-between items-center px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+                  <span className="text-xs text-gray-500 uppercase tracking-wider">Selected Partner</span>
+                  <span className="font-bold text-gray-900">{firstNameOnly(waitModalOrder.request?.customer, 'Suppadesh')}</span>
+                </div>
+                <div className="flex justify-between items-center px-4 py-2.5 bg-sky-50 border-b border-gray-100">
                   <span className="text-xs text-gray-500 uppercase tracking-wider">Budget</span>
                   <div className="text-right">
                     {(() => {
@@ -2194,29 +2207,25 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                       const unit = m ? m[2] : null;
                       const rate = qty && qty > 0 && total > 0 ? Math.round(total / qty) : null;
                       return rate ? (
-                        <span className="font-bold text-sky-700 text-sm">{qty!.toLocaleString()} {unit} × ฿{rate.toLocaleString()} = ฿{total.toLocaleString()}</span>
+                        <span className="font-bold text-sky-700">{qty!.toLocaleString()} {unit} × ฿{rate.toLocaleString()} = ฿{total.toLocaleString()}</span>
                       ) : (
-                        <span className="font-bold text-sky-700 text-sm">{waitModalOrder.request?.budget || '฿25,000,000'}</span>
+                        <span className="font-bold text-sky-700">{waitModalOrder.request?.budget || '฿25,000,000'}</span>
                       );
                     })()}
                   </div>
                 </div>
-              </div>
-
-              <div className="w-full bg-gray-50 rounded-xl p-3 space-y-2 text-sm">
-                <div className="flex justify-between items-center"><span className="text-gray-500 text-xs">Selected Partner</span><span className="font-bold text-gray-800">{firstNameOnly(waitModalOrder.request?.customer, 'Suppadesh')}</span></div>
-                <div className="flex justify-between items-center"><span className="text-gray-500 text-xs">PO Number</span><span className="font-mono font-bold text-gray-800">{waitModalOrder.request?.po || 'PO-SYS-202'}</span></div>
-                <div className="flex justify-between items-center"><span className="text-gray-500 text-xs">Project Location</span><span className="font-bold text-gray-800">{waitModalOrder.request?.location || waitModalOrder.request?.subdistrict || 'Saphansong'}</span></div>
-                <div className="flex flex-col gap-0.5"><span className="text-gray-500 text-xs">Project Details</span><span className="font-bold text-gray-800 text-sm">{String(waitModalOrder.request?.description || waitModalOrder.request?.desc || '').replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?/, '') || 'Project details from the draft PO.'}</span></div>
-              </div>
-
-              <div className="bg-sky-50 text-sky-800 text-[13px] p-3 rounded-xl border border-sky-100 text-center font-medium">
-                Pay the processing fee to activate chat &amp; notify your partner to proceed.
-              </div>
-
-              <div className="flex justify-between items-center px-4 py-2 bg-gray-50 rounded-xl text-sm">
-                <span className="text-gray-500">Processing Fee</span>
-                <span className="font-bold text-gray-800">฿100</span>
+                <div className="flex justify-between items-center px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+                  <span className="text-xs text-gray-500 uppercase tracking-wider">Project Location</span>
+                  <span className="font-bold text-gray-900">{waitModalOrder.request?.location || waitModalOrder.request?.subdistrict || 'Saphansong'}</span>
+                </div>
+                <div className="flex flex-col gap-1 px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+                  <span className="text-xs text-gray-500 uppercase tracking-wider">Project Details</span>
+                  <span className="font-bold text-gray-900">{String(waitModalOrder.request?.description || waitModalOrder.request?.desc || '').replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?/, '') || 'Project details from the draft PO.'}</span>
+                </div>
+                <div className="flex justify-between items-center px-4 py-2.5 bg-sky-50">
+                  <span className="text-xs text-gray-500 uppercase tracking-wider">Processing Fee</span>
+                  <span className="font-bold text-sky-800">฿100</span>
+                </div>
               </div>
 
               <div className="text-center text-[10px] text-gray-400 px-2">
@@ -2313,7 +2322,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
       {/* Meeting Invitation Modal */}
       {meetingModal && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-start bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto pt-[76px] pb-10">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto pt-20 pb-10">
           <div className="w-full max-w-lg bg-white rounded-3xl shadow-xl flex flex-col overflow-y-auto max-h-[calc(100dvh-6rem)] relative">
             <div className="sticky top-0 bg-white rounded-t-3xl z-10 px-6 pt-5 pb-3 border-b border-gray-100">
               <div className="text-center text-xs font-bold text-amber-700 bg-amber-50 rounded-xl px-4 py-1.5">Step 8 of 11</div>
@@ -2372,24 +2381,34 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-2 text-xs text-amber-700">
                 <strong>Budget:</strong> {meetingModal.budget} &nbsp;|&nbsp; <strong>Tier:</strong> {meetingModal.tier}
               </div>
+              <div>
+                <label className="text-xs text-gray-500 font-semibold uppercase tracking-wider block mb-1">Note <span className="normal-case font-normal text-gray-400">(optional)</span></label>
+                <textarea
+                  value={meetingNote}
+                  onChange={(e) => setMeetingNote(e.target.value)}
+                  rows={2}
+                  placeholder="Any additional instructions or notes for your partner..."
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
+                />
+              </div>
             </div>
 
             <div className="flex gap-3 px-6 pb-6 pt-2">
-              <button onClick={() => setMeetingModal(null)} className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition">Cancel</button>
+              <button onClick={() => { setMeetingNote(""); setMeetingModal(null); }} className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition">Cancel</button>
               <button
                 disabled={!meetingDate || !meetingTime || !meetingVenue}
                 className="flex-1 py-3 bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold rounded-xl transition shadow-md"
                 onClick={() => {
                   const createdAt = Date.now();
                   const dateLabel = meetingDate ? fmtDate(meetingDate + 'T' + (meetingTime || '09:00')) : '';
-                  const desc = `Meeting invitation sent. Proposed: ${dateLabel} ${meetingTime} at ${meetingVenue}. Waiting for partner confirmation.`;
+                  const desc = `Meeting invitation sent. Proposed: ${dateLabel} ${meetingTime} at ${meetingVenue}.${meetingNote.trim() ? ` Note: ${meetingNote.trim()}.` : ''} Waiting for partner confirmation.`;
                   const pendingId = `meet-pending-${meetingModal.po}`;
                   // Compute new arrays eagerly and write to localStorage BEFORE setState
                   // (same pattern as payment pill — prevents syncMockState interval from overwriting)
                   const updatedMeetActive = mockActiveItems.map((x: any) => x.po === meetingModal.po ? { ...x, step: 8, actionNeeded: false } : x);
                   const updatedMeetReqs = [
                     ...mockDynRequests.filter((x: any) => x.id !== meetingModal.id && x.id !== pendingId),
-                    { id: pendingId, po: meetingModal.po, title: meetingModal.title, customer: meetingModal.customer, date: fmtDateTime(createdAt), createdAt, budget: meetingModal.budget, tier: meetingModal.tier, desc, type: 'meeting_pending_partner', step: 8, venue: meetingVenue, meetingDate, meetingTime },
+                    { id: pendingId, po: meetingModal.po, title: meetingModal.title, customer: meetingModal.customer, date: fmtDateTime(createdAt), createdAt, budget: meetingModal.budget, tier: meetingModal.tier, desc, type: 'meeting_pending_partner', step: 8, venue: meetingVenue, meetingDate, meetingTime, meetingNote: meetingNote.trim() },
                   ];
                   try {
                     localStorage.setItem('ghis_mock_active', JSON.stringify(updatedMeetActive));
@@ -2411,10 +2430,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                       fetch(`/api/v1/orders/${backendOrder.id}/chat`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                        body: JSON.stringify({ text: `[SYSTEM] Customer sent meeting invitation for ${meetingModal.po}: ${dateLabel} ${meetingTime} at ${meetingVenue}.` }),
+                        body: JSON.stringify({ text: `[SYSTEM] Customer sent meeting invitation for ${meetingModal.po}: ${dateLabel} ${meetingTime} at ${meetingVenue}.${meetingNote.trim() ? ` Note: ${meetingNote.trim()}.` : ''}` }),
                       }).catch(() => {});
                     }
                   } catch {}
+                  setMeetingNote("");
                   setMeetingModal(null);
                 }}
               >Send Invitation</button>
@@ -2424,7 +2444,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       )}
 
       {variationApproveModal && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto pt-[76px]">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto pt-20">
           <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-y-auto max-h-[calc(100dvh-6rem)] mx-auto my-4">
             <div className="bg-gradient-to-r from-purple-600 to-fuchsia-600 px-6 py-4">
               <h3 className="text-white font-bold text-lg">Approve Variation</h3>
@@ -2491,7 +2511,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       )}
 
       {completeApproveModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-start pt-[76px] bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-y-auto max-h-[calc(100dvh-6rem)] mx-auto">
             <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4">
               <h3 className="text-white font-bold text-lg">Confirm Job Complete</h3>

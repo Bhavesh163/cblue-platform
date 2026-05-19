@@ -1212,7 +1212,7 @@ export default function FixerProPage() {
 
       {/* PO Accept/Decline Modal */}
       {waitModalOrder && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto pt-[76px]">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto pt-20">
           <div className="bg-white rounded-3xl p-8 max-w-lg w-full max-h-[calc(100dvh-6rem)] overflow-y-auto shadow-2xl animate-in zoom-in-95 duration-200 my-4">
             <div className="flex justify-between items-start mb-4">
               <div className="mb-2 text-sm font-semibold text-purple-600 bg-purple-50 inline-block px-3 py-1 rounded-full">{isMeetingConfirmation ? 'Step 8 of 11' : 'Step 5 of 11'}</div>
@@ -1931,9 +1931,11 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
 
 
 /* ===== PARTNER JOBS (Active) ===== */
+const EMPTY_VAR_ROWS = () => [{ item: '', qty: '', unit: '', rate: '', amount: '' }];
 function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activeJobs: any[]; onJobClick?: (job: any) => void; }) {
   const [variationModal, setVariationModal] = React.useState<any>(null);
   const [variationDesc, setVariationDesc] = React.useState("");
+  const [variationRows, setVariationRows] = React.useState<{item:string;qty:string;unit:string;rate:string;amount:string}[]>(EMPTY_VAR_ROWS());
   const [ratingModal, setRatingModal] = React.useState<any>(null);
   const [ratingStars, setRatingStars] = React.useState(5);
   const [completeModal, setCompleteModal] = React.useState<any>(null);
@@ -2026,10 +2028,20 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
                   <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"}</p>
                   {job.subdistrict && <p className="text-xs text-gray-500 mt-0.5">{job.subdistrict}</p>}
                 </div>
-                <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
                   <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[job.tier] || "bg-gray-100 text-gray-600"}`}>{job.tier}</span>
                   {job.actionNeeded && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-50 text-red-700">Action Needed</span>}
                   {job.earnings && <span className="text-xs font-bold text-gray-700">{job.earnings}</span>}
+                  {getStatusLabel(job.status, locale) !== "" && <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_STYLE[job.status] || ""}`}>{getStatusLabel(job.status, locale)}</span>}
+                  {(job.mockStep === 9 || (job.step === 9)) && (
+                    <button onClick={() => { setVariationModal(job); setVariationDesc(""); }} className="text-xs px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-full transition">Submit Variation</button>
+                  )}
+                  {(job.mockStep === 10 || (job.step === 10)) && (
+                    <button onClick={() => { setCompleteNote(""); setCompleteModal(job); }} className="text-xs px-3 py-1 bg-green-600 hover:bg-green-700 text-white font-bold rounded-full transition">Mark Complete</button>
+                  )}
+                  {(job.mockStep === 11 || (job.step === 11)) && (
+                    <button onClick={() => { setRatingModal(job); setRatingStars(5); }} className="text-xs px-3 py-1 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-full transition">Rate Customer</button>
+                  )}
                 </div>
               </div>
               <div className="mt-2 w-full pt-1">
@@ -2062,21 +2074,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2 mt-2 flex-wrap">
-                {getStatusLabel(job.status, locale) !== "" && <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_STYLE[job.status] || ""}`}>{getStatusLabel(job.status, locale)}</span>}
-                {/* Step 9: Partner submits variation */}
-                {(job.mockStep === 9 || (job.step === 9)) && (
-                  <button onClick={() => { setVariationModal(job); setVariationDesc(""); }} className="text-xs px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-full transition">Submit Variation</button>
-                )}
-                {/* Step 10: Partner marks complete */}
-                {(job.mockStep === 10 || (job.step === 10)) && (
-                  <button onClick={() => { setCompleteNote(""); setCompleteModal(job); }} className="text-xs px-3 py-1 bg-green-600 hover:bg-green-700 text-white font-bold rounded-full transition">Mark Complete</button>
-                )}
-                {/* Step 11: Partner rates customer */}
-                {(job.mockStep === 11 || (job.step === 11)) && (
-                  <button onClick={() => { setRatingModal(job); setRatingStars(5); }} className="text-xs px-3 py-1 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-full transition">Rate Customer</button>
-                )}
-              </div>
+
             </div>
           </div>
         ))}
@@ -2084,7 +2082,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
     </div>
     {/* Variation Modal */}
     {variationModal && (
-      <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto pt-[76px]">
+      <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto pt-20">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto max-h-[calc(100dvh-6rem)] overflow-y-auto my-4">
           <div className="bg-amber-500 px-6 py-4">
             <h3 className="text-white font-bold text-lg">Submit Variation</h3>
@@ -2106,15 +2104,53 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
               projectDetails={stripWorkflowPrefix(variationModal.description || variationModal.desc || variationModal.projectDetails || variationModal.service || '')}
             />
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Budget</label>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Original Budget</label>
               <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 font-bold text-amber-800">{(() => { const desc = String(variationModal.description || variationModal.desc || variationModal.projectDetails || ''); const m = desc.match(/(\d[\d,]*\.?\d*)\s*(sq\.?m\.?|sqm|m²|ตร\.?ม\.?|ตารางเมตร|sq\.?ft\.?|unit)/i); const qty = m ? parseFloat((m[1] ?? '').replace(/,/g, '')) : null; const raw = String(variationModal.budget || '').replace(/[฿,]/g, ''); const total = parseFloat(raw) || 0; const unit = m ? m[2] : null; const rate = qty && qty > 0 && total > 0 ? Math.round(total / qty) : null; return rate ? `${qty!.toLocaleString()} ${unit} × ฿${rate.toLocaleString()} = ฿${total.toLocaleString()}` : toCurrencyLabel(variationModal.budget); })()}</div>
-              <p className="text-xs text-gray-500 mt-1">Original PO total. Describe extra scope or revised amount in the variation below.</p>
+              <p className="text-xs text-gray-500 mt-1">Original PO total. Add variation line items below.</p>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Variation Description <span className="text-red-500">*</span></label>
+              <label className="block text-xs font-semibold text-gray-600 mb-2">Variation Price List</label>
+              <div className="overflow-x-auto rounded-xl border border-amber-100">
+                <table className="w-full text-xs">
+                  <thead><tr className="bg-amber-50 text-amber-800">
+                    <th className="px-2 py-2 text-left font-semibold">Item</th>
+                    <th className="px-2 py-2 text-right font-semibold w-12">Qty</th>
+                    <th className="px-2 py-2 text-left font-semibold w-14">Unit</th>
+                    <th className="px-2 py-2 text-right font-semibold w-20">Rate (฿)</th>
+                    <th className="px-2 py-2 text-right font-semibold w-20">Amount (฿)</th>
+                    <th className="px-1 py-2 w-6"></th>
+                  </tr></thead>
+                  <tbody>
+                    {variationRows.map((row, idx) => {
+                      const qty = parseFloat(row.qty) || 0;
+                      const rate = parseFloat(row.rate.replace(/,/g, '')) || 0;
+                      const amount = qty > 0 && rate > 0 ? qty * rate : (parseFloat(row.amount.replace(/,/g,'')) || 0);
+                      return (
+                        <tr key={idx} className="border-t border-amber-50">
+                          <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-amber-400" placeholder="Item description" value={row.item} onChange={e => { setVariationRows(variationRows.map((vr, vi) => vi !== idx ? vr : {...vr, item: e.target.value})); }} /></td>
+                          <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-1 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-amber-400" placeholder="0" value={row.qty} onChange={e => { setVariationRows(variationRows.map((vr, vi) => vi !== idx ? vr : {...vr, qty: e.target.value, amount: String(parseFloat(e.target.value||'0') * (parseFloat(vr.rate.replace(/,/g,''))||0) || '')})); }} /></td>
+                          <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-amber-400" placeholder="unit" value={row.unit} onChange={e => { setVariationRows(variationRows.map((vr, vi) => vi !== idx ? vr : {...vr, unit: e.target.value})); }} /></td>
+                          <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-1 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-amber-400" placeholder="0" value={row.rate} onChange={e => { setVariationRows(variationRows.map((vr, vi) => vi !== idx ? vr : {...vr, rate: e.target.value, amount: String((parseFloat(vr.qty)||0) * (parseFloat(e.target.value.replace(/,/g,''))||0) || '')})); }} /></td>
+                          <td className="px-2 py-1 text-right text-amber-700 font-bold">{amount > 0 ? amount.toLocaleString() : '-'}</td>
+                          <td className="px-1 py-1"><button onClick={() => { if (variationRows.length > 1) setVariationRows(variationRows.filter((_, i) => i !== idx)); }} className="text-gray-400 hover:text-red-500 text-base leading-none">×</button></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot><tr className="border-t border-amber-200 bg-amber-50">
+                    <td colSpan={4} className="px-2 py-2 font-semibold text-amber-800 text-right">Total Variation:</td>
+                    <td className="px-2 py-2 text-right font-bold text-amber-900">฿{variationRows.reduce((sum, row) => { const q = parseFloat(row.qty)||0; const r2 = parseFloat(row.rate.replace(/,/g,''))||0; return sum + (q > 0 && r2 > 0 ? q*r2 : parseFloat(row.amount.replace(/,/g,''))||0); }, 0).toLocaleString()}</td>
+                    <td></td>
+                  </tr></tfoot>
+                </table>
+              </div>
+              <button onClick={() => setVariationRows([...variationRows, { item: '', qty: '', unit: '', rate: '', amount: '' }])} className="mt-2 text-xs text-amber-600 hover:text-amber-800 font-semibold">+ Add Row</button>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Note / Description <span className="text-red-500">*</span></label>
               <textarea
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
-                rows={4}
+                rows={3}
                 placeholder="Describe the variation scope, extra work, or cost changes..."
                 value={variationDesc}
                 onChange={e => setVariationDesc(e.target.value)}
@@ -2124,13 +2160,16 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
               <button
                 onClick={() => {
                   if (!variationDesc.trim()) return;
-                  handlePartnerAction(variationModal, 'variation', `Partner variation request: ${variationDesc.trim()}`);
+                  const tableRows = variationRows.filter(r => r.item.trim());
+                  const tableText = tableRows.length > 0 ? '\n\nPrice List:\n' + tableRows.map(r => { const q = parseFloat(r.qty)||0; const rt = parseFloat(r.rate.replace(/,/g,''))||0; const amt = q > 0 && rt > 0 ? q*rt : parseFloat(r.amount.replace(/,/g,''))||0; return `- ${r.item}${r.qty ? ` | ${r.qty} ${r.unit}` : ''}${r.rate ? ` | ฿${rt.toLocaleString()}/unit` : ''}${amt > 0 ? ` | ฿${amt.toLocaleString()}` : ''}`; }).join('\n') : '';
+                  handlePartnerAction(variationModal, 'variation', `Partner variation request: ${variationDesc.trim()}${tableText}`);
+                  setVariationRows(EMPTY_VAR_ROWS());
                   setVariationModal(null);
                 }}
                 disabled={!variationDesc.trim()}
                 className="flex-1 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition text-sm"
               >Submit Variation</button>
-              <button onClick={() => setVariationModal(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">Cancel</button>
+              <button onClick={() => { setVariationRows(EMPTY_VAR_ROWS()); setVariationModal(null); }} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">Cancel</button>
             </div>
           </div>
         </div>
@@ -2138,7 +2177,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
     )}
     {/* Rating Modal */}
     {ratingModal && (
-      <div className="fixed inset-0 z-50 flex items-center justify-start pt-[76px] bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+      <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-y-auto max-h-[calc(100dvh-6rem)]">
           <div className="bg-sky-600 px-6 py-4">
             <h3 className="text-white font-bold text-lg">Rate Customer</h3>
@@ -2180,7 +2219,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
       </div>
     )}
     {completeModal && (
-      <div className="fixed inset-0 z-50 flex items-center justify-start pt-[76px] bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+      <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto">
         <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-y-auto max-h-[calc(100dvh-6rem)] mx-auto">
           <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4">
             <h3 className="text-white font-bold text-lg">Mark Job Complete</h3>
@@ -2229,6 +2268,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
 function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string; incomingJobs: any[]; onJobClick?: (job: any) => void; }) {
   const [variationModal, setVariationModal] = React.useState<any>(null);
   const [variationDesc, setVariationDesc] = React.useState("");
+  const [variationRows, setVariationRows] = React.useState<{item:string;qty:string;unit:string;rate:string;amount:string}[]>(EMPTY_VAR_ROWS());
   const [completeModal, setCompleteModal] = React.useState<any>(null);
   const [completeNote, setCompleteNote] = React.useState("");
   const [ratingModal, setRatingModal] = React.useState<any>(null);
@@ -2354,7 +2394,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
       </div>
     </div>
     {variationModal && (
-      <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto pt-[76px]">
+      <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto pt-20">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto max-h-[calc(100dvh-6rem)] overflow-y-auto my-4">
           <div className="bg-amber-500 px-6 py-4">
             <h3 className="text-white font-bold text-lg">Submit Variation</h3>
@@ -2376,24 +2416,62 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
               projectDetails={stripWorkflowPrefix(variationModal.description || variationModal.desc || variationModal.projectDetails || variationModal.service || '')}
             />
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Budget</label>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Original Budget</label>
               <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 font-bold text-amber-800">{(() => { const desc = String(variationModal.description || variationModal.desc || variationModal.projectDetails || ''); const m = desc.match(/(\d[\d,]*\.?\d*)\s*(sq\.?m\.?|sqm|m²|ตร\.?ม\.?|ตารางเมตร|sq\.?ft\.?|unit)/i); const qty = m ? parseFloat((m[1] ?? '').replace(/,/g, '')) : null; const raw = String(variationModal.budget || '').replace(/[฿,]/g, ''); const total = parseFloat(raw) || 0; const unit = m ? m[2] : null; const rate = qty && qty > 0 && total > 0 ? Math.round(total / qty) : null; return rate ? `${qty!.toLocaleString()} ${unit} × ฿${rate.toLocaleString()} = ฿${total.toLocaleString()}` : toCurrencyLabel(variationModal.budget); })()}</div>
-              <p className="text-xs text-gray-500 mt-1">Original PO total. Describe extra scope or revised amount in the variation below.</p>
+              <p className="text-xs text-gray-500 mt-1">Original PO total. Add variation line items below.</p>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Variation Description <span className="text-red-500">*</span></label>
-              <textarea className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none" rows={4} placeholder="Describe the variation scope, extra work, or cost changes..." value={variationDesc} onChange={e => setVariationDesc(e.target.value)} />
+              <label className="block text-xs font-semibold text-gray-600 mb-2">Variation Price List</label>
+              <div className="overflow-x-auto rounded-xl border border-amber-100">
+                <table className="w-full text-xs">
+                  <thead><tr className="bg-amber-50 text-amber-800">
+                    <th className="px-2 py-2 text-left font-semibold">Item</th>
+                    <th className="px-2 py-2 text-right font-semibold w-12">Qty</th>
+                    <th className="px-2 py-2 text-left font-semibold w-14">Unit</th>
+                    <th className="px-2 py-2 text-right font-semibold w-20">Rate (฿)</th>
+                    <th className="px-2 py-2 text-right font-semibold w-20">Amount (฿)</th>
+                    <th className="px-1 py-2 w-6"></th>
+                  </tr></thead>
+                  <tbody>
+                    {variationRows.map((row, idx) => {
+                      const qty = parseFloat(row.qty) || 0;
+                      const rate = parseFloat(row.rate.replace(/,/g, '')) || 0;
+                      const amount = qty > 0 && rate > 0 ? qty * rate : (parseFloat(row.amount.replace(/,/g,'')) || 0);
+                      return (
+                        <tr key={idx} className="border-t border-amber-50">
+                          <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-amber-400" placeholder="Item description" value={row.item} onChange={e => { setVariationRows(variationRows.map((vr, vi) => vi !== idx ? vr : {...vr, item: e.target.value})); }} /></td>
+                          <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-1 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-amber-400" placeholder="0" value={row.qty} onChange={e => { setVariationRows(variationRows.map((vr, vi) => vi !== idx ? vr : {...vr, qty: e.target.value, amount: String(parseFloat(e.target.value||'0') * (parseFloat(vr.rate.replace(/,/g,''))||0) || '')})); }} /></td>
+                          <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-amber-400" placeholder="unit" value={row.unit} onChange={e => { setVariationRows(variationRows.map((vr, vi) => vi !== idx ? vr : {...vr, unit: e.target.value})); }} /></td>
+                          <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-1 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-amber-400" placeholder="0" value={row.rate} onChange={e => { setVariationRows(variationRows.map((vr, vi) => vi !== idx ? vr : {...vr, rate: e.target.value, amount: String((parseFloat(vr.qty)||0) * (parseFloat(e.target.value.replace(/,/g,''))||0) || '')})); }} /></td>
+                          <td className="px-2 py-1 text-right text-amber-700 font-bold">{amount > 0 ? amount.toLocaleString() : '-'}</td>
+                          <td className="px-1 py-1"><button onClick={() => { if (variationRows.length > 1) setVariationRows(variationRows.filter((_, i) => i !== idx)); }} className="text-gray-400 hover:text-red-500 text-base leading-none">×</button></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot><tr className="border-t border-amber-200 bg-amber-50">
+                    <td colSpan={4} className="px-2 py-2 font-semibold text-amber-800 text-right">Total Variation:</td>
+                    <td className="px-2 py-2 text-right font-bold text-amber-900">฿{variationRows.reduce((sum, row) => { const q = parseFloat(row.qty)||0; const r2 = parseFloat(row.rate.replace(/,/g,''))||0; return sum + (q > 0 && r2 > 0 ? q*r2 : parseFloat(row.amount.replace(/,/g,''))||0); }, 0).toLocaleString()}</td>
+                    <td></td>
+                  </tr></tfoot>
+                </table>
+              </div>
+              <button onClick={() => setVariationRows([...variationRows, { item: '', qty: '', unit: '', rate: '', amount: '' }])} className="mt-2 text-xs text-amber-600 hover:text-amber-800 font-semibold">+ Add Row</button>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Note / Description <span className="text-red-500">*</span></label>
+              <textarea className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none" rows={3} placeholder="Describe the variation scope, extra work, or cost changes..." value={variationDesc} onChange={e => setVariationDesc(e.target.value)} />
             </div>
             <div className="flex gap-3 pt-1">
-              <button onClick={() => { if (!variationDesc.trim()) return; handlePartnerAction(variationModal, 'variation', `Partner variation request: ${variationDesc.trim()}`); setVariationModal(null); }} disabled={!variationDesc.trim()} className="flex-1 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition text-sm">Submit Variation</button>
-              <button onClick={() => setVariationModal(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">Cancel</button>
+              <button onClick={() => { if (!variationDesc.trim()) return; const tableRows = variationRows.filter(r => r.item.trim()); const tableText = tableRows.length > 0 ? '\n\nPrice List:\n' + tableRows.map(r => { const q = parseFloat(r.qty)||0; const rt = parseFloat(r.rate.replace(/,/g,''))||0; const amt = q > 0 && rt > 0 ? q*rt : parseFloat(r.amount.replace(/,/g,''))||0; return `- ${r.item}${r.qty ? ` | ${r.qty} ${r.unit}` : ''}${r.rate ? ` | ฿${rt.toLocaleString()}/unit` : ''}${amt > 0 ? ` | ฿${amt.toLocaleString()}` : ''}`; }).join('\n') : ''; handlePartnerAction(variationModal, 'variation', `Partner variation request: ${variationDesc.trim()}${tableText}`); setVariationRows(EMPTY_VAR_ROWS()); setVariationModal(null); }} disabled={!variationDesc.trim()} className="flex-1 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition text-sm">Submit Variation</button>
+              <button onClick={() => { setVariationRows(EMPTY_VAR_ROWS()); setVariationModal(null); }} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">Cancel</button>
             </div>
           </div>
         </div>
       </div>
     )}
     {completeModal && (
-      <div className="fixed inset-0 z-50 flex items-center justify-start pt-[76px] bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+      <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto">
         <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-y-auto max-h-[calc(100dvh-6rem)] mx-auto">
           <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4">
             <h3 className="text-white font-bold text-lg">Mark Job Complete</h3>
@@ -2424,7 +2502,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
       </div>
     )}
     {ratingModal && (
-      <div className="fixed inset-0 z-50 flex items-center justify-start pt-[76px] bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+      <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-y-auto max-h-[calc(100dvh-6rem)]">
           <div className="bg-sky-600 px-6 py-4">
             <h3 className="text-white font-bold text-lg">Rate Customer</h3>
