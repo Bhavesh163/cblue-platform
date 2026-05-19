@@ -719,6 +719,9 @@ export default function FixerProPage() {
         const po = extractPoCode(order);
         if (!po || !isPoCode(po)) continue;
 
+        // Skip closed chat rooms (job completed/rated)
+        if (localStorage.getItem(`chat_closed_${po}`)) continue;
+
         // Cache PO→UUID so ClientChatPage.resolveOrderDbId() works in Suppadesh's browser
         try { localStorage.setItem(`po_to_order_${po}`, orderId); } catch {}
 
@@ -977,11 +980,15 @@ export default function FixerProPage() {
         const variationAlreadySubmitted = Number(localActive?.step || 0) >= 9 && localActive?.actionNeeded === false;
         const completeAlreadySubmitted = Number(localActive?.step || 0) >= 10 && localActive?.actionNeeded === false;
         const partnerAlreadyRated = Boolean(historyEntry?.partnerRating);
+        const meetingAlreadyConfirmed = Number(localActive?.step || 0) >= 9;
         if (!po || !order) continue;
         // Skip ALL reconstruction for completed jobs - prevents step 8 from reappearing after partner rates
         if (historyEntry) continue;
 
         if (lower.includes('customer sent meeting invitation')) {
+          if (meetingAlreadyConfirmed || partnerAlreadyRated) {
+            next = next.filter((x: any) => !(x.po === po && (x.type === 'meeting_confirm_partner' || x.workflowType === 'meeting_confirm_partner')));
+          } else {
           const inviteDetails = parseMeetingInviteDetails(String(chat.lastMsg || order.statusNote || ''));
           const createdAt = Number(chat.sort || 0) || Date.now();
           upsert({
@@ -1009,6 +1016,7 @@ export default function FixerProPage() {
             status: 'MEETING_REQUESTED',
             step: 8,
           });
+          } // end else (meeting not yet confirmed)
         }
 
         if (lower.includes('partner confirmed site meeting') || lower.includes('meeting confirmed by partner')) {
@@ -1990,6 +1998,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
         const completed = { ...(active.find((x: any) => x.po === po) || job), step: 11, completedAt: createdAt, partnerRating: Number(rating) };
         localStorage.setItem("ghis_mock_active", JSON.stringify(updated));
         localStorage.setItem("ghis_mock_history", JSON.stringify([...hist, completed]));
+        try { localStorage.setItem(`chat_closed_${po}`, '1'); } catch {}
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && x.type === 'rate_partner')));
         window.dispatchEvent(new Event("storage"));
         postSystemMsg(`[SYSTEM] Partner has rated this project ${rating}/5 stars. The job is now complete.`);
@@ -2284,6 +2293,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
         const completed = { ...(active.find((x: any) => x.po === po) || job), step: 11, completedAt: createdAt, partnerRating: Number(rating) };
         localStorage.setItem("ghis_mock_active", JSON.stringify(updated));
         localStorage.setItem("ghis_mock_history", JSON.stringify([...hist, completed]));
+        try { localStorage.setItem(`chat_closed_${po}`, '1'); } catch {}
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && x.type === 'rate_partner')));
         window.dispatchEvent(new Event("storage"));
         postSystemMsg(`[SYSTEM] Partner has rated this project ${rating}/5 stars. The job is now complete.`);
