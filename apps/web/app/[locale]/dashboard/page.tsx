@@ -772,7 +772,7 @@ function PropertyTab({ locale, prefix, properties }: { locale: string; prefix: s
   );
 }
 
-function CustomerHistoryCard({ item, idx, compact = false }: { item: any; idx: number; compact?: boolean }) {
+function CustomerHistoryCard({ item, idx, compact = false, locale = "en" }: { item: any; idx: number; compact?: boolean; locale?: string }) {
   const [collapsed, setCollapsed] = useState(true);
   const chatPreview = collapsed ? [] : (Array.isArray(item.chatHistory) ? item.chatHistory.slice(compact ? -2 : -4) : []);
   const fmtDate = (value: any) => {
@@ -1943,7 +1943,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             {allHistory.length === 0 ? (
               <div className="p-8 text-center text-gray-500">No history found.</div>
             ) : (
-              allHistory.map((o: any, i: number) => <CustomerHistoryCard key={o.po || o.id || i} item={o} idx={i} />)
+              allHistory.map((o: any, i: number) => <CustomerHistoryCard key={o.po || o.id || i} item={o} idx={i} locale={locale} />)
             )}
           </div>
         </div>
@@ -2105,7 +2105,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               {allHistory.slice(0, 2).length === 0 ? (
                 <div className="p-8 text-center text-gray-500">No history found.</div>
               ) : (
-                allHistory.slice(0, 2).map((o: any, i: number) => <CustomerHistoryCard key={o.po || o.id || i} item={o} idx={i} compact={true} />)
+                allHistory.slice(0, 2).map((o: any, i: number) => <CustomerHistoryCard key={o.po || o.id || i} item={o} idx={i} compact={true} locale={locale} />)
               )}
             </div>
           </div>
