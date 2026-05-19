@@ -100,7 +100,7 @@ const getWorkflowStepFromStatus = (status?: string) => {
 const _n = new Date();
 const _fmt = (d: Date) => fmtDateTime(d);
 const notifications: any[] = [
-    { id: 1, msg: "Review PO Details for GREEN CONSTRUCTION", unread: true, time: _fmt(_n), dot: "bg-purple-500" },
+    { id: 1, msg: "Review PO Details for FIT OUT", unread: true, time: _fmt(_n), dot: "bg-purple-500" },
     { id: 2, msg: "Review PO Details for FIT OUT", unread: true, time: _fmt(new Date(_n.getTime() - 2 * 60 * 1000)), dot: "bg-purple-500" },
     { id: 3, msg: "Confirm meeting at site", unread: false, time: _fmt(new Date(_n.getTime() - 60 * 60 * 1000)), dot: "bg-gray-300" },
     { id: 4, msg: "Request for Approval of Variation", unread: false, time: _fmt(new Date(_n.getTime() - 24 * 60 * 60 * 1000)), dot: "bg-gray-300" },
@@ -129,7 +129,7 @@ const firstNameOnly = (value: any, fallback = 'User') => {
   const cleaned = String(value || '').trim();
   return cleaned ? cleaned.split(/\s+/)[0] || fallback : fallback;
 };
-const HIDDEN_TEST_POS = new Set(["PO-2605-6716", "PO-2605-9605", "PO-2605-8699"]);
+const HIDDEN_TEST_POS = new Set(["PO-2605-6716", "PO-2605-9605", "PO-2605-8699", "PO-2605-9701"]);
 const isHiddenTestPo = (value: any) => HIDDEN_TEST_POS.has(String(value || '').trim().toUpperCase());
 const filterVisibleWorkflowItems = (items: any[]) => items.filter((item: any) => !isHiddenTestPo(item?.po));
 const WORKFLOW_STEP_NAMES: Record<number, string> = {
@@ -807,16 +807,57 @@ export default function FixerProPage() {
         const a = localStorage.getItem("ghis_mock_active"); if (a) setMockActiveState(filterVisibleWorkflowItems(JSON.parse(a)));
         const h = localStorage.getItem("ghis_mock_history"); if (h) setMockHistory(filterVisibleWorkflowItems(JSON.parse(h)));
         const p = localStorage.getItem("partner_mock_dyn_req");
-        setPartnerDynReqs(
-          p
-            ? filterVisibleWorkflowItems(JSON.parse(p)).map((item: any) => ({
-                ...item,
-                workflowType:
-                  item?.workflowType ||
-                  (['variation_partner', 'complete_partner', 'rate_partner'].includes(item?.type) ? item.type : undefined),
-              }))
-            : [],
-        );
+        let partnerReqs: any[] = p
+          ? filterVisibleWorkflowItems(JSON.parse(p)).map((item: any) => ({
+              ...item,
+              workflowType:
+                item?.workflowType ||
+                (['variation_partner', 'complete_partner', 'rate_partner'].includes(item?.type) ? item.type : undefined),
+            }))
+          : [];
+        // Auto-sync: meeting_pending_partner in ghis_mock_dyn_req → meeting_confirm_partner in partner reqs
+        if (d) {
+          const ghisReqs: any[] = filterVisibleWorkflowItems(JSON.parse(d));
+          const pendingMeetings = ghisReqs.filter((r: any) => r.type === 'meeting_pending_partner');
+          let partnerChanged = false;
+          for (const pending of pendingMeetings) {
+            const alreadyHasMeetingConfirm = partnerReqs.some((r: any) => r.po === pending.po && r.type === 'meeting_confirm_partner');
+            const alreadyAdvanced = partnerReqs.some((r: any) => r.po === pending.po && (r.type === 'variation_partner' || r.type === 'complete_partner' || r.type === 'rate_partner'));
+            if (!alreadyHasMeetingConfirm && !alreadyAdvanced) {
+              partnerReqs = [
+                ...partnerReqs.filter((r: any) => !(r.po === pending.po && r.type === 'meeting_confirm_partner')),
+                {
+                  id: `meeting-confirm-${pending.po}`,
+                  po: pending.po,
+                  service: pending.title,
+                  serviceTh: pending.title,
+                  serviceZh: pending.title,
+                  customer: pending.customer,
+                  date: pending.date,
+                  createdAt: pending.createdAt || Date.now(),
+                  fee: pending.budget,
+                  budget: String(pending.budget || '').replace(/[^0-9]/g, ''),
+                  tier: pending.tier,
+                  desc: pending.desc,
+                  meetingDate: pending.meetingDate,
+                  meetingTime: pending.meetingTime,
+                  meetingDateLabel: pending.meetingDate || '',
+                  meetingTimeLabel: pending.meetingTime || '',
+                  meetingVenue: pending.venue || pending.meetingVenue || '',
+                  meetingMessage: pending.desc,
+                  type: 'meeting_confirm_partner',
+                  workflowType: 'meeting_confirm_partner',
+                  step: 8,
+                },
+              ];
+              partnerChanged = true;
+            }
+          }
+          if (partnerChanged) {
+            try { localStorage.setItem('partner_mock_dyn_req', JSON.stringify(partnerReqs)); } catch {}
+          }
+        }
+        setPartnerDynReqs(partnerReqs);
       } catch {}
     };
     checkMock();
@@ -1795,10 +1836,10 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
           <h3 className="font-bold text-gray-900 mb-3 flex items-center justify-between">⏰ Upcoming Meetings <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("requests")}>View All</span></h3>
           {scheduledMeetings.length > 0 ? (
             <div className="space-y-2">
-              {scheduledMeetings.slice(0, 2).map((meeting: any) => (
+              {scheduledMeetings.slice(0, 3).map((meeting: any) => (
                 <div key={meeting.id} className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
                   <p className="text-sm font-bold text-gray-800">{meeting.title} ({meeting.po})</p>
-                  <p className="text-xs text-gray-500 mt-1">{meeting.date}</p>
+                  <p className="text-xs text-gray-500 mt-1">{meeting.meetingDate || meeting.date}{meeting.meetingTime ? ` · ${meeting.meetingTime}` : ''}</p>
                   <p className="text-xs text-gray-500 mt-1">Location: {meeting.meetingVenue || meeting.venue || meeting.subdistrict || '-'} | Customer: {meeting.customer}</p>
                 </div>
               ))}
@@ -1983,7 +2024,8 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
         postSystemMsg(`[SYSTEM] Partner has submitted a variation request for ${po}. Please review in your Requests tab.`);
       } else if (action === 'complete') {
         const complId = `compl-${po}`;
-        const next = [...dynReqs.filter((x: any) => x.po !== po), { id: complId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: 'Work is completed. Please review and mark as complete to close this project.', type: 'complete_pending', step: 10 }];
+        const completeDesc = extraData?.trim() ? `Partner completion request: ${extraData.trim()}` : 'Work is completed. Please review and mark as complete to close this project.';
+        const next = [...dynReqs.filter((x: any) => x.po !== po), { id: complId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: completeDesc, type: 'complete_pending', step: 10 }];
         localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
         // Update active BEFORE writePartnerReqs to prevent race condition in buildChatFeed
         const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");

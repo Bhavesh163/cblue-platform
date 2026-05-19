@@ -51,7 +51,7 @@ const firstNameOnly = (value: any, fallback = 'User') => {
   const cleaned = String(value || '').trim();
   return cleaned ? cleaned.split(/\s+/)[0] || fallback : fallback;
 };
-const HIDDEN_TEST_POS = new Set(["PO-2605-6716", "PO-2605-9605", "PO-2605-8699"]);
+const HIDDEN_TEST_POS = new Set(["PO-2605-6716", "PO-2605-9605", "PO-2605-8699", "PO-2605-9701"]);
 const isHiddenTestPo = (value: any) => HIDDEN_TEST_POS.has(String(value || '').trim().toUpperCase());
 const WORKFLOW_STEP_NAMES: Record<number, string> = {
   5: 'Accept',
@@ -1672,7 +1672,12 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 setMockActiveItems(prev => prev.map((x: any) => x.po === item.po ? { ...x, step: 9, actionNeeded: true } : x));
                 const varId = `variation-${item.po}`;
                 const createdAt = Date.now();
-                setMockDynRequests(prev => { const f = prev.filter((x: any) => x.id !== item.id && x.id !== varId); return [...f, { id: varId, po: item.po, title: item.title, customer: item.customer, date: fmtDateTime(createdAt), createdAt, budget: item.budget, tier: item.tier, desc: 'Your partner has submitted a variation for your approval. Please review and confirm to proceed.', type: 'variation_pending', step: 9 }]; });
+                setMockDynRequests(prev => {
+                  // Don't overwrite an existing variation_pending from partner (which has the actual note)
+                  if (prev.some((x: any) => x.po === item.po && x.type === 'variation_pending' && x.id !== varId)) {
+                    return prev.filter((x: any) => x.id !== item.id);
+                  }
+                  const f = prev.filter((x: any) => x.id !== item.id && x.id !== varId); return [...f, { id: varId, po: item.po, title: item.title, customer: item.customer, date: fmtDateTime(createdAt), createdAt, budget: item.budget, tier: item.tier, desc: 'Your partner has submitted a variation for your approval. Please review and confirm to proceed.', type: 'variation_pending', step: 9 }]; });
                 setActiveTab("requests");
               }}>Meeting Complete ✓</button>
             </div>
@@ -1784,19 +1789,17 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     <div key={idx} className="p-5 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
       <div className="flex items-start gap-4 flex-1 min-w-0">
          <div className="w-10 h-10 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center font-bold shrink-0">{(item.title || item.service || "C").charAt(0)}</div>
-         <div className="flex items-start justify-between gap-2 flex-1 min-w-0">
-           <div className="min-w-0">
-             <h3 className="font-bold text-gray-900">{item.title || item.service} <span className="text-sm font-normal text-gray-400">· {item.po || `PO-${item.id?.slice(0,8) || '2605-8471'}`} | {item.subdistrict || 'Saphansong'}</span></h3>
-             <p className="text-sm text-gray-600 mt-0.5">{item.fixerAlias || item.partnerName || item.customer || "Customer"} · {item.date || "11/5/2026 14:30"} · Budget: {item.budget || ('฿' + Number(item.price || 0).toLocaleString())}</p>
-           </div>
-           <div className="flex flex-col items-end gap-1 flex-shrink-0">
-             <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${item.tier === 'ECONOMY' || item.tier === 'Economy' ? 'bg-green-50 text-green-700' : item.tier === 'Standard' || item.tier === 'STANDARD' ? 'bg-blue-50 text-blue-700' : item.tier === 'Corporate' ? 'bg-purple-50 text-purple-700' : item.tier === 'Specialist' ? 'bg-amber-50 text-amber-700' : item.tier === 'Expert' ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-600'}`}>{item.tier || 'Standard'}</span>
-             {(item.actionNeeded || actionableRequestPos.has(item.po)) && <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-red-50 text-red-700">Action Needed</span>}
-           </div>
+         <div className="min-w-0">
+           <h3 className="font-bold text-gray-900">{item.title || item.service} <span className="text-sm font-normal text-gray-400">· {item.po || `PO-${item.id?.slice(0,8) || '2605-8471'}`} | {item.subdistrict || 'Saphansong'}</span></h3>
+           <p className="text-sm text-gray-600 mt-0.5">{item.fixerAlias || item.partnerName || item.customer || "Customer"} · {item.date || "11/5/2026 14:30"} · Budget: {item.budget || ('฿' + Number(item.price || 0).toLocaleString())}</p>
          </div>
       </div>
-      <div className="w-full xl:w-[620px] shrink-0 mt-2 xl:mt-0">
+      <div className="w-full xl:w-[560px] shrink-0 mt-2 xl:mt-0">
         <Progress12Steps currentStep={item.step || 5} showCurrent={true} />
+      </div>
+      <div className="flex flex-col items-end gap-1 flex-shrink-0">
+        <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${item.tier === 'ECONOMY' || item.tier === 'Economy' ? 'bg-green-50 text-green-700' : item.tier === 'Standard' || item.tier === 'STANDARD' ? 'bg-blue-50 text-blue-700' : item.tier === 'Corporate' ? 'bg-purple-50 text-purple-700' : item.tier === 'Specialist' ? 'bg-amber-50 text-amber-700' : item.tier === 'Expert' ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-600'}`}>{item.tier || 'Standard'}</span>
+        {(item.actionNeeded || actionableRequestPos.has(item.po)) && <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-red-50 text-red-700">Action Needed</span>}
       </div>
     </div>
   );
@@ -2063,13 +2066,13 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             </div>
             {upcomingMeetings.length > 0 ? (
               <div className="space-y-3 mt-4">
-                {upcomingMeetings.slice(0, 2).map((m: any) => (
+                {upcomingMeetings.slice(0, 3).map((m: any) => (
                   <div key={m.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
                     <div className="flex justify-between items-center mb-2">
                        <span className="text-gray-900 font-bold">{m.title} ({m.po})</span>
-                       <span className="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-bold">{m.date}</span>
+                       <span className="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-bold">{m.meetingDate || m.date}{m.meetingTime ? ` · ${m.meetingTime}` : ''}</span>
                     </div>
-                    <p className="text-sm text-gray-600">Location: Saphansong | Provider: {m.customer}</p>
+                    <p className="text-sm text-gray-600">Location: {m.venue || m.meetingVenue || m.subdistrict || 'TBD'} | Provider: {m.customer}</p>
                   </div>
                 ))}
               </div>
@@ -2463,7 +2466,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               />
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Partner Request</label>
-                <p className="text-sm text-gray-700 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3">{variationApproveModal.desc}</p>
+                <p className="text-sm text-gray-700 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3">{String(variationApproveModal.desc || '').replace(/^Partner variation request:\s*/i, '').trim() || variationApproveModal.desc}</p>
               </div>
               <div className="flex gap-3 pt-1">
                 <button
@@ -2530,7 +2533,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               />
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Completion Note</label>
-                <p className="text-sm text-gray-700 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3">{completeApproveModal.desc}</p>
+                <p className="text-sm text-gray-700 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3">{String(completeApproveModal.desc || '').replace(/^Partner completion request:\s*/i, '').trim() || completeApproveModal.desc}</p>
               </div>
               <div className="flex gap-3 pt-1">
                 <button
