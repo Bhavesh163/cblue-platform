@@ -1037,6 +1037,9 @@ export default function FixerProPage() {
               workflowType: 'variation_partner',
               step: 9,
             });
+          } else if (variationAlreadySubmitted) {
+            // Clean up stale variation_partner if already submitted (guards against race condition re-adds)
+            next = next.filter((x: any) => !(x.po === po && x.type === 'variation_partner'));
           }
         }
         if (lower.includes('customer approved variation')) {
@@ -1065,6 +1068,9 @@ export default function FixerProPage() {
               workflowType: 'complete_partner',
               step: 10,
             });
+          } else if (completeAlreadySubmitted) {
+            // Clean up stale complete_partner if already submitted
+            next = next.filter((x: any) => !(x.po === po && x.type === 'complete_partner'));
           }
         }
         if (lower.includes('customer confirmed job complete')) {
@@ -1093,6 +1099,9 @@ export default function FixerProPage() {
               workflowType: 'rate_partner',
               step: 11,
             });
+          } else {
+            // Clean up stale rate_partner if already rated
+            next = next.filter((x: any) => !(x.po === po && x.type === 'rate_partner'));
           }
         }
       }
@@ -1954,32 +1963,34 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
         const varNote = extraData || 'Your partner has submitted a variation for your approval. Please review and confirm to proceed.';
         const next = [...dynReqs.filter((x: any) => x.po !== po), { id: varId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: varNote, type: 'variation_pending', step: 9 }];
         localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
-        writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(x.type))));
-        // Update partner's own active job step
+        // Update active BEFORE writePartnerReqs to prevent race condition in buildChatFeed
         const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
         const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 9, mockStep: 9, actionNeeded: false } : x);
         localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
+        writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
         postSystemMsg(`[SYSTEM] Partner has submitted a variation request for ${po}. Please review in your Requests tab.`);
       } else if (action === 'complete') {
         const complId = `compl-${po}`;
         const next = [...dynReqs.filter((x: any) => x.po !== po), { id: complId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: 'Work is completed. Please review and mark as complete to close this project.', type: 'complete_pending', step: 10 }];
         localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
-        writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['complete_partner', 'variation_partner', 'meeting_confirm_partner'].includes(x.type))));
+        // Update active BEFORE writePartnerReqs to prevent race condition in buildChatFeed
         const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
         const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 10, mockStep: 10, actionNeeded: false } : x);
         localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
+        writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['complete_partner', 'variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
         postSystemMsg(`[SYSTEM] Partner has marked the job as complete for ${po}. Please review and confirm in your Requests tab.`);
       } else if (action === 'rate') {
         const rating = extraData || '5';
-        writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && x.type === 'rate_partner')));
+        // Update active/history BEFORE writePartnerReqs so buildChatFeed sees historyEntry and skips
         const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
         const hist = JSON.parse(localStorage.getItem("ghis_mock_history") || "[]");
         const updated = active.filter((x: any) => x.po !== po);
         const completed = { ...(active.find((x: any) => x.po === po) || job), step: 11, completedAt: createdAt, partnerRating: Number(rating) };
         localStorage.setItem("ghis_mock_active", JSON.stringify(updated));
         localStorage.setItem("ghis_mock_history", JSON.stringify([...hist, completed]));
+        writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && x.type === 'rate_partner')));
         window.dispatchEvent(new Event("storage"));
         postSystemMsg(`[SYSTEM] Partner has rated this project ${rating}/5 stars. The job is now complete.`);
       }
@@ -2245,10 +2256,11 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
         const varNote = extraData || 'Your partner has submitted a variation for your approval. Please review and confirm to proceed.';
         const next = [...dynReqs.filter((x: any) => x.po !== po), { id: varId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: varNote, type: 'variation_pending', step: 9 }];
         localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
-        writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(x.type))));
+        // Update active BEFORE writePartnerReqs to prevent race condition in buildChatFeed
         const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
         const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 9, mockStep: 9, actionNeeded: false } : x);
         localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
+        writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
         postSystemMsg(`[SYSTEM] Partner has submitted a variation request for ${po}. Please review in your Requests tab.`);
       } else if (action === 'complete') {
@@ -2256,21 +2268,23 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
         const completeDesc = extraData?.trim() ? `Partner completion request: ${extraData.trim()}` : 'Work is completed. Please review and mark as complete to close this project.';
         const next = [...dynReqs.filter((x: any) => x.po !== po), { id: complId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: completeDesc, type: 'complete_pending', step: 10 }];
         localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
-        writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['complete_partner', 'variation_partner', 'meeting_confirm_partner'].includes(x.type))));
+        // Update active BEFORE writePartnerReqs to prevent race condition in buildChatFeed
         const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
         const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 10, mockStep: 10, actionNeeded: false } : x);
         localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
+        writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['complete_partner', 'variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
         postSystemMsg(`[SYSTEM] Partner has marked the job as complete for ${po}. Please review and confirm in your Requests tab.`);
       } else if (action === 'rate') {
         const rating = extraData || '5';
-        writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && x.type === 'rate_partner')));
+        // Update active/history BEFORE writePartnerReqs so buildChatFeed sees historyEntry and skips
         const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
         const hist = JSON.parse(localStorage.getItem("ghis_mock_history") || "[]");
         const updated = active.filter((x: any) => x.po !== po);
         const completed = { ...(active.find((x: any) => x.po === po) || job), step: 11, completedAt: createdAt, partnerRating: Number(rating) };
         localStorage.setItem("ghis_mock_active", JSON.stringify(updated));
         localStorage.setItem("ghis_mock_history", JSON.stringify([...hist, completed]));
+        writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && x.type === 'rate_partner')));
         window.dispatchEvent(new Event("storage"));
         postSystemMsg(`[SYSTEM] Partner has rated this project ${rating}/5 stars. The job is now complete.`);
       }

@@ -1409,10 +1409,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const filteredStaticRequests = (useStaticDemoData ? REQUESTS_MOCK : []).filter((x: any) => !progressedPos.has(x.po));
   const dedupedRequestMap = new Map<string, any>();
   for (const requestItem of [...filteredStaticRequests, ...visibleMockDynRequests].filter(
-    (m: any) => !mockPayments[m.id] && !['notice', 'meeting_scheduled', 'chat_ready'].includes(String(m.type || '')),
+    (m: any) => !mockPayments[m.id] && !['notice', 'meeting_scheduled', 'chat_ready', 'meeting_pending_partner'].includes(String(m.type || '')),
   )) {
     const requestType = String(requestItem.type || '');
-    const dedupeKey = requestItem.po && ['chat_ready', 'meeting_invite', 'meeting_pending_partner'].includes(requestType)
+    const dedupeKey = requestItem.po && ['chat_ready', 'meeting_invite'].includes(requestType)
       ? `${requestItem.po}:${requestType === 'chat_ready' ? 'chat' : 'meeting'}`
       : requestItem.po || requestItem.id;
     const existing = dedupedRequestMap.get(dedupeKey);
@@ -2132,9 +2132,18 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   onClick={() => {
                     const po = rateModal.po;
                     const job = mockActiveItems.find((x: any) => x.po === po);
-                    if (job) setMockHistory(prev => [...prev, { ...job, step: 11, completedAt: new Date().toISOString(), status: 'COMPLETED', rating: rateStars }]);
-                    setMockActiveItems(prev => prev.filter((x: any) => x.po !== po));
-                    setMockDynRequests(prev => prev.filter((x: any) => x.po !== po));
+                    const completed = { ...(job || rateModal), step: 11, completedAt: new Date().toISOString(), status: 'COMPLETED', rating: rateStars };
+                    const newActive = mockActiveItems.filter((x: any) => x.po !== po);
+                    const newReqs = mockDynRequests.filter((x: any) => x.po !== po);
+                    const prevHist = JSON.parse(localStorage.getItem('ghis_mock_history') || '[]');
+                    const newHist = [...(prevHist as any[]).filter((x: any) => x.po !== po), completed];
+                    localStorage.setItem('ghis_mock_active', JSON.stringify(newActive));
+                    localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(newReqs));
+                    localStorage.setItem('ghis_mock_history', JSON.stringify(newHist));
+                    window.dispatchEvent(new Event('storage'));
+                    setMockActiveItems(newActive);
+                    setMockDynRequests(newReqs);
+                    setMockHistory(newHist);
                     void postBackendWorkflowMessage(po, `[SYSTEM] Customer rated this project ${rateStars}/5 stars. Workflow completed.`);
                     setRateModal(null);
                     setActiveTab("history");
@@ -2447,12 +2456,20 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                       type: 'notice',
                       step: 10,
                     };
-                    setMockActiveItems(prev => prev.map((x: any) => x.po === po ? { ...x, step: 10, actionNeeded: false } : x));
-                    setMockDynRequests(prev => {
-                      const next = [...prev.filter((x: any) => !(x.po === po && ['variation_pending', 'meeting_pending_partner', 'meeting_scheduled'].includes(x.type))), notice];
-                      try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(next)); } catch {}
-                      return next;
-                    });
+                    const newActive = mockActiveItems.map((x: any) => x.po === po ? { ...x, step: 10, mockStep: 10, actionNeeded: false } : x);
+                    const newReqs = [...mockDynRequests.filter((x: any) => !(x.po === po && ['variation_pending', 'meeting_pending_partner', 'meeting_scheduled'].includes(x.type))), notice];
+                    const partnerReqs = JSON.parse(localStorage.getItem('partner_mock_dyn_req') || '[]') as any[];
+                    const complId = `complete-${po}`;
+                    const updatedPartnerReqs = [
+                      ...partnerReqs.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner', 'complete_partner'].includes(x.type))),
+                      { id: complId, po, title: variationApproveModal.title, customer: variationApproveModal.customer, date: fmtDateTime(createdAt), createdAt, budget: variationApproveModal.budget, tier: variationApproveModal.tier, desc: 'Customer approved the variation. Please submit project complete for confirmation.', type: 'complete_partner', step: 10 },
+                    ];
+                    localStorage.setItem('ghis_mock_active', JSON.stringify(newActive));
+                    localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(newReqs));
+                    localStorage.setItem('partner_mock_dyn_req', JSON.stringify(updatedPartnerReqs));
+                    window.dispatchEvent(new Event('storage'));
+                    setMockActiveItems(newActive);
+                    setMockDynRequests(newReqs);
                     void postBackendWorkflowMessage(po, `[SYSTEM] Customer approved variation for ${po}. Partner may now submit project complete.`);
                     setVariationApproveModal(null);
                     setActiveTab('requests');
@@ -2508,13 +2525,21 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                       type: 'rate_pending',
                       step: 11,
                     };
+                    const newActive = mockActiveItems.map((x: any) => x.po === po ? { ...x, step: 11, mockStep: 11, actionNeeded: true } : x);
+                    const newReqs = [...mockDynRequests.filter((x: any) => !(x.po === po && ['complete_pending', 'variation_pending', 'meeting_pending_partner', 'meeting_scheduled'].includes(x.type))), rateReq];
+                    const partnerReqs = JSON.parse(localStorage.getItem('partner_mock_dyn_req') || '[]') as any[];
+                    const ratePartnerId = `rate-partner-${po}`;
+                    const updatedPartnerReqs = [
+                      ...partnerReqs.filter((x: any) => !(x.po === po && ['complete_partner', 'variation_partner', 'meeting_confirm_partner', 'rate_partner'].includes(x.type))),
+                      { id: ratePartnerId, po, title: completeApproveModal.title, customer: completeApproveModal.customer, date: fmtDateTime(createdAt), createdAt, budget: completeApproveModal.budget, tier: completeApproveModal.tier, desc: 'Customer confirmed completion. Please rate the customer to close this job.', type: 'rate_partner', step: 11 },
+                    ];
                     try { localStorage.setItem(`chat_closed_${po}`, '1'); } catch {}
-                    setMockActiveItems(prev => prev.map((x: any) => x.po === po ? { ...x, step: 11, actionNeeded: true } : x));
-                    setMockDynRequests(prev => {
-                      const next = [...prev.filter((x: any) => !(x.po === po && ['complete_pending', 'variation_pending', 'meeting_pending_partner', 'meeting_scheduled'].includes(x.type))), rateReq];
-                      try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(next)); } catch {}
-                      return next;
-                    });
+                    localStorage.setItem('ghis_mock_active', JSON.stringify(newActive));
+                    localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(newReqs));
+                    localStorage.setItem('partner_mock_dyn_req', JSON.stringify(updatedPartnerReqs));
+                    window.dispatchEvent(new Event('storage'));
+                    setMockActiveItems(newActive);
+                    setMockDynRequests(newReqs);
                     if (token && backendOrder?.id) {
                       fetch(`/api/v1/orders/${backendOrder.id}/status`, {
                         method: 'PUT',
