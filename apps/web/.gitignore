@@ -41,3 +41,4 @@ next-env.d.ts
 
 # build output
 build_output.txt
+.env*.local

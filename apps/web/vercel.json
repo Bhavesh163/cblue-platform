@@ -1,8 +1,4 @@
 {
   "buildCommand": "npm run build",
-  "installCommand": "npm install --legacy-peer-deps",
-  "env": {
-    "TURBO_TOKEN": "@TURBO_TOKEN",
-    "TURBO_TEAM": "@TURBO_TEAM"
-  }
+  "installCommand": "npm install --legacy-peer-deps"
 }
