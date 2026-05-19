@@ -919,6 +919,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   // Load from localStorage AFTER mount (useEffect never runs on server)
   useEffect(() => {
     try {
+      // Only load customer mock data for customer accounts (ghis)
+      const subData = JSON.parse(localStorage.getItem("subscriber") || "{}");
+      const subEmail = String(subData?.email || "").toLowerCase();
+      if (!subEmail.includes('ghis')) { setMockReady(true); return; }
       // One-time cleanup of stale chat keys with invalid PO format (e.g. UUID-like keys from old builds)
       Object.keys(localStorage)
         .filter(k => k.startsWith('chat_messages_') || k.startsWith('chat_title_') || k.startsWith('po_to_order_'))
@@ -970,6 +974,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   useEffect(() => {
     const syncMockState = () => {
       try {
+        const subData = JSON.parse(localStorage.getItem("subscriber") || "{}");
+        const subEmail = String(subData?.email || "").toLowerCase();
+        if (!subEmail.includes('ghis')) return;
         const p = localStorage.getItem("ghis_mock_payments");
         const a = localStorage.getItem("ghis_mock_active");
         const d = localStorage.getItem("ghis_mock_dyn_req");
