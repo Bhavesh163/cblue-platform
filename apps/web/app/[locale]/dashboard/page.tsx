@@ -51,7 +51,7 @@ const firstNameOnly = (value: any, fallback = 'User') => {
   const cleaned = String(value || '').trim();
   return cleaned ? cleaned.split(/\s+/)[0] || fallback : fallback;
 };
-const HIDDEN_TEST_POS = new Set(["PO-2605-6716", "PO-2605-9605", "PO-2605-8699", "PO-2605-9701", "PO-2605-6146"]);
+const HIDDEN_TEST_POS = new Set(["PO-2605-6716", "PO-2605-9605", "PO-2605-8699", "PO-2605-9701", "PO-2605-6146", "PO-2605-8471"]);
 const isHiddenTestPo = (value: any) => HIDDEN_TEST_POS.has(String(value || '').trim().toUpperCase());
 const WORKFLOW_STEP_NAMES: Record<number, string> = {
   5: 'Accept',
@@ -1308,13 +1308,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const REQUESTS_MOCK = [
     { id: "req1", title: "REINSTATEMENT", customer: "Suppadesh", date: "5/11/2026, 2:30:00 PM", budget: "฿5,000,000", po: "PO-2605-1200", tier: "ECONOMY", desc: "I want a team to carry out a 3000 sq.m. housing project." },
     { id: "req2", title: "FITOUT", customer: "Suppadesh", date: "5/11/2026, 2:35:00 PM", budget: "฿25,000,000", po: "PO-2605-6812", tier: "STANDARD", desc: "I want to have a project team to carry out a 1000 sq.m. office fitout in Bangkok" },
-    { id: "req3", title: "GREEN CONSTRUCTION", customer: "Suppadesh", date: "5/11/2026, 2:40:00 PM", budget: "฿45,000,000", po: "PO-2605-8471", tier: "ECONOMY", desc: "I want a team to carry out a 3000 sq.m. green housing project in Bangkok." },
   ];
 
   const ACTIVE_MOCK = [
     { title: "REINSTATEMENT", customer: "Suppadesh", date: "5/11/2026, 2:30:00 PM", budget: "฿5,000,000", po: "PO-2605-1200", location: "Saphansong", tier: "ECONOMY", actionNeeded: true, step: 6 },
     { title: "FITOUT", customer: "Suppadesh", date: "5/11/2026, 2:35:00 PM", budget: "฿25,000,000", po: "PO-2605-6812", location: "Saphansong", tier: "Standard", actionNeeded: true, step: 6 },
-    { title: "GREEN CONSTRUCTION", customer: "Suppadesh", date: "5/11/2026, 2:40:00 PM", budget: "฿45,000,000", po: "PO-2605-8471", location: "Saphansong", tier: "ECONOMY", actionNeeded: true, step: 6 },
   ];
 
   const backendOrderPos = new Set(workflowOrders.map((o: any) => extractPo(o)).filter((po: string) => isPoCode(po)));
@@ -1322,14 +1320,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const useStaticDemoData = allowLocalCustomerWorkflow && backendOrderPos.size === 0;
   const visibleMockActiveItems = !allowLocalCustomerWorkflow
     ? []
-    : backendOrderPos.size > 0
-      ? mockActiveItems.filter((x: any) => backendOrderPos.has(x.po) && !isHiddenTestPo(x.po))
-      : mockActiveItems.filter((x: any) => !isHiddenTestPo(x.po));
+    : mockActiveItems.filter((x: any) => !isHiddenTestPo(x.po));
   const visibleMockDynRequests = !allowLocalCustomerWorkflow
     ? []
-    : backendOrderPos.size > 0
-      ? mockDynRequests.filter((x: any) => backendOrderPos.has(x.po) && !isHiddenTestPo(x.po))
-      : mockDynRequests.filter((x: any) => !isHiddenTestPo(x.po));
+    : mockDynRequests.filter((x: any) => !isHiddenTestPo(x.po));
   const visibleMockHistory = mockHistory.filter((x: any) => !isHiddenTestPo(x.po));
 
   // Merge: mockActiveItems overrides ACTIVE_MOCK items with same po (for step progression)
@@ -1411,6 +1405,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     });
   }
   const combinedActive = Array.from(activeByPo.values())
+    .filter((item: any) => !isHiddenTestPo(item.po))
     .sort((a: any, b: any) => parseDateMs(b.createdAt || b.date) - parseDateMs(a.createdAt || a.date));
   // Filter static requests: hide items whose PO already has a dynamic entry (already progressed past step 6)
   const progressedPos = new Set(visibleMockDynRequests.map((x: any) => x.po));
@@ -1756,6 +1751,31 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 setRateStars(5);
                 setRateModal(item);
               }}>Rate & Close ⭐</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    if (item.type === 'payment_pending') {
+      return (
+        <div key={item.id} className="bg-white border border-blue-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-lg">💳</div>
+            <div>
+              <h3 className="font-bold text-gray-900">{item.title || item.po} <span className="text-sm font-normal text-gray-500">· {item.po} · Step 6 of 11 · Fee &amp; Proceed</span></h3>
+              <p className="text-sm text-gray-600 mt-0.5">{item.customer} · {item.date}</p>
+              <p className="text-xs text-gray-500 mt-1">{item.desc || (locale === "th" ? "พาร์ทเนอร์ยอมรับ PO แล้ว กรุณาชำระค่าธรรมเนียมและดำเนินการต่อ" : locale === "zh" ? "合作伙伴已接受PO，请支付处理费用以继续。" : "Partner accepted your PO. Please pay the processing fee to proceed.")}</p>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-end">
+            <div className="text-left sm:text-right flex flex-col gap-1">
+              <span className="font-bold text-gray-900 pr-2">{locale === "th" ? "งบประมาณ:" : locale === "zh" ? "预算:" : "Budget:"} {item.budget}</span>
+              <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-blue-50 text-blue-700 uppercase self-start sm:self-end w-max">{item.tier}</span>
+            </div>
+            <div className="flex gap-2">
+              <button className="bg-sky-600 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-sky-700 transition shadow-sm whitespace-nowrap" onClick={() => setWaitModalOrder({ id: item.id, status: 'MATCHING', request: item })}>
+                {locale === "th" ? "Testing period - Free Pass" : locale === "zh" ? "Testing period - Free Pass" : "Testing period - Free Pass"}
+              </button>
             </div>
           </div>
         </div>

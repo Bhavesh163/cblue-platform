@@ -967,6 +967,7 @@ export default function FixerResults({
                 type: "pending_accept",
                 status: "CREATED",
                 step: 5,
+                orderId: createdOrderId || undefined,
               });
               localStorage.setItem(partnerReqKey, JSON.stringify(existingPartnerReqs));
             }

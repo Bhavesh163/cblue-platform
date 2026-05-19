@@ -1214,6 +1214,7 @@ export default function FixerProPage() {
     if (r.type === "complete_partner") return { id: `p-${r.id}`, msg: "Request for job complete", msgTh: "คำขอยืนยันงานเสร็จสิ้น", msgZh: "申请完工确认", unread: true, time: displayTime, dot: "bg-green-500" };
     if (r.type === "rate_partner") return { id: `p-${r.id}`, msg: "Rate customer to close job", msgTh: "ให้คะแนนลูกค้าเพื่อปิดงาน", msgZh: "评价客户以关闭工作", unread: true, time: displayTime, dot: "bg-sky-500" };
     if (r.type === "pending_accept") return { id: `p-${r.id}-${r.notifyAt || r.createdAt || '0'}`, msg: `New job request: ${r.service || "Project"} — please review and accept`, msgTh: `คำของานใหม่: ${r.service || "โครงการ"} — กรุณาตรวจสอบและรับงาน`, msgZh: `新工作请求: ${r.service || "项目"} — 请审核并接受`, unread: true, time: displayTime, dot: "bg-amber-500" };
+    if (r.type === "accept_sent") return { id: `p-${r.id}`, msg: `PO accepted for ${r.service || "Project"} — awaiting customer payment to proceed`, msgTh: `รับ PO สำหรับ ${r.service || "โครงการ"} แล้ว — รอการชำระเงินจากลูกค้า`, msgZh: `已接受 ${r.service || "项目"} 的PO — 等待客户付款`, unread: false, time: displayTime, dot: "bg-green-500" };
     return null;
   }).filter(Boolean) as any[];
 
@@ -1439,6 +1440,17 @@ export default function FixerProPage() {
                     // Remove the pending_accept entry from partner's queue now that it's accepted
                     const currentPartnerReqs = JSON.parse(localStorage.getItem("partner_mock_dyn_req") || "[]");
                     const updatedPartnerReqs = currentPartnerReqs.filter((r: any) => !(r.po === po && r.type === "pending_accept"));
+                    // Add accepted notice so partner sees alert: "PO accepted — awaiting customer payment"
+                    if (!updatedPartnerReqs.some((r: any) => r.po === po && r.type === "accept_sent")) {
+                      updatedPartnerReqs.push({
+                        id: `accepted-${po}`,
+                        po,
+                        service: waitModalOrder?.service || waitModalOrder?.title || serviceTitle,
+                        type: "accept_sent",
+                        date: new Date().toLocaleString(),
+                        createdAt: Date.now(),
+                      });
+                    }
                     localStorage.setItem("partner_mock_dyn_req", JSON.stringify(updatedPartnerReqs));
                     setMockActiveState(nextActive);
                     setMockDynReqs(nextReqs);
