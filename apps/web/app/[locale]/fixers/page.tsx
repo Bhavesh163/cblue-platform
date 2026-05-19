@@ -129,7 +129,7 @@ const firstNameOnly = (value: any, fallback = 'User') => {
   const cleaned = String(value || '').trim();
   return cleaned ? cleaned.split(/\s+/)[0] || fallback : fallback;
 };
-const HIDDEN_TEST_POS = new Set(["PO-2605-6716", "PO-2605-9605", "PO-2605-8699", "PO-2605-9701", "PO-2605-9593"]);
+const HIDDEN_TEST_POS = new Set(["PO-2605-6716", "PO-2605-9605", "PO-2605-8699", "PO-2605-9701", "PO-2605-9593", "PO-2605-8471", "PO-2605-6146"]);
 const isHiddenTestPo = (value: any) => HIDDEN_TEST_POS.has(String(value || '').trim().toUpperCase());
 const filterVisibleWorkflowItems = (items: any[]) => items.filter((item: any) => !isHiddenTestPo(item?.po));
 const WORKFLOW_STEP_NAMES: Record<number, string> = {
@@ -322,7 +322,12 @@ export default function FixerProPage() {
 
       const poFromDesc = extractPoCode(waitModalOrder);
       const poKey = waitModalOrder?.po || poFromDesc;
-      const attachmentOrderId = waitModalOrder?.orderId || (poKey ? localStorage.getItem(`po_to_order_${poKey}`) : '') || waitModalOrder?.id;
+      // Resolve the backend order UUID: orderId (set for new pending_accept items) → po_to_order map
+      // (customer browser only) → look up mappedOrders by PO code → UUID from waitModalOrder.id
+      const attachmentOrderId = waitModalOrder?.orderId
+        || (poKey ? localStorage.getItem(`po_to_order_${poKey}`) : '')
+        || (poKey ? (mappedOrders as any[]).find((o: any) => o.po === poKey)?.id : '')
+        || (isOrderUuid(waitModalOrder?.id) ? waitModalOrder?.id : '');
 
       try {
         const poMap = JSON.parse(localStorage.getItem('cblue_po_attachments') || '{}');
@@ -576,7 +581,8 @@ export default function FixerProPage() {
       status: o.status,
       progress: o.status === 'COMPLETED' ? 100 : (['IN_PROGRESS', 'CONFIRMED', 'ACCEPTED'].includes(o.status) ? 40 : 15),
       fee: o.estimatedPrice ? `฿${o.estimatedPrice.toLocaleString()}` : "0", 
-      budget: o.estimatedPrice ? o.estimatedPrice.toLocaleString() : "0"
+      budget: o.estimatedPrice ? o.estimatedPrice.toLocaleString() : "0",
+      step: 5,
     };
   }).filter(Boolean) as any[];
 
@@ -989,7 +995,10 @@ export default function FixerProPage() {
     responseRate: '0%',
     repeatClients: 0,
   };
-    const acceptedPos = new Set(mockActiveState.filter((x: any) => Number(x.step || 0) >= 6).map((x: any) => x.po));
+    const acceptedPos = new Set([
+      ...mockActiveState.filter((x: any) => Number(x.step || 0) >= 6).map((x: any) => x.po),
+      ...partnerDynReqs.filter((r: any) => r.type === 'accept_sent').map((r: any) => r.po),
+    ]);
     // MEETING_REQUESTED always shows for partner to confirm, regardless of mock step state
     let incomingJobs = mappedOrders.filter(o =>
       (['CREATED', 'PENDING', 'MATCHING'].includes(o.status) && !acceptedPos.has(o.po)) ||
@@ -1178,7 +1187,7 @@ export default function FixerProPage() {
   }, [chatFeed, mappedOrders, mockActiveState, mockHistory]);
 
   const partnerRequestItems = Array.from([
-    ...partnerDynReqs,
+    ...partnerDynReqs.filter((r: any) => !['accept_sent'].includes(String(r.type || ''))),
     ...incomingJobs.filter((job: any) => !(String(job.status || '').toUpperCase() === 'MEETING_REQUESTED' && partnerDynReqs.some((req: any) => req.po === job.po && req.workflowType === 'meeting_confirm_partner'))),
   ].reduce((map: Map<string, any>, item: any) => {
     const key = item.po || item.id;
@@ -1452,6 +1461,7 @@ export default function FixerProPage() {
                       });
                     }
                     localStorage.setItem("partner_mock_dyn_req", JSON.stringify(updatedPartnerReqs));
+                    setPartnerDynReqs(updatedPartnerReqs);
                     setMockActiveState(nextActive);
                     setMockDynReqs(nextReqs);
                     window.dispatchEvent(new Event("storage"));

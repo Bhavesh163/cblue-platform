@@ -1164,8 +1164,14 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   // polls orders and detects this, auto-creating a payment_pending card in requests.
   useEffect(() => {
     if (!mockReady || !subscriber?.email?.includes('ghis')) return;
-    const existingDynPos = new Set(mockDynRequests.map((x: any) => x.po));
-    const existingActivePos = new Set(mockActiveItems.map((x: any) => x.po));
+    // Only block if there is already an ACTIONABLE (step 6+) entry for the PO — NOT notice items
+    const existingDynPos = new Set(
+      mockDynRequests.filter((x: any) => !['notice'].includes(String(x.type || ''))).map((x: any) => x.po),
+    );
+    // Only block if active item is already at step 6+ (accepted), not step 5 (awaiting acceptance)
+    const existingActivePos = new Set(
+      mockActiveItems.filter((x: any) => Number(x.step || 0) >= 6).map((x: any) => x.po),
+    );
     const completedPos = new Set(mockHistory.map((x: any) => x.po));
     const toCreate: any[] = [];
     for (const order of workflowOrders) {
