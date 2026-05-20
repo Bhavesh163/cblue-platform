@@ -275,6 +275,8 @@ export default function FixerProPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [waitModalOrder, setWaitModalOrder] = useState<any>(null);
   const [waitModalAttachmentUrls, setWaitModalAttachmentUrls] = useState<string[]>([]);
+  const [declineModalOpen, setDeclineModalOpen] = useState(false);
+  const [declineComment, setDeclineComment] = useState('');
   const handleJobClick = (job: any) => {
     const workflowType = String(job?.workflowType || job?.type || '').toLowerCase();
     const jobStatus = String(job?.status || '').toUpperCase();
@@ -562,6 +564,7 @@ export default function FixerProPage() {
     
     return {
       id: o.id,
+      orderId: o.id,
       po: extractedPo,
       hasAttachment: attachmentUrls.length > 0,
       images: attachmentUrls,
@@ -1364,7 +1367,7 @@ export default function FixerProPage() {
                   }
                   return;
                 }
-                alert("No uploaded file found for this order. If you uploaded a file during booking, please ensure you are on the same browser/device as the customer.");
+                alert("Files were uploaded by the customer but are not yet accessible here. If you need them urgently, please ask the customer to share via the chat room after accepting this job.");
               }}>
                 {waitModalAttachmentUrls.length > 0
                   ? `${waitModalAttachmentUrls.length} file${waitModalAttachmentUrls.length > 1 ? 's' : ''} attached (Click to View)`
@@ -1529,8 +1532,8 @@ export default function FixerProPage() {
                 {isMeetingConfirmation ? 'Confirm Meeting Time' : 'Accept PO'}
               </button>
               <button 
-                onClick={() => setWaitModalOrder(null)} 
-                className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition"
+                onClick={() => setDeclineModalOpen(true)} 
+                className="flex-1 py-3 bg-gray-100 hover:bg-red-50 hover:text-red-700 text-gray-800 font-bold rounded-xl transition"
               >
                 Decline
               </button>
@@ -1549,6 +1552,98 @@ export default function FixerProPage() {
             setShowPdpa(false);
           }}
         />
+      )}
+
+      {/* Decline Confirmation Modal */}
+      {declineModalOpen && waitModalOrder && (
+        <div className="fixed inset-0 z-[200] bg-black/70 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-3xl">⚠️</span>
+              <div>
+                <h2 className="text-xl font-bold text-red-700">Decline This Job?</h2>
+                <p className="text-xs text-gray-500">{waitModalOrder.service || 'Job'} · {waitModalOrder.po}</p>
+              </div>
+            </div>
+            <p className="text-gray-600 text-sm mb-3">
+              Please provide a reason for declining. This will only be visible to CBLUE admin — the customer will receive a polite system message.
+            </p>
+            <textarea
+              className="w-full border border-gray-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-red-300 outline-none mb-4 resize-none"
+              rows={4}
+              placeholder="e.g. Currently fully booked, unable to take new projects at this time..."
+              value={declineComment}
+              onChange={e => setDeclineComment(e.target.value)}
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setDeclineModalOpen(false); setDeclineComment(''); }}
+                className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl transition"
+              >
+                Go Back
+              </button>
+              <button
+                onClick={async () => {
+                  const po = waitModalOrder.po;
+                  const backendOrderId = waitModalOrder.orderId
+                    || (po ? localStorage.getItem(`po_to_order_${po}`) : '')
+                    || (isOrderUuid(waitModalOrder.id) ? waitModalOrder.id : '');
+
+                  // 1. Store decline comment for admin only (partner-side localStorage)
+                  try {
+                    const logs = JSON.parse(localStorage.getItem('admin_decline_logs') || '[]');
+                    logs.push({
+                      po,
+                      orderId: backendOrderId,
+                      comment: declineComment.trim() || '(no comment)',
+                      partnerName: partner?.name || partner?.company || 'Partner',
+                      declinedAt: new Date().toISOString(),
+                    });
+                    localStorage.setItem('admin_decline_logs', JSON.stringify(logs));
+                  } catch {}
+
+                  // 2. Update backend order status to CANCELLED so customer sees it
+                  if (backendOrderId) {
+                    try {
+                      const token = localStorage.getItem('subscriber_token');
+                      if (token) {
+                        await fetch(`/api/v1/orders/${backendOrderId}/status`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                          body: JSON.stringify({ status: 'CANCELLED', note: 'The service provider is currently occupied with other projects and is unable to proceed with this job. Please re-book with another available professional.' }),
+                        });
+                      }
+                    } catch {}
+                  }
+
+                  // 3. Add alert to partner's own alerts
+                  try {
+                    const partnerAlerts = JSON.parse(localStorage.getItem('partner_alerts') || '[]');
+                    partnerAlerts.unshift({
+                      id: `decline-${po}-${Date.now()}`,
+                      type: 'decline_sent',
+                      po,
+                      title: 'Job Declined',
+                      message: `You have declined ${waitModalOrder.service || 'the job'} (${po}). The customer has been notified by the system.`,
+                      timestamp: new Date().toISOString(),
+                    });
+                    localStorage.setItem('partner_alerts', JSON.stringify(partnerAlerts));
+                  } catch {}
+
+                  // 4. Close both modals; backend status change will filter job on next fetch
+                  setDeclineModalOpen(false);
+                  setDeclineComment('');
+                  setWaitModalOrder(null);
+                  window.dispatchEvent(new Event('storage'));
+                }}
+                disabled={!declineComment.trim()}
+                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-xl transition"
+              >
+                Confirm Decline
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {/* Hero Header */}
       <div className="relative overflow-hidden">

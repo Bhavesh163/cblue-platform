@@ -861,6 +861,7 @@ export default function FixerResults({
             localStorage.setItem("cblue_order_attachments", JSON.stringify(byOrder));
 
             // Persist attachments to backend for cross-device visibility.
+            // Files are uploaded sequentially (not parallel) to avoid overwhelming the proxy.
             const uploadAttachment = async (url: string, idx: number, attempt = 0): Promise<boolean> => {
               try {
                 const res = await fetch(`/api/v1/orders/${createdOrderId}/attachments`, {
@@ -875,14 +876,26 @@ export default function FixerResults({
                   }),
                 });
                 if (res.ok) return true;
-                if (attempt < 1) return uploadAttachment(url, idx, attempt + 1);
+                // Retry once after a short delay for transient failures
+                if (attempt < 2) {
+                  await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
+                  return uploadAttachment(url, idx, attempt + 1);
+                }
               } catch {
-                if (attempt < 1) return uploadAttachment(url, idx, attempt + 1);
+                if (attempt < 2) {
+                  await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
+                  return uploadAttachment(url, idx, attempt + 1);
+                }
               }
               return false;
             };
 
-            const uploadResults = await Promise.all(storedAttachments.map((url, idx) => uploadAttachment(url, idx)));
+            // Upload sequentially to avoid large concurrent body payloads on CF Workers
+            const uploadResults: boolean[] = [];
+            for (let idx = 0; idx < storedAttachments.length; idx++) {
+              const result = await uploadAttachment(storedAttachments[idx]!, idx);
+              uploadResults.push(result);
+            }
             if (uploadResults.some((result) => !result)) {
               console.error("One or more order attachments failed to persist to backend", {
                 orderId: createdOrderId,

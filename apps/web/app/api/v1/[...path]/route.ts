@@ -78,7 +78,8 @@ async function handler(
       method: request.method,
       headers,
       cache: "no-store", // CRITICAL: Prevent cross-session data bleeding by disabling internal Next.js fetch cache.
-      signal: AbortSignal.timeout(30000), // Add 30s timeout
+      // Use a longer timeout for POST/PUT (may include large base64 file bodies)
+      signal: AbortSignal.timeout(["GET", "HEAD", "OPTIONS"].includes(request.method.toUpperCase()) ? 30000 : 90000),
     };
 
     if (!["GET", "HEAD", "OPTIONS"].includes(request.method.toUpperCase())) {
