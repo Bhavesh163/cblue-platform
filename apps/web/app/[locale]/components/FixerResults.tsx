@@ -946,6 +946,7 @@ export default function FixerResults({
             step: 5,
             fixerId: selectedFixer.id,
             description,
+            hasAttachment: storedAttachments.length > 0,
           };
           const idx = existing.findIndex((x: any) => x.po === poNumber);
           if (idx >= 0) existing[idx] = { ...existing[idx], ...pendingAcceptJob };

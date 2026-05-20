@@ -519,7 +519,8 @@ export default function FixerProPage() {
                 breakdown: user.fixer?.aiBreakdown || [],
                 flags: user.fixer?.aiFlags || [],
                 credentialStatus: user.fixer?.aiCredentialStatus || "unverified",
-                createdAt: user.fixer?.createdAt || user.createdAt
+                createdAt: user.fixer?.createdAt || user.createdAt,
+                priceList: user.fixer?.priceList ?? [],
               };
             }
             
@@ -1441,7 +1442,9 @@ export default function FixerProPage() {
                   }
                   return;
                 }
-                alert("Files were uploaded by the customer but are not yet accessible here. If you need them urgently, please ask the customer to share via the chat room after accepting this job.");
+                alert(waitModalOrder?.hasAttachment
+                  ? "Files were uploaded by the customer but are not yet accessible here. If you need them urgently, please ask the customer to share via the chat room after accepting this job."
+                  : "No file was attached to this request.");
               }}>
                 {waitModalAttachmentUrls.length > 0
                   ? `${waitModalAttachmentUrls.length} file${waitModalAttachmentUrls.length > 1 ? 's' : ''} attached (Click to View)`
