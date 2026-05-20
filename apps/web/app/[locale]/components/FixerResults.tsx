@@ -544,9 +544,15 @@ export default function FixerResults({
   };
 
   const getCurrentSenderId = () => readSubscriber()?.email || "customer";
-  const bookingLocation = bookingAddress?.subdistrict || bookingAddress?.district || bookingAddress?.province || "Saphansong";
+  const gpsLocationStr = (bookingAddress?.latitude && bookingAddress?.longitude)
+    ? `${Number(bookingAddress.latitude).toFixed(6)}, ${Number(bookingAddress.longitude).toFixed(6)}`
+    : null;
+  const bookingLocation = bookingAddress?.subdistrict || bookingAddress?.district || bookingAddress?.province || gpsLocationStr || "";
   const ensureOrderAddressId = async (token: string) => {
-    if (!bookingAddress?.province || !bookingAddress?.district || !bookingAddress?.subdistrict || !bookingAddress?.postalCode) {
+    // Allow creation if at least one geographic field is provided OR GPS coordinates
+    const hasGeo = bookingAddress?.province || bookingAddress?.district || bookingAddress?.subdistrict;
+    const hasGps = bookingAddress?.latitude && bookingAddress?.longitude;
+    if (!hasGeo && !hasGps) {
       return "";
     }
 
@@ -585,16 +591,16 @@ export default function FixerResults({
         },
         body: JSON.stringify({
           label: bookingType === "project" ? "Project Site" : bookingType === "professional" ? "Professional Service Location" : "Service Location",
-          province: bookingAddress.province,
-          district: bookingAddress.district,
-          subdistrict: bookingAddress.subdistrict,
-          postalCode: bookingAddress.postalCode,
+          province: bookingAddress?.province || (hasGps ? "GPS Location" : "Unknown"),
+          district: bookingAddress?.district || (hasGps ? "GPS Location" : "Unknown"),
+          subdistrict: bookingAddress?.subdistrict || (hasGps ? gpsLocationStr || "GPS Location" : "Unknown"),
+          postalCode: bookingAddress?.postalCode || "00000",
           street,
-          building: bookingAddress.building || undefined,
-          unit: bookingAddress.floor || undefined,
+          building: bookingAddress?.building || undefined,
+          unit: bookingAddress?.floor || undefined,
           notes,
-          latitude: bookingAddress.latitude,
-          longitude: bookingAddress.longitude,
+          latitude: bookingAddress?.latitude,
+          longitude: bookingAddress?.longitude,
         }),
       });
       if (!createRes.ok) return "";
@@ -829,7 +835,7 @@ export default function FixerResults({
             ...(addressId ? { addressId } : {}),
             orderType: bookingType === "household" ? "HOUSEHOLD" : "PROJECT",
             serviceCategory: service,
-            description: `${poNumber} | TIER:${typeof selectedFixer?.tier === "string" ? selectedFixer.tier.toUpperCase() : "STANDARD"} | ${description}`,
+            description: `${poNumber} | TIER:${typeof selectedFixer?.tier === "string" ? selectedFixer.tier.toUpperCase() : "STANDARD"} | LOC:${bookingLocation} | ${description}`,
             fixerId: selectedFixer.id,
             estimatedPrice: estPrice,
           })
@@ -1787,6 +1793,8 @@ export default function FixerResults({
     }
     // Budget math: extract quantity from description (e.g. "1000 sq.m.")
     const qtyMatch = (description || "").match(/(\d[\d,]*\.?\d*)\s*(sq\.?m\.?|sqm|m²|ตร\.?ม\.?|ตารางเมตร|sq\.?ft\.?|sqft|unit|ชิ้น|จุด|ชุด)/i);
+    const allQtyMatches = (description || "").match(/(\d[\d,]*\.?\d*)\s*(sq\.?m\.?|sqm|m²|ตร\.?ม\.?|ตารางเมตร|sq\.?ft\.?|sqft|unit|ชิ้น|จุด|ชุด)/gi);
+    const isMultiService = allQtyMatches && allQtyMatches.length > 1;
     const qtyVal = qtyMatch ? parseFloat((qtyMatch[1] ?? '').replace(/,/g, "")) : null;
     const qtyUnit = qtyMatch ? qtyMatch[2] : null;
     const totalPrice = selectedFixer.price || 0;
@@ -1841,7 +1849,7 @@ export default function FixerResults({
             {/* Budget Math Calculation */}
             <div className="bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">
               <span className="text-gray-500 text-xs block mb-1">{locale === "th" ? "งบประมาณ" : locale === "zh" ? "预算计算" : "Budget"}</span>
-              {qtyVal && unitRate ? (
+              {qtyVal && unitRate && !isMultiService ? (
                 <span className="font-bold text-sky-800">{qtyVal.toLocaleString()} {qtyUnit} × ฿{unitRate.toLocaleString()} = ฿{totalPrice.toLocaleString()}</span>
               ) : (
                 <span className="font-bold text-sky-800">฿{selectedFixer.price.toLocaleString()}</span>

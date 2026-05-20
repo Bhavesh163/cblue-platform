@@ -46,7 +46,7 @@ const extractPoCode = (orderLike: any) => {
   const desc = String(orderLike?.description || orderLike?.desc || "");
   return desc.match(PO_CODE_PATTERN)?.[0] || "";
 };
-const stripWorkflowPrefix = (value: any) => String(value || '').replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?/i, '').trim();
+const stripWorkflowPrefix = (value: any) => String(value || '').replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?(LOC:[^|]+\|\s*)?/i, '').trim();
 const firstNameOnly = (value: any, fallback = 'User') => {
   const cleaned = String(value || '').trim();
   return cleaned ? cleaned.split(/\s+/)[0] || fallback : fallback;
@@ -1033,6 +1033,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     const keys = Object.keys(localStorage).filter((k) => k.startsWith("chat_messages_"));
     const items: any[] = [];
     const knownPoSet = new Set(workflowOrders.map((o: any) => extractPo(o)).filter((p: string) => isPoCode(p)));
+    const completedPoSet = new Set(workflowOrders.filter((o: any) => String(o.status || '').toUpperCase() === 'COMPLETED').map((o: any) => extractPo(o)).filter((p: string) => isPoCode(p)));
     for (const key of keys) {
       try {
         const po = key.replace("chat_messages_", "");
@@ -1047,6 +1048,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           localStorage.removeItem(key);
           localStorage.removeItem(`chat_title_${po}`);
           localStorage.removeItem(`chat_from_${po}`);
+          continue;
+        }
+        if (completedPoSet.has(po)) {
+          localStorage.setItem(`chat_closed_${po}`, '1');
           continue;
         }
         if (localStorage.getItem(`chat_closed_${po}`)) continue;
@@ -1208,7 +1213,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         budget: order.estimatedPrice ? `฿${Number(order.estimatedPrice).toLocaleString()}` : '฿0',
         tier,
         desc: 'Partner accepted the PO. Please pay the processing fee and notify to proceed.',
-        location: String(order?.address?.subdistrict || order?.subdistrict || order?.location || ''),
+        location: (() => { const m = String(order?.description || '').match(/\bLOC:([^|]+)/); return (m ? m[1].trim() : '') || String(order?.address?.subdistrict || order?.subdistrict || order?.location || ''); })(),
         type: 'payment_pending',
         step: 6,
       });
@@ -1900,8 +1905,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         status: 'COMPLETED',
         step: 11,
         stepName: getWorkflowStepName(11),
-        location: entry.address?.subdistrict || entry.subdistrict || entry.location || existing.location || 'Unknown',
-        subdistrict: entry.address?.subdistrict || entry.subdistrict || entry.location || existing.subdistrict || 'Unknown',
+        location: (() => { const m = String(entry?.description || '').match(/\bLOC:([^|]+)/); const fromDesc = m ? m[1].trim() : ''; return fromDesc || entry.address?.subdistrict || entry.subdistrict || entry.location || existing.location || ''; })(),
+        subdistrict: (() => { const m = String(entry?.description || '').match(/\bLOC:([^|]+)/); const fromDesc = m ? m[1].trim() : ''; return fromDesc || entry.address?.subdistrict || entry.subdistrict || entry.location || existing.subdistrict || ''; })(),
         projectDetails,
         description: projectDetails,
         tier: entry.tier || existing.tier || 'Standard',
@@ -2171,10 +2176,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               <button className="text-sm font-bold text-sky-600 hover:text-sky-700" onClick={() => setActiveTab("history")}>View All</button>
             </div>
             <div className="divide-y divide-gray-50 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-4">
-              {allHistory.slice(0, 5).length === 0 ? (
+              {allHistory.slice(0, 2).length === 0 ? (
                 <div className="p-8 text-center text-gray-500">No history found.</div>
               ) : (
-                allHistory.slice(0, 5).map((o: any, i: number) => <CustomerHistoryCard key={o.po || o.id || i} item={o} idx={i} compact={true} locale={locale} />)
+                allHistory.slice(0, 2).map((o: any, i: number) => <CustomerHistoryCard key={o.po || o.id || i} item={o} idx={i} compact={true} locale={locale} />)
               )}
             </div>
           </div>

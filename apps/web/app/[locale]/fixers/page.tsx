@@ -122,7 +122,7 @@ const TIER_STYLE: Record<string, string> = {
   Specialist: "bg-amber-50 text-amber-700",
   Expert: "bg-red-50 text-red-700",
 };
-const stripWorkflowPrefix = (value: any) => String(value || '').replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?/i, '').trim();
+const stripWorkflowPrefix = (value: any) => String(value || '').replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?(LOC:[^|]+\|\s*)?/i, '').trim();
 const ORDER_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const isOrderUuid = (value: any) => ORDER_UUID_PATTERN.test(String(value || '').trim());
 const firstNameOnly = (value: any, fallback = 'User') => {
@@ -558,6 +558,7 @@ export default function FixerProPage() {
           .map((image: any) => (typeof image === 'string' ? image : image?.url || ''))
           .filter(Boolean)
       : [];
+    const locFromDesc = (() => { const m = String(o.description || '').match(/\bLOC:([^|]+)/); return m ? m[1].trim() : ''; })();
     
     return {
       id: o.id,
@@ -565,7 +566,7 @@ export default function FixerProPage() {
       hasAttachment: attachmentUrls.length > 0,
       images: attachmentUrls,
       issueImage: attachmentUrls[0] || "",
-      subdistrict: o.address?.subdistrict || o.address?.district || o.address?.province || o.subdistrict || "",
+      subdistrict: (locFromDesc && locFromDesc !== 'Unknown') ? locFromDesc : ((o.address?.subdistrict && o.address.subdistrict !== 'Unknown' ? o.address.subdistrict : '') || (o.address?.district && o.address.district !== 'Unknown' ? o.address.district : '') || (o.address?.province && o.address.province !== 'Unknown' ? o.address.province : '') || o.subdistrict || ""),
       createdAt: o.createdAt,
       customer: o.user?.name || "Customer",
       orderType: o.orderType?.toLowerCase() || "household",
@@ -663,6 +664,7 @@ export default function FixerProPage() {
     const keys = Object.keys(localStorage).filter((k) => k.startsWith("chat_messages_"));
     const items: any[] = [];
     const knownPoSet = new Set((mappedOrders as any[]).filter(Boolean).map((o: any) => o.po).filter(Boolean));
+    const completedPoSet = new Set((mappedOrders as any[]).filter(Boolean).filter((o: any) => String(o.status || '').toUpperCase() === 'COMPLETED').map((o: any) => o.po).filter(Boolean));
     for (const key of keys) {
       try {
         const po = key.replace("chat_messages_", "");
@@ -682,6 +684,10 @@ export default function FixerProPage() {
           localStorage.removeItem(key);
           localStorage.removeItem(`chat_title_${po}`);
           localStorage.removeItem(`chat_from_${po}`);
+          continue;
+        }
+        if (completedPoSet.has(po)) {
+          localStorage.setItem(`chat_closed_${po}`, '1');
           continue;
         }
         if (localStorage.getItem(`chat_closed_${po}`)) continue;
@@ -1216,7 +1222,10 @@ export default function FixerProPage() {
     const currentTs = parseTs(current.createdAt || current.date);
     const nextTs = parseTs(item.createdAt || item.date);
     if (nextStep > currentStep || (nextStep === currentStep && nextTs >= currentTs)) {
-      map.set(key, item);
+      // Preserve location from whichever source has a real value (not empty/Unknown)
+      const preservedLocation = (item.location && item.location !== 'Unknown') ? item.location : (current.location && current.location !== 'Unknown') ? current.location : (item.location || '');
+      const preservedSubdistrict = (item.subdistrict && item.subdistrict !== 'Unknown') ? item.subdistrict : (current.subdistrict && current.subdistrict !== 'Unknown') ? current.subdistrict : (item.subdistrict || '');
+      map.set(key, { ...item, location: preservedLocation, subdistrict: preservedSubdistrict });
     }
     return map;
   }, new Map<string, any>()).values())
@@ -2043,7 +2052,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
             <span className="text-xs text-purple-600 font-bold cursor-pointer hover:underline" onClick={() => onTabChange && onTabChange("history")}>View All →</span>
           </div>
           <div className="space-y-3 p-4">
-            {completedJobs.slice(0, 5).length > 0 ? completedJobs.slice(0, 5).map((h) => (
+            {completedJobs.slice(0, 2).length > 0 ? completedJobs.slice(0, 2).map((h) => (
               <WorkflowHistoryCard key={h.id || h.po} item={h} compact />
             )) : (
               <div className="py-6 text-center text-gray-500">No completed jobs yet.</div>

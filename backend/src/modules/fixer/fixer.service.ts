@@ -324,6 +324,32 @@ export class FixerService {
     return 1;
   }
 
+  /** Extract all (qty, contextTerms) pairs from description for multi-service estimation */
+  private extractAllServiceQtyPairs(description?: string): Array<{ qty: number; contextTerms: string[] }> {
+    if (!description) return [];
+    const normalized = this.normalizeSearchText(description);
+    const unitPattern = /sqm|m2|sqft|sq\.?m|ตร\.?ม|ตรม|unit|units|ชุด|ห้อง|room|rooms|floor|floors|ชั้น|item|items|job|งาน/i;
+    const pattern = /(\d[\d,]*\.?\d*)\s*(sqm|m2|sqft|sq\.?m|ตร\.?ม|ตรม|unit|units|ชุด|ห้อง|room|rooms|floor|floors|ชั้น|item|items|job|งาน)?\b/gi;
+    const pairs: Array<{ qty: number; idx: number; contextTerms: string[] }> = [];
+    let m: RegExpExecArray | null;
+    while ((m = pattern.exec(normalized)) !== null) {
+      const qty = parseFloat((m[1] ?? '').replace(/,/g, ''));
+      if (!isNaN(qty) && qty > 0) {
+        pairs.push({ qty, idx: m.index, contextTerms: [] });
+      }
+    }
+    if (pairs.length <= 1) return [];
+    // For each qty match, grab the context window (words around it) to identify the service
+    for (let i = 0; i < pairs.length; i++) {
+      const start = pairs[i].idx;
+      const end = pairs[i + 1] ? pairs[i + 1].idx : normalized.length;
+      const window = normalized.slice(Math.max(0, start - 30), end).trim();
+      const tokens = window.split(/\s+/).filter((t) => t.length > 1 && !this.fillerTokens.has(t) && !unitPattern.test(t) && isNaN(parseFloat(t)));
+      pairs[i].contextTerms = tokens;
+    }
+    return pairs.map(({ qty, contextTerms }) => ({ qty, contextTerms }));
+  }
+
   private normalizeSearchText(value?: string): string {
     return (value || '')
       .toLowerCase()
@@ -488,8 +514,41 @@ export class FixerService {
           const pricePerUnit = unitRate / partnerQty;
           const hasTextualMatch = match.score > 0;
 
-          // Compute correctly based on requested qty
-          basePrice = Math.round(pricePerUnit * customerQty);
+          // Check for multi-service description (e.g. "500 sqm reinstatement and 500 sqm fitout")
+          const serviceQtyPairs = this.extractAllServiceQtyPairs(description);
+          if (serviceQtyPairs.length > 1) {
+            // Sum estimates for each service mention using best-matching price list item
+            let multiTotal = 0;
+            for (const { qty, contextTerms } of serviceQtyPairs) {
+              if (contextTerms.length === 0) {
+                multiTotal += Math.round(pricePerUnit * qty);
+                continue;
+              }
+              const bestForContext = list
+                .map((item) => {
+                  const itemText = [
+                    typeof item.service === 'string' ? item.service : '',
+                    typeof item.unit === 'string' ? item.unit : '',
+                  ].filter(Boolean).join(' ');
+                  return { item, score: this.scoreTextMatch(itemText, contextTerms) };
+                })
+                .sort((a, b) => {
+                  if (b.score !== a.score) return b.score - a.score;
+                  return (Number(a.item.finalPrice) || Number.MAX_SAFE_INTEGER) - (Number(b.item.finalPrice) || Number.MAX_SAFE_INTEGER);
+                })[0];
+              if (bestForContext && bestForContext.score > 0) {
+                const ctxUnitRate = parseFloat(String(bestForContext.item.finalPrice)) || 0;
+                const ctxPartnerQty = parseFloat(String(bestForContext.item.amount)) || parseFloat(String(bestForContext.item.quantity)) || 1;
+                multiTotal += Math.round((ctxUnitRate / ctxPartnerQty) * qty);
+              } else {
+                multiTotal += Math.round(pricePerUnit * qty);
+              }
+            }
+            basePrice = multiTotal;
+          } else {
+            // Single service: existing logic
+            basePrice = Math.round(pricePerUnit * customerQty);
+          }
 
           matchedUnit = (matchedItem.unit as string) || '';
           matchedQty = customerQty;
