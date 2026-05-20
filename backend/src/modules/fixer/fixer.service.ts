@@ -480,6 +480,7 @@ export class FixerService {
         try { rawPriceList = JSON.parse(rawPriceList); } catch (e) {}
       }
 
+      const estimatedBreakdown: Array<{ service: string; qty: number; unit: string; unitRate: number; total: number }> = [];
       if (rawPriceList && Array.isArray(rawPriceList) && rawPriceList.length > 0) {
         const list = rawPriceList as Record<string, unknown>[];
         const rankedList = list
@@ -506,6 +507,7 @@ export class FixerService {
 
         const match = rankedList[0];
 
+
         if (match) {
           const matchedItem = match.item;
           const unitRate = parseFloat(String(matchedItem.finalPrice)) || 0;
@@ -521,7 +523,15 @@ export class FixerService {
             let multiTotal = 0;
             for (const { qty, contextTerms } of serviceQtyPairs) {
               if (contextTerms.length === 0) {
-                multiTotal += Math.round(pricePerUnit * qty);
+                const lineTotal = Math.round(pricePerUnit * qty);
+                multiTotal += lineTotal;
+                estimatedBreakdown.push({
+                  service: String(matchedItem.service || 'Service'),
+                  qty,
+                  unit: String(matchedItem.unit || 'sqm'),
+                  unitRate: Math.round(pricePerUnit),
+                  total: lineTotal,
+                });
                 continue;
               }
               const bestForContext = list
@@ -539,15 +549,39 @@ export class FixerService {
               if (bestForContext && bestForContext.score > 0) {
                 const ctxUnitRate = parseFloat(String(bestForContext.item.finalPrice)) || 0;
                 const ctxPartnerQty = parseFloat(String(bestForContext.item.amount)) || parseFloat(String(bestForContext.item.quantity)) || 1;
-                multiTotal += Math.round((ctxUnitRate / ctxPartnerQty) * qty);
+                const ctxPricePerUnit = ctxUnitRate / ctxPartnerQty;
+                const lineTotal = Math.round(ctxPricePerUnit * qty);
+                multiTotal += lineTotal;
+                estimatedBreakdown.push({
+                  service: String(bestForContext.item.service || contextTerms.slice(0, 2).join(' ') || 'Service'),
+                  qty,
+                  unit: String(bestForContext.item.unit || 'sqm'),
+                  unitRate: Math.round(ctxPricePerUnit),
+                  total: lineTotal,
+                });
               } else {
-                multiTotal += Math.round(pricePerUnit * qty);
+                const lineTotal = Math.round(pricePerUnit * qty);
+                multiTotal += lineTotal;
+                estimatedBreakdown.push({
+                  service: String(matchedItem.service || contextTerms.slice(0, 2).join(' ') || 'Service'),
+                  qty,
+                  unit: String(matchedItem.unit || 'sqm'),
+                  unitRate: Math.round(pricePerUnit),
+                  total: lineTotal,
+                });
               }
             }
             basePrice = multiTotal;
           } else {
             // Single service: existing logic
             basePrice = Math.round(pricePerUnit * customerQty);
+            estimatedBreakdown.push({
+              service: String(matchedItem.service || ''),
+              qty: customerQty,
+              unit: String(matchedItem.unit || ''),
+              unitRate: Math.round(pricePerUnit),
+              total: basePrice,
+            });
           }
 
           matchedUnit = (matchedItem.unit as string) || '';
@@ -576,6 +610,7 @@ export class FixerService {
         estimatedTotal: basePrice > 0 ? basePrice : null,
         estimatedUnit: matchedUnit,
         estimatedQty: matchedQty,
+        estimatedBreakdown: estimatedBreakdown.length > 0 ? estimatedBreakdown : null,
         matchScore: overallScore,
         satisfaction:
           f.rating >= 4.5 ? 90 + Math.random() * 10 : 70 + Math.random() * 20,

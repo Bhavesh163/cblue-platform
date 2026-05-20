@@ -801,6 +801,14 @@ export default function FixerResults({
     let createdOrderId = "";
     let storedAttachments: string[] = [];
 
+    // Store budget breakdown for customer's own modal (step 9 variation approve)
+    try {
+      const bd = (selectedFixer as any)?.estimatedBreakdown;
+      if (bd && Array.isArray(bd) && bd.length > 0 && poNumber) {
+        localStorage.setItem(`cblue_po_breakdown_${poNumber}`, JSON.stringify(bd));
+      }
+    } catch { /* non-blocking */ }
+
     // Persist uploaded files per-PO/order for partner PO modal retrieval.
     try {
       if (issueImages && issueImages.length > 0) {
@@ -1862,11 +1870,34 @@ export default function FixerResults({
             {/* Budget Math Calculation */}
             <div className="bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">
               <span className="text-gray-500 text-xs block mb-1">{locale === "th" ? "งบประมาณ" : locale === "zh" ? "预算计算" : "Budget"}</span>
-              {qtyVal && unitRate && !isMultiService ? (
-                <span className="font-bold text-sky-800">{qtyVal.toLocaleString()} {qtyUnit} × ฿{unitRate.toLocaleString()} = ฿{totalPrice.toLocaleString()}</span>
-              ) : (
-                <span className="font-bold text-sky-800">฿{selectedFixer.price.toLocaleString()}</span>
-              )}
+              {(() => {
+                const bd: Array<{ service: string; qty: number; unit: string; unitRate: number; total: number }> | null =
+                  (selectedFixer as any)?.estimatedBreakdown ?? null;
+                if (bd && bd.length > 1) {
+                  return (
+                    <div className="font-mono text-xs space-y-0.5">
+                      {bd.map((item, i) => (
+                        <div key={i} className="flex justify-between gap-2">
+                          <span className="text-gray-600">{i + 1}) {item!.service} {item.qty.toLocaleString()} {item.unit} × ฿{item.unitRate.toLocaleString()}</span>
+                          <span className="font-semibold text-sky-700 shrink-0">= ฿{item!.total.toLocaleString()}</span>
+                        </div>
+                      ))}
+                      <div className="flex justify-between gap-2 pt-1 border-t border-sky-200 font-bold text-sm">
+                        <span className="text-gray-700">{locale === "th" ? "งบประมาณรวม" : "Budget"}</span>
+                        <span className="text-sky-900">= ฿{totalPrice.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  );
+                }
+                if (bd && bd.length === 1) {
+                  const item = bd[0];
+                  return <span className="font-bold text-sky-800 font-mono text-xs">{item!.qty.toLocaleString()} {item!.unit} × ฿{item!.unitRate.toLocaleString()} = ฿{item!.total.toLocaleString()}</span>;
+                }
+                if (qtyVal && unitRate && !isMultiService) {
+                  return <span className="font-bold text-sky-800">{qtyVal.toLocaleString()} {qtyUnit} × ฿{unitRate.toLocaleString()} = ฿{totalPrice.toLocaleString()}</span>;
+                }
+                return <span className="font-bold text-sky-800">฿{selectedFixer.price.toLocaleString()}</span>;
+              })()}
             </div>
             <div className="flex justify-between items-center">
               <span className="text-gray-500">{t("poTier")}</span>

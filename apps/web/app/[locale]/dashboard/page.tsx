@@ -2538,6 +2538,34 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 location={variationApproveOrder?.address?.subdistrict || variationApproveOrder?.subdistrict || variationApproveOrder?.location || variationApproveModal?.location || variationApproveModal?.subdistrict || 'Unknown'}
                 projectDetails={stripWorkflowPrefix(variationApproveOrder?.description || variationApproveModal.desc || variationApproveModal.title || '')}
               />
+              {(() => {
+                try {
+                  const brkPo = variationApproveModal.po;
+                  const bd = JSON.parse(localStorage.getItem(`cblue_po_breakdown_${brkPo}`) || '[]') as Array<{ service: string; qty: number; unit: string; unitRate: number; total: number }>;
+                  if (bd.length > 1) {
+                    const rawBudget = variationApproveModal.budget || variationApproveOrder?.budget || variationApproveOrder?.fee;
+                    const totalAmt = parseFloat(String(rawBudget || '').replace(/[฿,]/g, '')) || bd.reduce((s, it) => s + it.total, 0);
+                    return (
+                      <div className="bg-sky-50 border border-sky-200 rounded-xl px-4 py-3">
+                        <div className="text-xs font-semibold text-gray-500 mb-1.5">Budget Breakdown</div>
+                        <div className="font-mono text-xs space-y-0.5">
+                          {bd.map((it, i) => (
+                            <div key={i} className="flex justify-between gap-2">
+                              <span className="text-gray-600">{i + 1}) {it.service} {it.qty.toLocaleString()} {it.unit} × ฿{it.unitRate.toLocaleString()}</span>
+                              <span className="font-semibold text-sky-700 shrink-0">= ฿{it.total.toLocaleString()}</span>
+                            </div>
+                          ))}
+                          <div className="flex justify-between gap-2 pt-1 border-t border-sky-200 font-bold text-sm">
+                            <span className="text-sky-900">Budget</span>
+                            <span className="text-sky-900">= ฿{totalAmt.toLocaleString()}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+                } catch { /* no breakdown stored */ }
+                return null;
+              })()}
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Partner Request</label>
                 <p className="text-sm text-gray-700 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 whitespace-pre-wrap">{String(variationApproveModal.desc || '').replace(/^Partner variation request:\s*/i, '').trim() || variationApproveModal.desc}</p>

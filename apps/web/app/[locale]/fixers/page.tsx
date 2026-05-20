@@ -147,6 +147,52 @@ const toCurrencyLabel = (value: any, fallback = '฿0') => {
   if (!raw) return fallback;
   return raw.startsWith('฿') ? raw : `฿${raw.replace(/^฿/, '')}`;
 };
+
+type BudgetBreakdownItem = { service: string; qty: number; unit: string; unitRate: number; total: number };
+const computeBudgetBreakdown = (description: string, priceList: any[], totalOverride?: number): BudgetBreakdownItem[] | null => {
+  if (!priceList || priceList.length === 0 || !description) return null;
+  const cleanDesc = stripWorkflowPrefix(description).toLowerCase()
+    .replace(/fit\s*[-\s]?out/g, 'fitout').replace(/re\s*instate(ment)?/g, 'reinstatement');
+  const pattern = /(\d[\d,]*\.?\d*)\s*(sqm|m2|sq\.?m\.?|m²|ตร\.?ม\.?|ตารางเมตร|sq\.?ft\.?|unit)/gi;
+  const pairs: Array<{ qty: number; idx: number }> = [];
+  let m: RegExpExecArray | null;
+  while ((m = pattern.exec(cleanDesc)) !== null) {
+    const qty = parseFloat((m[1] ?? '').replace(/,/g, ''));
+    if (!isNaN(qty) && qty > 0 && qty < 1000000) pairs.push({ qty, idx: m.index });
+  }
+  if (pairs.length === 0) return null;
+  const filler = new Set(['and', 'the', 'a', 'an', 'of', 'in', 'at', 'for', 'with', 'to', 'sqm', 'sq', 'm2', 'unit', 'units', 'per', 'i', 'have', 'want', 'need']);
+  const tokenize = (text: string) => text.split(/[\s.,]+/).filter(t => t.length > 1 && !filler.has(t) && isNaN(parseFloat(t)));
+  const matchToList = (tokens: string[]) => {
+    let best: any = priceList[0];
+    let bestScore = -1;
+    for (const item of priceList) {
+      const itemText = `${item.service || ''} ${item.unit || ''}`.toLowerCase().replace(/fit\s*[-\s]?out/g, 'fitout').replace(/re\s*instate(ment)?/g, 'reinstatement');
+      const score = tokens.filter(t => itemText.includes(t)).length;
+      if (score > bestScore) { bestScore = score; best = item; }
+    }
+    return best as any;
+  };
+  const breakdown: BudgetBreakdownItem[] = [];
+  for (let i = 0; i < pairs.length; i++) {
+    const pair = pairs[i]!;
+    const nextPair = pairs[i + 1];
+    const start = pair.idx;
+    const end = nextPair ? nextPair.idx : cleanDesc.length;
+    const window = cleanDesc.slice(Math.max(0, start - 50), end);
+    const tokens = tokenize(window).length > 0 ? tokenize(window) : tokenize(cleanDesc);
+    const item = matchToList(tokens);
+    const pQty = parseFloat(String(item?.amount ?? item?.quantity ?? 1)) || 1;
+    const unitRate = Math.round((parseFloat(String(item?.finalPrice ?? 0)) || 0) / pQty);
+    breakdown.push({ service: String(item?.service || `Service ${i + 1}`), qty: pair.qty, unit: String(item?.unit || 'sqm'), unitRate, total: Math.round(unitRate * pair.qty) });
+  }
+  if (totalOverride && totalOverride > 0 && breakdown.length > 1) {
+    const computed = breakdown.reduce((s, b) => s + b.total, 0);
+    if (computed === 0) return null;
+  }
+  return breakdown.length > 0 ? breakdown : null;
+};
+
 const getLocalChatHistory = (po: any) => {
   if (typeof window === 'undefined' || !po) return [];
   try {
@@ -1322,7 +1368,35 @@ export default function FixerProPage() {
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Type of Work</span><span className="font-bold text-gray-800 text-right">{waitModalServiceName}</span></div>
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">What You Need To Do</span><span className="font-bold text-gray-800 text-right max-w-[60%]">{waitModalInstruction}</span></div>
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Customer</span><span className="font-bold text-gray-800">{waitModalCounterpart}</span></div>
-              <div className="flex justify-between items-start border-b pb-2"><span className="text-gray-500">Budget</span><span className="font-bold text-amber-600 text-right">{(() => { const desc = String(waitModalProjectDetails || waitModalOrder?.description || ''); const m = desc.match(/(\d[\d,]*\.?\d*)\s*(sq\.?m\.?|sqm|m²|ตร\.?ม\.?|ตารางเมตร|sq\.?ft\.?|unit)/i); const qty = m ? parseFloat((m[1] ?? '').replace(/,/g, '')) : null; const raw = String(waitModalBudgetDisplay || '').replace(/[฿,]/g, ''); const total = parseFloat(raw) || 0; const unit = m ? m[2] : null; const rate = qty && qty > 0 && total > 0 ? Math.round(total / qty) : null; return rate ? `${qty!.toLocaleString()} ${unit} × ฿${rate.toLocaleString()} = ฿${total.toLocaleString()}` : waitModalBudgetDisplay; })()}</span></div>
+              <div className="border-b pb-2">
+                <span className="text-gray-500 text-sm block mb-1">Budget</span>
+                {(() => {
+                  const brkDesc = String(waitModalOrder?.description || '');
+                  const brkTotal = parseFloat(String(waitModalBudgetDisplay || '').replace(/[฿,]/g, '')) || 0;
+                  const bd = computeBudgetBreakdown(brkDesc, (partner as any)?.priceList ?? [], brkTotal);
+                  if (bd && bd.length > 1) {
+                    return (
+                      <div className="font-mono text-xs space-y-0.5">
+                        {bd.map((it, i) => (
+                          <div key={i} className="flex justify-between gap-2">
+                            <span className="text-gray-600">{i + 1}) {it!.service} {it.qty.toLocaleString()} {it.unit} × ฿{it.unitRate.toLocaleString()}</span>
+                            <span className="font-semibold text-amber-700 shrink-0">= ฿{it!.total.toLocaleString()}</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between gap-2 pt-1 border-t border-amber-200 font-bold text-sm">
+                          <span className="text-gray-700">Budget</span>
+                          <span className="text-amber-800">= ฿{brkTotal > 0 ? brkTotal.toLocaleString() : bd.reduce((s, it) => s + (it?.total ?? 0), 0).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    );
+                  }
+                  if (bd && bd.length === 1) {
+                    const it = bd[0];
+                    return <span className="font-bold text-amber-600 font-mono text-xs">{it!.qty.toLocaleString()} {it!.unit} × ฿{it!.unitRate.toLocaleString()} = ฿{it!.total.toLocaleString()}</span>;
+                  }
+                  return <span className="font-bold text-amber-600">{waitModalBudgetDisplay}</span>;
+                })()}
+              </div>
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Project Location</span><span className="font-bold text-gray-800 text-right">{waitModalOrder.location || waitModalOrder.subdistrict || waitModalOrder.meetingVenue || 'Unknown'}</span></div>
               {isMeetingConfirmation && (
                 <>
@@ -1738,8 +1812,8 @@ export default function FixerProPage() {
         <div className={`mt-6 ${activeTab !== 'overview' ? 'hidden' : ''}`}>
           <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={partnerRequestItems} scheduledMeetings={scheduledMeetings} completedJobs={completedJobs} earnings={earningsSeries} stats={stats} notifications={displayNotifications} chats={chatFeed} onJobClick={handleJobClick} onTabChange={(tab) => setActiveTab(tab as TabKey)} />
         </div>
-        {activeTab === "requests" && <PartnerRequests locale={locale} incomingJobs={partnerRequestItems} onJobClick={handleJobClick} />}
-        {activeTab === "active" && <PartnerJobs locale={locale} activeJobs={activeJobs} onJobClick={handleJobClick} />}
+        {activeTab === "requests" && <PartnerRequests locale={locale} incomingJobs={partnerRequestItems} onJobClick={handleJobClick} priceList={(partner as any)?.priceList} />}
+        {activeTab === "active" && <PartnerJobs locale={locale} activeJobs={activeJobs} onJobClick={handleJobClick} priceList={(partner as any)?.priceList} />}
         
         {activeTab === "properties" && <PartnerProperties locale={locale} prefix={prefix} properties={myProperties} />}
         {activeTab === "history" && <PartnerHistory locale={locale} completedJobs={completedJobs} />}
@@ -2164,7 +2238,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
 
 /* ===== PARTNER JOBS (Active) ===== */
 const EMPTY_VAR_ROWS = () => [{ item: '', qty: '', unit: '', rate: '', amount: '' }];
-function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activeJobs: any[]; onJobClick?: (job: any) => void; }) {
+function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: string; activeJobs: any[]; onJobClick?: (job: any) => void; priceList?: any[]; }) {
   const [variationModal, setVariationModal] = React.useState<any>(null);
   const [variationDesc, setVariationDesc] = React.useState("");
   const [variationRows, setVariationRows] = React.useState<{item:string;qty:string;unit:string;rate:string;amount:string}[]>(EMPTY_VAR_ROWS());
@@ -2338,7 +2412,34 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
             />
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Original Budget</label>
-              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 font-bold text-amber-800">{(() => { const desc = String(variationModal.description || variationModal.desc || variationModal.projectDetails || ''); const m = desc.match(/(\d[\d,]*\.?\d*)\s*(sq\.?m\.?|sqm|m²|ตร\.?ม\.?|ตารางเมตร|sq\.?ft\.?|unit)/i); const qty = m ? parseFloat((m[1] ?? '').replace(/,/g, '')) : null; const raw = String(variationModal.budget || '').replace(/[฿,]/g, ''); const total = parseFloat(raw) || 0; const unit = m ? m[2] : null; const rate = qty && qty > 0 && total > 0 ? Math.round(total / qty) : null; return rate ? `${qty!.toLocaleString()} ${unit} × ฿${rate.toLocaleString()} = ฿${total.toLocaleString()}` : toCurrencyLabel(variationModal.budget); })()}</div>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                {(() => {
+                  const varDesc = String(variationModal.description || variationModal.desc || variationModal.projectDetails || '');
+                  const varTotal = parseFloat(String(variationModal.budget || '').replace(/[฿,]/g, '')) || 0;
+                  const bd = computeBudgetBreakdown(varDesc, priceList ?? [], varTotal);
+                  if (bd && bd.length > 1) {
+                    return (
+                      <div className="font-mono text-xs space-y-0.5">
+                        {bd.map((it, i) => (
+                          <div key={i} className="flex justify-between gap-2">
+                            <span className="text-gray-600">{i + 1}) {it!.service} {it.qty.toLocaleString()} {it.unit} × ฿{it.unitRate.toLocaleString()}</span>
+                            <span className="font-semibold text-amber-700 shrink-0">= ฿{it!.total.toLocaleString()}</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between gap-2 pt-1 border-t border-amber-200 font-bold text-sm">
+                          <span className="text-amber-900">Budget</span>
+                          <span className="text-amber-900">= ฿{varTotal > 0 ? varTotal.toLocaleString() : bd.reduce((s, it) => s + (it?.total ?? 0), 0).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    );
+                  }
+                  if (bd && bd.length === 1) {
+                    const it = bd[0];
+                    return <span className="font-bold text-amber-800 font-mono text-xs">{it!.qty.toLocaleString()} {it!.unit} × ฿{it!.unitRate.toLocaleString()} = ฿{it!.total.toLocaleString()}</span>;
+                  }
+                  return <span className="font-bold text-amber-800">{toCurrencyLabel(variationModal.budget)}</span>;
+                })()}
+              </div>
               <p className="text-xs text-gray-500 mt-1">Original PO total. Add variation line items below.</p>
             </div>
             <div>
@@ -2498,7 +2599,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
   );
 }
 
-function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string; incomingJobs: any[]; onJobClick?: (job: any) => void; }) {
+function PartnerRequests({ locale, incomingJobs, onJobClick, priceList }: { locale: string; incomingJobs: any[]; onJobClick?: (job: any) => void; priceList?: any[]; }) {
   const [variationModal, setVariationModal] = React.useState<any>(null);
   const [variationDesc, setVariationDesc] = React.useState("");
   const [variationRows, setVariationRows] = React.useState<{item:string;qty:string;unit:string;rate:string;amount:string}[]>(EMPTY_VAR_ROWS());
@@ -2650,7 +2751,34 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
             />
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Original Budget</label>
-              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 font-bold text-amber-800">{(() => { const desc = String(variationModal.description || variationModal.desc || variationModal.projectDetails || ''); const m = desc.match(/(\d[\d,]*\.?\d*)\s*(sq\.?m\.?|sqm|m²|ตร\.?ม\.?|ตารางเมตร|sq\.?ft\.?|unit)/i); const qty = m ? parseFloat((m[1] ?? '').replace(/,/g, '')) : null; const raw = String(variationModal.budget || '').replace(/[฿,]/g, ''); const total = parseFloat(raw) || 0; const unit = m ? m[2] : null; const rate = qty && qty > 0 && total > 0 ? Math.round(total / qty) : null; return rate ? `${qty!.toLocaleString()} ${unit} × ฿${rate.toLocaleString()} = ฿${total.toLocaleString()}` : toCurrencyLabel(variationModal.budget); })()}</div>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                {(() => {
+                  const varDesc = String(variationModal.description || variationModal.desc || variationModal.projectDetails || '');
+                  const varTotal = parseFloat(String(variationModal.budget || '').replace(/[฿,]/g, '')) || 0;
+                  const bd = computeBudgetBreakdown(varDesc, priceList ?? [], varTotal);
+                  if (bd && bd.length > 1) {
+                    return (
+                      <div className="font-mono text-xs space-y-0.5">
+                        {bd.map((it, i) => (
+                          <div key={i} className="flex justify-between gap-2">
+                            <span className="text-gray-600">{i + 1}) {it!.service} {it.qty.toLocaleString()} {it.unit} × ฿{it.unitRate.toLocaleString()}</span>
+                            <span className="font-semibold text-amber-700 shrink-0">= ฿{it!.total.toLocaleString()}</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between gap-2 pt-1 border-t border-amber-200 font-bold text-sm">
+                          <span className="text-amber-900">Budget</span>
+                          <span className="text-amber-900">= ฿{varTotal > 0 ? varTotal.toLocaleString() : bd.reduce((s, it) => s + (it?.total ?? 0), 0).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    );
+                  }
+                  if (bd && bd.length === 1) {
+                    const it = bd[0];
+                    return <span className="font-bold text-amber-800 font-mono text-xs">{it!.qty.toLocaleString()} {it!.unit} × ฿{it!.unitRate.toLocaleString()} = ฿{it!.total.toLocaleString()}</span>;
+                  }
+                  return <span className="font-bold text-amber-800">{toCurrencyLabel(variationModal.budget)}</span>;
+                })()}
+              </div>
               <p className="text-xs text-gray-500 mt-1">Original PO total. Add variation line items below.</p>
             </div>
             <div>
@@ -3083,7 +3211,7 @@ function PartnerDashboard({ locale, partner, prefix, onLogout, orders }: { local
       </div>
 
       {activeTab === "profile" && <PartnerProfile locale={locale} prefix={prefix} partner={partner} />}
-   {activeTab === "active" && <PartnerJobs locale={locale} activeJobs={[...activeOrders, ...(orders || [])]} />}
+   {activeTab === "active" && <PartnerJobs locale={locale} activeJobs={[...activeOrders, ...(orders || [])]} priceList={(partner as any)?.priceList} />}
    
   
       
