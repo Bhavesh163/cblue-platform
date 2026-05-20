@@ -1195,6 +1195,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         budget: order.estimatedPrice ? `฿${Number(order.estimatedPrice).toLocaleString()}` : '฿0',
         tier,
         desc: 'Partner accepted the PO. Please pay the processing fee and notify to proceed.',
+        location: String(order?.address?.subdistrict || order?.subdistrict || order?.location || ''),
         type: 'payment_pending',
         step: 6,
       });
@@ -2151,10 +2152,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               <button className="text-sm font-bold text-sky-600 hover:text-sky-700" onClick={() => setActiveTab("history")}>View All</button>
             </div>
             <div className="divide-y divide-gray-50 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-4">
-              {allHistory.slice(0, 2).length === 0 ? (
+              {allHistory.slice(0, 5).length === 0 ? (
                 <div className="p-8 text-center text-gray-500">No history found.</div>
               ) : (
-                allHistory.slice(0, 2).map((o: any, i: number) => <CustomerHistoryCard key={o.po || o.id || i} item={o} idx={i} compact={true} locale={locale} />)
+                allHistory.slice(0, 5).map((o: any, i: number) => <CustomerHistoryCard key={o.po || o.id || i} item={o} idx={i} compact={true} locale={locale} />)
               )}
             </div>
           </div>
@@ -2307,7 +2308,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   const newDynReqs = [
                     ...mockDynRequests.filter((x: any) => x.po !== po && x.id !== chatReqId && x.id !== meetReqId),
                     { id: chatReqId, po, title: waitModalOrder.request?.title, customer: waitModalOrder.request?.customer || 'Suppadesh', date: now, createdAt, budget: waitModalOrder.request?.budget, tier: waitModalOrder.request?.tier, desc: 'Chat room is now active. Open the Chat page to connect with your partner.', type: 'chat_ready', step: 7 },
-                    { id: meetReqId, po, title: waitModalOrder.request?.title, customer: waitModalOrder.request?.customer || 'Suppadesh', date: now, createdAt, budget: waitModalOrder.request?.budget, tier: waitModalOrder.request?.tier, desc: 'Please send a meeting invitation to your partner. Fill in the venue and proposed date/time.', type: 'meeting_invite', step: 8, location: waitModalOrder.request?.location || 'Saphansong' },
+                    { id: meetReqId, po, title: waitModalOrder.request?.title, customer: waitModalOrder.request?.customer || 'Suppadesh', date: now, createdAt, budget: waitModalOrder.request?.budget, tier: waitModalOrder.request?.tier, desc: 'Please send a meeting invitation to your partner. Fill in the venue and proposed date/time.', type: 'meeting_invite', step: 8, location: waitModalOrder.request?.location || waitModalOrder?.location || waitModalOrder?.subdistrict || '' },
                   ];
                   const newPayments = { ...mockPayments, [waitModalOrder.id]: true };
                   // Write to localStorage synchronously BEFORE setState so interval reads fresh data
@@ -2460,7 +2461,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   const updatedMeetActive = mockActiveItems.map((x: any) => x.po === meetingModal.po ? { ...x, step: 8, actionNeeded: false } : x);
                   const updatedMeetReqs = [
                     ...mockDynRequests.filter((x: any) => x.id !== meetingModal.id && x.id !== pendingId),
-                    { id: pendingId, po: meetingModal.po, title: meetingModal.title, customer: meetingModal.customer, date: fmtDateTime(createdAt), createdAt, budget: meetingModal.budget, tier: meetingModal.tier, desc, type: 'meeting_pending_partner', step: 8, venue: meetingVenue, meetingDate, meetingTime, meetingNote: meetingNote.trim() },
+                    { id: pendingId, po: meetingModal.po, title: meetingModal.title, customer: meetingModal.customer, date: fmtDateTime(createdAt), createdAt, budget: meetingModal.budget, tier: meetingModal.tier, desc, type: 'meeting_pending_partner', step: 8, venue: meetingVenue, meetingDate, meetingTime, meetingNote: meetingNote.trim(), location: meetingModal.location || meetingModal.subdistrict || '' },
                   ];
                   try {
                     localStorage.setItem('ghis_mock_active', JSON.stringify(updatedMeetActive));
@@ -2510,7 +2511,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 po={variationApproveModal.po || '-'}
                 partnerName={firstNameOnly(variationApproveModal.customer || variationApproveOrder?.customer || variationApproveOrder?.fixerName, 'Partner')}
                 budget={(() => { const rawBudget = variationApproveModal.budget || variationApproveOrder?.budget || variationApproveOrder?.fee; const desc = String(variationApproveOrder?.description || variationApproveModal.desc || variationApproveModal.title || ''); const m = desc.match(/(\d[\d,]*\.?\d*)\s*(sq\.?m\.?|sqm|m²|ตร\.?ม\.?|ตารางเมตร|sq\.?ft\.?|unit)/i); const qty = m ? parseFloat((m[1] ?? '').replace(/,/g, '')) : null; const raw = String(rawBudget || '').replace(/[฿,]/g, ''); const total = parseFloat(raw) || 0; const unit = m ? m[2] : null; const rate = qty && qty > 0 && total > 0 ? Math.round(total / qty) : null; return rate ? `${qty!.toLocaleString()} ${unit} × ฿${rate.toLocaleString()} = ฿${total.toLocaleString()}` : toCurrencyLabel(rawBudget); })()}
-                location={variationApproveOrder?.address?.subdistrict || variationApproveOrder?.subdistrict || variationApproveOrder?.location || 'Unknown'}
+                location={variationApproveOrder?.address?.subdistrict || variationApproveOrder?.subdistrict || variationApproveOrder?.location || variationApproveModal?.location || variationApproveModal?.subdistrict || 'Unknown'}
                 projectDetails={stripWorkflowPrefix(variationApproveOrder?.description || variationApproveModal.desc || variationApproveModal.title || '')}
               />
               <div>
@@ -2541,7 +2542,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                     const complId = `complete-${po}`;
                     const updatedPartnerReqs = [
                       ...partnerReqs.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner', 'complete_partner'].includes(x.type))),
-                      { id: complId, po, title: variationApproveModal.title, customer: variationApproveModal.customer, date: fmtDateTime(createdAt), createdAt, budget: variationApproveModal.budget, tier: variationApproveModal.tier, desc: 'Customer approved the variation. Please submit project complete for confirmation.', type: 'complete_partner', step: 10 },
+                      { id: complId, po, title: variationApproveModal.title, customer: variationApproveModal.customer, date: fmtDateTime(createdAt), createdAt, budget: variationApproveModal.budget, tier: variationApproveModal.tier, desc: 'Customer approved the variation. Please submit project complete for confirmation.', location: variationApproveModal.location || variationApproveModal.subdistrict || '', type: 'complete_partner', step: 10 },
                     ];
                     localStorage.setItem('ghis_mock_active', JSON.stringify(newActive));
                     localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(newReqs));
@@ -2577,7 +2578,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 po={completeApproveModal.po || '-'}
                 partnerName={firstNameOnly(completeApproveModal.customer || completeApproveOrder?.customer || completeApproveOrder?.fixerName, 'Partner')}
                 budget={toCurrencyLabel(completeApproveModal.budget || completeApproveOrder?.budget || completeApproveOrder?.fee)}
-                location={completeApproveOrder?.address?.subdistrict || completeApproveOrder?.subdistrict || completeApproveOrder?.location || 'Unknown'}
+                location={completeApproveOrder?.address?.subdistrict || completeApproveOrder?.subdistrict || completeApproveOrder?.location || completeApproveModal?.location || completeApproveModal?.subdistrict || 'Unknown'}
                 projectDetails={stripWorkflowPrefix(completeApproveOrder?.description || completeApproveModal.desc || completeApproveModal.title || '')}
               />
               <div>
