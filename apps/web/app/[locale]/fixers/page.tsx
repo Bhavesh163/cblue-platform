@@ -662,10 +662,23 @@ export default function FixerProPage() {
     const isIncomingMessage = (m: any) => isVisibleMessage(m) && !isOwnSender(m.sender);
     const keys = Object.keys(localStorage).filter((k) => k.startsWith("chat_messages_"));
     const items: any[] = [];
+    const knownPoSet = new Set((mappedOrders as any[]).filter(Boolean).map((o: any) => o.po).filter(Boolean));
     for (const key of keys) {
       try {
         const po = key.replace("chat_messages_", "");
         if (!isPoCode(po)) {
+          localStorage.removeItem(key);
+          localStorage.removeItem(`chat_title_${po}`);
+          localStorage.removeItem(`chat_from_${po}`);
+          continue;
+        }
+        if (isHiddenTestPo(po)) {
+          localStorage.removeItem(key);
+          localStorage.removeItem(`chat_title_${po}`);
+          localStorage.removeItem(`chat_from_${po}`);
+          continue;
+        }
+        if (knownPoSet.size > 0 && !knownPoSet.has(po)) {
           localStorage.removeItem(key);
           localStorage.removeItem(`chat_title_${po}`);
           localStorage.removeItem(`chat_from_${po}`);
@@ -897,7 +910,8 @@ export default function FixerProPage() {
       const partnerWorkflowStep = Math.max(0, ...partnerDynReqs.filter((x: any) => x.po === job.po).map((x: any) => Number(x.step || 0)));
       const step = Math.max(Number(stepLookup?.step || 0), backendStep, partnerWorkflowStep);
       // For partner view: actionNeeded = partner has a pending workflow request OR backend requires partner action
-      const hasPartnerDynAction = partnerDynReqs.some((r: any) => r.po === job.po);
+      // Exclude accept_sent which is a permanent marker, not an action item
+      const hasPartnerDynAction = partnerDynReqs.some((r: any) => r.po === job.po && r.type !== 'accept_sent');
       const partnerActionNeeded = hasPartnerDynAction ||
         String(job.status || '').toUpperCase() === 'MEETING_REQUESTED' ||
         backendStep === 5;
@@ -1319,7 +1333,26 @@ export default function FixerProPage() {
                 } catch {}
                 const url = freshUrls[0] || '';
                 if (url) {
-                  window.open(url, "_blank");
+                  if (url.startsWith('data:')) {
+                    try {
+                      const arr = url.split(',');
+                      const mime = arr[0].match(/:(.*?);/)?.[1] || 'application/octet-stream';
+                      const bstr = atob(arr[1] ?? '');
+                      const u8arr = new Uint8Array(bstr.length);
+                      for (let i = 0; i < bstr.length; i++) u8arr[i] = bstr.charCodeAt(i);
+                      const blob = new Blob([u8arr], { type: mime });
+                      const blobUrl = URL.createObjectURL(blob);
+                      window.open(blobUrl, '_blank');
+                      setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+                    } catch {
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = 'attachment';
+                      a.click();
+                    }
+                  } else {
+                    window.open(url, "_blank");
+                  }
                   return;
                 }
                 alert("No uploaded file found for this order. If you uploaded a file during booking, please ensure you are on the same browser/device as the customer.");
@@ -2075,7 +2108,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
         try { localStorage.setItem(`partner_variation_sent_${po}`, '1'); } catch {}
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
-        postSystemMsg(`[SYSTEM] Partner has submitted a variation request for ${po}. Please review in your Requests tab.`);
+        postSystemMsg(`[SYSTEM] Partner has submitted a variation request for ${po}. Please review in your Requests tab. [VARIATION_DATA]${varNote}[/VARIATION_DATA]`);
       } else if (action === 'complete') {
         const complId = `compl-${po}`;
         const completeDesc = extraData?.trim() ? `Partner completion request: ${extraData.trim()}` : 'Work is completed. Please review and mark as complete to close this project.';
@@ -2088,7 +2121,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick }: { locale: string; activ
         try { localStorage.setItem(`partner_complete_sent_${po}`, '1'); } catch {}
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['complete_partner', 'variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
-        postSystemMsg(`[SYSTEM] Partner has marked the job as complete for ${po}. Please review and confirm in your Requests tab.`);
+        postSystemMsg(`[SYSTEM] Partner has marked the job as complete for ${po}. Please review and confirm in your Requests tab. [COMPLETE_DATA]${completeDesc}[/COMPLETE_DATA]`);
       } else if (action === 'rate') {
         const rating = extraData || '5';
         // Update active/history BEFORE writePartnerReqs so buildChatFeed sees historyEntry and skips
@@ -2411,7 +2444,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
         try { localStorage.setItem(`partner_variation_sent_${po}`, '1'); } catch {}
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
-        postSystemMsg(`[SYSTEM] Partner has submitted a variation request for ${po}. Please review in your Requests tab.`);
+        postSystemMsg(`[SYSTEM] Partner has submitted a variation request for ${po}. Please review in your Requests tab. [VARIATION_DATA]${varNote}[/VARIATION_DATA]`);
       } else if (action === 'complete') {
         const complId = `compl-${po}`;
         const completeDesc = extraData?.trim() ? `Partner completion request: ${extraData.trim()}` : 'Work is completed. Please review and mark as complete to close this project.';
@@ -2424,7 +2457,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick }: { locale: string;
         try { localStorage.setItem(`partner_complete_sent_${po}`, '1'); } catch {}
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['complete_partner', 'variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
-        postSystemMsg(`[SYSTEM] Partner has marked the job as complete for ${po}. Please review and confirm in your Requests tab.`);
+        postSystemMsg(`[SYSTEM] Partner has marked the job as complete for ${po}. Please review and confirm in your Requests tab. [COMPLETE_DATA]${completeDesc}[/COMPLETE_DATA]`);
       } else if (action === 'rate') {
         const rating = extraData || '5';
         // Update active/history BEFORE writePartnerReqs so buildChatFeed sees historyEntry and skips

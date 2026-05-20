@@ -1032,10 +1032,23 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     const isIncomingMessage = (m: any) => isVisibleMessage(m) && !isOwnSender(m.sender);
     const keys = Object.keys(localStorage).filter((k) => k.startsWith("chat_messages_"));
     const items: any[] = [];
+    const knownPoSet = new Set(workflowOrders.map((o: any) => extractPo(o)).filter((p: string) => isPoCode(p)));
     for (const key of keys) {
       try {
         const po = key.replace("chat_messages_", "");
         if (!isPoCode(po)) continue;
+        if (isHiddenTestPo(po)) {
+          localStorage.removeItem(key);
+          localStorage.removeItem(`chat_title_${po}`);
+          localStorage.removeItem(`chat_from_${po}`);
+          continue;
+        }
+        if (knownPoSet.size > 0 && !knownPoSet.has(po)) {
+          localStorage.removeItem(key);
+          localStorage.removeItem(`chat_title_${po}`);
+          localStorage.removeItem(`chat_from_${po}`);
+          continue;
+        }
         if (localStorage.getItem(`chat_closed_${po}`)) continue;
         const parsed = JSON.parse(localStorage.getItem(key) || "[]");
         if (!Array.isArray(parsed) || parsed.length === 0) continue;
@@ -1287,7 +1300,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         });
         setMockDynRequests(prev => {
           if (prev.some((x: any) => x.po === po && x.type === 'variation_pending')) return prev;
-          const item = { id: `var-${po}`, po, title, customer: 'Suppadesh', date: fmtDateTime(Date.now()), createdAt: Date.now(), budget, tier, desc: 'Partner has submitted a variation for your approval. Please review and confirm to proceed.', type: 'variation_pending', step: 9 };
+          const fullMsg = String(chatItem.lastMsg || '');
+          const noteMatch = fullMsg.match(/\[VARIATION_DATA\]([\s\S]*?)\[\/VARIATION_DATA\]/i);
+          const desc = noteMatch?.[1]?.trim() || 'Partner has submitted a variation for your approval. Please review and confirm to proceed.';
+          const item = { id: `var-${po}`, po, title, customer: 'Suppadesh', date: fmtDateTime(Date.now()), createdAt: Date.now(), budget, tier, desc, type: 'variation_pending', step: 9 };
           const merged = [...prev.filter((x: any) => !(x.po === po && ['variation_pending', 'meeting_invite', 'meeting_pending_partner', 'meeting_scheduled', 'chat_ready'].includes(x.type))), item];
           try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(merged)); } catch {}
           return merged;
@@ -1302,7 +1318,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         });
         setMockDynRequests(prev => {
           if (prev.some((x: any) => x.po === po && x.type === 'complete_pending')) return prev;
-          const item = { id: `compl-${po}`, po, title, customer: 'Suppadesh', date: fmtDateTime(Date.now()), createdAt: Date.now(), budget, tier, desc: 'Work is completed. Please review and mark as complete to close this project.', type: 'complete_pending', step: 10 };
+          const fullMsg = String(chatItem.lastMsg || '');
+          const noteMatch = fullMsg.match(/\[COMPLETE_DATA\]([\s\S]*?)\[\/COMPLETE_DATA\]/i);
+          const desc = noteMatch?.[1]?.trim() || 'Work is completed. Please review and mark as complete to close this project.';
+          const item = { id: `compl-${po}`, po, title, customer: 'Suppadesh', date: fmtDateTime(Date.now()), createdAt: Date.now(), budget, tier, desc, type: 'complete_pending', step: 10 };
           const merged = [...prev.filter((x: any) => !(x.po === po && ['complete_pending', 'variation_pending', 'meeting_invite', 'meeting_pending_partner', 'meeting_scheduled', 'chat_ready'].includes(x.type))), item];
           try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(merged)); } catch {}
           return merged;
@@ -2516,7 +2535,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               />
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Partner Request</label>
-                <p className="text-sm text-gray-700 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3">{String(variationApproveModal.desc || '').replace(/^Partner variation request:\s*/i, '').trim() || variationApproveModal.desc}</p>
+                <p className="text-sm text-gray-700 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 whitespace-pre-wrap">{String(variationApproveModal.desc || '').replace(/^Partner variation request:\s*/i, '').trim() || variationApproveModal.desc}</p>
               </div>
               <div className="flex gap-3 pt-1">
                 <button
@@ -2583,7 +2602,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               />
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Completion Note</label>
-                <p className="text-sm text-gray-700 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3">{String(completeApproveModal.desc || '').replace(/^Partner completion request:\s*/i, '').trim() || completeApproveModal.desc}</p>
+                <p className="text-sm text-gray-700 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 whitespace-pre-wrap">{String(completeApproveModal.desc || '').replace(/^Partner completion request:\s*/i, '').trim() || completeApproveModal.desc}</p>
               </div>
               <div className="flex gap-3 pt-1">
                 <button
