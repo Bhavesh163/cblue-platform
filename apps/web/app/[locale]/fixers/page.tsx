@@ -558,7 +558,7 @@ export default function FixerProPage() {
           .map((image: any) => (typeof image === 'string' ? image : image?.url || ''))
           .filter(Boolean)
       : [];
-    const locFromDesc = (() => { const m = String(o.description || '').match(/\bLOC:([^|]+)/); return m ? m[1].trim() : ''; })();
+    const locFromDesc = (() => { const m = String(o.description || '').match(/\bLOC:([^|]+)/); return m ? (m[1] ?? '').trim() : ''; })();
     
     return {
       id: o.id,
