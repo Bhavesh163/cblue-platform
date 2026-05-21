@@ -76,7 +76,7 @@ const toCurrencyLabel = (value: any, fallback = '฿0') => {
   if (allBahtMatches.length > 0) {
     const lastMatch = allBahtMatches[allBahtMatches.length - 1];
     if (lastMatch) {
-      const extracted = parseFloat(lastMatch[1].replace(/,/g, ''));
+      const extracted = parseFloat((lastMatch[1] ?? '').replace(/,/g, ''));
       if (!isNaN(extracted) && extracted > 0) return `฿${Math.round(extracted).toLocaleString()}`;
     }
   }
