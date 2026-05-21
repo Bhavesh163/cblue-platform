@@ -1496,7 +1496,7 @@ export default function FixerProPage() {
                       localStorage.setItem("ghis_mock_active", JSON.stringify(nextActive));
                       const nextPartnerReqs = [
                         ...partnerDynReqs.filter((r: any) => !(r.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(r.type))),
-                        { id: `variation-${po}`, orderId: backendOrderId || waitModalOrder.orderId || undefined, po, service: waitModalOrder.service || serviceTitle, serviceTh: waitModalOrder.service || serviceTitle, serviceZh: waitModalOrder.service || serviceTitle, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), fee: budgetLabel, budget: String(budgetLabel).replace(/[^0-9]/g, ''), tier: waitModalOrder.tier, description: (mappedOrders as any[]).find((o: any) => o?.po === po)?.description || 'Proceed to submit variation request if extra work or price adjustment is required.', location: waitModalOrder?.location || waitModalOrder?.subdistrict || '', type: 'variation_partner', step: 9 },
+                        { id: `variation-${po}`, orderId: backendOrderId || waitModalOrder.orderId || undefined, po, service: waitModalOrder.service || serviceTitle, serviceTh: waitModalOrder.service || serviceTitle, serviceZh: waitModalOrder.service || serviceTitle, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), fee: budgetLabel, budget: String(budgetLabel).replace(/[^0-9]/g, ''), tier: waitModalOrder.tier, description: (mappedOrders as any[]).find((o: any) => o?.po === po)?.description || waitModalOrder?.description || 'Proceed to submit variation request if extra work or price adjustment is required.', location: waitModalOrder?.location || waitModalOrder?.subdistrict || '', type: 'variation_partner', step: 9 },
                       ];
                       localStorage.setItem("partner_mock_dyn_req", JSON.stringify(nextPartnerReqs));
                       setMockDynReqs(nextReqs);
@@ -2356,7 +2356,16 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                   {job.earnings && <span className="text-xs font-bold text-gray-700">{job.earnings}</span>}
                   {getStatusLabel(job.status, locale) !== "" && <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_STYLE[job.status] || ""}`}>{getStatusLabel(job.status, locale)}</span>}
                   {(job.mockStep === 9 || (job.step === 9)) && (
-                    <button onClick={() => { setVariationModal(job); setVariationDesc(""); }} className="text-xs px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-full transition">Submit Variation</button>
+                    <button onClick={() => {
+                      setVariationModal(job); setVariationDesc("");
+                      // Refresh breakdown so customer's Approve Variation reads correct multi-item data
+                      try {
+                        const desc = String(job?.description || '');
+                        const total = parseFloat(String(job?.budget || job?.fee || '').replace(/[฿,]/g, '')) || 0;
+                        const bd = computeBudgetBreakdown(desc, priceList ?? [], total);
+                        if (bd && bd.length > 0 && job?.po) localStorage.setItem(`cblue_po_breakdown_${job.po}`, JSON.stringify(bd));
+                      } catch {}
+                    }} className="text-xs px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-full transition">Submit Variation</button>
                   )}
                   {(job.mockStep === 10 || (job.step === 10)) && (
                     <button onClick={() => { setCompleteNote(""); setCompleteModal(job); }} className="text-xs px-3 py-1 bg-green-600 hover:bg-green-700 text-white font-bold rounded-full transition">Mark Complete</button>
@@ -2718,7 +2727,15 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList }: { loca
               <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[req.tier] || ""}`}>{req.tier}</span>
               {req.type === 'variation_partner' ? (
                 <>
-                  <button onClick={(e) => { e.stopPropagation(); setVariationDesc(''); setVariationModal(req); }} className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg transition">Yes</button>
+                  <button onClick={(e) => { e.stopPropagation(); setVariationDesc(''); setVariationModal(req);
+                      // Refresh breakdown so customer's Approve Variation reads correct multi-item data
+                      try {
+                        const desc = String(req?.description || '');
+                        const total = parseFloat(String(req?.budget || req?.fee || '').replace(/[฿,]/g, '')) || 0;
+                        const bd = computeBudgetBreakdown(desc, priceList ?? [], total);
+                        if (bd && bd.length > 0 && req?.po) localStorage.setItem(`cblue_po_breakdown_${req.po}`, JSON.stringify(bd));
+                      } catch {}
+                    }} className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg transition">Yes</button>
                   <button onClick={(e) => { e.stopPropagation(); try { localStorage.setItem(`partner_variation_sent_${req.po}`, '1'); } catch {} writePartnerReqs(prev => prev.filter((x: any) => !(x.po === req.po && x.type === 'variation_partner'))); }} className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">No</button>
                 </>
               ) : req.type === 'complete_partner' ? (
