@@ -1408,7 +1408,8 @@ export default function FixerProPage() {
                 {(() => {
                   const brkDesc = String(waitModalOrder?.description || '');
                   const brkTotal = parseFloat(String(waitModalBudgetDisplay || '').replace(/[฿,]/g, '')) || 0;
-                  const bd = computeBudgetBreakdown(brkDesc, (partner as any)?.priceList ?? [], brkTotal);
+                  let bd = computeBudgetBreakdown(brkDesc, (partner as any)?.priceList ?? [], brkTotal);
+                  if (!bd || bd.length === 0) { try { const stored = JSON.parse(localStorage.getItem(`cblue_po_breakdown_${waitModalOrder?.po}`) || 'null'); if (Array.isArray(stored) && stored.length > 0) bd = stored as BudgetBreakdownItem[]; } catch {} }
                   if (bd && bd.length > 1) {
                     return (
                       <div className="font-mono text-xs space-y-0.5">

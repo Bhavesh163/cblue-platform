@@ -424,8 +424,8 @@ export default function PartnerZonePage() {
                         else if(localData && localData.projectImages && localData.projectImages.length > 0) url = localData.projectImages[0];
                   } catch {}
                 }
-                if(url) window.open(url, "_blank"); 
-                else { alert("No uploaded file found for this order."); } 
+                if(url && url.startsWith('http')) window.open(url, "_blank");
+                else { alert("Files were uploaded by the customer but are not yet accessible here. If you need them urgently, please ask the customer to share via the chat room."); } 
               }}>
                 {((waitModalJob as any)?.image || ((waitModalJob as any)?.images && (waitModalJob as any)?.images.length > 0) || (waitModalJob as any)?.fileUrl || ((waitModalJob as any)?.projectImages && (waitModalJob as any)?.projectImages.length > 0) || (waitModalJob as any)?.metadata?.images || (typeof window !== 'undefined' && localStorage.getItem("jobData") && JSON.parse(localStorage.getItem("jobData") || "{}").image)) ? "1 file attached (Click to View)" : "file attached"}
               </span></div>
