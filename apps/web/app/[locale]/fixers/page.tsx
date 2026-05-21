@@ -1177,7 +1177,7 @@ export default function FixerProPage() {
               fee: order.fee,
               budget: order.budget,
               tier: order.tier,
-              description: 'Proceed to submit variation request if extra work or price adjustment is required.',
+              description: order.description || 'Proceed to submit variation request if extra work or price adjustment is required.',
               type: 'variation_partner',
               workflowType: 'variation_partner',
               step: 9,
@@ -1447,13 +1447,11 @@ export default function FixerProPage() {
                   }
                   return;
                 }
-                alert(waitModalOrder?.hasAttachment
-                  ? "Files were uploaded by the customer but are not yet accessible here. If you need them urgently, please ask the customer to share via the chat room after accepting this job."
-                  : "No file was attached to this request.");
+                alert("Files were uploaded by the customer but are not yet accessible here. If you need them urgently, please ask the customer to share via the chat room after accepting this job.");
               }}>
                 {waitModalAttachmentUrls.length > 0
                   ? `${waitModalAttachmentUrls.length} file${waitModalAttachmentUrls.length > 1 ? 's' : ''} attached (Click to View)`
-                  : (waitModalOrder?.hasAttachment ? '1 file attached (Click to View)' : 'No file attached')}
+                  : 'Files attached'}
               </span></div>
             </div>
 
@@ -1489,7 +1487,7 @@ export default function FixerProPage() {
                       localStorage.setItem("ghis_mock_active", JSON.stringify(nextActive));
                       const nextPartnerReqs = [
                         ...partnerDynReqs.filter((r: any) => !(r.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(r.type))),
-                        { id: `variation-${po}`, orderId: backendOrderId || waitModalOrder.orderId || undefined, po, service: waitModalOrder.service || serviceTitle, serviceTh: waitModalOrder.service || serviceTitle, serviceZh: waitModalOrder.service || serviceTitle, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), fee: budgetLabel, budget: String(budgetLabel).replace(/[^0-9]/g, ''), tier: waitModalOrder.tier, description: 'Proceed to submit variation request if extra work or price adjustment is required.', location: waitModalOrder?.location || waitModalOrder?.subdistrict || '', type: 'variation_partner', step: 9 },
+                        { id: `variation-${po}`, orderId: backendOrderId || waitModalOrder.orderId || undefined, po, service: waitModalOrder.service || serviceTitle, serviceTh: waitModalOrder.service || serviceTitle, serviceZh: waitModalOrder.service || serviceTitle, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), fee: budgetLabel, budget: String(budgetLabel).replace(/[^0-9]/g, ''), tier: waitModalOrder.tier, description: (mappedOrders as any[]).find((o: any) => o?.po === po)?.description || 'Proceed to submit variation request if extra work or price adjustment is required.', location: waitModalOrder?.location || waitModalOrder?.subdistrict || '', type: 'variation_partner', step: 9 },
                       ];
                       localStorage.setItem("partner_mock_dyn_req", JSON.stringify(nextPartnerReqs));
                       setMockDynReqs(nextReqs);

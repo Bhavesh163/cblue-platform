@@ -992,6 +992,7 @@ export default function FixerResults({
                 tier: selectedFixer.tier,
                 description: description || `New project request. Please review and accept.`,
                 location: bookingLocation,
+                hasAttachment: storedAttachments.length > 0,
                 type: "pending_accept",
                 status: "CREATED",
                 step: 5,
