@@ -1275,7 +1275,12 @@ export default function FixerProPage() {
       // Preserve location from whichever source has a real value (not empty/Unknown)
       const preservedLocation = (item.location && item.location !== 'Unknown') ? item.location : (current.location && current.location !== 'Unknown') ? current.location : (item.location || '');
       const preservedSubdistrict = (item.subdistrict && item.subdistrict !== 'Unknown') ? item.subdistrict : (current.subdistrict && current.subdistrict !== 'Unknown') ? current.subdistrict : (item.subdistrict || '');
-      map.set(key, { ...item, location: preservedLocation, subdistrict: preservedSubdistrict });
+      // Preserve description (order text with qty/service details) from whichever source has it
+      const preservedDescription = item.description || current.description || '';
+      map.set(key, { ...item, location: preservedLocation, subdistrict: preservedSubdistrict, ...(preservedDescription ? { description: preservedDescription } : {}) });
+    } else if (!current.description && item.description) {
+      // Current wins on step; still carry description from incoming backend item if current lacks it
+      map.set(key, { ...current, description: item.description });
     }
     return map;
   }, new Map<string, any>()).values())

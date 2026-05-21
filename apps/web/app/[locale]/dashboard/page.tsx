@@ -2534,7 +2534,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 actionText="Review the partner variation request and approve it if you agree to proceed."
                 po={variationApproveModal.po || '-'}
                 partnerName={firstNameOnly(variationApproveModal.customer || variationApproveOrder?.customer || variationApproveOrder?.fixerName, 'Partner')}
-                budget={(() => { const rawBudget = variationApproveModal.budget || variationApproveOrder?.budget || variationApproveOrder?.fee; const desc = String(variationApproveOrder?.description || variationApproveModal.desc || variationApproveModal.title || ''); const m = desc.match(/(\d[\d,]*\.?\d*)\s*(sq\.?m\.?|sqm|m²|ตร\.?ม\.?|ตารางเมตร|sq\.?ft\.?|unit)/i); const qty = m ? parseFloat((m[1] ?? '').replace(/,/g, '')) : null; const raw = String(rawBudget || '').replace(/[฿,]/g, ''); const total = parseFloat(raw) || 0; const unit = m ? m[2] : null; const rate = qty && qty > 0 && total > 0 ? Math.round(total / qty) : null; return rate ? `${qty!.toLocaleString()} ${unit} × ฿${rate.toLocaleString()} = ฿${total.toLocaleString()}` : toCurrencyLabel(rawBudget); })()}
+                budget={toCurrencyLabel(variationApproveModal.budget || variationApproveOrder?.budget || variationApproveOrder?.fee)}
                 location={variationApproveOrder?.address?.subdistrict || variationApproveOrder?.subdistrict || variationApproveOrder?.location || variationApproveModal?.location || variationApproveModal?.subdistrict || 'Unknown'}
                 projectDetails={stripWorkflowPrefix(variationApproveOrder?.description || variationApproveModal.desc || variationApproveModal.title || '')}
               />
