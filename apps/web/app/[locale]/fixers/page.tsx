@@ -150,6 +150,15 @@ const toCurrencyLabel = (value: any, fallback = '฿0') => {
   if (!isNaN(num) && isFinite(num) && /^\d*\.?\d+$/.test(numStr.trim())) {
     return `฿${Math.round(num).toLocaleString()}`;
   }
+  // Extract the last ฿Amount from formula strings like '800 sq.m. × ฿28,125 = ฿22,500,000'
+  const allBahtMatches = [...raw.matchAll(/฿([\d,]+(?:\.\d+)?)/g)];
+  if (allBahtMatches.length > 0) {
+    const lastMatch = allBahtMatches[allBahtMatches.length - 1];
+    if (lastMatch) {
+      const extracted = parseFloat(lastMatch[1].replace(/,/g, ''));
+      if (!isNaN(extracted) && extracted > 0) return `฿${Math.round(extracted).toLocaleString()}`;
+    }
+  }
   return raw.startsWith('฿') ? raw : `฿${raw}`;
 };
 
@@ -1443,30 +1452,10 @@ export default function FixerProPage() {
                     if (poKey && parsed[poKey] && parsed[poKey].length > 0) freshUrls = parsed[poKey];
                   }
                 } catch {}
-                const url = freshUrls[0] || '';
-                if (url) {
-                  if (url.startsWith('data:')) {
-                    try {
-                      const arr = url.split(',');
-                      const mime = (arr[0] ?? '').match(/:(.*?);/)?.[1] || 'application/octet-stream';
-                      const bstr = atob(arr[1] ?? '');
-                      const u8arr = new Uint8Array(bstr.length);
-                      for (let i = 0; i < bstr.length; i++) u8arr[i] = bstr.charCodeAt(i);
-                      const blob = new Blob([u8arr], { type: mime });
-                      const blobUrl = URL.createObjectURL(blob);
-                      window.open(blobUrl, '_blank');
-                      setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
-                    } catch {
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = 'attachment';
-                      a.click();
-                    }
-                  } else {
-                    window.open(url, "_blank");
-                  }
-                  return;
-                }
+                // Only open proper HTTPS URLs directly; data: URLs are not reliably accessible
+                // from the partner's browser and should show the informational message instead.
+                const httpUrl = freshUrls.find(u => u.startsWith('http://') || u.startsWith('https://'));
+                if (httpUrl) { window.open(httpUrl, '_blank'); return; }
                 alert("Files were uploaded by the customer but are not yet accessible here. If you need them urgently, please ask the customer to share via the chat room after accepting this job.");
               }}>
                 {waitModalAttachmentUrls.length > 0

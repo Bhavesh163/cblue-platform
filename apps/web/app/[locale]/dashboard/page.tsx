@@ -71,6 +71,15 @@ const toCurrencyLabel = (value: any, fallback = '฿0') => {
   if (!isNaN(num) && isFinite(num) && /^\d*\.?\d+$/.test(numStr.trim())) {
     return `฿${Math.round(num).toLocaleString()}`;
   }
+  // Extract the last ฿Amount from formula strings like '800 sq.m. × ฿28,125 = ฿22,500,000'
+  const allBahtMatches = [...raw.matchAll(/฿([\d,]+(?:\.\d+)?)/g)];
+  if (allBahtMatches.length > 0) {
+    const lastMatch = allBahtMatches[allBahtMatches.length - 1];
+    if (lastMatch) {
+      const extracted = parseFloat(lastMatch[1].replace(/,/g, ''));
+      if (!isNaN(extracted) && extracted > 0) return `฿${Math.round(extracted).toLocaleString()}`;
+    }
+  }
   return raw.startsWith('฿') ? raw : `฿${raw}`;
 };
 
@@ -2547,7 +2556,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 try {
                   const brkPo = variationApproveModal.po;
                   const bd = JSON.parse(localStorage.getItem(`cblue_po_breakdown_${brkPo}`) || '[]') as Array<{ service: string; qty: number; unit: string; unitRate: number; total: number }>;
-                  if (bd.length >= 1) {
+                  // Guard against stale single-item breakdowns when description has multiple services
+                  const brkDesc = variationApproveOrder?.description || variationApproveModal?.desc || '';
+                  const descQtyCount = (brkDesc.match(/\d[\d,]*\.?\d*\s*(?:sqm|sq\.?m\.?|m²|ตร\.?ม\.?|ตารางเมตร)/gi) || []).length;
+                  if (bd.length >= 1 && (descQtyCount <= 1 || bd.length >= descQtyCount)) {
                     const rawBudget = variationApproveModal.budget || variationApproveOrder?.budget || variationApproveOrder?.fee;
                     const totalAmt = parseFloat(String(rawBudget || '').replace(/[฿,]/g, '')) || bd.reduce((s, it) => s + it.total, 0);
                     return (
