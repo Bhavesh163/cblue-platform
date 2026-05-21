@@ -661,6 +661,7 @@ export default function FixerResults({
             estimatedTotal: d.estimatedTotal,
             estimatedUnit: d.estimatedUnit,
             estimatedQty: d.estimatedQty,
+            estimatedBreakdown: d.estimatedBreakdown ?? null,
             satisfaction: Math.round(d.satisfaction || 85),
             specialties: d.specialties || [],
             experienceYears: d.experienceYears || 1,

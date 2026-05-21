@@ -66,7 +66,12 @@ const getWorkflowStepName = (step?: number) => WORKFLOW_STEP_NAMES[Number(step |
 const toCurrencyLabel = (value: any, fallback = '฿0') => {
   const raw = String(value || '').trim();
   if (!raw) return fallback;
-  return raw.startsWith('฿') ? raw : `฿${raw.replace(/^฿/, '')}`;
+  const numStr = raw.replace(/^฿/, '').replace(/,/g, '');
+  const num = parseFloat(numStr);
+  if (!isNaN(num) && isFinite(num) && /^\d*\.?\d+$/.test(numStr.trim())) {
+    return `฿${Math.round(num).toLocaleString()}`;
+  }
+  return raw.startsWith('฿') ? raw : `฿${raw}`;
 };
 
 function CustomerWorkflowModalMeta({
@@ -2542,7 +2547,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 try {
                   const brkPo = variationApproveModal.po;
                   const bd = JSON.parse(localStorage.getItem(`cblue_po_breakdown_${brkPo}`) || '[]') as Array<{ service: string; qty: number; unit: string; unitRate: number; total: number }>;
-                  if (bd.length > 1) {
+                  if (bd.length >= 1) {
                     const rawBudget = variationApproveModal.budget || variationApproveOrder?.budget || variationApproveOrder?.fee;
                     const totalAmt = parseFloat(String(rawBudget || '').replace(/[฿,]/g, '')) || bd.reduce((s, it) => s + it.total, 0);
                     return (

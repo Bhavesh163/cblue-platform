@@ -145,7 +145,12 @@ const getWorkflowStepName = (step?: number) => WORKFLOW_STEP_NAMES[Number(step |
 const toCurrencyLabel = (value: any, fallback = '฿0') => {
   const raw = String(value || '').trim();
   if (!raw) return fallback;
-  return raw.startsWith('฿') ? raw : `฿${raw.replace(/^฿/, '')}`;
+  const numStr = raw.replace(/^฿/, '').replace(/,/g, '');
+  const num = parseFloat(numStr);
+  if (!isNaN(num) && isFinite(num) && /^\d*\.?\d+$/.test(numStr.trim())) {
+    return `฿${Math.round(num).toLocaleString()}`;
+  }
+  return raw.startsWith('฿') ? raw : `฿${raw}`;
 };
 
 type BudgetBreakdownItem = { service: string; qty: number; unit: string; unitRate: number; total: number };
@@ -169,7 +174,9 @@ const computeBudgetBreakdown = (description: string, priceList: any[], totalOver
     for (const item of priceList) {
       const itemText = `${item.service || ''} ${item.unit || ''}`.toLowerCase().replace(/fit\s*[-\s]?out/g, 'fitout').replace(/re\s*instate(ment)?/g, 'reinstatement');
       const score = tokens.filter(t => itemText.includes(t)).length;
-      if (score > bestScore) { bestScore = score; best = item; }
+      // On tie, prefer lower-priced item (mirrors backend tiebreaker)
+      const isBetter = score > bestScore || (score === bestScore && score >= 0 && (parseFloat(String(item?.finalPrice)) || Infinity) < (parseFloat(String(best?.finalPrice)) || Infinity));
+      if (isBetter) { bestScore = score; best = item; }
     }
     return best as any;
   };
@@ -177,9 +184,9 @@ const computeBudgetBreakdown = (description: string, priceList: any[], totalOver
   for (let i = 0; i < pairs.length; i++) {
     const pair = pairs[i]!;
     const nextPair = pairs[i + 1];
-    const start = pair.idx;
     const end = nextPair ? nextPair.idx : cleanDesc.length;
-    const window = cleanDesc.slice(Math.max(0, start - 50), end);
+    // Use forward window from each pair's index to avoid context bleeding from adjacent pairs
+    const window = cleanDesc.slice(pair.idx, end);
     const tokens = tokenize(window).length > 0 ? tokenize(window) : tokenize(cleanDesc);
     const item = matchToList(tokens);
     const pQty = parseFloat(String(item?.amount ?? item?.quantity ?? 1)) || 1;
@@ -328,6 +335,19 @@ export default function FixerProPage() {
     const jobStatus = String(job?.status || '').toUpperCase();
     if (workflowType === 'meeting_confirm_partner' || workflowType === 'pending_accept' || ['MATCHING', 'CREATED', 'MEETING_REQUESTED'].includes(jobStatus)) {
       setWaitModalOrder(job);
+      // Write breakdown to localStorage so customer's dashboard Approve Variation can read it (same-browser demo)
+      try {
+        const po = job?.po;
+        if (po) {
+          const desc = String(job?.description || '');
+          const total = parseFloat(String(job?.budget || job?.fee || '').replace(/[฿,]/g, '')) || 0;
+          const pl = (partner as any)?.priceList ?? [];
+          const bd = computeBudgetBreakdown(desc, pl, total);
+          if (bd && bd.length > 0) {
+            localStorage.setItem(`cblue_po_breakdown_${po}`, JSON.stringify(bd));
+          }
+        }
+      } catch { /* non-blocking */ }
     } else {
       const poFromDesc = extractPoCode(job);
       const chatId = job.po || poFromDesc || job.id;
