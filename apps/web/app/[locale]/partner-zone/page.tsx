@@ -427,7 +427,7 @@ export default function PartnerZonePage() {
                 if(url) window.open(url, "_blank"); 
                 else { alert("No uploaded file found for this order."); } 
               }}>
-                {((waitModalJob as any)?.image || ((waitModalJob as any)?.images && (waitModalJob as any)?.images.length > 0) || (waitModalJob as any)?.fileUrl || ((waitModalJob as any)?.projectImages && (waitModalJob as any)?.projectImages.length > 0) || (waitModalJob as any)?.metadata?.images || (typeof window !== 'undefined' && localStorage.getItem("jobData") && JSON.parse(localStorage.getItem("jobData") || "{}").image)) ? "1 file attached (Click to View)" : "No file attached"}
+                {((waitModalJob as any)?.image || ((waitModalJob as any)?.images && (waitModalJob as any)?.images.length > 0) || (waitModalJob as any)?.fileUrl || ((waitModalJob as any)?.projectImages && (waitModalJob as any)?.projectImages.length > 0) || (waitModalJob as any)?.metadata?.images || (typeof window !== 'undefined' && localStorage.getItem("jobData") && JSON.parse(localStorage.getItem("jobData") || "{}").image)) ? "1 file attached (Click to View)" : "file attached"}
               </span></div>
             </div>
 

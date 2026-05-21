@@ -2556,10 +2556,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 try {
                   const brkPo = variationApproveModal.po;
                   const bd = JSON.parse(localStorage.getItem(`cblue_po_breakdown_${brkPo}`) || '[]') as Array<{ service: string; qty: number; unit: string; unitRate: number; total: number }>;
-                  // Guard against stale single-item breakdowns when description has multiple services
-                  const brkDesc = variationApproveOrder?.description || variationApproveModal?.desc || '';
-                  const descQtyCount = (brkDesc.match(/\d[\d,]*\.?\d*\s*(?:sqm|sq\.?m\.?|m²|ตร\.?ม\.?|ตารางเมตร)/gi) || []).length;
-                  if (bd.length >= 1 && (descQtyCount <= 1 || bd.length >= descQtyCount)) {
+                  if (bd.length >= 1) {
                     const rawBudget = variationApproveModal.budget || variationApproveOrder?.budget || variationApproveOrder?.fee;
                     const totalAmt = parseFloat(String(rawBudget || '').replace(/[฿,]/g, '')) || bd.reduce((s, it) => s + it.total, 0);
                     return (

@@ -2360,9 +2360,14 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                       setVariationModal(job); setVariationDesc("");
                       // Refresh breakdown so customer's Approve Variation reads correct multi-item data
                       try {
-                        const desc = String(job?.description || '');
+                        let descToUse = String(job?.description || '');
+                        if (!descToUse || /proceed to submit variation/i.test(descToUse)) {
+                          for (const k of ['ghis_mock_active', 'ghis_mock_dyn_req']) {
+                            try { const items = JSON.parse(localStorage.getItem(k) || '[]'); const found = (Array.isArray(items) ? items : []).find((r: any) => r?.po === job?.po); if (found?.description && !/proceed to submit variation/i.test(found.description)) { descToUse = found.description; break; } } catch {}
+                          }
+                        }
                         const total = parseFloat(String(job?.budget || job?.fee || '').replace(/[฿,]/g, '')) || 0;
-                        const bd = computeBudgetBreakdown(desc, priceList ?? [], total);
+                        const bd = computeBudgetBreakdown(descToUse, priceList ?? [], total);
                         if (bd && bd.length > 0 && job?.po) localStorage.setItem(`cblue_po_breakdown_${job.po}`, JSON.stringify(bd));
                       } catch {}
                     }} className="text-xs px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-full transition">Submit Variation</button>
@@ -2440,7 +2445,8 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                 {(() => {
                   const varDesc = String(variationModal.description || variationModal.desc || variationModal.projectDetails || '');
                   const varTotal = parseFloat(String(variationModal.budget || '').replace(/[฿,]/g, '')) || 0;
-                  const bd = computeBudgetBreakdown(varDesc, priceList ?? [], varTotal);
+                  let bd = computeBudgetBreakdown(varDesc, priceList ?? [], varTotal);
+                  if (!bd || bd.length === 0) { try { const stored = JSON.parse(localStorage.getItem(`cblue_po_breakdown_${variationModal.po}`) || 'null'); if (Array.isArray(stored) && stored.length > 0) bd = stored as BudgetBreakdownItem[]; } catch {} }
                   if (bd && bd.length > 1) {
                     return (
                       <div className="font-mono text-xs space-y-0.5">
@@ -2730,9 +2736,14 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList }: { loca
                   <button onClick={(e) => { e.stopPropagation(); setVariationDesc(''); setVariationModal(req);
                       // Refresh breakdown so customer's Approve Variation reads correct multi-item data
                       try {
-                        const desc = String(req?.description || '');
+                        let descToUse = String(req?.description || '');
+                        if (!descToUse || /proceed to submit variation/i.test(descToUse)) {
+                          for (const k of ['ghis_mock_active', 'ghis_mock_dyn_req']) {
+                            try { const items = JSON.parse(localStorage.getItem(k) || '[]'); const found = (Array.isArray(items) ? items : []).find((r: any) => r?.po === req?.po); if (found?.description && !/proceed to submit variation/i.test(found.description)) { descToUse = found.description; break; } } catch {}
+                          }
+                        }
                         const total = parseFloat(String(req?.budget || req?.fee || '').replace(/[฿,]/g, '')) || 0;
-                        const bd = computeBudgetBreakdown(desc, priceList ?? [], total);
+                        const bd = computeBudgetBreakdown(descToUse, priceList ?? [], total);
                         if (bd && bd.length > 0 && req?.po) localStorage.setItem(`cblue_po_breakdown_${req.po}`, JSON.stringify(bd));
                       } catch {}
                     }} className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg transition">Yes</button>
@@ -2787,7 +2798,8 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList }: { loca
                 {(() => {
                   const varDesc = String(variationModal.description || variationModal.desc || variationModal.projectDetails || '');
                   const varTotal = parseFloat(String(variationModal.budget || '').replace(/[฿,]/g, '')) || 0;
-                  const bd = computeBudgetBreakdown(varDesc, priceList ?? [], varTotal);
+                  let bd = computeBudgetBreakdown(varDesc, priceList ?? [], varTotal);
+                  if (!bd || bd.length === 0) { try { const stored = JSON.parse(localStorage.getItem(`cblue_po_breakdown_${variationModal.po}`) || 'null'); if (Array.isArray(stored) && stored.length > 0) bd = stored as BudgetBreakdownItem[]; } catch {} }
                   if (bd && bd.length > 1) {
                     return (
                       <div className="font-mono text-xs space-y-0.5">
