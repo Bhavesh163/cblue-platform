@@ -818,6 +818,14 @@ export default function FixerResults({
     try {
       if (issueImages && issueImages.length > 0) {
         const limited = issueImages.slice(0, 5);
+
+        // Store raw File objects in window so the partner modal can create blob URLs
+        // directly without hitting localStorage quota limits (HEIC files are often > 5 MB).
+        try {
+          (window as any).__cblue_files_by_po = (window as any).__cblue_files_by_po || {};
+          (window as any).__cblue_files_by_po[poNumber] = limited;
+        } catch { /* non-blocking */ }
+
         storedAttachments = await Promise.all(limited.map((f) => fileToUploadDataUrl(f)));
 
         const byPoRaw = localStorage.getItem("cblue_po_attachments") || "{}";

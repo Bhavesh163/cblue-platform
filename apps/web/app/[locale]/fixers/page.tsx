@@ -384,6 +384,16 @@ export default function FixerProPage() {
         }
       } catch {}
 
+      // Check raw File objects stored in window during this browser session.
+      // This bypasses localStorage quota limits (HEIC files are often > 5 MB).
+      try {
+        const rawFiles = (typeof window !== 'undefined' ? (window as any).__cblue_files_by_po : null) || {};
+        const files: File[] = poKey && Array.isArray(rawFiles[poKey]) ? rawFiles[poKey] : [];
+        if (files.length > 0) {
+          files.forEach(f => { try { directUrls.push(URL.createObjectURL(f)); } catch { /* skip */ } });
+        }
+      } catch {}
+
       const uniqueDirectUrls = Array.from(new Set(directUrls.filter(Boolean)));
       if (uniqueDirectUrls.length > 0) {
         if (isMounted) { setWaitModalAttachmentUrls(uniqueDirectUrls); setLoadingAttachments(false); }
@@ -1438,6 +1448,37 @@ export default function FixerProPage() {
                 // from the partner's browser and should show the informational message instead.
                 const httpUrl = freshUrls.find(u => u.startsWith('http://') || u.startsWith('https://'));
                 if (httpUrl) { window.open(httpUrl, '_blank'); return; }
+                // Handle blob: URLs (created from window raw files during attachment resolution)
+                const blobUrlsFromState = freshUrls.filter(u => u.startsWith('blob:'));
+                if (blobUrlsFromState.length > 0) {
+                  blobUrlsFromState.forEach((blobUrl, idx) => {
+                    const a = document.createElement('a');
+                    a.href = blobUrl;
+                    a.download = `attachment-${idx + 1}`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                  });
+                  return;
+                }
+                // Fallback: re-create blob URLs from window raw files (covers stale blob URL case)
+                try {
+                  const rawFiles = (window as any).__cblue_files_by_po || {};
+                  const files: File[] = poKey && Array.isArray(rawFiles[poKey]) ? rawFiles[poKey] : [];
+                  if (files.length > 0) {
+                    files.forEach((file, idx) => {
+                      const blobUrl = URL.createObjectURL(file);
+                      const a = document.createElement('a');
+                      a.href = blobUrl;
+                      a.download = file.name || `attachment-${idx + 1}`;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+                    });
+                    return;
+                  }
+                } catch {}
                 // Download data: URLs via Blob URL for better browser compatibility (works for HEIC, PDF, etc.)
                 const dataUrls = freshUrls.filter(u => u.startsWith('data:'));
                 if (dataUrls.length > 0) {
