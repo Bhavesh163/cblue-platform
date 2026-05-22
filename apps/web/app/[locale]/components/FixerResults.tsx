@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { computeBudgetBreakdown, resolvePartnerPriceList } from "../../../lib/computeBudgetBreakdown";
 
 interface Fixer {
   id: string;
@@ -1878,15 +1879,28 @@ export default function FixerResults({
               <span className="text-gray-500 text-xs block mb-1">{locale === "th" ? "งบประมาณ" : locale === "zh" ? "预算计算" : "Budget"}</span>
               {(() => {
                 let bd: Array<{ service: string; qty: number; unit: string; unitRate: number; total: number }> | null = null;
-                // Prefer frontend-computed breakdown from localStorage (avoids backend phantom items)
+                // 1. Try priceList-based recompute first — most accurate
                 try {
-                  const storedBd = localStorage.getItem(`cblue_po_breakdown_${poNumber}`);
-                  if (storedBd) {
-                    const parsed = JSON.parse(storedBd);
-                    if (Array.isArray(parsed) && parsed.length > 0) bd = parsed;
+                  const pl = resolvePartnerPriceList(poNumber);
+                  if (pl.length > 0 && description) {
+                    const computed = computeBudgetBreakdown(description, pl);
+                    if (computed && computed.length > 0) {
+                      bd = computed;
+                      try { localStorage.setItem(`cblue_po_breakdown_${poNumber}`, JSON.stringify(bd)); } catch {}
+                    }
                   }
                 } catch {}
-                // Fall back to backend breakdown only if nothing in localStorage
+                // 2. Prefer frontend-computed breakdown from localStorage (avoids backend phantom items)
+                if (!bd || bd.length === 0) {
+                  try {
+                    const storedBd = localStorage.getItem(`cblue_po_breakdown_${poNumber}`);
+                    if (storedBd) {
+                      const parsed = JSON.parse(storedBd);
+                      if (Array.isArray(parsed) && parsed.length > 0) bd = parsed;
+                    }
+                  } catch {}
+                }
+                // 3. Fall back to backend breakdown only if nothing else works
                 if (!bd || bd.length === 0) {
                   bd = (selectedFixer as any)?.estimatedBreakdown ?? null;
                 }

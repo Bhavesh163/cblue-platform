@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useTranslations, useLocale } from "next-intl";
 import { useRouter } from "next/navigation";
 import PdpaConsent from "../components/PdpaConsent";
+import { computeBudgetBreakdown, resolvePartnerPriceList, readStoredBreakdown, type BudgetBreakdownItem } from "../../../lib/computeBudgetBreakdown";
 
 interface SubscriberInfo {
   id: string;
@@ -2294,24 +2295,42 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   <span className="text-xs text-gray-500 uppercase tracking-wider">Budget</span>
                   <div className="text-right">
                     {(() => {
+                      const po = waitModalOrder.request?.po;
                       const desc = String(waitModalOrder.request?.description || waitModalOrder.request?.desc || '');
-                      const m = desc.match(/(\d[\d,]*\.?\d*)\s*(sq\.?m\.?|sqm|m²|ตร\.?ม\.?|ตารางเมตร|sq\.?ft\.?|unit)/i);
-                      const qty = m ? parseFloat((m[1] ?? '').replace(/,/g, '')) : null;
-                      const raw = String(waitModalOrder.request?.budget || '').replace(/[฿,]/g, '');
-                      const total = parseFloat(raw) || 0;
-                      const unit = m ? m[2] : null;
-                      const rate = qty && qty > 0 && total > 0 ? Math.round(total / qty) : null;
-                      return rate ? (
-                        <span className="font-bold text-sky-700">{qty!.toLocaleString()} {unit} × ฿{rate.toLocaleString()} = ฿{total.toLocaleString()}</span>
-                      ) : (
-                        <span className="font-bold text-sky-700">{waitModalOrder.request?.budget || '฿25,000,000'}</span>
-                      );
+                      let bd: BudgetBreakdownItem[] | null = readStoredBreakdown(po);
+                      if (!bd || bd.length === 0) {
+                        const pl = resolvePartnerPriceList(po);
+                        if (pl.length > 0 && desc) {
+                          const computed = computeBudgetBreakdown(desc, pl);
+                          if (computed && computed.length > 0) {
+                            bd = computed;
+                            try { localStorage.setItem(`cblue_po_breakdown_${po}`, JSON.stringify(bd)); } catch {}
+                          }
+                        }
+                      }
+                      if (bd && bd.length >= 1) {
+                        return (
+                          <div className="font-mono text-xs space-y-0.5 text-right">
+                            {bd.map((it, i) => (
+                              <div key={i} className="flex justify-between gap-2">
+                                <span className="text-gray-600">{i+1}) {it.service} {it.qty.toLocaleString()} {it.unit} × ฿{it.unitRate.toLocaleString()}</span>
+                                <span className="font-semibold text-sky-700 shrink-0">= ฿{it.total.toLocaleString()}</span>
+                              </div>
+                            ))}
+                            <div className="flex justify-between gap-2 pt-1 border-t border-sky-200 font-bold text-sm">
+                              <span className="text-sky-900">Budget</span>
+                              <span className="text-sky-900">= ฿{bd.reduce((s, it) => s + (it?.total ?? 0), 0).toLocaleString()}</span>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return <span className="font-bold text-sky-700">{waitModalOrder.request?.budget || '฿0'}</span>;
                     })()}
                   </div>
                 </div>
                 <div className="flex justify-between items-center px-4 py-2.5 bg-gray-50 border-b border-gray-100">
                   <span className="text-xs text-gray-500 uppercase tracking-wider">Project Location</span>
-                  <span className="font-bold text-gray-900">{waitModalOrder.request?.location || waitModalOrder.request?.subdistrict || 'Saphansong'}</span>
+                  <span className="font-bold text-gray-900">{waitModalOrder.request?.location || waitModalOrder.request?.subdistrict || 'N/A'}</span>
                 </div>
                 <div className="flex flex-col gap-1 px-4 py-2.5 bg-gray-50 border-b border-gray-100">
                   <span className="text-xs text-gray-500 uppercase tracking-wider">Project Details</span>
@@ -2562,28 +2581,22 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   let bd: Array<{ service: string; qty: number; unit: string; unitRate: number; total: number }> = [];
                   // 1. Embedded breakdown written by partner at variation submission
                   if (Array.isArray((variationApproveModal as any).breakdown) && (variationApproveModal as any).breakdown.length > 0) bd = (variationApproveModal as any).breakdown;
-                  // 2. Stored breakdown written at booking (FixerResults) or partner submit
-                  if (bd.length === 0) { try { const _s = localStorage.getItem(`cblue_po_breakdown_${brkPo}`); if (_s) bd = JSON.parse(_s); } catch {} }
-                  // 3. Compute from stored partner priceList + order description (robust fallback)
-                  if (bd.length === 0) { try {
-                    const _pl = JSON.parse(localStorage.getItem(`cblue_partner_pricelist_${brkPo}`) || '[]');
-                    if (Array.isArray(_pl) && _pl.length > 0) {
-                      const _raw = stripWorkflowPrefix(variationApproveOrder?.description || variationApproveModal.desc || '').toLowerCase().replace(/fit\s*[-\s]?out/g,'fitout').replace(/re\s*instate(ment)?/g,'reinstatement');
-                      const _pat = /(\d[\d,]*\.?\d*)\s*(sqm|m2|sq\.?m\.?|m²|ตร\.?ม\.?|ตารางเมตร|unit)/gi;
-                      const _pairs: Array<{qty:number;idx:number}> = []; let _pm: RegExpExecArray|null;
-                      while ((_pm = _pat.exec(_raw)) !== null) { const _q = parseFloat((_pm[1]??'').replace(/,/g,'')); if (!isNaN(_q) && _q > 0 && _q < 1e6) _pairs.push({qty:_q,idx:_pm.index}); }
-                      if (_pairs.length > 0) {
-                        const _fl = new Set(['and','the','a','an','of','in','at','for','with','to','sqm','sq','m2','unit','units','i','have','want','need']);
-                        const _tok = (t:string) => t.split(/[\s.,]+/).filter(w => w.length>1 && !_fl.has(w) && isNaN(parseFloat(w)));
-                        const _pick = (tokens:string[]) => { let _b:any=_pl[0],_bs=-1; for (const _it of _pl) { const _tx=`${_it.service||''} ${_it.unit||''}`.toLowerCase().replace(/fit\s*[-\s]?out/g,'fitout'); const _sc=tokens.filter(t=>_tx.includes(t)).length; if (_sc>_bs||(  _sc===_bs&&(parseFloat(String(_it.finalPrice))||Infinity)<(parseFloat(String(_b.finalPrice))||Infinity))) {_bs=_sc;_b=_it;} } return _b; };
-                        for (let _i=0;_i<_pairs.length;_i++) { const _p=_pairs[_i]!; const _nx=_pairs[_i+1]; const _win=_raw.slice(_p.idx,_nx?_nx.idx:_raw.length); const _tk=_tok(_win).length>0?_tok(_win):_tok(_raw); const _m2=_pick(_tk); const _ur=Math.round(parseFloat(String(_m2?.finalPrice??0))||0); bd.push({service:String(_m2?.service||`Service ${_i+1}`),qty:_p.qty,unit:String(_m2?.unit||'sqm'),unitRate:_ur,total:Math.round(_ur*_p.qty)}); }
-                        if (bd.length>0) try{localStorage.setItem(`cblue_po_breakdown_${brkPo}`,JSON.stringify(bd));}catch{}
+                  // 2. Compute fresh using priceList (most accurate, avoids phantom items)
+                  if (bd.length === 0) {
+                    const pl = resolvePartnerPriceList(brkPo);
+                    const desc = String(variationApproveOrder?.description || variationApproveModal.desc || '');
+                    if (pl.length > 0 && desc) {
+                      const computed = computeBudgetBreakdown(desc, pl);
+                      if (computed && computed.length > 0) {
+                        bd = computed;
+                        try { localStorage.setItem(`cblue_po_breakdown_${brkPo}`, JSON.stringify(bd)); } catch {}
                       }
                     }
-                  } catch {} }
+                  }
+                  // 3. Stored breakdown from localStorage
+                  if (bd.length === 0) { try { const _s = localStorage.getItem(`cblue_po_breakdown_${brkPo}`); if (_s) { const p = JSON.parse(_s); if (Array.isArray(p) && p.length > 0) bd = p; } } catch {} }
                   if (bd.length >= 1) {
-                    const rawBudget = variationApproveModal.budget || variationApproveOrder?.budget || variationApproveOrder?.fee;
-                    const totalAmt = parseFloat(String(rawBudget || '').replace(/[฿,]/g, '')) || bd.reduce((s, it) => s + it.total, 0);
+                    const totalAmt = bd.reduce((s, it) => s + (it?.total ?? 0), 0);
                     return (
                       <div className="bg-sky-50 border border-sky-200 rounded-xl px-4 py-3">
                         <div className="text-xs font-semibold text-gray-500 mb-1.5">Budget Breakdown</div>
@@ -2672,6 +2685,39 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 location={(completeApproveOrder?.address?.latitude && completeApproveOrder?.address?.longitude) ? `${Number(completeApproveOrder.address.latitude).toFixed(6)}, ${Number(completeApproveOrder.address.longitude).toFixed(6)}` : (completeApproveOrder?.address?.subdistrict || completeApproveOrder?.subdistrict || completeApproveOrder?.location || completeApproveModal?.location || completeApproveModal?.subdistrict || 'Unknown')}
                 projectDetails={stripWorkflowPrefix(completeApproveOrder?.description || completeApproveModal.desc || completeApproveModal.title || '')}
               />
+              {(() => {
+                const brkPo = completeApproveModal.po;
+                let bd: BudgetBreakdownItem[] | null = null;
+                try {
+                  // 1. Compute fresh using priceList
+                  const pl = resolvePartnerPriceList(brkPo);
+                  const desc = String(completeApproveOrder?.description || completeApproveModal.desc || '');
+                  if (pl.length > 0 && desc) {
+                    const computed = computeBudgetBreakdown(desc, pl);
+                    if (computed && computed.length > 0) bd = computed;
+                  }
+                  // 2. Fall back to stored breakdown
+                  if (!bd || bd.length === 0) bd = readStoredBreakdown(brkPo);
+                } catch {}
+                if (!bd || bd.length === 0) return null;
+                return (
+                  <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+                    <div className="text-xs font-semibold text-gray-500 mb-1.5">Budget Breakdown</div>
+                    <div className="font-mono text-xs space-y-0.5">
+                      {bd.map((it, i) => (
+                        <div key={i} className="flex justify-between gap-2">
+                          <span className="text-gray-600">{i+1}) {it.service} {it.qty.toLocaleString()} {it.unit} × ฿{it.unitRate.toLocaleString()}</span>
+                          <span className="font-semibold text-green-700 shrink-0">= ฿{it.total.toLocaleString()}</span>
+                        </div>
+                      ))}
+                      <div className="flex justify-between gap-2 pt-1 border-t border-green-200 font-bold text-sm">
+                        <span className="text-gray-700">Budget</span>
+                        <span className="text-green-800">= ฿{bd.reduce((s, it) => s + (it?.total ?? 0), 0).toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Completion Note</label>
                 <p className="text-sm text-gray-700 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 whitespace-pre-wrap">{String(completeApproveModal.desc || '').replace(/^Partner completion request:\s*/i, '').trim() || completeApproveModal.desc}</p>

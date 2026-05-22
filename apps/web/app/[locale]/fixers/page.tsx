@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useLocale } from "next-intl";
 import { useRouter } from "next/navigation";
 import PdpaConsent from "../components/PdpaConsent";
+import { computeBudgetBreakdown, BudgetBreakdownItem } from "../../../lib/computeBudgetBreakdown";
 
 interface PartnerInfo {
   id?: string;
@@ -162,75 +163,6 @@ const toCurrencyLabel = (value: any, fallback = '฿0') => {
   return raw.startsWith('฿') ? raw : `฿${raw}`;
 };
 
-type BudgetBreakdownItem = { service: string; qty: number; unit: string; unitRate: number; total: number };
-const computeBudgetBreakdown = (description: string, priceList: any[], totalOverride?: number): BudgetBreakdownItem[] | null => {
-  if (!priceList || priceList.length === 0 || !description) return null;
-  const cleanDesc = stripWorkflowPrefix(description).toLowerCase()
-    .replace(/fit\s*[-\s]?out/g, 'fitout').replace(/re\s*instate(ment)?/g, 'reinstatement');
-  const pattern = /(\d[\d,]*\.?\d*)\s*(sqm|m2|sq\.?m\.?|m²|ตร\.?ม\.?|ตารางเมตร|sq\.?ft\.?|unit)/gi;
-  const pairs: Array<{ qty: number; idx: number }> = [];
-  let m: RegExpExecArray | null;
-  while ((m = pattern.exec(cleanDesc)) !== null) {
-    const qty = parseFloat((m[1] ?? '').replace(/,/g, ''));
-    if (!isNaN(qty) && qty > 0 && qty < 1000000) pairs.push({ qty, idx: m.index });
-  }
-  // Second pass: find unitless numbers (e.g. "700 office building construction")
-  const strictIdxRanges = pairs.map(p => p.idx);
-  const loosePat = /(?<!\d)(\d{2,6})(?!\s*(?:sqm|m2|sq\.?m|m²|ตร|unit|,\d|[.,]\d))/gi;
-  const filler = new Set(['and', 'the', 'a', 'an', 'of', 'in', 'at', 'for', 'with', 'to', 'sqm', 'sq', 'm2', 'unit', 'units', 'per', 'i', 'have', 'want', 'need']);
-  const tokenize = (text: string) => text.split(/[\s.,]+/).filter(t => t.length > 1 && !filler.has(t) && isNaN(parseFloat(t)));
-  let lm: RegExpExecArray | null;
-  while ((lm = loosePat.exec(cleanDesc)) !== null) {
-    const qty = parseFloat((lm[1] ?? '').replace(/,/g, ''));
-    if (isNaN(qty) || qty < 10 || qty >= 1000000) continue;
-    // Skip if already captured by strict pass (within 3 chars)
-    if (strictIdxRanges.some(idx => Math.abs(idx - lm!.index) < 4)) continue;
-    const winEnd = Math.min(lm.index + 80, cleanDesc.length);
-    const win = cleanDesc.slice(lm.index, winEnd);
-    const toks = tokenize(win);
-    // Only add if context matches a service keyword
-    let bestScore = 0;
-    for (const item of priceList) {
-      const itemText = `${item.service || ''} ${item.unit || ''}`.toLowerCase().replace(/fit\s*[-\s]?out/g, 'fitout').replace(/re\s*instate(ment)?/g, 'reinstatement');
-      const score = toks.filter(t => itemText.includes(t)).length;
-      if (score > bestScore) bestScore = score;
-    }
-    if (bestScore >= 1) pairs.push({ qty, idx: lm.index });
-  }
-  pairs.sort((a, b) => a.idx - b.idx);
-  if (pairs.length === 0) return null;
-  const matchToList = (tokens: string[]) => {
-    let best: any = priceList[0];
-    let bestScore = -1;
-    for (const item of priceList) {
-      const itemText = `${item.service || ''} ${item.unit || ''}`.toLowerCase().replace(/fit\s*[-\s]?out/g, 'fitout').replace(/re\s*instate(ment)?/g, 'reinstatement');
-      const score = tokens.filter(t => itemText.includes(t)).length;
-      // On tie, prefer lower-priced item (mirrors backend tiebreaker)
-      const isBetter = score > bestScore || (score === bestScore && score >= 0 && (parseFloat(String(item?.finalPrice)) || Infinity) < (parseFloat(String(best?.finalPrice)) || Infinity));
-      if (isBetter) { bestScore = score; best = item; }
-    }
-    return best as any;
-  };
-  const breakdown: BudgetBreakdownItem[] = [];
-  for (let i = 0; i < pairs.length; i++) {
-    const pair = pairs[i]!;
-    const nextPair = pairs[i + 1];
-    const end = nextPair ? nextPair.idx : cleanDesc.length;
-    // Use forward window from each pair's index to avoid context bleeding from adjacent pairs
-    const window = cleanDesc.slice(pair.idx, end);
-    const tokens = tokenize(window).length > 0 ? tokenize(window) : tokenize(cleanDesc);
-    const item = matchToList(tokens);
-    const pQty = parseFloat(String(item?.amount ?? item?.quantity ?? 1)) || 1;
-    const unitRate = Math.round((parseFloat(String(item?.finalPrice ?? 0)) || 0) / pQty);
-    breakdown.push({ service: String(item?.service || `Service ${i + 1}`), qty: pair.qty, unit: String(item?.unit || 'sqm'), unitRate, total: Math.round(unitRate * pair.qty) });
-  }
-  if (totalOverride && totalOverride > 0 && breakdown.length > 1) {
-    const computed = breakdown.reduce((s, b) => s + b.total, 0);
-    if (computed === 0) return null;
-  }
-  return breakdown.length > 0 ? breakdown : null;
-};
-
 const getLocalChatHistory = (po: any) => {
   if (typeof window === 'undefined' || !po) return [];
   try {
@@ -359,6 +291,7 @@ export default function FixerProPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [waitModalOrder, setWaitModalOrder] = useState<any>(null);
   const [waitModalAttachmentUrls, setWaitModalAttachmentUrls] = useState<string[]>([]);
+  const [loadingAttachments, setLoadingAttachments] = useState(false);
   const [declineModalOpen, setDeclineModalOpen] = useState(false);
   const [declineComment, setDeclineComment] = useState('');
   const handleJobClick = (job: any) => {
@@ -415,9 +348,10 @@ export default function FixerProPage() {
 
     const resolveWaitModalAttachments = async () => {
       if (!waitModalOrder) {
-        if (isMounted) setWaitModalAttachmentUrls([]);
+        if (isMounted) { setWaitModalAttachmentUrls([]); setLoadingAttachments(false); }
         return;
       }
+      if (isMounted) setLoadingAttachments(true);
 
       const directUrls = [
         waitModalOrder?.issueImage,
@@ -452,19 +386,19 @@ export default function FixerProPage() {
 
       const uniqueDirectUrls = Array.from(new Set(directUrls.filter(Boolean)));
       if (uniqueDirectUrls.length > 0) {
-        if (isMounted) setWaitModalAttachmentUrls(uniqueDirectUrls);
+        if (isMounted) { setWaitModalAttachmentUrls(uniqueDirectUrls); setLoadingAttachments(false); }
         return;
       }
 
       if (!attachmentOrderId) {
-        if (isMounted) setWaitModalAttachmentUrls([]);
+        if (isMounted) { setWaitModalAttachmentUrls([]); setLoadingAttachments(false); }
         return;
       }
 
       try {
         const token = localStorage.getItem('subscriber_token') || '';
         if (!token) {
-          if (isMounted) setWaitModalAttachmentUrls([]);
+          if (isMounted) { setWaitModalAttachmentUrls([]); setLoadingAttachments(false); }
           return;
         }
 
@@ -472,7 +406,7 @@ export default function FixerProPage() {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) {
-          if (isMounted) setWaitModalAttachmentUrls([]);
+          if (isMounted) { setWaitModalAttachmentUrls([]); setLoadingAttachments(false); }
           return;
         }
 
@@ -480,9 +414,9 @@ export default function FixerProPage() {
         const backendUrls = Array.isArray(attachments)
           ? attachments.map((attachment: any) => attachment?.url).filter(Boolean)
           : [];
-        if (isMounted) setWaitModalAttachmentUrls(Array.from(new Set(backendUrls)));
+        if (isMounted) { setWaitModalAttachmentUrls(Array.from(new Set(backendUrls))); setLoadingAttachments(false); }
       } catch {
-        if (isMounted) setWaitModalAttachmentUrls([]);
+        if (isMounted) { setWaitModalAttachmentUrls([]); setLoadingAttachments(false); }
       }
     };
 
@@ -1534,7 +1468,7 @@ export default function FixerProPage() {
               }}>
                 {waitModalAttachmentUrls.length > 0
                   ? `${waitModalAttachmentUrls.length} file${waitModalAttachmentUrls.length > 1 ? 's' : ''} attached — Click to Download`
-                  : 'Files attached — Click to Check'}
+                  : loadingAttachments ? 'Checking files…' : 'No files attached'}
               </span></div>
             </div>
 
