@@ -1227,7 +1227,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         budget: order.estimatedPrice ? `฿${Number(order.estimatedPrice).toLocaleString()}` : '฿0',
         tier,
         desc: 'Partner accepted the PO. Please pay the processing fee and notify to proceed.',
-        location: (() => { const m = String(order?.description || '').match(/\bLOC:([^|]+)/); return (m ? (m[1] ?? '').trim() : '') || String(order?.address?.subdistrict || order?.subdistrict || order?.location || ''); })(),
+        location: (() => { if (order?.address?.latitude && order?.address?.longitude) return `${Number(order.address.latitude).toFixed(6)}, ${Number(order.address.longitude).toFixed(6)}`; const m = String(order?.description || '').match(/\bLOC:([^|]+)/); return (m ? (m[1] ?? '').trim() : '') || String(order?.address?.subdistrict || order?.subdistrict || order?.location || ''); })(),
         type: 'payment_pending',
         step: 6,
       });
@@ -1408,7 +1408,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         date: toDisplayDateTime(o.createdAt),
         createdAt: parseDateMs(o.createdAt),
         budget: o.estimatedPrice ? `฿${Number(o.estimatedPrice).toLocaleString()}` : '฿0',
-        location: o.subdistrict || 'Saphansong',
+        location: (() => {
+          if (o.address?.latitude && o.address?.longitude) return `${Number(o.address.latitude).toFixed(6)}, ${Number(o.address.longitude).toFixed(6)}`;
+          const m = String(o.description || '').match(/\bLOC:([^|]+)/);
+          return (m ? (m[1] ?? '').trim() : '') || o.address?.subdistrict || o.subdistrict || 'Unknown';
+        })(),
         tier,
         actionNeeded: [6, 8, 9, 10, 11].includes(step),
         step,
@@ -1919,8 +1923,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         status: 'COMPLETED',
         step: 11,
         stepName: getWorkflowStepName(11),
-        location: (() => { const m = String(entry?.description || '').match(/\bLOC:([^|]+)/); const fromDesc = m ? (m[1] ?? '').trim() : ''; return fromDesc || entry.address?.subdistrict || entry.subdistrict || entry.location || existing.location || ''; })(),
-        subdistrict: (() => { const m = String(entry?.description || '').match(/\bLOC:([^|]+)/); const fromDesc = m ? (m[1] ?? '').trim() : ''; return fromDesc || entry.address?.subdistrict || entry.subdistrict || entry.location || existing.subdistrict || ''; })(),
+        location: (() => { if (entry?.address?.latitude && entry?.address?.longitude) return `${Number(entry.address.latitude).toFixed(6)}, ${Number(entry.address.longitude).toFixed(6)}`; const m = String(entry?.description || '').match(/\bLOC:([^|]+)/); const fromDesc = m ? (m[1] ?? '').trim() : ''; return fromDesc || entry.address?.subdistrict || entry.subdistrict || entry.location || existing.location || ''; })(),
+        subdistrict: (() => { if (entry?.address?.latitude && entry?.address?.longitude) return `${Number(entry.address.latitude).toFixed(6)}, ${Number(entry.address.longitude).toFixed(6)}`; const m = String(entry?.description || '').match(/\bLOC:([^|]+)/); const fromDesc = m ? (m[1] ?? '').trim() : ''; return fromDesc || entry.address?.subdistrict || entry.subdistrict || entry.location || existing.subdistrict || ''; })(),
         projectDetails,
         description: projectDetails,
         tier: entry.tier || existing.tier || 'Standard',
@@ -2549,7 +2553,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 po={variationApproveModal.po || '-'}
                 partnerName={firstNameOnly(variationApproveModal.customer || variationApproveOrder?.customer || variationApproveOrder?.fixerName, 'Partner')}
                 budget={toCurrencyLabel(variationApproveModal.budget || variationApproveOrder?.budget || variationApproveOrder?.fee)}
-                location={variationApproveOrder?.address?.subdistrict || variationApproveOrder?.subdistrict || variationApproveOrder?.location || variationApproveModal?.location || variationApproveModal?.subdistrict || 'Unknown'}
+                location={(variationApproveOrder?.address?.latitude && variationApproveOrder?.address?.longitude) ? `${Number(variationApproveOrder.address.latitude).toFixed(6)}, ${Number(variationApproveOrder.address.longitude).toFixed(6)}` : (variationApproveOrder?.address?.subdistrict || variationApproveOrder?.subdistrict || variationApproveOrder?.location || variationApproveModal?.location || variationApproveModal?.subdistrict || 'Unknown')}
                 projectDetails={stripWorkflowPrefix(variationApproveOrder?.description || variationApproveModal.desc || variationApproveModal.title || '')}
               />
               {(() => {
@@ -2665,7 +2669,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 po={completeApproveModal.po || '-'}
                 partnerName={firstNameOnly(completeApproveModal.customer || completeApproveOrder?.customer || completeApproveOrder?.fixerName, 'Partner')}
                 budget={toCurrencyLabel(completeApproveModal.budget || completeApproveOrder?.budget || completeApproveOrder?.fee)}
-                location={completeApproveOrder?.address?.subdistrict || completeApproveOrder?.subdistrict || completeApproveOrder?.location || completeApproveModal?.location || completeApproveModal?.subdistrict || 'Unknown'}
+                location={(completeApproveOrder?.address?.latitude && completeApproveOrder?.address?.longitude) ? `${Number(completeApproveOrder.address.latitude).toFixed(6)}, ${Number(completeApproveOrder.address.longitude).toFixed(6)}` : (completeApproveOrder?.address?.subdistrict || completeApproveOrder?.subdistrict || completeApproveOrder?.location || completeApproveModal?.location || completeApproveModal?.subdistrict || 'Unknown')}
                 projectDetails={stripWorkflowPrefix(completeApproveOrder?.description || completeApproveModal.desc || completeApproveModal.title || '')}
               />
               <div>

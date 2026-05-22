@@ -37,6 +37,7 @@ interface BookingAddress {
   addressText?: string;
   latitude?: number;
   longitude?: number;
+  locationType?: string;
 }
 
 type BookingType = "household" | "project" | "professional" | "property";
@@ -547,7 +548,9 @@ export default function FixerResults({
   const gpsLocationStr = (bookingAddress?.latitude && bookingAddress?.longitude)
     ? `${Number(bookingAddress.latitude).toFixed(6)}, ${Number(bookingAddress.longitude).toFixed(6)}`
     : null;
-  const bookingLocation = bookingAddress?.subdistrict || bookingAddress?.district || bookingAddress?.province || gpsLocationStr || "";
+  const bookingLocation = (bookingAddress?.locationType === 'gps' && gpsLocationStr)
+    ? gpsLocationStr
+    : (bookingAddress?.subdistrict || bookingAddress?.district || bookingAddress?.province || gpsLocationStr || "");
   const ensureOrderAddressId = async (token: string) => {
     // Allow creation if at least one geographic field is provided OR GPS coordinates
     const hasGeo = bookingAddress?.province || bookingAddress?.district || bookingAddress?.subdistrict;
@@ -1876,7 +1879,7 @@ export default function FixerResults({
               {(() => {
                 const bd: Array<{ service: string; qty: number; unit: string; unitRate: number; total: number }> | null =
                   (selectedFixer as any)?.estimatedBreakdown ?? null;
-                if (bd && bd.length > 1) {
+                if (bd && bd.length >= 1) {
                   return (
                     <div className="font-mono text-xs space-y-0.5">
                       {bd.map((item, i) => (
@@ -1892,15 +1895,15 @@ export default function FixerResults({
                     </div>
                   );
                 }
-                if (bd && bd.length === 1) {
-                  const item = bd[0];
-                  return <span className="font-bold text-sky-800 font-mono text-xs">{item!.qty.toLocaleString()} {item!.unit} × ฿{item!.unitRate.toLocaleString()} = ฿{item!.total.toLocaleString()}</span>;
-                }
                 if (qtyVal && unitRate && !isMultiService) {
                   return <span className="font-bold text-sky-800">{qtyVal.toLocaleString()} {qtyUnit} × ฿{unitRate.toLocaleString()} = ฿{totalPrice.toLocaleString()}</span>;
                 }
                 return <span className="font-bold text-sky-800">฿{selectedFixer.price.toLocaleString()}</span>;
               })()}
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-500">{locale === "th" ? "ที่ตั้งโครงการ" : locale === "zh" ? "项目位置" : "Project Location"}</span>
+              <span className="text-gray-800 text-right text-sm">{bookingLocation || 'Not specified'}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-gray-500">{t("poTier")}</span>

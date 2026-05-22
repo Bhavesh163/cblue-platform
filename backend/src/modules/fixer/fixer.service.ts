@@ -343,7 +343,7 @@ export class FixerService {
     for (let i = 0; i < pairs.length; i++) {
       const start = pairs[i].idx;
       const end = pairs[i + 1] ? pairs[i + 1].idx : normalized.length;
-      const window = normalized.slice(Math.max(0, start - 30), end).trim();
+      const window = normalized.slice(start, end).trim();
       const tokens = window.split(/\s+/).filter((t) => t.length > 1 && !this.fillerTokens.has(t) && !unitPattern.test(t) && isNaN(parseFloat(t)));
       pairs[i].contextTerms = tokens;
     }

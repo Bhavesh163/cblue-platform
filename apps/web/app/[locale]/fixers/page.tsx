@@ -174,9 +174,31 @@ const computeBudgetBreakdown = (description: string, priceList: any[], totalOver
     const qty = parseFloat((m[1] ?? '').replace(/,/g, ''));
     if (!isNaN(qty) && qty > 0 && qty < 1000000) pairs.push({ qty, idx: m.index });
   }
-  if (pairs.length === 0) return null;
+  // Second pass: find unitless numbers (e.g. "700 office building construction")
+  const strictIdxRanges = pairs.map(p => p.idx);
+  const loosePat = /(?<!\d)(\d{2,6})(?!\s*(?:sqm|m2|sq\.?m|m²|ตร|unit|,\d|[.,]\d))/gi;
   const filler = new Set(['and', 'the', 'a', 'an', 'of', 'in', 'at', 'for', 'with', 'to', 'sqm', 'sq', 'm2', 'unit', 'units', 'per', 'i', 'have', 'want', 'need']);
   const tokenize = (text: string) => text.split(/[\s.,]+/).filter(t => t.length > 1 && !filler.has(t) && isNaN(parseFloat(t)));
+  let lm: RegExpExecArray | null;
+  while ((lm = loosePat.exec(cleanDesc)) !== null) {
+    const qty = parseFloat((lm[1] ?? '').replace(/,/g, ''));
+    if (isNaN(qty) || qty < 10 || qty >= 1000000) continue;
+    // Skip if already captured by strict pass (within 3 chars)
+    if (strictIdxRanges.some(idx => Math.abs(idx - lm!.index) < 4)) continue;
+    const winEnd = Math.min(lm.index + 80, cleanDesc.length);
+    const win = cleanDesc.slice(lm.index, winEnd);
+    const toks = tokenize(win);
+    // Only add if context matches a service keyword
+    let bestScore = 0;
+    for (const item of priceList) {
+      const itemText = `${item.service || ''} ${item.unit || ''}`.toLowerCase().replace(/fit\s*[-\s]?out/g, 'fitout').replace(/re\s*instate(ment)?/g, 'reinstatement');
+      const score = toks.filter(t => itemText.includes(t)).length;
+      if (score > bestScore) bestScore = score;
+    }
+    if (bestScore >= 1) pairs.push({ qty, idx: lm.index });
+  }
+  pairs.sort((a, b) => a.idx - b.idx);
+  if (pairs.length === 0) return null;
   const matchToList = (tokens: string[]) => {
     let best: any = priceList[0];
     let bestScore = -1;
@@ -648,7 +670,13 @@ export default function FixerProPage() {
       hasAttachment: attachmentUrls.length > 0,
       images: attachmentUrls,
       issueImage: attachmentUrls[0] || "",
-      subdistrict: (locFromDesc && locFromDesc !== 'Unknown') ? locFromDesc : ((o.address?.subdistrict && o.address.subdistrict !== 'Unknown' ? o.address.subdistrict : '') || (o.address?.district && o.address.district !== 'Unknown' ? o.address.district : '') || (o.address?.province && o.address.province !== 'Unknown' ? o.address.province : '') || o.subdistrict || ""),
+      subdistrict: (() => {
+        // Prefer GPS coordinates when stored in address
+        if (o.address?.latitude && o.address?.longitude) {
+          return `${Number(o.address.latitude).toFixed(6)}, ${Number(o.address.longitude).toFixed(6)}`;
+        }
+        return (locFromDesc && locFromDesc !== 'Unknown') ? locFromDesc : ((o.address?.subdistrict && o.address.subdistrict !== 'Unknown' ? o.address.subdistrict : '') || (o.address?.district && o.address.district !== 'Unknown' ? o.address.district : '') || (o.address?.province && o.address.province !== 'Unknown' ? o.address.province : '') || o.subdistrict || "");
+      })(),
       createdAt: o.createdAt,
       customer: o.user?.name || "Customer",
       orderType: o.orderType?.toLowerCase() || "household",
@@ -1413,7 +1441,7 @@ export default function FixerProPage() {
                   const brkTotal = parseFloat(String(waitModalBudgetDisplay || '').replace(/[฿,]/g, '')) || 0;
                   let bd = computeBudgetBreakdown(brkDesc, (partner as any)?.priceList ?? [], brkTotal);
                   if (!bd || bd.length === 0) { try { const stored = JSON.parse(localStorage.getItem(`cblue_po_breakdown_${waitModalOrder?.po}`) || 'null'); if (Array.isArray(stored) && stored.length > 0) bd = stored as BudgetBreakdownItem[]; } catch {} }
-                  if (bd && bd.length > 1) {
+                  if (bd && bd.length >= 1) {
                     return (
                       <div className="font-mono text-xs space-y-0.5">
                         {bd.map((it, i) => (
@@ -1428,10 +1456,6 @@ export default function FixerProPage() {
                         </div>
                       </div>
                     );
-                  }
-                  if (bd && bd.length === 1) {
-                    const it = bd[0];
-                    return <span className="font-bold text-amber-600 font-mono text-xs">{it!.qty.toLocaleString()} {it!.unit} × ฿{it!.unitRate.toLocaleString()} = ฿{it!.total.toLocaleString()}</span>;
                   }
                   return <span className="font-bold text-amber-600">{waitModalBudgetDisplay}</span>;
                 })()}
@@ -1460,6 +1484,20 @@ export default function FixerProPage() {
                 // from the partner's browser and should show the informational message instead.
                 const httpUrl = freshUrls.find(u => u.startsWith('http://') || u.startsWith('https://'));
                 if (httpUrl) { window.open(httpUrl, '_blank'); return; }
+                // Download data: URLs via anchor element (works in browser without popup blockers)
+                const dataUrls = freshUrls.filter(u => u.startsWith('data:'));
+                if (dataUrls.length > 0) {
+                  dataUrls.forEach((dataUrl, idx) => {
+                    const ext = (dataUrl.match(/^data:([^;]+)/) ?? [])[1]?.split('/')[1] || 'bin';
+                    const a = document.createElement('a');
+                    a.href = dataUrl;
+                    a.download = `attachment-${idx + 1}.${ext}`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                  });
+                  return;
+                }
                 alert("Files were uploaded by the customer but are not yet accessible here. If you need them urgently, please ask the customer to share via the chat room after accepting this job.");
               }}>
                 {waitModalAttachmentUrls.length > 0
@@ -2452,7 +2490,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                   const varTotal = parseFloat(String(variationModal.budget || '').replace(/[฿,]/g, '')) || 0;
                   let bd = computeBudgetBreakdown(varDesc, priceList ?? [], varTotal);
                   if (!bd || bd.length === 0) { try { const stored = JSON.parse(localStorage.getItem(`cblue_po_breakdown_${variationModal.po}`) || 'null'); if (Array.isArray(stored) && stored.length > 0) bd = stored as BudgetBreakdownItem[]; } catch {} }
-                  if (bd && bd.length > 1) {
+                  if (bd && bd.length >= 1) {
                     return (
                       <div className="font-mono text-xs space-y-0.5">
                         {bd.map((it, i) => (
@@ -2467,10 +2505,6 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                         </div>
                       </div>
                     );
-                  }
-                  if (bd && bd.length === 1) {
-                    const it = bd[0];
-                    return <span className="font-bold text-amber-800 font-mono text-xs">{it!.qty.toLocaleString()} {it!.unit} × ฿{it!.unitRate.toLocaleString()} = ฿{it!.total.toLocaleString()}</span>;
                   }
                   return <span className="font-bold text-amber-800">{toCurrencyLabel(variationModal.budget)}</span>;
                 })()}
@@ -2806,7 +2840,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList }: { loca
                   const varTotal = parseFloat(String(variationModal.budget || '').replace(/[฿,]/g, '')) || 0;
                   let bd = computeBudgetBreakdown(varDesc, priceList ?? [], varTotal);
                   if (!bd || bd.length === 0) { try { const stored = JSON.parse(localStorage.getItem(`cblue_po_breakdown_${variationModal.po}`) || 'null'); if (Array.isArray(stored) && stored.length > 0) bd = stored as BudgetBreakdownItem[]; } catch {} }
-                  if (bd && bd.length > 1) {
+                  if (bd && bd.length >= 1) {
                     return (
                       <div className="font-mono text-xs space-y-0.5">
                         {bd.map((it, i) => (
@@ -2821,10 +2855,6 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList }: { loca
                         </div>
                       </div>
                     );
-                  }
-                  if (bd && bd.length === 1) {
-                    const it = bd[0];
-                    return <span className="font-bold text-amber-800 font-mono text-xs">{it!.qty.toLocaleString()} {it!.unit} × ฿{it!.unitRate.toLocaleString()} = ฿{it!.total.toLocaleString()}</span>;
                   }
                   return <span className="font-bold text-amber-800">{toCurrencyLabel(variationModal.budget)}</span>;
                 })()}

@@ -357,6 +357,7 @@ function HouseholdBookingContent() {
           addressText: form.addressText,
           latitude: gpsCoords?.lat,
           longitude: gpsCoords?.lng,
+          locationType: form.locationType,
         }}
         issueImages={images}
         onNewBooking={() => {
