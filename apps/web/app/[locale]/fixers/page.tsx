@@ -355,6 +355,9 @@ export default function FixerProPage() {
           if (bd && bd.length > 0) {
             localStorage.setItem(`cblue_po_breakdown_${po}`, JSON.stringify(bd));
           }
+          if (pl && pl.length > 0) {
+            localStorage.setItem(`cblue_partner_pricelist_${po}`, JSON.stringify(pl));
+          }
         }
       } catch { /* non-blocking */ }
     } else {
@@ -2370,6 +2373,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                         const total = parseFloat(String(job?.budget || job?.fee || '').replace(/[฿,]/g, '')) || 0;
                         const bd = computeBudgetBreakdown(descToUse, priceList ?? [], total);
                         if (bd && bd.length > 0 && job?.po) localStorage.setItem(`cblue_po_breakdown_${job.po}`, JSON.stringify(bd));
+                        if (priceList && priceList.length > 0 && job?.po) localStorage.setItem(`cblue_partner_pricelist_${job.po}`, JSON.stringify(priceList));
                       } catch {}
                     }} className="text-xs px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-full transition">Submit Variation</button>
                   )}
@@ -2746,6 +2750,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList }: { loca
                         const total = parseFloat(String(req?.budget || req?.fee || '').replace(/[฿,]/g, '')) || 0;
                         const bd = computeBudgetBreakdown(descToUse, priceList ?? [], total);
                         if (bd && bd.length > 0 && req?.po) localStorage.setItem(`cblue_po_breakdown_${req.po}`, JSON.stringify(bd));
+                        if (priceList && priceList.length > 0 && req?.po) localStorage.setItem(`cblue_partner_pricelist_${req.po}`, JSON.stringify(priceList));
                       } catch {}
                     }} className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg transition">Yes</button>
                   <button onClick={(e) => { e.stopPropagation(); try { localStorage.setItem(`partner_variation_sent_${req.po}`, '1'); } catch {} writePartnerReqs(prev => prev.filter((x: any) => !(x.po === req.po && x.type === 'variation_partner'))); }} className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">No</button>

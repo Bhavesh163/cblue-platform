@@ -2555,7 +2555,28 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               {(() => {
                 try {
                   const brkPo = variationApproveModal.po;
-                  const bd = JSON.parse(localStorage.getItem(`cblue_po_breakdown_${brkPo}`) || '[]') as Array<{ service: string; qty: number; unit: string; unitRate: number; total: number }>;
+                  let bd: Array<{ service: string; qty: number; unit: string; unitRate: number; total: number }> = [];
+                  // 1. Embedded breakdown written by partner at variation submission
+                  if (Array.isArray((variationApproveModal as any).breakdown) && (variationApproveModal as any).breakdown.length > 0) bd = (variationApproveModal as any).breakdown;
+                  // 2. Stored breakdown written at booking (FixerResults) or partner submit
+                  if (bd.length === 0) { try { const _s = localStorage.getItem(`cblue_po_breakdown_${brkPo}`); if (_s) bd = JSON.parse(_s); } catch {} }
+                  // 3. Compute from stored partner priceList + order description (robust fallback)
+                  if (bd.length === 0) { try {
+                    const _pl = JSON.parse(localStorage.getItem(`cblue_partner_pricelist_${brkPo}`) || '[]');
+                    if (Array.isArray(_pl) && _pl.length > 0) {
+                      const _raw = stripWorkflowPrefix(variationApproveOrder?.description || variationApproveModal.desc || '').toLowerCase().replace(/fit\s*[-\s]?out/g,'fitout').replace(/re\s*instate(ment)?/g,'reinstatement');
+                      const _pat = /(\d[\d,]*\.?\d*)\s*(sqm|m2|sq\.?m\.?|m²|ตร\.?ม\.?|ตารางเมตร|unit)/gi;
+                      const _pairs: Array<{qty:number;idx:number}> = []; let _pm: RegExpExecArray|null;
+                      while ((_pm = _pat.exec(_raw)) !== null) { const _q = parseFloat((_pm[1]??'').replace(/,/g,'')); if (!isNaN(_q) && _q > 0 && _q < 1e6) _pairs.push({qty:_q,idx:_pm.index}); }
+                      if (_pairs.length > 0) {
+                        const _fl = new Set(['and','the','a','an','of','in','at','for','with','to','sqm','sq','m2','unit','units','i','have','want','need']);
+                        const _tok = (t:string) => t.split(/[\s.,]+/).filter(w => w.length>1 && !_fl.has(w) && isNaN(parseFloat(w)));
+                        const _pick = (tokens:string[]) => { let _b:any=_pl[0],_bs=-1; for (const _it of _pl) { const _tx=`${_it.service||''} ${_it.unit||''}`.toLowerCase().replace(/fit\s*[-\s]?out/g,'fitout'); const _sc=tokens.filter(t=>_tx.includes(t)).length; if (_sc>_bs||(  _sc===_bs&&(parseFloat(String(_it.finalPrice))||Infinity)<(parseFloat(String(_b.finalPrice))||Infinity))) {_bs=_sc;_b=_it;} } return _b; };
+                        for (let _i=0;_i<_pairs.length;_i++) { const _p=_pairs[_i]!; const _nx=_pairs[_i+1]; const _win=_raw.slice(_p.idx,_nx?_nx.idx:_raw.length); const _tk=_tok(_win).length>0?_tok(_win):_tok(_raw); const _m2=_pick(_tk); const _ur=Math.round(parseFloat(String(_m2?.finalPrice??0))||0); bd.push({service:String(_m2?.service||`Service ${_i+1}`),qty:_p.qty,unit:String(_m2?.unit||'sqm'),unitRate:_ur,total:Math.round(_ur*_p.qty)}); }
+                        if (bd.length>0) try{localStorage.setItem(`cblue_po_breakdown_${brkPo}`,JSON.stringify(bd));}catch{}
+                      }
+                    }
+                  } catch {} }
                   if (bd.length >= 1) {
                     const rawBudget = variationApproveModal.budget || variationApproveOrder?.budget || variationApproveOrder?.fee;
                     const totalAmt = parseFloat(String(rawBudget || '').replace(/[฿,]/g, '')) || bd.reduce((s, it) => s + it.total, 0);
