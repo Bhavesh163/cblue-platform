@@ -2448,7 +2448,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
               counterpartLabel="Customer"
               counterpartName={firstNameOnly(variationModal.customer, 'Customer')}
               budget={toCurrencyLabel(variationModal.budget)}
-              location={variationModal.location || variationModal.subdistrict || 'Unknown'}
+              location={(() => { const loc = variationModal.location || variationModal.subdistrict || ''; if (loc && loc !== 'Unknown') return loc; const m = String(variationModal.description || '').match(/\bLOC:([^|]+)/); return m ? (m[1] ?? '').trim() : 'Unknown'; })()}
               projectDetails={stripWorkflowPrefix(variationModal.description || variationModal.desc || variationModal.projectDetails || variationModal.service || '')}
             />
             <div>
@@ -2568,7 +2568,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
               counterpartLabel="Customer"
               counterpartName={firstNameOnly(ratingModal.customer, 'Customer')}
               budget={toCurrencyLabel(ratingModal.budget || ratingModal.fee)}
-              location={ratingModal.location || ratingModal.subdistrict || 'Unknown'}
+              location={(() => { const loc = ratingModal.location || ratingModal.subdistrict || ''; if (loc && loc !== 'Unknown') return loc; const m = String(ratingModal.description || '').match(/\bLOC:([^|]+)/); return m ? (m[1] ?? '').trim() : 'Unknown'; })()}
               projectDetails={stripWorkflowPrefix(ratingModal.description || ratingModal.desc || ratingModal.projectDetails || ratingModal.service || '')}
             />
             <div>
@@ -2610,13 +2610,26 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
               counterpartLabel="Customer"
               counterpartName={firstNameOnly(completeModal.customer, 'Customer')}
               budget={toCurrencyLabel(completeModal.budget || completeModal.fee)}
-              location={completeModal.location || completeModal.subdistrict || 'Unknown'}
+              location={(() => { const loc = completeModal.location || completeModal.subdistrict || ''; if (loc && loc !== 'Unknown') return loc; const m = String(completeModal.description || '').match(/\bLOC:([^|]+)/); return m ? (m[1] ?? '').trim() : 'Unknown'; })()}
               projectDetails={stripWorkflowPrefix(completeModal.description || completeModal.desc || completeModal.projectDetails || completeModal.service || '')}
             />
-            {/* Budget breakdown read from localStorage (complete_partner description is a status msg, not project desc) */}
+            {/* Budget breakdown — priceList-first, then localStorage fallback */}
             {(() => {
               let bd: BudgetBreakdownItem[] | null = null;
-              try { const s = localStorage.getItem(`cblue_po_breakdown_${completeModal.po}`); if (s) { const p = JSON.parse(s); if (Array.isArray(p) && p.length > 0) bd = p; } } catch {}
+              try {
+                const pl = priceList ?? [];
+                const descForBd = String(completeModal.description || '');
+                if (pl.length > 0 && descForBd) {
+                  const computed = computeBudgetBreakdown(descForBd, pl);
+                  if (computed && computed.length > 0) {
+                    bd = computed;
+                    try { localStorage.setItem(`cblue_po_breakdown_${completeModal.po}`, JSON.stringify(bd)); } catch {}
+                  }
+                }
+              } catch {}
+              if (!bd || bd.length === 0) {
+                try { const s = localStorage.getItem(`cblue_po_breakdown_${completeModal.po}`); if (s) { const p = JSON.parse(s); if (Array.isArray(p) && p.length > 0) bd = p; } } catch {}
+              }
               if (!bd || bd.length === 0) return null;
               return (
                 <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3">
@@ -2828,7 +2841,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList }: { loca
               counterpartLabel="Customer"
               counterpartName={firstNameOnly(variationModal.customer, 'Customer')}
               budget={toCurrencyLabel(variationModal.budget)}
-              location={variationModal.location || variationModal.subdistrict || 'Unknown'}
+              location={(() => { const loc = variationModal.location || variationModal.subdistrict || ''; if (loc && loc !== 'Unknown') return loc; const m = String(variationModal.description || '').match(/\bLOC:([^|]+)/); return m ? (m[1] ?? '').trim() : 'Unknown'; })()}
               projectDetails={stripWorkflowPrefix(variationModal.description || variationModal.desc || variationModal.projectDetails || variationModal.service || '')}
             />
             <div>
@@ -2930,13 +2943,27 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList }: { loca
               counterpartLabel="Customer"
               counterpartName={firstNameOnly(completeModal.customer, 'Customer')}
               budget={toCurrencyLabel(completeModal.budget || completeModal.fee)}
-              location={completeModal.location || completeModal.subdistrict || 'Unknown'}
+              location={(() => { const loc = completeModal.location || completeModal.subdistrict || ''; if (loc && loc !== 'Unknown') return loc; try { const active = JSON.parse(localStorage.getItem('ghis_mock_active') || '[]'); const job = (active as any[]).find((x: any) => x.po === completeModal.po); const m = String(job?.description || '').match(/\bLOC:([^|]+)/); if (m) return (m[1] ?? '').trim(); } catch {} return 'Unknown'; })()}
               projectDetails={stripWorkflowPrefix(completeModal.description || completeModal.desc || completeModal.projectDetails || completeModal.service || '')}
             />
-            {/* Budget breakdown read from localStorage (complete_partner description is a status msg, not project desc) */}
+            {/* Budget breakdown — priceList-first (reads description from ghis_mock_active), then localStorage fallback */}
             {(() => {
               let bd: BudgetBreakdownItem[] | null = null;
-              try { const s = localStorage.getItem(`cblue_po_breakdown_${completeModal.po}`); if (s) { const p = JSON.parse(s); if (Array.isArray(p) && p.length > 0) bd = p; } } catch {}
+              try {
+                const pl = priceList ?? [];
+                let descForBd = '';
+                try { const active = JSON.parse(localStorage.getItem('ghis_mock_active') || '[]'); const job = (active as any[]).find((x: any) => x.po === completeModal.po); if (job?.description) descForBd = String(job.description); } catch {}
+                if (pl.length > 0 && descForBd) {
+                  const computed = computeBudgetBreakdown(descForBd, pl);
+                  if (computed && computed.length > 0) {
+                    bd = computed;
+                    try { localStorage.setItem(`cblue_po_breakdown_${completeModal.po}`, JSON.stringify(bd)); } catch {}
+                  }
+                }
+              } catch {}
+              if (!bd || bd.length === 0) {
+                try { const s = localStorage.getItem(`cblue_po_breakdown_${completeModal.po}`); if (s) { const p = JSON.parse(s); if (Array.isArray(p) && p.length > 0) bd = p; } } catch {}
+              }
               if (!bd || bd.length === 0) return null;
               return (
                 <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3">
@@ -2984,7 +3011,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList }: { loca
               counterpartLabel="Customer"
               counterpartName={firstNameOnly(ratingModal.customer, 'Customer')}
               budget={toCurrencyLabel(ratingModal.budget || ratingModal.fee)}
-              location={ratingModal.location || ratingModal.subdistrict || 'Unknown'}
+              location={(() => { const loc = ratingModal.location || ratingModal.subdistrict || ''; if (loc && loc !== 'Unknown') return loc; try { const active = JSON.parse(localStorage.getItem('ghis_mock_active') || '[]'); const job = (active as any[]).find((x: any) => x.po === ratingModal.po); const m = String(job?.description || '').match(/\bLOC:([^|]+)/); if (m) return (m[1] ?? '').trim(); } catch {} return 'Unknown'; })()}
               projectDetails={stripWorkflowPrefix(ratingModal.description || ratingModal.desc || ratingModal.projectDetails || ratingModal.service || '')}
             />
             <div>

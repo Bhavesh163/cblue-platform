@@ -2330,7 +2330,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 </div>
                 <div className="flex justify-between items-center px-4 py-2.5 bg-gray-50 border-b border-gray-100">
                   <span className="text-xs text-gray-500 uppercase tracking-wider">Project Location</span>
-                  <span className="font-bold text-gray-900">{waitModalOrder.request?.location || waitModalOrder.request?.subdistrict || 'N/A'}</span>
+                  <span className="font-bold text-gray-900">{(() => { const loc = waitModalOrder.request?.location || waitModalOrder.request?.subdistrict || ''; if (loc && loc !== 'Unknown') return loc; const m = String(waitModalOrder.request?.description || waitModalOrder.request?.desc || '').match(/\bLOC:([^|]+)/); return m ? (m[1] ?? '').trim() : 'N/A'; })()}</span>
                 </div>
                 <div className="flex flex-col gap-1 px-4 py-2.5 bg-gray-50 border-b border-gray-100">
                   <span className="text-xs text-gray-500 uppercase tracking-wider">Project Details</span>
