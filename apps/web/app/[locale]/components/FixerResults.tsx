@@ -1877,8 +1877,18 @@ export default function FixerResults({
             <div className="bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">
               <span className="text-gray-500 text-xs block mb-1">{locale === "th" ? "งบประมาณ" : locale === "zh" ? "预算计算" : "Budget"}</span>
               {(() => {
-                const bd: Array<{ service: string; qty: number; unit: string; unitRate: number; total: number }> | null =
+                let bd: Array<{ service: string; qty: number; unit: string; unitRate: number; total: number }> | null =
                   (selectedFixer as any)?.estimatedBreakdown ?? null;
+                // If breakdown is missing/empty, try to recompute from frontend priceList
+                if (!bd || bd.length === 0) {
+                  try {
+                    const storedBd = localStorage.getItem(`cblue_po_breakdown_${poNumber}`);
+                    if (storedBd) {
+                      const parsed = JSON.parse(storedBd);
+                      if (Array.isArray(parsed) && parsed.length > 0) bd = parsed;
+                    }
+                  } catch {}
+                }
                 if (bd && bd.length >= 1) {
                   return (
                     <div className="font-mono text-xs space-y-0.5">

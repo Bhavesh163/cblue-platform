@@ -370,9 +370,13 @@ export default function FixerProPage() {
       try {
         const po = job?.po;
         if (po) {
-          const desc = String(job?.description || '');
+          const desc = String(job?.description || job?.desc || '');
           const total = parseFloat(String(job?.budget || job?.fee || '').replace(/[฿,]/g, '')) || 0;
-          const pl = (partner as any)?.priceList ?? [];
+          let pl = (partner as any)?.priceList ?? [];
+          // Fallback: try priceList stored in localStorage for this PO
+          if (pl.length === 0) {
+            try { const stored = localStorage.getItem(`cblue_partner_pricelist_${po}`); if (stored) pl = JSON.parse(stored); } catch {}
+          }
           const bd = computeBudgetBreakdown(desc, pl, total);
           if (bd && bd.length > 0) {
             localStorage.setItem(`cblue_po_breakdown_${po}`, JSON.stringify(bd));
@@ -974,6 +978,7 @@ export default function FixerProPage() {
                   budget: String(pending.budget || '').replace(/[^0-9]/g, ''),
                   tier: pending.tier,
                   desc: pending.desc,
+                  description: pending.description || pending.desc || '',
                   meetingDate: pending.meetingDate,
                   meetingTime: pending.meetingTime,
                   meetingDateLabel: pending.meetingDate || '',
@@ -1437,9 +1442,12 @@ export default function FixerProPage() {
               <div className="border-b pb-2">
                 <span className="text-gray-500 text-sm block mb-1">Budget</span>
                 {(() => {
-                  const brkDesc = String(waitModalOrder?.description || '');
+                  const brkDesc = String(waitModalOrder?.description || waitModalOrder?.desc || '');
                   const brkTotal = parseFloat(String(waitModalBudgetDisplay || '').replace(/[฿,]/g, '')) || 0;
-                  let bd = computeBudgetBreakdown(brkDesc, (partner as any)?.priceList ?? [], brkTotal);
+                  let pl = (partner as any)?.priceList ?? [];
+                  if (pl.length === 0) { try { const stored = localStorage.getItem(`cblue_partner_pricelist_${waitModalOrder?.po}`); if (stored) pl = JSON.parse(stored); } catch {} }
+                  let bd = computeBudgetBreakdown(brkDesc, pl, brkTotal);
+                  if (bd && bd.length > 0) { try { localStorage.setItem(`cblue_po_breakdown_${waitModalOrder?.po}`, JSON.stringify(bd)); } catch {} }
                   if (!bd || bd.length === 0) { try { const stored = JSON.parse(localStorage.getItem(`cblue_po_breakdown_${waitModalOrder?.po}`) || 'null'); if (Array.isArray(stored) && stored.length > 0) bd = stored as BudgetBreakdownItem[]; } catch {} }
                   if (bd && bd.length >= 1) {
                     return (
@@ -2402,16 +2410,18 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                       setVariationModal(job); setVariationDesc("");
                       // Refresh breakdown so customer's Approve Variation reads correct multi-item data
                       try {
-                        let descToUse = String(job?.description || '');
+                        let descToUse = String(job?.description || job?.desc || '');
                         if (!descToUse || /proceed to submit variation/i.test(descToUse)) {
-                          for (const k of ['ghis_mock_active', 'ghis_mock_dyn_req']) {
-                            try { const items = JSON.parse(localStorage.getItem(k) || '[]'); const found = (Array.isArray(items) ? items : []).find((r: any) => r?.po === job?.po); if (found?.description && !/proceed to submit variation/i.test(found.description)) { descToUse = found.description; break; } } catch {}
+                          for (const k of ['ghis_mock_active', 'ghis_mock_dyn_req', 'partner_mock_dyn_req']) {
+                            try { const items = JSON.parse(localStorage.getItem(k) || '[]'); const found = (Array.isArray(items) ? items : []).find((r: any) => r?.po === job?.po); if ((found?.description || found?.desc) && !/proceed to submit variation/i.test(found.description || found.desc || '')) { descToUse = found.description || found.desc || ''; break; } } catch {}
                           }
                         }
                         const total = parseFloat(String(job?.budget || job?.fee || '').replace(/[฿,]/g, '')) || 0;
-                        const bd = computeBudgetBreakdown(descToUse, priceList ?? [], total);
+                        let pl = priceList ?? [];
+                        if (pl.length === 0) { try { const stored = localStorage.getItem(`cblue_partner_pricelist_${job?.po}`); if (stored) pl = JSON.parse(stored); } catch {} }
+                        const bd = computeBudgetBreakdown(descToUse, pl, total);
                         if (bd && bd.length > 0 && job?.po) localStorage.setItem(`cblue_po_breakdown_${job.po}`, JSON.stringify(bd));
-                        if (priceList && priceList.length > 0 && job?.po) localStorage.setItem(`cblue_partner_pricelist_${job.po}`, JSON.stringify(priceList));
+                        if (pl && pl.length > 0 && job?.po) localStorage.setItem(`cblue_partner_pricelist_${job.po}`, JSON.stringify(pl));
                       } catch {}
                     }} className="text-xs px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-full transition">Submit Variation</button>
                   )}
@@ -2488,7 +2498,10 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                 {(() => {
                   const varDesc = String(variationModal.description || variationModal.desc || variationModal.projectDetails || '');
                   const varTotal = parseFloat(String(variationModal.budget || '').replace(/[฿,]/g, '')) || 0;
-                  let bd = computeBudgetBreakdown(varDesc, priceList ?? [], varTotal);
+                  let varPl = priceList ?? [];
+                  if (varPl.length === 0) { try { const stored = localStorage.getItem(`cblue_partner_pricelist_${variationModal.po}`); if (stored) varPl = JSON.parse(stored); } catch {} }
+                  let bd = computeBudgetBreakdown(varDesc, varPl, varTotal);
+                  if (bd && bd.length > 0) { try { localStorage.setItem(`cblue_po_breakdown_${variationModal.po}`, JSON.stringify(bd)); } catch {} }
                   if (!bd || bd.length === 0) { try { const stored = JSON.parse(localStorage.getItem(`cblue_po_breakdown_${variationModal.po}`) || 'null'); if (Array.isArray(stored) && stored.length > 0) bd = stored as BudgetBreakdownItem[]; } catch {} }
                   if (bd && bd.length >= 1) {
                     return (
@@ -2775,16 +2788,18 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList }: { loca
                   <button onClick={(e) => { e.stopPropagation(); setVariationDesc(''); setVariationModal(req);
                       // Refresh breakdown so customer's Approve Variation reads correct multi-item data
                       try {
-                        let descToUse = String(req?.description || '');
+                        let descToUse = String(req?.description || req?.desc || '');
                         if (!descToUse || /proceed to submit variation/i.test(descToUse)) {
-                          for (const k of ['ghis_mock_active', 'ghis_mock_dyn_req']) {
-                            try { const items = JSON.parse(localStorage.getItem(k) || '[]'); const found = (Array.isArray(items) ? items : []).find((r: any) => r?.po === req?.po); if (found?.description && !/proceed to submit variation/i.test(found.description)) { descToUse = found.description; break; } } catch {}
+                          for (const k of ['ghis_mock_active', 'ghis_mock_dyn_req', 'partner_mock_dyn_req']) {
+                            try { const items = JSON.parse(localStorage.getItem(k) || '[]'); const found = (Array.isArray(items) ? items : []).find((r: any) => r?.po === req?.po); if ((found?.description || found?.desc) && !/proceed to submit variation/i.test(found.description || found.desc || '')) { descToUse = found.description || found.desc || ''; break; } } catch {}
                           }
                         }
                         const total = parseFloat(String(req?.budget || req?.fee || '').replace(/[฿,]/g, '')) || 0;
-                        const bd = computeBudgetBreakdown(descToUse, priceList ?? [], total);
+                        let pl = priceList ?? [];
+                        if (pl.length === 0) { try { const stored = localStorage.getItem(`cblue_partner_pricelist_${req?.po}`); if (stored) pl = JSON.parse(stored); } catch {} }
+                        const bd = computeBudgetBreakdown(descToUse, pl, total);
                         if (bd && bd.length > 0 && req?.po) localStorage.setItem(`cblue_po_breakdown_${req.po}`, JSON.stringify(bd));
-                        if (priceList && priceList.length > 0 && req?.po) localStorage.setItem(`cblue_partner_pricelist_${req.po}`, JSON.stringify(priceList));
+                        if (pl && pl.length > 0 && req?.po) localStorage.setItem(`cblue_partner_pricelist_${req.po}`, JSON.stringify(pl));
                       } catch {}
                     }} className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg transition">Yes</button>
                   <button onClick={(e) => { e.stopPropagation(); try { localStorage.setItem(`partner_variation_sent_${req.po}`, '1'); } catch {} writePartnerReqs(prev => prev.filter((x: any) => !(x.po === req.po && x.type === 'variation_partner'))); }} className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">No</button>
@@ -2838,7 +2853,10 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList }: { loca
                 {(() => {
                   const varDesc = String(variationModal.description || variationModal.desc || variationModal.projectDetails || '');
                   const varTotal = parseFloat(String(variationModal.budget || '').replace(/[฿,]/g, '')) || 0;
-                  let bd = computeBudgetBreakdown(varDesc, priceList ?? [], varTotal);
+                  let varPl = priceList ?? [];
+                  if (varPl.length === 0) { try { const stored = localStorage.getItem(`cblue_partner_pricelist_${variationModal.po}`); if (stored) varPl = JSON.parse(stored); } catch {} }
+                  let bd = computeBudgetBreakdown(varDesc, varPl, varTotal);
+                  if (bd && bd.length > 0) { try { localStorage.setItem(`cblue_po_breakdown_${variationModal.po}`, JSON.stringify(bd)); } catch {} }
                   if (!bd || bd.length === 0) { try { const stored = JSON.parse(localStorage.getItem(`cblue_po_breakdown_${variationModal.po}`) || 'null'); if (Array.isArray(stored) && stored.length > 0) bd = stored as BudgetBreakdownItem[]; } catch {} }
                   if (bd && bd.length >= 1) {
                     return (
