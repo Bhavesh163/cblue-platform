@@ -1877,19 +1877,21 @@ export default function FixerResults({
             <div className="bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">
               <span className="text-gray-500 text-xs block mb-1">{locale === "th" ? "งบประมาณ" : locale === "zh" ? "预算计算" : "Budget"}</span>
               {(() => {
-                let bd: Array<{ service: string; qty: number; unit: string; unitRate: number; total: number }> | null =
-                  (selectedFixer as any)?.estimatedBreakdown ?? null;
-                // If breakdown is missing/empty, try to recompute from frontend priceList
+                let bd: Array<{ service: string; qty: number; unit: string; unitRate: number; total: number }> | null = null;
+                // Prefer frontend-computed breakdown from localStorage (avoids backend phantom items)
+                try {
+                  const storedBd = localStorage.getItem(`cblue_po_breakdown_${poNumber}`);
+                  if (storedBd) {
+                    const parsed = JSON.parse(storedBd);
+                    if (Array.isArray(parsed) && parsed.length > 0) bd = parsed;
+                  }
+                } catch {}
+                // Fall back to backend breakdown only if nothing in localStorage
                 if (!bd || bd.length === 0) {
-                  try {
-                    const storedBd = localStorage.getItem(`cblue_po_breakdown_${poNumber}`);
-                    if (storedBd) {
-                      const parsed = JSON.parse(storedBd);
-                      if (Array.isArray(parsed) && parsed.length > 0) bd = parsed;
-                    }
-                  } catch {}
+                  bd = (selectedFixer as any)?.estimatedBreakdown ?? null;
                 }
                 if (bd && bd.length >= 1) {
+                  const bdTotal = bd.reduce((s, it) => s + (it?.total ?? 0), 0);
                   return (
                     <div className="font-mono text-xs space-y-0.5">
                       {bd.map((item, i) => (
@@ -1900,7 +1902,7 @@ export default function FixerResults({
                       ))}
                       <div className="flex justify-between gap-2 pt-1 border-t border-sky-200 font-bold text-sm">
                         <span className="text-gray-700">{locale === "th" ? "งบประมาณรวม" : "Budget"}</span>
-                        <span className="text-sky-900">= ฿{totalPrice.toLocaleString()}</span>
+                        <span className="text-sky-900">= ฿{bdTotal.toLocaleString()}</span>
                       </div>
                     </div>
                   );

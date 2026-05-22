@@ -377,6 +377,10 @@ export default function FixerProPage() {
           if (pl.length === 0) {
             try { const stored = localStorage.getItem(`cblue_partner_pricelist_${po}`); if (stored) pl = JSON.parse(stored); } catch {}
           }
+          // Final fallback: general key set when partner profile was loaded
+          if (pl.length === 0) {
+            try { const stored = localStorage.getItem('cblue_partner_pricelist_general'); if (stored) pl = JSON.parse(stored); } catch {}
+          }
           const bd = computeBudgetBreakdown(desc, pl, total);
           if (bd && bd.length > 0) {
             localStorage.setItem(`cblue_po_breakdown_${po}`, JSON.stringify(bd));
@@ -584,6 +588,9 @@ export default function FixerProPage() {
             
             setPartner(pInfo);
             localStorage.setItem("subscriber", JSON.stringify(pInfo));
+            if (Array.isArray(pInfo.priceList) && pInfo.priceList.length > 0) {
+              try { localStorage.setItem('cblue_partner_pricelist_general', JSON.stringify(pInfo.priceList)); } catch {}
+            }
           }
 
           const ordersRes = await fetch("/api/v1/orders/fixer", { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
@@ -1273,6 +1280,8 @@ export default function FixerProPage() {
               fee: order.fee,
               budget: order.budget,
               tier: order.tier,
+              location: order.subdistrict || order.location || '',
+              subdistrict: order.subdistrict || '',
               description: 'Customer approved the variation. Please submit project complete for confirmation.',
               type: 'complete_partner',
               workflowType: 'complete_partner',
@@ -1304,6 +1313,8 @@ export default function FixerProPage() {
               fee: order.fee,
               budget: order.budget,
               tier: order.tier,
+              location: order.subdistrict || order.location || '',
+              subdistrict: order.subdistrict || '',
               description: 'Customer confirmed completion. Please rate the customer to close this job.',
               type: 'rate_partner',
               workflowType: 'rate_partner',
@@ -1446,6 +1457,7 @@ export default function FixerProPage() {
                   const brkTotal = parseFloat(String(waitModalBudgetDisplay || '').replace(/[฿,]/g, '')) || 0;
                   let pl = (partner as any)?.priceList ?? [];
                   if (pl.length === 0) { try { const stored = localStorage.getItem(`cblue_partner_pricelist_${waitModalOrder?.po}`); if (stored) pl = JSON.parse(stored); } catch {} }
+                  if (pl.length === 0) { try { const stored = localStorage.getItem('cblue_partner_pricelist_general'); if (stored) pl = JSON.parse(stored); } catch {} }
                   let bd = computeBudgetBreakdown(brkDesc, pl, brkTotal);
                   if (bd && bd.length > 0) { try { localStorage.setItem(`cblue_po_breakdown_${waitModalOrder?.po}`, JSON.stringify(bd)); } catch {} }
                   if (!bd || bd.length === 0) { try { const stored = JSON.parse(localStorage.getItem(`cblue_po_breakdown_${waitModalOrder?.po}`) || 'null'); if (Array.isArray(stored) && stored.length > 0) bd = stored as BudgetBreakdownItem[]; } catch {} }
@@ -1460,7 +1472,7 @@ export default function FixerProPage() {
                         ))}
                         <div className="flex justify-between gap-2 pt-1 border-t border-amber-200 font-bold text-sm">
                           <span className="text-gray-700">Budget</span>
-                          <span className="text-amber-800">= ฿{brkTotal > 0 ? brkTotal.toLocaleString() : bd.reduce((s, it) => s + (it?.total ?? 0), 0).toLocaleString()}</span>
+                          <span className="text-amber-800">= ฿{bd.reduce((s, it) => s + (it?.total ?? 0), 0).toLocaleString()}</span>
                         </div>
                       </div>
                     );
@@ -1492,25 +1504,37 @@ export default function FixerProPage() {
                 // from the partner's browser and should show the informational message instead.
                 const httpUrl = freshUrls.find(u => u.startsWith('http://') || u.startsWith('https://'));
                 if (httpUrl) { window.open(httpUrl, '_blank'); return; }
-                // Download data: URLs via anchor element (works in browser without popup blockers)
+                // Download data: URLs via Blob URL for better browser compatibility (works for HEIC, PDF, etc.)
                 const dataUrls = freshUrls.filter(u => u.startsWith('data:'));
                 if (dataUrls.length > 0) {
                   dataUrls.forEach((dataUrl, idx) => {
-                    const ext = (dataUrl.match(/^data:([^;]+)/) ?? [])[1]?.split('/')[1] || 'bin';
-                    const a = document.createElement('a');
-                    a.href = dataUrl;
-                    a.download = `attachment-${idx + 1}.${ext}`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
+                    try {
+                      const [header, base64] = dataUrl.split(',');
+                      const mimeType = header?.match(/:(.*?);/)?.[1] || 'application/octet-stream';
+                      const ext = mimeType.split('/')[1] || 'bin';
+                      const byteString = atob(base64 || '');
+                      const byteArray = new Uint8Array(byteString.length);
+                      for (let i = 0; i < byteString.length; i++) byteArray[i] = byteString.charCodeAt(i);
+                      const blob = new Blob([byteArray], { type: mimeType });
+                      const blobUrl = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = blobUrl;
+                      a.download = `attachment-${idx + 1}.${ext}`;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+                    } catch {
+                      alert('Could not download file. Please ask the customer to share it via the chat room.');
+                    }
                   });
                   return;
                 }
                 alert("Files were uploaded by the customer but are not yet accessible here. If you need them urgently, please ask the customer to share via the chat room after accepting this job.");
               }}>
                 {waitModalAttachmentUrls.length > 0
-                  ? `${waitModalAttachmentUrls.length} file${waitModalAttachmentUrls.length > 1 ? 's' : ''} attached (Click to View)`
-                  : 'Files attached'}
+                  ? `${waitModalAttachmentUrls.length} file${waitModalAttachmentUrls.length > 1 ? 's' : ''} attached — Click to Download`
+                  : 'Files attached — Click to Check'}
               </span></div>
             </div>
 
@@ -2419,6 +2443,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                         const total = parseFloat(String(job?.budget || job?.fee || '').replace(/[฿,]/g, '')) || 0;
                         let pl = priceList ?? [];
                         if (pl.length === 0) { try { const stored = localStorage.getItem(`cblue_partner_pricelist_${job?.po}`); if (stored) pl = JSON.parse(stored); } catch {} }
+                        if (pl.length === 0) { try { const stored = localStorage.getItem('cblue_partner_pricelist_general'); if (stored) pl = JSON.parse(stored); } catch {} }
                         const bd = computeBudgetBreakdown(descToUse, pl, total);
                         if (bd && bd.length > 0 && job?.po) localStorage.setItem(`cblue_po_breakdown_${job.po}`, JSON.stringify(bd));
                         if (pl && pl.length > 0 && job?.po) localStorage.setItem(`cblue_partner_pricelist_${job.po}`, JSON.stringify(pl));
@@ -2500,6 +2525,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                   const varTotal = parseFloat(String(variationModal.budget || '').replace(/[฿,]/g, '')) || 0;
                   let varPl = priceList ?? [];
                   if (varPl.length === 0) { try { const stored = localStorage.getItem(`cblue_partner_pricelist_${variationModal.po}`); if (stored) varPl = JSON.parse(stored); } catch {} }
+                  if (varPl.length === 0) { try { const stored = localStorage.getItem('cblue_partner_pricelist_general'); if (stored) varPl = JSON.parse(stored); } catch {} }
                   let bd = computeBudgetBreakdown(varDesc, varPl, varTotal);
                   if (bd && bd.length > 0) { try { localStorage.setItem(`cblue_po_breakdown_${variationModal.po}`, JSON.stringify(bd)); } catch {} }
                   if (!bd || bd.length === 0) { try { const stored = JSON.parse(localStorage.getItem(`cblue_po_breakdown_${variationModal.po}`) || 'null'); if (Array.isArray(stored) && stored.length > 0) bd = stored as BudgetBreakdownItem[]; } catch {} }
@@ -2514,7 +2540,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                         ))}
                         <div className="flex justify-between gap-2 pt-1 border-t border-amber-200 font-bold text-sm">
                           <span className="text-amber-900">Budget</span>
-                          <span className="text-amber-900">= ฿{varTotal > 0 ? varTotal.toLocaleString() : bd.reduce((s, it) => s + (it?.total ?? 0), 0).toLocaleString()}</span>
+                          <span className="text-amber-900">= ฿{bd.reduce((s, it) => s + (it?.total ?? 0), 0).toLocaleString()}</span>
                         </div>
                       </div>
                     );
@@ -2653,6 +2679,29 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
               location={completeModal.location || completeModal.subdistrict || 'Unknown'}
               projectDetails={stripWorkflowPrefix(completeModal.description || completeModal.desc || completeModal.projectDetails || completeModal.service || '')}
             />
+            {/* Budget breakdown read from localStorage (complete_partner description is a status msg, not project desc) */}
+            {(() => {
+              let bd: BudgetBreakdownItem[] | null = null;
+              try { const s = localStorage.getItem(`cblue_po_breakdown_${completeModal.po}`); if (s) { const p = JSON.parse(s); if (Array.isArray(p) && p.length > 0) bd = p; } } catch {}
+              if (!bd || bd.length === 0) return null;
+              return (
+                <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+                  <span className="text-gray-500 text-xs block mb-1">Budget Breakdown</span>
+                  <div className="font-mono text-xs space-y-0.5">
+                    {bd.map((it, i) => (
+                      <div key={i} className="flex justify-between gap-2">
+                        <span className="text-gray-600">{i + 1}) {it!.service} {it.qty.toLocaleString()} {it.unit} × ฿{it.unitRate.toLocaleString()}</span>
+                        <span className="font-semibold text-green-700 shrink-0">= ฿{it!.total.toLocaleString()}</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between gap-2 pt-1 border-t border-green-200 font-bold text-sm">
+                      <span className="text-gray-700">Budget</span>
+                      <span className="text-green-800">= ฿{bd.reduce((s, it) => s + (it?.total ?? 0), 0).toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-2">Completion Note <span className="text-gray-400 font-normal">(optional)</span></label>
               <textarea
@@ -2797,6 +2846,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList }: { loca
                         const total = parseFloat(String(req?.budget || req?.fee || '').replace(/[฿,]/g, '')) || 0;
                         let pl = priceList ?? [];
                         if (pl.length === 0) { try { const stored = localStorage.getItem(`cblue_partner_pricelist_${req?.po}`); if (stored) pl = JSON.parse(stored); } catch {} }
+                        if (pl.length === 0) { try { const stored = localStorage.getItem('cblue_partner_pricelist_general'); if (stored) pl = JSON.parse(stored); } catch {} }
                         const bd = computeBudgetBreakdown(descToUse, pl, total);
                         if (bd && bd.length > 0 && req?.po) localStorage.setItem(`cblue_po_breakdown_${req.po}`, JSON.stringify(bd));
                         if (pl && pl.length > 0 && req?.po) localStorage.setItem(`cblue_partner_pricelist_${req.po}`, JSON.stringify(pl));
@@ -2855,6 +2905,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList }: { loca
                   const varTotal = parseFloat(String(variationModal.budget || '').replace(/[฿,]/g, '')) || 0;
                   let varPl = priceList ?? [];
                   if (varPl.length === 0) { try { const stored = localStorage.getItem(`cblue_partner_pricelist_${variationModal.po}`); if (stored) varPl = JSON.parse(stored); } catch {} }
+                  if (varPl.length === 0) { try { const stored = localStorage.getItem('cblue_partner_pricelist_general'); if (stored) varPl = JSON.parse(stored); } catch {} }
                   let bd = computeBudgetBreakdown(varDesc, varPl, varTotal);
                   if (bd && bd.length > 0) { try { localStorage.setItem(`cblue_po_breakdown_${variationModal.po}`, JSON.stringify(bd)); } catch {} }
                   if (!bd || bd.length === 0) { try { const stored = JSON.parse(localStorage.getItem(`cblue_po_breakdown_${variationModal.po}`) || 'null'); if (Array.isArray(stored) && stored.length > 0) bd = stored as BudgetBreakdownItem[]; } catch {} }
@@ -2869,7 +2920,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList }: { loca
                         ))}
                         <div className="flex justify-between gap-2 pt-1 border-t border-amber-200 font-bold text-sm">
                           <span className="text-amber-900">Budget</span>
-                          <span className="text-amber-900">= ฿{varTotal > 0 ? varTotal.toLocaleString() : bd.reduce((s, it) => s + (it?.total ?? 0), 0).toLocaleString()}</span>
+                          <span className="text-amber-900">= ฿{bd.reduce((s, it) => s + (it?.total ?? 0), 0).toLocaleString()}</span>
                         </div>
                       </div>
                     );
@@ -2948,6 +2999,29 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList }: { loca
               location={completeModal.location || completeModal.subdistrict || 'Unknown'}
               projectDetails={stripWorkflowPrefix(completeModal.description || completeModal.desc || completeModal.projectDetails || completeModal.service || '')}
             />
+            {/* Budget breakdown read from localStorage (complete_partner description is a status msg, not project desc) */}
+            {(() => {
+              let bd: BudgetBreakdownItem[] | null = null;
+              try { const s = localStorage.getItem(`cblue_po_breakdown_${completeModal.po}`); if (s) { const p = JSON.parse(s); if (Array.isArray(p) && p.length > 0) bd = p; } } catch {}
+              if (!bd || bd.length === 0) return null;
+              return (
+                <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+                  <span className="text-gray-500 text-xs block mb-1">Budget Breakdown</span>
+                  <div className="font-mono text-xs space-y-0.5">
+                    {bd.map((it, i) => (
+                      <div key={i} className="flex justify-between gap-2">
+                        <span className="text-gray-600">{i + 1}) {it!.service} {it.qty.toLocaleString()} {it.unit} × ฿{it.unitRate.toLocaleString()}</span>
+                        <span className="font-semibold text-green-700 shrink-0">= ฿{it!.total.toLocaleString()}</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between gap-2 pt-1 border-t border-green-200 font-bold text-sm">
+                      <span className="text-gray-700">Budget</span>
+                      <span className="text-green-800">= ฿{bd.reduce((s, it) => s + (it?.total ?? 0), 0).toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-2">Completion Note <span className="text-gray-400 font-normal">(optional)</span></label>
               <textarea value={completeNote} onChange={e => setCompleteNote(e.target.value)} rows={3} placeholder="e.g. All tasks finished, site cleaned, client signed off..." className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 resize-none" />

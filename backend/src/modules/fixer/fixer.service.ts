@@ -560,15 +560,9 @@ export class FixerService {
                   total: lineTotal,
                 });
               } else {
-                const lineTotal = Math.round(pricePerUnit * qty);
-                multiTotal += lineTotal;
-                estimatedBreakdown.push({
-                  service: String(matchedItem.service || contextTerms.slice(0, 2).join(' ') || 'Service'),
-                  qty,
-                  unit: String(matchedItem.unit || 'sqm'),
-                  unitRate: Math.round(pricePerUnit),
-                  total: lineTotal,
-                });
+                // Context terms present but no service in price list matches them —
+                // skip this quantity to avoid phantom line items (e.g. "10 page", "100 FAQ")
+                // that don't belong to the partner's service offerings.
               }
             }
             basePrice = multiTotal;
