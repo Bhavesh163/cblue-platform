@@ -9,7 +9,7 @@ export class PropertyService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(userId: string, dto: CreatePropertyDto) {
-    return this.prisma.property.create({
+    const property = await this.prisma.property.create({
       data: {
         userId,
         propertyType: dto.propertyType,
@@ -37,6 +37,24 @@ export class PropertyService {
       },
       include: { images: true },
     });
+
+    if (dto.images && dto.images.length > 0) {
+      await this.prisma.propertyImage.createMany({
+        data: dto.images.map((img, idx) => ({
+          propertyId: property.id,
+          url: img.url,
+          key: img.key || `property/${property.id}/image-${idx + 1}`,
+          sortOrder: idx,
+          isPrimary: idx === 0,
+        })),
+      });
+      return this.prisma.property.findUnique({
+        where: { id: property.id },
+        include: { images: { orderBy: { sortOrder: 'asc' } } },
+      });
+    }
+
+    return property;
   }
 
   async search(dto: SearchPropertyDto) {

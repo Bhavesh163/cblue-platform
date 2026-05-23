@@ -27,6 +27,70 @@ export default function PropertyRegisterPage() {
   const [locationType, setLocationType] = useState<"gps" | "dropdown" | "address">("dropdown");
   const [subscriber, setSubscriber] = useState<{ name: string; email?: string; role?: string } | null>(null);
   const [authMode, setAuthMode] = useState<"login" | "register">("register");
+  const [propImages, setPropImages] = useState<File[]>([]);
+
+  // Compress an image File to ≤0.3 MB base64 data URL
+  async function compressPropertyImage(file: File): Promise<string> {
+    if (!file.type.startsWith("image/")) {
+      return new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+    const TARGET = 409600; // 0.3 MB in base64 chars
+    const passes = [
+      { maxDim: 1200, quality: 0.70 },
+      { maxDim: 900, quality: 0.60 },
+      { maxDim: 700, quality: 0.50 },
+    ];
+    return new Promise<string>((resolve) => {
+      const img = document.createElement("img");
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        let result = "";
+        const tryPass = (idx: number) => {
+          if (idx >= passes.length) { resolve(result || ""); return; }
+          const pass = passes[idx]!;
+          const scale = Math.min(1, pass.maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.round(img.naturalWidth * scale);
+          canvas.height = Math.round(img.naturalHeight * scale);
+          canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const data = canvas.toDataURL("image/jpeg", pass.quality);
+          result = data;
+          if (data.length <= TARGET || idx === passes.length - 1) { resolve(data); return; }
+          tryPass(idx + 1);
+        };
+        tryPass(0);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(""); };
+      img.src = url;
+    });
+  }
+
+  function handlePropImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!e.target.files) return;
+    const newFiles = Array.from(e.target.files);
+    setPropImages((prev) => {
+      const combined = [...prev, ...newFiles].slice(0, 5);
+      const totalMB = combined.reduce((sum, f) => sum + f.size, 0) / (1024 * 1024);
+      if (totalMB > 5) {
+        alert(
+          locale === "th"
+            ? "รวมไฟล์ทั้งหมดต้องไม่เกิน 5 MB"
+            : locale === "zh"
+            ? "所有文件总计不超过 5 MB"
+            : "Total files must not exceed 5 MB.",
+        );
+        return prev;
+      }
+      return combined;
+    });
+    e.target.value = "";
+  }
 
   useEffect(() => {
     try {
@@ -188,10 +252,23 @@ export default function PropertyRegisterPage() {
         ...(form.password ? { password: form.password } : {}),
       };
 
+      // Compress and attach property images
+      let compressedImages: { url: string; key: string }[] = [];
+      if (propImages.length > 0) {
+        try {
+          compressedImages = (await Promise.all(
+            propImages.map(async (f, idx) => {
+              const url = await compressPropertyImage(f);
+              return url ? { url, key: `property/upload/image-${idx + 1}` } : null;
+            })
+          )).filter(Boolean) as { url: string; key: string }[];
+        } catch { /* non-blocking */ }
+      }
+
       const res = await fetch("/api/v1/properties", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, ...(compressedImages.length > 0 ? { images: compressedImages } : {}) }),
       });
 
       if (res.ok) {
@@ -717,8 +794,26 @@ export default function PropertyRegisterPage() {
                   type="file"
                   multiple
                   accept="image/*"
+                  onChange={handlePropImageChange}
                   className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
                 />
+                <p className="mt-1 text-xs text-gray-400">
+                  {locale === "th" ? "สูงสุด 5 รูป · ไม่เกิน 5 MB รวม · บีบอัดอัตโนมัติเป็น 0.3 MB ต่อไฟล์" : locale === "zh" ? "最多 5 张 · 总计不超过 5 MB · 自动压缩至每张 0.3 MB" : "Up to 5 photos · 5 MB total · auto-compressed to 0.3 MB each"}
+                </p>
+                {propImages.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {propImages.map((f, i) => (
+                      <div key={i} className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-200 bg-gray-50">
+                        <img src={URL.createObjectURL(f)} alt="" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setPropImages((prev) => prev.filter((_, j) => j !== i))}
+                          className="absolute top-0.5 right-0.5 w-5 h-5 bg-red-500 text-white rounded-full text-xs leading-none flex items-center justify-center"
+                        >×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </fieldset>
 

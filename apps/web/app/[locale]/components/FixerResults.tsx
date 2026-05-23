@@ -2081,7 +2081,7 @@ export default function FixerResults({
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
-        const nominated = data.find((f: any) => f.id === nominateId || f.id.endsWith(nominateId) || f.alias.includes(nominateId));
+        const nominated = data.find((f: any) => f.id === nominateId || f.id.endsWith(nominateId) || f.alias.toLowerCase().includes(nominateId.toLowerCase()));
         if (nominated) {
           setNominatedFixer(nominated);
           setMatchError("");
@@ -2110,10 +2110,10 @@ export default function FixerResults({
 
     setMatchError(
       locale === "th"
-        ? "ไม่พบพาร์ทเนอร์ตามรหัสที่ระบุ"
+        ? "ไม่พบพาร์ทเนอร์ตามชื่อหรือรหัสที่ระบุ"
         : locale === "zh"
-          ? "未找到您输入的合作伙伴编号"
-          : "No partner found for that ID",
+          ? "未找到您输入的合作伙伴姓名或编号"
+          : "No partner found for that name or ID",
     );
   };
 
@@ -2276,16 +2276,16 @@ export default function FixerResults({
              {locale === "th" ? "เสนอพาร์ทเนอร์ลำดับที่ 8" : locale === "zh" ? "提名第8位合作伙伴" : "Nominate 8th Partner"}
           </h4>
           <p className="text-xs text-gray-500 mb-3">
-            {locale === "th" ? "กรอกหมายเลข ID ของพาร์ทเนอร์ที่คุณต้องการเพิ่มในรายการเปรียบเทียบ" : locale === "zh" ? "输入您想添加到比较列表的合作伙伴ID号" : "Enter the Partner ID number you want to add to the comparison list"}
+            {locale === "th" ? "กรอกชื่อหรือหมายเลข ID ของพาร์ทเนอร์ที่คุณต้องการเพิ่ม ระบบจะดึงอัตราค่าบริการจากรายการงานที่ตรงกัน" : locale === "zh" ? "输入您想添加的合作伙伴姓名或ID号，系统将根据匹配工作获取单价" : "Enter the partner name or ID to add. The unit rate from their matched job price list will be used to calculate the price."}
           </p>
           <div className="flex gap-2">
             <input
               type="text"
               value={nominateId}
-              onChange={(e) => setNominateId(e.target.value.replace(/\D/g, ""))}
-              placeholder={locale === "th" ? "หมายเลข ID พาร์ทเนอร์" : locale === "zh" ? "合作伙伴ID号" : "Partner ID number"}
+              onChange={(e) => setNominateId(e.target.value)}
+              placeholder={locale === "th" ? "ชื่อหรือหมายเลข ID พาร์ทเนอร์" : locale === "zh" ? "合作伙伴姓名或ID号" : "Partner name or ID"}
               className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:border-sky-500"
-              maxLength={6}
+              maxLength={60}
             />
             <button
               onClick={handleNominate}

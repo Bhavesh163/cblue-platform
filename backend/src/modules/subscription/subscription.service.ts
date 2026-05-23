@@ -261,7 +261,7 @@ export class SubscriptionService {
     }
 
     const frontendUrl =
-      this.configService.get<string>('frontendUrl') || 'http://localhost:3000';
+      (this.configService.get<string>('frontendUrl') || 'http://localhost:3000').replace(/\/$/, '');
     const resetUrl = `${frontendUrl}/en/subscription/reset-password?token=${resetToken}`;
 
     const body = {

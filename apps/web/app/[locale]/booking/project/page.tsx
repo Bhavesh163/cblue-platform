@@ -228,7 +228,19 @@ function ProjectBookingContent() {
       const newFiles = Array.from(e.target.files);
       setImages((prev) => {
         const combined = [...prev, ...newFiles];
-        return combined.slice(0, 5);
+        const limited = combined.slice(0, 5);
+        const totalMB = limited.reduce((sum, f) => sum + f.size, 0) / (1024 * 1024);
+        if (totalMB > 5) {
+          alert(
+            locale === "th"
+              ? "รวมไฟล์ทั้งหมดต้องไม่เกิน 5 MB กรุณาเลือกไฟล์ขนาดเล็กกว่านี้"
+              : locale === "zh"
+              ? "所有文件总计不超过 5 MB，请选择较小的文件"
+              : "Total files must not exceed 5 MB. Please select smaller files.",
+          );
+          return prev;
+        }
+        return limited;
       });
       e.target.value = "";
     }

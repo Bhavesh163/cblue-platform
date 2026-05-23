@@ -5,10 +5,23 @@ import {
   IsOptional,
   IsString,
   IsEmail,
+  IsArray,
+  ValidateNested,
   Min,
   Max,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { PropertyType, ListingType, PropertyTier } from '@prisma/client';
+
+export class PropertyImageDto {
+  @IsString()
+  @IsNotEmpty()
+  url: string;
+
+  @IsOptional()
+  @IsString()
+  key?: string;
+}
 
 export class CreatePropertyDto {
   @IsEnum(PropertyType)
@@ -101,4 +114,10 @@ export class CreatePropertyDto {
   @IsOptional()
   @IsNumber()
   yearBuilt?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PropertyImageDto)
+  images?: PropertyImageDto[];
 }

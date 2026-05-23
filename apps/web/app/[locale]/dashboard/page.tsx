@@ -858,12 +858,32 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const [propInquiries, setPropInquiries] = useState<PropInquiry[]>([]);
   const [propPayModal, setPropPayModal] = useState<PropInquiry | null>(null);
   const [propMeetingModal, setPropMeetingModal] = useState<PropInquiry | null>(null);
+  const [propModalImages, setPropModalImages] = useState<string[]>([]);
   const [propMeetingDate, setPropMeetingDate] = useState("");
   const [propMeetingTime, setPropMeetingTime] = useState("");
   const [propMeetingVenue, setPropMeetingVenue] = useState("");
   const [propRateModal, setPropRateModal] = useState<PropInquiry | null>(null);
   const [propRateStars, setPropRateStars] = useState(0);
   const [propRateComment, setPropRateComment] = useState("");
+
+  // Fetch property images when propPayModal or propMeetingModal opens
+  useEffect(() => {
+    const pid = propPayModal?.propertyId || propMeetingModal?.propertyId;
+    if (!pid) { setPropModalImages([]); return; }
+    let active = true;
+    fetch(`/api/v1/properties/${pid}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (!active) return;
+        if (data?.images && Array.isArray(data.images)) {
+          setPropModalImages(data.images.map((i: { url: string }) => i.url).filter(Boolean));
+        } else {
+          setPropModalImages([]);
+        }
+      })
+      .catch(() => { if (active) setPropModalImages([]); });
+    return () => { active = false; };
+  }, [propPayModal, propMeetingModal]);
   // Tracks previous backend order statuses to detect MEETING_REQUESTED → IN_PROGRESS transitions
   const prevOrderStatuses = useRef<Record<string, string>>({});
   const toDisplayDateTime = (value: any) => {
@@ -2488,6 +2508,13 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               <p className="text-green-100 text-sm mt-1">{propPayModal.poNumber} · Step 5 of 8</p>
             </div>
             <div className="px-6 py-5 space-y-4">
+              {propModalImages.length > 0 && (
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {propModalImages.map((url, i) => (
+                    <img key={i} src={url} alt="" className="w-24 h-20 object-cover rounded-lg shrink-0 border border-gray-200" />
+                  ))}
+                </div>
+              )}
               <div className="bg-gray-50 rounded-xl p-4 text-sm space-y-2">
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ทรัพย์สิน" : "Property"}</span><span className="font-semibold text-right max-w-[60%] line-clamp-1">{propPayModal.propertyTitle}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "จังหวัด" : "Province"}</span><span className="font-semibold">{propPayModal.province}</span></div>
@@ -2542,6 +2569,13 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               <p className="text-teal-100 text-sm mt-1">{propMeetingModal.poNumber} · Step 7 of 8</p>
             </div>
             <div className="px-6 py-5 space-y-4">
+              {propModalImages.length > 0 && (
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {propModalImages.map((url, i) => (
+                    <img key={i} src={url} alt="" className="w-24 h-20 object-cover rounded-lg shrink-0 border border-gray-200" />
+                  ))}
+                </div>
+              )}
               <p className="text-sm text-gray-600">{locale === "th" ? `นัดหมายเยี่ยมชม: ${propMeetingModal.propertyTitle}` : `Schedule a viewing for: ${propMeetingModal.propertyTitle}`}</p>
               <div className="space-y-3">
                 <div>

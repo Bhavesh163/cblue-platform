@@ -5,6 +5,7 @@ export const HOUSEHOLD_SERVICES = [
   { value: "INTERIOR", label: "Interior", labelTh: "ตกแต่งภายใน", labelZh: "室内装修" },
   { value: "LANDSCAPING", label: "Landscaping", labelTh: "จัดสวน", labelZh: "园林绿化" },
   { value: "CLADDING_ROOFING", label: "Cladding/Roofing", labelTh: "หลังคา/ผนัง", labelZh: "屋顶/外墙" },
+  { value: "OTHERS", label: "Others", labelTh: "อื่น ๆ", labelZh: "其他" },
 ] as const;
 
 export const PROJECT_SERVICES = [
@@ -28,6 +29,7 @@ export const PROJECT_SERVICES = [
   { value: "GREEN_CONSTRUCTION", label: "Green Construction", labelTh: "ก่อสร้างเขียว", labelZh: "绿色建筑" },
   { value: "SMART_HOME", label: "Smart Home/Building & BMS", labelTh: "สมาร์ทโฮม & BMS", labelZh: "智能家居/建筑与BMS" },
   { value: "SMART_FARMING", label: "Smart Farming", labelTh: "เกษตรอัจฉริยะ", labelZh: "智慧农业" },
+  { value: "OTHERS", label: "Others", labelTh: "อื่น ๆ", labelZh: "其他" },
 ] as const;
 
 export const PROFESSIONAL_SERVICES = [

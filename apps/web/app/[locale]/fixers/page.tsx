@@ -304,6 +304,25 @@ export default function FixerProPage() {
   const [propPartnerRateModal, setPropPartnerRateModal] = useState<PropInquiry | null>(null);
   const [propPartnerRateStars, setPropPartnerRateStars] = useState(0);
   const [propPartnerRateComment, setPropPartnerRateComment] = useState("");
+  const [propPartnerModalImages, setPropPartnerModalImages] = useState<string[]>([]);
+
+  useEffect(() => {
+    const pid = propAcceptModal?.propertyId || propMeetingConfirmModal?.propertyId;
+    if (!pid) { setPropPartnerModalImages([]); return; }
+    let active = true;
+    fetch(`/api/v1/properties/${pid}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (!active) return;
+        if (data?.images && Array.isArray(data.images)) {
+          setPropPartnerModalImages(data.images.map((i: { url: string }) => i.url).filter(Boolean));
+        } else {
+          setPropPartnerModalImages([]);
+        }
+      })
+      .catch(() => { if (active) setPropPartnerModalImages([]); });
+    return () => { active = false; };
+  }, [propAcceptModal, propMeetingConfirmModal]);
   const handleJobClick = (job: any) => {
     const workflowType = String(job?.workflowType || job?.type || '').toLowerCase();
     const jobStatus = String(job?.status || '').toUpperCase();
@@ -1452,6 +1471,13 @@ export default function FixerProPage() {
               <p className="text-green-100 text-sm mt-1">{propAcceptModal.poNumber} · Step 4 of 8</p>
             </div>
             <div className="px-6 py-5 space-y-4">
+              {propPartnerModalImages.length > 0 && (
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {propPartnerModalImages.map((url, i) => (
+                    <img key={i} src={url} alt="" className="w-24 h-20 object-cover rounded-lg shrink-0 border border-gray-200" />
+                  ))}
+                </div>
+              )}
               <div className="bg-gray-50 rounded-xl p-4 text-sm space-y-2">
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ทรัพย์สิน" : "Property"}</span><span className="font-semibold text-right max-w-[60%] line-clamp-1">{propAcceptModal.propertyTitle}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ประเภท" : "Type"}</span><span className="font-semibold">{propAcceptModal.propertyType}</span></div>
@@ -1506,6 +1532,13 @@ export default function FixerProPage() {
               <p className="text-teal-100 text-sm mt-1">{propMeetingConfirmModal.poNumber} · Step 7 of 8</p>
             </div>
             <div className="px-6 py-5 space-y-4">
+              {propPartnerModalImages.length > 0 && (
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {propPartnerModalImages.map((url, i) => (
+                    <img key={i} src={url} alt="" className="w-24 h-20 object-cover rounded-lg shrink-0 border border-gray-200" />
+                  ))}
+                </div>
+              )}
               <div className="bg-gray-50 rounded-xl p-4 text-sm space-y-2">
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ทรัพย์สิน" : "Property"}</span><span className="font-semibold text-right max-w-[60%] line-clamp-1">{propMeetingConfirmModal.propertyTitle}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "วันที่" : "Date"}</span><span className="font-semibold">{propMeetingConfirmModal.meetingDate || 'TBD'}</span></div>
@@ -2516,12 +2549,25 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
   const [variationRows, setVariationRows] = React.useState<{item:string;qty:string;unit:string;rate:string;amount:string}[]>(EMPTY_VAR_ROWS());
   const [variationAttachUrls, setVariationAttachUrls] = React.useState<string[]>([]);
   React.useEffect(() => {
+    let isMounted = true;
     if (!variationModal) { setVariationAttachUrls([]); return; }
     const po = variationModal.po;
     const urls: string[] = [];
     try { const m = JSON.parse(localStorage.getItem('cblue_po_attachments') || '{}'); if (po && Array.isArray(m[po])) urls.push(...m[po]); } catch {}
+    try { const m = JSON.parse(localStorage.getItem('cblue_order_attachments') || '{}'); const oid = variationModal.orderId || (po ? localStorage.getItem(`po_to_order_${po}`) : ''); if (oid && Array.isArray(m[oid])) urls.push(...m[oid]); } catch {}
     try { const rawFiles = (typeof window !== 'undefined' ? (window as any).__cblue_files_by_po : null) || {}; const files: File[] = po && Array.isArray(rawFiles[po]) ? rawFiles[po] : []; files.forEach(f => { try { urls.push(URL.createObjectURL(f)); } catch {} }); } catch {}
-    setVariationAttachUrls(Array.from(new Set(urls.filter(Boolean))));
+    const deduped = Array.from(new Set(urls.filter(Boolean)));
+    if (deduped.length > 0) { if (isMounted) setVariationAttachUrls(deduped); return; }
+    // Fetch from backend as cross-device fallback
+    const orderId = variationModal.orderId || (po ? localStorage.getItem(`po_to_order_${po}`) : '');
+    if (orderId) {
+      const token = localStorage.getItem('subscriber_token') || '';
+      fetch(`/api/v1/orders/${orderId}/attachments`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : [])
+        .then((data: any[]) => { if (isMounted) setVariationAttachUrls(Array.from(new Set((Array.isArray(data) ? data.map((a: any) => a?.url) : []).filter(Boolean)))); })
+        .catch(() => {});
+    }
+    return () => { isMounted = false; };
   }, [variationModal]);
   const [ratingModal, setRatingModal] = React.useState<any>(null);
   const [ratingStars, setRatingStars] = React.useState(5);
@@ -2961,8 +3007,19 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
     const po = variationModal.po;
     const urls: string[] = [];
     try { const m = JSON.parse(localStorage.getItem('cblue_po_attachments') || '{}'); if (po && Array.isArray(m[po])) urls.push(...m[po]); } catch {}
+    try { const orderMap = JSON.parse(localStorage.getItem('cblue_order_attachments') || '{}'); const oid = variationModal.orderId || (po ? localStorage.getItem(`po_to_order_${po}`) : ''); if (oid && Array.isArray(orderMap[oid])) urls.push(...orderMap[oid]); } catch {}
     try { const rawFiles = (typeof window !== 'undefined' ? (window as any).__cblue_files_by_po : null) || {}; const files: File[] = po && Array.isArray(rawFiles[po]) ? rawFiles[po] : []; files.forEach(f => { try { urls.push(URL.createObjectURL(f)); } catch {} }); } catch {}
-    setVariationAttachUrls(Array.from(new Set(urls.filter(Boolean))));
+    const localUrls = Array.from(new Set(urls.filter(Boolean)));
+    const orderId = variationModal.orderId || (po ? localStorage.getItem(`po_to_order_${po}`) : null);
+    if (localUrls.length === 0 && orderId) {
+      const token = (typeof window !== 'undefined' ? localStorage.getItem('subscriber_token') : '') || '';
+      fetch(`/api/v1/orders/${orderId}/attachments`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : [])
+        .then(data => { if (Array.isArray(data) && data.length > 0) setVariationAttachUrls(data.map((a: any) => a.url || a).filter(Boolean)); })
+        .catch(() => {});
+    } else {
+      setVariationAttachUrls(localUrls);
+    }
   }, [variationModal]);
   const [completeModal, setCompleteModal] = React.useState<any>(null);
   const [completeNote, setCompleteNote] = React.useState("");
