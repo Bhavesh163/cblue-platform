@@ -2306,6 +2306,15 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
   const [variationModal, setVariationModal] = React.useState<any>(null);
   const [variationDesc, setVariationDesc] = React.useState("");
   const [variationRows, setVariationRows] = React.useState<{item:string;qty:string;unit:string;rate:string;amount:string}[]>(EMPTY_VAR_ROWS());
+  const [variationAttachUrls, setVariationAttachUrls] = React.useState<string[]>([]);
+  React.useEffect(() => {
+    if (!variationModal) { setVariationAttachUrls([]); return; }
+    const po = variationModal.po;
+    const urls: string[] = [];
+    try { const m = JSON.parse(localStorage.getItem('cblue_po_attachments') || '{}'); if (po && Array.isArray(m[po])) urls.push(...m[po]); } catch {}
+    try { const rawFiles = (typeof window !== 'undefined' ? (window as any).__cblue_files_by_po : null) || {}; const files: File[] = po && Array.isArray(rawFiles[po]) ? rawFiles[po] : []; files.forEach(f => { try { urls.push(URL.createObjectURL(f)); } catch {} }); } catch {}
+    setVariationAttachUrls(Array.from(new Set(urls.filter(Boolean))));
+  }, [variationModal]);
   const [ratingModal, setRatingModal] = React.useState<any>(null);
   const [ratingStars, setRatingStars] = React.useState(5);
   const [completeModal, setCompleteModal] = React.useState<any>(null);
@@ -2492,6 +2501,22 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
               location={(() => { const loc = variationModal.location || variationModal.subdistrict || ''; if (loc && loc !== 'Unknown') return loc; const m = String(variationModal.description || '').match(/\bLOC:([^|]+)/); return m ? (m[1] ?? '').trim() : 'Unknown'; })()}
               projectDetails={stripWorkflowPrefix(variationModal.description || variationModal.desc || variationModal.projectDetails || variationModal.service || '')}
             />
+            {/* Uploaded Files — lets partner reference customer photos when writing variation */}
+            <div className="flex justify-between items-center rounded-lg border border-amber-100 bg-amber-50 px-4 py-2.5 text-xs">
+              <span className="text-amber-800 font-semibold">Uploaded Files</span>
+              <span className={`cursor-pointer font-semibold ${variationAttachUrls.length > 0 ? 'text-sky-600 hover:underline' : 'text-gray-400'}`} onClick={() => {
+                const po = variationModal.po;
+                const httpUrl = variationAttachUrls.find(u => u.startsWith('http://') || u.startsWith('https://'));
+                if (httpUrl) { window.open(httpUrl, '_blank'); return; }
+                const blobUrls = variationAttachUrls.filter(u => u.startsWith('blob:'));
+                if (blobUrls.length > 0) { blobUrls.forEach((u, i) => { const a = document.createElement('a'); a.href = u; a.download = `attachment-${i+1}`; document.body.appendChild(a); a.click(); document.body.removeChild(a); }); return; }
+                try { const rawFiles = (window as any).__cblue_files_by_po || {}; const files: File[] = po && Array.isArray(rawFiles[po]) ? rawFiles[po] : []; if (files.length > 0) { files.forEach((f, i) => { const blobUrl = URL.createObjectURL(f); const a = document.createElement('a'); a.href = blobUrl; a.download = f.name || `attachment-${i+1}`; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(blobUrl), 2000); }); return; } } catch {}
+                if (variationAttachUrls.length === 0) return;
+                alert('Could not download file. Please ask the customer to share via the chat room.');
+              }}>
+                {variationAttachUrls.length > 0 ? `${variationAttachUrls.length} file${variationAttachUrls.length > 1 ? 's' : ''} attached — Click to Download` : 'No files attached'}
+              </span>
+            </div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Original Budget</label>
               <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
@@ -2722,6 +2747,15 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList }: { loca
   const [variationModal, setVariationModal] = React.useState<any>(null);
   const [variationDesc, setVariationDesc] = React.useState("");
   const [variationRows, setVariationRows] = React.useState<{item:string;qty:string;unit:string;rate:string;amount:string}[]>(EMPTY_VAR_ROWS());
+  const [variationAttachUrls, setVariationAttachUrls] = React.useState<string[]>([]);
+  React.useEffect(() => {
+    if (!variationModal) { setVariationAttachUrls([]); return; }
+    const po = variationModal.po;
+    const urls: string[] = [];
+    try { const m = JSON.parse(localStorage.getItem('cblue_po_attachments') || '{}'); if (po && Array.isArray(m[po])) urls.push(...m[po]); } catch {}
+    try { const rawFiles = (typeof window !== 'undefined' ? (window as any).__cblue_files_by_po : null) || {}; const files: File[] = po && Array.isArray(rawFiles[po]) ? rawFiles[po] : []; files.forEach(f => { try { urls.push(URL.createObjectURL(f)); } catch {} }); } catch {}
+    setVariationAttachUrls(Array.from(new Set(urls.filter(Boolean))));
+  }, [variationModal]);
   const [completeModal, setCompleteModal] = React.useState<any>(null);
   const [completeNote, setCompleteNote] = React.useState("");
   const [ratingModal, setRatingModal] = React.useState<any>(null);
@@ -2885,6 +2919,22 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList }: { loca
               location={(() => { const loc = variationModal.location || variationModal.subdistrict || ''; if (loc && loc !== 'Unknown') return loc; const m = String(variationModal.description || '').match(/\bLOC:([^|]+)/); return m ? (m[1] ?? '').trim() : 'Unknown'; })()}
               projectDetails={stripWorkflowPrefix(variationModal.description || variationModal.desc || variationModal.projectDetails || variationModal.service || '')}
             />
+            {/* Uploaded Files — lets partner reference customer photos when writing variation */}
+            <div className="flex justify-between items-center rounded-lg border border-amber-100 bg-amber-50 px-4 py-2.5 text-xs">
+              <span className="text-amber-800 font-semibold">Uploaded Files</span>
+              <span className={`cursor-pointer font-semibold ${variationAttachUrls.length > 0 ? 'text-sky-600 hover:underline' : 'text-gray-400'}`} onClick={() => {
+                const po = variationModal.po;
+                const httpUrl = variationAttachUrls.find(u => u.startsWith('http://') || u.startsWith('https://'));
+                if (httpUrl) { window.open(httpUrl, '_blank'); return; }
+                const blobUrls = variationAttachUrls.filter(u => u.startsWith('blob:'));
+                if (blobUrls.length > 0) { blobUrls.forEach((u, i) => { const a = document.createElement('a'); a.href = u; a.download = `attachment-${i+1}`; document.body.appendChild(a); a.click(); document.body.removeChild(a); }); return; }
+                try { const rawFiles = (window as any).__cblue_files_by_po || {}; const files: File[] = po && Array.isArray(rawFiles[po]) ? rawFiles[po] : []; if (files.length > 0) { files.forEach((f, i) => { const blobUrl = URL.createObjectURL(f); const a = document.createElement('a'); a.href = blobUrl; a.download = f.name || `attachment-${i+1}`; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(blobUrl), 2000); }); return; } } catch {}
+                if (variationAttachUrls.length === 0) return;
+                alert('Could not download file. Please ask the customer to share via the chat room.');
+              }}>
+                {variationAttachUrls.length > 0 ? `${variationAttachUrls.length} file${variationAttachUrls.length > 1 ? 's' : ''} attached — Click to Download` : 'No files attached'}
+              </span>
+            </div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Original Budget</label>
               <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
