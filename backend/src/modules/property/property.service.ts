@@ -14,6 +14,7 @@ export class PropertyService {
         userId,
         propertyType: dto.propertyType,
         listingType: dto.listingType,
+        tier: dto.tier,
         title: dto.title,
         description: dto.description,
         price: dto.price,

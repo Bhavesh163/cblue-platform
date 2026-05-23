@@ -8,7 +8,7 @@ import {
   Min,
   Max,
 } from 'class-validator';
-import { PropertyType, ListingType } from '@prisma/client';
+import { PropertyType, ListingType, PropertyTier } from '@prisma/client';
 
 export class CreatePropertyDto {
   @IsEnum(PropertyType)
@@ -16,6 +16,10 @@ export class CreatePropertyDto {
 
   @IsEnum(ListingType)
   listingType: ListingType;
+
+  @IsOptional()
+  @IsEnum(PropertyTier)
+  tier?: PropertyTier;
 
   @IsString()
   @IsNotEmpty()

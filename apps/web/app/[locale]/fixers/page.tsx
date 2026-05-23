@@ -294,6 +294,11 @@ export default function FixerProPage() {
   const [loadingAttachments, setLoadingAttachments] = useState(false);
   const [declineModalOpen, setDeclineModalOpen] = useState(false);
   const [declineComment, setDeclineComment] = useState('');
+  // Property inquiry state for lister/fixer — polls cblue_prop_inquiries every 1000ms
+  interface PropInquiry { id: string; poNumber: string; propertyId: string; propertyTitle: string; propertyTier: string; propertyFee: number; propertyType: string; listingType: string; propertyPrice: number; province: string; district: string; customerEmail: string; customerName: string; listerName: string; status: string; step: number; createdAt: number; updatedAt: number; meetingDate?: string; meetingTime?: string; meetingVenue?: string; customerRating?: number; customerComment?: string; listerRating?: number; listerComment?: string; reselectedOnce?: boolean; }
+  const [propInquiries, setPropInquiries] = useState<PropInquiry[]>([]);
+  const [propAcceptModal, setPropAcceptModal] = useState<PropInquiry | null>(null);
+  const [propMeetingConfirmModal, setPropMeetingConfirmModal] = useState<PropInquiry | null>(null);
   const handleJobClick = (job: any) => {
     const workflowType = String(job?.workflowType || job?.type || '').toLowerCase();
     const jobStatus = String(job?.status || '').toUpperCase();
@@ -595,6 +600,19 @@ export default function FixerProPage() {
       clearInterval(timer);
     };
   }, [partner?.id]);
+
+  // Poll property inquiries addressed to this lister (NOTIFY_SENT = step 4 accept, MEETING_SENT = step 7 confirm)
+  useEffect(() => {
+    function loadProps() {
+      try {
+        const all: PropInquiry[] = JSON.parse(localStorage.getItem("cblue_prop_inquiries") || "[]");
+        setPropInquiries(all.filter((p: PropInquiry) => p.status === "NOTIFY_SENT" || p.status === "MEETING_SENT"));
+      } catch { setPropInquiries([]); }
+    }
+    loadProps();
+    const id = setInterval(loadProps, 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const isSubscribed = !!partner;
 
@@ -1306,6 +1324,14 @@ export default function FixerProPage() {
   }, new Map<string, any>()).values())
     .sort((a: any, b: any) => parseTs(b.createdAt || b.date) - parseTs(a.createdAt || a.date));
 
+  // Inject prop inquiry items: NOTIFY_SENT = step 4 accept, MEETING_SENT = step 7 confirm
+  const propRequestCards: any[] = propInquiries.map((p: PropInquiry) => {
+    if (p.status === "NOTIFY_SENT") return { id: `prop-accept-${p.poNumber}`, type: "prop_accept", po: p.poNumber, propInquiry: p, createdAt: p.createdAt };
+    if (p.status === "MEETING_SENT") return { id: `prop-meet-confirm-${p.poNumber}`, type: "prop_meeting_confirm", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
+    return null;
+  }).filter(Boolean) as any[];
+  const partnerRequestItemsWithProp = [...propRequestCards, ...partnerRequestItems];
+
   const dynamicNotifications = mockDynReqs.map((r: any) => {
     const displayTime = typeof r.date === "string" && r.date.includes(":") ? r.date : (r.date ? fmtDateTime(r.date) : "");
     if (r.type === "meeting_pending_partner") return { id: `dyn-${r.id}`, msg: "Confirm meeting at site", msgTh: "ยืนยันนัดหมายที่สถานที่", msgZh: "确认现场会议", unread: true, time: displayTime, dot: "bg-amber-500" };
@@ -1345,7 +1371,7 @@ export default function FixerProPage() {
 
   const tabs: { key: TabKey; label: string; icon: string; badge?: number }[] = [
     { key: "overview", label: locale === "th" ? "ภาพรวม" : locale === "zh" ? "概览" : "Overview", icon: "" },
-    { key: "requests", label: locale === "th" ? "คำขอใหม่" : locale === "zh" ? "新请求" : "Requests", icon: "📋", badge: partnerRequestItems.length || undefined },
+    { key: "requests", label: locale === "th" ? "คำขอใหม่" : locale === "zh" ? "新请求" : "Requests", icon: "📋", badge: partnerRequestItemsWithProp.length || undefined },
         { key: "active", label: locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "当前工作" : "Active Jobs", icon: "", badge: activeJobs.length || undefined },
     
     { key: "properties", label: locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房产" : "Properties", icon: "" },
@@ -1376,6 +1402,91 @@ export default function FixerProPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50/30">
       {/* PDPA Consent Modal */}
+
+      {/* Property Inquiry Accept Modal (Step 4 of 8) */}
+      {propAcceptModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl overflow-hidden">
+            <div className="bg-gradient-to-r from-emerald-600 to-green-600 px-6 py-4">
+              <h3 className="text-white font-bold text-lg">🏠 {locale === "th" ? "ยืนยันการสอบถาม" : locale === "zh" ? "确认询盘" : "Confirm Property Inquiry"}</h3>
+              <p className="text-green-100 text-sm mt-1">{propAcceptModal.poNumber} · Step 4 of 8</p>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div className="bg-gray-50 rounded-xl p-4 text-sm space-y-2">
+                <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ทรัพย์สิน" : "Property"}</span><span className="font-semibold text-right max-w-[60%] line-clamp-1">{propAcceptModal.propertyTitle}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ประเภท" : "Type"}</span><span className="font-semibold">{propAcceptModal.propertyType}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "จังหวัด" : "Province"}</span><span className="font-semibold">{propAcceptModal.province}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ระดับบริการ" : "Service Tier"}</span><span className="font-semibold">{propAcceptModal.propertyTier}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ผู้สนใจ (นิรนาม)" : "Interested Party"}</span><span className="font-semibold text-gray-400">{locale === "th" ? "ไม่ระบุตัวตน" : "Anonymous"}</span></div>
+                <div className="flex justify-between border-t border-gray-100 pt-2"><span className="text-gray-500">{locale === "th" ? "PO" : "PO"}</span><span className="font-mono font-bold text-emerald-700">{propAcceptModal.poNumber}</span></div>
+              </div>
+              <p className="text-xs text-gray-500">{locale === "th" ? "หลังยืนยัน ลูกค้าจะชำระค่าดำเนินการและได้รับข้อมูลติดต่อของคุณ" : "After acceptance, the customer pays the processing fee and receives your contact info."}</p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setPropAcceptModal(null)}
+                  className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl font-semibold text-sm"
+                >
+                  {locale === "th" ? "ปฏิเสธ" : "Decline"}
+                </button>
+                <button
+                  onClick={() => {
+                    try {
+                      const all: PropInquiry[] = JSON.parse(localStorage.getItem("cblue_prop_inquiries") || "[]");
+                      const merged = all.map((p: PropInquiry) => p.id === propAcceptModal!.id ? { ...p, status: "PARTNER_ACCEPTED", step: 4, updatedAt: Date.now() } : p);
+                      localStorage.setItem("cblue_prop_inquiries", JSON.stringify(merged));
+                      window.dispatchEvent(new Event("storage"));
+                    } catch {}
+                    setPropAcceptModal(null);
+                    alert(locale === "th" ? "✅ ยืนยันแล้ว! คำขอนี้จะหายไปจากรายการ ลูกค้าจะดำเนินการชำระเงิน" : "✅ Accepted! This inquiry will disappear from your list. The customer will proceed to pay the fee.");
+                  }}
+                  className="flex-1 py-2.5 bg-green-700 text-white rounded-xl font-bold text-sm hover:bg-green-800 transition"
+                >
+                  ✅ {locale === "th" ? "ยืนยัน" : "Accept"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Property Meeting Confirmation Modal (Step 7 of 8) */}
+      {propMeetingConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl overflow-hidden">
+            <div className="bg-gradient-to-r from-teal-500 to-cyan-500 px-6 py-4">
+              <h3 className="text-white font-bold text-lg">📅 {locale === "th" ? "ยืนยันนัดหมาย" : locale === "zh" ? "确认会议" : "Confirm Meeting"}</h3>
+              <p className="text-teal-100 text-sm mt-1">{propMeetingConfirmModal.poNumber} · Step 7 of 8</p>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div className="bg-gray-50 rounded-xl p-4 text-sm space-y-2">
+                <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ทรัพย์สิน" : "Property"}</span><span className="font-semibold text-right max-w-[60%] line-clamp-1">{propMeetingConfirmModal.propertyTitle}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "วันที่" : "Date"}</span><span className="font-semibold">{propMeetingConfirmModal.meetingDate || 'TBD'}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "เวลา" : "Time"}</span><span className="font-semibold">{propMeetingConfirmModal.meetingTime || 'TBD'}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "สถานที่" : "Venue"}</span><span className="font-semibold">{propMeetingConfirmModal.meetingVenue || 'TBD'}</span></div>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setPropMeetingConfirmModal(null)} className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl font-semibold text-sm">
+                  {locale === "th" ? "ยกเลิก" : "Cancel"}
+                </button>
+                <button
+                  onClick={() => {
+                    try {
+                      const all: PropInquiry[] = JSON.parse(localStorage.getItem("cblue_prop_inquiries") || "[]");
+                      const merged = all.map((p: PropInquiry) => p.id === propMeetingConfirmModal!.id ? { ...p, status: "MEETING_CONFIRMED", step: 7, updatedAt: Date.now() } : p);
+                      localStorage.setItem("cblue_prop_inquiries", JSON.stringify(merged));
+                      window.dispatchEvent(new Event("storage"));
+                    } catch {}
+                    setPropMeetingConfirmModal(null);
+                  }}
+                  className="flex-1 py-2.5 bg-teal-600 text-white rounded-xl font-bold text-sm hover:bg-teal-700 transition"
+                >
+                  ✅ {locale === "th" ? "ยืนยันนัดหมาย" : "Confirm Meeting"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* PO Accept/Decline Modal */}
       {waitModalOrder && (
@@ -1876,7 +1987,7 @@ export default function FixerProPage() {
         <div className={`mt-6 ${activeTab !== 'overview' ? 'hidden' : ''}`}>
           <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={partnerRequestItems} scheduledMeetings={scheduledMeetings} completedJobs={completedJobs} earnings={earningsSeries} stats={stats} notifications={displayNotifications} chats={chatFeed} onJobClick={handleJobClick} onTabChange={(tab) => setActiveTab(tab as TabKey)} />
         </div>
-        {activeTab === "requests" && <PartnerRequests locale={locale} incomingJobs={partnerRequestItems} onJobClick={handleJobClick} priceList={(partner as any)?.priceList} />}
+        {activeTab === "requests" && <PartnerRequests locale={locale} incomingJobs={partnerRequestItemsWithProp} onJobClick={handleJobClick} priceList={(partner as any)?.priceList} onPropAccept={(p: PropInquiry) => setPropAcceptModal(p)} onPropMeetingConfirm={(p: PropInquiry) => setPropMeetingConfirmModal(p)} />}
         {activeTab === "active" && <PartnerJobs locale={locale} activeJobs={activeJobs} onJobClick={handleJobClick} priceList={(partner as any)?.priceList} />}
         
         {activeTab === "properties" && <PartnerProperties locale={locale} prefix={prefix} properties={myProperties} />}
@@ -2743,7 +2854,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
   );
 }
 
-function PartnerRequests({ locale, incomingJobs, onJobClick, priceList }: { locale: string; incomingJobs: any[]; onJobClick?: (job: any) => void; priceList?: any[]; }) {
+function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAccept, onPropMeetingConfirm }: { locale: string; incomingJobs: any[]; onJobClick?: (job: any) => void; priceList?: any[]; onPropAccept?: (p: any) => void; onPropMeetingConfirm?: (p: any) => void; }) {
   const [variationModal, setVariationModal] = React.useState<any>(null);
   const [variationDesc, setVariationDesc] = React.useState("");
   const [variationRows, setVariationRows] = React.useState<{item:string;qty:string;unit:string;rate:string;amount:string}[]>(EMPTY_VAR_ROWS());
@@ -2842,7 +2953,42 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList }: { loca
         <span className="text-xs bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full font-bold">{incomingJobs.length}</span>
       </div>
       <div className="divide-y divide-gray-50">
-        {incomingJobs.map((req) => (
+        {incomingJobs.map((req) => {
+          // Property inquiry cards
+          if (req.type === "prop_accept") {
+            const p: any = req.propInquiry;
+            return (
+              <div key={req.id} className="px-6 py-4 flex items-center gap-4">
+                <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center text-lg">🏠</div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-900 text-sm">{p.propertyTitle} <span className="text-xs font-normal text-gray-400">· {p.poNumber} · Step 4 of 8</span></p>
+                  <p className="text-xs text-emerald-700 font-semibold mt-0.5">{locale === "th" ? "ลูกค้าสนใจทรัพย์สินของคุณ — กรุณายืนยัน" : "Customer is interested in your property — please confirm"}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{p.province} · {p.propertyTier} · ฿{p.propertyFee} fee</p>
+                </div>
+                <button onClick={() => onPropAccept?.(p)} className="px-4 py-2 bg-green-700 text-white text-xs font-bold rounded-lg hover:bg-green-800 transition">
+                  {locale === "th" ? "ดูรายละเอียด" : "Review"}
+                </button>
+              </div>
+            );
+          }
+          if (req.type === "prop_meeting_confirm") {
+            const p: any = req.propInquiry;
+            return (
+              <div key={req.id} className="px-6 py-4 flex items-center gap-4">
+                <div className="w-10 h-10 rounded-lg bg-teal-50 flex items-center justify-center text-lg">📅</div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-900 text-sm">{p.propertyTitle} <span className="text-xs font-normal text-gray-400">· {p.poNumber} · Step 7 of 8</span></p>
+                  <p className="text-xs text-teal-700 font-semibold mt-0.5">{locale === "th" ? "ลูกค้าส่งคำเชิญนัดหมาย — กรุณายืนยัน" : "Customer sent a meeting invitation — please confirm"}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{p.meetingDate} {p.meetingTime} · {p.meetingVenue}</p>
+                </div>
+                <button onClick={() => onPropMeetingConfirm?.(p)} className="px-4 py-2 bg-teal-600 text-white text-xs font-bold rounded-lg hover:bg-teal-700 transition">
+                  {locale === "th" ? "ยืนยัน" : "Confirm"}
+                </button>
+              </div>
+            );
+          }
+          // Normal fixer request card
+          return (
           <div key={req.id} className="px-6 py-4 flex items-center gap-4 transition cursor-default">
             <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center text-lg"></div>
             <div className="flex-1 min-w-0">
@@ -2894,7 +3040,8 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList }: { loca
               )}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
     {variationModal && (

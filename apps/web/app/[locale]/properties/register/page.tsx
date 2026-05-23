@@ -47,6 +47,7 @@ export default function PropertyRegisterPage() {
   const [form, setForm] = useState({
     propertyType: "",
     listingType: "",
+    tier: "STANDARD",
     title: "",
     description: "",
     price: "",
@@ -162,6 +163,7 @@ export default function PropertyRegisterPage() {
       const payload = {
         propertyType: form.propertyType,
         listingType: form.listingType,
+        tier: form.tier || 'STANDARD',
         title: form.title,
         description: form.description,
         price: parseFloat(form.price),
@@ -216,7 +218,7 @@ export default function PropertyRegisterPage() {
           <p className="text-gray-600 mb-8">{locale === "th" ? "อสังหาริมทรัพย์ของคุณได้รับการเผยแพร่ในระบบแล้ว ผู้เช่าหรือผู้ซื้อสามารถติดต่อคุณได้ทันที" : "Your property is now live and visible to potential tenants or buyers."}</p>
           <div className="flex gap-4 justify-center">
             <button onClick={() => { setSubmitted(false); setForm({
-      propertyType: "", listingType: "", title: "", description: "", price: "", area: "",
+      propertyType: "", listingType: "", tier: "STANDARD", title: "", description: "", price: "", area: "",
       bedrooms: "", bathrooms: "", floors: "", yearBuilt: "", houseNumber: "", floor: "", building: "", road: "", soi: "",
       province: "", district: "", subdistrict: "", postalCode: "", addressLine: "",
       contactName: "", contactEmail: "", contactPhone: "",
@@ -347,6 +349,36 @@ export default function PropertyRegisterPage() {
                     <option value="SALE">{t("forSale")}</option>
                     <option value="RENT">{t("forRent")}</option>
                   </select>
+                </div>
+
+                {/* Service Tier — Lister sets this; fee charged to interested buyer/renter */}
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {locale === "th" ? "ระดับบริการ (กำหนดโดยผู้ลงประกาศ)" : locale === "zh" ? "服务等级（由发布者设定）" : "Service Tier (Set by Lister)"} <span className="text-red-500">{tc("required")}</span>
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                    {[
+                      { value: 'ECONOMY',  fee: 200,  label: 'Economy',  desc: locale === 'th' ? 'ห้อง/ที่ดิน' : locale === 'zh' ? '房间/土地' : 'Room/Land' },
+                      { value: 'STANDARD', fee: 400,  label: 'Standard', desc: locale === 'th' ? 'คอนโด/ทาวน์เฮ้าส์' : locale === 'zh' ? '公寓/联排别墅' : 'Condo/Townhouse' },
+                      { value: 'UPPER',    fee: 600,  label: 'Upper',    desc: locale === 'th' ? 'บ้านเดี่ยว' : locale === 'zh' ? '独立屋' : 'House' },
+                      { value: 'LUXURY',   fee: 800,  label: 'Luxury',   desc: locale === 'th' ? 'หรูหรา' : locale === 'zh' ? '豪华' : 'Luxury' },
+                      { value: 'GRANDEUR', fee: 1000, label: 'Grandeur', desc: locale === 'th' ? 'พรีเมียม' : locale === 'zh' ? '顶级' : 'Premium' },
+                    ].map((tier) => (
+                      <button
+                        key={tier.value}
+                        type="button"
+                        onClick={() => setForm(prev => ({ ...prev, tier: tier.value }))}
+                        className={`flex flex-col items-center p-3 rounded-xl border-2 text-center transition ${form.tier === tier.value ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-green-300'}`}
+                      >
+                        <span className="font-bold text-gray-900 text-sm">{tier.label}</span>
+                        <span className="text-xs text-gray-500 mt-0.5">{tier.desc}</span>
+                        <span className="font-extrabold text-green-700 text-sm mt-1">฿{tier.fee}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+                    {locale === 'th' ? '฿ = ค่าดำเนินการที่ผู้สนใจจ่ายให้ CBLUE เพื่อติดต่อคุณ ราคาทรัพย์สินตกลงโดยตรงระหว่างคู่สัญญา' : locale === 'zh' ? '฿ = 感兴趣的买家/租客支付给CBLUE的处理费，以便联系您。房产价格由双方直接协商。' : '฿ = processing fee paid by interested buyer/renter to CBLUE to contact you. Property price is agreed directly between parties.'}
+                  </p>
                 </div>
 
                 {/* Title */}

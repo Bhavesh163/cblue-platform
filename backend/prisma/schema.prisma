@@ -69,6 +69,15 @@ enum NotificationStatus {
 enum OrderType {
   HOUSEHOLD
   PROJECT
+  REAL_ESTATE
+}
+
+enum PropertyTier {
+  ECONOMY
+  STANDARD
+  UPPER
+  LUXURY
+  GRANDEUR
 }
 
 enum PropertyType {
@@ -407,6 +416,7 @@ model Property {
   propertyType PropertyType
   listingType  ListingType
   status       PropertyStatus @default(ACTIVE)
+  tier         PropertyTier   @default(STANDARD)
 
   title       String
   description String

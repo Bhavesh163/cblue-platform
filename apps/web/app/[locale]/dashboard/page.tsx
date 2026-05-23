@@ -851,6 +851,17 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const [rateStars, setRateStars] = useState(5);
   const [variationApproveModal, setVariationApproveModal] = useState<any>(null);
   const [completeApproveModal, setCompleteApproveModal] = useState<any>(null);
+  // Property inquiry workflow state (cblue_prop_inquiries — not ghis-gated)
+  interface PropInquiry { id: string; poNumber: string; propertyId: string; propertyTitle: string; propertyTier: string; propertyFee: number; propertyType: string; listingType: string; propertyPrice: number; province: string; district: string; customerEmail: string; customerName: string; listerName: string; status: string; step: number; createdAt: number; updatedAt: number; meetingDate?: string; meetingTime?: string; meetingVenue?: string; customerRating?: number; customerComment?: string; listerRating?: number; listerComment?: string; reselectedOnce?: boolean; }
+  const [propInquiries, setPropInquiries] = useState<PropInquiry[]>([]);
+  const [propPayModal, setPropPayModal] = useState<PropInquiry | null>(null);
+  const [propMeetingModal, setPropMeetingModal] = useState<PropInquiry | null>(null);
+  const [propMeetingDate, setPropMeetingDate] = useState("");
+  const [propMeetingTime, setPropMeetingTime] = useState("");
+  const [propMeetingVenue, setPropMeetingVenue] = useState("");
+  const [propRateModal, setPropRateModal] = useState<PropInquiry | null>(null);
+  const [propRateStars, setPropRateStars] = useState(0);
+  const [propRateComment, setPropRateComment] = useState("");
   // Tracks previous backend order statuses to detect MEETING_REQUESTED → IN_PROGRESS transitions
   const prevOrderStatuses = useRef<Record<string, string>>({});
   const toDisplayDateTime = (value: any) => {
@@ -1010,6 +1021,20 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       clearInterval(timer);
     };
   }, []);
+
+  // Load property inquiries for this customer (not ghis-gated — works for all logged-in users)
+  useEffect(() => {
+    function loadPropInquiries() {
+      try {
+        const all: PropInquiry[] = JSON.parse(localStorage.getItem("cblue_prop_inquiries") || "[]");
+        const email = subscriber?.email || "";
+        setPropInquiries(email ? all.filter((p: PropInquiry) => p.customerEmail === email) : []);
+      } catch { setPropInquiries([]); }
+    }
+    loadPropInquiries();
+    window.addEventListener("storage", loadPropInquiries);
+    return () => window.removeEventListener("storage", loadPropInquiries);
+  }, [subscriber]);
 
   const buildChatFeed = () => {
     if (typeof window === "undefined") return [];
@@ -1485,12 +1510,31 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   }
   const allRequestItems = Array.from(dedupedRequestMap.values())
     .sort((a: any, b: any) => parseDateMs(b.createdAt || b.date) - parseDateMs(a.createdAt || a.date));
+
+  // Inject prop inquiry request cards (not ghis-gated)
+  const propRequestItems: any[] = propInquiries
+    .filter((p: PropInquiry) => ["PARTNER_ACCEPTED", "PAID", "MEETING_CONFIRMED"].includes(p.status))
+    .map((p: PropInquiry) => {
+      if (p.status === "PARTNER_ACCEPTED") return { id: `prop-pay-${p.poNumber}`, type: "prop_pay_fee", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
+      if (p.status === "PAID") return { id: `prop-meet-${p.poNumber}`, type: "prop_meeting_invite", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
+      if (p.status === "MEETING_CONFIRMED") return { id: `prop-rate-${p.poNumber}`, type: "prop_rate", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
+      return null;
+    })
+    .filter(Boolean) as any[];
+  const allRequestItemsWithProp = [...propRequestItems, ...allRequestItems];
+
   const actionableRequestPos = new Set(
     allRequestItems
       .filter((requestItem: any) => !['notice', 'meeting_scheduled'].includes(String(requestItem.type || '')))
       .map((requestItem: any) => requestItem.po),
   );
-  const overviewRequestItems = allRequestItems.slice(0, 3);
+  const overviewRequestItems = allRequestItemsWithProp.slice(0, 3);
+  const propConfirmedMeetings = propInquiries
+    .filter((p: PropInquiry) => p.status === "MEETING_CONFIRMED" && p.meetingDate)
+    .filter((p: PropInquiry) => {
+      const ts = parseDateMs(`${p.meetingDate}T${p.meetingTime || '00:00'}`);
+      return ts >= Date.now() - (3 * 24 * 60 * 60 * 1000);
+    });
   const upcomingMeetings = visibleMockDynRequests
     .filter((x: any) => x.type === "meeting_scheduled")
     .filter((x: any) => {
@@ -1620,6 +1664,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
   
   const renderRequestCard = (item: any) => {
+    if (['prop_pay_fee', 'prop_meeting_invite', 'prop_rate'].includes(item.type)) return renderPropRequestCard(item);
     if (mockPayments[item.id]) return null;
     if (item.type === 'notice') return null;
     if (item.type === 'chat_ready') {
@@ -1857,6 +1902,92 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     );
   };
 
+  const savePropInquiries = (updated: PropInquiry[]) => {
+    try {
+      const all: PropInquiry[] = JSON.parse(localStorage.getItem("cblue_prop_inquiries") || "[]");
+      const merged = all.map((p: PropInquiry) => updated.find((u: PropInquiry) => u.id === p.id) || p);
+      localStorage.setItem("cblue_prop_inquiries", JSON.stringify(merged));
+      window.dispatchEvent(new Event("storage"));
+    } catch {}
+  };
+
+  const renderPropRequestCard = (item: any) => {
+    const p: PropInquiry = item.propInquiry;
+    if (item.type === "prop_pay_fee") {
+      return (
+        <div key={item.id} className="bg-white border border-emerald-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-lg">🏠</div>
+            <div>
+              <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {p.poNumber} · Step 5 of 8</span></h3>
+              <p className="text-sm text-gray-600 mt-0.5">{p.listerName} · {p.province}</p>
+              <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "ผู้ลงประกาศยืนยันแล้ว — ชำระค่าดำเนินการเพื่อรับข้อมูลติดต่อ" : locale === "zh" ? "房源方已确认 — 支付处理费以获取联系方式" : "Lister accepted — pay the processing fee to get contact info"}</p>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-end">
+            <div className="text-left sm:text-right flex flex-col gap-1">
+              <span className="font-bold text-green-700">฿{p.propertyFee}</span>
+              <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-emerald-50 text-emerald-700 uppercase self-start sm:self-end w-max">{p.propertyTier}</span>
+            </div>
+            <button
+              className="bg-green-700 text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-green-800 transition shadow-sm whitespace-nowrap"
+              onClick={() => setPropPayModal(p)}
+            >
+              {locale === "th" ? "ชำระค่าดำเนินการ" : locale === "zh" ? "支付处理费" : "Pay Processing Fee"}
+            </button>
+          </div>
+        </div>
+      );
+    }
+    if (item.type === "prop_meeting_invite") {
+      return (
+        <div key={item.id} className="bg-white border border-teal-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center font-bold text-lg">📅</div>
+            <div>
+              <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {p.poNumber} · Step 7 of 8</span></h3>
+              <p className="text-sm text-gray-600 mt-0.5">{p.listerName} · {p.province}</p>
+              <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "ชำระแล้ว — ส่งคำเชิญนัดหมายเพื่อเยี่ยมชมทรัพย์สิน" : locale === "zh" ? "已付款 — 发送会议邀请以预约参观" : "Fee paid — send a meeting invitation to schedule a property viewing"}</p>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-end">
+            <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-teal-50 text-teal-700 uppercase self-start sm:self-end w-max">{p.propertyTier}</span>
+            <button
+              className="bg-teal-600 text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-teal-700 transition shadow-sm whitespace-nowrap"
+              onClick={() => { setPropMeetingDate(""); setPropMeetingTime(""); setPropMeetingVenue(""); setPropMeetingModal(p); }}
+            >
+              {locale === "th" ? "📅 ส่งคำเชิญนัดหมาย" : locale === "zh" ? "📅 发送会议邀请" : "📅 Send Meeting Invitation"}
+            </button>
+          </div>
+        </div>
+      );
+    }
+    if (item.type === "prop_rate") {
+      return (
+        <div key={item.id} className="bg-white border border-yellow-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-lg bg-yellow-50 text-yellow-600 flex items-center justify-center font-bold text-lg">⭐</div>
+            <div>
+              <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {p.poNumber} · Step 8 of 8</span></h3>
+              <p className="text-sm text-gray-600 mt-0.5">{p.listerName} · {p.province}</p>
+              <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "นัดหมายยืนยันแล้ว — ให้คะแนนเพื่อปิดงาน" : locale === "zh" ? "会议已确认 — 评分以结案" : "Meeting confirmed — rate to close this inquiry"}</p>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-end">
+            <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-yellow-50 text-yellow-700 uppercase self-start sm:self-end w-max">{p.propertyTier}</span>
+            <button
+              className="bg-yellow-500 text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-yellow-600 transition shadow-sm whitespace-nowrap"
+              onClick={() => { setPropRateStars(0); setPropRateComment(""); setPropRateModal(p); }}
+            >
+              {locale === "th" ? "⭐ ให้คะแนน & ปิดงาน" : locale === "zh" ? "⭐ 评分并结案" : "⭐ Rate & Close"}
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
   const renderActiveCard = (item: any, idx: number) => (
     <div key={idx} className="p-5 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
       <div className="flex items-start gap-4 flex-1 min-w-0">
@@ -1938,7 +2069,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   ).sort((a: any, b: any) => parseDateMs(b.completedAt || b.statusChangedAt || b.createdAt || b.date) - parseDateMs(a.completedAt || a.statusChangedAt || a.createdAt || a.date));
   const propertiesCount = orders ? orders.filter((o: any) => o.type === "property").length : 0;
   const stats = { active: activeOrders.length, completed: allHistory.length, messages: 0, rating: "4.8" };
-  const totalReqCount = allRequestItems.length;
+  const totalReqCount = allRequestItemsWithProp.length;
   const getWorkflowOrderSnapshot = (po: any) =>
     workflowOrders.find((order: any) => extractPo(order) === po) ||
     combinedActive.find((item: any) => item.po === po) ||
@@ -1980,7 +2111,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div className="text-sm text-gray-500 font-bold">{totalReqCount}</div>
           </div>
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50 mt-4 mx-6">
-              {allRequestItems.map((m: any) => renderRequestCard(m))}
+              {allRequestItemsWithProp.map((m: any) => renderRequestCard(m))}
           </div>
         </div>
       )}
@@ -2155,12 +2286,21 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div className="flex justify-between items-center mb-4 mt-6">
               <div className="flex flex-col">
                 <h2 className="text-xl font-bold text-gray-800">⏰ {locale === "th" ? "การนัดหมายที่จะมาถึง" : locale === "zh" ? "即将到来的会议" : "Upcoming Meetings"}</h2>
-                <span className="text-gray-500 font-bold text-sm">{upcomingMeetings.length}</span>
+                <span className="text-gray-500 font-bold text-sm">{upcomingMeetings.length + propConfirmedMeetings.length}</span>
               </div>
               <button className="text-sm font-bold text-sky-600 hover:text-sky-700" onClick={() => setActiveTab("requests")}>{locale === "th" ? "ดูทั้งหมด" : locale === "zh" ? "查看全部" : "View All"}</button>
             </div>
-            {upcomingMeetings.length > 0 ? (
+            {(upcomingMeetings.length > 0 || propConfirmedMeetings.length > 0) ? (
               <div className="space-y-3 mt-4">
+                {propConfirmedMeetings.map((p: PropInquiry) => (
+                  <div key={p.poNumber} className="bg-white rounded-xl shadow-sm border border-emerald-200 p-5">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-gray-900 font-bold">🏠 {p.propertyTitle} ({p.poNumber})</span>
+                      <span className="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-bold">{p.meetingDate}{p.meetingTime ? ` · ${p.meetingTime}` : ''}</span>
+                    </div>
+                    <p className="text-sm text-gray-600">{locale === "th" ? "สถานที่:" : "Venue:"} {p.meetingVenue || 'TBD'} | {locale === "th" ? "ผู้ลงประกาศ:" : "Lister:"} {p.listerName}</p>
+                  </div>
+                ))}
                 {upcomingMeetings.slice(0, 3).map((m: any) => (
                   <div key={m.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
                     <div className="flex justify-between items-center mb-2">
@@ -2205,6 +2345,151 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             </div>
           </div>
         </div>
+      {/* === Property Inquiry Modals === */}
+
+      {/* Step 5: Pay Processing Fee */}
+      {propPayModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl overflow-hidden">
+            <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4">
+              <h3 className="text-white font-bold text-lg">💳 {locale === "th" ? "ชำระค่าดำเนินการ" : locale === "zh" ? "支付处理费" : "Pay Processing Fee"}</h3>
+              <p className="text-green-100 text-sm mt-1">{propPayModal.poNumber} · Step 5 of 8</p>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div className="bg-gray-50 rounded-xl p-4 text-sm space-y-2">
+                <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ทรัพย์สิน" : "Property"}</span><span className="font-semibold text-right max-w-[60%] line-clamp-1">{propPayModal.propertyTitle}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "จังหวัด" : "Province"}</span><span className="font-semibold">{propPayModal.province}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ผู้ลงประกาศ" : "Lister"}</span><span className="font-semibold">{propPayModal.listerName}</span></div>
+                <div className="flex justify-between border-t border-gray-100 pt-2">
+                  <span className="text-gray-700 font-semibold">{locale === "th" ? "ค่าดำเนินการ" : "Processing Fee"}</span>
+                  <span className="font-extrabold text-green-700 text-lg">฿{propPayModal.propertyFee}</span>
+                </div>
+              </div>
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
+                {locale === "th"
+                  ? "🧪 ช่วงทดสอบ: ข้ามการชำระเงินได้ฟรี หลังกด 'Free Pass' คุณจะได้รับข้อมูลติดต่อผู้ลงประกาศ"
+                  : "🧪 Testing period: payment is skipped for free. After clicking 'Free Pass' you will receive the lister's contact info."}
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setPropPayModal(null)} className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl font-semibold text-sm">
+                  {locale === "th" ? "ยกเลิก" : "Cancel"}
+                </button>
+                <button
+                  className="flex-1 py-2.5 bg-green-700 text-white rounded-xl font-bold text-sm hover:bg-green-800 transition"
+                  onClick={() => {
+                    try {
+                      const all: PropInquiry[] = JSON.parse(localStorage.getItem("cblue_prop_inquiries") || "[]");
+                      const merged = all.map((p: PropInquiry) => p.id === propPayModal.id ? { ...p, status: "PAID", step: 5, updatedAt: Date.now() } : p);
+                      localStorage.setItem("cblue_prop_inquiries", JSON.stringify(merged));
+                      window.dispatchEvent(new Event("storage"));
+                    } catch {}
+                    setPropPayModal(null);
+                  }}
+                >
+                  🧪 Testing period — Free Pass
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Step 7: Send Meeting Invitation */}
+      {propMeetingModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl overflow-hidden">
+            <div className="bg-gradient-to-r from-teal-500 to-cyan-500 px-6 py-4">
+              <h3 className="text-white font-bold text-lg">📅 {locale === "th" ? "ส่งคำเชิญนัดหมาย" : locale === "zh" ? "发送会议邀请" : "Send Meeting Invitation"}</h3>
+              <p className="text-teal-100 text-sm mt-1">{propMeetingModal.poNumber} · Step 7 of 8</p>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <p className="text-sm text-gray-600">{locale === "th" ? `นัดหมายเยี่ยมชม: ${propMeetingModal.propertyTitle}` : `Schedule a viewing for: ${propMeetingModal.propertyTitle}`}</p>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "วันที่" : "Date"}</label>
+                  <input type="date" value={propMeetingDate} onChange={e => setPropMeetingDate(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "เวลา" : "Time"}</label>
+                  <input type="time" value={propMeetingTime} onChange={e => setPropMeetingTime(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "สถานที่" : "Venue"}</label>
+                  <input type="text" value={propMeetingVenue} onChange={e => setPropMeetingVenue(e.target.value)} placeholder={locale === "th" ? "เช่น ชั้น 1 อาคาร A" : "e.g. Lobby, Building A"} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300" />
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setPropMeetingModal(null)} className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl font-semibold text-sm">
+                  {locale === "th" ? "ยกเลิก" : "Cancel"}
+                </button>
+                <button
+                  disabled={!propMeetingDate || !propMeetingTime || !propMeetingVenue}
+                  className="flex-1 py-2.5 bg-teal-600 text-white rounded-xl font-bold text-sm hover:bg-teal-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => {
+                    try {
+                      const all: PropInquiry[] = JSON.parse(localStorage.getItem("cblue_prop_inquiries") || "[]");
+                      const merged = all.map((p: PropInquiry) => p.id === propMeetingModal!.id ? { ...p, status: "MEETING_SENT", step: 7, meetingDate: propMeetingDate, meetingTime: propMeetingTime, meetingVenue: propMeetingVenue, updatedAt: Date.now() } : p);
+                      localStorage.setItem("cblue_prop_inquiries", JSON.stringify(merged));
+                      window.dispatchEvent(new Event("storage"));
+                    } catch {}
+                    setPropMeetingModal(null);
+                  }}
+                >
+                  {locale === "th" ? "📅 ส่งคำเชิญ" : "📅 Send Invite"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Step 8: Rate & Close */}
+      {propRateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl overflow-hidden">
+            <div className="bg-gradient-to-r from-yellow-500 to-amber-500 px-6 py-4">
+              <h3 className="text-white font-bold text-lg">⭐ {locale === "th" ? "ให้คะแนนและปิดงาน" : locale === "zh" ? "评分并结案" : "Rate & Close"}</h3>
+              <p className="text-yellow-100 text-sm mt-1">{propRateModal.poNumber} · Step 8 of 8</p>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <p className="text-sm text-gray-600">{locale === "th" ? `ให้คะแนนประสบการณ์กับ: ${propRateModal.listerName}` : `Rate your experience with: ${propRateModal.listerName}`}</p>
+              <div>
+                <p className="text-xs font-semibold text-gray-600 mb-2">{locale === "th" ? "คะแนน" : "Rating"}</p>
+                <div className="flex gap-2 justify-center">
+                  {[1,2,3,4,5].map(star => (
+                    <button key={star} onClick={() => setPropRateStars(star)} className={`text-3xl transition ${propRateStars >= star ? "text-yellow-400" : "text-gray-200"}`}>★</button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "ความคิดเห็น (ไม่บังคับ)" : "Comment (optional)"}</label>
+                <textarea value={propRateComment} onChange={e => setPropRateComment(e.target.value)} rows={3} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300 resize-none" placeholder={locale === "th" ? "แชร์ประสบการณ์ของคุณ..." : "Share your experience..."} />
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setPropRateModal(null)} className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl font-semibold text-sm">
+                  {locale === "th" ? "ยกเลิก" : "Cancel"}
+                </button>
+                <button
+                  disabled={propRateStars === 0}
+                  className="flex-1 py-2.5 bg-yellow-500 text-white rounded-xl font-bold text-sm hover:bg-yellow-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => {
+                    try {
+                      const all: PropInquiry[] = JSON.parse(localStorage.getItem("cblue_prop_inquiries") || "[]");
+                      const merged = all.map((p: PropInquiry) => p.id === propRateModal!.id ? { ...p, status: "RATED", step: 8, customerRating: propRateStars, customerComment: propRateComment, updatedAt: Date.now() } : p);
+                      localStorage.setItem("cblue_prop_inquiries", JSON.stringify(merged));
+                      window.dispatchEvent(new Event("storage"));
+                    } catch {}
+                    setPropRateModal(null);
+                  }}
+                >
+                  {locale === "th" ? "⭐ ส่งคะแนน" : "⭐ Submit Rating"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Rate & Close Modal */}
       {rateModal && (
         <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto">
