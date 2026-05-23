@@ -2409,24 +2409,39 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             </div>
             {(upcomingMeetings.length > 0 || propConfirmedMeetings.length > 0) ? (
               <div className="space-y-3 mt-4">
-                {propConfirmedMeetings.map((p: PropInquiry) => (
-                  <div key={p.poNumber} className="bg-white rounded-xl shadow-sm border border-emerald-200 p-5">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-gray-900 font-bold">🏠 {p.propertyTitle} ({p.poNumber})</span>
-                      <span className="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-bold">{p.meetingDate}{p.meetingTime ? ` · ${p.meetingTime}` : ''}</span>
-                    </div>
-                    <p className="text-sm text-gray-600">{locale === "th" ? "สถานที่:" : "Venue:"} {p.meetingVenue || 'TBD'} | {locale === "th" ? "ผู้ลงประกาศ:" : "Lister:"} {p.listerName}</p>
-                  </div>
-                ))}
-                {upcomingMeetings.slice(0, 3).map((m: any) => (
-                  <div key={m.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-                    <div className="flex justify-between items-center mb-2">
-                       <span className="text-gray-900 font-bold">{m.title} ({m.po})</span>
-                       <span className="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-bold">{m.meetingDate || m.date}{m.meetingTime ? ` · ${m.meetingTime}` : ''}</span>
-                    </div>
-                    <p className="text-sm text-gray-600">{locale === "th" ? "สถานที่:" : locale === "zh" ? "地点:" : "Location:"} {m.venue || m.meetingVenue || m.subdistrict || 'TBD'} | {locale === "th" ? "ผู้ให้บริการ:" : locale === "zh" ? "服务提供商:" : "Provider:"} {m.customer}</p>
-                  </div>
-                ))}
+                {(() => {
+                  // Merge prop + fixer meetings, sort by date asc, show oldest 3 not-yet-due
+                  const propItems = propConfirmedMeetings.map((p: PropInquiry) => ({
+                    key: p.poNumber,
+                    ts: parseDateMs(`${p.meetingDate}T${p.meetingTime || '00:00'}`),
+                    node: (
+                      <div key={p.poNumber} className="bg-white rounded-xl shadow-sm border border-emerald-200 p-5">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-gray-900 font-bold">🏠 {p.propertyTitle} ({p.poNumber})</span>
+                          <span className="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-bold">{p.meetingDate}{p.meetingTime ? ` · ${p.meetingTime}` : ''}</span>
+                        </div>
+                        <p className="text-sm text-gray-600">{locale === "th" ? "สถานที่:" : "Venue:"} {p.meetingVenue || 'TBD'} | {locale === "th" ? "ผู้ลงประกาศ:" : "Lister:"} {p.listerName}</p>
+                      </div>
+                    ),
+                  }));
+                  const fixerItems = upcomingMeetings.map((m: any) => ({
+                    key: m.id,
+                    ts: m.meetingDate ? parseDateMs(`${m.meetingDate}T${m.meetingTime || '00:00'}`) : parseDateMs(m.createdAt || m.date),
+                    node: (
+                      <div key={m.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-gray-900 font-bold">{m.title} ({m.po})</span>
+                          <span className="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-bold">{m.meetingDate || m.date}{m.meetingTime ? ` · ${m.meetingTime}` : ''}</span>
+                        </div>
+                        <p className="text-sm text-gray-600">{locale === "th" ? "สถานที่:" : locale === "zh" ? "地点:" : "Location:"} {m.venue || m.meetingVenue || m.subdistrict || 'TBD'} | {locale === "th" ? "ผู้ให้บริการ:" : locale === "zh" ? "服务提供商:" : "Provider:"} {m.customer}</p>
+                      </div>
+                    ),
+                  }));
+                  return [...propItems, ...fixerItems]
+                    .sort((a, b) => a.ts - b.ts)
+                    .slice(0, 3)
+                    .map(item => item.node);
+                })()}
               </div>
             ) : (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mt-4 text-center text-sm text-gray-400">{locale === "th" ? "ไม่มีการนัดหมายที่จะมาถึง" : locale === "zh" ? "暂无会议" : "No upcoming meetings"}</div>
