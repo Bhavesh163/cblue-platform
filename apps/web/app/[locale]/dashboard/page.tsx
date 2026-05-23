@@ -40,6 +40,8 @@ const fmtDateTime = (d: Date | number | string) => {
 const PO_CODE_PATTERN = /PO-(?:\d{8}|\d{4}-\d{4,})/i;
 const PO_CODE_EXACT_PATTERN = /^PO-(?:\d{8}|\d{4}-\d{4,})$/i;
 const isValidPoCode = (value: string) => PO_CODE_EXACT_PATTERN.test(String(value || '').trim());
+const PROP_PO_PATTERN = /^PRE-\d{4}-\d{4}$/i;
+const isPropPoCode = (value: string) => PROP_PO_PATTERN.test(String(value || '').trim());
 const extractPoCode = (orderLike: any) => {
   if (!orderLike) return "";
   const direct = String(orderLike?.po || "").trim();
@@ -955,7 +957,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         .filter(k => k.startsWith('chat_messages_') || k.startsWith('chat_title_') || k.startsWith('po_to_order_'))
         .forEach(k => {
           const suffix = k.replace(/^chat_messages_|^chat_title_|^po_to_order_/, '');
-          if (!isValidPoCode(suffix)) { try { localStorage.removeItem(k); } catch {} }
+          if (!isValidPoCode(suffix) && !isPropPoCode(suffix)) { try { localStorage.removeItem(k); } catch {} }
         });
       Object.keys(localStorage)
         .filter(k => k.startsWith('chat_messages_'))
@@ -1119,6 +1121,37 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     return items;
   };
 
+  const buildPropChatFeed = (): any[] => {
+    if (typeof window === "undefined") return [];
+    const items: any[] = [];
+    const activePOs = propInquiries
+      .filter((p: PropInquiry) => ["PAID", "MEETING_SENT", "MEETING_CONFIRMED"].includes(p.status))
+      .map((p: PropInquiry) => p.poNumber);
+    for (const po of activePOs) {
+      try {
+        const key = `chat_messages_${po}`;
+        const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+        if (!Array.isArray(parsed) || parsed.length === 0) continue;
+        const reversed = [...parsed].reverse();
+        const last = reversed.find((m: any) => m?.text?.trim());
+        if (!last) continue;
+        const inq = propInquiries.find((p: PropInquiry) => p.poNumber === po);
+        const incomingMsg = reversed.find((m: any) => m?.text?.trim() && m.sender !== "system" && m.sender !== "customer");
+        items.push({
+          id: po, po,
+          name: inq ? `🏠 ${inq.propertyTitle}` : `Property Chat - ${po}`,
+          lastMsg: last.text,
+          time: last.time || "",
+          incomingMsg: incomingMsg?.text || "",
+          hasIncoming: Boolean(incomingMsg),
+          sort: Date.now(),
+          isPropChat: true,
+        });
+      } catch {}
+    }
+    return items;
+  };
+
   const buildBackendChatFeed = async () => {
     if (typeof window === "undefined") return [];
     const token = localStorage.getItem("subscriber_token") || "";
@@ -1188,9 +1221,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
     const syncChats = async () => {
       const localItems = buildChatFeed();
+      const propChatItems = buildPropChatFeed();
       const backendItems = await buildBackendChatFeed();
 
       const merged = new Map<string, any>();
+      for (const item of propChatItems) merged.set(item.po, item);
       for (const item of localItems) merged.set(item.po, item);
       for (const item of backendItems) merged.set(item.po, item);
 
@@ -1666,7 +1701,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
   
   const renderRequestCard = (item: any) => {
-    if (['prop_pay_fee', 'prop_meeting_invite', 'prop_rate'].includes(item.type)) return renderPropRequestCard(item);
+    if (['prop_waiting', 'prop_declined', 'prop_pay_fee', 'prop_meeting_invite', 'prop_rate'].includes(item.type)) return renderPropRequestCard(item);
     if (mockPayments[item.id]) return null;
     if (item.type === 'notice') return null;
     if (item.type === 'chat_ready') {

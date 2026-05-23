@@ -65,6 +65,8 @@ const fmtDateTime = (d: Date | number | string) => {
 const PO_CODE_PATTERN = /PO-(?:\d{8}|\d{4}-\d{4,})/i;
 const PO_CODE_EXACT_PATTERN = /^PO-(?:\d{8}|\d{4}-\d{4,})$/i;
 const isPoCode = (value: string) => PO_CODE_EXACT_PATTERN.test(String(value || "").trim());
+const PROP_PO_PATTERN = /^PRE-\d{4}-\d{4}$/i;
+const isPropPoCode = (value: string) => PROP_PO_PATTERN.test(String(value || "").trim());
 const extractPoCode = (value: any) => {
   if (!value) return "";
   const direct = String(value?.po || "").trim();
@@ -604,12 +606,12 @@ export default function FixerProPage() {
     };
   }, [partner?.id]);
 
-  // Poll property inquiries addressed to this lister (NOTIFY_SENT = step 4 accept, MEETING_SENT = step 7 confirm)
+  // Poll property inquiries addressed to this lister (NOTIFY_SENT = step 4 accept, PAID = step 5-6 chat, MEETING_SENT = step 7 confirm, MEETING_CONFIRMED = step 8 rate)
   useEffect(() => {
     function loadProps() {
       try {
         const all: PropInquiry[] = JSON.parse(localStorage.getItem("cblue_prop_inquiries") || "[]");
-        setPropInquiries(all.filter((p: PropInquiry) => ["NOTIFY_SENT", "MEETING_SENT", "MEETING_CONFIRMED"].includes(p.status)));
+        setPropInquiries(all.filter((p: PropInquiry) => ["NOTIFY_SENT", "PAID", "MEETING_SENT", "MEETING_CONFIRMED"].includes(p.status)));
       } catch { setPropInquiries([]); }
     }
     loadProps();
@@ -754,19 +756,15 @@ export default function FixerProPage() {
     for (const key of keys) {
       try {
         const po = key.replace("chat_messages_", "");
-        if (!isPoCode(po)) {
-          localStorage.removeItem(key);
-          localStorage.removeItem(`chat_title_${po}`);
-          localStorage.removeItem(`chat_from_${po}`);
-          continue;
-        }
+        // Preserve prop chat rooms — don't delete or skip PRE- PO keys
+        if (isPropPoCode(po)) continue;
         if (isHiddenTestPo(po)) {
           localStorage.removeItem(key);
           localStorage.removeItem(`chat_title_${po}`);
           localStorage.removeItem(`chat_from_${po}`);
           continue;
         }
-        if (knownPoSet.size > 0 && !knownPoSet.has(po)) {
+        if (knownPoSet.size > 0 && !knownPoSet.has(po) && !isPropPoCode(po)) {
           localStorage.removeItem(key);
           localStorage.removeItem(`chat_title_${po}`);
           localStorage.removeItem(`chat_from_${po}`);
@@ -801,6 +799,38 @@ export default function FixerProPage() {
       } catch {}
     }
     items.sort((a, b) => b.sort - a.sort);
+    return items;
+  };
+
+  const buildPropChatFeed = (): any[] => {
+    if (typeof window === "undefined") return [];
+    const items: any[] = [];
+    // Show chat rooms for prop inquiries this partner is involved in (PAID or later)
+    const activePropPOs = propInquiries
+      .filter((p: PropInquiry) => ["PAID", "MEETING_SENT", "MEETING_CONFIRMED"].includes(p.status))
+      .map((p: PropInquiry) => p.poNumber);
+    for (const po of activePropPOs) {
+      try {
+        const key = `chat_messages_${po}`;
+        const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+        if (!Array.isArray(parsed) || parsed.length === 0) continue;
+        const reversed = [...parsed].reverse();
+        const last = reversed.find((m: any) => m?.text?.trim());
+        if (!last) continue;
+        const inq = propInquiries.find((p: PropInquiry) => p.poNumber === po);
+        const incomingMsg = reversed.find((m: any) => m?.text?.trim() && m.sender !== "system" && m.sender !== "lister" && m.sender !== "partner");
+        items.push({
+          id: po, po,
+          name: inq ? `🏠 ${inq.propertyTitle}` : `Property Chat - ${po}`,
+          lastMsg: last.text,
+          time: last.time || "",
+          incomingMsg: incomingMsg?.text || "",
+          hasIncoming: Boolean(incomingMsg),
+          sort: Date.now(),
+          isPropChat: true,
+        });
+      } catch {}
+    }
     return items;
   };
 
@@ -880,8 +910,10 @@ export default function FixerProPage() {
     let isMounted = true;
     const syncChats = async () => {
       const localItems = buildChatFeed();
+      const propChatItems = buildPropChatFeed();
       const backendItems = await buildBackendChatFeed();
       const merged = new Map<string, any>();
+      for (const item of propChatItems) merged.set(item.po, item);
       for (const item of localItems) merged.set(item.po, item);
       for (const item of backendItems) merged.set(item.po, item);
       const mergedList = Array.from(merged.values()).sort((a: any, b: any) => Number(b.sort || 0) - Number(a.sort || 0));
