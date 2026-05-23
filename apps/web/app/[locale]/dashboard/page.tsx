@@ -1513,8 +1513,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
   // Inject prop inquiry request cards (not ghis-gated)
   const propRequestItems: any[] = propInquiries
-    .filter((p: PropInquiry) => ["PARTNER_ACCEPTED", "PAID", "MEETING_CONFIRMED"].includes(p.status))
+    .filter((p: PropInquiry) => ["NOTIFY_SENT", "DECLINED", "PARTNER_ACCEPTED", "PAID", "MEETING_CONFIRMED"].includes(p.status))
     .map((p: PropInquiry) => {
+      if (p.status === "NOTIFY_SENT") return { id: `prop-waiting-${p.poNumber}`, type: "prop_waiting", po: p.poNumber, propInquiry: p, createdAt: p.createdAt };
+      if (p.status === "DECLINED") return { id: `prop-declined-${p.poNumber}`, type: "prop_declined", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
       if (p.status === "PARTNER_ACCEPTED") return { id: `prop-pay-${p.poNumber}`, type: "prop_pay_fee", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
       if (p.status === "PAID") return { id: `prop-meet-${p.poNumber}`, type: "prop_meeting_invite", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
       if (p.status === "MEETING_CONFIRMED") return { id: `prop-rate-${p.poNumber}`, type: "prop_rate", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
@@ -1913,6 +1915,58 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
   const renderPropRequestCard = (item: any) => {
     const p: PropInquiry = item.propInquiry;
+    if (item.type === "prop_waiting") {
+      return (
+        <div key={item.id} className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-lg bg-gray-50 text-gray-500 flex items-center justify-center font-bold text-lg">⏳</div>
+            <div>
+              <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {p.poNumber} · Step 3 of 8</span></h3>
+              <p className="text-sm text-gray-600 mt-0.5">{p.province}</p>
+              <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "รอผู้ลงประกาศยืนยัน — หากไม่ตอบสนองสามารถเลือกใหม่ได้" : locale === "zh" ? "等待房源方确认 — 如无响应可重新选择" : "Waiting for lister to accept — you may reselect if no response"}</p>
+            </div>
+          </div>
+          <div className="flex gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+            {!p.reselectedOnce && (
+              <button
+                className="flex-1 sm:flex-none px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition whitespace-nowrap"
+                onClick={() => {
+                  if (!confirm(locale === "th" ? "ยืนยันการเลือกผู้ลงประกาศใหม่? คำขอนี้จะถูกยกเลิก" : "Reselect a different property? This inquiry will be cancelled.")) return;
+                  try {
+                    const all: PropInquiry[] = JSON.parse(localStorage.getItem("cblue_prop_inquiries") || "[]");
+                    const merged = all.map((x: PropInquiry) => x.id === p.id ? { ...x, status: "CANCELLED", reselectedOnce: true, updatedAt: Date.now() } : x);
+                    localStorage.setItem("cblue_prop_inquiries", JSON.stringify(merged));
+                    window.dispatchEvent(new Event("storage"));
+                  } catch {}
+                }}
+              >
+                {locale === "th" ? "🔄 เลือกใหม่" : locale === "zh" ? "🔄 重新选择" : "🔄 Reselect"}
+              </button>
+            )}
+            <span className="px-3 py-2 bg-gray-100 text-gray-500 rounded-lg text-xs font-semibold whitespace-nowrap">
+              {locale === "th" ? "รอยืนยัน..." : "Pending..."}
+            </span>
+          </div>
+        </div>
+      );
+    }
+    if (item.type === "prop_declined") {
+      return (
+        <div key={item.id} className="bg-white border border-red-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-lg bg-red-50 text-red-500 flex items-center justify-center font-bold text-lg">❌</div>
+            <div>
+              <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {p.poNumber}</span></h3>
+              <p className="text-sm text-red-600 font-semibold mt-0.5">{locale === "th" ? "ผู้ลงประกาศปฏิเสธคำขอ" : locale === "zh" ? "房源方已拒绝" : "Lister declined your inquiry"}</p>
+              <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "กรุณาเลือกทรัพย์สินใหม่จาก Real Estate Page" : "Please select another property from the Real Estate Page."}</p>
+            </div>
+          </div>
+          <a href={`${prefix}/properties`} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 transition whitespace-nowrap">
+            {locale === "th" ? "ค้นหาใหม่" : "Browse Again"}
+          </a>
+        </div>
+      );
+    }
     if (item.type === "prop_pay_fee") {
       return (
         <div key={item.id} className="bg-white border border-emerald-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -2172,6 +2226,34 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               allHistory.map((o: any, i: number) => <CustomerHistoryCard key={o.po || o.id || i} item={o} idx={i} locale={locale} />)
             )}
           </div>
+          {/* Property Inquiry History */}
+          {(() => {
+            const propHist: any[] = (() => { try { return JSON.parse(localStorage.getItem("prop_inquiry_history") || "[]"); } catch { return []; } })();
+            if (propHist.length === 0) return null;
+            return (
+              <div className="mt-2 border-t border-gray-100">
+                <div className="px-6 py-3 bg-emerald-50">
+                  <h3 className="font-semibold text-emerald-800 text-sm">🏠 {locale === "th" ? "ประวัติคำขออสังหาฯ" : "Property Inquiry History"}</h3>
+                </div>
+                <div className="divide-y divide-gray-50">
+                  {propHist.slice().reverse().map((p: any, i: number) => (
+                    <div key={p.id || i} className="px-6 py-4 flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center text-lg">🏠</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-gray-900 text-sm">{p.propertyTitle} <span className="text-xs font-normal text-gray-400">· {p.poNumber}</span></p>
+                        <p className="text-xs text-gray-500 mt-0.5">{p.province} · {p.listerName}</p>
+                        <p className="text-xs text-emerald-600 font-semibold mt-0.5">
+                          ✅ {locale === "th" ? "ปิดงานแล้ว" : "Completed"} · ⭐ {p.customerRating ?? "-"}/5
+                          {p.completedAt ? ` · ${new Date(p.completedAt).toLocaleDateString()}` : ""}
+                        </p>
+                      </div>
+                      <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-full">{locale === "th" ? "สำเร็จ" : "Done"}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -2381,6 +2463,13 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                       const all: PropInquiry[] = JSON.parse(localStorage.getItem("cblue_prop_inquiries") || "[]");
                       const merged = all.map((p: PropInquiry) => p.id === propPayModal.id ? { ...p, status: "PAID", step: 5, updatedAt: Date.now() } : p);
                       localStorage.setItem("cblue_prop_inquiries", JSON.stringify(merged));
+                      // Create prop chat room with CBLUE system welcome message
+                      const chatKey = `chat_messages_${propPayModal.poNumber}`;
+                      const existingChat = (() => { try { return JSON.parse(localStorage.getItem(chatKey) || "[]"); } catch { return []; } })();
+                      if (existingChat.length === 0) {
+                        const sysMsg = { id: `sys-prop-${Date.now()}`, sender: "system", text: locale === "th" ? `🏠 CBLUE สร้างห้องแชทสำหรับ ${propPayModal.propertyTitle} (${propPayModal.poNumber}) — กรุณาสนทนาเพื่อนัดหมายเยี่ยมชมทรัพย์สิน และดำเนินการส่งคำเชิญนัดหมายที่แท็บ Requests` : `🏠 CBLUE created a chat room for ${propPayModal.propertyTitle} (${propPayModal.poNumber}). Please use this chat to coordinate, and proceed to send a site meeting invitation from your Requests tab.`, time: new Date().toLocaleTimeString() };
+                        localStorage.setItem(chatKey, JSON.stringify([sysMsg]));
+                      }
                       window.dispatchEvent(new Event("storage"));
                     } catch {}
                     setPropPayModal(null);
@@ -2475,11 +2564,19 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   onClick={() => {
                     try {
                       const all: PropInquiry[] = JSON.parse(localStorage.getItem("cblue_prop_inquiries") || "[]");
+                      const ratedItem = all.find((p: PropInquiry) => p.id === propRateModal!.id);
                       const merged = all.map((p: PropInquiry) => p.id === propRateModal!.id ? { ...p, status: "RATED", step: 8, customerRating: propRateStars, customerComment: propRateComment, updatedAt: Date.now() } : p);
                       localStorage.setItem("cblue_prop_inquiries", JSON.stringify(merged));
+                      // Save to prop inquiry history
+                      if (ratedItem) {
+                        const hist: any[] = (() => { try { return JSON.parse(localStorage.getItem("prop_inquiry_history") || "[]"); } catch { return []; } })();
+                        hist.push({ ...ratedItem, status: "RATED", customerRating: propRateStars, customerComment: propRateComment, completedAt: Date.now() });
+                        localStorage.setItem("prop_inquiry_history", JSON.stringify(hist));
+                      }
                       window.dispatchEvent(new Event("storage"));
                     } catch {}
                     setPropRateModal(null);
+                    alert(locale === "th" ? "⭐ ขอบคุณ! งานนี้ปิดแล้วและย้ายไปประวัติ" : "⭐ Thank you! This inquiry has been closed and moved to history.");
                   }}
                 >
                   {locale === "th" ? "⭐ ส่งคะแนน" : "⭐ Submit Rating"}

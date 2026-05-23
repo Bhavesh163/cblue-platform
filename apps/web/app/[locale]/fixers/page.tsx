@@ -299,6 +299,9 @@ export default function FixerProPage() {
   const [propInquiries, setPropInquiries] = useState<PropInquiry[]>([]);
   const [propAcceptModal, setPropAcceptModal] = useState<PropInquiry | null>(null);
   const [propMeetingConfirmModal, setPropMeetingConfirmModal] = useState<PropInquiry | null>(null);
+  const [propPartnerRateModal, setPropPartnerRateModal] = useState<PropInquiry | null>(null);
+  const [propPartnerRateStars, setPropPartnerRateStars] = useState(0);
+  const [propPartnerRateComment, setPropPartnerRateComment] = useState("");
   const handleJobClick = (job: any) => {
     const workflowType = String(job?.workflowType || job?.type || '').toLowerCase();
     const jobStatus = String(job?.status || '').toUpperCase();
@@ -606,7 +609,7 @@ export default function FixerProPage() {
     function loadProps() {
       try {
         const all: PropInquiry[] = JSON.parse(localStorage.getItem("cblue_prop_inquiries") || "[]");
-        setPropInquiries(all.filter((p: PropInquiry) => p.status === "NOTIFY_SENT" || p.status === "MEETING_SENT"));
+        setPropInquiries(all.filter((p: PropInquiry) => ["NOTIFY_SENT", "MEETING_SENT", "MEETING_CONFIRMED"].includes(p.status)));
       } catch { setPropInquiries([]); }
     }
     loadProps();
@@ -1124,6 +1127,10 @@ export default function FixerProPage() {
     .filter((r: any) => !isHiddenTestPo(r.po))
     .filter((r: any) => r.type === 'meeting_scheduled')
     .sort((a: any, b: any) => parseTs(a.date) - parseTs(b.date));
+  const propScheduledMeetings = propInquiries
+    .filter((p: PropInquiry) => p.status === "MEETING_CONFIRMED" && p.meetingDate)
+    .map((p: PropInquiry) => ({ id: `prop-${p.poNumber}`, title: p.propertyTitle, po: p.poNumber, meetingDate: p.meetingDate || "", meetingTime: p.meetingTime || "", meetingVenue: p.meetingVenue || "", customer: p.customerName || "Customer", date: p.meetingDate || "" }));
+  const allScheduledMeetings = [...scheduledMeetings, ...propScheduledMeetings];
 
   useEffect(() => {
     if (!chatFeed || chatFeed.length === 0) return;
@@ -1324,10 +1331,11 @@ export default function FixerProPage() {
   }, new Map<string, any>()).values())
     .sort((a: any, b: any) => parseTs(b.createdAt || b.date) - parseTs(a.createdAt || a.date));
 
-  // Inject prop inquiry items: NOTIFY_SENT = step 4 accept, MEETING_SENT = step 7 confirm
+  // Inject prop inquiry items: NOTIFY_SENT = step 4 accept, MEETING_SENT = step 7 confirm, MEETING_CONFIRMED = step 8 rate
   const propRequestCards: any[] = propInquiries.map((p: PropInquiry) => {
     if (p.status === "NOTIFY_SENT") return { id: `prop-accept-${p.poNumber}`, type: "prop_accept", po: p.poNumber, propInquiry: p, createdAt: p.createdAt };
     if (p.status === "MEETING_SENT") return { id: `prop-meet-confirm-${p.poNumber}`, type: "prop_meeting_confirm", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
+    if (p.status === "MEETING_CONFIRMED" && p.listerRating === undefined) return { id: `prop-rate-p-${p.poNumber}`, type: "prop_rate_partner", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
     return null;
   }).filter(Boolean) as any[];
   const partnerRequestItemsWithProp = [...propRequestCards, ...partnerRequestItems];
@@ -1423,7 +1431,15 @@ export default function FixerProPage() {
               <p className="text-xs text-gray-500">{locale === "th" ? "หลังยืนยัน ลูกค้าจะชำระค่าดำเนินการและได้รับข้อมูลติดต่อของคุณ" : "After acceptance, the customer pays the processing fee and receives your contact info."}</p>
               <div className="flex gap-3">
                 <button
-                  onClick={() => setPropAcceptModal(null)}
+                  onClick={() => {
+                    try {
+                      const all: PropInquiry[] = JSON.parse(localStorage.getItem("cblue_prop_inquiries") || "[]");
+                      const merged = all.map((p: PropInquiry) => p.id === propAcceptModal!.id ? { ...p, status: "DECLINED", updatedAt: Date.now() } : p);
+                      localStorage.setItem("cblue_prop_inquiries", JSON.stringify(merged));
+                      window.dispatchEvent(new Event("storage"));
+                    } catch {}
+                    setPropAcceptModal(null);
+                  }}
                   className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl font-semibold text-sm"
                 >
                   {locale === "th" ? "ปฏิเสธ" : "Decline"}
@@ -1477,10 +1493,59 @@ export default function FixerProPage() {
                       window.dispatchEvent(new Event("storage"));
                     } catch {}
                     setPropMeetingConfirmModal(null);
+                    alert(locale === "th" ? "✅ ยืนยันนัดหมายแล้ว! การนัดหมายจะปรากฏในปฏิทิน" : "✅ Meeting confirmed! It will appear in upcoming meetings for both parties.");
                   }}
                   className="flex-1 py-2.5 bg-teal-600 text-white rounded-xl font-bold text-sm hover:bg-teal-700 transition"
                 >
                   ✅ {locale === "th" ? "ยืนยันนัดหมาย" : "Confirm Meeting"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Property Rate Modal for Partner (Step 8 of 8) */}
+      {propPartnerRateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl overflow-hidden">
+            <div className="bg-gradient-to-r from-yellow-500 to-amber-500 px-6 py-4">
+              <h3 className="text-white font-bold text-lg">⭐ {locale === "th" ? "ให้คะแนนลูกค้า" : locale === "zh" ? "评价客户" : "Rate Customer"}</h3>
+              <p className="text-yellow-100 text-sm mt-1">{propPartnerRateModal.poNumber} · Step 8 of 8</p>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <p className="text-sm text-gray-600">{locale === "th" ? `ให้คะแนนประสบการณ์การทำงานกับลูกค้าสำหรับ: ${propPartnerRateModal.propertyTitle}` : `Rate your experience with the customer for: ${propPartnerRateModal.propertyTitle}`}</p>
+              <div>
+                <p className="text-xs font-semibold text-gray-600 mb-2">{locale === "th" ? "คะแนน" : "Rating"}</p>
+                <div className="flex gap-2 justify-center">
+                  {[1,2,3,4,5].map(star => (
+                    <button key={star} onClick={() => setPropPartnerRateStars(star)} className={`text-3xl transition ${propPartnerRateStars >= star ? "text-yellow-400" : "text-gray-200"}`}>★</button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "ความคิดเห็น (ไม่บังคับ)" : "Comment (optional)"}</label>
+                <textarea value={propPartnerRateComment} onChange={e => setPropPartnerRateComment(e.target.value)} rows={3} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300 resize-none" placeholder={locale === "th" ? "แชร์ประสบการณ์ของคุณ..." : "Share your experience..."} />
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setPropPartnerRateModal(null)} className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl font-semibold text-sm">
+                  {locale === "th" ? "ยกเลิก" : "Cancel"}
+                </button>
+                <button
+                  disabled={propPartnerRateStars === 0}
+                  className="flex-1 py-2.5 bg-yellow-500 text-white rounded-xl font-bold text-sm hover:bg-yellow-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => {
+                    try {
+                      const all: PropInquiry[] = JSON.parse(localStorage.getItem("cblue_prop_inquiries") || "[]");
+                      const merged = all.map((p: PropInquiry) => p.id === propPartnerRateModal!.id ? { ...p, listerRating: propPartnerRateStars, listerComment: propPartnerRateComment, updatedAt: Date.now() } : p);
+                      localStorage.setItem("cblue_prop_inquiries", JSON.stringify(merged));
+                      window.dispatchEvent(new Event("storage"));
+                    } catch {}
+                    setPropPartnerRateModal(null);
+                    alert(locale === "th" ? "⭐ ขอบคุณ! ส่งคะแนนแล้ว คำขอนี้จะหายไปจากรายการ" : "⭐ Thank you! Rating submitted. This request will disappear from your list.");
+                  }}
+                >
+                  {locale === "th" ? "⭐ ส่งคะแนน" : "⭐ Submit Rating"}
                 </button>
               </div>
             </div>
@@ -1985,9 +2050,9 @@ export default function FixerProPage() {
 
         {/* Tab Content */}
         <div className={`mt-6 ${activeTab !== 'overview' ? 'hidden' : ''}`}>
-          <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={partnerRequestItems} scheduledMeetings={scheduledMeetings} completedJobs={completedJobs} earnings={earningsSeries} stats={stats} notifications={displayNotifications} chats={chatFeed} onJobClick={handleJobClick} onTabChange={(tab) => setActiveTab(tab as TabKey)} />
+          <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={partnerRequestItems} scheduledMeetings={allScheduledMeetings} completedJobs={completedJobs} earnings={earningsSeries} stats={stats} notifications={displayNotifications} chats={chatFeed} onJobClick={handleJobClick} onTabChange={(tab) => setActiveTab(tab as TabKey)} />
         </div>
-        {activeTab === "requests" && <PartnerRequests locale={locale} incomingJobs={partnerRequestItemsWithProp} onJobClick={handleJobClick} priceList={(partner as any)?.priceList} onPropAccept={(p: PropInquiry) => setPropAcceptModal(p)} onPropMeetingConfirm={(p: PropInquiry) => setPropMeetingConfirmModal(p)} />}
+        {activeTab === "requests" && <PartnerRequests locale={locale} incomingJobs={partnerRequestItemsWithProp} onJobClick={handleJobClick} priceList={(partner as any)?.priceList} onPropAccept={(p: PropInquiry) => setPropAcceptModal(p)} onPropMeetingConfirm={(p: PropInquiry) => setPropMeetingConfirmModal(p)} onPropRatePartner={(p: PropInquiry) => { setPropPartnerRateStars(0); setPropPartnerRateComment(""); setPropPartnerRateModal(p); }} />}
         {activeTab === "active" && <PartnerJobs locale={locale} activeJobs={activeJobs} onJobClick={handleJobClick} priceList={(partner as any)?.priceList} />}
         
         {activeTab === "properties" && <PartnerProperties locale={locale} prefix={prefix} properties={myProperties} />}
@@ -2854,7 +2919,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
   );
 }
 
-function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAccept, onPropMeetingConfirm }: { locale: string; incomingJobs: any[]; onJobClick?: (job: any) => void; priceList?: any[]; onPropAccept?: (p: any) => void; onPropMeetingConfirm?: (p: any) => void; }) {
+function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAccept, onPropMeetingConfirm, onPropRatePartner }: { locale: string; incomingJobs: any[]; onJobClick?: (job: any) => void; priceList?: any[]; onPropAccept?: (p: any) => void; onPropMeetingConfirm?: (p: any) => void; onPropRatePartner?: (p: any) => void; }) {
   const [variationModal, setVariationModal] = React.useState<any>(null);
   const [variationDesc, setVariationDesc] = React.useState("");
   const [variationRows, setVariationRows] = React.useState<{item:string;qty:string;unit:string;rate:string;amount:string}[]>(EMPTY_VAR_ROWS());
@@ -2983,6 +3048,22 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
                 </div>
                 <button onClick={() => onPropMeetingConfirm?.(p)} className="px-4 py-2 bg-teal-600 text-white text-xs font-bold rounded-lg hover:bg-teal-700 transition">
                   {locale === "th" ? "ยืนยัน" : "Confirm"}
+                </button>
+              </div>
+            );
+          }
+          if (req.type === "prop_rate_partner") {
+            const p: any = req.propInquiry;
+            return (
+              <div key={req.id} className="px-6 py-4 flex items-center gap-4">
+                <div className="w-10 h-10 rounded-lg bg-yellow-50 flex items-center justify-center text-lg">⭐</div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-900 text-sm">{p.propertyTitle} <span className="text-xs font-normal text-gray-400">· {p.poNumber} · Step 8 of 8</span></p>
+                  <p className="text-xs text-yellow-700 font-semibold mt-0.5">{locale === "th" ? "นัดหมายยืนยันแล้ว — ให้คะแนนลูกค้าเพื่อปิดงาน" : "Meeting confirmed — rate the customer to close this inquiry"}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{p.meetingDate} {p.meetingTime} · {p.province}</p>
+                </div>
+                <button onClick={() => onPropRatePartner?.(p)} className="px-4 py-2 bg-yellow-500 text-white text-xs font-bold rounded-lg hover:bg-yellow-600 transition">
+                  ⭐ {locale === "th" ? "ให้คะแนน" : "Rate"}
                 </button>
               </div>
             );
