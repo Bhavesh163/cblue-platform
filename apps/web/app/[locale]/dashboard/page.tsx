@@ -1370,7 +1370,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const visibleMockDynRequests = !allowLocalCustomerWorkflow
     ? []
     : mockDynRequests.filter((x: any) => !isHiddenTestPo(x.po));
-  const visibleMockHistory = mockHistory.filter((x: any) => !isHiddenTestPo(x.po));
+  const visibleMockHistory = !allowLocalCustomerWorkflow
+    ? []
+    : mockHistory.filter((x: any) => !isHiddenTestPo(x.po));
 
   // Merge: mockActiveItems overrides ACTIVE_MOCK items with same po (for step progression)
   const paidPOs = new Set(visibleMockActiveItems.map((x: any) => x.po));

@@ -440,25 +440,43 @@ async function fileToDataUrl(file: File): Promise<string> {
 
 async function fileToUploadDataUrl(file: File): Promise<string> {
   const rawDataUrl = await fileToDataUrl(file);
+
+  // Non-image types (PDF, HEIC on Chrome, etc.) cannot be decoded by canvas.
+  // The raw File object stored in window.__cblue_files_by_po handles downloads.
   if (!file.type.startsWith("image/")) return rawDataUrl;
-  if (rawDataUrl.length <= 1_400_000) return rawDataUrl;
+
+  // Target: 0.3 MB = 307,200 bytes. Base64 expands by ~4/3, so the dataURL
+  // string must stay under 307200 * (4/3) ≈ 409,600 characters.
+  const TARGET_CHARS = 409_600;
+  if (rawDataUrl.length <= TARGET_CHARS) return rawDataUrl;
 
   return await new Promise((resolve) => {
     const image = new window.Image();
     image.onload = () => {
-      const longestSide = Math.max(image.width, image.height);
-      const scale = longestSide > 1600 ? 1600 / longestSide : 1;
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.round(image.width * scale));
-      canvas.height = Math.max(1, Math.round(image.height * scale));
-      const context = canvas.getContext("2d");
-      if (!context) {
-        resolve(rawDataUrl);
-        return;
-      }
-      context.drawImage(image, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL("image/jpeg", 0.78));
+      const compress = (maxDim: number, quality: number): string => {
+        const longest = Math.max(image.width, image.height);
+        const scale = longest > maxDim ? maxDim / longest : 1;
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return rawDataUrl;
+        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL("image/jpeg", quality);
+      };
+
+      // Pass 1 – 1200 px, 70 % quality (well under 0.3 MB for typical photos)
+      let out = compress(1200, 0.70);
+      if (out.length <= TARGET_CHARS) { resolve(out); return; }
+
+      // Pass 2 – 900 px, 60 % quality
+      out = compress(900, 0.60);
+      if (out.length <= TARGET_CHARS) { resolve(out); return; }
+
+      // Pass 3 – 700 px, 50 % quality (last resort before giving up)
+      resolve(compress(700, 0.50));
     };
+    // HEIC / undecodable formats: canvas fires onerror; raw file object handles download
     image.onerror = () => resolve(rawDataUrl);
     image.src = rawDataUrl;
   });

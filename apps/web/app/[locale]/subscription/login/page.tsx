@@ -68,6 +68,31 @@ function SubscriptionLoginPageContent() {
 
       const data = await res.json().catch(() => null);
       if (!data || !data.accessToken) throw new Error(t("loginError"));
+
+      // Clear all session-scoped demo/booking data when a different account logs in.
+      // This prevents one user's localStorage state from leaking into another's session.
+      try {
+        const prevSubscriber = JSON.parse(localStorage.getItem("subscriber") || "{}");
+        const prevEmail = String(prevSubscriber?.email || "").toLowerCase();
+        const newEmail = String(data.subscriber?.email || "").toLowerCase();
+        if (prevEmail && newEmail && prevEmail !== newEmail) {
+          const keysToRemove = Object.keys(localStorage).filter(k =>
+            k.startsWith("ghis_mock_") ||
+            k.startsWith("cblue_po_") ||
+            k.startsWith("cblue_order_") ||
+            k.startsWith("cblue_workflow") ||
+            k.startsWith("po_to_order_") ||
+            k.startsWith("chat_messages_") ||
+            k.startsWith("chat_title_") ||
+            k.startsWith("partner_mock_") ||
+            k === "pdpa_consent_customer"
+          );
+          keysToRemove.forEach(k => { try { localStorage.removeItem(k); } catch {} });
+          // Clear window raw file cache too
+          try { delete (window as any).__cblue_files_by_po; } catch {}
+        }
+      } catch {}
+
       localStorage.setItem("subscriber_token", data.accessToken);
       localStorage.setItem("subscriber", JSON.stringify(data.subscriber));
       const redir = searchParams.get("redirect") || "/dashboard";
