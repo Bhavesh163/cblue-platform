@@ -66,6 +66,10 @@ services:
       JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-7d}
       PORT: 3002
       NODE_ENV: production
+      MAILJET_API_KEY: ${MAILJET_API_KEY:-515b1389c9f3ce79b51f58955681dd9c}
+      MAILJET_SECRET_KEY: ${MAILJET_SECRET_KEY:-95e113e56293d977324d710a3067fb15}
+      MAILJET_FROM_EMAIL: ${MAILJET_FROM_EMAIL:-noreply@lblue.tech}
+      FRONTEND_URL: ${FRONTEND_URL:-https://cblue.co.th}
     depends_on:
       postgres:
         condition: service_started

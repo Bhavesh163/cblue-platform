@@ -265,9 +265,13 @@ export default function PropertyRegisterPage() {
         } catch { /* non-blocking */ }
       }
 
+      const token = typeof window !== "undefined" ? localStorage.getItem("subscriber_token") : null;
       const res = await fetch("/api/v1/properties", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ ...payload, ...(compressedImages.length > 0 ? { images: compressedImages } : {}) }),
       });
 

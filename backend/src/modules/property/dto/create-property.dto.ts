@@ -38,9 +38,9 @@ export class CreatePropertyDto {
   @IsNotEmpty()
   title: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  description: string;
+  description?: string;
 
   @IsNumber()
   @Min(0)
@@ -72,9 +72,9 @@ export class CreatePropertyDto {
   @IsNotEmpty()
   province: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  district: string;
+  district?: string;
 
   @IsOptional()
   @IsString()

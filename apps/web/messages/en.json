@@ -169,7 +169,7 @@
     "bedrooms": "Bedrooms",
     "bathrooms": "Bathrooms",
     "details": "Property Details",
-    "images": "Upload Photos (max 20)",
+    "images": "Upload Photos (max 5)",
     "contactName": "Contact Name",
     "submitListing": "Submit Listing",
     "types": {
