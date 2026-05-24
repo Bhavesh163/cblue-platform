@@ -802,7 +802,7 @@ export default function PropertyRegisterPage() {
                   className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
                 />
                 <p className="mt-1 text-xs text-gray-400">
-                  {locale === "th" ? "สูงสุด 5 รูป · ไม่เกิน 5 MB รวม · บีบอัดอัตโนมัติเป็น 0.3 MB ต่อไฟล์" : locale === "zh" ? "最多 5 张 · 总计不超过 5 MB · 自动压缩至每张 0.3 MB" : "Up to 5 photos · 5 MB total · auto-compressed to 0.3 MB each"}
+                  {locale === "th" ? "สูงสุด 5 รูป · บีบอัดอัตโนมัติเป็น ≤0.3 MB ต่อไฟล์" : locale === "zh" ? "最多 5 张 · 自动压缩至每张 ≤0.3 MB" : "Up to 5 photos · auto-compressed to ≤0.3 MB each"}
                 </p>
                 {propImages.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-2">
