@@ -5,10 +5,8 @@ import {
   IsBoolean,
   IsDateString,
   IsNumber,
-  IsIn,
   IsEnum,
 } from 'class-validator';
-import { ALL_SERVICE_CATEGORIES } from '../../../common/constants';
 
 export enum OrderType {
   HOUSEHOLD = 'HOUSEHOLD',

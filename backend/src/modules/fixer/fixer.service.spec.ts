@@ -279,8 +279,16 @@ describe('FixerService', () => {
       );
 
       const fitoutCandidate = result.find(
-        (candidate) => candidate.id === 'fixer-fitout',
-      );
+        (candidate: { id: string }) => candidate.id === 'fixer-fitout',
+      ) as
+        | {
+            id: string;
+            estimatedTotal: number;
+            price: number;
+            estimatedUnit: string;
+            estimatedQty: number;
+          }
+        | undefined;
 
       expect(fitoutCandidate).toBeDefined();
       expect(fitoutCandidate?.estimatedTotal).toBe(1200000);

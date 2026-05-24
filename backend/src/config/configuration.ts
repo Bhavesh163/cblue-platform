@@ -31,7 +31,8 @@ export default () => ({
   },
   mailjet: {
     apiKey: process.env.MAILJET_API_KEY || '515b1389c9f3ce79b51f58955681dd9c',
-    apiSecret: process.env.MAILJET_SECRET_KEY || '95e113e56293d977324d710a3067fb15',
+    apiSecret:
+      process.env.MAILJET_SECRET_KEY || '95e113e56293d977324d710a3067fb15',
     fromEmail: process.env.MAILJET_FROM_EMAIL || 'noreply@lblue.tech',
   },
   frontendUrl: process.env.FRONTEND_URL || 'https://cblue.co.th',

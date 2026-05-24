@@ -19,14 +19,26 @@ const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   ASSIGNED: [OrderStatus.DEPOSIT_PENDING, OrderStatus.CANCELLED],
   DEPOSIT_PENDING: [OrderStatus.CONFIRMED, OrderStatus.CANCELLED],
   CONFIRMED: [OrderStatus.IN_PROGRESS, OrderStatus.CANCELLED],
-  IN_PROGRESS: [OrderStatus.MEETING_REQUESTED, OrderStatus.COMPLETED, OrderStatus.CANCELLED],
-  MEETING_REQUESTED: [OrderStatus.IN_PROGRESS, OrderStatus.COMPLETED, OrderStatus.CANCELLED],
+  IN_PROGRESS: [
+    OrderStatus.MEETING_REQUESTED,
+    OrderStatus.COMPLETED,
+    OrderStatus.CANCELLED,
+  ],
+  MEETING_REQUESTED: [
+    OrderStatus.IN_PROGRESS,
+    OrderStatus.COMPLETED,
+    OrderStatus.CANCELLED,
+  ],
   COMPLETED: [],
   CANCELLED: [],
 };
 const HIDDEN_TEST_PO_MARKERS = ['PO-2605-6716', 'PO-2605-9605', 'PO-2605-8699'];
 const isHiddenTestOrder = (description?: string | null) =>
-  HIDDEN_TEST_PO_MARKERS.some((po) => String(description || '').toUpperCase().includes(po));
+  HIDDEN_TEST_PO_MARKERS.some((po) =>
+    String(description || '')
+      .toUpperCase()
+      .includes(po),
+  );
 
 @Injectable()
 export class OrderService {
@@ -42,19 +54,21 @@ export class OrderService {
         where: { id: addressId, userId },
       });
       if (!address) {
-        throw new BadRequestException('Address not found or does not belong to user');
+        throw new BadRequestException(
+          'Address not found or does not belong to user',
+        );
       }
     } else {
       // Create fallback dummy address for guest/direct flows
       const dummyAddress = await this.prisma.address.create({
         data: {
           userId,
-          label: "Temporary Request Location",
-          province: "Unknown",
-          district: "Unknown",
-          subdistrict: "Unknown",
-          postalCode: "00000"
-        }
+          label: 'Temporary Request Location',
+          province: 'Unknown',
+          district: 'Unknown',
+          subdistrict: 'Unknown',
+          postalCode: '00000',
+        },
       });
       addressId = dummyAddress.id;
     }
@@ -251,7 +265,8 @@ export class OrderService {
       orderId: created.orderId,
       senderUserId: created.senderUserId,
       senderRole: created.senderRole,
-      senderName: created.senderUser?.name || created.senderUser?.email || 'User',
+      senderName:
+        created.senderUser?.name || created.senderUser?.email || 'User',
       text: created.text,
       createdAt: created.createdAt,
     };
@@ -309,9 +324,16 @@ export class OrderService {
       if (order.userId !== changedBy) {
         throw new ForbiddenException('You do not have access to this order');
       }
-      const customerAllowed: OrderStatus[] = [OrderStatus.IN_PROGRESS, OrderStatus.MEETING_REQUESTED, OrderStatus.COMPLETED, OrderStatus.CANCELLED];
+      const customerAllowed: OrderStatus[] = [
+        OrderStatus.IN_PROGRESS,
+        OrderStatus.MEETING_REQUESTED,
+        OrderStatus.COMPLETED,
+        OrderStatus.CANCELLED,
+      ];
       if (!customerAllowed.includes(dto.status)) {
-        throw new ForbiddenException(`Customers may only transition to IN_PROGRESS, MEETING_REQUESTED, COMPLETED, or CANCELLED`);
+        throw new ForbiddenException(
+          `Customers may only transition to IN_PROGRESS, MEETING_REQUESTED, COMPLETED, or CANCELLED`,
+        );
       }
     }
 

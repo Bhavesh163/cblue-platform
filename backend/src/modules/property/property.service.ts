@@ -143,11 +143,16 @@ export class PropertyService {
       return null;
     }
 
+    // Destructure images out — Prisma update expects a nested relation input, not a DTO array.
+    // Image updates are handled separately via the create() flow or a dedicated endpoint.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { images: _images, ...scalarData } = data;
+
     return this.prisma.property.update({
       where: { id },
       data: {
-        ...data,
-        features: data.features as Prisma.InputJsonValue,
+        ...scalarData,
+        features: scalarData.features as Prisma.InputJsonValue,
       },
       include: { images: true },
     });

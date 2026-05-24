@@ -10,7 +10,10 @@ export class UserService {
   async getProfile(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: { addresses: true, fixer: { include: { skills: true, availability: true, images: true } } },
+      include: {
+        addresses: true,
+        fixer: { include: { skills: true, availability: true, images: true } },
+      },
     });
     if (!user) throw new NotFoundException('User not found');
     return user;
@@ -98,8 +101,8 @@ export class UserService {
         data: {
           bio: null,
           description: null,
-          status: 'REJECTED'
-        }
+          status: 'REJECTED',
+        },
       });
     }
     return { success: true, message: 'Account deleted via PDPA' };

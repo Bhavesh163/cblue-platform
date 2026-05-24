@@ -13,8 +13,7 @@ import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { CreateOrderChatMessageDto } from './dto/create-order-chat-message.dto';
 import { UploadOrderAttachmentDto } from './dto/upload-order-attachment.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
+
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UserRole } from '@prisma/client';
 

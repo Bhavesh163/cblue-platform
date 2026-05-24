@@ -260,17 +260,16 @@ export class SubscriptionService {
       return;
     }
 
-    const frontendUrl =
-      (this.configService.get<string>('frontendUrl') || 'http://localhost:3000').replace(/\/$/, '');
+    const frontendUrl = (
+      this.configService.get<string>('frontendUrl') || 'http://localhost:3000'
+    ).replace(/\/$/, '');
     const resetUrl = `${frontendUrl}/en/subscription/reset-password?token=${resetToken}`;
 
     const body = {
       Messages: [
         {
           From: {
-            Email:
-               
-              'noreply@lblue.tech',
+            Email: 'noreply@lblue.tech',
             Name: 'CBLUE',
           },
           To: [{ Email: email, Name: name }],
@@ -347,11 +346,13 @@ export class SubscriptionService {
         const errorText = await response.text();
         this.logger.error(`Mailjet error: ${errorText}`);
         this.logger.log(
-          `[FALLBACK] Password reset link for ${email}: /en/subscription/reset-password?token=${resetToken}`
+          `[FALLBACK] Password reset link for ${email}: /en/subscription/reset-password?token=${resetToken}`,
         );
       } else {
         this.logger.log(`Password reset email sent to ${email}`);
-        this.logger.log(`[BACKUP-LINK] /en/subscription/reset-password?token=${resetToken}`);
+        this.logger.log(
+          `[BACKUP-LINK] /en/subscription/reset-password?token=${resetToken}`,
+        );
       }
     } catch (error) {
       this.logger.error(`Failed to send email: ${error}`);

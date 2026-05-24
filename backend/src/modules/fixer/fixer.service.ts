@@ -75,7 +75,11 @@ export class FixerService {
         yearsExperience: dto.yearsExperience,
         travelRadius: dto.travelRadius,
         availableStartDate: dto.scheduledDate,
-        companyAddress: dto.companyAddress ? (JSON.parse(JSON.stringify(dto.companyAddress)) as Prisma.InputJsonValue) : undefined,
+        companyAddress: dto.companyAddress
+          ? (JSON.parse(
+              JSON.stringify(dto.companyAddress),
+            ) as Prisma.InputJsonValue)
+          : undefined,
         priceList: dto.priceList
           ? (JSON.parse(JSON.stringify(dto.priceList)) as Prisma.InputJsonValue)
           : undefined,
@@ -86,8 +90,14 @@ export class FixerService {
         gpsLng: dto.gpsCoords?.lng,
         aiScore: dto.aiScore,
         aiTier: dto.aiTier,
-        aiBreakdown: dto.aiBreakdown ? (JSON.parse(JSON.stringify(dto.aiBreakdown)) as Prisma.InputJsonValue) : undefined,
-        aiFlags: dto.aiFlags ? (JSON.parse(JSON.stringify(dto.aiFlags)) as Prisma.InputJsonValue) : undefined,
+        aiBreakdown: dto.aiBreakdown
+          ? (JSON.parse(
+              JSON.stringify(dto.aiBreakdown),
+            ) as Prisma.InputJsonValue)
+          : undefined,
+        aiFlags: dto.aiFlags
+          ? (JSON.parse(JSON.stringify(dto.aiFlags)) as Prisma.InputJsonValue)
+          : undefined,
         aiCredentialStatus: dto.aiCredentialStatus,
       },
       include: { user: true },
@@ -159,7 +169,11 @@ export class FixerService {
         yearsExperience: dto.yearsExperience,
         travelRadius: dto.travelRadius,
         availableStartDate: dto.scheduledDate,
-        companyAddress: dto.companyAddress ? (JSON.parse(JSON.stringify(dto.companyAddress)) as Prisma.InputJsonValue) : Prisma.JsonNull,
+        companyAddress: dto.companyAddress
+          ? (JSON.parse(
+              JSON.stringify(dto.companyAddress),
+            ) as Prisma.InputJsonValue)
+          : Prisma.JsonNull,
         priceList: dto.priceList
           ? (JSON.parse(JSON.stringify(dto.priceList)) as Prisma.InputJsonValue)
           : Prisma.JsonNull,
@@ -170,8 +184,14 @@ export class FixerService {
         gpsLng: dto.gpsCoords?.lng,
         aiScore: dto.aiScore,
         aiTier: dto.aiTier,
-        aiBreakdown: dto.aiBreakdown ? (JSON.parse(JSON.stringify(dto.aiBreakdown)) as Prisma.InputJsonValue) : Prisma.JsonNull,
-        aiFlags: dto.aiFlags ? (JSON.parse(JSON.stringify(dto.aiFlags)) as Prisma.InputJsonValue) : Prisma.JsonNull,
+        aiBreakdown: dto.aiBreakdown
+          ? (JSON.parse(
+              JSON.stringify(dto.aiBreakdown),
+            ) as Prisma.InputJsonValue)
+          : Prisma.JsonNull,
+        aiFlags: dto.aiFlags
+          ? (JSON.parse(JSON.stringify(dto.aiFlags)) as Prisma.InputJsonValue)
+          : Prisma.JsonNull,
         aiCredentialStatus: dto.aiCredentialStatus,
       },
     });
@@ -325,12 +345,17 @@ export class FixerService {
   }
 
   /** Extract all (qty, contextTerms) pairs from description for multi-service estimation */
-  private extractAllServiceQtyPairs(description?: string): Array<{ qty: number; contextTerms: string[] }> {
+  private extractAllServiceQtyPairs(
+    description?: string,
+  ): Array<{ qty: number; contextTerms: string[] }> {
     if (!description) return [];
     const normalized = this.normalizeSearchText(description);
-    const unitPattern = /sqm|m2|sqft|sq\.?m|ตร\.?ม|ตรม|unit|units|ชุด|ห้อง|room|rooms|floor|floors|ชั้น|item|items|job|งาน/i;
-    const pattern = /(\d[\d,]*\.?\d*)\s*(sqm|m2|sqft|sq\.?m|ตร\.?ม|ตรม|unit|units|ชุด|ห้อง|room|rooms|floor|floors|ชั้น|item|items|job|งาน)?\b/gi;
-    const pairs: Array<{ qty: number; idx: number; contextTerms: string[] }> = [];
+    const unitPattern =
+      /sqm|m2|sqft|sq\.?m|ตร\.?ม|ตรม|unit|units|ชุด|ห้อง|room|rooms|floor|floors|ชั้น|item|items|job|งาน/i;
+    const pattern =
+      /(\d[\d,]*\.?\d*)\s*(sqm|m2|sqft|sq\.?m|ตร\.?ม|ตรม|unit|units|ชุด|ห้อง|room|rooms|floor|floors|ชั้น|item|items|job|งาน)?\b/gi;
+    const pairs: Array<{ qty: number; idx: number; contextTerms: string[] }> =
+      [];
     let m: RegExpExecArray | null;
     while ((m = pattern.exec(normalized)) !== null) {
       const qty = parseFloat((m[1] ?? '').replace(/,/g, ''));
@@ -344,7 +369,15 @@ export class FixerService {
       const start = pairs[i].idx;
       const end = pairs[i + 1] ? pairs[i + 1].idx : normalized.length;
       const window = normalized.slice(start, end).trim();
-      const tokens = window.split(/\s+/).filter((t) => t.length > 1 && !this.fillerTokens.has(t) && !unitPattern.test(t) && isNaN(parseFloat(t)));
+      const tokens = window
+        .split(/\s+/)
+        .filter(
+          (t) =>
+            t.length > 1 &&
+            !this.fillerTokens.has(t) &&
+            !unitPattern.test(t) &&
+            isNaN(parseFloat(t)),
+        );
       pairs[i].contextTerms = tokens;
     }
     return pairs.map(({ qty, contextTerms }) => ({ qty, contextTerms }));
@@ -431,11 +464,19 @@ export class FixerService {
     const fixerProvince = this.normalizeSearchText(fixer.serviceProvince || '');
     const fixerDistrict = this.normalizeSearchText(fixer.serviceDistrict || '');
 
-    if (!autoProvince && fixerProvince && fixerProvince !== normalizedProvince) {
+    if (
+      !autoProvince &&
+      fixerProvince &&
+      fixerProvince !== normalizedProvince
+    ) {
       return false;
     }
 
-    if (!autoDistrict && fixerDistrict && fixerDistrict !== normalizedDistrict) {
+    if (
+      !autoDistrict &&
+      fixerDistrict &&
+      fixerDistrict !== normalizedDistrict
+    ) {
       return false;
     }
 
@@ -454,11 +495,15 @@ export class FixerService {
         include: { user: true, skills: true },
       });
 
-      console.log(`[matchFixers] Input district: ${district}, province: ${province}, allFixers length = ${allFixers.length}`);
+      console.log(
+        `[matchFixers] Input district: ${district}, province: ${province}, allFixers length = ${allFixers.length}`,
+      );
       const pool = allFixers.filter((fixer) =>
         this.matchServiceArea(fixer, district, province),
       );
-      console.log(`[matchFixers] After matchServiceArea, pool length = ${pool.length}`);
+      console.log(
+        `[matchFixers] After matchServiceArea, pool length = ${pool.length}`,
+      );
 
       if (pool.length === 0) return [];
 
@@ -466,241 +511,290 @@ export class FixerService {
       const searchTerms = this.buildSearchTerms(service, description);
 
       const formattedPool = pool.map((f) => {
-      let basePrice = 0;
-      let matchedUnit = '';
-      let matchedQty = 1;
-      let matchedScore = 0;
-      const skillText = f.skills
-        .map((skill) => `${skill.category} ${skill.name}`)
-        .join(' ');
-      const profileText = `${skillText} ${f.description || ''} ${f.pastProjectType || ''} ${f.bio || ''}`;
+        let basePrice = 0;
+        let matchedUnit = '';
+        let matchedQty = 1;
+        let matchedScore = 0;
+        const skillText = f.skills
+          .map((skill) => `${skill.category} ${skill.name}`)
+          .join(' ');
+        const profileText = `${skillText} ${f.description || ''} ${f.pastProjectType || ''} ${f.bio || ''}`;
 
-      let rawPriceList = f.priceList;
-      if (typeof rawPriceList === 'string') {
-        try { rawPriceList = JSON.parse(rawPriceList); } catch (e) {}
-      }
-
-      const estimatedBreakdown: Array<{ service: string; qty: number; unit: string; unitRate: number; total: number }> = [];
-      if (rawPriceList && Array.isArray(rawPriceList) && rawPriceList.length > 0) {
-        const list = rawPriceList as Record<string, unknown>[];
-        const rankedList = list
-          .map((item) => {
-            const itemText = [
-              typeof item.service === 'string' ? item.service : '',
-              typeof item.unit === 'string' ? item.unit : '',
-            ]
-              .filter(Boolean)
-              .join(' ');
-
-            return {
-              item,
-              score: this.scoreTextMatch(itemText, searchTerms),
-            };
-          })
-          .sort((a, b) => {
-            if (b.score !== a.score) return b.score - a.score;
-            return (
-              (Number(a.item.finalPrice) || Number.MAX_SAFE_INTEGER) -
-              (Number(b.item.finalPrice) || Number.MAX_SAFE_INTEGER)
-            );
-          });
-
-        const match = rankedList[0];
-
-
-        if (match) {
-          const matchedItem = match.item;
-          const unitRate = parseFloat(String(matchedItem.finalPrice)) || 0;
-          const partnerQty =
-            parseFloat(String(matchedItem.amount)) || parseFloat(String(matchedItem.quantity)) || 1;
-          const pricePerUnit = unitRate / partnerQty;
-          const hasTextualMatch = match.score > 0;
-
-          // Check for multi-service description (e.g. "500 sqm reinstatement and 500 sqm fitout")
-          const serviceQtyPairs = this.extractAllServiceQtyPairs(description);
-          if (serviceQtyPairs.length > 1) {
-            // Sum estimates for each service mention using best-matching price list item
-            let multiTotal = 0;
-            for (const { qty, contextTerms } of serviceQtyPairs) {
-              if (contextTerms.length === 0) {
-                const lineTotal = Math.round(pricePerUnit * qty);
-                multiTotal += lineTotal;
-                estimatedBreakdown.push({
-                  service: String(matchedItem.service || 'Service'),
-                  qty,
-                  unit: String(matchedItem.unit || 'sqm'),
-                  unitRate: Math.round(pricePerUnit),
-                  total: lineTotal,
-                });
-                continue;
-              }
-              const bestForContext = list
-                .map((item) => {
-                  const itemText = [
-                    typeof item.service === 'string' ? item.service : '',
-                    typeof item.unit === 'string' ? item.unit : '',
-                  ].filter(Boolean).join(' ');
-                  return { item, score: this.scoreTextMatch(itemText, contextTerms) };
-                })
-                .sort((a, b) => {
-                  if (b.score !== a.score) return b.score - a.score;
-                  return (Number(a.item.finalPrice) || Number.MAX_SAFE_INTEGER) - (Number(b.item.finalPrice) || Number.MAX_SAFE_INTEGER);
-                })[0];
-              if (bestForContext && bestForContext.score > 0) {
-                const ctxUnitRate = parseFloat(String(bestForContext.item.finalPrice)) || 0;
-                const ctxPartnerQty = parseFloat(String(bestForContext.item.amount)) || parseFloat(String(bestForContext.item.quantity)) || 1;
-                const ctxPricePerUnit = ctxUnitRate / ctxPartnerQty;
-                const lineTotal = Math.round(ctxPricePerUnit * qty);
-                multiTotal += lineTotal;
-                estimatedBreakdown.push({
-                  service: String(bestForContext.item.service || contextTerms.slice(0, 2).join(' ') || 'Service'),
-                  qty,
-                  unit: String(bestForContext.item.unit || 'sqm'),
-                  unitRate: Math.round(ctxPricePerUnit),
-                  total: lineTotal,
-                });
-              } else {
-                // Context terms present but no service in price list matches them —
-                // skip this quantity to avoid phantom line items (e.g. "10 page", "100 FAQ")
-                // that don't belong to the partner's service offerings.
-              }
-            }
-            basePrice = multiTotal;
-          } else {
-            // Single service: existing logic
-            basePrice = Math.round(pricePerUnit * customerQty);
-            estimatedBreakdown.push({
-              service: String(matchedItem.service || ''),
-              qty: customerQty,
-              unit: String(matchedItem.unit || ''),
-              unitRate: Math.round(pricePerUnit),
-              total: basePrice,
-            });
+        let rawPriceList = f.priceList;
+        if (typeof rawPriceList === 'string') {
+          try {
+            rawPriceList = JSON.parse(rawPriceList);
+          } catch {
+            /* ignore parse errors */
           }
-
-          matchedUnit = (matchedItem.unit as string) || '';
-          matchedQty = customerQty;
-          matchedScore = match.score;
         }
-      }
 
-      const fallbackProfileScore = this.scoreTextMatch(profileText, searchTerms);
-      const overallScore = Math.max(matchedScore, fallbackProfileScore);
-      const minListedPrice = Array.isArray(rawPriceList)
-        ? (rawPriceList as Record<string, unknown>[]).reduce((min, item) => {
-            const value = Number(item.finalPrice) || 0;
-            if (value <= 0) return min;
-            return min === 0 ? value : Math.min(min, value);
-          }, 0)
-        : 0;
+        const estimatedBreakdown: Array<{
+          service: string;
+          qty: number;
+          unit: string;
+          unitRate: number;
+          total: number;
+        }> = [];
+        if (
+          rawPriceList &&
+          Array.isArray(rawPriceList) &&
+          rawPriceList.length > 0
+        ) {
+          const list = rawPriceList as Record<string, unknown>[];
+          const rankedList = list
+            .map((item) => {
+              const itemText = [
+                typeof item.service === 'string' ? item.service : '',
+                typeof item.unit === 'string' ? item.unit : '',
+              ]
+                .filter(Boolean)
+                .join(' ');
 
-      return {
-        id: f.id,
-        alias: f.user?.company || f.user?.name || `Partner-${f.id.slice(0, 4)}`,
-        tier: (f.tier || 'economy').toLowerCase(),
-        rating: f.rating || 0,
-        totalJobs: f.completedJobs || 0,
-        price: basePrice > 0 ? basePrice : minListedPrice || 500,
-        estimatedTotal: basePrice > 0 ? basePrice : null,
-        estimatedUnit: matchedUnit,
-        estimatedQty: matchedQty,
-        estimatedBreakdown: estimatedBreakdown.length > 0 ? estimatedBreakdown : null,
-        matchScore: overallScore,
-        satisfaction:
-          f.rating >= 4.5 ? 90 + Math.random() * 10 : 70 + Math.random() * 20,
-        specialties: f.skills.map((s) => s.name),
-        experienceYears: f.yearsExperience || 1,
-        selectedReason: '',
-        matchIcon: '',
+              return {
+                item,
+                score: this.scoreTextMatch(itemText, searchTerms),
+              };
+            })
+            .sort((a, b) => {
+              if (b.score !== a.score) return b.score - a.score;
+              return (
+                (Number(a.item.finalPrice) || Number.MAX_SAFE_INTEGER) -
+                (Number(b.item.finalPrice) || Number.MAX_SAFE_INTEGER)
+              );
+            });
+
+          const match = rankedList[0];
+
+          if (match) {
+            const matchedItem = match.item;
+            const unitRate = parseFloat(String(matchedItem.finalPrice)) || 0;
+            const partnerQty =
+              parseFloat(String(matchedItem.amount)) ||
+              parseFloat(String(matchedItem.quantity)) ||
+              1;
+            const pricePerUnit = unitRate / partnerQty;
+
+            // Check for multi-service description (e.g. "500 sqm reinstatement and 500 sqm fitout")
+            const serviceQtyPairs = this.extractAllServiceQtyPairs(description);
+            if (serviceQtyPairs.length > 1) {
+              // Sum estimates for each service mention using best-matching price list item
+              let multiTotal = 0;
+              for (const { qty, contextTerms } of serviceQtyPairs) {
+                if (contextTerms.length === 0) {
+                  const lineTotal = Math.round(pricePerUnit * qty);
+                  multiTotal += lineTotal;
+                  estimatedBreakdown.push({
+                    service:
+                      typeof matchedItem.service === 'string'
+                        ? matchedItem.service
+                        : 'Service',
+                    qty,
+                    unit:
+                      typeof matchedItem.unit === 'string'
+                        ? matchedItem.unit
+                        : 'sqm',
+                    unitRate: Math.round(pricePerUnit),
+                    total: lineTotal,
+                  });
+                  continue;
+                }
+                const bestForContext = list
+                  .map((item) => {
+                    const itemText = [
+                      typeof item.service === 'string' ? item.service : '',
+                      typeof item.unit === 'string' ? item.unit : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ');
+                    return {
+                      item,
+                      score: this.scoreTextMatch(itemText, contextTerms),
+                    };
+                  })
+                  .sort((a, b) => {
+                    if (b.score !== a.score) return b.score - a.score;
+                    return (
+                      (Number(a.item.finalPrice) || Number.MAX_SAFE_INTEGER) -
+                      (Number(b.item.finalPrice) || Number.MAX_SAFE_INTEGER)
+                    );
+                  })[0];
+                if (bestForContext && bestForContext.score > 0) {
+                  const ctxUnitRate =
+                    parseFloat(String(bestForContext.item.finalPrice)) || 0;
+                  const ctxPartnerQty =
+                    parseFloat(String(bestForContext.item.amount)) ||
+                    parseFloat(String(bestForContext.item.quantity)) ||
+                    1;
+                  const ctxPricePerUnit = ctxUnitRate / ctxPartnerQty;
+                  const lineTotal = Math.round(ctxPricePerUnit * qty);
+                  multiTotal += lineTotal;
+                  estimatedBreakdown.push({
+                    service:
+                      typeof bestForContext.item.service === 'string'
+                        ? bestForContext.item.service
+                        : contextTerms.slice(0, 2).join(' ') || 'Service',
+                    qty,
+                    unit:
+                      typeof bestForContext.item.unit === 'string'
+                        ? bestForContext.item.unit
+                        : 'sqm',
+                    unitRate: Math.round(ctxPricePerUnit),
+                    total: lineTotal,
+                  });
+                } else {
+                  // Context terms present but no service in price list matches them —
+                  // skip this quantity to avoid phantom line items (e.g. "10 page", "100 FAQ")
+                  // that don't belong to the partner's service offerings.
+                }
+              }
+              basePrice = multiTotal;
+            } else {
+              // Single service: existing logic
+              basePrice = Math.round(pricePerUnit * customerQty);
+              estimatedBreakdown.push({
+                service:
+                  typeof matchedItem.service === 'string'
+                    ? matchedItem.service
+                    : '',
+                qty: customerQty,
+                unit:
+                  typeof matchedItem.unit === 'string' ? matchedItem.unit : '',
+                unitRate: Math.round(pricePerUnit),
+                total: basePrice,
+              });
+            }
+
+            matchedUnit = (matchedItem.unit as string) || '';
+            matchedQty = customerQty;
+            matchedScore = match.score;
+          }
+        }
+
+        const fallbackProfileScore = this.scoreTextMatch(
+          profileText,
+          searchTerms,
+        );
+        const overallScore = Math.max(matchedScore, fallbackProfileScore);
+        const minListedPrice = Array.isArray(rawPriceList)
+          ? (rawPriceList as Record<string, unknown>[]).reduce((min, item) => {
+              const value = Number(item.finalPrice) || 0;
+              if (value <= 0) return min;
+              return min === 0 ? value : Math.min(min, value);
+            }, 0)
+          : 0;
+
+        return {
+          id: f.id,
+          alias:
+            f.user?.company || f.user?.name || `Partner-${f.id.slice(0, 4)}`,
+          tier: (f.tier || 'economy').toLowerCase(),
+          rating: f.rating || 0,
+          totalJobs: f.completedJobs || 0,
+          price: basePrice > 0 ? basePrice : minListedPrice || 500,
+          estimatedTotal: basePrice > 0 ? basePrice : null,
+          estimatedUnit: matchedUnit,
+          estimatedQty: matchedQty,
+          estimatedBreakdown:
+            estimatedBreakdown.length > 0 ? estimatedBreakdown : null,
+          matchScore: overallScore,
+          satisfaction:
+            f.rating >= 4.5 ? 90 + Math.random() * 10 : 70 + Math.random() * 20,
+          specialties: f.skills.map((s) => s.name),
+          experienceYears: f.yearsExperience || 1,
+          selectedReason: '',
+          matchIcon: '',
+        };
+      });
+
+      const matchedPool = formattedPool.filter(
+        (partner) => partner.matchScore > 0,
+      );
+      const rankingPool = matchedPool.length > 0 ? matchedPool : formattedPool;
+
+      const isUpperTier = (tier: string) =>
+        [
+          'corporate',
+          'specialist',
+          'expert',
+          'manager',
+          'director',
+          'luxury',
+          'grandeur',
+        ].includes(tier);
+
+      const results: any[] = [];
+      const usedIds = new Set();
+
+      const pick = (partner, reason) => {
+        if (partner && !usedIds.has(partner.id)) {
+          partner.selectedReason = reason;
+          results.push(partner);
+          usedIds.add(partner.id);
+        }
       };
-    });
 
-    const matchedPool = formattedPool.filter((partner) => partner.matchScore > 0);
-    const rankingPool = matchedPool.length > 0 ? matchedPool : formattedPool;
+      const byPrice = [...rankingPool].sort((a, b) => a.price - b.price);
+      pick(byPrice[0], '💰 Cheapest in area');
+      pick(
+        byPrice.find((p) => !usedIds.has(p.id)),
+        '💰 Ranked 2nd Cheapest',
+      );
 
-    const isUpperTier = (tier: string) =>
-      [
-        'corporate',
-        'specialist',
-        'expert',
-        'manager',
-        'director',
-        'luxury',
-        'grandeur',
-      ].includes(tier);
+      const bySatisfaction = [...rankingPool].sort(
+        (a, b) => b.rating - a.rating || b.totalJobs - a.totalJobs,
+      );
+      pick(
+        bySatisfaction.find((p) => !usedIds.has(p.id)),
+        '⭐ Highest Rated',
+      );
+      pick(
+        bySatisfaction.find((p) => !usedIds.has(p.id)),
+        '⭐ Highly Recommended',
+      );
 
-    const results: any[] = [];
-    const usedIds = new Set();
+      const upperTiers = rankingPool.filter((f) => isUpperTier(f.tier));
+      const upperByPrice = [...upperTiers].sort((a, b) => a.price - b.price);
+      if (upperByPrice.length > 0)
+        pick(
+          upperByPrice.find((f) => !usedIds.has(f.id)),
+          '🏆 Cheapest of upper tier',
+        );
 
-    const pick = (partner, reason) => {
-      if (partner && !usedIds.has(partner.id)) {
-        partner.selectedReason = reason;
-        results.push(partner);
-        usedIds.add(partner.id);
+      const upperBySat = [...upperTiers].sort(
+        (a, b) => b.rating - a.rating || b.totalJobs - a.totalJobs,
+      );
+      if (upperBySat.length > 0)
+        pick(
+          upperBySat.find((f) => !usedIds.has(f.id)),
+          '🏆 Highest rated of upper tier',
+        );
+
+      const returningPool = rankingPool.filter((p) => !usedIds.has(p.id));
+      if (returningPool.length > 0) {
+        const returning =
+          returningPool[Math.floor(Math.random() * returningPool.length)];
+        returning.alias = '★ ' + returning.alias;
+        pick(returning, '🔄 Returning partner');
       }
-    };
 
-    const byPrice = [...rankingPool].sort((a, b) => a.price - b.price);
-    pick(byPrice[0], '💰 Cheapest in area');
-    pick(
-      byPrice.find((p) => !usedIds.has(p.id)),
-      '💰 Ranked 2nd Cheapest',
-    );
+      if (nominateId) {
+        const nominated = rankingPool.find(
+          (f) =>
+            f.id === nominateId ||
+            f.id.endsWith(nominateId) ||
+            f.alias.includes(nominateId),
+        );
+        if (nominated) pick(nominated, '👤 Customer nomination');
+      }
 
-    const bySatisfaction = [...rankingPool].sort(
-      (a, b) => b.rating - a.rating || b.totalJobs - a.totalJobs,
-    );
-    pick(
-      bySatisfaction.find((p) => !usedIds.has(p.id)),
-      '⭐ Highest Rated',
-    );
-    pick(
-      bySatisfaction.find((p) => !usedIds.has(p.id)),
-      '⭐ Highly Recommended',
-    );
+      const remaining = rankingPool.filter((p) => !usedIds.has(p.id));
+      for (const r of remaining) {
+        if (results.length >= 8) break;
+        pick(r, '💡 Suggested Candidate');
+      }
 
-    const upperTiers = rankingPool.filter((f) => isUpperTier(f.tier));
-    const upperByPrice = [...upperTiers].sort((a, b) => a.price - b.price);
-    if (upperByPrice.length > 0)
-      pick(
-        upperByPrice.find((f) => !usedIds.has(f.id)),
-        '🏆 Cheapest of upper tier',
-      );
-
-    const upperBySat = [...upperTiers].sort(
-      (a, b) => b.rating - a.rating || b.totalJobs - a.totalJobs,
-    );
-    if (upperBySat.length > 0)
-      pick(
-        upperBySat.find((f) => !usedIds.has(f.id)),
-        '🏆 Highest rated of upper tier',
-      );
-
-    const returningPool = rankingPool.filter((p) => !usedIds.has(p.id));
-    if (returningPool.length > 0) {
-      const returning =
-        returningPool[Math.floor(Math.random() * returningPool.length)];
-      returning.alias = '★ ' + returning.alias;
-      pick(returning, '🔄 Returning partner');
-    }
-
-    if (nominateId) {
-      const nominated = rankingPool.find(
-        (f) =>
-          f.id === nominateId ||
-          f.id.endsWith(nominateId) ||
-          f.alias.includes(nominateId),
-      );
-      if (nominated) pick(nominated, '👤 Customer nomination');
-    }
-
-    const remaining = rankingPool.filter((p) => !usedIds.has(p.id));
-    for (const r of remaining) {
-      if (results.length >= 8) break;
-      pick(r, '💡 Suggested Candidate');
-    }
-
-    return results.slice(0, 8);
+      return results.slice(0, 8);
     } catch (error) {
       console.error('[matchFixers] error', error);
       return [];
