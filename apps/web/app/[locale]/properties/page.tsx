@@ -39,6 +39,7 @@ export default function PropertiesPage() {
   const [searched, setSearched] = useState(false);
   const [subscriber, setSubscriber] = useState<{ name: string; email: string } | null>(null);
   const [showLoginGate, setShowLoginGate] = useState(false);
+  const [pendingContactProp, setPendingContactProp] = useState<Property | null>(null);
   const [showContactFlow, setShowContactFlow] = useState<Property | null>(null);
   const [contactStep, setContactStep] = useState<"po" | "notify" | "done">("po");
   const [showPdpa, setShowPdpa] = useState(false);
@@ -135,6 +136,7 @@ export default function PropertiesPage() {
 
   function handleContactLister(prop: Property) {
     if (!subscriber) {
+      setPendingContactProp(prop);
       setShowLoginGate(true);
       return;
     }
@@ -247,6 +249,14 @@ export default function PropertiesPage() {
                   setSubscriber(authData.subscriber);
                   window.dispatchEvent(new Event("storage"));
                   setShowLoginGate(false);
+                  // Auto-proceed to contact flow for the property that triggered the login
+                  if (pendingContactProp) {
+                    const po = generatePO();
+                    setPoNumber(po);
+                    setShowContactFlow(pendingContactProp);
+                    setContactStep("po");
+                    setPendingContactProp(null);
+                  }
                 } catch {
                   setAuthError(locale === "th" ? "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้" : locale === "zh" ? "无法连接服务器" : "Cannot connect to server");
                 }

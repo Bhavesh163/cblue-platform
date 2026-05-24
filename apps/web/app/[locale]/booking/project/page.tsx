@@ -228,19 +228,7 @@ function ProjectBookingContent() {
       const newFiles = Array.from(e.target.files);
       setImages((prev) => {
         const combined = [...prev, ...newFiles];
-        const limited = combined.slice(0, 5);
-        const totalMB = limited.reduce((sum, f) => sum + f.size, 0) / (1024 * 1024);
-        if (totalMB > 5) {
-          alert(
-            locale === "th"
-              ? "รวมไฟล์ทั้งหมดต้องไม่เกิน 5 MB กรุณาเลือกไฟล์ขนาดเล็กกว่านี้"
-              : locale === "zh"
-              ? "所有文件总计不超过 5 MB，请选择较小的文件"
-              : "Total files must not exceed 5 MB. Please select smaller files.",
-          );
-          return prev;
-        }
-        return limited;
+        return combined.slice(0, 5);
       });
       e.target.value = "";
     }
@@ -870,7 +858,7 @@ function ProjectBookingContent() {
                   value={form.description}
                   onChange={handleChange}
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none resize-none"
-                  placeholder={locale === "th" ? "อธิบายรายละเอียดโปรเจกต์ ขอบเขตงาน งบประมาณ และความต้องการพิเศษ" : locale === "zh" ? "请描述项目详情、范围、预算和特殊要求" : "Describe project details, scope, budget, and special requirements"}
+                  placeholder={locale === "th" ? "อธิบายรายละเอียดโปรเจกต์ ขอบเขตงาน งบประมาณ และความต้องการพิเศษ เช่น งานตกแต่งภายใน 600 ตร.ม. × 25,000 บาท/ตร.ม. | งานรื้อถอน 300 ตร.ม. × 5,000 บาท/ตร.ม. | การก่อสร้าง 700 ตร.ม. × 15,000 บาท/ตร.ม." : locale === "zh" ? "请描述项目详情、范围、预算和特殊要求，例如：室内装修 600㎡ × 25,000฿/㎡ | 复原工程 300㎡ × 5,000฿/㎡ | 建筑施工 700㎡ × 15,000฿/㎡" : "Describe project details, scope, budget, and special requirements. Include quantity × unit rate for each item, e.g. Fit-out 600 sq.m. × ฿25,000/sq.m. | Reinstatement 300 sq.m. × ฿5,000/sq.m. | Construction 700 sq.m. × ฿15,000/sq.m."}
                 />
               </div>
 

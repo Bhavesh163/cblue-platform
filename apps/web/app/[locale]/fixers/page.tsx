@@ -2079,7 +2079,7 @@ export default function FixerProPage() {
         )}
 
         {/* Main Content Area */}
-        {isSubscribed && !isFixer && !loading && (
+        {isSubscribed && !isFixer && myProperties.length === 0 && !loading && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 mb-8 text-center max-w-2xl mx-auto">
             <div className="text-5xl mb-4">👷‍♂️</div>
             <h2 className="text-xl font-bold text-gray-900 mb-2">
@@ -2094,7 +2094,7 @@ export default function FixerProPage() {
           </div>
         )}
 
-        {isSubscribed && isFixer && (
+        {isSubscribed && (isFixer || myProperties.length > 0) && (
           <>
             <div className="flex gap-1 bg-white rounded-xl shadow-sm border border-gray-200 p-1.5 mb-6 overflow-x-auto">
           {tabs.map((tab) => (
@@ -2131,7 +2131,7 @@ export default function FixerProPage() {
         <div className="my-10 border-t border-gray-200" />
 
         {/* Registration Cards */}
-        {(!isSubscribed || !isFixer) && !loading && (
+        {(!isSubscribed || (!isFixer && myProperties.length === 0)) && !loading && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           {/* Register as Fixer & Pro */}
           <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition">

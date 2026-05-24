@@ -224,6 +224,16 @@ export default function PropertyRegisterPage() {
 
     setSubmitting(true);
     try {
+      // Compose address fields not in DTO into addressLine
+      const addressParts = [
+        form.houseNumber,
+        form.building ? `Bldg ${form.building}` : "",
+        form.floor ? `Fl.${form.floor}` : "",
+        form.soi ? `Soi ${form.soi}` : "",
+        form.road,
+        form.addressLine,
+      ].filter(Boolean).join(" ");
+
       const payload = {
         propertyType: form.propertyType,
         listingType: form.listingType,
@@ -240,16 +250,10 @@ export default function PropertyRegisterPage() {
         district: form.district,
         subdistrict: form.subdistrict,
         postalCode: form.postalCode,
-        houseNumber: form.houseNumber || undefined,
-        building: form.building || undefined,
-        floor: form.floor || undefined,
-        road: form.road || undefined,
-        soi: form.soi || undefined,
-        addressLine: form.addressLine,
+        addressLine: addressParts || undefined,
         contactName: form.contactName,
         contactPhone: form.contactPhone,
         contactEmail: form.contactEmail,
-        ...(form.password ? { password: form.password } : {}),
       };
 
       // Compress and attach property images
@@ -832,9 +836,9 @@ export default function PropertyRegisterPage() {
                 />
                 <span className="text-sm text-gray-600">
                   {tb("consent")}{" "}
-                  <a href="#" className="text-blue-600 underline">{tb("terms")}</a>{" "}
+                  <a href={`${prefix}/terms`} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">{tb("terms")}</a>{" "}
                   {tc("and")}{" "}
-                  <a href="#" className="text-blue-600 underline">{tb("privacy")}</a>
+                  <a href={`${prefix}/privacy`} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">{tb("privacy")}</a>
                 </span>
               </label>
 
