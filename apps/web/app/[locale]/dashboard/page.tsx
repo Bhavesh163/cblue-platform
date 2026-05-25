@@ -1587,11 +1587,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
   // Inject prop inquiry request cards (not ghis-gated)
   const propRequestItems: any[] = propInquiries
-    .filter((p: PropInquiry) => ["NOTIFY_SENT", "DECLINED", "PARTNER_ACCEPTED", "PAID", "MEETING_CONFIRMED"].includes(p.status))
+    .filter((p: PropInquiry) => ["NOTIFY_SENT", "DECLINED", "ACCEPTED", "PAID", "MEETING_CONFIRMED"].includes(p.status))
     .map((p: PropInquiry) => {
       if (p.status === "NOTIFY_SENT") return { id: `prop-waiting-${p.poNumber}`, type: "prop_waiting", po: p.poNumber, propInquiry: p, createdAt: p.createdAt };
       if (p.status === "DECLINED") return { id: `prop-declined-${p.poNumber}`, type: "prop_declined", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
-      if (p.status === "PARTNER_ACCEPTED") return { id: `prop-pay-${p.poNumber}`, type: "prop_pay_fee", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
+      if (p.status === "ACCEPTED") return { id: `prop-pay-${p.poNumber}`, type: "prop_pay_fee", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
       if (p.status === "PAID") return { id: `prop-meet-${p.poNumber}`, type: "prop_meeting_invite", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
       if (p.status === "MEETING_CONFIRMED") return { id: `prop-rate-${p.poNumber}`, type: "prop_rate", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
       return null;

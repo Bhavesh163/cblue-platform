@@ -214,7 +214,7 @@ export default function PropertiesPage() {
                 value={authEmail}
                 onChange={(e) => { setAuthEmail(e.target.value); setAuthError(""); }}
               />
-              <input type="password" placeholder={locale === "th" ? "รหัสผ่าน (อย่างน้อย 8 ตัว)" : locale === "zh" ? "密码（至少8个字符）" : "Password (min 8 chars)"} value={authPassword}
+              <input type="password" placeholder={locale === "th" ? "รหัสผ่าน (ตัวใหญ่+เล็ก+ตัวเลข+อักขระพิเศษ)" : locale === "zh" ? "密码（大小写+数字+特殊字符）" : "Password (A-z + 0-9 + !@#)"} value={authPassword}
                 onChange={(e) => { setAuthPassword(e.target.value); setAuthError(""); }}
                 className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
               />

@@ -35,6 +35,8 @@ const T: Record<string, Record<string, string>> = {
     s13: "CBLUE may update these Terms of Service at any time. Continued use of the platform after changes constitutes acceptance of the updated terms. Users will be notified of material changes via email or platform notification.",
     s14t: "14. Contact",
     s14: "For questions about these Terms of Service, please use our Contact Us page or email cblue.thailand@gmail.com.",
+    s15t: "15. Data Storage & Retention Policy",
+    s15: "To ensure optimal platform performance, CBLUE enforces a 5 MB browser storage limit per user account. If your stored data (job records, attachments, and session files) approaches 4.5 MB, the system will automatically delete the oldest completed job or property listing record to free space. All uploaded images are automatically compressed to no more than 0.3 MB each (up to 5 files per booking = 1.5 MB max). Property inquiry data is stored securely on our servers and synced across all your devices. You are advised not to clear browser data while active jobs or inquiries are in progress, as some session data (chat messages, file attachments) may only be stored locally.",
   },
   th: {
     title: "ข้อกำหนดการใช้บริการ",
@@ -67,6 +69,8 @@ const T: Record<string, Record<string, string>> = {
     s13: "CBLUE อาจอัปเดตข้อกำหนดได้ตลอดเวลา การใช้ต่อเนื่องหลังเปลี่ยนแปลงถือว่ายอมรับ จะแจ้งผู้ใช้ผ่านอีเมลหรือแจ้งเตือนในแพลตฟอร์ม",
     s14t: "14. ติดต่อ",
     s14: "หากมีคำถามเกี่ยวกับข้อกำหนด กรุณาใช้หน้า ติดต่อเรา หรืออีเมล cblue.thailand@gmail.com",
+    s15t: "15. นโยบายการเก็บข้อมูลและขนาดพื้นที่เก็บ",
+    s15: "เพื่อประสิทธิภาพในการใช้งาน CBLUE กำหนดขีดจำกัดพื้นที่บราวเซอร์ในการเก็บข้อมูลน้อยกว่า 5 MB ต่อผู้ใช้ หากข้อมูลที่บันทึกเข้าใกล้ 4.5 MB ระบบจะลบรายการงานหรือประกาศอสังหาริมทรัพย์ที่เก่าที่สุดและเสร็จสิ้นแล้วโดยอัตโนมัติ ไฟล์ที่อัปโหลดทุกไฟล์จะถูกบีบอัดโดยอัตโนมัติไม่เกิน 0.3 MB ต่อไฟล์ (สูงสุด 5 ไฟล์ต่อการจอง) ข้อมูลการสอบถามอสังหาริมทรัพย์ถูกเก็บไว้อย่างปลอดภัยบนเซิร์ฟเวอร์และซิงค์ส์ระหว่างอุปกรณ์ทุกชิ้น แนะนำให้ไม่ลบข้อมูลบราวเซอร์ขณะที่มีงานหรือการสอบถามที่กำลังดำเนินการอยู่",
   },
   zh: {
     title: "服务条款",
@@ -99,6 +103,8 @@ const T: Record<string, Record<string, string>> = {
     s13: "CBLUE 可随时更新这些服务条款。继续使用即表示接受更新后的条款。",
     s14t: "14. 联系方式",
     s14: "如对这些服务条款有疑问，请使用 联系我们 页面或发邮件至 cblue.thailand@gmail.com。",
+    s15t: "15. 数据存储与保留政策",
+    s15: "为确保平台性能最优，CBLUE 对每个用户账户实施 5 MB 浏览器存储限制。当已存储数据（任务记录、附件和会话文件）接近 4.5 MB 时，系统将自动删除最旧的已完成任务或房产列表记录以释放空间。每个上传的图片将自动压缩至不超过 0.3 MB（每次预订最多 5 个文件 = 最多 1.5 MB）。房产查询数据安全存储在我们的服务器上，并在您的所有设备间同步。建议在活跞任务或查询进行期间不要清除浏览器数据。",
   },
 };
 
@@ -107,7 +113,7 @@ export default function TermsPage() {
   const t = (key: string) => T[locale]?.[key] || T["en"]![key] || key;
   const prefix = `/${locale}`;
 
-  const sections = Array.from({ length: 14 }, (_, i) => i + 1);
+  const sections = Array.from({ length: 15 }, (_, i) => i + 1);
 
   return (
     <div className="bg-gray-50 min-h-screen">

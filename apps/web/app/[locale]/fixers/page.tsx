@@ -1533,7 +1533,7 @@ export default function FixerProPage() {
                 </button>
                 <button
                   onClick={async () => {
-                    await updatePropInquiry(propAcceptModal!.id, { status: "PARTNER_ACCEPTED", step: 4 });
+                    await updatePropInquiry(propAcceptModal!.id, { status: "ACCEPTED", step: 4 });
                     setPropAcceptModal(null);
                     alert(locale === "th" ? "✅ ยืนยันแล้ว! คำขอนี้จะหายไปจากรายการ ลูกค้าจะดำเนินการชำระเงิน" : "✅ Accepted! This inquiry will disappear from your list. The customer will proceed to pay the fee.");
                   }}
