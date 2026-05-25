@@ -239,7 +239,7 @@ export default function PropertyRegisterPage() {
         yearBuilt: form.yearBuilt ? parseInt(form.yearBuilt) : undefined,
         province: form.province || undefined,
         district: form.district || undefined,
-        subdistrict: form.subdistrict || undefined,
+        subdistrict: (form.subdistrict && !form.subdistrict.startsWith('--')) ? form.subdistrict : undefined,
         postalCode: form.postalCode || undefined,
         addressLine: addressParts || undefined,
         latitude: gpsCoords?.lat,

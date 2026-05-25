@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreatePropertyDto } from './dto/create-property.dto';
 import { SearchPropertyDto } from './dto/search-property.dto';
@@ -6,6 +11,8 @@ import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class PropertyService {
+  private readonly logger = new Logger(PropertyService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   async create(userId: string, dto: CreatePropertyDto) {
@@ -19,52 +26,76 @@ export class PropertyService {
         'User account not found. Please log out and log in again.',
       );
     }
-    const property = await this.prisma.property.create({
-      data: {
-        userId,
-        propertyType: dto.propertyType,
-        listingType: dto.listingType,
-        tier: dto.tier,
-        title: dto.title,
-        description: dto.description ?? '',
-        price: dto.price,
-        area: dto.area,
-        bedrooms: dto.bedrooms,
-        bathrooms: dto.bathrooms,
-        floors: dto.floors,
-        province: dto.province ?? '',
-        district: dto.district ?? '',
-        subdistrict: dto.subdistrict,
-        postalCode: dto.postalCode,
-        addressLine: dto.addressLine,
-        latitude: dto.latitude,
-        longitude: dto.longitude,
-        contactName: dto.contactName,
-        contactPhone: dto.contactPhone,
-        contactEmail: dto.contactEmail,
-        features: dto.features as Prisma.InputJsonValue,
-        yearBuilt: dto.yearBuilt,
-      },
-      include: { images: true },
-    });
+    try {
+      const property = await this.prisma.property.create({
+        data: {
+          userId,
+          propertyType: dto.propertyType,
+          listingType: dto.listingType,
+          tier: dto.tier,
+          title: dto.title,
+          description: dto.description ?? '',
+          price: dto.price,
+          area: dto.area,
+          bedrooms: dto.bedrooms,
+          bathrooms: dto.bathrooms,
+          floors: dto.floors,
+          province: dto.province ?? '',
+          district: dto.district ?? '',
+          subdistrict: dto.subdistrict,
+          postalCode: dto.postalCode,
+          addressLine: dto.addressLine,
+          latitude: dto.latitude,
+          longitude: dto.longitude,
+          contactName: dto.contactName,
+          contactPhone: dto.contactPhone,
+          contactEmail: dto.contactEmail,
+          features: dto.features as Prisma.InputJsonValue,
+          yearBuilt: dto.yearBuilt,
+        },
+        include: { images: true },
+      });
 
-    if (dto.images && dto.images.length > 0) {
-      await this.prisma.propertyImage.createMany({
-        data: dto.images.map((img, idx) => ({
-          propertyId: property.id,
-          url: img.url,
-          key: img.key || `property/${property.id}/image-${idx + 1}`,
-          sortOrder: idx,
-          isPrimary: idx === 0,
-        })),
-      });
-      return this.prisma.property.findUnique({
-        where: { id: property.id },
-        include: { images: { orderBy: { sortOrder: 'asc' } } },
-      });
+      if (dto.images && dto.images.length > 0) {
+        await this.prisma.propertyImage.createMany({
+          data: dto.images.map((img, idx) => ({
+            propertyId: property.id,
+            url: img.url,
+            key: img.key || `property/${property.id}/image-${idx + 1}`,
+            sortOrder: idx,
+            isPrimary: idx === 0,
+          })),
+        });
+        return this.prisma.property.findUnique({
+          where: { id: property.id },
+          include: { images: { orderBy: { sortOrder: 'asc' } } },
+        });
+      }
+
+      return property;
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError) {
+        this.logger.error(
+          `Prisma error creating property for user ${userId}: ${err.code} ${err.message}`,
+        );
+        if (err.code === 'P2003') {
+          throw new BadRequestException(
+            'Invalid user reference. Please log out and log in again.',
+          );
+        }
+        throw new BadRequestException(`Database error: ${err.code}`);
+      }
+      if (err instanceof Prisma.PrismaClientValidationError) {
+        this.logger.error(
+          `Prisma validation error for user ${userId}: ${err.message}`,
+        );
+        throw new BadRequestException(
+          'Invalid property data. Please check all fields and try again.',
+        );
+      }
+      // Re-throw HttpExceptions (NotFoundException, etc.) as-is
+      throw err;
     }
-
-    return property;
   }
 
   async search(dto: SearchPropertyDto) {
