@@ -8,6 +8,7 @@ import { THAI_PROVINCES } from "../../lib/constants";
 import { getDistrictsForProvince } from "../../lib/thai-address-data";
 import { getSubdistrictsForDistrict, lookupByPostalCode } from "../../lib/thai-subdistrict-data";
 import GpsDetectButton from "../../components/GpsDetectButton";
+import { refreshSubscriberSession } from "../../../../lib/subscriberSession";
 const PROPERTY_TYPES = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "APARTMENT"] as const;
 
 
@@ -262,15 +263,26 @@ export default function PropertyRegisterPage() {
         } catch { /* non-blocking */ }
       }
 
-      const token = typeof window !== "undefined" ? localStorage.getItem("subscriber_token") : null;
-      const res = await fetch("/api/v1/properties", {
+      let token = typeof window !== "undefined" ? localStorage.getItem("subscriber_token") : null;
+      token = (await refreshSubscriberSession(token)) || token;
+      const requestBody = JSON.stringify({ ...payload, ...(compressedImages.length > 0 ? { images: compressedImages } : {}) });
+      const submitListing = (authToken: string | null) => fetch("/api/v1/properties", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         },
-        body: JSON.stringify({ ...payload, ...(compressedImages.length > 0 ? { images: compressedImages } : {}) }),
+        body: requestBody,
       });
+
+      let res = await submitListing(token);
+      if (!res.ok && [401, 403, 500].includes(res.status)) {
+        const refreshedToken = await refreshSubscriberSession(token);
+        if (refreshedToken && refreshedToken !== token) {
+          token = refreshedToken;
+          res = await submitListing(token);
+        }
+      }
 
       if (res.ok) {
         setSubmitted(true);

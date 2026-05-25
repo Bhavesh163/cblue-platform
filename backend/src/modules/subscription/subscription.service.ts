@@ -15,6 +15,12 @@ import { ForgotPasswordDto, ResetPasswordDto } from './dto/forgot-password.dto';
 
 import * as crypto from 'crypto';
 
+type SessionJwtPayload = {
+  sub?: string;
+  email?: string;
+  phone?: string;
+};
+
 @Injectable()
 export class SubscriptionService {
   private readonly logger = new Logger(SubscriptionService.name);
@@ -144,6 +150,51 @@ export class SubscriptionService {
     };
   }
 
+  async refreshSession(authorization?: string) {
+    const token = authorization?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+    if (!token) {
+      throw new UnauthorizedException('Missing authorization token');
+    }
+
+    const payload = await this.jwtService.verifyAsync<SessionJwtPayload>(
+      token,
+      {
+        secret: this.configService.getOrThrow<string>('jwt.secret'),
+      },
+    );
+
+    const user = await this.resolveBridgedUserFromPayload(payload);
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('Session expired. Please log in again.');
+    }
+
+    const subscriber = await this.resolveSubscriberForUser(user, payload);
+    if (!subscriber) {
+      throw new UnauthorizedException('Subscriber account not found');
+    }
+
+    if (!user.subscriberId || user.subscriberId !== subscriber.id) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { subscriberId: subscriber.id },
+      });
+    }
+
+    const accessToken = await this.generateToken(user.id, subscriber.email);
+    return {
+      accessToken,
+      subscriber: {
+        id: subscriber.id,
+        email: subscriber.email,
+        name: subscriber.name,
+        phone: subscriber.phone,
+        company: subscriber.company,
+        status: subscriber.status,
+        serviceCategory: subscriber.serviceCategory,
+      },
+    };
+  }
+
   async getProfile(subscriberId: string) {
     const subscriber = await this.prisma.subscriber.findUnique({
       where: { id: subscriberId },
@@ -241,6 +292,92 @@ export class SubscriptionService {
         expiresIn: '24h',
       },
     );
+  }
+
+  private async resolveBridgedUserFromPayload(payload: SessionJwtPayload) {
+    if (payload.sub) {
+      const byId = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+      });
+      if (byId) return byId;
+    }
+
+    const normalizedEmail = payload.email?.trim().toLowerCase() || '';
+    const normalizedPhone = payload.phone?.trim() || '';
+
+    let subscriber = normalizedEmail
+      ? await this.prisma.subscriber.findUnique({
+          where: { email: normalizedEmail },
+        })
+      : null;
+
+    if (!subscriber && normalizedPhone) {
+      subscriber = await this.prisma.subscriber.findFirst({
+        where: { phone: normalizedPhone },
+      });
+    }
+
+    const userSearch: Array<Record<string, string>> = [];
+    if (subscriber?.id) userSearch.push({ subscriberId: subscriber.id });
+    if (normalizedEmail) userSearch.push({ email: normalizedEmail });
+    if (normalizedPhone) userSearch.push({ phone: normalizedPhone });
+    if (userSearch.length === 0) return null;
+
+    let user = await this.prisma.user.findFirst({
+      where: { OR: userSearch },
+    });
+
+    if (!user && subscriber) {
+      user = await this.prisma.user.create({
+        data: {
+          email: subscriber.email,
+          phone: subscriber.phone || undefined,
+          name: subscriber.name,
+          company: subscriber.company,
+          subscriberId: subscriber.id,
+          role: 'USER',
+        },
+      });
+    } else if (user && subscriber && user.subscriberId !== subscriber.id) {
+      user = await this.prisma.user.update({
+        where: { id: user.id },
+        data: { subscriberId: subscriber.id },
+      });
+    }
+
+    return user;
+  }
+
+  private async resolveSubscriberForUser(
+    user: {
+      subscriberId: string | null;
+      email: string | null;
+      phone: string | null;
+      id: string;
+    },
+    payload: SessionJwtPayload,
+  ) {
+    if (user.subscriberId) {
+      const byId = await this.prisma.subscriber.findUnique({
+        where: { id: user.subscriberId },
+      });
+      if (byId) return byId;
+    }
+
+    const email = user.email || payload.email?.trim().toLowerCase() || '';
+    if (email) {
+      const byEmail = await this.prisma.subscriber.findUnique({
+        where: { email },
+      });
+      if (byEmail) return byEmail;
+    }
+
+    const phone = user.phone || payload.phone?.trim() || '';
+    if (phone) {
+      return this.prisma.subscriber.findFirst({ where: { phone } });
+    }
+
+    return null;
   }
 
   private async sendResetEmail(

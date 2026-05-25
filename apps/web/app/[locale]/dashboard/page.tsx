@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useTranslations, useLocale } from "next-intl";
+import { refreshSubscriberSession } from "../../../lib/subscriberSession";
 import { useRouter } from "next/navigation";
 import PdpaConsent from "../components/PdpaConsent";
 import { computeBudgetBreakdown, resolvePartnerPriceList, readStoredBreakdown, type BudgetBreakdownItem } from "../../../lib/computeBudgetBreakdown";
@@ -1093,9 +1094,17 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     }
     async function loadPropInquiries() {
       try {
-        const token = localStorage.getItem("subscriber_token") || "";
+        let token = localStorage.getItem("subscriber_token") || "";
         if (!token) { setPropInquiries([]); return; }
-        const res = await fetch("/api/v1/property-inquiries/customer", { headers: { Authorization: `Bearer ${token}` } });
+        const load = (authToken: string) => fetch("/api/v1/property-inquiries/customer", { headers: { Authorization: `Bearer ${authToken}` } });
+        let res = await load(token);
+        if (!res.ok && [401, 403].includes(res.status)) {
+          const refreshedToken = await refreshSubscriberSession(token);
+          if (refreshedToken) {
+            token = refreshedToken;
+            res = await load(token);
+          }
+        }
         if (!res.ok) { setPropInquiries([]); return; }
         const data = await res.json();
         setPropInquiries(Array.isArray(data) ? data.map(mapApiInquiry) : []);
@@ -2009,12 +2018,20 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
   const updatePropInquiry = async (id: string, update: Partial<PropInquiry>) => {
     try {
-      const token = localStorage.getItem("subscriber_token") || "";
-      const res = await fetch(`/api/v1/property-inquiries/${id}`, {
+      let token = localStorage.getItem("subscriber_token") || "";
+      const updateReq = (authToken: string) => fetch(`/api/v1/property-inquiries/${id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
         body: JSON.stringify(update),
       });
+      let res = await updateReq(token);
+      if (!res.ok && [401, 403].includes(res.status)) {
+        const refreshedToken = await refreshSubscriberSession(token);
+        if (refreshedToken) {
+          token = refreshedToken;
+          res = await updateReq(token);
+        }
+      }
       if (res.ok) {
         setPropInquiries(prev => prev.map(p => p.id === id ? { ...p, ...update, updatedAt: Date.now() } : p));
       }

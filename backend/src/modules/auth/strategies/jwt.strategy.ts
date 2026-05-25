@@ -31,25 +31,45 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       where: { id: payload.sub },
     });
 
-    if (!user && payload.email) {
-      const normalizedEmail = payload.email.trim().toLowerCase();
-      const subscriber = await this.prisma.subscriber.findUnique({
-        where: { email: normalizedEmail },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          company: true,
-        },
-      });
+    if (!user) {
+      const normalizedEmail = payload.email?.trim().toLowerCase() || '';
+      const normalizedPhone = payload.phone?.trim() || '';
+      let subscriber = normalizedEmail
+        ? await this.prisma.subscriber.findUnique({
+            where: { email: normalizedEmail },
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              company: true,
+              phone: true,
+            },
+          })
+        : null;
+
+      if (!subscriber && normalizedPhone) {
+        subscriber = await this.prisma.subscriber.findFirst({
+          where: { phone: normalizedPhone },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            company: true,
+            phone: true,
+          },
+        });
+      }
 
       if (subscriber) {
+        const userSearch: Array<Record<string, string>> = [
+          { subscriberId: subscriber.id },
+        ];
+        if (normalizedEmail) userSearch.push({ email: normalizedEmail });
+        if (normalizedPhone) userSearch.push({ phone: normalizedPhone });
+
         user = await this.prisma.user.findFirst({
           where: {
-            OR: [
-              { subscriberId: subscriber.id },
-              { email: normalizedEmail },
-            ],
+            OR: userSearch,
           },
         });
 
@@ -57,6 +77,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
           user = await this.prisma.user.create({
             data: {
               email: subscriber.email,
+              phone: subscriber.phone || undefined,
               name: subscriber.name,
               company: subscriber.company,
               subscriberId: subscriber.id,
@@ -71,7 +92,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         }
 
         this.logger.warn(
-          `Recovered stale JWT bridge for ${normalizedEmail}; using user ${user.id}`,
+          `Recovered stale JWT bridge for ${normalizedEmail || normalizedPhone}; using user ${user.id}`,
         );
       }
     }

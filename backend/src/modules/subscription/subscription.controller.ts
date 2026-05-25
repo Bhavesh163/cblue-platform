@@ -1,4 +1,11 @@
-import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  HttpCode,
+  HttpStatus,
+  Headers,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { SubscriptionService } from './subscription.service';
 import { CreateSubscriberDto } from './dto/create-subscriber.dto';
@@ -20,6 +27,13 @@ export class SubscriptionController {
   @Throttle({ default: { ttl: 60000, limit: 10 } })
   login(@Body() dto: LoginSubscriberDto) {
     return this.subscriptionService.login(dto);
+  }
+
+  @Post('refresh-session')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 60000, limit: 30 } })
+  refreshSession(@Headers('authorization') authorization?: string) {
+    return this.subscriptionService.refreshSession(authorization);
   }
 
   @Post('forgot-password')

@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useTranslations, useLocale } from "next-intl";
 import { THAI_PROVINCES } from "../lib/constants";
 import PdpaConsent from "../components/PdpaConsent";
+import { refreshSubscriberSession } from "../../../lib/subscriberSession";
 const PROPERTY_TYPES = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "APARTMENT"] as const;
 
 
@@ -355,10 +356,18 @@ export default function PropertiesPage() {
                     <button
                       onClick={async () => {
                         try {
-                          const token = localStorage.getItem("subscriber_token") || "";
-                          await fetch("/api/v1/property-inquiries", {
+                          let token = localStorage.getItem("subscriber_token") || "";
+                          token = (await refreshSubscriberSession(token)) || token;
+                          if (!token) {
+                            setShowContactFlow(null);
+                            setPendingContactProp(showContactFlow);
+                            setShowLoginGate(true);
+                            return;
+                          }
+
+                          const submitInquiry = (authToken: string) => fetch("/api/v1/property-inquiries", {
                             method: "POST",
-                            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                            headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
                             body: JSON.stringify({
                               poNumber,
                               propertyId: showContactFlow.id,
@@ -368,7 +377,28 @@ export default function PropertiesPage() {
                               listerName: showContactFlow.contactName || showContactFlow.title,
                             }),
                           });
-                        } catch {}
+
+                          let res = await submitInquiry(token);
+                          if (!res.ok && [401, 403, 500].includes(res.status)) {
+                            const refreshedToken = await refreshSubscriberSession(token);
+                            if (refreshedToken && refreshedToken !== token) {
+                              token = refreshedToken;
+                              res = await submitInquiry(token);
+                            }
+                          }
+
+                          if (!res.ok) {
+                            const errData = await res.json().catch(() => null);
+                            const msg = Array.isArray(errData?.message)
+                              ? errData.message.join(", ")
+                              : errData?.message || (locale === "th" ? "ไม่สามารถส่งคำขอได้ กรุณาเข้าสู่ระบบใหม่แล้วลองอีกครั้ง" : locale === "zh" ? "无法发送询盘。请重新登录后再试。" : "Could not send the inquiry. Please log in again and retry.");
+                            alert(msg);
+                            return;
+                          }
+                        } catch {
+                          alert(locale === "th" ? "ไม่สามารถส่งคำขอได้ในขณะนี้" : locale === "zh" ? "目前无法发送询盘" : "Could not send the inquiry right now.");
+                          return;
+                        }
                         setContactStep("notify");
                         setTimeout(() => setContactStep("done"), 3000);
                       }}
