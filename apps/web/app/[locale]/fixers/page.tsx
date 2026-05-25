@@ -54,6 +54,32 @@ const stats = {
 
 const chats: any[] = [];
 
+/** Prune localStorage when approaching the 4.5 MB soft limit. */
+function pruneStorageIfNeeded() {
+  try {
+    let total = 0;
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k) total += (k.length + (localStorage.getItem(k) || '').length) * 2;
+    }
+    if (total < 4.5 * 1024 * 1024) return;
+    try {
+      const hist = JSON.parse(localStorage.getItem('ghis_mock_history') || '[]');
+      if (hist.length > 0) {
+        hist.shift();
+        localStorage.setItem('ghis_mock_history', JSON.stringify(hist));
+      }
+    } catch {}
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('cblue_po_breakdown_')) {
+        localStorage.removeItem(k);
+        break;
+      }
+    }
+  } catch {}
+}
+
 const fmtDate = (d: Date | number | string) => {
   const dt = new Date(d);
   return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
@@ -2649,6 +2675,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
         const updated = active.filter((x: any) => x.po !== po);
         const completed = { ...(active.find((x: any) => x.po === po) || job), step: 11, completedAt: createdAt, partnerRating: Number(rating) };
         localStorage.setItem("ghis_mock_active", JSON.stringify(updated));
+        pruneStorageIfNeeded();
         localStorage.setItem("ghis_mock_history", JSON.stringify([...hist, completed]));
         try { localStorage.setItem(`chat_closed_${po}`, '1'); } catch {}
         try { localStorage.removeItem(`partner_variation_sent_${po}`); localStorage.removeItem(`partner_complete_sent_${po}`); } catch {}
@@ -3103,6 +3130,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
         const updated = active.filter((x: any) => x.po !== po);
         const completed = { ...(active.find((x: any) => x.po === po) || job), step: 11, completedAt: createdAt, partnerRating: Number(rating) };
         localStorage.setItem("ghis_mock_active", JSON.stringify(updated));
+        pruneStorageIfNeeded();
         localStorage.setItem("ghis_mock_history", JSON.stringify([...hist, completed]));
         try { localStorage.setItem(`chat_closed_${po}`, '1'); } catch {}
         try { localStorage.removeItem(`partner_variation_sent_${po}`); localStorage.removeItem(`partner_complete_sent_${po}`); } catch {}

@@ -27,6 +27,35 @@ const notifications: any[] = [];
 
 const chats: any[] = [];
 
+/** Prune localStorage when approaching the 4.5 MB soft limit.
+ * Removes the oldest completed job history entry and oldest PO breakdown. */
+function pruneStorageIfNeeded() {
+  try {
+    let total = 0;
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k) total += (k.length + (localStorage.getItem(k) || '').length) * 2;
+    }
+    if (total < 4.5 * 1024 * 1024) return;
+    // Remove oldest history entry
+    try {
+      const hist = JSON.parse(localStorage.getItem('ghis_mock_history') || '[]');
+      if (hist.length > 0) {
+        hist.shift();
+        localStorage.setItem('ghis_mock_history', JSON.stringify(hist));
+      }
+    } catch {}
+    // Remove oldest PO breakdown entry
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('cblue_po_breakdown_')) {
+        localStorage.removeItem(k);
+        break;
+      }
+    }
+  } catch {}
+}
+
 const fmtDate = (d: Date | number | string) => {
   const dt = new Date(d);
   return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
@@ -1009,7 +1038,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   useEffect(() => { if (mockReady) try { localStorage.setItem("ghis_mock_payments", JSON.stringify(mockPayments)); } catch {} }, [mockPayments, mockReady]);
   useEffect(() => { if (mockReady) try { localStorage.setItem("ghis_mock_active", JSON.stringify(mockActiveItems)); } catch {} }, [mockActiveItems, mockReady]);
   useEffect(() => { if (mockReady) try { localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(mockDynRequests)); } catch {} }, [mockDynRequests, mockReady]);
-  useEffect(() => { if (mockReady) try { localStorage.setItem("ghis_mock_history", JSON.stringify(mockHistory)); } catch {} }, [mockHistory, mockReady]);
+  useEffect(() => { if (mockReady) try { pruneStorageIfNeeded(); localStorage.setItem("ghis_mock_history", JSON.stringify(mockHistory)); } catch {} }, [mockHistory, mockReady]);
 
   useEffect(() => {
     try {
@@ -2146,6 +2175,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               try { localStorage.removeItem(`chat_messages_${po}`); } catch {}
               const hist = JSON.parse(localStorage.getItem("ghis_mock_history") || "[]");
               hist.push({ ...item, status: "CANCELLED", statusName: "Cancelled", stepName: "Cancelled", completedAt: Date.now() });
+              pruneStorageIfNeeded();
               localStorage.setItem("ghis_mock_history", JSON.stringify(hist));
               window.dispatchEvent(new Event("storage"));
             } catch (cancelErr) { console.error("Cancel job error:", cancelErr); }
