@@ -1786,11 +1786,11 @@ export default function FixerProPage() {
                   });
                   return;
                 }
-                alert("Files were uploaded by the customer but are not yet accessible here. If you need them urgently, please ask the customer to share via the chat room after accepting this job.");
+                alert("Files are attached but still syncing here. Please reopen this modal in a moment, or ask the customer to share them in the chat room if you need them urgently.");
               }}>
                 {waitModalAttachmentUrls.length > 0
                   ? `${waitModalAttachmentUrls.length} file${waitModalAttachmentUrls.length > 1 ? 's' : ''} attached — Click to Download`
-                  : loadingAttachments ? 'Checking files…' : 'No files attached'}
+                  : loadingAttachments ? 'Checking files…' : 'Files attached'}
               </span></div>
             </div>
 
@@ -2809,7 +2809,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                 if (variationAttachUrls.length === 0) return;
                 alert('Could not download file. Please ask the customer to share via the chat room.');
               }}>
-                {variationAttachUrls.length > 0 ? `${variationAttachUrls.length} file${variationAttachUrls.length > 1 ? 's' : ''} attached — Click to Download` : 'No files attached'}
+                {variationAttachUrls.length > 0 ? `${variationAttachUrls.length} file${variationAttachUrls.length > 1 ? 's' : ''} attached — Click to Download` : 'Files attached'}
               </span>
             </div>
             <div>
@@ -3291,7 +3291,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
                 if (variationAttachUrls.length === 0) return;
                 alert('Could not download file. Please ask the customer to share via the chat room.');
               }}>
-                {variationAttachUrls.length > 0 ? `${variationAttachUrls.length} file${variationAttachUrls.length > 1 ? 's' : ''} attached — Click to Download` : 'No files attached'}
+                {variationAttachUrls.length > 0 ? `${variationAttachUrls.length} file${variationAttachUrls.length > 1 ? 's' : ''} attached — Click to Download` : 'Files attached'}
               </span>
             </div>
             <div>

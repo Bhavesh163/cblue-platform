@@ -13,6 +13,7 @@ interface Fixer {
   estimatedTotal?: number;
   estimatedUnit?: string;
   estimatedQty?: number;
+  priceList?: unknown[];
   satisfaction: number;
   specialties: string[];
   experienceYears: number;
@@ -42,6 +43,8 @@ interface BookingAddress {
 }
 
 type BookingType = "household" | "project" | "professional" | "property";
+
+const FIXER_TIERS = ["economy", "standard", "corporate", "specialist", "expert"] as const;
 
 const T: Record<string, Record<string, string>> = {
   en: {
@@ -673,22 +676,28 @@ export default function FixerResults({
       .then(data => {
         if (data && Array.isArray(data) && data.length > 0) {
           // ensure data fields align with expected frontend Fixer interface
-          const mapped = data.map((d: any) => ({
-            id: d.id,
-            alias: d.alias,
-            tier: d.tier.charAt(0).toUpperCase() + d.tier.slice(1).toLowerCase(),
-            rating: d.rating,
-            totalJobs: d.totalJobs || d.completedJobs || 0,
-            price: d.estimatedTotal ?? d.price,
-            estimatedTotal: d.estimatedTotal,
-            estimatedUnit: d.estimatedUnit,
-            estimatedQty: d.estimatedQty,
-            estimatedBreakdown: d.estimatedBreakdown ?? null,
-            satisfaction: Math.round(d.satisfaction || 85),
-            specialties: d.specialties || [],
-            experienceYears: d.experienceYears || 1,
-            selectedReason: d.selectedReason,
-          }));
+          const mapped = data.map((d: any) => {
+            const normalizedTier = String(d.tier || "economy").toLowerCase();
+            return {
+              id: d.id,
+              alias: d.alias,
+              tier: (FIXER_TIERS.includes(normalizedTier as typeof FIXER_TIERS[number])
+                ? normalizedTier
+                : "economy") as Fixer["tier"],
+              rating: d.rating,
+              totalJobs: d.totalJobs || d.completedJobs || 0,
+              price: d.estimatedTotal ?? d.price,
+              estimatedTotal: d.estimatedTotal,
+              estimatedUnit: d.estimatedUnit,
+              estimatedQty: d.estimatedQty,
+              priceList: Array.isArray(d.priceList) ? d.priceList : [],
+              estimatedBreakdown: d.estimatedBreakdown ?? null,
+              satisfaction: Math.round(d.satisfaction || 85),
+              specialties: d.specialties || [],
+              experienceYears: d.experienceYears || 1,
+              selectedReason: d.selectedReason,
+            };
+          });
           setFixers(mapped);
           setMatchError("");
         } else {
@@ -816,6 +825,33 @@ export default function FixerResults({
   }, [step]);
 
   const handleSelect = (fixer: Fixer) => {
+    try {
+      if (poNumber) {
+        const nextBreakdown = Array.isArray((fixer as any)?.estimatedBreakdown)
+          ? (fixer as any).estimatedBreakdown
+          : [];
+        if (nextBreakdown.length > 0) {
+          localStorage.setItem(
+            `cblue_po_breakdown_${poNumber}`,
+            JSON.stringify(nextBreakdown),
+          );
+        } else {
+          localStorage.removeItem(`cblue_po_breakdown_${poNumber}`);
+        }
+
+        const nextPriceList = Array.isArray(fixer.priceList) ? fixer.priceList : [];
+        if (nextPriceList.length > 0) {
+          localStorage.setItem(
+            `cblue_partner_pricelist_${poNumber}`,
+            JSON.stringify(nextPriceList),
+          );
+        } else {
+          localStorage.removeItem(`cblue_partner_pricelist_${poNumber}`);
+        }
+      }
+    } catch {
+      // Non-blocking for selection flow.
+    }
     setSelectedFixer(fixer);
     setStep("po");
   };
@@ -823,6 +859,7 @@ export default function FixerResults({
   const handlePOAcknowledge = async () => {
     let createdOrderId = "";
     let storedAttachments: string[] = [];
+    let attachmentSyncFailed = false;
 
     // Store budget breakdown for customer's own modal (step 9 variation approve)
     try {
@@ -936,6 +973,7 @@ export default function FixerResults({
               uploadResults.push(result);
             }
             if (uploadResults.some((result) => !result)) {
+              attachmentSyncFailed = true;
               console.error("One or more order attachments failed to persist to backend", {
                 orderId: createdOrderId,
                 poNumber,
@@ -949,6 +987,17 @@ export default function FixerResults({
       }
     } catch (e) {
       console.error("Order creation non-blocking fail", e);
+    }
+
+    if (attachmentSyncFailed) {
+      alert(
+        locale === "th"
+          ? "ไฟล์แนบยังซิงก์ขึ้นระบบไม่สำเร็จ กรุณาลองกดอีกครั้งเพื่อให้พาร์ทเนอร์ดาวน์โหลดไฟล์ได้ครบถ้วน"
+          : locale === "zh"
+            ? "附件尚未成功同步到系统。请再试一次，以便合作伙伴能下载完整文件。"
+            : "Attachments have not finished syncing to the server yet. Please try again so your partner can download the files.",
+      );
+      return;
     }
 
     if (selectedFixer && bookingType && poNumber) {

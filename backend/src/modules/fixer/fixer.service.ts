@@ -695,6 +695,7 @@ export class FixerService {
           estimatedTotal: basePrice > 0 ? basePrice : null,
           estimatedUnit: matchedUnit,
           estimatedQty: matchedQty,
+          priceList: Array.isArray(rawPriceList) ? rawPriceList : [],
           estimatedBreakdown:
             estimatedBreakdown.length > 0 ? estimatedBreakdown : null,
           matchScore: overallScore,

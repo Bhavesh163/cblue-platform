@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
@@ -13,6 +13,8 @@ export interface JwtPayload {
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
+  private readonly logger = new Logger(JwtStrategy.name);
+
   constructor(
     configService: ConfigService,
     private prisma: PrismaService,
@@ -25,12 +27,63 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload) {
-    const user = await this.prisma.user.findUnique({
+    let user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
     });
+
+    if (!user && payload.email) {
+      const normalizedEmail = payload.email.trim().toLowerCase();
+      const subscriber = await this.prisma.subscriber.findUnique({
+        where: { email: normalizedEmail },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          company: true,
+        },
+      });
+
+      if (subscriber) {
+        user = await this.prisma.user.findFirst({
+          where: {
+            OR: [
+              { subscriberId: subscriber.id },
+              { email: normalizedEmail },
+            ],
+          },
+        });
+
+        if (!user) {
+          user = await this.prisma.user.create({
+            data: {
+              email: subscriber.email,
+              name: subscriber.name,
+              company: subscriber.company,
+              subscriberId: subscriber.id,
+              role: 'USER',
+            },
+          });
+        } else if (!user.subscriberId || user.subscriberId !== subscriber.id) {
+          user = await this.prisma.user.update({
+            where: { id: user.id },
+            data: { subscriberId: subscriber.id },
+          });
+        }
+
+        this.logger.warn(
+          `Recovered stale JWT bridge for ${normalizedEmail}; using user ${user.id}`,
+        );
+      }
+    }
+
     if (!user || !user.isActive) {
       return null;
     }
-    return { id: user.id, phone: user.phone ?? '', role: user.role };
+    return {
+      id: user.id,
+      phone: user.phone ?? '',
+      role: user.role,
+      email: user.email ?? payload.email ?? '',
+    };
   }
 }
