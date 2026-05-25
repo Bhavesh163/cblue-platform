@@ -357,7 +357,7 @@
     "sendReset": "发送重置链接",
     "sending": "发送中...",
     "resetSent": "邮件已发送！",
-    "resetSentDesc": "请检查您的收件箱。重置链接将在1小时后过期。",
+    "resetSentDesc": "请检查您的收件箱（包括垃圾邮件/垃圾箱），查找密码重置链接。重置链接将在1小时后过期。",
     "resetTitle": "重置密码",
     "resetDesc": "在下方输入您的新密码",
     "resetPassword": "重置密码",

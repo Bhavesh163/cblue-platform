@@ -76,17 +76,6 @@ export default function PropertyRegisterPage() {
     const newFiles = Array.from(e.target.files);
     setPropImages((prev) => {
       const combined = [...prev, ...newFiles].slice(0, 5);
-      const totalMB = combined.reduce((sum, f) => sum + f.size, 0) / (1024 * 1024);
-      if (totalMB > 5) {
-        alert(
-          locale === "th"
-            ? "รวมไฟล์ทั้งหมดต้องไม่เกิน 5 MB"
-            : locale === "zh"
-            ? "所有文件总计不超过 5 MB"
-            : "Total files must not exceed 5 MB.",
-        );
-        return prev;
-      }
       return combined;
     });
     e.target.value = "";
@@ -443,11 +432,11 @@ export default function PropertyRegisterPage() {
                   </label>
                   <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                     {[
-                      { value: 'ECONOMY',  fee: 200,  label: 'Economy',  desc: locale === 'th' ? 'ห้อง/ที่ดิน' : locale === 'zh' ? '房间/土地' : 'Room/Land' },
-                      { value: 'STANDARD', fee: 400,  label: 'Standard', desc: locale === 'th' ? 'คอนโด/ทาวน์เฮ้าส์' : locale === 'zh' ? '公寓/联排别墅' : 'Condo/Townhouse' },
-                      { value: 'UPPER',    fee: 600,  label: 'Upper',    desc: locale === 'th' ? 'บ้านเดี่ยว' : locale === 'zh' ? '独立屋' : 'House' },
-                      { value: 'LUXURY',   fee: 800,  label: 'Luxury',   desc: locale === 'th' ? 'หรูหรา' : locale === 'zh' ? '豪华' : 'Luxury' },
-                      { value: 'GRANDEUR', fee: 1000, label: 'Grandeur', desc: locale === 'th' ? 'พรีเมียม' : locale === 'zh' ? '顶级' : 'Premium' },
+                      { value: 'ECONOMY',  fee: 100,  label: 'Economy' },
+                      { value: 'STANDARD', fee: 400,  label: 'Standard' },
+                      { value: 'UPPER',    fee: 600,  label: 'Upper' },
+                      { value: 'LUXURY',   fee: 800,  label: 'Luxury' },
+                      { value: 'GRANDEUR', fee: 1000, label: 'Grandeur' },
                     ].map((tier) => (
                       <button
                         key={tier.value}
@@ -456,7 +445,6 @@ export default function PropertyRegisterPage() {
                         className={`flex flex-col items-center p-3 rounded-xl border-2 text-center transition ${form.tier === tier.value ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-green-300'}`}
                       >
                         <span className="font-bold text-gray-900 text-sm">{tier.label}</span>
-                        <span className="text-xs text-gray-500 mt-0.5">{tier.desc}</span>
                         <span className="font-extrabold text-green-700 text-sm mt-1">฿{tier.fee}</span>
                       </button>
                     ))}

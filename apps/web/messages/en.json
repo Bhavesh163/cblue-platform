@@ -357,7 +357,7 @@
     "sendReset": "Send Reset Link",
     "sending": "Sending...",
     "resetSent": "Email Sent!",
-    "resetSentDesc": "Please check your email inbox for a password reset link. The link will expire in 1 hour.",
+    "resetSentDesc": "Please check your email inbox (and spam/junk folder) for a password reset link. The link will expire in 1 hour.",
     "resetTitle": "Reset Password",
     "resetDesc": "Enter your new password below",
     "resetPassword": "Reset Password",

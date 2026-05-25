@@ -858,7 +858,7 @@ function ProjectBookingContent() {
                   value={form.description}
                   onChange={handleChange}
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none resize-none"
-                  placeholder={locale === "th" ? "อธิบายรายละเอียดโปรเจกต์ ขอบเขตงาน งบประมาณ และความต้องการพิเศษ เช่น งานตกแต่งภายใน 600 ตร.ม. × 25,000 บาท/ตร.ม. | งานรื้อถอน 300 ตร.ม. × 5,000 บาท/ตร.ม. | การก่อสร้าง 700 ตร.ม. × 15,000 บาท/ตร.ม." : locale === "zh" ? "请描述项目详情、范围、预算和特殊要求，例如：室内装修 600㎡ × 25,000฿/㎡ | 复原工程 300㎡ × 5,000฿/㎡ | 建筑施工 700㎡ × 15,000฿/㎡" : "Describe project details, scope, budget, and special requirements. Include quantity × unit rate for each item, e.g. Fit-out 600 sq.m. × ฿25,000/sq.m. | Reinstatement 300 sq.m. × ฿5,000/sq.m. | Construction 700 sq.m. × ฿15,000/sq.m."}
+                  placeholder={locale === "th" ? "อธิบายรายละเอียดโปรเจกต์ รายละเอียดของงาน รวมถึงปริมาณของแต่ละรายการ วันที่เริ่มงานและสิ้นสุดที่วางแผนไว้ เงื่อนไขการชำระเงิน และความต้องการพิเศษ" : locale === "zh" ? "请描述项目详情、工作细节（包括每项工作的数量）、计划开始和完成日期、付款条件及特殊要求" : "Describe project details, detail of work including quantity of each item, planned start and finish date, payment term and special requirements."}
                 />
               </div>
 
