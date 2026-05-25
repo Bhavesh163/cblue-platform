@@ -1,3 +1,10 @@
+export function clearSubscriberSession() {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem('subscriber_token');
+  localStorage.removeItem('subscriber');
+  window.dispatchEvent(new Event('storage'));
+}
+
 export async function refreshSubscriberSession(
   currentToken?: string | null,
 ): Promise<string | null> {
@@ -11,6 +18,10 @@ export async function refreshSubscriberSession(
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
     });
+    if (res.status === 401 || res.status === 403) {
+      clearSubscriberSession();
+      return null;
+    }
     if (!res.ok) return null;
 
     const data = await res.json().catch(() => null);

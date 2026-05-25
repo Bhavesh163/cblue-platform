@@ -6,7 +6,7 @@ import Image from "next/image";
 import { useTranslations, useLocale } from "next-intl";
 import { THAI_PROVINCES } from "../lib/constants";
 import PdpaConsent from "../components/PdpaConsent";
-import { refreshSubscriberSession } from "../../../lib/subscriberSession";
+import { clearSubscriberSession, refreshSubscriberSession } from "../../../lib/subscriberSession";
 const PROPERTY_TYPES = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "APARTMENT"] as const;
 
 
@@ -34,6 +34,11 @@ export default function PropertiesPage() {
   const tc = useTranslations("common");
   const locale = useLocale();
   const prefix = `/${locale}`;
+  const loginRequiredMessage = locale === "th"
+    ? "เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้งก่อนส่งคำขอ"
+    : locale === "zh"
+    ? "登录已过期。请重新登录后再发送询盘。"
+    : "Your session expired. Please log in again before sending the inquiry.";
 
   const [properties, setProperties] = useState<Property[]>([]);
   const [latestProperties, setLatestProperties] = useState<Property[]>([]);
@@ -356,8 +361,18 @@ export default function PropertiesPage() {
                     <button
                       onClick={async () => {
                         try {
-                          let token = localStorage.getItem("subscriber_token") || "";
-                          token = (await refreshSubscriberSession(token)) || token;
+                          const storedToken = localStorage.getItem("subscriber_token") || "";
+                          const refreshedToken = storedToken ? await refreshSubscriberSession(storedToken) : null;
+                          if (storedToken && !refreshedToken) {
+                            clearSubscriberSession();
+                            setShowContactFlow(null);
+                            setPendingContactProp(showContactFlow);
+                            setShowLoginGate(true);
+                            alert(loginRequiredMessage);
+                            return;
+                          }
+
+                          const token = refreshedToken || storedToken;
                           if (!token) {
                             setShowContactFlow(null);
                             setPendingContactProp(showContactFlow);
@@ -379,12 +394,17 @@ export default function PropertiesPage() {
                           });
 
                           let res = await submitInquiry(token);
-                          if (!res.ok && [401, 403, 500].includes(res.status)) {
-                            const refreshedToken = await refreshSubscriberSession(token);
-                            if (refreshedToken && refreshedToken !== token) {
-                              token = refreshedToken;
-                              res = await submitInquiry(token);
+                          if (!res.ok && [401, 403].includes(res.status)) {
+                            const retriedToken = await refreshSubscriberSession(token);
+                            if (!retriedToken) {
+                              clearSubscriberSession();
+                              setShowContactFlow(null);
+                              setPendingContactProp(showContactFlow);
+                              setShowLoginGate(true);
+                              alert(loginRequiredMessage);
+                              return;
                             }
+                            res = await submitInquiry(retriedToken);
                           }
 
                           if (!res.ok) {

@@ -8,7 +8,7 @@ import { THAI_PROVINCES } from "../../lib/constants";
 import { getDistrictsForProvince } from "../../lib/thai-address-data";
 import { getSubdistrictsForDistrict, lookupByPostalCode } from "../../lib/thai-subdistrict-data";
 import GpsDetectButton from "../../components/GpsDetectButton";
-import { refreshSubscriberSession } from "../../../../lib/subscriberSession";
+import { clearSubscriberSession, refreshSubscriberSession } from "../../../../lib/subscriberSession";
 const PROPERTY_TYPES = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "APARTMENT"] as const;
 
 
@@ -29,6 +29,11 @@ export default function PropertyRegisterPage() {
   const [subscriber, setSubscriber] = useState<{ name: string; email?: string; role?: string } | null>(null);
   const [authMode, setAuthMode] = useState<"login" | "register">("register");
   const [propImages, setPropImages] = useState<File[]>([]);
+  const sessionExpiredMessage = locale === "th"
+    ? "เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้งแล้วส่งรายการใหม่"
+    : locale === "zh"
+    ? "登录已过期。请重新登录后再提交房源。"
+    : "Your session expired. Please log in again before submitting the property.";
 
   // Compress an image File to ≤0.3 MB base64 data URL
   async function compressPropertyImage(file: File): Promise<string> {
@@ -83,19 +88,40 @@ export default function PropertyRegisterPage() {
   }
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("subscriber");
-      if (stored) {
+    let active = true;
+    async function syncStoredSession() {
+      try {
+        const stored = localStorage.getItem("subscriber");
+        const token = localStorage.getItem("subscriber_token");
+        if (!stored || !token) {
+          if (stored || token) clearSubscriberSession();
+          if (active) setSubscriber(null);
+          return;
+        }
+
         const parsed = JSON.parse(stored);
+        if (!active) return;
         setSubscriber(parsed);
-        // Auto-fill contact info from existing session
         setForm((prev) => ({
           ...prev,
           contactName: parsed.name || prev.contactName,
           contactEmail: parsed.email || prev.contactEmail,
         }));
+
+        const refreshedToken = await refreshSubscriberSession(token);
+        if (!refreshedToken && active) {
+          setSubscriber(null);
+        }
+      } catch {
+        clearSubscriberSession();
+        if (active) setSubscriber(null);
       }
-    } catch { /* ignore */ }
+    }
+
+    void syncStoredSession();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const [form, setForm] = useState({
@@ -263,8 +289,19 @@ export default function PropertyRegisterPage() {
         } catch { /* non-blocking */ }
       }
 
-      let token = typeof window !== "undefined" ? localStorage.getItem("subscriber_token") : null;
-      token = (await refreshSubscriberSession(token)) || token;
+      const storedToken = typeof window !== "undefined" ? localStorage.getItem("subscriber_token") : null;
+      const refreshedToken = storedToken ? await refreshSubscriberSession(storedToken) : null;
+      if (storedToken && !refreshedToken) {
+        setSubscriber(null);
+        setError(sessionExpiredMessage);
+        return;
+      }
+      const token = refreshedToken || storedToken;
+      if (!token) {
+        setSubscriber(null);
+        setError(sessionExpiredMessage);
+        return;
+      }
       const requestBody = JSON.stringify({ ...payload, ...(compressedImages.length > 0 ? { images: compressedImages } : {}) });
       const submitListing = (authToken: string | null) => fetch("/api/v1/properties", {
         method: "POST",
@@ -276,12 +313,14 @@ export default function PropertyRegisterPage() {
       });
 
       let res = await submitListing(token);
-      if (!res.ok && [401, 403, 500].includes(res.status)) {
-        const refreshedToken = await refreshSubscriberSession(token);
-        if (refreshedToken && refreshedToken !== token) {
-          token = refreshedToken;
-          res = await submitListing(token);
+      if (!res.ok && [401, 403].includes(res.status)) {
+        const retriedToken = await refreshSubscriberSession(token);
+        if (!retriedToken) {
+          setSubscriber(null);
+          setError(sessionExpiredMessage);
+          return;
         }
+        res = await submitListing(retriedToken);
       }
 
       if (res.ok) {

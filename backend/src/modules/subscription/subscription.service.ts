@@ -156,12 +156,17 @@ export class SubscriptionService {
       throw new UnauthorizedException('Missing authorization token');
     }
 
-    const payload = await this.jwtService.verifyAsync<SessionJwtPayload>(
-      token,
-      {
+    let payload: SessionJwtPayload;
+    try {
+      payload = await this.jwtService.verifyAsync<SessionJwtPayload>(token, {
         secret: this.configService.getOrThrow<string>('jwt.secret'),
-      },
-    );
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Rejected refresh-session token: ${error instanceof Error ? error.message : 'invalid token'}`,
+      );
+      throw new UnauthorizedException('Session expired. Please log in again.');
+    }
 
     const user = await this.resolveBridgedUserFromPayload(payload);
     if (!user || !user.isActive) {
