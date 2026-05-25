@@ -22,7 +22,7 @@ export class PropertyService {
         bedrooms: dto.bedrooms,
         bathrooms: dto.bathrooms,
         floors: dto.floors,
-        province: dto.province,
+        province: dto.province ?? '',
         district: dto.district ?? '',
         subdistrict: dto.subdistrict,
         postalCode: dto.postalCode,

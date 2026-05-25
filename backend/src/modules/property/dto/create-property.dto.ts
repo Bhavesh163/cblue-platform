@@ -68,9 +68,9 @@ export class CreatePropertyDto {
   @Min(0)
   floors?: number;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  province: string;
+  province?: string;
 
   @IsOptional()
   @IsString()

@@ -165,7 +165,9 @@ export default function PropertyRegisterPage() {
       return;
     }
 
-    if (!form.propertyType || !form.listingType || !form.title || !form.price || !form.province) {
+    if (!form.propertyType || !form.listingType || !form.title || !form.price ||
+        (locationType !== "gps" && !form.province) ||
+        (locationType === "gps" && !gpsCoords)) {
       setError(tc("error"));
       return;
     }
@@ -235,11 +237,13 @@ export default function PropertyRegisterPage() {
         bathrooms: form.bathrooms ? parseInt(form.bathrooms) : undefined,
         floors: form.floors ? parseInt(form.floors) : undefined,
         yearBuilt: form.yearBuilt ? parseInt(form.yearBuilt) : undefined,
-        province: form.province,
-        district: form.district,
-        subdistrict: form.subdistrict,
-        postalCode: form.postalCode,
+        province: form.province || undefined,
+        district: form.district || undefined,
+        subdistrict: form.subdistrict || undefined,
+        postalCode: form.postalCode || undefined,
         addressLine: addressParts || undefined,
+        latitude: gpsCoords?.lat,
+        longitude: gpsCoords?.lng,
         contactName: form.contactName,
         contactPhone: form.contactPhone,
         contactEmail: form.contactEmail,
