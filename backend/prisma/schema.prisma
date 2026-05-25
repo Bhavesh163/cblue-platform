@@ -133,6 +133,8 @@ model User {
   notifications Notification[]
   properties    Property[]
   chatMessages  OrderChatMessage[] @relation("OrderChatSender")
+  customerInquiries PropertyInquiry[] @relation("CustomerInquiries")
+  listerInquiries   PropertyInquiry[] @relation("ListerInquiries")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -446,6 +448,7 @@ model Property {
   yearBuilt   Int?
 
   images      PropertyImage[]
+  inquiries   PropertyInquiry[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -473,6 +476,50 @@ model PropertyImage {
 
   @@index([propertyId])
   @@map("property_images")
+}
+
+// ==================== PROPERTY INQUIRY ====================
+
+enum PropertyInquiryStatus {
+  NOTIFY_SENT
+  ACCEPTED
+  DECLINED
+  PAID
+  MEETING_SENT
+  MEETING_CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+model PropertyInquiry {
+  id           String                @id @default(uuid())
+  poNumber     String                @unique
+  propertyId   String
+  property     Property              @relation(fields: [propertyId], references: [id])
+  customerId   String
+  customer     User                  @relation("CustomerInquiries", fields: [customerId], references: [id])
+  listerUserId String
+  lister       User                  @relation("ListerInquiries", fields: [listerUserId], references: [id])
+  customerName  String
+  customerEmail String
+  listerName    String
+  status       PropertyInquiryStatus @default(NOTIFY_SENT)
+  step         Int                   @default(3)
+  meetingDate   String?
+  meetingTime   String?
+  meetingVenue  String?
+  customerRating   Int?
+  customerComment  String?
+  listerRating     Int?
+  listerComment    String?
+  reselectedOnce   Boolean           @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customerId])
+  @@index([listerUserId])
+  @@index([propertyId])
+  @@map("property_inquiries")
 }
 
 // ==================== SUBSCRIPTION ====================

@@ -12,6 +12,7 @@ const PROPERTY_TYPES = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "OF
 
 interface Property {
   id: string;
+  userId?: string;
   title: string;
   description: string;
   propertyType: string;
@@ -352,30 +353,22 @@ export default function PropertiesPage() {
                         : "⚠️ Contact info is revealed after paying the processing fee in your Dashboard. CBLUE is a matching platform only. Property price is agreed directly between parties."}
                     </div>
                     <button
-                      onClick={() => {
-                        const existing: unknown[] = (() => { try { return JSON.parse(localStorage.getItem("cblue_prop_inquiries") || "[]"); } catch { return []; } })();
-                        existing.push({
-                          id: poNumber,
-                          poNumber,
-                          propertyId: showContactFlow.id,
-                          propertyTitle: showContactFlow.title,
-                          propertyTier: propTier,
-                          propertyFee: fee,
-                          propertyType: showContactFlow.propertyType,
-                          listingType: showContactFlow.listingType,
-                          propertyPrice: showContactFlow.price,
-                          province: showContactFlow.province,
-                          district: showContactFlow.district,
-                          customerEmail: subscriber?.email || "",
-                          customerName: subscriber?.name || "",
-                          listerName: showContactFlow.contactName || showContactFlow.title,
-                          status: "NOTIFY_SENT",
-                          step: 3,
-                          createdAt: Date.now(),
-                          updatedAt: Date.now(),
-                        });
-                        localStorage.setItem("cblue_prop_inquiries", JSON.stringify(existing));
-                        window.dispatchEvent(new Event("storage"));
+                      onClick={async () => {
+                        try {
+                          const token = localStorage.getItem("subscriber_token") || "";
+                          await fetch("/api/v1/property-inquiries", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                            body: JSON.stringify({
+                              poNumber,
+                              propertyId: showContactFlow.id,
+                              listerUserId: showContactFlow.userId || "",
+                              customerName: subscriber?.name || "",
+                              customerEmail: subscriber?.email || "",
+                              listerName: showContactFlow.contactName || showContactFlow.title,
+                            }),
+                          });
+                        } catch {}
                         setContactStep("notify");
                         setTimeout(() => setContactStep("done"), 3000);
                       }}

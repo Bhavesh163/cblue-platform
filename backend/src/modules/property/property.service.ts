@@ -1,4 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreatePropertyDto } from './dto/create-property.dto';
 import { SearchPropertyDto } from './dto/search-property.dto';
@@ -9,6 +13,16 @@ export class PropertyService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(userId: string, dto: CreatePropertyDto) {
+    // Verify the user exists before attempting insert (prevents FK constraint 500)
+    const userExists = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+    if (!userExists) {
+      throw new NotFoundException(
+        'User account not found. Please log out and log in again.',
+      );
+    }
     const property = await this.prisma.property.create({
       data: {
         userId,

@@ -1046,16 +1046,35 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
   // Load property inquiries for this customer (not ghis-gated — works for all logged-in users)
   useEffect(() => {
-    function loadPropInquiries() {
+    const TIER_FEES: Record<string, number> = { ECONOMY: 100, STANDARD: 400, UPPER: 600, LUXURY: 800, GRANDEUR: 1000 };
+    function mapApiInquiry(api: any): PropInquiry {
+      return {
+        id: api.id, poNumber: api.poNumber, propertyId: api.propertyId,
+        propertyTitle: api.property?.title || '', propertyTier: api.property?.tier || 'STANDARD',
+        propertyFee: TIER_FEES[api.property?.tier || 'STANDARD'] ?? 400,
+        propertyType: api.property?.propertyType || '', listingType: api.property?.listingType || '',
+        propertyPrice: api.property?.price || 0, province: api.property?.province || '',
+        district: api.property?.district || '', customerEmail: api.customerEmail,
+        customerName: api.customerName, listerName: api.listerName, status: api.status, step: api.step,
+        createdAt: new Date(api.createdAt).getTime(), updatedAt: new Date(api.updatedAt).getTime(),
+        meetingDate: api.meetingDate, meetingTime: api.meetingTime, meetingVenue: api.meetingVenue,
+        customerRating: api.customerRating, customerComment: api.customerComment,
+        listerRating: api.listerRating, listerComment: api.listerComment, reselectedOnce: api.reselectedOnce,
+      };
+    }
+    async function loadPropInquiries() {
       try {
-        const all: PropInquiry[] = JSON.parse(localStorage.getItem("cblue_prop_inquiries") || "[]");
-        const email = subscriber?.email || "";
-        setPropInquiries(email ? all.filter((p: PropInquiry) => p.customerEmail === email) : []);
+        const token = localStorage.getItem("subscriber_token") || "";
+        if (!token) { setPropInquiries([]); return; }
+        const res = await fetch("/api/v1/property-inquiries/customer", { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok) { setPropInquiries([]); return; }
+        const data = await res.json();
+        setPropInquiries(Array.isArray(data) ? data.map(mapApiInquiry) : []);
       } catch { setPropInquiries([]); }
     }
     loadPropInquiries();
-    window.addEventListener("storage", loadPropInquiries);
-    return () => window.removeEventListener("storage", loadPropInquiries);
+    const timer = setInterval(loadPropInquiries, 10000);
+    return () => clearInterval(timer);
   }, [subscriber]);
 
   const buildChatFeed = () => {
@@ -1959,12 +1978,17 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     );
   };
 
-  const savePropInquiries = (updated: PropInquiry[]) => {
+  const updatePropInquiry = async (id: string, update: Partial<PropInquiry>) => {
     try {
-      const all: PropInquiry[] = JSON.parse(localStorage.getItem("cblue_prop_inquiries") || "[]");
-      const merged = all.map((p: PropInquiry) => updated.find((u: PropInquiry) => u.id === p.id) || p);
-      localStorage.setItem("cblue_prop_inquiries", JSON.stringify(merged));
-      window.dispatchEvent(new Event("storage"));
+      const token = localStorage.getItem("subscriber_token") || "";
+      const res = await fetch(`/api/v1/property-inquiries/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(update),
+      });
+      if (res.ok) {
+        setPropInquiries(prev => prev.map(p => p.id === id ? { ...p, ...update, updatedAt: Date.now() } : p));
+      }
     } catch {}
   };
 
@@ -1985,14 +2009,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             {!p.reselectedOnce && (
               <button
                 className="flex-1 sm:flex-none px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition whitespace-nowrap"
-                onClick={() => {
+                onClick={async () => {
                   if (!confirm(locale === "th" ? "ยืนยันการเลือกผู้ลงประกาศใหม่? คำขอนี้จะถูกยกเลิก" : "Reselect a different property? This inquiry will be cancelled.")) return;
-                  try {
-                    const all: PropInquiry[] = JSON.parse(localStorage.getItem("cblue_prop_inquiries") || "[]");
-                    const merged = all.map((x: PropInquiry) => x.id === p.id ? { ...x, status: "CANCELLED", reselectedOnce: true, updatedAt: Date.now() } : x);
-                    localStorage.setItem("cblue_prop_inquiries", JSON.stringify(merged));
-                    window.dispatchEvent(new Event("storage"));
-                  } catch {}
+                  await updatePropInquiry(p.id, { status: "CANCELLED", reselectedOnce: true });
                 }}
               >
                 {locale === "th" ? "🔄 เลือกใหม่" : locale === "zh" ? "🔄 重新选择" : "🔄 Reselect"}
@@ -2283,7 +2302,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           </div>
           {/* Property Inquiry History */}
           {(() => {
-            const propHist: any[] = (() => { try { return JSON.parse(localStorage.getItem("prop_inquiry_history") || "[]"); } catch { return []; } })();
+            const propHist = propInquiries.filter(p => p.status === "COMPLETED");
             if (propHist.length === 0) return null;
             return (
               <div className="mt-2 border-t border-gray-100">
@@ -2299,7 +2318,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                         <p className="text-xs text-gray-500 mt-0.5">{p.province} · {p.listerName}</p>
                         <p className="text-xs text-emerald-600 font-semibold mt-0.5">
                           ✅ {locale === "th" ? "ปิดงานแล้ว" : "Completed"} · ⭐ {p.customerRating ?? "-"}/5
-                          {p.completedAt ? ` · ${new Date(p.completedAt).toLocaleDateString()}` : ""}
+                          {p.updatedAt ? ` · ${new Date(p.updatedAt).toLocaleDateString()}` : ""}
                         </p>
                       </div>
                       <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-full">{locale === "th" ? "สำเร็จ" : "Done"}</span>
@@ -2535,20 +2554,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 </button>
                 <button
                   className="flex-1 py-2.5 bg-green-700 text-white rounded-xl font-bold text-sm hover:bg-green-800 transition"
-                  onClick={() => {
-                    try {
-                      const all: PropInquiry[] = JSON.parse(localStorage.getItem("cblue_prop_inquiries") || "[]");
-                      const merged = all.map((p: PropInquiry) => p.id === propPayModal.id ? { ...p, status: "PAID", step: 5, updatedAt: Date.now() } : p);
-                      localStorage.setItem("cblue_prop_inquiries", JSON.stringify(merged));
-                      // Create prop chat room with CBLUE system welcome message
-                      const chatKey = `chat_messages_${propPayModal.poNumber}`;
-                      const existingChat = (() => { try { return JSON.parse(localStorage.getItem(chatKey) || "[]"); } catch { return []; } })();
-                      if (existingChat.length === 0) {
-                        const sysMsg = { id: `sys-prop-${Date.now()}`, sender: "system", text: locale === "th" ? `🏠 CBLUE สร้างห้องแชทสำหรับ ${propPayModal.propertyTitle} (${propPayModal.poNumber}) — กรุณาสนทนาเพื่อนัดหมายเยี่ยมชมทรัพย์สิน และดำเนินการส่งคำเชิญนัดหมายที่แท็บ Requests` : `🏠 CBLUE created a chat room for ${propPayModal.propertyTitle} (${propPayModal.poNumber}). Please use this chat to coordinate, and proceed to send a site meeting invitation from your Requests tab.`, time: new Date().toLocaleTimeString() };
-                        localStorage.setItem(chatKey, JSON.stringify([sysMsg]));
-                      }
-                      window.dispatchEvent(new Event("storage"));
-                    } catch {}
+                  onClick={async () => {
+                    await updatePropInquiry(propPayModal.id, { status: "PAID", step: 5 });
                     setPropPayModal(null);
                   }}
                 >
@@ -2598,13 +2605,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 <button
                   disabled={!propMeetingDate || !propMeetingTime || !propMeetingVenue}
                   className="flex-1 py-2.5 bg-teal-600 text-white rounded-xl font-bold text-sm hover:bg-teal-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={() => {
-                    try {
-                      const all: PropInquiry[] = JSON.parse(localStorage.getItem("cblue_prop_inquiries") || "[]");
-                      const merged = all.map((p: PropInquiry) => p.id === propMeetingModal!.id ? { ...p, status: "MEETING_SENT", step: 7, meetingDate: propMeetingDate, meetingTime: propMeetingTime, meetingVenue: propMeetingVenue, updatedAt: Date.now() } : p);
-                      localStorage.setItem("cblue_prop_inquiries", JSON.stringify(merged));
-                      window.dispatchEvent(new Event("storage"));
-                    } catch {}
+                  onClick={async () => {
+                    await updatePropInquiry(propMeetingModal!.id, { status: "MEETING_SENT", step: 7, meetingDate: propMeetingDate, meetingTime: propMeetingTime, meetingVenue: propMeetingVenue });
                     setPropMeetingModal(null);
                   }}
                 >
@@ -2645,20 +2647,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 <button
                   disabled={propRateStars === 0}
                   className="flex-1 py-2.5 bg-yellow-500 text-white rounded-xl font-bold text-sm hover:bg-yellow-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={() => {
-                    try {
-                      const all: PropInquiry[] = JSON.parse(localStorage.getItem("cblue_prop_inquiries") || "[]");
-                      const ratedItem = all.find((p: PropInquiry) => p.id === propRateModal!.id);
-                      const merged = all.map((p: PropInquiry) => p.id === propRateModal!.id ? { ...p, status: "RATED", step: 8, customerRating: propRateStars, customerComment: propRateComment, updatedAt: Date.now() } : p);
-                      localStorage.setItem("cblue_prop_inquiries", JSON.stringify(merged));
-                      // Save to prop inquiry history
-                      if (ratedItem) {
-                        const hist: any[] = (() => { try { return JSON.parse(localStorage.getItem("prop_inquiry_history") || "[]"); } catch { return []; } })();
-                        hist.push({ ...ratedItem, status: "RATED", customerRating: propRateStars, customerComment: propRateComment, completedAt: Date.now() });
-                        localStorage.setItem("prop_inquiry_history", JSON.stringify(hist));
-                      }
-                      window.dispatchEvent(new Event("storage"));
-                    } catch {}
+                  onClick={async () => {
+                    await updatePropInquiry(propRateModal!.id, { status: "COMPLETED", step: 8, customerRating: propRateStars, customerComment: propRateComment });
                     setPropRateModal(null);
                     alert(locale === "th" ? "⭐ ขอบคุณ! งานนี้ปิดแล้วและย้ายไปประวัติ" : "⭐ Thank you! This inquiry has been closed and moved to history.");
                   }}

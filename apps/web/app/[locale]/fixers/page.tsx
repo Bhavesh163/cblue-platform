@@ -627,16 +627,50 @@ export default function FixerProPage() {
 
   // Poll property inquiries addressed to this lister (NOTIFY_SENT = step 4 accept, PAID = step 5-6 chat, MEETING_SENT = step 7 confirm, MEETING_CONFIRMED = step 8 rate)
   useEffect(() => {
-    function loadProps() {
+    const TIER_FEES: Record<string, number> = { ECONOMY: 100, STANDARD: 400, UPPER: 600, LUXURY: 800, GRANDEUR: 1000 };
+    function mapApiInquiry(api: any): PropInquiry {
+      return {
+        id: api.id, poNumber: api.poNumber, propertyId: api.propertyId,
+        propertyTitle: api.property?.title || '', propertyTier: api.property?.tier || 'STANDARD',
+        propertyFee: TIER_FEES[api.property?.tier || 'STANDARD'] ?? 400,
+        propertyType: api.property?.propertyType || '', listingType: api.property?.listingType || '',
+        propertyPrice: api.property?.price || 0, province: api.property?.province || '',
+        district: api.property?.district || '', customerEmail: api.customerEmail,
+        customerName: api.customerName, listerName: api.listerName, status: api.status, step: api.step,
+        createdAt: new Date(api.createdAt).getTime(), updatedAt: new Date(api.updatedAt).getTime(),
+        meetingDate: api.meetingDate, meetingTime: api.meetingTime, meetingVenue: api.meetingVenue,
+        customerRating: api.customerRating, customerComment: api.customerComment,
+        listerRating: api.listerRating, listerComment: api.listerComment, reselectedOnce: api.reselectedOnce,
+      };
+    }
+    async function loadProps() {
       try {
-        const all: PropInquiry[] = JSON.parse(localStorage.getItem("cblue_prop_inquiries") || "[]");
-        setPropInquiries(all.filter((p: PropInquiry) => ["NOTIFY_SENT", "PAID", "MEETING_SENT", "MEETING_CONFIRMED"].includes(p.status)));
+        const token = localStorage.getItem("subscriber_token") || "";
+        if (!token) { setPropInquiries([]); return; }
+        const res = await fetch("/api/v1/property-inquiries/lister", { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok) { setPropInquiries([]); return; }
+        const data = await res.json();
+        setPropInquiries(Array.isArray(data) ? data.map(mapApiInquiry).filter((p: PropInquiry) => ["NOTIFY_SENT", "PAID", "MEETING_SENT", "MEETING_CONFIRMED"].includes(p.status)) : []);
       } catch { setPropInquiries([]); }
     }
     loadProps();
-    const id = setInterval(loadProps, 1000);
+    const id = setInterval(loadProps, 10000);
     return () => clearInterval(id);
   }, []);
+
+  const updatePropInquiry = async (id: string, update: Partial<PropInquiry>) => {
+    try {
+      const token = localStorage.getItem("subscriber_token") || "";
+      const res = await fetch(`/api/v1/property-inquiries/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(update),
+      });
+      if (res.ok) {
+        setPropInquiries(prev => prev.map(p => p.id === id ? { ...p, ...update, updatedAt: Date.now() } : p));
+      }
+    } catch {}
+  };
 
   const isSubscribed = !!partner;
 
@@ -1489,13 +1523,8 @@ export default function FixerProPage() {
               <p className="text-xs text-gray-500">{locale === "th" ? "หลังยืนยัน ลูกค้าจะชำระค่าดำเนินการและได้รับข้อมูลติดต่อของคุณ" : "After acceptance, the customer pays the processing fee and receives your contact info."}</p>
               <div className="flex gap-3">
                 <button
-                  onClick={() => {
-                    try {
-                      const all: PropInquiry[] = JSON.parse(localStorage.getItem("cblue_prop_inquiries") || "[]");
-                      const merged = all.map((p: PropInquiry) => p.id === propAcceptModal!.id ? { ...p, status: "DECLINED", updatedAt: Date.now() } : p);
-                      localStorage.setItem("cblue_prop_inquiries", JSON.stringify(merged));
-                      window.dispatchEvent(new Event("storage"));
-                    } catch {}
+                  onClick={async () => {
+                    await updatePropInquiry(propAcceptModal!.id, { status: "DECLINED" });
                     setPropAcceptModal(null);
                   }}
                   className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl font-semibold text-sm"
@@ -1503,13 +1532,8 @@ export default function FixerProPage() {
                   {locale === "th" ? "ปฏิเสธ" : "Decline"}
                 </button>
                 <button
-                  onClick={() => {
-                    try {
-                      const all: PropInquiry[] = JSON.parse(localStorage.getItem("cblue_prop_inquiries") || "[]");
-                      const merged = all.map((p: PropInquiry) => p.id === propAcceptModal!.id ? { ...p, status: "PARTNER_ACCEPTED", step: 4, updatedAt: Date.now() } : p);
-                      localStorage.setItem("cblue_prop_inquiries", JSON.stringify(merged));
-                      window.dispatchEvent(new Event("storage"));
-                    } catch {}
+                  onClick={async () => {
+                    await updatePropInquiry(propAcceptModal!.id, { status: "PARTNER_ACCEPTED", step: 4 });
                     setPropAcceptModal(null);
                     alert(locale === "th" ? "✅ ยืนยันแล้ว! คำขอนี้จะหายไปจากรายการ ลูกค้าจะดำเนินการชำระเงิน" : "✅ Accepted! This inquiry will disappear from your list. The customer will proceed to pay the fee.");
                   }}
@@ -1550,13 +1574,8 @@ export default function FixerProPage() {
                   {locale === "th" ? "ยกเลิก" : "Cancel"}
                 </button>
                 <button
-                  onClick={() => {
-                    try {
-                      const all: PropInquiry[] = JSON.parse(localStorage.getItem("cblue_prop_inquiries") || "[]");
-                      const merged = all.map((p: PropInquiry) => p.id === propMeetingConfirmModal!.id ? { ...p, status: "MEETING_CONFIRMED", step: 7, updatedAt: Date.now() } : p);
-                      localStorage.setItem("cblue_prop_inquiries", JSON.stringify(merged));
-                      window.dispatchEvent(new Event("storage"));
-                    } catch {}
+                  onClick={async () => {
+                    await updatePropInquiry(propMeetingConfirmModal!.id, { status: "MEETING_CONFIRMED", step: 7 });
                     setPropMeetingConfirmModal(null);
                     alert(locale === "th" ? "✅ ยืนยันนัดหมายแล้ว! การนัดหมายจะปรากฏในปฏิทิน" : "✅ Meeting confirmed! It will appear in upcoming meetings for both parties.");
                   }}
@@ -1599,13 +1618,8 @@ export default function FixerProPage() {
                 <button
                   disabled={propPartnerRateStars === 0}
                   className="flex-1 py-2.5 bg-yellow-500 text-white rounded-xl font-bold text-sm hover:bg-yellow-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={() => {
-                    try {
-                      const all: PropInquiry[] = JSON.parse(localStorage.getItem("cblue_prop_inquiries") || "[]");
-                      const merged = all.map((p: PropInquiry) => p.id === propPartnerRateModal!.id ? { ...p, listerRating: propPartnerRateStars, listerComment: propPartnerRateComment, updatedAt: Date.now() } : p);
-                      localStorage.setItem("cblue_prop_inquiries", JSON.stringify(merged));
-                      window.dispatchEvent(new Event("storage"));
-                    } catch {}
+                  onClick={async () => {
+                    await updatePropInquiry(propPartnerRateModal!.id, { listerRating: propPartnerRateStars, listerComment: propPartnerRateComment });
                     setPropPartnerRateModal(null);
                     alert(locale === "th" ? "⭐ ขอบคุณ! ส่งคะแนนแล้ว คำขอนี้จะหายไปจากรายการ" : "⭐ Thank you! Rating submitted. This request will disappear from your list.");
                   }}
