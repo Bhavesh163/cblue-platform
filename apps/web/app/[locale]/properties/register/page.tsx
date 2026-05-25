@@ -275,7 +275,11 @@ export default function PropertyRegisterPage() {
       if (res.ok) {
         setSubmitted(true);
       } else {
-        setError(tb("submitError"));
+        const errData = await res.json().catch(() => null);
+        const msg = errData?.message;
+        if (Array.isArray(msg)) setError(msg.join(", "));
+        else if (typeof msg === "string" && msg) setError(msg);
+        else setError(tb("submitError"));
       }
     } catch {
       setError(tb("submitError"));

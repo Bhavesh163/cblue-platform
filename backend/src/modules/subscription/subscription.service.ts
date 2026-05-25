@@ -324,6 +324,7 @@ export class SubscriptionService {
               </div>
             </div>
           `,
+          TextPart: `Hello ${name},\n\nWe received a request to reset your password for your CBLUE account.\n\nClick the link below to reset your password (valid for 1 hour):\n${resetUrl}\n\nIf you did not request this, please ignore this email.\n\n© ${new Date().getFullYear()} Construction Blue Co., Ltd. All rights reserved.`,
         },
       ],
     };

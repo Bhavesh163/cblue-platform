@@ -154,7 +154,7 @@ export default function PropertiesPage() {
     return `PRE-${yy}${mm}-${seq}`;
   }
 
-  const TIER_FEES: Record<string, number> = { ECONOMY: 200, STANDARD: 400, UPPER: 600, LUXURY: 800, GRANDEUR: 1000 };
+  const TIER_FEES: Record<string, number> = { ECONOMY: 100, STANDARD: 400, UPPER: 600, LUXURY: 800, GRANDEUR: 1000 };
   const TIER_LABELS: Record<string, string> = { ECONOMY: "Economy", STANDARD: "Standard", UPPER: "Upper", LUXURY: "Luxury", GRANDEUR: "Grandeur" };
 
 
