@@ -273,7 +273,7 @@ export class SubscriptionService {
             Name: 'CBLUE',
           },
           To: [{ Email: email, Name: name }],
-          Subject: 'CBLUE - Password Reset / รีเซ็ตรหัสผ่าน / 重置密码',
+          Subject: 'Reset your CBLUE password',
           HTMLPart: `
             <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f7f6; padding: 40px 0; min-height: 100vh;">
               <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.08);">

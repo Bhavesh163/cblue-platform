@@ -69,7 +69,14 @@ export default function ForgotPasswordPage() {
             </svg>
           </div>
           <h2 className="text-xl font-bold text-gray-900 mb-2">{t("resetSent")}</h2>
-          <p className="text-sm text-gray-500 mb-6">{t("resetSentDesc")}</p>
+          <p className="text-sm text-gray-500 mb-3">{t("resetSentDesc")}</p>
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 mb-6 text-left">
+            {locale === "th"
+              ? "📬 ไม่พบอีเมล? กรุณาตรวจสอบโฟลเดอร์ Spam, Junk, Promotions, Bulk หรือ Updates ในกล่องจดหมายของคุณ"
+              : locale === "zh"
+              ? "📬 找不到邮件？请检查垃圾邮件、促销或批量邮件文件夹。"
+              : "📬 Can't find it? Check your Spam, Junk, Promotions, Bulk, or Updates folder."}
+          </div>
           <Link href={`${prefix}/subscription/login`} className="text-blue-600 hover:underline text-sm">
             {t("backToLogin")}
           </Link>
