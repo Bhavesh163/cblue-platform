@@ -21,6 +21,14 @@ type SessionJwtPayload = {
   phone?: string;
 };
 
+type BridgeSubscriber = {
+  id: string;
+  email: string;
+  phone: string;
+  name: string;
+  company: string | null;
+};
+
 @Injectable()
 export class SubscriptionService {
   private readonly logger = new Logger(SubscriptionService.name);
@@ -83,7 +91,11 @@ export class SubscriptionService {
       return { subscriber, user };
     });
 
-    const token = await this.generateToken(user.id, subscriber.email);
+    const token = await this.generateToken(
+      user.id,
+      subscriber.email,
+      subscriber.phone,
+    );
 
     return {
       accessToken: token,
@@ -118,23 +130,16 @@ export class SubscriptionService {
     }
 
     // Bridge: find or create User record for this subscriber
-    let user = await this.prisma.user.findFirst({
-      where: { subscriberId: subscriber.id },
-    });
+    const user = await this.ensureUserBridge(subscriber);
     if (!user) {
-      // Legacy subscriber without a User — create one
-      user = await this.prisma.user.create({
-        data: {
-          email: subscriber.email,
-          name: subscriber.name,
-          company: subscriber.company,
-          subscriberId: subscriber.id,
-          role: 'USER',
-        },
-      });
+      throw new UnauthorizedException('Could not resolve your account session');
     }
 
-    const token = await this.generateToken(user.id, subscriber.email);
+    const token = await this.generateToken(
+      user.id,
+      subscriber.email,
+      subscriber.phone,
+    );
 
     return {
       accessToken: token,
@@ -185,7 +190,11 @@ export class SubscriptionService {
       });
     }
 
-    const accessToken = await this.generateToken(user.id, subscriber.email);
+    const accessToken = await this.generateToken(
+      user.id,
+      subscriber.email,
+      subscriber.phone,
+    );
     return {
       accessToken,
       subscriber: {
@@ -289,14 +298,135 @@ export class SubscriptionService {
     });
   }
 
-  private async generateToken(userId: string, email: string) {
+  private async generateToken(
+    userId: string,
+    email: string,
+    phone?: string | null,
+  ) {
     return this.jwtService.signAsync(
-      { sub: userId, email },
+      { sub: userId, email, phone: phone || undefined },
       {
         secret: this.configService.getOrThrow<string>('jwt.secret'),
         expiresIn: '24h',
       },
     );
+  }
+
+  private async findSubscriberByIdentity(
+    email?: string | null,
+    phone?: string | null,
+  ) {
+    const normalizedEmail = email?.trim().toLowerCase() || '';
+    if (normalizedEmail) {
+      const byEmail = await this.prisma.subscriber.findUnique({
+        where: { email: normalizedEmail },
+      });
+      if (byEmail) return byEmail;
+    }
+
+    const normalizedPhone = phone?.trim() || '';
+    if (!normalizedPhone) return null;
+
+    return this.prisma.subscriber.findFirst({
+      where: { phone: normalizedPhone },
+    });
+  }
+
+  private async findCanonicalUserForSubscriber(
+    subscriber: BridgeSubscriber,
+    preferredUserId?: string | null,
+  ) {
+    const normalizedEmail = subscriber.email.trim().toLowerCase();
+    const normalizedPhone = subscriber.phone?.trim() || '';
+
+    if (preferredUserId) {
+      const preferred = await this.prisma.user.findUnique({
+        where: { id: preferredUserId },
+      });
+      if (
+        preferred &&
+        (preferred.subscriberId === subscriber.id ||
+          preferred.email?.trim().toLowerCase() === normalizedEmail ||
+          (!!normalizedPhone && preferred.phone === normalizedPhone))
+      ) {
+        return preferred;
+      }
+    }
+
+    const bySubscriberId = await this.prisma.user.findUnique({
+      where: { subscriberId: subscriber.id },
+    });
+    if (bySubscriberId) return bySubscriberId;
+
+    const byEmail = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
+    if (byEmail) return byEmail;
+
+    if (!normalizedPhone) return null;
+
+    return this.prisma.user.findUnique({
+      where: { phone: normalizedPhone },
+    });
+  }
+
+  private async ensureUserBridge(
+    subscriber: BridgeSubscriber,
+    preferredUserId?: string | null,
+  ) {
+    let user = await this.findCanonicalUserForSubscriber(
+      subscriber,
+      preferredUserId,
+    );
+
+    if (!user) {
+      try {
+        user = await this.prisma.user.create({
+          data: {
+            email: subscriber.email,
+            phone: subscriber.phone || undefined,
+            name: subscriber.name,
+            company: subscriber.company,
+            subscriberId: subscriber.id,
+            role: 'USER',
+          },
+        });
+      } catch (error) {
+        this.logger.warn(
+          `User bridge create retry for subscriber ${subscriber.id}: ${error instanceof Error ? error.message : 'unknown error'}`,
+        );
+        user = await this.findCanonicalUserForSubscriber(
+          subscriber,
+          preferredUserId,
+        );
+      }
+    }
+
+    if (!user) return null;
+    if (user.subscriberId === subscriber.id) return user;
+
+    const bySubscriberId = await this.prisma.user.findUnique({
+      where: { subscriberId: subscriber.id },
+    });
+    if (bySubscriberId) return bySubscriberId;
+
+    try {
+      return await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          subscriberId: subscriber.id,
+          email: user.email || subscriber.email,
+          phone: user.phone || subscriber.phone || undefined,
+          name: user.name || subscriber.name,
+          company: user.company || subscriber.company,
+        },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `User bridge update retry for subscriber ${subscriber.id}: ${error instanceof Error ? error.message : 'unknown error'}`,
+      );
+      return this.findCanonicalUserForSubscriber(subscriber, preferredUserId);
+    }
   }
 
   private async resolveBridgedUserFromPayload(payload: SessionJwtPayload) {
@@ -307,50 +437,13 @@ export class SubscriptionService {
       if (byId) return byId;
     }
 
-    const normalizedEmail = payload.email?.trim().toLowerCase() || '';
-    const normalizedPhone = payload.phone?.trim() || '';
+    const subscriber = await this.findSubscriberByIdentity(
+      payload.email,
+      payload.phone,
+    );
+    if (!subscriber) return null;
 
-    let subscriber = normalizedEmail
-      ? await this.prisma.subscriber.findUnique({
-          where: { email: normalizedEmail },
-        })
-      : null;
-
-    if (!subscriber && normalizedPhone) {
-      subscriber = await this.prisma.subscriber.findFirst({
-        where: { phone: normalizedPhone },
-      });
-    }
-
-    const userSearch: Array<Record<string, string>> = [];
-    if (subscriber?.id) userSearch.push({ subscriberId: subscriber.id });
-    if (normalizedEmail) userSearch.push({ email: normalizedEmail });
-    if (normalizedPhone) userSearch.push({ phone: normalizedPhone });
-    if (userSearch.length === 0) return null;
-
-    let user = await this.prisma.user.findFirst({
-      where: { OR: userSearch },
-    });
-
-    if (!user && subscriber) {
-      user = await this.prisma.user.create({
-        data: {
-          email: subscriber.email,
-          phone: subscriber.phone || undefined,
-          name: subscriber.name,
-          company: subscriber.company,
-          subscriberId: subscriber.id,
-          role: 'USER',
-        },
-      });
-    } else if (user && subscriber && user.subscriberId !== subscriber.id) {
-      user = await this.prisma.user.update({
-        where: { id: user.id },
-        data: { subscriberId: subscriber.id },
-      });
-    }
-
-    return user;
+    return this.ensureUserBridge(subscriber, payload.sub);
   }
 
   private async resolveSubscriberForUser(
@@ -369,20 +462,10 @@ export class SubscriptionService {
       if (byId) return byId;
     }
 
-    const email = user.email || payload.email?.trim().toLowerCase() || '';
-    if (email) {
-      const byEmail = await this.prisma.subscriber.findUnique({
-        where: { email },
-      });
-      if (byEmail) return byEmail;
-    }
-
-    const phone = user.phone || payload.phone?.trim() || '';
-    if (phone) {
-      return this.prisma.subscriber.findFirst({ where: { phone } });
-    }
-
-    return null;
+    return this.findSubscriberByIdentity(
+      user.email || payload.email,
+      user.phone || payload.phone,
+    );
   }
 
   private async sendResetEmail(
