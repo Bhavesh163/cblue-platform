@@ -2,6 +2,8 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  InternalServerErrorException,
+  HttpException,
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -16,17 +18,17 @@ export class PropertyService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(userId: string, dto: CreatePropertyDto) {
-    // Verify the user exists before attempting insert (prevents FK constraint 500)
-    const userExists = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true },
-    });
-    if (!userExists) {
-      throw new NotFoundException(
-        'User account not found. Please log out and log in again.',
-      );
-    }
     try {
+      // Verify the user exists before attempting insert (prevents FK constraint 500)
+      const userExists = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true },
+      });
+      if (!userExists) {
+        throw new NotFoundException(
+          'User account not found. Please log out and log in again.',
+        );
+      }
       const property = await this.prisma.property.create({
         data: {
           userId,
@@ -74,16 +76,21 @@ export class PropertyService {
 
       return property;
     } catch (err) {
+      // Re-throw HttpExceptions (NotFoundException, etc.) as-is
+      if (err instanceof HttpException) throw err;
+
       if (err instanceof Prisma.PrismaClientKnownRequestError) {
         this.logger.error(
-          `Prisma error creating property for user ${userId}: ${err.code} ${err.message}`,
+          `Prisma known error [${err.code}] creating property for user ${userId}: ${err.message}`,
         );
         if (err.code === 'P2003') {
           throw new BadRequestException(
             'Invalid user reference. Please log out and log in again.',
           );
         }
-        throw new BadRequestException(`Database error: ${err.code}`);
+        throw new BadRequestException(
+          `Database error [${err.code}]. Please try again or contact support.`,
+        );
       }
       if (err instanceof Prisma.PrismaClientValidationError) {
         this.logger.error(
@@ -93,8 +100,15 @@ export class PropertyService {
           'Invalid property data. Please check all fields and try again.',
         );
       }
-      // Re-throw HttpExceptions (NotFoundException, etc.) as-is
-      throw err;
+      // Any other unexpected error — log with type so we can diagnose from user reports
+      const errType = err instanceof Error ? err.constructor.name : typeof err;
+      const errMsg = err instanceof Error ? err.message : String(err);
+      this.logger.error(
+        `Unexpected error [${errType}] creating property for user ${userId}: ${errMsg}`,
+      );
+      throw new InternalServerErrorException(
+        `Property creation failed [${errType}]. Please try again or contact support.`,
+      );
     }
   }
 
