@@ -96,11 +96,7 @@ export class PropertyInquiryService {
     });
   }
 
-  async update(
-    id: string,
-    userId: string,
-    dto: UpdatePropertyInquiryDto,
-  ) {
+  async update(id: string, userId: string, dto: UpdatePropertyInquiryDto) {
     const inquiry = await this.prisma.propertyInquiry.findUnique({
       where: { id },
     });
