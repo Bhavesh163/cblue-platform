@@ -624,7 +624,13 @@ export class SubscriptionService {
 
       if (!response.ok) {
         apiError = await response.text();
-        this.logger.error(`Mailjet API error: ${apiError}`);
+        this.logger.error(`Mailjet API error [${response.status}]: ${apiError}`);
+        // Check for common Mailjet errors
+        if (apiError.toLowerCase().includes('inactive') || apiError.toLowerCase().includes('sender')) {
+          this.logger.warn(
+            `⚠️ Mailjet sender '${fromEmail}' may be inactive. Check Mailjet dashboard to activate this sender.`,
+          );
+        }
       } else {
         this.logger.log(
           `Password reset email sent to ${email} via Mailjet API`,

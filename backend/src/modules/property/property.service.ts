@@ -23,7 +23,17 @@ export class PropertyService {
   ) {
     let userId = currentUser?.id?.trim() || '';
     try {
-      userId = (await this.resolveCreateUserId(currentUser, dto)) || '';
+      try {
+        userId = (await this.resolveCreateUserId(currentUser, dto)) || '';
+      } catch (resolveError) {
+        this.logger.error(
+          `Error resolving user ID for property create: ${resolveError instanceof Error ? resolveError.message : String(resolveError)}`,
+          resolveError instanceof Error ? resolveError.stack : undefined,
+        );
+        throw new BadRequestException(
+          'Could not resolve your account. Please log out and log in again.',
+        );
+      }
       if (!userId) {
         throw new NotFoundException(
           'User account not found. Please log out and log in again.',
@@ -141,9 +151,23 @@ export class PropertyService {
       return currentUserId || null;
     }
 
-    let subscriber = contactEmail
-      ? await this.prisma.subscriber.findUnique({
-          where: { email: contactEmail },
+    try {
+      let subscriber = contactEmail
+        ? await this.prisma.subscriber.findUnique({
+            where: { email: contactEmail },
+            select: {
+              id: true,
+              email: true,
+              phone: true,
+              name: true,
+              company: true,
+            },
+          })
+        : null;
+
+      if (!subscriber && contactPhone) {
+        const phoneMatches = await this.prisma.subscriber.findMany({
+          where: { phone: contactPhone },
           select: {
             id: true,
             email: true,
@@ -151,51 +175,25 @@ export class PropertyService {
             name: true,
             company: true,
           },
-        })
-      : null;
+          take: 2,
+        });
 
-    if (!subscriber && contactPhone) {
-      const phoneMatches = await this.prisma.subscriber.findMany({
-        where: { phone: contactPhone },
-        select: {
-          id: true,
-          email: true,
-          phone: true,
-          name: true,
-          company: true,
-        },
-        take: 2,
-      });
+        if (phoneMatches.length > 1) {
+          this.logger.warn(
+            `Property create found ambiguous subscriber phone match for ${contactPhone}; keeping current user bridge`,
+          );
+          return currentUserId || null;
+        }
 
-      if (phoneMatches.length > 1) {
-        this.logger.warn(
-          `Property create found ambiguous subscriber phone match for ${contactPhone}; keeping current user bridge`,
-        );
+        subscriber = phoneMatches[0] ?? null;
+      }
+
+      if (!subscriber) {
         return currentUserId || null;
       }
 
-      subscriber = phoneMatches[0] ?? null;
-    }
-
-    if (!subscriber) {
-      return currentUserId || null;
-    }
-
-    let canonicalUser = await this.prisma.user.findUnique({
-      where: { subscriberId: subscriber.id },
-      select: {
-        id: true,
-        subscriberId: true,
-        email: true,
-        phone: true,
-        name: true,
-        company: true,
-      },
-    });
-
-    if (!canonicalUser) {
-      canonicalUser = await this.prisma.user.findUnique({
-        where: { email: subscriber.email },
+      let canonicalUser = await this.prisma.user.findUnique({
+        where: { subscriberId: subscriber.id },
         select: {
           id: true,
           subscriberId: true,
@@ -205,19 +203,10 @@ export class PropertyService {
           company: true,
         },
       });
-    }
 
-    if (canonicalUser && canonicalUser.subscriberId !== subscriber.id) {
-      try {
-        canonicalUser = await this.prisma.user.update({
-          where: { id: canonicalUser.id },
-          data: {
-            subscriberId: subscriber.id,
-            email: canonicalUser.email || subscriber.email,
-            phone: canonicalUser.phone || subscriber.phone || undefined,
-            name: canonicalUser.name || subscriber.name,
-            company: canonicalUser.company || subscriber.company,
-          },
+      if (!canonicalUser) {
+        canonicalUser = await this.prisma.user.findUnique({
+          where: { email: subscriber.email },
           select: {
             id: true,
             subscriberId: true,
@@ -227,118 +216,118 @@ export class PropertyService {
             company: true,
           },
         });
-      } catch (error) {
-        this.logger.warn(
-          `Property create canonical bridge update retry for ${subscriber.email}: ${error instanceof Error ? error.message : 'unknown error'}`,
-        );
-        if (!canonicalUser.phone && subscriber.phone) {
-          try {
-            canonicalUser = await this.prisma.user.update({
-              where: { id: canonicalUser.id },
-              data: {
-                subscriberId: subscriber.id,
-                email: canonicalUser.email || subscriber.email,
-                name: canonicalUser.name || subscriber.name,
-                company: canonicalUser.company || subscriber.company,
-              },
-              select: {
-                id: true,
-                subscriberId: true,
-                email: true,
-                phone: true,
-                name: true,
-                company: true,
-              },
-            });
-          } catch (retryError) {
-            this.logger.warn(
-              `Property create canonical bridge update without phone retry for ${subscriber.email}: ${retryError instanceof Error ? retryError.message : 'unknown error'}`,
-            );
+      }
+
+      if (canonicalUser && canonicalUser.subscriberId !== subscriber.id) {
+        try {
+          canonicalUser = await this.prisma.user.update({
+            where: { id: canonicalUser.id },
+            data: {
+              subscriberId: subscriber.id,
+              email: canonicalUser.email || subscriber.email,
+              phone: canonicalUser.phone || subscriber.phone || undefined,
+              name: canonicalUser.name || subscriber.name,
+              company: canonicalUser.company || subscriber.company,
+            },
+            select: {
+              id: true,
+              subscriberId: true,
+              email: true,
+              phone: true,
+              name: true,
+              company: true,
+            },
+          });
+        } catch (error) {
+          this.logger.warn(
+            `Property create canonical bridge update retry for ${subscriber.email}: ${error instanceof Error ? error.message : 'unknown error'}`,
+          );
+          if (!canonicalUser.phone && subscriber.phone) {
+            try {
+              canonicalUser = await this.prisma.user.update({
+                where: { id: canonicalUser.id },
+                data: {
+                  subscriberId: subscriber.id,
+                  email: canonicalUser.email || subscriber.email,
+                  name: canonicalUser.name || subscriber.name,
+                  company: canonicalUser.company || subscriber.company,
+                },
+                select: {
+                  id: true,
+                  subscriberId: true,
+                  email: true,
+                  phone: true,
+                  name: true,
+                  company: true,
+                },
+              });
+            } catch (retryError) {
+              this.logger.warn(
+                `Property create canonical bridge update without phone retry for ${subscriber.email}: ${retryError instanceof Error ? retryError.message : 'unknown error'}`,
+              );
+            }
           }
         }
       }
-    }
 
-    if (!canonicalUser && currentUserId) {
-      try {
-        canonicalUser = await this.prisma.user.update({
-          where: { id: currentUserId },
-          data: {
-            subscriberId: subscriber.id,
-            email: currentEmail || subscriber.email,
-            phone: currentPhone || subscriber.phone || undefined,
-            name: subscriber.name,
-            company: subscriber.company,
-          },
-          select: {
-            id: true,
-            subscriberId: true,
-            email: true,
-            phone: true,
-            name: true,
-            company: true,
-          },
-        });
-      } catch (error) {
-        this.logger.warn(
-          `Property create bridge update retry for ${subscriber.email}: ${error instanceof Error ? error.message : 'unknown error'}`,
-        );
-        if (!currentPhone && subscriber.phone) {
-          try {
-            canonicalUser = await this.prisma.user.update({
-              where: { id: currentUserId },
-              data: {
-                subscriberId: subscriber.id,
-                email: currentEmail || subscriber.email,
-                name: subscriber.name,
-                company: subscriber.company,
-              },
-              select: {
-                id: true,
-                subscriberId: true,
-                email: true,
-                phone: true,
-                name: true,
-                company: true,
-              },
-            });
-          } catch (retryError) {
-            this.logger.warn(
-              `Property create bridge update without phone retry for ${subscriber.email}: ${retryError instanceof Error ? retryError.message : 'unknown error'}`,
-            );
+      if (!canonicalUser && currentUserId) {
+        try {
+          canonicalUser = await this.prisma.user.update({
+            where: { id: currentUserId },
+            data: {
+              subscriberId: subscriber.id,
+              email: currentEmail || subscriber.email,
+              phone: currentPhone || subscriber.phone || undefined,
+              name: subscriber.name,
+              company: subscriber.company,
+            },
+            select: {
+              id: true,
+              subscriberId: true,
+              email: true,
+              phone: true,
+              name: true,
+              company: true,
+            },
+          });
+        } catch (error) {
+          this.logger.warn(
+            `Property create bridge update retry for ${subscriber.email}: ${error instanceof Error ? error.message : 'unknown error'}`,
+          );
+          if (!currentPhone && subscriber.phone) {
+            try {
+              canonicalUser = await this.prisma.user.update({
+                where: { id: currentUserId },
+                data: {
+                  subscriberId: subscriber.id,
+                  email: currentEmail || subscriber.email,
+                  name: subscriber.name,
+                  company: subscriber.company,
+                },
+                select: {
+                  id: true,
+                  subscriberId: true,
+                  email: true,
+                  phone: true,
+                  name: true,
+                  company: true,
+                },
+              });
+            } catch (retryError) {
+              this.logger.warn(
+                `Property create bridge update without phone retry for ${subscriber.email}: ${retryError instanceof Error ? retryError.message : 'unknown error'}`,
+              );
+            }
           }
         }
       }
-    }
 
-    if (!canonicalUser) {
-      try {
-        canonicalUser = await this.prisma.user.create({
-          data: {
-            email: subscriber.email,
-            phone: subscriber.phone || undefined,
-            name: subscriber.name,
-            company: subscriber.company,
-            subscriberId: subscriber.id,
-            role: 'USER',
-          },
-          select: {
-            id: true,
-            subscriberId: true,
-            email: true,
-            phone: true,
-            name: true,
-            company: true,
-          },
-        });
-      } catch (error) {
-        this.logger.warn(
-          `Property create bridge create retry for ${subscriber.email}: ${error instanceof Error ? error.message : 'unknown error'}`,
-        );
+      if (!canonicalUser) {
         try {
           canonicalUser = await this.prisma.user.create({
             data: {
               email: subscriber.email,
+              phone: subscriber.phone || undefined,
               name: subscriber.name,
               company: subscriber.company,
               subscriberId: subscriber.id,
@@ -353,24 +342,19 @@ export class PropertyService {
               company: true,
             },
           });
-        } catch (retryError) {
+        } catch (error) {
           this.logger.warn(
-            `Property create bridge create without phone retry for ${subscriber.email}: ${retryError instanceof Error ? retryError.message : 'unknown error'}`,
+            `Property create bridge create retry for ${subscriber.email}: ${error instanceof Error ? error.message : 'unknown error'}`,
           );
-          canonicalUser = await this.prisma.user.findUnique({
-            where: { subscriberId: subscriber.id },
-            select: {
-              id: true,
-              subscriberId: true,
-              email: true,
-              phone: true,
-              name: true,
-              company: true,
-            },
-          });
-          if (!canonicalUser) {
-            canonicalUser = await this.prisma.user.findUnique({
-              where: { email: subscriber.email },
+          try {
+            canonicalUser = await this.prisma.user.create({
+              data: {
+                email: subscriber.email,
+                name: subscriber.name,
+                company: subscriber.company,
+                subscriberId: subscriber.id,
+                role: 'USER',
+              },
               select: {
                 id: true,
                 subscriberId: true,
@@ -380,18 +364,53 @@ export class PropertyService {
                 company: true,
               },
             });
+          } catch (retryError) {
+            this.logger.warn(
+              `Property create bridge create without phone retry for ${subscriber.email}: ${retryError instanceof Error ? retryError.message : 'unknown error'}`,
+            );
+            canonicalUser = await this.prisma.user.findUnique({
+              where: { subscriberId: subscriber.id },
+              select: {
+                id: true,
+                subscriberId: true,
+                email: true,
+                phone: true,
+                name: true,
+                company: true,
+              },
+            });
+            if (!canonicalUser) {
+              canonicalUser = await this.prisma.user.findUnique({
+                where: { email: subscriber.email },
+                select: {
+                  id: true,
+                  subscriberId: true,
+                  email: true,
+                  phone: true,
+                  name: true,
+                  company: true,
+                },
+              });
+            }
           }
         }
       }
-    }
 
-    if (canonicalUser && canonicalUser.id !== currentUserId) {
-      this.logger.warn(
-        `Property create canonicalized ${contactEmail || contactPhone} from user ${currentUserId || 'missing'} to ${canonicalUser.id}`,
+      if (canonicalUser && canonicalUser.id !== currentUserId) {
+        this.logger.warn(
+          `Property create canonicalized ${contactEmail || contactPhone} from user ${currentUserId || 'missing'} to ${canonicalUser.id}`,
+        );
+      }
+
+      return canonicalUser?.id || currentUserId || null;
+    } catch (error) {
+      // Final catch-all to prevent unhandled errors from causing 500
+      this.logger.error(
+        `Unexpected error in resolveCreateUserId: ${error instanceof Error ? error.message : String(error)}`,
+        error instanceof Error ? error.stack : undefined,
       );
+      return currentUserId || null;
     }
-
-    return canonicalUser?.id || currentUserId || null;
   }
 
   async search(dto: SearchPropertyDto) {

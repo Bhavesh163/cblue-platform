@@ -434,7 +434,7 @@ export default function PartnerZonePage() {
                   alert("Files attached. If the download is not available here yet, please open the chat room and download them there.");
                 }
               }}>
-                {((waitModalJob as any)?.image || ((waitModalJob as any)?.images && (waitModalJob as any)?.images.length > 0) || (waitModalJob as any)?.fileUrl || ((waitModalJob as any)?.projectImages && (waitModalJob as any)?.projectImages.length > 0) || (waitModalJob as any)?.metadata?.images || (typeof window !== 'undefined' && localStorage.getItem("jobData") && JSON.parse(localStorage.getItem("jobData") || "{}").image)) ? "1 file attached (Click to View)" : "Files attached"}
+                {((waitModalJob as any)?.image || ((waitModalJob as any)?.images && (waitModalJob as any)?.images.length > 0) || (waitModalJob as any)?.fileUrl || ((waitModalJob as any)?.projectImages && (waitModalJob as any)?.projectImages.length > 0) || (waitModalJob as any)?.metadata?.images || (typeof window !== 'undefined' && localStorage.getItem("jobData") && JSON.parse(localStorage.getItem("jobData") || "{}").image)) ? "1 file attached (Click to View)" : "No files attached"}
               </span></div>
             </div>
 

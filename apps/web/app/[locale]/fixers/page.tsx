@@ -1807,7 +1807,7 @@ export default function FixerProPage() {
               }}>
                 {waitModalAttachmentUrls.length > 0
                   ? `${waitModalAttachmentUrls.length} file${waitModalAttachmentUrls.length > 1 ? 's' : ''} attached — Click to Download`
-                  : loadingAttachments ? 'Checking files…' : 'Files attached'}
+                  : loadingAttachments ? 'Checking files…' : 'No files attached'}
               </span></div>
             </div>
 
@@ -2826,7 +2826,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                 if (variationAttachUrls.length === 0) return;
                 alert('Could not download file. Please ask the customer to share via the chat room.');
               }}>
-                {variationAttachUrls.length > 0 ? `${variationAttachUrls.length} file${variationAttachUrls.length > 1 ? 's' : ''} attached — Click to Download` : 'Files attached'}
+                {variationAttachUrls.length > 0 ? `${variationAttachUrls.length} file${variationAttachUrls.length > 1 ? 's' : ''} attached — Click to Download` : 'No files attached'}
               </span>
             </div>
             <div>
@@ -3308,7 +3308,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
                 if (variationAttachUrls.length === 0) return;
                 alert('Could not download file. Please ask the customer to share via the chat room.');
               }}>
-                {variationAttachUrls.length > 0 ? `${variationAttachUrls.length} file${variationAttachUrls.length > 1 ? 's' : ''} attached — Click to Download` : 'Files attached'}
+                {variationAttachUrls.length > 0 ? `${variationAttachUrls.length} file${variationAttachUrls.length > 1 ? 's' : ''} attached — Click to Download` : 'No files attached'}
               </span>
             </div>
             <div>
