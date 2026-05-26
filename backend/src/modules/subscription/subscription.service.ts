@@ -12,6 +12,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateSubscriberDto } from './dto/create-subscriber.dto';
 import { LoginSubscriberDto } from './dto/login-subscriber.dto';
 import { ForgotPasswordDto, ResetPasswordDto } from './dto/forgot-password.dto';
+import * as nodemailer from 'nodemailer';
 
 import * as crypto from 'crypto';
 
@@ -481,6 +482,9 @@ export class SubscriptionService {
     const mailjetApiKey = this.configService.get<string>('mailjet.apiKey');
     const mailjetApiSecret =
       this.configService.get<string>('mailjet.apiSecret');
+    const fromEmail =
+      this.configService.get<string>('mailjet.fromEmail') ||
+      'noreply@lblue.tech';
 
     if (!mailjetApiKey || !mailjetApiSecret) {
       this.logger.warn('Mailjet not configured — skipping email send');
@@ -494,26 +498,13 @@ export class SubscriptionService {
       this.configService.get<string>('frontendUrl') || 'http://localhost:3000'
     ).replace(/\/$/, '');
     const resetUrl = `${frontendUrl}/en/subscription/reset-password?token=${resetToken}`;
-
-    const body = {
-      Messages: [
-        {
-          From: {
-            Email: 'noreply@lblue.tech',
-            Name: 'CBLUE',
-          },
-          To: [{ Email: email, Name: name }],
-          Subject: 'Reset your CBLUE password',
-          HTMLPart: `
+    const subject = 'Reset your CBLUE password';
+    const htmlPart = `
             <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f7f6; padding: 40px 0; min-height: 100vh;">
               <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.08);">
-                
-                <!-- Header with Logo Area -->
                 <div style="background-color: #0c4a6e; padding: 32px 40px; text-align: center;">
                   <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600; letter-spacing: 0.5px;">CBLUE.</h1>
                 </div>
-
-                <!-- Body content -->
                 <div style="padding: 40px;">
                   <h2 style="color: #1e293b; margin-top: 0; font-size: 20px; font-weight: 600;">Password Reset Request</h2>
                   <p style="color: #475569; font-size: 16px; line-height: 1.6; margin-bottom: 24px;">
@@ -523,42 +514,47 @@ export class SubscriptionService {
                     We received a request to reset your password for your CBLUE account. This link is valid for the next <strong>1 hour</strong>.
                     <br/><span style="font-size: 14px; color: #64748b; margin-top: 4px; display: inline-block;">(คุณได้ร้องขอการรีเซ็ตรหัสผ่าน บัญชี CBLUE ของคุณ. ลิงก์นี้จะหมดอายุใน 1 ชั่วโมง / 您已请求重置CBLUE账户密码。此链接将在1小时后失效)</span>
                   </p>
-                  
                   <div style="text-align: center; margin: 32px 0;">
                     <a href="${resetUrl}" style="display: inline-block; padding: 14px 32px; background-color: #0284c7; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600; text-align: center; transition: background-color 0.2s;">
                       Reset Password
                     </a>
                   </div>
-
                   <p style="color: #475569; font-size: 16px; line-height: 1.6; margin-bottom: 24px;">
                     If you did not request a password reset, please ignore this email or contact support if you have concerns.
                     <br/><span style="font-size: 14px; color: #64748b; margin-top: 4px; display: inline-block;">(หากคุณไม่ได้ร้องขอ กรุณาเพิกเฉยอีเมลนี้ / 若非本人操作，请忽略此邮件)</span>
                   </p>
-
-                  <!-- Divider -->
                   <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 32px 0;" />
-
                   <p style="color: #94a3b8; font-size: 13px; line-height: 1.5; margin: 0; text-align: center;">
                     If the button above is not working, copy and paste the following link into your browser:<br/>
                     <a href="${resetUrl}" style="color: #0284c7; text-decoration: none; word-break: break-all;">${resetUrl}</a>
                   </p>
                 </div>
-                
-                <!-- Footer -->
                 <div style="background-color: #f8fafc; padding: 24px 40px; text-align: center; border-top: 1px solid #e2e8f0;">
                   <p style="color: #94a3b8; font-size: 13px; margin: 0;">
                     &copy; ${new Date().getFullYear()} Construction Blue Co., Ltd. All rights reserved.
                   </p>
                 </div>
-
               </div>
             </div>
-          `,
-          TextPart: `Hello ${name},\n\nWe received a request to reset your password for your CBLUE account.\n\nClick the link below to reset your password (valid for 1 hour):\n${resetUrl}\n\nIf you did not request this, please ignore this email.\n\n© ${new Date().getFullYear()} Construction Blue Co., Ltd. All rights reserved.`,
+          `;
+    const textPart = `Hello ${name},\n\nWe received a request to reset your password for your CBLUE account.\n\nClick the link below to reset your password (valid for 1 hour):\n${resetUrl}\n\nIf you did not request this, please ignore this email.\n\n© ${new Date().getFullYear()} Construction Blue Co., Ltd. All rights reserved.`;
+
+    const body = {
+      Messages: [
+        {
+          From: {
+            Email: fromEmail,
+            Name: 'CBLUE',
+          },
+          To: [{ Email: email, Name: name }],
+          Subject: subject,
+          HTMLPart: htmlPart,
+          TextPart: textPart,
         },
       ],
     };
 
+    let apiError: string | null = null;
     try {
       const response = await fetch('https://api.mailjet.com/v3.1/send', {
         method: 'POST',
@@ -574,19 +570,57 @@ export class SubscriptionService {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        this.logger.error(`Mailjet error: ${errorText}`);
-        this.logger.log(
-          `[FALLBACK] Password reset link for ${email}: /en/subscription/reset-password?token=${resetToken}`,
-        );
+        apiError = await response.text();
+        this.logger.error(`Mailjet API error: ${apiError}`);
       } else {
-        this.logger.log(`Password reset email sent to ${email}`);
+        this.logger.log(
+          `Password reset email sent to ${email} via Mailjet API`,
+        );
         this.logger.log(
           `[BACKUP-LINK] /en/subscription/reset-password?token=${resetToken}`,
         );
+        return;
       }
     } catch (error) {
-      this.logger.error(`Failed to send email: ${error}`);
+      apiError = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Mailjet API send failed: ${apiError}`);
+    }
+
+    try {
+      const transporter = nodemailer.createTransport({
+        host: 'in-v3.mailjet.com',
+        port: 587,
+        secure: false,
+        auth: {
+          user: mailjetApiKey,
+          pass: mailjetApiSecret,
+        },
+      });
+
+      await transporter.sendMail({
+        from: `CBLUE <${fromEmail}>`,
+        to: email,
+        subject,
+        text: textPart,
+        html: htmlPart,
+      });
+
+      this.logger.log(`Password reset email sent to ${email} via Mailjet SMTP`);
+      if (apiError) {
+        this.logger.warn(
+          `Mailjet API path failed before SMTP fallback: ${apiError}`,
+        );
+      }
+      this.logger.log(
+        `[BACKUP-LINK] /en/subscription/reset-password?token=${resetToken}`,
+      );
+    } catch (smtpError) {
+      const smtpErrorText =
+        smtpError instanceof Error ? smtpError.message : String(smtpError);
+      this.logger.error(`Mailjet SMTP send failed: ${smtpErrorText}`);
+      this.logger.log(
+        `[FALLBACK] Password reset link for ${email}: /en/subscription/reset-password?token=${resetToken}`,
+      );
     }
   }
 }
