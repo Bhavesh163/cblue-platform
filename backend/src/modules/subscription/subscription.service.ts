@@ -251,8 +251,17 @@ export class SubscriptionService {
       data: { resetToken, resetTokenExpiry },
     });
 
-    // Send email via Mailjet
-    await this.sendResetEmail(subscriber.email, subscriber.name, resetToken);
+    // Send email via Mailjet (with API + SMTP fallback paths)
+    const sent = await this.sendResetEmail(
+      subscriber.email,
+      subscriber.name,
+      resetToken,
+    );
+    if (!sent) {
+      this.logger.error(
+        `Password reset email delivery failed for ${subscriber.email}`,
+      );
+    }
 
     return { message: 'If the email exists, a reset link has been sent.' };
   }
@@ -531,20 +540,27 @@ export class SubscriptionService {
     email: string,
     name: string,
     resetToken: string,
-  ) {
+  ): Promise<boolean> {
     const mailjetApiKey = this.configService.get<string>('mailjet.apiKey');
     const mailjetApiSecret =
       this.configService.get<string>('mailjet.apiSecret');
-    const fromEmail =
+    const configuredFromEmail =
       this.configService.get<string>('mailjet.fromEmail') ||
       'noreply@lblue.tech';
+    const fromCandidates = Array.from(
+      new Set(
+        [configuredFromEmail, 'noreply@lblue.tech', 'noreply@cblue.co.th']
+          .map((v) => v.trim())
+          .filter(Boolean),
+      ),
+    );
 
     if (!mailjetApiKey || !mailjetApiSecret) {
       this.logger.warn('Mailjet not configured — skipping email send');
       this.logger.log(
         `[DEV] Password reset link for ${email}: /reset-password?token=${resetToken}`,
       );
-      return;
+      return false;
     }
 
     const frontendUrl = (
@@ -592,94 +608,134 @@ export class SubscriptionService {
           `;
     const textPart = `Hello ${name},\n\nWe received a request to reset your password for your CBLUE account.\n\nClick the link below to reset your password (valid for 1 hour):\n${resetUrl}\n\nIf you did not request this, please ignore this email.\n\n© ${new Date().getFullYear()} Construction Blue Co., Ltd. All rights reserved.`;
 
-    const body = {
-      Messages: [
-        {
-          From: {
-            Email: fromEmail,
-            Name: 'CBLUE',
-          },
-          To: [{ Email: email, Name: name }],
-          Subject: subject,
-          HTMLPart: htmlPart,
-          TextPart: textPart,
-        },
-      ],
+    const isSenderConfigError = (errorText: string) => {
+      const lower = errorText.toLowerCase();
+      return (
+        lower.includes('inactive') ||
+        lower.includes('sender') ||
+        lower.includes('from')
+      );
     };
 
     let apiError: string | null = null;
-    try {
-      const response = await fetch('https://api.mailjet.com/v3.1/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization:
-            'Basic ' +
-            Buffer.from(`${mailjetApiKey}:${mailjetApiSecret}`).toString(
-              'base64',
-            ),
-        },
-        body: JSON.stringify(body),
-      });
+    for (const fromEmail of fromCandidates) {
+      const body = {
+        Messages: [
+          {
+            From: {
+              Email: fromEmail,
+              Name: 'CBLUE',
+            },
+            To: [{ Email: email, Name: name }],
+            Subject: subject,
+            HTMLPart: htmlPart,
+            TextPart: textPart,
+          },
+        ],
+      };
 
-      if (!response.ok) {
+      try {
+        const response = await fetch('https://api.mailjet.com/v3.1/send', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization:
+              'Basic ' +
+              Buffer.from(`${mailjetApiKey}:${mailjetApiSecret}`).toString(
+                'base64',
+              ),
+          },
+          body: JSON.stringify(body),
+        });
+
+        if (response.ok) {
+          this.logger.log(
+            `Password reset email sent to ${email} via Mailjet API (${fromEmail})`,
+          );
+          this.logger.log(
+            `[BACKUP-LINK] /en/subscription/reset-password?token=${resetToken}`,
+          );
+          return true;
+        }
+
         apiError = await response.text();
-        this.logger.error(`Mailjet API error [${response.status}]: ${apiError}`);
-        // Check for common Mailjet errors
-        if (apiError.toLowerCase().includes('inactive') || apiError.toLowerCase().includes('sender')) {
+        this.logger.error(
+          `Mailjet API error [${response.status}] from ${fromEmail}: ${apiError}`,
+        );
+
+        if (isSenderConfigError(apiError)) {
           this.logger.warn(
-            `⚠️ Mailjet sender '${fromEmail}' may be inactive. Check Mailjet dashboard to activate this sender.`,
+            `Mailjet sender '${fromEmail}' appears inactive; trying fallback sender.`,
+          );
+          continue;
+        }
+
+        break;
+      } catch (error) {
+        apiError = error instanceof Error ? error.message : String(error);
+        this.logger.error(
+          `Mailjet API send failed from ${fromEmail}: ${apiError}`,
+        );
+        break;
+      }
+    }
+
+    const transporter = nodemailer.createTransport({
+      host: 'in-v3.mailjet.com',
+      port: 587,
+      secure: false,
+      auth: {
+        user: mailjetApiKey,
+        pass: mailjetApiSecret,
+      },
+    });
+
+    try {
+      for (const fromEmail of fromCandidates) {
+        try {
+          await transporter.sendMail({
+            from: `CBLUE <${fromEmail}>`,
+            to: email,
+            subject,
+            text: textPart,
+            html: htmlPart,
+          });
+
+          this.logger.log(
+            `Password reset email sent to ${email} via Mailjet SMTP (${fromEmail})`,
+          );
+          if (apiError) {
+            this.logger.warn(
+              `Mailjet API path failed before SMTP fallback: ${apiError}`,
+            );
+          }
+          this.logger.log(
+            `[BACKUP-LINK] /en/subscription/reset-password?token=${resetToken}`,
+          );
+          return true;
+        } catch (smtpError) {
+          const smtpErrorText =
+            smtpError instanceof Error ? smtpError.message : String(smtpError);
+          this.logger.error(
+            `Mailjet SMTP send failed from ${fromEmail}: ${smtpErrorText}`,
           );
         }
-      } else {
-        this.logger.log(
-          `Password reset email sent to ${email} via Mailjet API`,
-        );
-        this.logger.log(
-          `[BACKUP-LINK] /en/subscription/reset-password?token=${resetToken}`,
-        );
-        return;
       }
-    } catch (error) {
-      apiError = error instanceof Error ? error.message : String(error);
-      this.logger.error(`Mailjet API send failed: ${apiError}`);
-    }
-
-    try {
-      const transporter = nodemailer.createTransport({
-        host: 'in-v3.mailjet.com',
-        port: 587,
-        secure: false,
-        auth: {
-          user: mailjetApiKey,
-          pass: mailjetApiSecret,
-        },
-      });
-
-      await transporter.sendMail({
-        from: `CBLUE <${fromEmail}>`,
-        to: email,
-        subject,
-        text: textPart,
-        html: htmlPart,
-      });
-
-      this.logger.log(`Password reset email sent to ${email} via Mailjet SMTP`);
-      if (apiError) {
-        this.logger.warn(
-          `Mailjet API path failed before SMTP fallback: ${apiError}`,
-        );
-      }
-      this.logger.log(
-        `[BACKUP-LINK] /en/subscription/reset-password?token=${resetToken}`,
-      );
-    } catch (smtpError) {
+    } catch (smtpInitError) {
       const smtpErrorText =
-        smtpError instanceof Error ? smtpError.message : String(smtpError);
-      this.logger.error(`Mailjet SMTP send failed: ${smtpErrorText}`);
-      this.logger.log(
-        `[FALLBACK] Password reset link for ${email}: /en/subscription/reset-password?token=${resetToken}`,
-      );
+        smtpInitError instanceof Error
+          ? smtpInitError.message
+          : String(smtpInitError);
+      this.logger.error(`Mailjet SMTP transport init failed: ${smtpErrorText}`);
     }
+
+    this.logger.error(`Password reset email could not be sent to ${email}`);
+    if (apiError) {
+      this.logger.error(`Last Mailjet API error: ${apiError}`);
+    }
+    this.logger.log(
+      `[FALLBACK] Password reset link for ${email}: /en/subscription/reset-password?token=${resetToken}`,
+    );
+    return false;
   }
 }

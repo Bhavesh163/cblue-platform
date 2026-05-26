@@ -1561,28 +1561,11 @@ export default function FixerProPage() {
                   className="text-xs font-semibold text-sky-700 hover:text-sky-800"
                   onClick={() => {
                     propPartnerModalImages.forEach((url, idx) => {
+                      const normalizedUrl = url.startsWith('data:image/') && !url.includes(';base64,')
+                        ? url.replace(/;bas(?!e64,)/i, ';base64,')
+                        : url;
                       const link = document.createElement('a');
-                      link.href = url;
-                      link.target = '_blank';
-                      link.rel = 'noopener noreferrer';
-                      link.download = `property-photo-${idx + 1}`;
-                      document.body.appendChild(link);
-                      link.click();
-                      document.body.removeChild(link);
-                    });
-                  }}
-                >
-                  Download Photos
-                </button>
-              )}
-              {propPartnerModalImages.length > 0 && (
-                <button
-                  type="button"
-                  className="text-xs font-semibold text-sky-700 hover:text-sky-800"
-                  onClick={() => {
-                    propPartnerModalImages.forEach((url, idx) => {
-                      const link = document.createElement('a');
-                      link.href = url;
+                      link.href = normalizedUrl;
                       link.target = '_blank';
                       link.rel = 'noopener noreferrer';
                       link.download = `property-photo-${idx + 1}`;
@@ -1645,6 +1628,29 @@ export default function FixerProPage() {
                     <img key={i} src={url} alt="" className="w-24 h-20 object-cover rounded-lg shrink-0 border border-gray-200" />
                   ))}
                 </div>
+              )}
+              {propPartnerModalImages.length > 0 && (
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-sky-700 hover:text-sky-800"
+                  onClick={() => {
+                    propPartnerModalImages.forEach((url, idx) => {
+                      const normalizedUrl = url.startsWith('data:image/') && !url.includes(';base64,')
+                        ? url.replace(/;bas(?!e64,)/i, ';base64,')
+                        : url;
+                      const link = document.createElement('a');
+                      link.href = normalizedUrl;
+                      link.target = '_blank';
+                      link.rel = 'noopener noreferrer';
+                      link.download = `property-photo-${idx + 1}`;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    });
+                  }}
+                >
+                  Download Photos
+                </button>
               )}
               <div className="bg-gray-50 rounded-xl p-4 text-sm space-y-2">
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ทรัพย์สิน" : "Property"}</span><span className="font-semibold text-right max-w-[60%] line-clamp-1">{propMeetingConfirmModal.propertyTitle}</span></div>

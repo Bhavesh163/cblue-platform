@@ -45,7 +45,7 @@ export default function PropertyRegisterPage() {
         reader.readAsDataURL(file);
       });
     }
-    const TARGET = 409600; // 0.3 MB in base64 chars
+    const TARGET = 300000; // keep payload modest while remaining under 0.3 MB target
     const passes = [
       { maxDim: 1200, quality: 0.70 },
       { maxDim: 900, quality: 0.60 },
@@ -72,9 +72,29 @@ export default function PropertyRegisterPage() {
         };
         tryPass(0);
       };
-      img.onerror = () => { URL.revokeObjectURL(url); resolve(""); };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        const reader = new FileReader();
+        reader.onload = () => resolve((reader.result as string) || "");
+        reader.onerror = () => resolve("");
+        reader.readAsDataURL(file);
+      };
       img.src = url;
     });
+  }
+
+  function normalizeImageDataUrl(raw: string): string {
+    const value = (raw || "").trim();
+    if (!value) return "";
+    if (!value.startsWith("data:")) return value;
+
+    // Repair a common truncated prefix typo (e.g. data:image/jpeg;bas...)
+    const fixedPrefix = value.includes(";base64,")
+      ? value
+      : value.replace(/;bas(?!e64,)/i, ";base64,");
+
+    const isValidDataUrl = /^data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=\r\n]+$/.test(fixedPrefix);
+    return isValidDataUrl ? fixedPrefix : "";
   }
 
   function handlePropImageChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -282,7 +302,7 @@ export default function PropertyRegisterPage() {
         try {
           compressedImages = (await Promise.all(
             propImages.map(async (f, idx) => {
-              const url = await compressPropertyImage(f);
+              const url = normalizeImageDataUrl(await compressPropertyImage(f));
               return url ? { url, key: `property/upload/image-${idx + 1}` } : null;
             })
           )).filter(Boolean) as { url: string; key: string }[];
@@ -296,23 +316,24 @@ export default function PropertyRegisterPage() {
         setError(sessionExpiredMessage);
         return;
       }
-      const token = refreshedToken || storedToken;
+      let token = refreshedToken || storedToken;
       if (!token) {
         setSubscriber(null);
         setError(sessionExpiredMessage);
         return;
       }
-      const requestBody = JSON.stringify({ ...payload, ...(compressedImages.length > 0 ? { images: compressedImages } : {}) });
-      const submitListing = (authToken: string | null) => fetch("/api/v1/properties", {
+      const requestBodyWithImages = JSON.stringify({ ...payload, ...(compressedImages.length > 0 ? { images: compressedImages } : {}) });
+      const requestBodyWithoutImages = JSON.stringify(payload);
+      const submitListing = (authToken: string | null, body: string) => fetch("/api/v1/properties", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         },
-        body: requestBody,
+        body,
       });
 
-      let res = await submitListing(token);
+      let res = await submitListing(token, requestBodyWithImages);
       if (!res.ok && [401, 403].includes(res.status)) {
         const retriedToken = await refreshSubscriberSession(token);
         if (!retriedToken) {
@@ -320,7 +341,25 @@ export default function PropertyRegisterPage() {
           setError(sessionExpiredMessage);
           return;
         }
-        res = await submitListing(retriedToken);
+        token = retriedToken;
+        res = await submitListing(token, requestBodyWithImages);
+      }
+
+      // Fallback path: if image payload caused a server-side failure,
+      // retry once without images so listing can still be published.
+      if (!res.ok && res.status >= 500 && compressedImages.length > 0) {
+        let retryRes = await submitListing(token, requestBodyWithoutImages);
+        if (!retryRes.ok && [401, 403].includes(retryRes.status)) {
+          const retriedToken = await refreshSubscriberSession(token);
+          if (!retriedToken) {
+            setSubscriber(null);
+            setError(sessionExpiredMessage);
+            return;
+          }
+          token = retriedToken;
+          retryRes = await submitListing(token, requestBodyWithoutImages);
+        }
+        res = retryRes;
       }
 
       if (res.ok) {

@@ -2587,28 +2587,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   className="text-xs font-semibold text-sky-700 hover:text-sky-800"
                   onClick={() => {
                     propModalImages.forEach((url, idx) => {
+                      const normalizedUrl = url.startsWith('data:image/') && !url.includes(';base64,')
+                        ? url.replace(/;bas(?!e64,)/i, ';base64,')
+                        : url;
                       const link = document.createElement('a');
-                      link.href = url;
-                      link.target = '_blank';
-                      link.rel = 'noopener noreferrer';
-                      link.download = `property-photo-${idx + 1}`;
-                      document.body.appendChild(link);
-                      link.click();
-                      document.body.removeChild(link);
-                    });
-                  }}
-                >
-                  Download Photos
-                </button>
-              )}
-              {propModalImages.length > 0 && (
-                <button
-                  type="button"
-                  className="text-xs font-semibold text-sky-700 hover:text-sky-800"
-                  onClick={() => {
-                    propModalImages.forEach((url, idx) => {
-                      const link = document.createElement('a');
-                      link.href = url;
+                      link.href = normalizedUrl;
                       link.target = '_blank';
                       link.rel = 'noopener noreferrer';
                       link.download = `property-photo-${idx + 1}`;
@@ -2669,6 +2652,29 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                     <img key={i} src={url} alt="" className="w-24 h-20 object-cover rounded-lg shrink-0 border border-gray-200" />
                   ))}
                 </div>
+              )}
+              {propModalImages.length > 0 && (
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-sky-700 hover:text-sky-800"
+                  onClick={() => {
+                    propModalImages.forEach((url, idx) => {
+                      const normalizedUrl = url.startsWith('data:image/') && !url.includes(';base64,')
+                        ? url.replace(/;bas(?!e64,)/i, ';base64,')
+                        : url;
+                      const link = document.createElement('a');
+                      link.href = normalizedUrl;
+                      link.target = '_blank';
+                      link.rel = 'noopener noreferrer';
+                      link.download = `property-photo-${idx + 1}`;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    });
+                  }}
+                >
+                  Download Photos
+                </button>
               )}
               <p className="text-sm text-gray-600">{locale === "th" ? `นัดหมายเยี่ยมชม: ${propMeetingModal.propertyTitle}` : `Schedule a viewing for: ${propMeetingModal.propertyTitle}`}</p>
               <div className="space-y-3">

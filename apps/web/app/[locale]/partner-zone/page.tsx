@@ -402,37 +402,60 @@ export default function PartnerZonePage() {
               <div className="flex justify-between"><span className="text-gray-500">PO Number</span><span className="font-mono font-bold text-gray-800">PO-2605-{waitModalJob.id.slice(0, 4)}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Customer Budget</span><span className="font-bold text-gray-800">฿3,500</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Project Details</span><span className="font-bold text-gray-800">{waitModalJob.description}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Uploaded Files</span><span className="font-semibold text-sky-600 cursor-pointer hover:underline" onClick={() => { 
-                let url = (waitModalJob as any)?.issueImage || (waitModalJob as any)?.image || (waitModalJob as any)?.fileUrl || ((waitModalJob as any)?.projectImages && (waitModalJob as any)?.projectImages[0]) || ((waitModalJob as any)?.images && (waitModalJob as any)?.images[0]) || ((waitModalJob as any)?.metadata?.images && (waitModalJob as any)?.metadata.images[0]) || ((waitModalJob as any)?.metadata?.issueImageUrl) || ((waitModalJob as any)?.metadata?.issueImage); 
-                if (!url) {
-                  try {
-                    const poMap = JSON.parse(localStorage.getItem("cblue_po_attachments") || "{}");
-                    const poKey = `PO-2605-${waitModalJob.id.slice(0, 4)}`;
-                    if (poMap[poKey] && poMap[poKey][0]) url = poMap[poKey][0];
-                  } catch {}
+              <div className="flex justify-between"><span className="text-gray-500">Uploaded Files</span><span className="font-semibold text-sky-600 cursor-pointer hover:underline" onClick={() => {
+                const urls: string[] = [];
+                const pushUrl = (value: unknown) => {
+                  if (typeof value !== "string") return;
+                  const trimmed = value.trim();
+                  if (!trimmed) return;
+                  if (!urls.includes(trimmed)) urls.push(trimmed);
+                };
+
+                pushUrl((waitModalJob as any)?.issueImage);
+                pushUrl((waitModalJob as any)?.image);
+                pushUrl((waitModalJob as any)?.fileUrl);
+                ((waitModalJob as any)?.projectImages || []).forEach(pushUrl);
+                ((waitModalJob as any)?.images || []).forEach(pushUrl);
+                ((waitModalJob as any)?.metadata?.images || []).forEach(pushUrl);
+                pushUrl((waitModalJob as any)?.metadata?.issueImageUrl);
+                pushUrl((waitModalJob as any)?.metadata?.issueImage);
+
+                try {
+                  const poMap = JSON.parse(localStorage.getItem("cblue_po_attachments") || "{}");
+                  const poKey = `PO-2605-${waitModalJob.id.slice(0, 4)}`;
+                  if (Array.isArray(poMap[poKey])) poMap[poKey].forEach(pushUrl);
+                } catch {}
+
+                try {
+                  const orderMap = JSON.parse(localStorage.getItem("cblue_order_attachments") || "{}");
+                  if (Array.isArray(orderMap[waitModalJob.id])) orderMap[waitModalJob.id].forEach(pushUrl);
+                } catch {}
+
+                try {
+                  const localData = JSON.parse(localStorage.getItem("jobData") || "{}");
+                  pushUrl(localData?.image);
+                  if (Array.isArray(localData?.projectImages)) localData.projectImages.forEach(pushUrl);
+                } catch {}
+
+                if (urls.length === 0) {
+                  alert("No downloadable attachment found yet. Please open the chat room and try again.");
+                  return;
                 }
-                if (!url) {
-                  try {
-                    const orderMap = JSON.parse(localStorage.getItem("cblue_order_attachments") || "{}");
-                    if (orderMap[waitModalJob.id] && orderMap[waitModalJob.id][0]) url = orderMap[waitModalJob.id][0];
-                  } catch {}
-                }
-                if(!url) {
-                    try {
-                        const localData = JSON.parse(localStorage.getItem("jobData") || "{}");
-                        if(localData && localData.image) url = localData.image;
-                        else if(localData && localData.projectImages && localData.projectImages.length > 0) url = localData.projectImages[0];
-                  } catch {}
-                }
-                if (url) {
-                  const link = document.createElement('a');
+
+                urls.forEach((rawUrl, idx) => {
+                  let url = rawUrl;
+                  if (url.startsWith("data:image/") && !url.includes(";base64,")) {
+                    url = url.replace(/;bas(?!e64,)/i, ";base64,");
+                  }
+                  const link = document.createElement("a");
                   link.href = url;
-                  link.target = '_blank';
-                  link.rel = 'noopener noreferrer';
+                  link.target = "_blank";
+                  link.rel = "noopener noreferrer";
+                  link.download = `attachment-${idx + 1}`;
+                  document.body.appendChild(link);
                   link.click();
-                } else {
-                  alert("Files attached. If the download is not available here yet, please open the chat room and download them there.");
-                }
+                  document.body.removeChild(link);
+                });
               }}>
                 {((waitModalJob as any)?.image || ((waitModalJob as any)?.images && (waitModalJob as any)?.images.length > 0) || (waitModalJob as any)?.fileUrl || ((waitModalJob as any)?.projectImages && (waitModalJob as any)?.projectImages.length > 0) || (waitModalJob as any)?.metadata?.images || (typeof window !== 'undefined' && localStorage.getItem("jobData") && JSON.parse(localStorage.getItem("jobData") || "{}").image)) ? "1 file attached (Click to View)" : "Files attached"}
               </span></div>

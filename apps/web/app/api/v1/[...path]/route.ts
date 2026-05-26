@@ -56,6 +56,8 @@ async function handler(
   let target = "";
   try {
     const { path } = await context.params;
+    const method = request.method.toUpperCase();
+    const hasRequestBody = !["GET", "HEAD", "OPTIONS"].includes(method);
 
     // Forward headers (skip hop-by-hop)
     const headers = new Headers();
@@ -74,21 +76,19 @@ async function handler(
     }
 
     // Build fetch init
-    const init: RequestInit & { duplex?: string } = {
+    const initBase: RequestInit = {
       method: request.method,
       headers,
       cache: "no-store", // CRITICAL: Prevent cross-session data bleeding by disabling internal Next.js fetch cache.
       // Use a longer timeout for POST/PUT (may include large base64 file bodies)
-      signal: AbortSignal.timeout(["GET", "HEAD", "OPTIONS"].includes(request.method.toUpperCase()) ? 30000 : 90000),
+      signal: AbortSignal.timeout(hasRequestBody ? 90000 : 30000),
     };
 
-    if (!["GET", "HEAD", "OPTIONS"].includes(request.method.toUpperCase())) {
-      init.body = request.body;
-      init.duplex = "half"; // required for streaming body on edge
-    }
+    // Buffer request body once, then reuse it for upstream fetch attempts.
+    // This avoids edge streaming incompatibilities that can corrupt larger JSON payloads.
+    const rawBody = hasRequestBody ? await request.arrayBuffer() : null;
 
-    const method = request.method.toUpperCase();
-    const canRetry = ["GET", "HEAD", "OPTIONS"].includes(method);
+    const canRetry = !hasRequestBody;
     let upstream: Response | null = null;
     let lastError: unknown = null;
 
@@ -98,6 +98,16 @@ async function handler(
       target = url.toString();
 
       try {
+        const init: RequestInit = {
+          ...initBase,
+          ...(rawBody && rawBody.byteLength > 0
+            ? {
+                // Clone body buffer per attempt to avoid consumed-body errors.
+                body: rawBody.slice(0),
+              }
+            : {}),
+        };
+
         const attempt = await fetch(target, init);
 
         if (!canRetry || attempt.status < 500 || i === backendUrls.length - 1) {
