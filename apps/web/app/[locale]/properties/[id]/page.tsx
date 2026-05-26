@@ -84,6 +84,38 @@ export default function PropertyDetailPage() {
     LAND: "land",
     COMMERCIAL: "commercial",
     APARTMENT: "apartment",
+    OFFICE: "office",
+    WAREHOUSE: "warehouse",
+    SHOPHOUSE: "shophouse",
+    FACTORY: "factory",
+  };
+
+  const getPropertyTypeLabel = (type: string) => {
+    const typeKey = typeKeys[type];
+    if (typeKey) {
+      try {
+        return t(`types.${typeKey}`);
+      } catch {
+        // Fall through to locale-specific defaults.
+      }
+    }
+
+    const fallbackLabels: Record<string, { en: string; th: string; zh: string }> = {
+      CONDO: { en: "Condo", th: "คอนโด", zh: "公寓" },
+      HOUSE: { en: "House", th: "บ้าน", zh: "别墅" },
+      TOWNHOUSE: { en: "Townhouse", th: "ทาวน์เฮาส์", zh: "联排别墅" },
+      LAND: { en: "Land", th: "ที่ดิน", zh: "土地" },
+      COMMERCIAL: { en: "Commercial", th: "อาคารพาณิชย์", zh: "商业物业" },
+      APARTMENT: { en: "Apartment", th: "อพาร์ทเมนท์", zh: "公寓楼" },
+      OFFICE: { en: "Office", th: "ออฟฟิศ", zh: "办公室" },
+      WAREHOUSE: { en: "Warehouse", th: "โกดัง", zh: "仓库" },
+      SHOPHOUSE: { en: "Shophouse", th: "ตึกแถว", zh: "商铺" },
+      FACTORY: { en: "Factory", th: "โรงงาน", zh: "工厂" },
+    };
+
+    const fallback = fallbackLabels[type];
+    if (!fallback) return type;
+    return locale === "th" ? fallback.th : locale === "zh" ? fallback.zh : fallback.en;
   };
 
   useEffect(() => {
@@ -137,8 +169,8 @@ export default function PropertyDetailPage() {
       <section className="bg-gray-900">
         <div className="mx-auto max-w-7xl">
           {galleryImages.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-1 max-h-[500px] overflow-hidden">
-              {galleryImages.slice(0, 4).map((img, idx) => (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
+              {galleryImages.map((img, idx) => (
                 <img
                   key={img.id}
                   src={img.url}
@@ -170,7 +202,7 @@ export default function PropertyDetailPage() {
                     {property.listingType === "SALE" ? t("forSale") : t("forRent")}
                   </span>
                   <span className="text-sm text-gray-500">
-                    {t(`types.${typeKeys[property.propertyType]}`)}
+                    {getPropertyTypeLabel(property.propertyType)}
                   </span>
                 </div>
                 <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{property.title}</h1>
@@ -244,18 +276,11 @@ export default function PropertyDetailPage() {
               <div className="bg-white rounded-xl border border-gray-200 p-6 sticky top-24 space-y-4">
                 <h3 className="font-semibold text-gray-900">{t("contactName")}</h3>
                 <p className="text-gray-700">{property.contactName || "CBLUE Lister"}</p>
-                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-                  {locale === "th"
-                    ? "ข้อมูลติดต่อจะเปิดเผยหลังชำระค่าดำเนินการในแดชบอร์ด"
-                    : locale === "zh"
-                    ? "完成处理费支付后将显示联系方式"
-                    : "Contact details are revealed after paying the processing fee in Dashboard."}
-                </div>
                 <Link
-                  href={`${prefix}/properties`}
+                  href={`${prefix}/properties?contact=${encodeURIComponent(property.id)}`}
                   className="block w-full py-3 text-center text-sm font-semibold text-white bg-green-700 hover:bg-green-800 rounded-xl transition"
                 >
-                  {locale === "th" ? "📩 กลับไปส่งคำขอติดต่อ" : locale === "zh" ? "📩 返回发送询盘" : "📩 Go to Contact Flow"}
+                  {locale === "th" ? "📩 ติดต่อผู้ลงประกาศ" : locale === "zh" ? "📩 联系发布者" : "📩 Contact Lister"}
                 </Link>
                 {property.yearBuilt && (
                   <p className="text-xs text-gray-400">

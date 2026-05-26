@@ -173,7 +173,7 @@
     "contactName": "ชื่อผู้ติดต่อ",
     "submitListing": "ลงประกาศ",
     "types": {
-      "🏢 condo": "🏢 คอนโด", "🏠 house": "🏠 บ้าน", "🏡 townhouse": "🏡 ทาวน์เฮ้าส์", "🌳 land": "🌳 ที่ดิน", "🏬 commercial": "🏬 อาคารพาณิชย์", "💼 office": "💼 ออฟฟิศ", "🏢 apartment": "🏢 อพาร์ทเม้นท์", "🏭 warehouse": "🏭 โกดัง", "🏭 factory": "🏭 โรงงาน", "office": "ออฟฟิศ", "warehouse": "โกดัง", "factory": "โรงงาน",
+      "🏢 condo": "🏢 คอนโด", "🏠 house": "🏠 บ้าน", "🏡 townhouse": "🏡 ทาวน์เฮ้าส์", "🌳 land": "🌳 ที่ดิน", "🏬 commercial": "🏬 อาคารพาณิชย์", "💼 office": "💼 ออฟฟิศ", "🏢 apartment": "🏢 อพาร์ทเม้นท์", "🏭 warehouse": "🏭 โกดัง", "🏬 shophouse": "🏬 ตึกแถว", "🏭 factory": "🏭 โรงงาน", "condo": "คอนโด", "office": "ออฟฟิศ", "warehouse": "โกดัง", "shophouse": "ตึกแถว", "factory": "โรงงาน",
       "house": "บ้านเดี่ยว",
       "townhouse": "ทาวน์เฮาส์",
       "land": "ที่ดิน",

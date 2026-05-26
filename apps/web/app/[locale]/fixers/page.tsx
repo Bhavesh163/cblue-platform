@@ -542,6 +542,43 @@ export default function FixerProPage() {
   const [propPartnerRateComment, setPropPartnerRateComment] = useState("");
   const [propPartnerModalImages, setPropPartnerModalImages] = useState<string[]>([]);
 
+  const ensurePropChatBootstrap = (inquiry: PropInquiry) => {
+    if (typeof window === "undefined" || !inquiry?.poNumber) return;
+    try {
+      const po = inquiry.poNumber;
+      const key = `chat_messages_${po}`;
+      const existing = JSON.parse(localStorage.getItem(key) || "[]");
+      if (Array.isArray(existing) && existing.length > 0) {
+        if (!localStorage.getItem(`chat_title_${po}`)) {
+          localStorage.setItem(`chat_title_${po}`, `🏠 ${inquiry.propertyTitle || po}`);
+        }
+        return;
+      }
+
+      const now = Date.now();
+      const text = locale === "th"
+        ? "[CBLUE] ห้องแชทเปิดใช้งานแล้ว กรุณาหารือเวลานัดหมายหน้างานร่วมกัน และให้ลูกค้าส่งคำเชิญนัดหมายจากหน้า Requests"
+        : locale === "zh"
+        ? "[CBLUE] 聊天室已激活。请双方协商可看房时间，并由客户在 Requests 页面发送会议邀请。"
+        : "[CBLUE] Chat room is now active. Please discuss available site meeting time, and the customer should send a meeting invitation from Requests.";
+
+      const bootstrapMessage = {
+        id: `cblue-prop-${po}-${now}`,
+        sender: "cblue",
+        text,
+        createdAt: new Date(now).toISOString(),
+        time: fmtDateTime(now),
+      };
+
+      localStorage.setItem(key, JSON.stringify([bootstrapMessage]));
+      localStorage.setItem(`chat_title_${po}`, `🏠 ${inquiry.propertyTitle || po}`);
+      localStorage.setItem(`chat_from_${po}`, "fixers");
+      window.dispatchEvent(new Event("cblue-chat-updated"));
+    } catch {
+      // Best-effort chat bootstrap for property flow.
+    }
+  };
+
   useEffect(() => {
     const pid = propAcceptModal?.propertyId || propMeetingConfirmModal?.propertyId;
     if (!pid) { setPropPartnerModalImages([]); return; }
@@ -902,13 +939,22 @@ export default function FixerProPage() {
         }
         if (!res.ok) { setPropInquiries([]); return; }
         const data = await res.json();
-        setPropInquiries(Array.isArray(data) ? data.map(mapApiInquiry).filter((p: PropInquiry) => ["NOTIFY_SENT", "ACCEPTED", "PAID", "MEETING_SENT", "MEETING_CONFIRMED"].includes(p.status)) : []);
+        setPropInquiries(Array.isArray(data) ? data.map(mapApiInquiry).filter((p: PropInquiry) => ["NOTIFY_SENT", "ACCEPTED", "PAID", "MEETING_SENT", "MEETING_CONFIRMED", "COMPLETED"].includes(p.status)) : []);
       } catch { setPropInquiries([]); }
     }
     loadProps();
     const id = setInterval(loadProps, 10000);
     return () => clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    for (const inquiry of propInquiries) {
+      const status = String(inquiry.status || "").toUpperCase();
+      if (["PAID", "MEETING_SENT", "MEETING_CONFIRMED"].includes(status)) {
+        ensurePropChatBootstrap(inquiry);
+      }
+    }
+  }, [propInquiries]);
 
   const updatePropInquiry = async (id: string, update: Partial<PropInquiry>) => {
     try {
@@ -927,9 +973,21 @@ export default function FixerProPage() {
         }
       }
       if (res.ok) {
-        setPropInquiries(prev => prev.map(p => p.id === id ? { ...p, ...update, updatedAt: Date.now() } : p));
+        const updatedFromApi = await res.json().catch(() => null);
+        setPropInquiries(prev => prev.map(p => {
+          if (p.id !== id) return p;
+          return {
+            ...p,
+            ...update,
+            ...(updatedFromApi || {}),
+            updatedAt: Date.now(),
+          };
+        }));
+        return true;
       }
+      return false;
     } catch {}
+    return false;
   };
 
   const isSubscribed = !!partner;
@@ -1490,6 +1548,58 @@ export default function FixerProPage() {
     const bTs = new Date(b.statusChangedAt || b.completedAt || b.createdAt || b.date || 0).getTime();
     return bTs - aTs;
   });
+  const propCompletedJobs = propInquiries
+    .filter((p: PropInquiry) => String(p.status || '').toUpperCase() === 'COMPLETED')
+    .map((p: PropInquiry) => {
+      const completedAt = p.updatedAt || p.createdAt || Date.now();
+      return {
+        id: `prop-completed-${p.id}`,
+        po: p.poNumber,
+        service: p.propertyTitle || 'Property Inquiry',
+        serviceTh: p.propertyTitle || 'คำขออสังหาริมทรัพย์',
+        serviceZh: p.propertyTitle || '房产咨询',
+        customer: firstNameOnly(p.customerName, 'Customer'),
+        customerName: firstNameOnly(p.customerName, 'Customer'),
+        counterpartName: firstNameOnly(p.customerName, 'Customer'),
+        date: fmtDateTime(completedAt),
+        createdAt: p.createdAt || completedAt,
+        completedAt,
+        statusChangedAt: completedAt,
+        budget: toCurrencyLabel(p.propertyPrice),
+        fee: toCurrencyLabel(p.propertyFee),
+        tier: p.propertyTier || 'STANDARD',
+        status: 'COMPLETED',
+        step: 8,
+        stepName: 'Property Inquiry Completed',
+        location: p.province || '',
+        subdistrict: p.district || '',
+        projectDetails: `Property: ${p.propertyTitle || p.poNumber} | Province: ${p.province || '-'} | Meeting: ${p.meetingDate || '-'} ${p.meetingTime || ''} @ ${p.meetingVenue || '-'}`,
+        description: `Customer rating: ${p.customerRating ?? '-'} | Lister rating: ${p.listerRating ?? '-'} | PO ${p.poNumber}`,
+        chatHistory: getLocalChatHistory(p.poNumber),
+        partnerRating: p.listerRating,
+      };
+    });
+  const allCompletedJobs = Array.from(
+    [...completedJobs, ...propCompletedJobs].reduce((map: Map<string, any>, entry: any) => {
+      const key = String(entry?.po || entry?.id || '').trim();
+      if (!key || isHiddenTestPo(key)) return map;
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, entry);
+        return map;
+      }
+      const existingTs = new Date(existing.statusChangedAt || existing.completedAt || existing.createdAt || existing.date || 0).getTime();
+      const nextTs = new Date(entry.statusChangedAt || entry.completedAt || entry.createdAt || entry.date || 0).getTime();
+      if (nextTs >= existingTs) {
+        map.set(key, { ...existing, ...entry });
+      }
+      return map;
+    }, new Map<string, any>()).values(),
+  ).sort((a: any, b: any) => {
+    const aTs = new Date(a.statusChangedAt || a.completedAt || a.createdAt || a.date || 0).getTime();
+    const bTs = new Date(b.statusChangedAt || b.completedAt || b.createdAt || b.date || 0).getTime();
+    return bTs - aTs;
+  });
   const earningsSeries = (() => {
     const enMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const thMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
@@ -1503,7 +1613,7 @@ export default function FixerProPage() {
     }));
     const completedByMonth = new Map<string, number>();
 
-    for (const job of (completedJobs as any[])) {
+    for (const job of (allCompletedJobs as any[])) {
       const ts = new Date((job as any).statusChangedAt || (job as any).createdAt || (job as any).date || 0).getTime();
       if (!ts) continue;
       const dt = new Date(ts);
@@ -1530,7 +1640,7 @@ export default function FixerProPage() {
   })();
   const stats = {
     activeJobs: activeJobs.length,
-    completedJobs: completedJobs.length,
+    completedJobs: allCompletedJobs.length,
     monthlyEarnings: `฿${(earningsSeries[earningsSeries.length - 1]?.amount || 0).toLocaleString()}`,
     rating: 0,
     responseRate: '0%',
@@ -1549,9 +1659,13 @@ export default function FixerProPage() {
   const parseTs = (v: any) => {
     if (typeof v === "number") return v;
     if (typeof v === "string") {
-      const parsed = parseInt(v, 10);
-      if (!isNaN(parsed)) return parsed;
-      return new Date(v).getTime();
+      const raw = v.trim();
+      if (/^\d+$/.test(raw)) {
+        const numeric = Number(raw);
+        return Number.isFinite(numeric) ? numeric : 0;
+      }
+      const asDate = new Date(raw).getTime();
+      return Number.isNaN(asDate) ? 0 : asDate;
     }
     return 0;
   };
@@ -1559,11 +1673,26 @@ export default function FixerProPage() {
   const scheduledMeetings = mockDynReqs
     .filter((r: any) => !isHiddenTestPo(r.po))
     .filter((r: any) => r.type === 'meeting_scheduled')
-    .sort((a: any, b: any) => parseTs(a.date) - parseTs(b.date));
+    .filter((r: any) => {
+      const ts = r.meetingDate
+        ? parseTs(`${r.meetingDate}T${r.meetingTime || '00:00'}`)
+        : parseTs(r.date || r.createdAt);
+      return ts >= Date.now();
+    })
+    .sort((a: any, b: any) => {
+      const aTs = a.meetingDate ? parseTs(`${a.meetingDate}T${a.meetingTime || '00:00'}`) : parseTs(a.date || a.createdAt);
+      const bTs = b.meetingDate ? parseTs(`${b.meetingDate}T${b.meetingTime || '00:00'}`) : parseTs(b.date || b.createdAt);
+      return aTs - bTs;
+    });
   const propScheduledMeetings = propInquiries
     .filter((p: PropInquiry) => p.status === "MEETING_CONFIRMED" && p.meetingDate)
+    .filter((p: PropInquiry) => parseTs(`${p.meetingDate}T${p.meetingTime || '00:00'}`) >= Date.now())
     .map((p: PropInquiry) => ({ id: `prop-${p.poNumber}`, title: p.propertyTitle, po: p.poNumber, meetingDate: p.meetingDate || "", meetingTime: p.meetingTime || "", meetingVenue: p.meetingVenue || "", customer: p.customerName || "Customer", date: p.meetingDate || "" }));
-  const allScheduledMeetings = [...scheduledMeetings, ...propScheduledMeetings];
+  const allScheduledMeetings = [...scheduledMeetings, ...propScheduledMeetings].sort((a: any, b: any) => {
+    const aTs = a.meetingDate ? parseTs(`${a.meetingDate}T${a.meetingTime || '00:00'}`) : parseTs(a.date || a.createdAt);
+    const bTs = b.meetingDate ? parseTs(`${b.meetingDate}T${b.meetingTime || '00:00'}`) : parseTs(b.date || b.createdAt);
+    return aTs - bTs;
+  });
 
   useEffect(() => {
     if (!chatFeed || chatFeed.length === 0) return;
@@ -1793,6 +1922,84 @@ export default function FixerProPage() {
     return null;
   }).filter(Boolean) as any[];
 
+  const propWorkflowNotifications = propInquiries.map((p: PropInquiry) => {
+    const createdAt = Number(p.updatedAt || p.createdAt || Date.now());
+    const time = fmtDateTime(createdAt);
+    if (p.status === 'NOTIFY_SENT') {
+      return {
+        id: `prop-notify-${p.poNumber}`,
+        msg: `New property inquiry ${p.poNumber}: ${p.propertyTitle}. Please review and accept.`,
+        msgTh: `มีคำขออสังหาฯ ใหม่ ${p.poNumber}: ${p.propertyTitle} กรุณาตรวจสอบและยืนยัน`,
+        msgZh: `新的房产咨询 ${p.poNumber}: ${p.propertyTitle}，请审核并接受。`,
+        unread: true,
+        time,
+        createdAt,
+        dot: 'bg-amber-500',
+      };
+    }
+    if (p.status === 'ACCEPTED') {
+      return {
+        id: `prop-accepted-${p.poNumber}`,
+        msg: `You accepted ${p.propertyTitle}. Waiting for customer Free Pass confirmation.`,
+        msgTh: `คุณยืนยัน ${p.propertyTitle} แล้ว กำลังรอลูกค้า Free Pass`,
+        msgZh: `您已接受 ${p.propertyTitle}，正在等待客户 Free Pass。`,
+        unread: false,
+        time,
+        createdAt,
+        dot: 'bg-emerald-500',
+      };
+    }
+    if (p.status === 'PAID') {
+      return {
+        id: `prop-paid-${p.poNumber}`,
+        msg: `Customer activated Free Pass for ${p.propertyTitle}. Chat room is now active.`,
+        msgTh: `ลูกค้าเปิด Free Pass สำหรับ ${p.propertyTitle} แล้ว ห้องแชทพร้อมใช้งาน`,
+        msgZh: `客户已为 ${p.propertyTitle} 激活 Free Pass，聊天室已开启。`,
+        unread: true,
+        time,
+        createdAt,
+        dot: 'bg-sky-500',
+      };
+    }
+    if (p.status === 'MEETING_SENT') {
+      return {
+        id: `prop-meeting-sent-${p.poNumber}`,
+        msg: `Meeting invitation received for ${p.propertyTitle}. Please confirm schedule.`,
+        msgTh: `ได้รับคำเชิญนัดหมายสำหรับ ${p.propertyTitle} กรุณายืนยันเวลา`,
+        msgZh: `已收到 ${p.propertyTitle} 的会议邀请，请确认时间。`,
+        unread: true,
+        time,
+        createdAt,
+        dot: 'bg-amber-500',
+      };
+    }
+    if (p.status === 'MEETING_CONFIRMED' && p.listerRating === undefined) {
+      return {
+        id: `prop-rate-needed-${p.poNumber}`,
+        msg: `Meeting confirmed for ${p.propertyTitle}. Please rate customer to close step 8.`,
+        msgTh: `นัดหมายของ ${p.propertyTitle} ยืนยันแล้ว กรุณาให้คะแนนลูกค้าเพื่อจบขั้นตอนที่ 8`,
+        msgZh: `${p.propertyTitle} 会议已确认。请评价客户以完成第8步。`,
+        unread: true,
+        time,
+        createdAt,
+        dot: 'bg-yellow-500',
+      };
+    }
+    if (p.status === 'MEETING_CONFIRMED' && p.listerRating !== undefined && p.customerRating === undefined) {
+      return {
+        id: `prop-wait-customer-rate-${p.poNumber}`,
+        msg: `You rated customer for ${p.propertyTitle}. Waiting for customer rating to close.`,
+        msgTh: `คุณให้คะแนนลูกค้าสำหรับ ${p.propertyTitle} แล้ว กำลังรอลูกค้าให้คะแนนเพื่อปิดงาน`,
+        msgZh: `您已为 ${p.propertyTitle} 的客户评分，正在等待客户评分后结案。`,
+        unread: false,
+        time,
+        createdAt,
+        dot: 'bg-indigo-400',
+      };
+    }
+    return null;
+  }).filter(Boolean) as any[];
+
   // Generate alerts from backend orders with actionable statuses
   const orderAlertPos = new Set<string>();
   const orderAlerts = mappedOrders.flatMap((o: any) => {
@@ -1807,8 +2014,8 @@ export default function FixerProPage() {
     return [];
   });
 
-  const displayNotifications = [...orderAlerts, ...dynamicNotifications, ...partnerWorkflowNotifications]
-    .sort((a: any, b: any) => parseTs(b.time) - parseTs(a.time));
+  const displayNotifications = [...orderAlerts, ...dynamicNotifications, ...partnerWorkflowNotifications, ...propWorkflowNotifications]
+    .sort((a: any, b: any) => parseTs(b.createdAt || b.time) - parseTs(a.createdAt || a.time));
 
   const tabs: { key: TabKey; label: string; icon: string; badge?: number }[] = [
     { key: "overview", label: locale === "th" ? "ภาพรวม" : locale === "zh" ? "概览" : "Overview", icon: "" },
@@ -1864,20 +2071,21 @@ export default function FixerProPage() {
                 <button
                   type="button"
                   className="text-xs font-semibold text-sky-700 hover:text-sky-800"
-                  onClick={() => {
-                    propPartnerModalImages.forEach((url, idx) => {
-                      const normalizedUrl = url.startsWith('data:image/') && !url.includes(';base64,')
-                        ? url.replace(/;bas(?!e64,)/i, ';base64,')
-                        : url;
-                      const link = document.createElement('a');
-                      link.href = normalizedUrl;
-                      link.target = '_blank';
-                      link.rel = 'noopener noreferrer';
-                      link.download = `property-photo-${idx + 1}`;
-                      document.body.appendChild(link);
-                      link.click();
-                      document.body.removeChild(link);
+                  onClick={async () => {
+                    const downloaded = await downloadAttachmentUrls({
+                      urls: propPartnerModalImages,
+                      po: propAcceptModal?.poNumber,
+                      prefix: 'property-photo',
                     });
+                    if (!downloaded) {
+                      alert(
+                        locale === 'th'
+                          ? 'ไม่พบไฟล์ที่ดาวน์โหลดได้ในขณะนี้'
+                          : locale === 'zh'
+                          ? '当前没有可下载的文件。'
+                          : 'No downloadable file found right now.',
+                      );
+                    }
                   }}
                 >
                   Download Photos
@@ -1938,20 +2146,21 @@ export default function FixerProPage() {
                 <button
                   type="button"
                   className="text-xs font-semibold text-sky-700 hover:text-sky-800"
-                  onClick={() => {
-                    propPartnerModalImages.forEach((url, idx) => {
-                      const normalizedUrl = url.startsWith('data:image/') && !url.includes(';base64,')
-                        ? url.replace(/;bas(?!e64,)/i, ';base64,')
-                        : url;
-                      const link = document.createElement('a');
-                      link.href = normalizedUrl;
-                      link.target = '_blank';
-                      link.rel = 'noopener noreferrer';
-                      link.download = `property-photo-${idx + 1}`;
-                      document.body.appendChild(link);
-                      link.click();
-                      document.body.removeChild(link);
+                  onClick={async () => {
+                    const downloaded = await downloadAttachmentUrls({
+                      urls: propPartnerModalImages,
+                      po: propMeetingConfirmModal?.poNumber,
+                      prefix: 'property-photo',
                     });
+                    if (!downloaded) {
+                      alert(
+                        locale === 'th'
+                          ? 'ไม่พบไฟล์ที่ดาวน์โหลดได้ในขณะนี้'
+                          : locale === 'zh'
+                          ? '当前没有可下载的文件。'
+                          : 'No downloadable file found right now.',
+                      );
+                    }
                   }}
                 >
                   Download Photos
@@ -2013,9 +2222,22 @@ export default function FixerProPage() {
                   disabled={propPartnerRateStars === 0}
                   className="flex-1 py-2.5 bg-yellow-500 text-white rounded-xl font-bold text-sm hover:bg-yellow-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={async () => {
-                    await updatePropInquiry(propPartnerRateModal!.id, { listerRating: propPartnerRateStars, listerComment: propPartnerRateComment });
+                    const customerAlreadyRated = propPartnerRateModal?.customerRating !== undefined && propPartnerRateModal?.customerRating !== null;
+                    await updatePropInquiry(
+                      propPartnerRateModal!.id,
+                      {
+                        status: customerAlreadyRated ? "COMPLETED" : "MEETING_CONFIRMED",
+                        step: 8,
+                        listerRating: propPartnerRateStars,
+                        listerComment: propPartnerRateComment,
+                      },
+                    );
                     setPropPartnerRateModal(null);
-                    alert(locale === "th" ? "⭐ ขอบคุณ! ส่งคะแนนแล้ว คำขอนี้จะหายไปจากรายการ" : "⭐ Thank you! Rating submitted. This request will disappear from your list.");
+                    alert(
+                      customerAlreadyRated
+                        ? (locale === "th" ? "⭐ ขอบคุณ! ส่งคะแนนแล้ว งานนี้ปิดและย้ายไปประวัติ" : "⭐ Thank you! Rating submitted. This inquiry is now closed and moved to history.")
+                        : (locale === "th" ? "⭐ ขอบคุณ! บันทึกคะแนนแล้ว กำลังรอลูกค้าให้คะแนนเพื่อปิดงาน" : "⭐ Thank you! Rating submitted. Waiting for customer rating to close this inquiry."),
+                    );
                   }}
                 >
                   {locale === "th" ? "⭐ ส่งคะแนน" : "⭐ Submit Rating"}
@@ -2465,13 +2687,13 @@ export default function FixerProPage() {
 
         {/* Tab Content */}
         <div className={`mt-6 ${activeTab !== 'overview' ? 'hidden' : ''}`}>
-          <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={partnerRequestItems} scheduledMeetings={allScheduledMeetings} completedJobs={completedJobs} earnings={earningsSeries} stats={stats} notifications={displayNotifications} chats={chatFeed} onJobClick={handleJobClick} onTabChange={(tab) => setActiveTab(tab as TabKey)} />
+          <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={partnerRequestItems} scheduledMeetings={allScheduledMeetings} completedJobs={allCompletedJobs} earnings={earningsSeries} stats={stats} notifications={displayNotifications} chats={chatFeed} onJobClick={handleJobClick} onTabChange={(tab) => setActiveTab(tab as TabKey)} />
         </div>
         {activeTab === "requests" && <PartnerRequests locale={locale} incomingJobs={partnerRequestItemsWithProp} onJobClick={handleJobClick} priceList={(partner as any)?.priceList} onPropAccept={(p: PropInquiry) => setPropAcceptModal(p)} onPropMeetingConfirm={(p: PropInquiry) => setPropMeetingConfirmModal(p)} onPropRatePartner={(p: PropInquiry) => { setPropPartnerRateStars(0); setPropPartnerRateComment(""); setPropPartnerRateModal(p); }} />}
         {activeTab === "active" && <PartnerJobs locale={locale} activeJobs={activeJobs} onJobClick={handleJobClick} priceList={(partner as any)?.priceList} />}
         
         {activeTab === "properties" && <PartnerProperties locale={locale} prefix={prefix} properties={myProperties} />}
-        {activeTab === "history" && <PartnerHistory locale={locale} completedJobs={completedJobs} />}
+        {activeTab === "history" && <PartnerHistory locale={locale} completedJobs={allCompletedJobs} />}
         {activeTab === "chat" && <PartnerChats locale={locale} chats={chatFeed} />}
         {activeTab === "notifications" && <PartnerNotifications locale={locale} notifications={displayNotifications} />}
         {activeTab === "profile" && <PartnerProfile locale={locale} prefix={prefix} partner={partner} />}

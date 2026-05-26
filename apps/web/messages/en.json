@@ -173,7 +173,7 @@
     "contactName": "Contact Name",
     "submitListing": "Submit Listing",
     "types": {
-      "🏢 condo": "🏢 Condo", "🏠 house": "🏠 House", "🏡 townhouse": "🏡 Townhouse", "🌳 land": "🌳 Land", "🏬 commercial": "🏬 Commercial", "💼 office": "💼 Office", "🏢 apartment": "🏢 Apartment", "🏭 warehouse": "🏭 Warehouse", "🏭 factory": "🏭 Factory", "office": "Office", "warehouse": "Warehouse", "factory": "Factory",
+      "🏢 condo": "🏢 Condo", "🏠 house": "🏠 House", "🏡 townhouse": "🏡 Townhouse", "🌳 land": "🌳 Land", "🏬 commercial": "🏬 Commercial", "💼 office": "💼 Office", "🏢 apartment": "🏢 Apartment", "🏭 warehouse": "🏭 Warehouse", "🏬 shophouse": "🏬 Shophouse", "🏭 factory": "🏭 Factory", "condo": "Condo", "office": "Office", "warehouse": "Warehouse", "shophouse": "Shophouse", "factory": "Factory",
       "house": "House",
       "townhouse": "Townhouse",
       "land": "Land",

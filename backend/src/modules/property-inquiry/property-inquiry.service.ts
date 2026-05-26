@@ -13,6 +13,44 @@ import {
 export class PropertyInquiryService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private async resolveLinkedUserIds(userId: string) {
+    const fallbackId = String(userId || '').trim();
+    if (!fallbackId) return [] as string[];
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: fallbackId },
+      select: { id: true, subscriberId: true, email: true },
+    });
+
+    if (!user) return [fallbackId];
+
+    const linkedIds = new Set<string>([user.id]);
+
+    if (user.subscriberId) {
+      const bySubscriberId = await this.prisma.user.findMany({
+        where: { subscriberId: user.subscriberId },
+        select: { id: true },
+      });
+      bySubscriberId.forEach((item) => linkedIds.add(item.id));
+    }
+
+    const normalizedEmail = String(user.email || '').trim().toLowerCase();
+    if (normalizedEmail) {
+      const byEmail = await this.prisma.user.findMany({
+        where: {
+          email: {
+            equals: normalizedEmail,
+            mode: 'insensitive',
+          },
+        },
+        select: { id: true },
+      });
+      byEmail.forEach((item) => linkedIds.add(item.id));
+    }
+
+    return Array.from(linkedIds);
+  }
+
   async create(customerId: string, dto: CreatePropertyInquiryDto) {
     // Verify lister user exists
     const lister = await this.prisma.user.findUnique({
@@ -55,8 +93,11 @@ export class PropertyInquiryService {
   }
 
   async findByCustomer(customerId: string) {
+    const customerIds = await this.resolveLinkedUserIds(customerId);
+    if (customerIds.length === 0) return [];
+
     return this.prisma.propertyInquiry.findMany({
-      where: { customerId },
+      where: { customerId: { in: customerIds } },
       include: {
         property: {
           select: {
@@ -76,8 +117,11 @@ export class PropertyInquiryService {
   }
 
   async findByLister(listerUserId: string) {
+    const listerIds = await this.resolveLinkedUserIds(listerUserId);
+    if (listerIds.length === 0) return [];
+
     return this.prisma.propertyInquiry.findMany({
-      where: { listerUserId },
+      where: { listerUserId: { in: listerIds } },
       include: {
         property: {
           select: {
@@ -103,8 +147,12 @@ export class PropertyInquiryService {
     if (!inquiry) {
       throw new NotFoundException('Inquiry not found');
     }
-    // Only the customer or lister can update
-    if (inquiry.customerId !== userId && inquiry.listerUserId !== userId) {
+    // Allow canonicalized bridge identities (same subscriber/email) to update.
+    const requesterIds = await this.resolveLinkedUserIds(userId);
+    const isAllowed =
+      requesterIds.includes(inquiry.customerId) ||
+      requesterIds.includes(inquiry.listerUserId);
+    if (!isAllowed) {
       throw new ForbiddenException('Not authorized to update this inquiry');
     }
 

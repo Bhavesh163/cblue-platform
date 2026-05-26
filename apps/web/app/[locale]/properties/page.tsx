@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useTranslations, useLocale } from "next-intl";
+import { useSearchParams } from "next/navigation";
 import { THAI_PROVINCES } from "../lib/constants";
 import PdpaConsent from "../components/PdpaConsent";
 import { clearSubscriberSession, refreshSubscriberSession } from "../../../lib/subscriberSession";
@@ -98,6 +99,14 @@ function sanitizeProperty(raw: any): Property {
   };
 }
 
+function getPrimaryImageUrl(images: { url: string }[] | undefined) {
+  if (!Array.isArray(images) || images.length === 0) return PLACEHOLDER_PROPERTY_IMAGE;
+  const firstValid = images
+    .map((img) => normalizeImageUrl(img?.url))
+    .find(Boolean);
+  return firstValid || PLACEHOLDER_PROPERTY_IMAGE;
+}
+
 function isFakeListing(property: Property) {
   const haystack = `${property.title} ${property.description}`.toLowerCase();
   if (DEBUG_LISTING_PATTERN.test(haystack)) return true;
@@ -147,7 +156,9 @@ export default function PropertiesPage() {
   const t = useTranslations("realEstate");
   const tc = useTranslations("common");
   const locale = useLocale();
+  const searchParams = useSearchParams();
   const prefix = `/${locale}`;
+  const autoContactId = String(searchParams.get("contact") || "").trim();
   const loginRequiredMessage = locale === "th"
     ? "เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้งก่อนส่งคำขอ"
     : locale === "zh"
@@ -171,6 +182,7 @@ export default function PropertiesPage() {
   const [authMode, setAuthMode] = useState<"login" | "register">("register");
   const [authError, setAuthError] = useState("");
   const [authEmail, setAuthEmail] = useState("");
+  const [autoContactHandled, setAutoContactHandled] = useState(false);
   const [filters, setFilters] = useState({
     propertyType: "",
     listingType: "",
@@ -194,6 +206,44 @@ export default function PropertiesPage() {
     window.addEventListener("storage", handleStorage);
     return () => window.removeEventListener("storage", handleStorage);
   }, []);
+
+  useEffect(() => {
+    if (!autoContactId) {
+      setAutoContactHandled(false);
+    }
+  }, [autoContactId]);
+
+  useEffect(() => {
+    if (!autoContactId || autoContactHandled) return;
+    let cancelled = false;
+
+    const openFromQuery = async () => {
+      let target = [...properties, ...latestProperties].find((item) => item.id === autoContactId) || null;
+
+      if (!target) {
+        try {
+          const res = await fetch(`/api/v1/properties/${encodeURIComponent(autoContactId)}`);
+          if (res.ok) {
+            const data = await res.json();
+            target = sanitizeProperty(data);
+          }
+        } catch {
+          // Best effort only.
+        }
+      }
+
+      if (cancelled) return;
+      if (target) {
+        void handleContactLister(target);
+      }
+      setAutoContactHandled(true);
+    };
+
+    void openFromQuery();
+    return () => {
+      cancelled = true;
+    };
+  }, [autoContactId, autoContactHandled, latestProperties, properties]);
 
   useEffect(() => {
     // Check login
@@ -274,9 +324,32 @@ export default function PropertiesPage() {
     return new Intl.NumberFormat("th-TH").format(price);
   }
 
-  function handleContactLister(prop: Property) {
+  async function canActivateInquiryWithCustomer(authToken: string) {
+    if (!authToken) return false;
+    try {
+      const res = await fetch("/api/v1/users/me", {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (!res.ok) return false;
+      const me = await res.json();
+      return !Boolean(me?.fixer);
+    } catch {
+      return false;
+    }
+  }
+
+  async function handleContactLister(prop: Property) {
     if (!subscriber) {
       setPendingContactProp(prop);
+      setShowLoginGate(true);
+      return;
+    }
+    const token = localStorage.getItem("subscriber_token") || "";
+    const isCustomerSession = await canActivateInquiryWithCustomer(token);
+    if (!isCustomerSession) {
+      setPendingContactProp(prop);
+      setAuthMode("login");
+      setAuthError(locale === "th" ? "กรุณาเข้าสู่ระบบด้วยบัญชีลูกค้าเพื่อส่งแจ้งเตือน" : locale === "zh" ? "请使用客户账号登录后再发送通知。" : "Please log in with a customer account to activate inquiry notifications.");
       setShowLoginGate(true);
       return;
     }
@@ -300,16 +373,16 @@ export default function PropertiesPage() {
 
 
   const typeKeys: Record<string, string> = {
-    "CONDO": "🏢 condo",
-    "HOUSE": "🏠 house",
-    "TOWNHOUSE": "🏡 townhouse",
-    "LAND": "🌳 land",
-    "COMMERCIAL": "🏬 commercial",
-    "OFFICE": "💼 office",
-    "APARTMENT": "🏢 apartment",
-    "WAREHOUSE": "🏭 warehouse",
-    "SHOPHOUSE": "🏬 shophouse",
-    "FACTORY": "🏭 factory"
+    CONDO: "condo",
+    HOUSE: "house",
+    TOWNHOUSE: "townhouse",
+    LAND: "land",
+    COMMERCIAL: "commercial",
+    OFFICE: "office",
+    APARTMENT: "apartment",
+    WAREHOUSE: "warehouse",
+    SHOPHOUSE: "shophouse",
+    FACTORY: "factory",
   };
 
   const getPropertyTypeLabel = (type: string) => {
@@ -323,9 +396,16 @@ export default function PropertiesPage() {
     }
 
     const fallbackLabels: Record<string, { en: string; th: string; zh: string }> = {
+      CONDO: { en: "Condo", th: "คอนโด", zh: "公寓" },
+      HOUSE: { en: "House", th: "บ้าน", zh: "别墅" },
+      TOWNHOUSE: { en: "Townhouse", th: "ทาวน์เฮาส์", zh: "联排别墅" },
+      LAND: { en: "Land", th: "ที่ดิน", zh: "土地" },
+      COMMERCIAL: { en: "Commercial", th: "อาคารพาณิชย์", zh: "商业物业" },
       OFFICE: { en: "Office", th: "ออฟฟิศ", zh: "办公室" },
+      APARTMENT: { en: "Apartment", th: "อพาร์ทเมนท์", zh: "公寓楼" },
       WAREHOUSE: { en: "Warehouse", th: "โกดัง", zh: "仓库" },
       SHOPHOUSE: { en: "Shophouse", th: "ตึกแถว", zh: "商铺" },
+      FACTORY: { en: "Factory", th: "โรงงาน", zh: "工厂" },
     };
     const fallback = fallbackLabels[type];
     if (!fallback) return type;
@@ -405,6 +485,11 @@ export default function PropertiesPage() {
                     return;
                   }
                   const authData = await authRes.json();
+                  const canActivateInquiry = await canActivateInquiryWithCustomer(authData.accessToken || "");
+                  if (!canActivateInquiry) {
+                    setAuthError(locale === "th" ? "บัญชีนี้ไม่ใช่บัญชีลูกค้า กรุณาเข้าสู่ระบบด้วยบัญชีลูกค้าเพื่อส่งแจ้งเตือน" : locale === "zh" ? "此账户不是客户账户。请使用客户账户登录后再发送通知。" : "This account is not a customer account. Please log in with a customer account to activate inquiry notifications.");
+                    return;
+                  }
                   localStorage.setItem("subscriber_token", authData.accessToken);
                   localStorage.setItem("subscriber", JSON.stringify(authData.subscriber));
                   setSubscriber(authData.subscriber);
@@ -823,7 +908,7 @@ export default function PropertiesPage() {
                   <Link href={`${prefix}/properties/${prop.id}`}>
                     <div className="h-48 bg-gray-200 flex items-center justify-center">
                       <img
-                        src={prop.images[0]?.url || PLACEHOLDER_PROPERTY_IMAGE}
+                        src={getPrimaryImageUrl(prop.images)}
                         alt={prop.title}
                         className="w-full h-full object-cover"
                       />
@@ -854,7 +939,7 @@ export default function PropertiesPage() {
                       {prop.province}{prop.district ? `, ${prop.district}` : ""}
                     </p>
                     <button
-                      onClick={() => handleContactLister(prop)}
+                      onClick={() => { void handleContactLister(prop); }}
                       className="mt-3 w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg transition"
                     >
                       📩 {locale === "th" ? "ติดต่อผู้ลงประกาศ" : locale === "zh" ? "联系发布者" : "Contact Lister"}
@@ -868,39 +953,18 @@ export default function PropertiesPage() {
 
           {/* CTA to register property */}
           {!searched && (
-            <div className="text-center py-12">
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 max-w-7xl mx-auto px-4">
-                {PROPERTY_TYPES.map((type) => (
-                  <button
-                    key={type}
-                    onClick={() => handleSearch({ propertyType: type })}
-                    className="bg-white rounded-xl p-4 border border-gray-200 text-center hover:border-green-500 hover:shadow-md transition cursor-pointer flex flex-col items-center justify-center gap-2"
-                  >
-                    <h3 className="font-semibold text-gray-900 text-sm sm:text-base">{getPropertyTypeLabel(type)}</h3>
-                  </button>
-                ))}
-              </div>
-              <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
-                <button
-                  onClick={() => handleSearch()}
-                  className="px-8 py-3 text-sm font-semibold text-white bg-green-700 hover:bg-green-800 rounded-xl transition-colors"
-                >
-                  {t("searchProperty")}
-                </button>
-                <Link
-                  href={`${prefix}/properties/register`}
-                  className="px-8 py-3 text-sm font-semibold text-green-700 border border-green-700 hover:bg-green-50 rounded-xl transition-colors text-center"
-                >
-                  {t("listProperty")}
-                </Link>
-              </div>
-
-              {/* Latest 20 Properties */}
+            <div className="py-12 space-y-12">
+              {/* Latest 20 Properties (newest first) */}
               {latestProperties.length > 0 && (
-                <div className="mt-16">
-                  <h2 className="text-2xl font-bold text-gray-900 text-center mb-8">
-                    {locale === "th" ? "ประกาศล่าสุด" : locale === "zh" ? "最新房源" : "Latest Listings"}
-                  </h2>
+                <div>
+                  <div className="text-center mb-8">
+                    <h2 className="text-2xl font-bold text-gray-900">
+                      {locale === "th" ? "ประกาศล่าสุด 20 รายการ (ใหม่สุดก่อน)" : locale === "zh" ? "最新20条房源（按发布时间倒序）" : "Latest 20 Listings (Newest First)"}
+                    </h2>
+                    <p className="text-sm text-gray-500 mt-2">
+                      {locale === "th" ? "แสดงผลล่าสุดก่อน เพื่อให้จับคู่ได้เร็วขึ้น" : locale === "zh" ? "优先显示最新发布，提升匹配效率" : "Latest posts are shown first to improve matching speed."}
+                    </p>
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     {latestProperties.map((prop) => (
                       <Link
@@ -910,7 +974,7 @@ export default function PropertiesPage() {
                       >
                         <div className="h-40 bg-gray-200 flex items-center justify-center">
                           <img
-                            src={prop.images[0]?.url || PLACEHOLDER_PROPERTY_IMAGE}
+                            src={getPrimaryImageUrl(prop.images)}
                             alt={prop.title}
                             className="w-full h-full object-cover"
                           />
@@ -943,6 +1007,37 @@ export default function PropertiesPage() {
                   </div>
                 </div>
               )}
+
+              <div className="text-center">
+                <div className="mb-6">
+                  <h3 className="text-xl font-bold text-gray-900">{locale === "th" ? "เลือกตามประเภทอสังหาฯ" : locale === "zh" ? "按房产类型浏览" : "Browse by Property Type"}</h3>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 max-w-7xl mx-auto px-4">
+                  {PROPERTY_TYPES.map((type) => (
+                    <button
+                      key={type}
+                      onClick={() => handleSearch({ propertyType: type })}
+                      className="bg-white rounded-xl p-4 border border-gray-200 text-center hover:border-green-500 hover:shadow-md transition cursor-pointer flex flex-col items-center justify-center gap-2"
+                    >
+                      <h3 className="font-semibold text-gray-900 text-sm sm:text-base">{getPropertyTypeLabel(type)}</h3>
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
+                  <button
+                    onClick={() => handleSearch()}
+                    className="px-8 py-3 text-sm font-semibold text-white bg-green-700 hover:bg-green-800 rounded-xl transition-colors"
+                  >
+                    {t("searchProperty")}
+                  </button>
+                  <Link
+                    href={`${prefix}/properties/register`}
+                    className="px-8 py-3 text-sm font-semibold text-green-700 border border-green-700 hover:bg-green-50 rounded-xl transition-colors text-center"
+                  >
+                    {t("listProperty")}
+                  </Link>
+                </div>
+              </div>
             </div>
           )}
         </div>

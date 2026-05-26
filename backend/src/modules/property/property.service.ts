@@ -455,7 +455,7 @@ export class PropertyService {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          images: { orderBy: { sortOrder: 'asc' }, take: 1 },
+          images: { orderBy: { sortOrder: 'asc' } },
         },
       }),
       this.prisma.property.count({ where }),
@@ -485,7 +485,7 @@ export class PropertyService {
       where: { userId },
       orderBy: { createdAt: 'desc' },
       include: {
-        images: { orderBy: { sortOrder: 'asc' }, take: 1 },
+        images: { orderBy: { sortOrder: 'asc' } },
       },
     });
   }

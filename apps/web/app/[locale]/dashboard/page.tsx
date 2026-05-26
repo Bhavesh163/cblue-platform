@@ -168,6 +168,16 @@ const triggerDownload = (href: string, filename: string, revoke = false) => {
     setTimeout(() => URL.revokeObjectURL(href), 2000);
   }
 };
+const shouldAttachAuthHeader = (url: string) => {
+  if (url.startsWith('/api/')) return true;
+  try {
+    if (typeof window === 'undefined') return false;
+    const parsed = new URL(url, window.location.origin);
+    return parsed.origin === window.location.origin && parsed.pathname.startsWith('/api/');
+  } catch {
+    return false;
+  }
+};
 const downloadImageUrls = async (urls: string[], prefix = 'property-photo') => {
   const uniqueUrls = Array.from(new Set((urls || []).map(normalizeImageUrl).filter(Boolean)));
   for (const [index, url] of uniqueUrls.entries()) {
@@ -178,7 +188,15 @@ const downloadImageUrls = async (urls: string[], prefix = 'property-photo') => {
         continue;
       }
 
-      const response = await fetch(url, { credentials: 'include' });
+      const token = typeof window !== 'undefined' ? localStorage.getItem('subscriber_token') || '' : '';
+      const headers: Record<string, string> = {};
+      if (token && shouldAttachAuthHeader(url)) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+      const response = await fetch(url, {
+        credentials: 'include',
+        headers,
+      });
       if (!response.ok) {
         if (url.startsWith('http://') || url.startsWith('https://')) {
           window.open(url, '_blank', 'noopener,noreferrer');
@@ -979,6 +997,43 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const [propRateStars, setPropRateStars] = useState(0);
   const [propRateComment, setPropRateComment] = useState("");
 
+  const ensurePropChatBootstrap = (inquiry: PropInquiry) => {
+    if (typeof window === "undefined" || !inquiry?.poNumber) return;
+    try {
+      const po = inquiry.poNumber;
+      const key = `chat_messages_${po}`;
+      const existing = JSON.parse(localStorage.getItem(key) || "[]");
+      if (Array.isArray(existing) && existing.length > 0) {
+        if (!localStorage.getItem(`chat_title_${po}`)) {
+          localStorage.setItem(`chat_title_${po}`, `🏠 ${inquiry.propertyTitle || po}`);
+        }
+        return;
+      }
+
+      const now = Date.now();
+      const text = locale === "th"
+        ? "[CBLUE] ห้องแชทเปิดใช้งานแล้ว กรุณาหารือเวลานัดหมายหน้างานร่วมกัน และให้ลูกค้าส่งคำเชิญนัดหมายจากหน้า Requests"
+        : locale === "zh"
+        ? "[CBLUE] 聊天室已激活。请双方协商可看房时间，并由客户在 Requests 页面发送会议邀请。"
+        : "[CBLUE] Chat room is now active. Please discuss available site meeting time, and the customer should send a meeting invitation from Requests.";
+
+      const bootstrapMessage = {
+        id: `cblue-prop-${po}-${now}`,
+        sender: "cblue",
+        text,
+        createdAt: new Date(now).toISOString(),
+        time: toDisplayDateTime(now),
+      };
+
+      localStorage.setItem(key, JSON.stringify([bootstrapMessage]));
+      localStorage.setItem(`chat_title_${po}`, `🏠 ${inquiry.propertyTitle || po}`);
+      localStorage.setItem(`chat_from_${po}`, "dashboard");
+      window.dispatchEvent(new Event("cblue-chat-updated"));
+    } catch {
+      // Best-effort chat bootstrap for property flow.
+    }
+  };
+
   // Fetch property images when propPayModal or propMeetingModal opens
   useEffect(() => {
     const pid = propPayModal?.propertyId || propMeetingModal?.propertyId;
@@ -1201,6 +1256,15 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     const timer = setInterval(loadPropInquiries, 10000);
     return () => clearInterval(timer);
   }, [subscriber]);
+
+  useEffect(() => {
+    for (const inquiry of propInquiries) {
+      const status = String(inquiry.status || "").toUpperCase();
+      if (["PAID", "MEETING_SENT", "MEETING_CONFIRMED"].includes(status)) {
+        ensurePropChatBootstrap(inquiry);
+      }
+    }
+  }, [propInquiries]);
 
   const buildChatFeed = () => {
     if (typeof window === "undefined") return [];
@@ -1717,7 +1781,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       if (p.status === "DECLINED") return { id: `prop-declined-${p.poNumber}`, type: "prop_declined", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
       if (p.status === "ACCEPTED") return { id: `prop-pay-${p.poNumber}`, type: "prop_pay_fee", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
       if (p.status === "PAID") return { id: `prop-meet-${p.poNumber}`, type: "prop_meeting_invite", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
-      if (p.status === "MEETING_CONFIRMED") return { id: `prop-rate-${p.poNumber}`, type: "prop_rate", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
+      if (p.status === "MEETING_CONFIRMED" && p.customerRating === undefined) return { id: `prop-rate-${p.poNumber}`, type: "prop_rate", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
       return null;
     })
     .filter(Boolean) as any[];
@@ -1755,7 +1819,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     .filter((p: PropInquiry) => p.status === "MEETING_CONFIRMED" && p.meetingDate)
     .filter((p: PropInquiry) => {
       const ts = parseDateMs(`${p.meetingDate}T${p.meetingTime || '00:00'}`);
-      return ts >= Date.now() - (3 * 24 * 60 * 60 * 1000);
+      return ts >= Date.now();
     });
   const upcomingMeetings = visibleMockDynRequests
     .filter((x: any) => x.type === "meeting_scheduled")
@@ -1763,7 +1827,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       const meetingTs = x.meetingDate
         ? parseDateMs(`${x.meetingDate}T${x.meetingTime || '00:00'}`)
         : parseDateMs(x.createdAt || x.date);
-      return meetingTs >= Date.now() - (3 * 24 * 60 * 60 * 1000);
+      return meetingTs >= Date.now();
     })
     .sort((a: any, b: any) => {
       const aTs = a.meetingDate ? parseDateMs(`${a.meetingDate}T${a.meetingTime || '00:00'}`) : parseDateMs(a.createdAt || a.date);
@@ -1784,8 +1848,70 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       return null;
     })
     .filter(Boolean) as any[];
+  const propWorkflowAlerts = propInquiries
+    .map((p: PropInquiry) => {
+      const createdAt = Number(p.updatedAt || p.createdAt || Date.now());
+      const time = toDisplayDateTime(createdAt);
+      if (p.status === "ACCEPTED") {
+        return {
+          id: `prop-alert-accepted-${p.poNumber}`,
+          msg: `Lister accepted ${p.propertyTitle}. Proceed with Testing period - Free Pass.`,
+          msgTh: `ผู้ลงประกาศยืนยัน ${p.propertyTitle} แล้ว กรุณาดำเนินการ Testing period - Free Pass`,
+          msgZh: `房源方已接受 ${p.propertyTitle}。请继续 Testing period - Free Pass。`,
+          time,
+          createdAt,
+          dot: "bg-emerald-500",
+        };
+      }
+      if (p.status === "PAID") {
+        return {
+          id: `prop-alert-paid-${p.poNumber}`,
+          msg: `Chat is active for ${p.propertyTitle}. Send meeting invitation when ready.`,
+          msgTh: `แชทของ ${p.propertyTitle} เปิดใช้งานแล้ว กรุณาส่งคำเชิญนัดหมายเมื่อพร้อม`,
+          msgZh: `${p.propertyTitle} 的聊天已激活。准备好后请发送会议邀请。`,
+          time,
+          createdAt,
+          dot: "bg-sky-500",
+        };
+      }
+      if (p.status === "MEETING_SENT") {
+        return {
+          id: `prop-alert-meeting-sent-${p.poNumber}`,
+          msg: `Meeting invitation sent for ${p.propertyTitle}. Waiting for lister confirmation.`,
+          msgTh: `ส่งคำเชิญนัดหมายของ ${p.propertyTitle} แล้ว กำลังรอผู้ลงประกาศยืนยัน`,
+          msgZh: `${p.propertyTitle} 的会议邀请已发送，正在等待房源方确认。`,
+          time,
+          createdAt,
+          dot: "bg-amber-500",
+        };
+      }
+      if (p.status === "MEETING_CONFIRMED" && p.customerRating === undefined) {
+        return {
+          id: `prop-alert-rate-${p.poNumber}`,
+          msg: `Meeting confirmed for ${p.propertyTitle}. Please rate to finish step 8.`,
+          msgTh: `นัดหมายของ ${p.propertyTitle} ยืนยันแล้ว กรุณาให้คะแนนเพื่อจบขั้นตอนที่ 8`,
+          msgZh: `${p.propertyTitle} 的会议已确认。请评分以完成第8步。`,
+          time,
+          createdAt,
+          dot: "bg-yellow-500",
+        };
+      }
+      if (p.status === "MEETING_CONFIRMED" && p.customerRating !== undefined && p.listerRating === undefined) {
+        return {
+          id: `prop-alert-wait-lister-rate-${p.poNumber}`,
+          msg: `You rated ${p.propertyTitle}. Waiting for lister rating to close this inquiry.`,
+          msgTh: `คุณให้คะแนน ${p.propertyTitle} แล้ว กำลังรอผู้ลงประกาศให้คะแนนเพื่อปิดงาน`,
+          msgZh: `您已为 ${p.propertyTitle} 评分。正在等待房源方评分后结案。`,
+          time,
+          createdAt,
+          dot: "bg-indigo-400",
+        };
+      }
+      return null;
+    })
+    .filter(Boolean) as any[];
   const baseAlerts: any[] = [];
-  const allAlerts = [...workflowAlerts, ...baseAlerts].sort((a: any, b: any) => parseDateMs(b.createdAt || b.time) - parseDateMs(a.createdAt || a.time));
+  const allAlerts = [...workflowAlerts, ...propWorkflowAlerts, ...baseAlerts].sort((a: any, b: any) => parseDateMs(b.createdAt || b.time) - parseDateMs(a.createdAt || a.time));
   const overviewAlerts = allAlerts.slice(0, 3);
   const overviewIncomingChats = chatFeed.filter((c: any) => c.hasIncoming).slice(0, 3);
 
@@ -2151,9 +2277,21 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         }
       }
       if (res.ok) {
-        setPropInquiries(prev => prev.map(p => p.id === id ? { ...p, ...update, updatedAt: Date.now() } : p));
+        const updatedFromApi = await res.json().catch(() => null);
+        setPropInquiries(prev => prev.map(p => {
+          if (p.id !== id) return p;
+          return {
+            ...p,
+            ...update,
+            ...(updatedFromApi || {}),
+            updatedAt: Date.now(),
+          };
+        }));
+        return true;
       }
+      return false;
     } catch {}
+    return false;
   };
 
   const renderPropRequestCard = (item: any) => {
@@ -2504,8 +2642,21 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                         <p className="font-semibold text-gray-900 text-sm">{p.propertyTitle} <span className="text-xs font-normal text-gray-400">· {p.poNumber}</span></p>
                         <p className="text-xs text-gray-500 mt-0.5">{p.province} · {p.listerName}</p>
                         <p className="text-xs text-emerald-600 font-semibold mt-0.5">
-                          ✅ {locale === "th" ? "ปิดงานแล้ว" : "Completed"} · ⭐ {p.customerRating ?? "-"}/5
+                          ✅ {locale === "th" ? "ปิดงานแล้ว" : "Completed"} · ⭐ {p.customerRating ?? "-"}/5 ({locale === "th" ? "คุณให้" : "you"}) · ⭐ {p.listerRating ?? "-"}/5 ({locale === "th" ? "ผู้ลงประกาศให้" : "lister"})
                           {p.updatedAt ? ` · ${new Date(p.updatedAt).toLocaleDateString()}` : ""}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {(() => {
+                            try {
+                              const parsed = JSON.parse(localStorage.getItem(`chat_messages_${p.poNumber}`) || "[]");
+                              const count = Array.isArray(parsed)
+                                ? parsed.filter((m: any) => String(m?.text || "").trim()).length
+                                : 0;
+                              return `${locale === "th" ? "บันทึกแชท" : locale === "zh" ? "聊天记录" : "Chat records"}: ${count}`;
+                            } catch {
+                              return `${locale === "th" ? "บันทึกแชท" : locale === "zh" ? "聊天记录" : "Chat records"}: 0`;
+                            }
+                          })()}
                         </p>
                       </div>
                       <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-full">{locale === "th" ? "สำเร็จ" : "Done"}</span>
@@ -2753,7 +2904,12 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 <button
                   className="flex-1 py-2.5 bg-green-700 text-white rounded-xl font-bold text-sm hover:bg-green-800 transition"
                   onClick={async () => {
-                    await updatePropInquiry(propPayModal.id, { status: "PAID", step: 5 });
+                    const current = propPayModal;
+                    if (!current) return;
+                    const ok = await updatePropInquiry(current.id, { status: "PAID", step: 5 });
+                    if (ok) {
+                      ensurePropChatBootstrap({ ...current, status: "PAID", step: 5 });
+                    }
                     setPropPayModal(null);
                   }}
                 >
@@ -2857,9 +3013,22 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   disabled={propRateStars === 0}
                   className="flex-1 py-2.5 bg-yellow-500 text-white rounded-xl font-bold text-sm hover:bg-yellow-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={async () => {
-                    await updatePropInquiry(propRateModal!.id, { status: "COMPLETED", step: 8, customerRating: propRateStars, customerComment: propRateComment });
+                    const alreadyRatedByLister = propRateModal?.listerRating !== undefined && propRateModal?.listerRating !== null;
+                    await updatePropInquiry(
+                      propRateModal!.id,
+                      {
+                        status: alreadyRatedByLister ? "COMPLETED" : "MEETING_CONFIRMED",
+                        step: 8,
+                        customerRating: propRateStars,
+                        customerComment: propRateComment,
+                      },
+                    );
                     setPropRateModal(null);
-                    alert(locale === "th" ? "⭐ ขอบคุณ! งานนี้ปิดแล้วและย้ายไปประวัติ" : "⭐ Thank you! This inquiry has been closed and moved to history.");
+                    alert(
+                      alreadyRatedByLister
+                        ? (locale === "th" ? "⭐ ขอบคุณ! งานนี้ปิดแล้วและย้ายไปประวัติ" : "⭐ Thank you! This inquiry is now closed and moved to history.")
+                        : (locale === "th" ? "⭐ ขอบคุณ! บันทึกคะแนนแล้ว กำลังรอผู้ลงประกาศให้คะแนนเพื่อปิดงาน" : "⭐ Thank you! Your rating is saved. Waiting for lister rating to close this inquiry."),
+                    );
                   }}
                 >
                   {locale === "th" ? "⭐ ส่งคะแนน" : "⭐ Submit Rating"}

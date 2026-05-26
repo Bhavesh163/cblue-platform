@@ -640,10 +640,16 @@ export class SubscriptionService {
       this.configService.get<string>('mailjet.apiSecret');
     const configuredFromEmail =
       this.configService.get<string>('mailjet.fromEmail') ||
-      'noreply@lblue.tech';
+      'noreply@cblue.co.th';
+    const normalizedConfiguredFromEmail = configuredFromEmail
+      .trim()
+      .replace(/^['\"]|['\"]$/g, '');
     const fromCandidates = Array.from(
       new Set(
-        [configuredFromEmail, 'noreply@lblue.tech', 'noreply@cblue.co.th']
+        [
+          normalizedConfiguredFromEmail,
+          'noreply@cblue.co.th',
+        ]
           .map((v) => v.trim())
           .filter(Boolean),
       ),

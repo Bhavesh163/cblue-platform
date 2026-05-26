@@ -364,7 +364,7 @@ jobs:
                 -e JWT_EXPIRATION=15m -e JWT_REFRESH_EXPIRATION=7d \
                 -e MAILJET_API_KEY="515b1389c9f3ce79b51f58955681dd9c" \
                 -e MAILJET_SECRET_KEY="95e113e56293d977324d710a3067fb15" \
-                -e MAILJET_FROM_EMAIL="noreply@lblue.tech" \
+                -e MAILJET_FROM_EMAIL="noreply@cblue.co.th" \
                 -e FRONTEND_URL="https://cblue.co.th" \
                 -e PORT=3002 -e NODE_ENV=production \
                 --restart unless-stopped \
@@ -509,7 +509,7 @@ jobs:
                 -e JWT_EXPIRATION=15m -e JWT_REFRESH_EXPIRATION=7d \
                 -e MAILJET_API_KEY="515b1389c9f3ce79b51f58955681dd9c" \
                 -e MAILJET_SECRET_KEY="95e113e56293d977324d710a3067fb15" \
-                -e MAILJET_FROM_EMAIL="noreply@lblue.tech" \
+                -e MAILJET_FROM_EMAIL="noreply@cblue.co.th" \
                 -e FRONTEND_URL="https://cblue.co.th" \
                 -e PORT=3002 -e NODE_ENV=production \
                 "$IMAGE" 2>&1
