@@ -42,20 +42,19 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
           })
         : null;
 
-      if (!user) {
-        const subscriber = await this.findSubscriberByIdentity(
-          payload.email,
-          payload.phone,
-        );
-        if (subscriber) {
-          user = await this.ensureUserBridge(subscriber, payload.sub);
-          if (user) {
-            const normalizedEmail = payload.email?.trim().toLowerCase() || '';
-            const normalizedPhone = payload.phone?.trim() || '';
-            this.logger.warn(
-              `Recovered stale JWT bridge for ${normalizedEmail || normalizedPhone}; using user ${user.id}`,
-            );
-          }
+      const subscriber = await this.findSubscriberByIdentity(
+        payload.email,
+        payload.phone,
+      );
+
+      if (subscriber) {
+        user = await this.ensureUserBridge(subscriber, user?.id || payload.sub);
+        if (user) {
+          const normalizedEmail = payload.email?.trim().toLowerCase() || '';
+          const normalizedPhone = payload.phone?.trim() || '';
+          this.logger.warn(
+            `Recovered stale JWT bridge for ${normalizedEmail || normalizedPhone}; using user ${user.id}`,
+          );
         }
       }
 

@@ -430,20 +430,25 @@ export class SubscriptionService {
   }
 
   private async resolveBridgedUserFromPayload(payload: SessionJwtPayload) {
-    if (payload.sub) {
-      const byId = await this.prisma.user.findUnique({
-        where: { id: payload.sub },
-      });
-      if (byId) return byId;
-    }
+    const existingUser = payload.sub
+      ? await this.prisma.user.findUnique({
+          where: { id: payload.sub },
+        })
+      : null;
 
     const subscriber = await this.findSubscriberByIdentity(
       payload.email,
       payload.phone,
     );
-    if (!subscriber) return null;
+    if (subscriber) {
+      return this.ensureUserBridge(subscriber, existingUser?.id || payload.sub);
+    }
 
-    return this.ensureUserBridge(subscriber, payload.sub);
+    if (existingUser) {
+      return existingUser;
+    }
+
+    return null;
   }
 
   private async resolveSubscriberForUser(
