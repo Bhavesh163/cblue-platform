@@ -2581,6 +2581,46 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   ))}
                 </div>
               )}
+              {propModalImages.length > 0 && (
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-sky-700 hover:text-sky-800"
+                  onClick={() => {
+                    propModalImages.forEach((url, idx) => {
+                      const link = document.createElement('a');
+                      link.href = url;
+                      link.target = '_blank';
+                      link.rel = 'noopener noreferrer';
+                      link.download = `property-photo-${idx + 1}`;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    });
+                  }}
+                >
+                  Download Photos
+                </button>
+              )}
+              {propModalImages.length > 0 && (
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-sky-700 hover:text-sky-800"
+                  onClick={() => {
+                    propModalImages.forEach((url, idx) => {
+                      const link = document.createElement('a');
+                      link.href = url;
+                      link.target = '_blank';
+                      link.rel = 'noopener noreferrer';
+                      link.download = `property-photo-${idx + 1}`;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    });
+                  }}
+                >
+                  Download Photos
+                </button>
+              )}
               <div className="bg-gray-50 rounded-xl p-4 text-sm space-y-2">
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ทรัพย์สิน" : "Property"}</span><span className="font-semibold text-right max-w-[60%] line-clamp-1">{propPayModal.propertyTitle}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "จังหวัด" : "Province"}</span><span className="font-semibold">{propPayModal.province}</span></div>

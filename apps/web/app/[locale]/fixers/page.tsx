@@ -1555,6 +1555,46 @@ export default function FixerProPage() {
                   ))}
                 </div>
               )}
+              {propPartnerModalImages.length > 0 && (
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-sky-700 hover:text-sky-800"
+                  onClick={() => {
+                    propPartnerModalImages.forEach((url, idx) => {
+                      const link = document.createElement('a');
+                      link.href = url;
+                      link.target = '_blank';
+                      link.rel = 'noopener noreferrer';
+                      link.download = `property-photo-${idx + 1}`;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    });
+                  }}
+                >
+                  Download Photos
+                </button>
+              )}
+              {propPartnerModalImages.length > 0 && (
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-sky-700 hover:text-sky-800"
+                  onClick={() => {
+                    propPartnerModalImages.forEach((url, idx) => {
+                      const link = document.createElement('a');
+                      link.href = url;
+                      link.target = '_blank';
+                      link.rel = 'noopener noreferrer';
+                      link.download = `property-photo-${idx + 1}`;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    });
+                  }}
+                >
+                  Download Photos
+                </button>
+              )}
               <div className="bg-gray-50 rounded-xl p-4 text-sm space-y-2">
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ทรัพย์สิน" : "Property"}</span><span className="font-semibold text-right max-w-[60%] line-clamp-1">{propAcceptModal.propertyTitle}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ประเภท" : "Type"}</span><span className="font-semibold">{propAcceptModal.propertyType}</span></div>
@@ -1807,7 +1847,7 @@ export default function FixerProPage() {
               }}>
                 {waitModalAttachmentUrls.length > 0
                   ? `${waitModalAttachmentUrls.length} file${waitModalAttachmentUrls.length > 1 ? 's' : ''} attached — Click to Download`
-                  : loadingAttachments ? 'Checking files…' : 'No files attached'}
+                  : loadingAttachments ? 'Checking files…' : 'Files attached'}
               </span></div>
             </div>
 
@@ -2610,6 +2650,19 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
     if (!variationModal) { setVariationAttachUrls([]); return; }
     const po = variationModal.po;
     const urls: string[] = [];
+    const directSources = [
+      variationModal?.issueImage,
+      variationModal?.image,
+      variationModal?.fileUrl,
+      ...(Array.isArray(variationModal?.projectImages) ? variationModal.projectImages : []),
+      ...(Array.isArray(variationModal?.images) ? variationModal.images : []),
+      ...(Array.isArray(variationModal?.metadata?.images) ? variationModal.metadata.images : []),
+      variationModal?.metadata?.issueImageUrl,
+      variationModal?.metadata?.issueImage,
+    ]
+      .map((item: any) => (typeof item === 'string' ? item : item?.url))
+      .filter(Boolean);
+    urls.push(...directSources);
     try { const m = JSON.parse(localStorage.getItem('cblue_po_attachments') || '{}'); if (po && Array.isArray(m[po])) urls.push(...m[po]); } catch {}
     try { const m = JSON.parse(localStorage.getItem('cblue_order_attachments') || '{}'); const oid = variationModal.orderId || (po ? localStorage.getItem(`po_to_order_${po}`) : ''); if (oid && Array.isArray(m[oid])) urls.push(...m[oid]); } catch {}
     try { const rawFiles = (typeof window !== 'undefined' ? (window as any).__cblue_files_by_po : null) || {}; const files: File[] = po && Array.isArray(rawFiles[po]) ? rawFiles[po] : []; files.forEach(f => { try { urls.push(URL.createObjectURL(f)); } catch {} }); } catch {}
@@ -2826,7 +2879,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                 if (variationAttachUrls.length === 0) return;
                 alert('Could not download file. Please ask the customer to share via the chat room.');
               }}>
-                {variationAttachUrls.length > 0 ? `${variationAttachUrls.length} file${variationAttachUrls.length > 1 ? 's' : ''} attached — Click to Download` : 'No files attached'}
+                {variationAttachUrls.length > 0 ? `${variationAttachUrls.length} file${variationAttachUrls.length > 1 ? 's' : ''} attached — Click to Download` : 'Files attached'}
               </span>
             </div>
             <div>
@@ -3308,7 +3361,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
                 if (variationAttachUrls.length === 0) return;
                 alert('Could not download file. Please ask the customer to share via the chat room.');
               }}>
-                {variationAttachUrls.length > 0 ? `${variationAttachUrls.length} file${variationAttachUrls.length > 1 ? 's' : ''} attached — Click to Download` : 'No files attached'}
+                {variationAttachUrls.length > 0 ? `${variationAttachUrls.length} file${variationAttachUrls.length > 1 ? 's' : ''} attached — Click to Download` : 'Files attached'}
               </span>
             </div>
             <div>

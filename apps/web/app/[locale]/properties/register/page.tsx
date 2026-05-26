@@ -326,11 +326,23 @@ export default function PropertyRegisterPage() {
       if (res.ok) {
         setSubmitted(true);
       } else {
-        const errData = await res.json().catch(() => null);
-        const msg = errData?.message;
-        if (Array.isArray(msg)) setError(msg.join(", "));
-        else if (typeof msg === "string" && msg) setError(msg);
-        else setError(tb("submitError"));
+        const contentType = res.headers.get("content-type") || "";
+        const rawText = await res.text().catch(() => "");
+        let msg = "";
+        if (contentType.includes("application/json")) {
+          try {
+            const errData = JSON.parse(rawText || "{}");
+            msg = Array.isArray(errData?.message)
+              ? errData.message.join(", ")
+              : errData?.message || "";
+          } catch {
+            msg = "";
+          }
+        }
+        if (!msg && rawText) {
+          msg = rawText.replace(/<[^>]+>/g, "").trim();
+        }
+        setError(msg || tb("submitError"));
       }
     } catch {
       setError(tb("submitError"));
