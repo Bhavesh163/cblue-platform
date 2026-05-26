@@ -16,6 +16,8 @@ interface Property {
   userId?: string;
   title: string;
   description: string;
+  createdAt?: string;
+  updatedAt?: string;
   propertyType: string;
   listingType: string;
   tier?: string;
@@ -26,7 +28,110 @@ interface Property {
   province: string;
   district: string;
   contactName?: string;
+  contactEmail?: string;
   images: { url: string }[];
+}
+
+const PLACEHOLDER_PROPERTY_IMAGE = "/images/scenic-house.jpg";
+const DEBUG_LISTING_PATTERN = /\b(test|probe|debug|dummy|sample|qa)\b/i;
+const PLACEHOLDER_LOCATION_PATTERN = /^--\s*select/i;
+
+function parsePropertyTimestamp(value?: string) {
+  const ts = value ? Date.parse(value) : 0;
+  return Number.isFinite(ts) ? ts : 0;
+}
+
+function normalizeDistrict(value: unknown) {
+  const text = String(value || "").trim();
+  if (!text || PLACEHOLDER_LOCATION_PATTERN.test(text)) return "";
+  return text;
+}
+
+function normalizeImageUrl(value: unknown) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  if (raw.startsWith("data:image/")) {
+    const compact = raw.replace(/\s+/g, "");
+    const normalized = compact.includes(";base64,")
+      ? compact
+      : compact.replace(/;bas(?!e64,)/i, ";base64,");
+    const valid = /^data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+$/.test(normalized);
+    return valid ? normalized : "";
+  }
+
+  if (
+    raw.startsWith("http://") ||
+    raw.startsWith("https://") ||
+    raw.startsWith("/") ||
+    raw.startsWith("blob:")
+  ) {
+    return raw;
+  }
+
+  return "";
+}
+
+function sanitizeProperty(raw: any): Property {
+  const imagesRaw = Array.isArray(raw?.images) ? raw.images : [];
+  const images = imagesRaw
+    .map((img: any) => normalizeImageUrl(typeof img === "string" ? img : img?.url))
+    .filter(Boolean)
+    .map((url: string) => ({ url }));
+
+  return {
+    ...raw,
+    title: String(raw?.title || "").trim(),
+    description: String(raw?.description || "").trim(),
+    province: String(raw?.province || "").trim(),
+    district: normalizeDistrict(raw?.district),
+    contactEmail: String(raw?.contactEmail || "").trim().toLowerCase(),
+    images,
+  };
+}
+
+function isFakeListing(property: Property) {
+  const haystack = `${property.title} ${property.description}`.toLowerCase();
+  if (DEBUG_LISTING_PATTERN.test(haystack)) return true;
+  if ((property.contactEmail || "").endsWith("@example.com")) return true;
+  return false;
+}
+
+function dedupeProperties(items: Property[]) {
+  const bestByKey = new Map<string, Property>();
+  for (const item of items) {
+    const key = [
+      item.userId || "",
+      String(item.title || "").trim().toLowerCase(),
+      String(item.propertyType || "").toUpperCase(),
+      String(item.listingType || "").toUpperCase(),
+      Number(item.price || 0),
+      String(item.province || "").trim().toLowerCase(),
+      String(item.district || "").trim().toLowerCase(),
+      Number(item.bedrooms || 0),
+      Number(item.bathrooms || 0),
+      Number(item.area || 0),
+    ].join("|");
+
+    const existing = bestByKey.get(key);
+    if (!existing) {
+      bestByKey.set(key, item);
+      continue;
+    }
+
+    const existingHasImage = (existing.images?.length || 0) > 0;
+    const nextHasImage = (item.images?.length || 0) > 0;
+    const existingTs = parsePropertyTimestamp(existing.updatedAt || existing.createdAt);
+    const nextTs = parsePropertyTimestamp(item.updatedAt || item.createdAt);
+
+    if ((nextHasImage && !existingHasImage) || (nextHasImage === existingHasImage && nextTs >= existingTs)) {
+      bestByKey.set(key, item);
+    }
+  }
+
+  return Array.from(bestByKey.values()).sort(
+    (a, b) => parsePropertyTimestamp(b.createdAt) - parsePropertyTimestamp(a.createdAt),
+  );
 }
 
 export default function PropertiesPage() {
@@ -97,7 +202,12 @@ export default function PropertiesPage() {
         const res = await fetch("/api/v1/properties?limit=20");
         if (res.ok) {
           const data = await res.json();
-          setLatestProperties(data.properties || []);
+          const normalized = dedupeProperties(
+            (Array.isArray(data?.properties) ? data.properties : [])
+              .map(sanitizeProperty)
+              .filter((property: Property) => !isFakeListing(property)),
+          );
+          setLatestProperties(normalized.slice(0, 20));
         }
       } catch {
         // API not available
@@ -127,7 +237,12 @@ export default function PropertiesPage() {
       const res = await fetch(`/api/v1/properties?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
-        setProperties(data.properties || []);
+        const normalized = dedupeProperties(
+          (Array.isArray(data?.properties) ? data.properties : [])
+            .map(sanitizeProperty)
+            .filter((property: Property) => !isFakeListing(property)),
+        );
+        setProperties(normalized);
       }
     } catch {
       // API not available
@@ -668,11 +783,11 @@ export default function PropertiesPage() {
                 >
                   <Link href={`${prefix}/properties/${prop.id}`}>
                     <div className="h-48 bg-gray-200 flex items-center justify-center">
-                      {prop.images[0] ? (
-                        <img src={prop.images[0].url} alt={prop.title} className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="text-4xl"></span>
-                      )}
+                      <img
+                        src={prop.images[0]?.url || PLACEHOLDER_PROPERTY_IMAGE}
+                        alt={prop.title}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
                   </Link>
                   <div className="p-4">
@@ -696,7 +811,9 @@ export default function PropertiesPage() {
                       {prop.bathrooms && <span>{prop.bathrooms} bath</span>}
                       {prop.area && <span>{prop.area} sqm</span>}
                     </div>
-                    <p className="text-xs text-gray-400 mt-2">{prop.province}, {prop.district}</p>
+                    <p className="text-xs text-gray-400 mt-2">
+                      {prop.province}{prop.district ? `, ${prop.district}` : ""}
+                    </p>
                     <button
                       onClick={() => handleContactLister(prop)}
                       className="mt-3 w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg transition"
@@ -753,11 +870,11 @@ export default function PropertiesPage() {
                         className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
                       >
                         <div className="h-40 bg-gray-200 flex items-center justify-center">
-                          {prop.images[0] ? (
-                            <img src={prop.images[0].url} alt={prop.title} className="w-full h-full object-cover" />
-                          ) : (
-                            <span className="text-4xl"></span>
-                          )}
+                          <img
+                            src={prop.images[0]?.url || PLACEHOLDER_PROPERTY_IMAGE}
+                            alt={prop.title}
+                            className="w-full h-full object-cover"
+                          />
                         </div>
                         <div className="p-3">
                           <div className="flex items-center gap-2 mb-1">

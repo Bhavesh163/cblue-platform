@@ -115,6 +115,31 @@ const toCurrencyLabel = (value: any, fallback = '฿0') => {
   }
   return raw.startsWith('฿') ? raw : `฿${raw}`;
 };
+const normalizeImageUrl = (value: unknown) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  if (raw.startsWith('data:image/')) {
+    const compact = raw.replace(/\s+/g, '');
+    const normalized = compact.includes(';base64,')
+      ? compact
+      : compact.replace(/;bas(?!e64,)/i, ';base64,');
+    return /^data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+$/.test(normalized)
+      ? normalized
+      : '';
+  }
+
+  if (
+    raw.startsWith('http://') ||
+    raw.startsWith('https://') ||
+    raw.startsWith('/') ||
+    raw.startsWith('blob:')
+  ) {
+    return raw;
+  }
+
+  return '';
+};
 
 function CustomerWorkflowModalMeta({
   step,
@@ -906,7 +931,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       .then((data) => {
         if (!active) return;
         if (data?.images && Array.isArray(data.images)) {
-          setPropModalImages(data.images.map((i: { url: string }) => i.url).filter(Boolean));
+          setPropModalImages(
+            data.images
+              .map((i: { url: string }) => normalizeImageUrl(i?.url))
+              .filter(Boolean),
+          );
         } else {
           setPropModalImages([]);
         }
@@ -1625,9 +1654,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
   // Inject prop inquiry request cards (not ghis-gated)
   const propRequestItems: any[] = propInquiries
-    .filter((p: PropInquiry) => ["NOTIFY_SENT", "DECLINED", "ACCEPTED", "PAID", "MEETING_CONFIRMED"].includes(p.status))
+    .filter((p: PropInquiry) => ["DECLINED", "ACCEPTED", "PAID", "MEETING_CONFIRMED"].includes(p.status))
     .map((p: PropInquiry) => {
-      if (p.status === "NOTIFY_SENT") return { id: `prop-waiting-${p.poNumber}`, type: "prop_waiting", po: p.poNumber, propInquiry: p, createdAt: p.createdAt };
       if (p.status === "DECLINED") return { id: `prop-declined-${p.poNumber}`, type: "prop_declined", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
       if (p.status === "ACCEPTED") return { id: `prop-pay-${p.poNumber}`, type: "prop_pay_fee", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
       if (p.status === "PAID") return { id: `prop-meet-${p.poNumber}`, type: "prop_meeting_invite", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
@@ -1635,6 +1663,28 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       return null;
     })
     .filter(Boolean) as any[];
+  const propActiveItems: any[] = propInquiries
+    .filter((p: PropInquiry) => p.status === "NOTIFY_SENT")
+    .map((p: PropInquiry) => ({
+      id: `prop-waiting-${p.poNumber}`,
+      type: "prop_waiting",
+      po: p.poNumber,
+      title: p.propertyTitle,
+      service: p.propertyTitle,
+      fixerAlias: p.listerName,
+      partnerName: p.listerName,
+      location: [p.province, p.district].filter(Boolean).join(', '),
+      subdistrict: p.district || p.province,
+      budget: toCurrencyLabel(p.propertyFee || p.propertyPrice),
+      tier: p.propertyTier || "Standard",
+      step: 4,
+      actionNeeded: false,
+      createdAt: p.createdAt,
+      propInquiry: p,
+    }));
+  const combinedActiveWithProp = [...propActiveItems, ...combinedActive].sort(
+    (a: any, b: any) => parseDateMs(b.createdAt || b.date) - parseDateMs(a.createdAt || a.date),
+  );
   const allRequestItemsWithProp = [...propRequestItems, ...allRequestItems];
 
   const actionableRequestPos = new Set(
@@ -2165,10 +2215,19 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const renderActiveCard = (item: any, idx: number) => (
     <div key={idx} className="p-5 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
       <div className="flex items-start gap-4 flex-1 min-w-0">
-         <div className="w-10 h-10 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center font-bold shrink-0">{(locale === "th" ? (item.titleTh || item.serviceTh || item.title || item.service || "C") : locale === "zh" ? (item.titleZh || item.serviceZh || item.title || item.service || "C") : (item.title || item.service || "C")).charAt(0)}</div>
+         <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold shrink-0 ${item.type === 'prop_waiting' ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-600'}`}>{(locale === "th" ? (item.titleTh || item.serviceTh || item.title || item.service || "C") : locale === "zh" ? (item.titleZh || item.serviceZh || item.title || item.service || "C") : (item.title || item.service || "C")).charAt(0)}</div>
          <div className="min-w-0">
-           <h3 className="font-bold text-gray-900">{locale === "th" ? (item.titleTh || item.serviceTh || item.title || item.service) : locale === "zh" ? (item.titleZh || item.serviceZh || item.title || item.service) : (item.title || item.service)} <span className="text-sm font-normal text-gray-400">· {item.po || `PO-${item.id?.slice(0,8) || '2605-8471'}`} | {item.subdistrict || 'Saphansong'}</span></h3>
+           <h3 className="font-bold text-gray-900">{locale === "th" ? (item.titleTh || item.serviceTh || item.title || item.service) : locale === "zh" ? (item.titleZh || item.serviceZh || item.title || item.service) : (item.title || item.service)} <span className="text-sm font-normal text-gray-400">· {item.po || `PO-${item.id?.slice(0,8) || '2605-8471'}`} | {item.subdistrict || item.location || 'Saphansong'}</span></h3>
            <p className="text-sm text-gray-600 mt-0.5">{item.fixerAlias || item.partnerName || item.customer || "Customer"} · {item.date || "11/5/2026 14:30"} · {locale === "th" ? "งบประมาณ:" : locale === "zh" ? "预算:" : "Budget:"} {item.budget || ('฿' + Number(item.price || 0).toLocaleString())}</p>
+           {item.type === 'prop_waiting' && (
+             <p className="text-xs text-amber-700 mt-1">
+               {locale === "th"
+                 ? "รอพาร์ทเนอร์ยอมรับคำขอ (ขั้นตอน Notify)"
+                 : locale === "zh"
+                 ? "等待合作伙伴接受请求（通知步骤）"
+                 : "Waiting for partner acceptance (Notify step)."}
+             </p>
+           )}
          </div>
       </div>
       <div className="w-full xl:w-[560px] shrink-0 mt-2 xl:mt-0">
@@ -2176,8 +2235,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       </div>
       <div className="flex flex-col items-end gap-1 flex-shrink-0">
         <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${item.tier === 'ECONOMY' || item.tier === 'Economy' ? 'bg-green-50 text-green-700' : item.tier === 'Standard' || item.tier === 'STANDARD' ? 'bg-blue-50 text-blue-700' : item.tier === 'Corporate' ? 'bg-purple-50 text-purple-700' : item.tier === 'Specialist' ? 'bg-amber-50 text-amber-700' : item.tier === 'Expert' ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-600'}`}>{item.tier || 'Standard'}</span>
-        {(item.actionNeeded || actionableRequestPos.has(item.po)) && <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-red-50 text-red-700">{locale === "th" ? "ต้องดำเนินการ" : locale === "zh" ? "需要操作" : "Action Needed"}</span>}
-        <button
+        {(item.actionNeeded || actionableRequestPos.has(item.po)) && item.type !== 'prop_waiting' && <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-red-50 text-red-700">{locale === "th" ? "ต้องดำเนินการ" : locale === "zh" ? "需要操作" : "Action Needed"}</span>}
+        {item.type !== 'prop_waiting' && <button
           onClick={(e) => {
             e.stopPropagation();
             if (!confirm(locale === "th" ? "ยืนยันการยกเลิกงาน? ข้อมูลงานจะถูกย้ายไปยังประวัติ" : locale === "zh" ? "确认取消此工作？工作信息将移至历史记录。" : "Cancel this job? All job info will be moved to history.")) return;
@@ -2200,7 +2259,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           className="text-xs px-2.5 py-1 rounded-full font-bold bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition"
         >
           {locale === "th" ? "ยกเลิกงาน" : locale === "zh" ? "取消工作" : "Cancel Job"}
-        </button>
+        </button>}
       </div>
     </div>
   );
@@ -2243,11 +2302,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     }, new Map<string, any>()).values(),
   ).sort((a: any, b: any) => parseDateMs(b.completedAt || b.statusChangedAt || b.createdAt || b.date) - parseDateMs(a.completedAt || a.statusChangedAt || a.createdAt || a.date));
   const propertiesCount = orders ? orders.filter((o: any) => o.type === "property").length : 0;
-  const stats = { active: activeOrders.length, completed: allHistory.length, messages: 0, rating: "4.8" };
+  const stats = { active: combinedActiveWithProp.length, completed: allHistory.length, messages: 0, rating: "4.8" };
   const totalReqCount = allRequestItemsWithProp.length;
   const getWorkflowOrderSnapshot = (po: any) =>
     workflowOrders.find((order: any) => extractPo(order) === po) ||
-    combinedActive.find((item: any) => item.po === po) ||
+    combinedActiveWithProp.find((item: any) => item.po === po) ||
     visibleMockHistory.find((item: any) => item.po === po) ||
     {};
   const rateModalOrder = rateModal ? getWorkflowOrderSnapshot(rateModal.po) : null;
@@ -2262,7 +2321,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         {[
           { key: "overview", icon: "", label: locale === "th" ? "ภาพรวม" : "Overview", count: null },
           { key: "requests", icon: "", label: locale === "th" ? "คำขอของคุณ" : "Requests", count: totalReqCount || null },
-          { key: "active", icon: "", label: locale === "th" ? "งานที่ใช้งานอยู่" : "Active Jobs", count: combinedActive.length || null },
+          { key: "active", icon: "", label: locale === "th" ? "งานที่ใช้งานอยู่" : "Active Jobs", count: combinedActiveWithProp.length || null },
           
           { key: "properties", icon: "", label: locale === "th" ? "อสังหาฯ" : "Properties", count: propertiesCount || null },
           { key: "history", icon: "", label: locale === "th" ? "ประวัติ" : "History", count: allHistory.length || null },
@@ -2294,11 +2353,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       {activeTab === "active" && (
         <div className="mt-6">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-gray-800">Active Jobs <span className="text-sm font-normal text-gray-400 ml-2">{combinedActive.length}</span></h2>
+            <h2 className="text-xl font-bold text-gray-800">Active Jobs <span className="text-sm font-normal text-gray-400 ml-2">{combinedActiveWithProp.length}</span></h2>
           </div>
           {/* Pill container — all jobs in one grouped container with dividers */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50">
-            {combinedActive.map((m, i) => (
+            {combinedActiveWithProp.map((m, i) => (
               <div key={i}>
                 {renderActiveCard(m, i)}
               </div>
@@ -2538,12 +2597,12 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div className="flex justify-between items-center mb-4 mt-6">
               <div className="flex flex-col">
                 <h2 className="text-xl font-bold text-gray-800">Active Jobs</h2>
-                <span className="text-gray-500 font-bold text-sm">{combinedActive.length}</span>
+                <span className="text-gray-500 font-bold text-sm">{combinedActiveWithProp.length}</span>
               </div>
               <button className="text-sm font-bold text-sky-600 hover:text-sky-700" onClick={() => setActiveTab("active")}>View All</button>
             </div>
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50 mt-4">
-              {combinedActive.slice(0, 5).map((m, i) => renderActiveCard(m, i))}
+              {combinedActiveWithProp.slice(0, 5).map((m, i) => renderActiveCard(m, i))}
             </div>
           </div>
 

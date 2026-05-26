@@ -111,6 +111,37 @@ const parseMeetingInviteDetails = (value: string) => {
     meetingVenue: String(match?.[4] || "").trim(),
   };
 };
+const PLACEHOLDER_LOCATION_PATTERN = /^--\s*select/i;
+const normalizeImageUrl = (value: unknown) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  if (raw.startsWith("data:image/")) {
+    const compact = raw.replace(/\s+/g, "");
+    const normalized = compact.includes(";base64,")
+      ? compact
+      : compact.replace(/;bas(?!e64,)/i, ";base64,");
+    return /^data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+$/.test(normalized)
+      ? normalized
+      : "";
+  }
+
+  if (
+    raw.startsWith("http://") ||
+    raw.startsWith("https://") ||
+    raw.startsWith("/") ||
+    raw.startsWith("blob:")
+  ) {
+    return raw;
+  }
+
+  return "";
+};
+const normalizeLocationText = (value: unknown) => {
+  const text = String(value || "").trim();
+  if (!text || PLACEHOLDER_LOCATION_PATTERN.test(text)) return "";
+  return text;
+};
 const getWorkflowStepFromStatus = (status?: string) => {
   switch (String(status || '').toUpperCase()) {
     case 'ASSIGNED':
@@ -342,7 +373,11 @@ export default function FixerProPage() {
       .then((data) => {
         if (!active) return;
         if (data?.images && Array.isArray(data.images)) {
-          setPropPartnerModalImages(data.images.map((i: { url: string }) => i.url).filter(Boolean));
+          setPropPartnerModalImages(
+            data.images
+              .map((i: { url: string }) => normalizeImageUrl(i?.url))
+              .filter(Boolean),
+          );
         } else {
           setPropPartnerModalImages([]);
         }
@@ -450,7 +485,9 @@ export default function FixerProPage() {
         }
       } catch {}
 
-      const uniqueDirectUrls = Array.from(new Set(directUrls.filter(Boolean)));
+      const uniqueDirectUrls = Array.from(
+        new Set(directUrls.map(normalizeImageUrl).filter(Boolean)),
+      );
       if (uniqueDirectUrls.length > 0) {
         if (isMounted) { setWaitModalAttachmentUrls(uniqueDirectUrls); setLoadingAttachments(false); }
         return;
@@ -478,7 +515,9 @@ export default function FixerProPage() {
 
         const attachments = await res.json();
         const backendUrls = Array.isArray(attachments)
-          ? attachments.map((attachment: any) => attachment?.url).filter(Boolean)
+          ? attachments
+              .map((attachment: any) => normalizeImageUrl(attachment?.url))
+              .filter(Boolean)
           : [];
         if (isMounted) { setWaitModalAttachmentUrls(Array.from(new Set(backendUrls))); setLoadingAttachments(false); }
       } catch {
@@ -775,12 +814,24 @@ export default function FixerProPage() {
   const properties = myProperties.map(p => ({
     id: p.id,
     type: 'property',
-    service: p.title,
-    serviceTh: p.titleTh || p.title,
-    serviceZh: p.titleZh || p.title,
-    location: p.address?.province || "Bangkok",
+    service: p.title || '',
+    serviceTh: p.titleTh || p.title || '',
+    serviceZh: p.titleZh || p.title || '',
+    description: p.description || '',
+    propertyType: p.propertyType || '',
+    listingType: p.listingType || '',
+    province: normalizeLocationText(p.province || p.address?.province) || "Bangkok",
+    district: normalizeLocationText(p.district || p.address?.district),
+    location: [normalizeLocationText(p.province || p.address?.province), normalizeLocationText(p.district || p.address?.district)].filter(Boolean).join(', ') || "Bangkok",
     status: p.status,
-    fee: p.price ? `฿${p.price.toLocaleString()}` : "N/A"
+    fee: p.price ? `฿${p.price.toLocaleString()}` : "N/A",
+    price: p.price || 0,
+    images: Array.isArray(p.images)
+      ? p.images
+          .map((img: any) => normalizeImageUrl(typeof img === 'string' ? img : img?.url))
+          .filter(Boolean)
+      : [],
+    createdAt: p.createdAt,
   }));
   const EARNINGS_MOCK = [
     { month: "May 25", monthTh: "พ.ค. 25", monthZh: "5月 25", amount: 18500 },
@@ -3800,21 +3851,150 @@ function PartnerProfile({ locale, prefix, partner }: { locale: string; prefix: s
 
 /* ===== PARTNER PROPERTIES ===== */
 function PartnerProperties({ locale, prefix, properties }: { locale: string; prefix: string; properties: any[] }) {
+  const [items, setItems] = useState<any[]>(properties || []);
+  const [editing, setEditing] = useState<any | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [removingId, setRemovingId] = useState("");
+
+  useEffect(() => {
+    setItems(properties || []);
+  }, [properties]);
+
+  const openEdit = (property: any) => {
+    setEditing({
+      id: property.id,
+      title: property.service || "",
+      description: property.description || "",
+      price: String(property.price || 0),
+      province: property.province || "",
+      district: property.district || "",
+    });
+  };
+
+  const saveEdit = async () => {
+    if (!editing?.id) return;
+    setSaving(true);
+    try {
+      let token = localStorage.getItem("subscriber_token") || "";
+      if (!token) return;
+      const payload = {
+        title: String(editing.title || "").trim(),
+        description: String(editing.description || "").trim(),
+        price: Number(editing.price || 0),
+        province: String(editing.province || "").trim(),
+        district: String(editing.district || "").trim(),
+      };
+
+      const updateReq = (authToken: string) => fetch(`/api/v1/properties/${editing.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      let res = await updateReq(token);
+      if (!res.ok && [401, 403].includes(res.status)) {
+        const refreshedToken = await refreshSubscriberSession(token);
+        if (refreshedToken) {
+          token = refreshedToken;
+          res = await updateReq(token);
+        }
+      }
+      if (!res.ok) return;
+
+      const updated = await res.json().catch(() => null);
+      if (updated) {
+        setItems((prev) => prev.map((item) => {
+          if (item.id !== editing.id) return item;
+          const province = normalizeLocationText(updated.province || item.province);
+          const district = normalizeLocationText(updated.district || item.district);
+          return {
+            ...item,
+            service: updated.title || item.service,
+            serviceTh: updated.titleTh || updated.title || item.serviceTh,
+            serviceZh: updated.titleZh || updated.title || item.serviceZh,
+            description: updated.description ?? item.description,
+            price: Number(updated.price ?? item.price ?? 0),
+            fee: `฿${Number(updated.price ?? item.price ?? 0).toLocaleString()}`,
+            province,
+            district,
+            location: [province, district].filter(Boolean).join(', ') || item.location,
+          };
+        }));
+      }
+      setEditing(null);
+    } catch {
+      // Non-blocking
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeProperty = async (id: string) => {
+    if (!id) return;
+    const ok = confirm(
+      locale === "th"
+        ? "ยืนยันลบประกาศนี้หรือไม่?"
+        : locale === "zh"
+        ? "确认删除该房源吗？"
+        : "Delete this property listing?",
+    );
+    if (!ok) return;
+
+    setRemovingId(id);
+    try {
+      let token = localStorage.getItem("subscriber_token") || "";
+      if (!token) return;
+      const removeReq = (authToken: string) => fetch(`/api/v1/properties/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+
+      let res = await removeReq(token);
+      if (!res.ok && [401, 403].includes(res.status)) {
+        const refreshedToken = await refreshSubscriberSession(token);
+        if (refreshedToken) {
+          token = refreshedToken;
+          res = await removeReq(token);
+        }
+      }
+      if (!res.ok) return;
+
+      setItems((prev) => prev.filter((item) => item.id !== id));
+    } catch {
+      // Non-blocking
+    } finally {
+      setRemovingId("");
+    }
+  };
+
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-100">
+      <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
         <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "อสังหาริมทรัพย์ของคุณ" : locale === "zh" ? "您的房产" : "Your Properties"}</h2>
+        <Link href={`${prefix}/properties/register`} className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition whitespace-nowrap">
+          {locale === "th" ? "ลงประกาศใหม่" : locale === "zh" ? "发布新房源" : "List New"}
+        </Link>
       </div>
       <div className="divide-y divide-gray-50">
-        {properties && properties.length > 0 ? properties.map((p: any) => (
+        {items && items.length > 0 ? items.map((p: any) => (
           <div key={p.id} className="p-6 hover:bg-gray-50/50 transition">
             <div className="flex items-center gap-4 mb-4">
-              <div className="w-16 h-16 rounded-xl bg-teal-100 flex items-center justify-center text-3xl"></div>
+              <div className="w-16 h-16 rounded-xl overflow-hidden bg-teal-100 border border-teal-100">
+                <img
+                  src={normalizeImageUrl(p?.images?.[0]) || "/images/scenic-house.jpg"}
+                  alt={p.service || "Property"}
+                  className="w-full h-full object-cover"
+                />
+              </div>
               <div className="flex-1">
                 <div className="flex justify-between items-start">
                   <div>
                     <h3 className="font-bold text-gray-900">{locale === "th" ? p.serviceTh : locale === "zh" ? p.serviceZh : p.service}</h3>
                     <p className="text-sm text-gray-500 mt-1">{p.location || "-"} &middot; {p.fee}</p>
+                    <p className="text-xs text-gray-400 mt-1">{p.propertyType || ""} {p.listingType ? `· ${p.listingType}` : ""}</p>
                   </div>
                   <span className={`text-xs px-3 py-1 rounded-full font-bold ${p.status === 'AVAILABLE' || p.status === 'CREATED' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
                     {p.status}
@@ -3824,15 +4004,69 @@ function PartnerProperties({ locale, prefix, properties }: { locale: string; pre
             </div>
             
             <div className="flex items-center gap-4 text-sm mt-4 pt-4 border-t border-gray-100">
-              <Link href={`properties/${p.id}/edit`} className="ml-auto px-4 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-lg transition">
+              <button onClick={() => openEdit(p)} className="ml-auto px-4 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-lg transition">
                 {locale === "th" ? "แก้ไข" : locale === "zh" ? "编辑" : "Edit"}
-              </Link>
+              </button>
+              <button
+                onClick={() => removeProperty(p.id)}
+                disabled={removingId === p.id}
+                className="px-4 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {removingId === p.id
+                  ? (locale === "th" ? "กำลังลบ..." : locale === "zh" ? "删除中..." : "Removing...")
+                  : (locale === "th" ? "ลบ" : locale === "zh" ? "删除" : "Delete")}
+              </button>
             </div>
           </div>
         )) : (
           <p className="text-sm text-gray-500 p-6 text-center">{locale === "th" ? "ไม่มีประกาศอสังหาริมทรัพย์" : locale === "zh" ? "没有房产列表" : "No properties listed"}</p>
         )}
       </div>
+
+      {editing && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="w-full max-w-lg bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="font-bold text-gray-900">{locale === "th" ? "แก้ไขประกาศอสังหาริมทรัพย์" : locale === "zh" ? "编辑房源" : "Edit Property"}</h3>
+              <button onClick={() => setEditing(null)} className="text-gray-500 hover:text-gray-700">✕</button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "ชื่อประกาศ" : locale === "zh" ? "标题" : "Title"}</label>
+                <input value={editing.title} onChange={(e) => setEditing((prev: any) => ({ ...prev, title: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "รายละเอียด" : locale === "zh" ? "描述" : "Description"}</label>
+                <textarea value={editing.description} onChange={(e) => setEditing((prev: any) => ({ ...prev, description: e.target.value }))} rows={4} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none" />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "ราคา" : locale === "zh" ? "价格" : "Price"}</label>
+                  <input type="number" min="0" value={editing.price} onChange={(e) => setEditing((prev: any) => ({ ...prev, price: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "จังหวัด" : locale === "zh" ? "省份" : "Province"}</label>
+                  <input value={editing.province} onChange={(e) => setEditing((prev: any) => ({ ...prev, province: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "เขต/อำเภอ" : locale === "zh" ? "区/县" : "District"}</label>
+                <input value={editing.district} onChange={(e) => setEditing((prev: any) => ({ ...prev, district: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button onClick={() => setEditing(null)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700">
+                  {locale === "th" ? "ยกเลิก" : locale === "zh" ? "取消" : "Cancel"}
+                </button>
+                <button onClick={saveEdit} disabled={saving} className="px-4 py-2 bg-green-700 hover:bg-green-800 text-white rounded-lg text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed">
+                  {saving
+                    ? (locale === "th" ? "กำลังบันทึก..." : locale === "zh" ? "保存中..." : "Saving...")
+                    : (locale === "th" ? "บันทึก" : locale === "zh" ? "保存" : "Save")}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

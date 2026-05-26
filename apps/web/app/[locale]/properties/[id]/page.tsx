@@ -31,6 +31,40 @@ interface PropertyDetail {
   user: { name: string } | null;
 }
 
+const PLACEHOLDER_PROPERTY_IMAGE = "/images/scenic-house.jpg";
+const PLACEHOLDER_LOCATION_PATTERN = /^--\s*select/i;
+
+function normalizeImageUrl(value: unknown) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  if (raw.startsWith("data:image/")) {
+    const compact = raw.replace(/\s+/g, "");
+    const normalized = compact.includes(";base64,")
+      ? compact
+      : compact.replace(/;bas(?!e64,)/i, ";base64,");
+    const valid = /^data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+$/.test(normalized);
+    return valid ? normalized : "";
+  }
+
+  if (
+    raw.startsWith("http://") ||
+    raw.startsWith("https://") ||
+    raw.startsWith("/") ||
+    raw.startsWith("blob:")
+  ) {
+    return raw;
+  }
+
+  return "";
+}
+
+function cleanLocationPart(value: unknown) {
+  const text = String(value || "").trim();
+  if (!text || PLACEHOLDER_LOCATION_PATTERN.test(text)) return "";
+  return text;
+}
+
 export default function PropertyDetailPage() {
   const t = useTranslations("realEstate");
   const tc = useTranslations("common");
@@ -74,6 +108,10 @@ export default function PropertyDetailPage() {
     return new Intl.NumberFormat("th-TH").format(price);
   }
 
+  const galleryImages = (property?.images || [])
+    .map((img) => ({ ...img, url: normalizeImageUrl(img?.url) }))
+    .filter((img) => Boolean(img.url));
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center text-gray-500">
@@ -98,9 +136,9 @@ export default function PropertyDetailPage() {
       {/* Image Gallery */}
       <section className="bg-gray-900">
         <div className="mx-auto max-w-7xl">
-          {property.images.length > 0 ? (
+          {galleryImages.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-1 max-h-[500px] overflow-hidden">
-              {property.images.slice(0, 4).map((img, idx) => (
+              {galleryImages.slice(0, 4).map((img, idx) => (
                 <img
                   key={img.id}
                   src={img.url}
@@ -110,7 +148,9 @@ export default function PropertyDetailPage() {
               ))}
             </div>
           ) : (
-            <div className="h-64 flex items-center justify-center text-6xl bg-gray-800">🏠</div>
+            <div className="h-64 bg-gray-800">
+              <img src={PLACEHOLDER_PROPERTY_IMAGE} alt={property.title} className="w-full h-full object-cover" />
+            </div>
           )}
         </div>
       </section>
@@ -187,11 +227,13 @@ export default function PropertyDetailPage() {
                 </h2>
                 <div className="text-gray-700 space-y-1">
                   {property.addressLine && <p>{property.addressLine}</p>}
-                  <p>
-                    {[property.subdistrict, property.district, property.province]
+                  <p>{[
+                      cleanLocationPart(property.subdistrict),
+                      cleanLocationPart(property.district),
+                      cleanLocationPart(property.province),
+                    ]
                       .filter(Boolean)
-                      .join(", ")}
-                  </p>
+                      .join(", ")}</p>
                   {property.postalCode && <p>{property.postalCode}</p>}
                 </div>
               </div>
@@ -201,25 +243,20 @@ export default function PropertyDetailPage() {
             <div>
               <div className="bg-white rounded-xl border border-gray-200 p-6 sticky top-24 space-y-4">
                 <h3 className="font-semibold text-gray-900">{t("contactName")}</h3>
-                {property.contactName && (
-                  <p className="text-gray-700">{property.contactName}</p>
-                )}
-                {property.contactPhone && (
-                  <a
-                    href={`tel:${property.contactPhone}`}
-                    className="block w-full py-3 text-center text-sm font-semibold text-white bg-green-700 hover:bg-green-800 rounded-xl transition"
-                  >
-                    📞 {property.contactPhone}
-                  </a>
-                )}
-                {property.contactEmail && (
-                  <a
-                    href={`mailto:${property.contactEmail}`}
-                    className="block w-full py-3 text-center text-sm font-semibold text-green-700 border border-green-700 hover:bg-green-50 rounded-xl transition"
-                  >
-                    ✉️ {property.contactEmail}
-                  </a>
-                )}
+                <p className="text-gray-700">{property.contactName || "CBLUE Lister"}</p>
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                  {locale === "th"
+                    ? "ข้อมูลติดต่อจะเปิดเผยหลังชำระค่าดำเนินการในแดชบอร์ด"
+                    : locale === "zh"
+                    ? "完成处理费支付后将显示联系方式"
+                    : "Contact details are revealed after paying the processing fee in Dashboard."}
+                </div>
+                <Link
+                  href={`${prefix}/properties`}
+                  className="block w-full py-3 text-center text-sm font-semibold text-white bg-green-700 hover:bg-green-800 rounded-xl transition"
+                >
+                  {locale === "th" ? "📩 กลับไปส่งคำขอติดต่อ" : locale === "zh" ? "📩 返回发送询盘" : "📩 Go to Contact Flow"}
+                </Link>
                 {property.yearBuilt && (
                   <p className="text-xs text-gray-400">
                     {locale === "th" ? "ปีที่สร้าง" : locale === "zh" ? "建造年份" : "Year Built"}: {property.yearBuilt}

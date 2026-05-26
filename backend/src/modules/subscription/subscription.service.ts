@@ -41,9 +41,14 @@ export class SubscriptionService {
     private configService: ConfigService,
   ) {}
 
+  private normalizeEmail(value?: string | null) {
+    return String(value || '').trim().toLowerCase();
+  }
+
   async register(dto: CreateSubscriberDto) {
+    const normalizedEmail = this.normalizeEmail(dto.email);
     const existing = await this.prisma.subscriber.findUnique({
-      where: { email: dto.email.toLowerCase() },
+      where: { email: normalizedEmail },
     });
 
     if (existing) {
@@ -56,7 +61,7 @@ export class SubscriptionService {
     const { subscriber, user } = await this.prisma.$transaction(async (tx) => {
       const subscriber = await tx.subscriber.create({
         data: {
-          email: dto.email.toLowerCase(),
+          email: normalizedEmail,
           passwordHash,
           name: dto.name,
           phone: dto.phone ?? '',
@@ -70,7 +75,7 @@ export class SubscriptionService {
 
       // Bridge: find or create a User record linked to this Subscriber so JwtAuthGuard works
       let user = await tx.user.findFirst({
-        where: { email: dto.email.toLowerCase() },
+        where: { email: normalizedEmail },
       });
       if (user) {
         user = await tx.user.update({
@@ -80,7 +85,7 @@ export class SubscriptionService {
       } else {
         user = await tx.user.create({
           data: {
-            email: dto.email.toLowerCase(),
+            email: normalizedEmail,
             name: dto.name,
             company: dto.company,
             subscriberId: subscriber.id,
@@ -110,8 +115,9 @@ export class SubscriptionService {
   }
 
   async login(dto: LoginSubscriberDto) {
+    const normalizedEmail = this.normalizeEmail(dto.email);
     const subscriber = await this.prisma.subscriber.findUnique({
-      where: { email: dto.email.toLowerCase() },
+      where: { email: normalizedEmail },
     });
 
     if (!subscriber) {
@@ -233,12 +239,39 @@ export class SubscriptionService {
   }
 
   async forgotPassword(dto: ForgotPasswordDto) {
-    const subscriber = await this.prisma.subscriber.findUnique({
-      where: { email: dto.email.toLowerCase() },
-    });
+    const normalizedEmail = this.normalizeEmail(dto.email);
+    let subscriber = normalizedEmail
+      ? await this.prisma.subscriber.findUnique({
+          where: { email: normalizedEmail },
+        })
+      : null;
+
+    if (!subscriber && normalizedEmail) {
+      const bridgedUser = await this.prisma.user.findUnique({
+        where: { email: normalizedEmail },
+        select: { id: true, subscriberId: true, email: true, phone: true },
+      });
+
+      if (bridgedUser) {
+        subscriber = await this.findSubscriberByIdentity(
+          normalizedEmail,
+          bridgedUser.phone,
+          bridgedUser,
+        );
+
+        if (subscriber) {
+          this.logger.log(
+            `forgotPassword bridge lookup matched user ${bridgedUser.id} -> subscriber ${subscriber.id}`,
+          );
+        }
+      }
+    }
 
     if (!subscriber) {
       // Return success even if email not found (security best practice)
+      if (normalizedEmail) {
+        this.logger.warn(`forgotPassword: no subscriber match for ${normalizedEmail}`);
+      }
       return { message: 'If the email exists, a reset link has been sent.' };
     }
 
