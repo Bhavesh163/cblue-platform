@@ -19,6 +19,7 @@ describe('SubscriptionService', () => {
     prismaService = {
       subscriber: {
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
         findMany: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
@@ -74,6 +75,7 @@ describe('SubscriptionService', () => {
     it('should successfully register a new user and subscriber', async () => {
       // Mock no existing subscriber
       prismaService.subscriber.findUnique.mockResolvedValue(null);
+      prismaService.subscriber.findFirst.mockResolvedValue(null);
       // Mock created subscriber inside transaction
       prismaService.subscriber.create.mockResolvedValue({
         id: 'sub-1',
@@ -96,6 +98,7 @@ describe('SubscriptionService', () => {
 
     it('should throw conflict error if subscriber exists', async () => {
       prismaService.subscriber.findUnique.mockResolvedValue({ id: 'sub-1' });
+      prismaService.subscriber.findFirst.mockResolvedValue({ id: 'sub-1' });
 
       await expect(
         service.register({

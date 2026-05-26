@@ -42,7 +42,9 @@ export class SubscriptionService {
   ) {}
 
   private normalizeEmail(value?: string | null) {
-    return String(value || '').trim().toLowerCase();
+    return String(value || '')
+      .trim()
+      .toLowerCase();
   }
 
   private async findSubscriberByEmail(email?: string | null) {
@@ -333,7 +335,9 @@ export class SubscriptionService {
     if (!subscriber) {
       // Return success even if email not found (security best practice)
       if (normalizedEmail) {
-        this.logger.warn(`forgotPassword: no subscriber match for ${normalizedEmail}`);
+        this.logger.warn(
+          `forgotPassword: no subscriber match for ${normalizedEmail}`,
+        );
       }
       return { message: 'If the email exists, a reset link has been sent.' };
     }
@@ -643,13 +647,10 @@ export class SubscriptionService {
       'noreply@cblue.co.th';
     const normalizedConfiguredFromEmail = configuredFromEmail
       .trim()
-      .replace(/^['\"]|['\"]$/g, '');
+      .replace(/^['"]|['"]$/g, '');
     const fromCandidates = Array.from(
       new Set(
-        [
-          normalizedConfiguredFromEmail,
-          'noreply@cblue.co.th',
-        ]
+        [normalizedConfiguredFromEmail, 'noreply@cblue.co.th']
           .map((v) => v.trim())
           .filter(Boolean),
       ),

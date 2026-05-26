@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useTranslations, useLocale } from "next-intl";
@@ -152,7 +152,7 @@ function dedupeProperties(items: Property[]) {
   );
 }
 
-export default function PropertiesPage() {
+function PropertiesPageContent() {
   const t = useTranslations("realEstate");
   const tc = useTranslations("common");
   const locale = useLocale();
@@ -1043,5 +1043,13 @@ export default function PropertiesPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+export default function PropertiesPage() {
+  return (
+    <Suspense fallback={null}>
+      <PropertiesPageContent />
+    </Suspense>
   );
 }

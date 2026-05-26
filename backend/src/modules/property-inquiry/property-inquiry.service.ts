@@ -34,7 +34,9 @@ export class PropertyInquiryService {
       bySubscriberId.forEach((item) => linkedIds.add(item.id));
     }
 
-    const normalizedEmail = String(user.email || '').trim().toLowerCase();
+    const normalizedEmail = String(user.email || '')
+      .trim()
+      .toLowerCase();
     if (normalizedEmail) {
       const byEmail = await this.prisma.user.findMany({
         where: {
