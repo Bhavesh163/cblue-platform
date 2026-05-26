@@ -45,11 +45,47 @@ export class SubscriptionService {
     return String(value || '').trim().toLowerCase();
   }
 
-  async register(dto: CreateSubscriberDto) {
-    const normalizedEmail = this.normalizeEmail(dto.email);
-    const existing = await this.prisma.subscriber.findUnique({
+  private async findSubscriberByEmail(email?: string | null) {
+    const normalizedEmail = this.normalizeEmail(email);
+    if (!normalizedEmail) return null;
+
+    const exact = await this.prisma.subscriber.findUnique({
       where: { email: normalizedEmail },
     });
+    if (exact) return exact;
+
+    return this.prisma.subscriber.findFirst({
+      where: {
+        email: {
+          equals: normalizedEmail,
+          mode: 'insensitive',
+        },
+      },
+    });
+  }
+
+  private async findUserByEmail(email?: string | null) {
+    const normalizedEmail = this.normalizeEmail(email);
+    if (!normalizedEmail) return null;
+
+    const exact = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
+    if (exact) return exact;
+
+    return this.prisma.user.findFirst({
+      where: {
+        email: {
+          equals: normalizedEmail,
+          mode: 'insensitive',
+        },
+      },
+    });
+  }
+
+  async register(dto: CreateSubscriberDto) {
+    const normalizedEmail = this.normalizeEmail(dto.email);
+    const existing = await this.findSubscriberByEmail(normalizedEmail);
 
     if (existing) {
       throw new ConflictException('Email already registered');
@@ -75,7 +111,12 @@ export class SubscriptionService {
 
       // Bridge: find or create a User record linked to this Subscriber so JwtAuthGuard works
       let user = await tx.user.findFirst({
-        where: { email: normalizedEmail },
+        where: {
+          email: {
+            equals: normalizedEmail,
+            mode: 'insensitive',
+          },
+        },
       });
       if (user) {
         user = await tx.user.update({
@@ -116,9 +157,7 @@ export class SubscriptionService {
 
   async login(dto: LoginSubscriberDto) {
     const normalizedEmail = this.normalizeEmail(dto.email);
-    const subscriber = await this.prisma.subscriber.findUnique({
-      where: { email: normalizedEmail },
-    });
+    const subscriber = await this.findSubscriberByEmail(normalizedEmail);
 
     if (!subscriber) {
       throw new UnauthorizedException('Invalid email or password');
@@ -241,27 +280,51 @@ export class SubscriptionService {
   async forgotPassword(dto: ForgotPasswordDto) {
     const normalizedEmail = this.normalizeEmail(dto.email);
     let subscriber = normalizedEmail
-      ? await this.prisma.subscriber.findUnique({
-          where: { email: normalizedEmail },
-        })
+      ? await this.findSubscriberByEmail(normalizedEmail)
       : null;
 
     if (!subscriber && normalizedEmail) {
-      const bridgedUser = await this.prisma.user.findUnique({
-        where: { email: normalizedEmail },
-        select: { id: true, subscriberId: true, email: true, phone: true },
-      });
+      const bridgedUser = await this.findUserByEmail(normalizedEmail);
 
       if (bridgedUser) {
+        const bridgePayload = {
+          id: bridgedUser.id,
+          subscriberId: bridgedUser.subscriberId,
+          email: bridgedUser.email,
+          phone: bridgedUser.phone,
+        };
         subscriber = await this.findSubscriberByIdentity(
           normalizedEmail,
           bridgedUser.phone,
-          bridgedUser,
+          bridgePayload,
         );
 
         if (subscriber) {
           this.logger.log(
             `forgotPassword bridge lookup matched user ${bridgedUser.id} -> subscriber ${subscriber.id}`,
+          );
+        }
+      }
+    }
+
+    if (!subscriber && normalizedEmail) {
+      const byEmailContains = await this.prisma.subscriber.findFirst({
+        where: {
+          email: {
+            contains: normalizedEmail,
+            mode: 'insensitive',
+          },
+        },
+        select: { id: true },
+      });
+
+      if (byEmailContains) {
+        subscriber = await this.prisma.subscriber.findUnique({
+          where: { id: byEmailContains.id },
+        });
+        if (subscriber) {
+          this.logger.log(
+            `forgotPassword recovered subscriber ${subscriber.id} via contains(email) fallback`,
           );
         }
       }
@@ -376,9 +439,7 @@ export class SubscriptionService {
       preferredUser?.email?.trim().toLowerCase() ||
       '';
     if (normalizedEmail) {
-      const byEmail = await this.prisma.subscriber.findUnique({
-        where: { email: normalizedEmail },
-      });
+      const byEmail = await this.findSubscriberByEmail(normalizedEmail);
       if (byEmail) return byEmail;
     }
 

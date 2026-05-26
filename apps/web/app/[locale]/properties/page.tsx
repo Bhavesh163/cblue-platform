@@ -7,7 +7,10 @@ import { useTranslations, useLocale } from "next-intl";
 import { THAI_PROVINCES } from "../lib/constants";
 import PdpaConsent from "../components/PdpaConsent";
 import { clearSubscriberSession, refreshSubscriberSession } from "../../../lib/subscriberSession";
-const PROPERTY_TYPES = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "APARTMENT"] as const;
+const CORE_PROPERTY_TYPES = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "APARTMENT"] as const;
+const EXTRA_PROPERTY_TYPES = ["OFFICE", "WAREHOUSE", "SHOPHOUSE"] as const;
+const PROPERTY_TYPES = [...CORE_PROPERTY_TYPES, ...EXTRA_PROPERTY_TYPES] as const;
+const CORE_PROPERTY_TYPE_SET = new Set<string>(CORE_PROPERTY_TYPES as readonly string[]);
 
 
 
@@ -56,8 +59,13 @@ function normalizeImageUrl(value: unknown) {
     const normalized = compact.includes(";base64,")
       ? compact
       : compact.replace(/;bas(?!e64,)/i, ";base64,");
-    const valid = /^data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+$/.test(normalized);
-    return valid ? normalized : "";
+    const commaIndex = normalized.indexOf(",");
+    if (commaIndex <= 0) return "";
+    const header = normalized.slice(0, commaIndex);
+    const payload = normalized.slice(commaIndex + 1).replace(/\s+/g, "");
+    if (!payload) return "";
+    const fixedHeader = /;base64$/i.test(header) ? header : `${header};base64`;
+    return `${fixedHeader},${payload}`;
   }
 
   if (
@@ -94,6 +102,7 @@ function isFakeListing(property: Property) {
   const haystack = `${property.title} ${property.description}`.toLowerCase();
   if (DEBUG_LISTING_PATTERN.test(haystack)) return true;
   if ((property.contactEmail || "").endsWith("@example.com")) return true;
+  if (String(property.listingType || "").toUpperCase() === "SALE" && Number(property.price || 0) <= 1) return true;
   return false;
 }
 
@@ -226,13 +235,22 @@ export default function PropertiesPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (f.propertyType) params.set("propertyType", f.propertyType);
+      const selectedPropertyType = String(f.propertyType || "").trim().toUpperCase();
+      if (selectedPropertyType && CORE_PROPERTY_TYPE_SET.has(selectedPropertyType)) {
+        params.set("propertyType", selectedPropertyType);
+      }
       if (f.listingType) params.set("listingType", f.listingType);
       if (f.province) params.set("province", f.province);
       if (f.minPrice) params.set("minPrice", f.minPrice);
       if (f.maxPrice) params.set("maxPrice", f.maxPrice);
       if (f.bedrooms) params.set("bedrooms", f.bedrooms);
-      if (f.keyword) params.set("keyword", f.keyword);
+      const mergedKeyword = [
+        String(f.keyword || "").trim(),
+        selectedPropertyType && !CORE_PROPERTY_TYPE_SET.has(selectedPropertyType) ? selectedPropertyType : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      if (mergedKeyword) params.set("keyword", mergedKeyword);
 
       const res = await fetch(`/api/v1/properties?${params.toString()}`);
       if (res.ok) {
@@ -290,7 +308,28 @@ export default function PropertiesPage() {
     "OFFICE": "💼 office",
     "APARTMENT": "🏢 apartment",
     "WAREHOUSE": "🏭 warehouse",
+    "SHOPHOUSE": "🏬 shophouse",
     "FACTORY": "🏭 factory"
+  };
+
+  const getPropertyTypeLabel = (type: string) => {
+    const typeKey = typeKeys[type];
+    if (typeKey) {
+      try {
+        return t(`types.${typeKey}`);
+      } catch {
+        // Fallback below when translation key is unavailable.
+      }
+    }
+
+    const fallbackLabels: Record<string, { en: string; th: string; zh: string }> = {
+      OFFICE: { en: "Office", th: "ออฟฟิศ", zh: "办公室" },
+      WAREHOUSE: { en: "Warehouse", th: "โกดัง", zh: "仓库" },
+      SHOPHOUSE: { en: "Shophouse", th: "ตึกแถว", zh: "商铺" },
+    };
+    const fallback = fallbackLabels[type];
+    if (!fallback) return type;
+    return locale === "th" ? fallback.th : locale === "zh" ? fallback.zh : fallback.en;
   };
 
   return (
@@ -647,7 +686,7 @@ export default function PropertiesPage() {
                 >
                   <option value="">--</option>
                   {PROPERTY_TYPES.map((pt) => (
-                    <option key={pt} value={pt}>{t(`types.${typeKeys[pt]}`)}</option>
+                    <option key={pt} value={pt}>{getPropertyTypeLabel(pt)}</option>
                   ))}
                 </select>
               </div>
@@ -798,7 +837,7 @@ export default function PropertiesPage() {
                         {prop.listingType === "SALE" ? t("forSale") : t("forRent")}
                       </span>
                       <span className="text-xs text-gray-500">
-                        {t(`types.${typeKeys[prop.propertyType]}`)}
+                        {getPropertyTypeLabel(prop.propertyType)}
                       </span>
                     </div>
                     <h3 className="font-semibold text-gray-900 line-clamp-1">{prop.title}</h3>
@@ -837,7 +876,7 @@ export default function PropertiesPage() {
                     onClick={() => handleSearch({ propertyType: type })}
                     className="bg-white rounded-xl p-4 border border-gray-200 text-center hover:border-green-500 hover:shadow-md transition cursor-pointer flex flex-col items-center justify-center gap-2"
                   >
-                    <h3 className="font-semibold text-gray-900 text-sm sm:text-base">{t(`types.${typeKeys[type]}`)}</h3>
+                    <h3 className="font-semibold text-gray-900 text-sm sm:text-base">{getPropertyTypeLabel(type)}</h3>
                   </button>
                 ))}
               </div>
@@ -884,7 +923,7 @@ export default function PropertiesPage() {
                               {prop.listingType === "SALE" ? t("forSale") : t("forRent")}
                             </span>
                             <span className="text-xs text-gray-500">
-                              {t(`types.${typeKeys[prop.propertyType]}`)}
+                              {getPropertyTypeLabel(prop.propertyType)}
                             </span>
                           </div>
                           <h3 className="font-semibold text-gray-900 text-sm line-clamp-1">{prop.title}</h3>

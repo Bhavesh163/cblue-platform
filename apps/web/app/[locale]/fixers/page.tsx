@@ -121,9 +121,13 @@ const normalizeImageUrl = (value: unknown) => {
     const normalized = compact.includes(";base64,")
       ? compact
       : compact.replace(/;bas(?!e64,)/i, ";base64,");
-    return /^data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+$/.test(normalized)
-      ? normalized
-      : "";
+    const commaIndex = normalized.indexOf(",");
+    if (commaIndex <= 0) return "";
+    const header = normalized.slice(0, commaIndex);
+    const payload = normalized.slice(commaIndex + 1).replace(/\s+/g, "");
+    if (!payload) return "";
+    const fixedHeader = /;base64$/i.test(header) ? header : `${header};base64`;
+    return `${fixedHeader},${payload}`;
   }
 
   if (
@@ -136,6 +140,180 @@ const normalizeImageUrl = (value: unknown) => {
   }
 
   return "";
+};
+const parseFilenameFromContentDisposition = (value: string | null) => {
+  if (!value) return "";
+  const utfMatch = value.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utfMatch?.[1]) {
+    try {
+      return decodeURIComponent(utfMatch[1]);
+    } catch {
+      return utfMatch[1];
+    }
+  }
+  const asciiMatch = value.match(/filename="?([^";]+)"?/i);
+  return asciiMatch?.[1] || "";
+};
+const extensionFromMimeType = (mimeType?: string | null) => {
+  const mime = String(mimeType || "").toLowerCase();
+  if (!mime) return "bin";
+  if (mime.includes("jpeg")) return "jpg";
+  if (mime.includes("png")) return "png";
+  if (mime.includes("webp")) return "webp";
+  if (mime.includes("gif")) return "gif";
+  if (mime.includes("pdf")) return "pdf";
+  if (mime.includes("heic")) return "heic";
+  const match = mime.match(/\/([a-z0-9.+-]+)$/i);
+  return match?.[1] || "bin";
+};
+const inferFilenameFromUrl = (url: string, fallback: string) => {
+  try {
+    const base = typeof window !== "undefined" ? window.location.origin : "http://localhost";
+    const parsed = new URL(url, base);
+    const name = parsed.pathname.split("/").filter(Boolean).pop();
+    if (name) {
+      try {
+        return decodeURIComponent(name);
+      } catch {
+        return name;
+      }
+    }
+  } catch {}
+  return fallback;
+};
+const triggerDownload = (href: string, filename: string, revoke = false) => {
+  const link = document.createElement("a");
+  link.href = href;
+  link.download = filename;
+  link.rel = "noopener noreferrer";
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  if (revoke) {
+    setTimeout(() => URL.revokeObjectURL(href), 2000);
+  }
+};
+const downloadBlobFile = (blob: Blob, filename: string) => {
+  const blobUrl = URL.createObjectURL(blob);
+  triggerDownload(blobUrl, filename, true);
+};
+const shouldAttachAuthHeader = (url: string) => {
+  if (url.startsWith("/api/")) return true;
+  try {
+    if (typeof window === "undefined") return false;
+    const parsed = new URL(url, window.location.origin);
+    return parsed.origin === window.location.origin && parsed.pathname.startsWith("/api/");
+  } catch {
+    return false;
+  }
+};
+const downloadRawFilesForPo = (po?: string, prefix = "attachment") => {
+  if (!po || typeof window === "undefined") return 0;
+  try {
+    const rawFiles = (window as any).__cblue_files_by_po || {};
+    const files: File[] = Array.isArray(rawFiles[po]) ? rawFiles[po] : [];
+    let downloaded = 0;
+    files.forEach((file, index) => {
+      const ext = extensionFromMimeType(file.type);
+      const fallbackName = `${prefix}-${index + 1}.${ext}`;
+      const fileName = file.name || fallbackName;
+      const blobUrl = URL.createObjectURL(file);
+      triggerDownload(blobUrl, fileName, true);
+      downloaded += 1;
+    });
+    return downloaded;
+  } catch {
+    return 0;
+  }
+};
+const downloadSingleAttachmentUrl = async (
+  rawUrl: string,
+  index: number,
+  prefix = "attachment",
+) => {
+  const url = normalizeImageUrl(rawUrl);
+  if (!url) return false;
+
+  const fallbackName = inferFilenameFromUrl(url, `${prefix}-${index + 1}`);
+
+  if (url.startsWith("blob:")) {
+    triggerDownload(url, fallbackName);
+    return true;
+  }
+
+  if (url.startsWith("data:")) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) return false;
+      const blob = await response.blob();
+      const ext = extensionFromMimeType(blob.type);
+      const fileName = fallbackName.includes(".") ? fallbackName : `${fallbackName}.${ext}`;
+      downloadBlobFile(blob, fileName);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  try {
+    const headers: Record<string, string> = {};
+    const token = typeof window !== "undefined" ? localStorage.getItem("subscriber_token") || "" : "";
+    if (token && shouldAttachAuthHeader(url)) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const response = await fetch(url, {
+      headers,
+      credentials: "include",
+    });
+
+    if (!response.ok) {
+      if (url.startsWith("http://") || url.startsWith("https://")) {
+        window.open(url, "_blank", "noopener,noreferrer");
+        return true;
+      }
+      return false;
+    }
+
+    const blob = await response.blob();
+    const headerName = parseFilenameFromContentDisposition(
+      response.headers.get("content-disposition"),
+    );
+    const ext = extensionFromMimeType(blob.type);
+    const fileName = headerName || (fallbackName.includes(".") ? fallbackName : `${fallbackName}.${ext}`);
+    downloadBlobFile(blob, fileName);
+    return true;
+  } catch {
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      window.open(url, "_blank", "noopener,noreferrer");
+      return true;
+    }
+    return false;
+  }
+};
+const downloadAttachmentUrls = async ({
+  urls,
+  po,
+  prefix = "attachment",
+}: {
+  urls: string[];
+  po?: string;
+  prefix?: string;
+}) => {
+  const uniqueUrls = Array.from(new Set((urls || []).map(normalizeImageUrl).filter(Boolean)));
+  let downloadCount = 0;
+
+  for (const [i, url] of uniqueUrls.entries()) {
+    const success = await downloadSingleAttachmentUrl(url, i, prefix);
+    if (success) downloadCount += 1;
+  }
+
+  if (downloadCount === 0) {
+    downloadCount += downloadRawFilesForPo(po, prefix);
+  }
+
+  return downloadCount > 0;
 };
 const normalizeLocationText = (value: unknown) => {
   const text = String(value || "").trim();
@@ -724,7 +902,7 @@ export default function FixerProPage() {
         }
         if (!res.ok) { setPropInquiries([]); return; }
         const data = await res.json();
-        setPropInquiries(Array.isArray(data) ? data.map(mapApiInquiry).filter((p: PropInquiry) => ["NOTIFY_SENT", "PAID", "MEETING_SENT", "MEETING_CONFIRMED"].includes(p.status)) : []);
+        setPropInquiries(Array.isArray(data) ? data.map(mapApiInquiry).filter((p: PropInquiry) => ["NOTIFY_SENT", "ACCEPTED", "PAID", "MEETING_SENT", "MEETING_CONFIRMED"].includes(p.status)) : []);
       } catch { setPropInquiries([]); }
     }
     loadProps();
@@ -1188,6 +1366,82 @@ export default function FixerProPage() {
         String(job.status || '').toUpperCase() === 'MEETING_REQUESTED' ||
         backendStep === 5;
       return { ...job, step, mockStep: step, actionNeeded: partnerActionNeeded };
+  });
+  const mapPropStatusToStep = (status: string, step: number) => {
+    const explicitStep = Number(step || 0);
+    if (explicitStep > 0) return explicitStep;
+    switch (String(status || '').toUpperCase()) {
+      case 'ACCEPTED':
+      case 'NOTIFY_SENT':
+        return 4;
+      case 'PAID':
+        return 5;
+      case 'MEETING_SENT':
+        return 7;
+      case 'MEETING_CONFIRMED':
+        return 8;
+      default:
+        return 5;
+    }
+  };
+  const propActiveJobs = propInquiries
+    .filter((p: PropInquiry) => ['ACCEPTED', 'PAID', 'MEETING_SENT', 'MEETING_CONFIRMED'].includes(String(p.status || '').toUpperCase()))
+    .map((p: PropInquiry) => {
+      const status = String(p.status || '').toUpperCase();
+      const step = mapPropStatusToStep(status, p.step);
+      return {
+        id: `prop-active-${p.id}`,
+        orderId: p.id,
+        po: p.poNumber,
+        service: p.propertyTitle || 'Property Inquiry',
+        serviceTh: p.propertyTitle || 'คำขออสังหาริมทรัพย์',
+        serviceZh: p.propertyTitle || '房产咨询',
+        customer: firstNameOnly(p.customerName, 'Customer'),
+        date: fmtDateTime(p.updatedAt || p.createdAt || Date.now()),
+        createdAt: p.updatedAt || p.createdAt || Date.now(),
+        budget: String(p.propertyPrice || 0),
+        fee: toCurrencyLabel(p.propertyFee),
+        tier: p.propertyTier || 'STANDARD',
+        location: p.province || '',
+        subdistrict: p.district || '',
+        status,
+        step,
+        mockStep: step,
+        actionNeeded: status === 'MEETING_SENT' || (status === 'MEETING_CONFIRMED' && p.listerRating === undefined),
+        isPropertyJob: true,
+      };
+    });
+  const toJobSortTs = (value: any) => {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      const numeric = Number(value);
+      if (!Number.isNaN(numeric) && Number.isFinite(numeric)) return numeric;
+      const asDate = new Date(value).getTime();
+      return Number.isNaN(asDate) ? 0 : asDate;
+    }
+    return 0;
+  };
+  const mergedActiveJobs = new Map<string, any>();
+  [...activeJobs, ...propActiveJobs].forEach((job: any) => {
+    const key = String(job?.po || job?.id || '').trim();
+    if (!key || isHiddenTestPo(key)) return;
+    const existing = mergedActiveJobs.get(key);
+    if (!existing) {
+      mergedActiveJobs.set(key, job);
+      return;
+    }
+    const existingStep = Number(existing.step || 0);
+    const nextStep = Number(job.step || 0);
+    const existingTs = toJobSortTs(existing.createdAt || existing.date);
+    const nextTs = toJobSortTs(job.createdAt || job.date);
+    if (nextStep > existingStep || (nextStep === existingStep && nextTs >= existingTs)) {
+      mergedActiveJobs.set(key, { ...existing, ...job });
+    }
+  });
+  activeJobs = Array.from(mergedActiveJobs.values()).sort((a: any, b: any) => {
+    const aTs = toJobSortTs(a.createdAt || a.date);
+    const bTs = toJobSortTs(b.createdAt || b.date);
+    return bTs - aTs;
   });
   const backendCompletedJobs = mappedOrders.filter(o => o.status === 'COMPLETED');
   // Merge localStorage history (same-browser simulation) with backend completed orders
@@ -1829,7 +2083,7 @@ export default function FixerProPage() {
               )}
               <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">Project Details</span><span className="font-bold text-gray-800 bg-white p-2 rounded border border-gray-100">{waitModalProjectDetails}</span></div>
               {isMeetingConfirmation && waitModalMeetingDetails.meetingMessage && <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">Customer Invitation</span><span className="text-gray-800 bg-white p-2 rounded border border-gray-100">{waitModalMeetingDetails.meetingMessage}</span></div>}
-              <div className="flex justify-between"><span className="text-gray-500">Uploaded Files</span><span className="font-semibold text-sky-600 cursor-pointer hover:underline" onClick={() => {
+              <div className="flex justify-between"><span className="text-gray-500">Uploaded Files</span><span className="font-semibold text-sky-600 cursor-pointer hover:underline" onClick={async () => {
                 const poKey = waitModalOrder?.po;
                 let freshUrls: string[] = waitModalAttachmentUrls;
                 try {
@@ -1839,68 +2093,10 @@ export default function FixerProPage() {
                     if (poKey && parsed[poKey] && parsed[poKey].length > 0) freshUrls = parsed[poKey];
                   }
                 } catch {}
-                // Only open proper HTTPS URLs directly; data: URLs are not reliably accessible
-                // from the partner's browser and should show the informational message instead.
-                const httpUrl = freshUrls.find(u => u.startsWith('http://') || u.startsWith('https://'));
-                if (httpUrl) { window.open(httpUrl, '_blank'); return; }
-                // Handle blob: URLs (created from window raw files during attachment resolution)
-                const blobUrlsFromState = freshUrls.filter(u => u.startsWith('blob:'));
-                if (blobUrlsFromState.length > 0) {
-                  blobUrlsFromState.forEach((blobUrl, idx) => {
-                    const a = document.createElement('a');
-                    a.href = blobUrl;
-                    a.download = `attachment-${idx + 1}`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                  });
-                  return;
+                const downloaded = await downloadAttachmentUrls({ urls: freshUrls, po: poKey, prefix: 'attachment' });
+                if (!downloaded && freshUrls.length > 0) {
+                  alert("Files are attached but still syncing here. Please reopen this modal in a moment, or ask the customer to share them in the chat room if you need them urgently.");
                 }
-                // Fallback: re-create blob URLs from window raw files (covers stale blob URL case)
-                try {
-                  const rawFiles = (window as any).__cblue_files_by_po || {};
-                  const files: File[] = poKey && Array.isArray(rawFiles[poKey]) ? rawFiles[poKey] : [];
-                  if (files.length > 0) {
-                    files.forEach((file, idx) => {
-                      const blobUrl = URL.createObjectURL(file);
-                      const a = document.createElement('a');
-                      a.href = blobUrl;
-                      a.download = file.name || `attachment-${idx + 1}`;
-                      document.body.appendChild(a);
-                      a.click();
-                      document.body.removeChild(a);
-                      setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
-                    });
-                    return;
-                  }
-                } catch {}
-                // Download data: URLs via Blob URL for better browser compatibility (works for HEIC, PDF, etc.)
-                const dataUrls = freshUrls.filter(u => u.startsWith('data:'));
-                if (dataUrls.length > 0) {
-                  dataUrls.forEach((dataUrl, idx) => {
-                    try {
-                      const [header, base64] = dataUrl.split(',');
-                      const mimeType = header?.match(/:(.*?);/)?.[1] || 'application/octet-stream';
-                      const ext = mimeType.split('/')[1] || 'bin';
-                      const byteString = atob(base64 || '');
-                      const byteArray = new Uint8Array(byteString.length);
-                      for (let i = 0; i < byteString.length; i++) byteArray[i] = byteString.charCodeAt(i);
-                      const blob = new Blob([byteArray], { type: mimeType });
-                      const blobUrl = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = blobUrl;
-                      a.download = `attachment-${idx + 1}.${ext}`;
-                      document.body.appendChild(a);
-                      a.click();
-                      document.body.removeChild(a);
-                      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-                    } catch {
-                      alert('Could not download file. Please ask the customer to share it via the chat room.');
-                    }
-                  });
-                  return;
-                }
-                alert("Files are attached but still syncing here. Please reopen this modal in a moment, or ask the customer to share them in the chat room if you need them urgently.");
               }}>
                 {waitModalAttachmentUrls.length > 0
                   ? `${waitModalAttachmentUrls.length} file${waitModalAttachmentUrls.length > 1 ? 's' : ''} attached — Click to Download`
@@ -2926,15 +3122,16 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
             {/* Uploaded Files — lets partner reference customer photos when writing variation */}
             <div className="flex justify-between items-center rounded-lg border border-amber-100 bg-amber-50 px-4 py-2.5 text-xs">
               <span className="text-amber-800 font-semibold">Uploaded Files</span>
-              <span className={`cursor-pointer font-semibold ${variationAttachUrls.length > 0 ? 'text-sky-600 hover:underline' : 'text-gray-400'}`} onClick={() => {
-                const po = variationModal.po;
-                const httpUrl = variationAttachUrls.find(u => u.startsWith('http://') || u.startsWith('https://'));
-                if (httpUrl) { window.open(httpUrl, '_blank'); return; }
-                const blobUrls = variationAttachUrls.filter(u => u.startsWith('blob:'));
-                if (blobUrls.length > 0) { blobUrls.forEach((u, i) => { const a = document.createElement('a'); a.href = u; a.download = `attachment-${i+1}`; document.body.appendChild(a); a.click(); document.body.removeChild(a); }); return; }
-                try { const rawFiles = (window as any).__cblue_files_by_po || {}; const files: File[] = po && Array.isArray(rawFiles[po]) ? rawFiles[po] : []; if (files.length > 0) { files.forEach((f, i) => { const blobUrl = URL.createObjectURL(f); const a = document.createElement('a'); a.href = blobUrl; a.download = f.name || `attachment-${i+1}`; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(blobUrl), 2000); }); return; } } catch {}
+              <span className={`cursor-pointer font-semibold ${variationAttachUrls.length > 0 ? 'text-sky-600 hover:underline' : 'text-gray-400'}`} onClick={async () => {
                 if (variationAttachUrls.length === 0) return;
-                alert('Could not download file. Please ask the customer to share via the chat room.');
+                const downloaded = await downloadAttachmentUrls({
+                  urls: variationAttachUrls,
+                  po: variationModal.po,
+                  prefix: 'attachment',
+                });
+                if (!downloaded) {
+                  alert('Could not download file. Please ask the customer to share via the chat room.');
+                }
               }}>
                 {variationAttachUrls.length > 0 ? `${variationAttachUrls.length} file${variationAttachUrls.length > 1 ? 's' : ''} attached — Click to Download` : 'Files attached'}
               </span>
@@ -3408,15 +3605,16 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
             {/* Uploaded Files — lets partner reference customer photos when writing variation */}
             <div className="flex justify-between items-center rounded-lg border border-amber-100 bg-amber-50 px-4 py-2.5 text-xs">
               <span className="text-amber-800 font-semibold">Uploaded Files</span>
-              <span className={`cursor-pointer font-semibold ${variationAttachUrls.length > 0 ? 'text-sky-600 hover:underline' : 'text-gray-400'}`} onClick={() => {
-                const po = variationModal.po;
-                const httpUrl = variationAttachUrls.find(u => u.startsWith('http://') || u.startsWith('https://'));
-                if (httpUrl) { window.open(httpUrl, '_blank'); return; }
-                const blobUrls = variationAttachUrls.filter(u => u.startsWith('blob:'));
-                if (blobUrls.length > 0) { blobUrls.forEach((u, i) => { const a = document.createElement('a'); a.href = u; a.download = `attachment-${i+1}`; document.body.appendChild(a); a.click(); document.body.removeChild(a); }); return; }
-                try { const rawFiles = (window as any).__cblue_files_by_po || {}; const files: File[] = po && Array.isArray(rawFiles[po]) ? rawFiles[po] : []; if (files.length > 0) { files.forEach((f, i) => { const blobUrl = URL.createObjectURL(f); const a = document.createElement('a'); a.href = blobUrl; a.download = f.name || `attachment-${i+1}`; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(blobUrl), 2000); }); return; } } catch {}
+              <span className={`cursor-pointer font-semibold ${variationAttachUrls.length > 0 ? 'text-sky-600 hover:underline' : 'text-gray-400'}`} onClick={async () => {
                 if (variationAttachUrls.length === 0) return;
-                alert('Could not download file. Please ask the customer to share via the chat room.');
+                const downloaded = await downloadAttachmentUrls({
+                  urls: variationAttachUrls,
+                  po: variationModal.po,
+                  prefix: 'attachment',
+                });
+                if (!downloaded) {
+                  alert('Could not download file. Please ask the customer to share via the chat room.');
+                }
               }}>
                 {variationAttachUrls.length > 0 ? `${variationAttachUrls.length} file${variationAttachUrls.length > 1 ? 's' : ''} attached — Click to Download` : 'Files attached'}
               </span>

@@ -84,7 +84,7 @@ const firstNameOnly = (value: any, fallback = 'User') => {
   const cleaned = String(value || '').trim();
   return cleaned ? cleaned.split(/\s+/)[0] || fallback : fallback;
 };
-const HIDDEN_TEST_POS = new Set(["PO-2605-6716", "PO-2605-9605", "PO-2605-8699", "PO-2605-9701", "PO-2605-6146", "PO-2605-8471"]);
+const HIDDEN_TEST_POS = new Set(["PO-2605-6716", "PO-2605-9605", "PO-2605-8699", "PO-2605-9701", "PO-2605-6146", "PO-2605-8471", "PO-2605-9593"]);
 const isHiddenTestPo = (value: any) => HIDDEN_TEST_POS.has(String(value || '').trim().toUpperCase());
 const WORKFLOW_STEP_NAMES: Record<number, string> = {
   5: 'Accept',
@@ -124,9 +124,13 @@ const normalizeImageUrl = (value: unknown) => {
     const normalized = compact.includes(';base64,')
       ? compact
       : compact.replace(/;bas(?!e64,)/i, ';base64,');
-    return /^data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+$/.test(normalized)
-      ? normalized
-      : '';
+    const commaIndex = normalized.indexOf(',');
+    if (commaIndex <= 0) return '';
+    const header = normalized.slice(0, commaIndex);
+    const payload = normalized.slice(commaIndex + 1).replace(/\s+/g, '');
+    if (!payload) return '';
+    const fixedHeader = /;base64$/i.test(header) ? header : `${header};base64`;
+    return `${fixedHeader},${payload}`;
   }
 
   if (
@@ -139,6 +143,60 @@ const normalizeImageUrl = (value: unknown) => {
   }
 
   return '';
+};
+const extensionFromMimeType = (mimeType?: string | null) => {
+  const mime = String(mimeType || '').toLowerCase();
+  if (!mime) return 'bin';
+  if (mime.includes('jpeg')) return 'jpg';
+  if (mime.includes('png')) return 'png';
+  if (mime.includes('webp')) return 'webp';
+  if (mime.includes('gif')) return 'gif';
+  if (mime.includes('heic')) return 'heic';
+  const match = mime.match(/\/([a-z0-9.+-]+)$/i);
+  return match?.[1] || 'bin';
+};
+const triggerDownload = (href: string, filename: string, revoke = false) => {
+  const link = document.createElement('a');
+  link.href = href;
+  link.download = filename;
+  link.rel = 'noopener noreferrer';
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  if (revoke) {
+    setTimeout(() => URL.revokeObjectURL(href), 2000);
+  }
+};
+const downloadImageUrls = async (urls: string[], prefix = 'property-photo') => {
+  const uniqueUrls = Array.from(new Set((urls || []).map(normalizeImageUrl).filter(Boolean)));
+  for (const [index, url] of uniqueUrls.entries()) {
+    const fallbackName = `${prefix}-${index + 1}`;
+    try {
+      if (url.startsWith('blob:')) {
+        triggerDownload(url, fallbackName);
+        continue;
+      }
+
+      const response = await fetch(url, { credentials: 'include' });
+      if (!response.ok) {
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+          window.open(url, '_blank', 'noopener,noreferrer');
+        }
+        continue;
+      }
+
+      const blob = await response.blob();
+      const ext = extensionFromMimeType(blob.type);
+      const fileName = `${fallbackName}.${ext}`;
+      const blobUrl = URL.createObjectURL(blob);
+      triggerDownload(blobUrl, fileName, true);
+    } catch {
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    }
+  }
 };
 
 function CustomerWorkflowModalMeta({
@@ -1798,17 +1856,27 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mockReady, orders, subscriber?.email, chatFeed]);
 
-  const STEPS_FULL = ["Match", "Select", "PO", "Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"];
-  const STEPS = ["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"];
+  const FIXER_ACTIVE_STEPS = ["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"];
+  const PROPERTY_ACTIVE_STEPS = ["Match", "Select", "Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Rate"];
 
-    const Progress12Steps = ({ currentStep, showCurrent = true }: { currentStep: number; showCurrent?: boolean }) => (
+  const ProgressSteps = ({
+    currentStep,
+    steps,
+    startStep,
+    showCurrent = true,
+  }: {
+    currentStep: number;
+    steps: string[];
+    startStep: number;
+    showCurrent?: boolean;
+  }) => (
     <div className="w-2/3 mt-4 overflow-x-auto pb-4 hide-scrollbar">
       <div className="flex items-center min-w-max relative px-2">
         <div className="absolute left-4 right-4 top-3 -translate-y-1/2 h-1 bg-gray-200 rounded-full"></div>
-        <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, ((currentStep - 4) / (STEPS.length - 1)) * 100))}%` }}></div>
+        <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, ((currentStep - startStep) / (steps.length - 1)) * 100))}%` }}></div>
         
-        {STEPS.map((s, i) => {
-          const stepNum = i + 4; // Notify starts at 4
+        {steps.map((s, i) => {
+          const stepNum = i + startStep;
           const isCompleted = stepNum < currentStep;
           const isCurrent = showCurrent && stepNum === currentStep;
             return (
@@ -2231,7 +2299,20 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
          </div>
       </div>
       <div className="w-full xl:w-[560px] shrink-0 mt-2 xl:mt-0">
-        <Progress12Steps currentStep={item.step || 5} showCurrent={true} />
+        {(() => {
+          const isPropertyCard = item.type === 'prop_waiting' || isPropPoCode(item.po);
+          const steps = isPropertyCard ? PROPERTY_ACTIVE_STEPS : FIXER_ACTIVE_STEPS;
+          const startStep = isPropertyCard ? 1 : 4;
+          const fallbackStep = isPropertyCard ? 4 : 5;
+          return (
+            <ProgressSteps
+              currentStep={Number(item.step || fallbackStep)}
+              steps={steps}
+              startStep={startStep}
+              showCurrent={true}
+            />
+          );
+        })()}
       </div>
       <div className="flex flex-col items-end gap-1 flex-shrink-0">
         <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${item.tier === 'ECONOMY' || item.tier === 'Economy' ? 'bg-green-50 text-green-700' : item.tier === 'Standard' || item.tier === 'STANDARD' ? 'bg-blue-50 text-blue-700' : item.tier === 'Corporate' ? 'bg-purple-50 text-purple-700' : item.tier === 'Specialist' ? 'bg-amber-50 text-amber-700' : item.tier === 'Expert' ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-600'}`}>{item.tier || 'Standard'}</span>
@@ -2645,19 +2726,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   type="button"
                   className="text-xs font-semibold text-sky-700 hover:text-sky-800"
                   onClick={() => {
-                    propModalImages.forEach((url, idx) => {
-                      const normalizedUrl = url.startsWith('data:image/') && !url.includes(';base64,')
-                        ? url.replace(/;bas(?!e64,)/i, ';base64,')
-                        : url;
-                      const link = document.createElement('a');
-                      link.href = normalizedUrl;
-                      link.target = '_blank';
-                      link.rel = 'noopener noreferrer';
-                      link.download = `property-photo-${idx + 1}`;
-                      document.body.appendChild(link);
-                      link.click();
-                      document.body.removeChild(link);
-                    });
+                    void downloadImageUrls(propModalImages, 'property-photo');
                   }}
                 >
                   Download Photos
@@ -2717,19 +2786,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   type="button"
                   className="text-xs font-semibold text-sky-700 hover:text-sky-800"
                   onClick={() => {
-                    propModalImages.forEach((url, idx) => {
-                      const normalizedUrl = url.startsWith('data:image/') && !url.includes(';base64,')
-                        ? url.replace(/;bas(?!e64,)/i, ';base64,')
-                        : url;
-                      const link = document.createElement('a');
-                      link.href = normalizedUrl;
-                      link.target = '_blank';
-                      link.rel = 'noopener noreferrer';
-                      link.download = `property-photo-${idx + 1}`;
-                      document.body.appendChild(link);
-                      link.click();
-                      document.body.removeChild(link);
-                    });
+                    void downloadImageUrls(propModalImages, 'property-photo');
                   }}
                 >
                   Download Photos
