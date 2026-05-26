@@ -17,8 +17,19 @@ export class PropertyService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(userId: string, dto: CreatePropertyDto) {
+  async create(
+    currentUser: { id?: string; email?: string; phone?: string } | undefined,
+    dto: CreatePropertyDto,
+  ) {
+    let userId = currentUser?.id?.trim() || '';
     try {
+      userId = (await this.resolveCreateUserId(currentUser, dto)) || '';
+      if (!userId) {
+        throw new NotFoundException(
+          'User account not found. Please log out and log in again.',
+        );
+      }
+
       // Verify the user exists before attempting insert (prevents FK constraint 500)
       const userExists = await this.prisma.user.findUnique({
         where: { id: userId },
@@ -110,6 +121,110 @@ export class PropertyService {
         `Property creation failed [${errType}]. Please try again or contact support.`,
       );
     }
+  }
+
+  private async resolveCreateUserId(
+    currentUser: { id?: string; email?: string; phone?: string } | undefined,
+    dto: CreatePropertyDto,
+  ) {
+    const currentUserId = currentUser?.id?.trim() || '';
+    const currentEmail = currentUser?.email?.trim().toLowerCase() || '';
+    const currentPhone = currentUser?.phone?.trim() || '';
+    const contactEmail = dto.contactEmail?.trim().toLowerCase() || '';
+    const contactPhone = dto.contactPhone?.trim() || '';
+
+    const sameIdentity =
+      (!!currentEmail && !!contactEmail && currentEmail === contactEmail) ||
+      (!!currentPhone && !!contactPhone && currentPhone === contactPhone);
+
+    if (!sameIdentity) {
+      return currentUserId || null;
+    }
+
+    const subscriber = contactEmail
+      ? await this.prisma.subscriber.findUnique({
+          where: { email: contactEmail },
+          select: {
+            id: true,
+            email: true,
+            phone: true,
+            name: true,
+            company: true,
+          },
+        })
+      : contactPhone
+        ? await this.prisma.subscriber.findFirst({
+            where: { phone: contactPhone },
+            select: {
+              id: true,
+              email: true,
+              phone: true,
+              name: true,
+              company: true,
+            },
+          })
+        : null;
+
+    if (!subscriber) {
+      return currentUserId || null;
+    }
+
+    let canonicalUser = await this.prisma.user.findUnique({
+      where: { subscriberId: subscriber.id },
+      select: { id: true },
+    });
+
+    if (!canonicalUser && currentUserId) {
+      try {
+        canonicalUser = await this.prisma.user.update({
+          where: { id: currentUserId },
+          data: {
+            subscriberId: subscriber.id,
+            email: currentEmail || subscriber.email,
+            phone: currentPhone || subscriber.phone || undefined,
+            name: subscriber.name,
+            company: subscriber.company,
+          },
+          select: { id: true },
+        });
+      } catch (error) {
+        this.logger.warn(
+          `Property create bridge update retry for ${subscriber.email}: ${error instanceof Error ? error.message : 'unknown error'}`,
+        );
+      }
+    }
+
+    if (!canonicalUser) {
+      try {
+        canonicalUser = await this.prisma.user.create({
+          data: {
+            email: subscriber.email,
+            phone: subscriber.phone || undefined,
+            name: subscriber.name,
+            company: subscriber.company,
+            subscriberId: subscriber.id,
+            role: 'USER',
+          },
+          select: { id: true },
+        });
+      } catch (error) {
+        this.logger.warn(
+          `Property create bridge create retry for ${subscriber.email}: ${error instanceof Error ? error.message : 'unknown error'}`,
+        );
+        canonicalUser = await this.prisma.user.findUnique({
+          where: { subscriberId: subscriber.id },
+          select: { id: true },
+        });
+      }
+    }
+
+    if (canonicalUser && canonicalUser.id !== currentUserId) {
+      this.logger.warn(
+        `Property create canonicalized ${contactEmail || contactPhone} from user ${currentUserId || 'missing'} to ${canonicalUser.id}`,
+      );
+    }
+
+    return canonicalUser?.id || currentUserId || null;
   }
 
   async search(dto: SearchPropertyDto) {

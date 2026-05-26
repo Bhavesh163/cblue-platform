@@ -22,8 +22,12 @@ export class PropertyController {
 
   @Post()
   @UseGuards(JwtAuthGuard)
-  create(@CurrentUser('id') userId: string, @Body() dto: CreatePropertyDto) {
-    return this.propertyService.create(userId, dto);
+  create(
+    @CurrentUser()
+    currentUser: { id?: string; email?: string; phone?: string } | undefined,
+    @Body() dto: CreatePropertyDto,
+  ) {
+    return this.propertyService.create(currentUser, dto);
   }
 
   @Get()
