@@ -316,8 +316,23 @@ export class SubscriptionService {
   private async findSubscriberByIdentity(
     email?: string | null,
     phone?: string | null,
+    preferredUser?: {
+      subscriberId: string | null;
+      email: string | null;
+    } | null,
   ) {
-    const normalizedEmail = email?.trim().toLowerCase() || '';
+    const preferredSubscriberId = preferredUser?.subscriberId?.trim() || '';
+    if (preferredSubscriberId) {
+      const byId = await this.prisma.subscriber.findUnique({
+        where: { id: preferredSubscriberId },
+      });
+      if (byId) return byId;
+    }
+
+    const normalizedEmail =
+      email?.trim().toLowerCase() ||
+      preferredUser?.email?.trim().toLowerCase() ||
+      '';
     if (normalizedEmail) {
       const byEmail = await this.prisma.subscriber.findUnique({
         where: { email: normalizedEmail },
@@ -328,9 +343,19 @@ export class SubscriptionService {
     const normalizedPhone = phone?.trim() || '';
     if (!normalizedPhone) return null;
 
-    return this.prisma.subscriber.findFirst({
+    const phoneMatches = await this.prisma.subscriber.findMany({
       where: { phone: normalizedPhone },
+      take: 2,
     });
+
+    if (phoneMatches.length > 1) {
+      this.logger.warn(
+        `Ambiguous subscriber phone match for ${normalizedPhone}; refusing phone-only bridge repair`,
+      );
+      return null;
+    }
+
+    return phoneMatches[0] ?? null;
   }
 
   private async findCanonicalUserForSubscriber(
@@ -338,7 +363,6 @@ export class SubscriptionService {
     preferredUserId?: string | null,
   ) {
     const normalizedEmail = subscriber.email.trim().toLowerCase();
-    const normalizedPhone = subscriber.phone?.trim() || '';
 
     if (preferredUserId) {
       const preferred = await this.prisma.user.findUnique({
@@ -347,8 +371,7 @@ export class SubscriptionService {
       if (
         preferred &&
         (preferred.subscriberId === subscriber.id ||
-          preferred.email?.trim().toLowerCase() === normalizedEmail ||
-          (!!normalizedPhone && preferred.phone === normalizedPhone))
+          preferred.email?.trim().toLowerCase() === normalizedEmail)
       ) {
         return preferred;
       }
@@ -364,11 +387,7 @@ export class SubscriptionService {
     });
     if (byEmail) return byEmail;
 
-    if (!normalizedPhone) return null;
-
-    return this.prisma.user.findUnique({
-      where: { phone: normalizedPhone },
-    });
+    return null;
   }
 
   private async ensureUserBridge(
@@ -396,10 +415,25 @@ export class SubscriptionService {
         this.logger.warn(
           `User bridge create retry for subscriber ${subscriber.id}: ${error instanceof Error ? error.message : 'unknown error'}`,
         );
-        user = await this.findCanonicalUserForSubscriber(
-          subscriber,
-          preferredUserId,
-        );
+        try {
+          user = await this.prisma.user.create({
+            data: {
+              email: subscriber.email,
+              name: subscriber.name,
+              company: subscriber.company,
+              subscriberId: subscriber.id,
+              role: 'USER',
+            },
+          });
+        } catch (retryError) {
+          this.logger.warn(
+            `User bridge create without phone retry for subscriber ${subscriber.id}: ${retryError instanceof Error ? retryError.message : 'unknown error'}`,
+          );
+          user = await this.findCanonicalUserForSubscriber(
+            subscriber,
+            preferredUserId,
+          );
+        }
       }
     }
 
@@ -426,6 +460,23 @@ export class SubscriptionService {
       this.logger.warn(
         `User bridge update retry for subscriber ${subscriber.id}: ${error instanceof Error ? error.message : 'unknown error'}`,
       );
+      if (!user.phone && subscriber.phone) {
+        try {
+          return await this.prisma.user.update({
+            where: { id: user.id },
+            data: {
+              subscriberId: subscriber.id,
+              email: user.email || subscriber.email,
+              name: user.name || subscriber.name,
+              company: user.company || subscriber.company,
+            },
+          });
+        } catch (retryError) {
+          this.logger.warn(
+            `User bridge update without phone retry for subscriber ${subscriber.id}: ${retryError instanceof Error ? retryError.message : 'unknown error'}`,
+          );
+        }
+      }
       return this.findCanonicalUserForSubscriber(subscriber, preferredUserId);
     }
   }
@@ -440,6 +491,7 @@ export class SubscriptionService {
     const subscriber = await this.findSubscriberByIdentity(
       payload.email,
       payload.phone,
+      existingUser,
     );
     if (subscriber) {
       return this.ensureUserBridge(subscriber, existingUser?.id || payload.sub);
@@ -471,6 +523,7 @@ export class SubscriptionService {
     return this.findSubscriberByIdentity(
       user.email || payload.email,
       user.phone || payload.phone,
+      user,
     );
   }
 
