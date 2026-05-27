@@ -23,6 +23,8 @@ interface PropertyDetail {
   subdistrict: string;
   postalCode: string;
   addressLine: string;
+  latitude?: number | null;
+  longitude?: number | null;
   contactName: string;
   contactPhone: string;
   contactEmail: string;
@@ -43,8 +45,13 @@ function normalizeImageUrl(value: unknown) {
     const normalized = compact.includes(";base64,")
       ? compact
       : compact.replace(/;bas(?!e64,)/i, ";base64,");
-    const valid = /^data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+$/.test(normalized);
-    return valid ? normalized : "";
+    const commaIndex = normalized.indexOf(",");
+    if (commaIndex <= 0) return "";
+    const header = normalized.slice(0, commaIndex);
+    const payload = normalized.slice(commaIndex + 1).replace(/\s+/g, "");
+    if (!payload) return "";
+    const fixedHeader = /;base64$/i.test(header) ? header : `${header};base64`;
+    return `${fixedHeader},${payload}`;
   }
 
   if (
@@ -59,10 +66,43 @@ function normalizeImageUrl(value: unknown) {
   return "";
 }
 
+function extractImageUrlCandidate(image: any) {
+  if (typeof image === "string") return image;
+  if (!image || typeof image !== "object") return "";
+  return image.url || image.key || image.imageUrl || image.publicUrl || image.src || "";
+}
+
 function cleanLocationPart(value: unknown) {
   const text = String(value || "").trim();
   if (!text || PLACEHOLDER_LOCATION_PATTERN.test(text)) return "";
   return text;
+}
+
+function normalizeCoordinate(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function hasValidGpsCoordinatePair(latitude: number | null, longitude: number | null) {
+  if (latitude === null || longitude === null) return false;
+  if (Math.abs(latitude) < 0.000001 && Math.abs(longitude) < 0.000001) return false;
+  return true;
+}
+
+function getPropertySiteLocation(property: Partial<PropertyDetail>) {
+  const latitude = normalizeCoordinate(property.latitude);
+  const longitude = normalizeCoordinate(property.longitude);
+  if (latitude !== null && longitude !== null && hasValidGpsCoordinatePair(latitude, longitude)) {
+    return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+  }
+
+  return [
+    cleanLocationPart(property.addressLine),
+    cleanLocationPart(property.subdistrict),
+    cleanLocationPart(property.district),
+    cleanLocationPart(property.province),
+  ].filter(Boolean).join(", ") || "Unknown";
 }
 
 export default function PropertyDetailPage() {
@@ -141,7 +181,7 @@ export default function PropertyDetailPage() {
   }
 
   const galleryImages = (property?.images || [])
-    .map((img) => ({ ...img, url: normalizeImageUrl(img?.url) }))
+    .map((img) => ({ ...img, url: normalizeImageUrl(extractImageUrlCandidate(img)) }))
     .filter((img) => Boolean(img.url));
 
   if (loading) {
@@ -258,6 +298,9 @@ export default function PropertyDetailPage() {
                   {locale === "th" ? "ที่ตั้ง" : locale === "zh" ? "位置" : "Location"}
                 </h2>
                 <div className="text-gray-700 space-y-1">
+                  <p>
+                    {locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}: {getPropertySiteLocation(property)}
+                  </p>
                   {property.addressLine && <p>{property.addressLine}</p>}
                   <p>{[
                       cleanLocationPart(property.subdistrict),
@@ -276,6 +319,9 @@ export default function PropertyDetailPage() {
               <div className="bg-white rounded-xl border border-gray-200 p-6 sticky top-24 space-y-4">
                 <h3 className="font-semibold text-gray-900">{t("contactName")}</h3>
                 <p className="text-gray-700">{property.contactName || "CBLUE Lister"}</p>
+                <p className="text-xs text-gray-500">
+                  {locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}: {getPropertySiteLocation(property)}
+                </p>
                 <Link
                   href={`${prefix}/properties?contact=${encodeURIComponent(property.id)}`}
                   className="block w-full py-3 text-center text-sm font-semibold text-white bg-green-700 hover:bg-green-800 rounded-xl transition"

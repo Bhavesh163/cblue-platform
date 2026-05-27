@@ -141,6 +141,11 @@ const normalizeImageUrl = (value: unknown) => {
 
   return "";
 };
+const extractImageUrlCandidate = (image: any) => {
+  if (typeof image === "string") return image;
+  if (!image || typeof image !== "object") return "";
+  return image.url || image.key || image.imageUrl || image.publicUrl || image.src || "";
+};
 const parseFilenameFromContentDisposition = (value: string | null) => {
   if (!value) return "";
   const utfMatch = value.match(/filename\*=UTF-8''([^;]+)/i);
@@ -330,7 +335,7 @@ const getPropSiteLocation = (p: {
 }) => {
   const lat = Number(p.latitude);
   const lng = Number(p.longitude);
-  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+  if (Number.isFinite(lat) && Number.isFinite(lng) && !(Math.abs(lat) < 0.000001 && Math.abs(lng) < 0.000001)) {
     return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
   }
   return [
@@ -419,6 +424,36 @@ const toCurrencyLabel = (value: any, fallback = '฿0') => {
     }
   }
   return raw.startsWith('฿') ? raw : `฿${raw}`;
+};
+const PROPERTY_FLOW_STEPS = ["Match", "Select", "Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Rate"];
+const FIXER_FLOW_STEPS = ["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"];
+const isPropertyWorkflowJob = (job: any) => {
+  const po = String(job?.po || "").trim();
+  if (isPropPoCode(po)) return true;
+  if (Boolean(job?.isPropertyJob)) return true;
+  const workflowType = String(job?.workflowType || job?.type || "").toLowerCase();
+  return workflowType.startsWith("prop_");
+};
+const getWorkflowProgressConfig = (job: any) => {
+  const isProperty = isPropertyWorkflowJob(job);
+  return {
+    steps: isProperty ? PROPERTY_FLOW_STEPS : FIXER_FLOW_STEPS,
+    startStep: isProperty ? 1 : 4,
+    completeStep: isProperty ? 8 : 11,
+    fallbackStep: isProperty ? 4 : 5,
+  };
+};
+const getJobAmountPrefix = (job: any, locale: string) => {
+  if (isPropertyWorkflowJob(job)) {
+    return locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value";
+  }
+  return locale === "th" ? "งบ" : locale === "zh" ? "预算" : "Budget";
+};
+const getJobAmountValue = (job: any) => {
+  if (isPropertyWorkflowJob(job)) {
+    return toCurrencyLabel(job?.value || job?.budget || job?.propertyPrice || 0);
+  }
+  return job?.fee || toCurrencyLabel(job?.budget || 0);
 };
 
 const getLocalChatHistory = (po: any) => {
@@ -610,7 +645,7 @@ export default function FixerProPage() {
         if (data?.images && Array.isArray(data.images)) {
           setPropPartnerModalImages(
             data.images
-              .map((i: { url: string }) => normalizeImageUrl(i?.url))
+              .map((i: any) => normalizeImageUrl(extractImageUrlCandidate(i)))
               .filter(Boolean),
           );
         } else {
@@ -932,9 +967,13 @@ export default function FixerProPage() {
     function mapApiInquiry(api: any): PropInquiry {
       const propertyImages = Array.isArray(api?.property?.images)
         ? api.property.images
-            .map((image: any) => normalizeImageUrl(typeof image === 'string' ? image : image?.url))
+            .map((image: any) => normalizeImageUrl(extractImageUrlCandidate(image)))
             .filter(Boolean)
         : [];
+      const createdAtTs = new Date(api?.createdAt || 0).getTime();
+      const updatedAtTs = new Date(api?.updatedAt || api?.createdAt || 0).getTime();
+      const createdAt = Number.isFinite(createdAtTs) && createdAtTs > 0 ? createdAtTs : Date.now();
+      const updatedAt = Number.isFinite(updatedAtTs) && updatedAtTs > 0 ? updatedAtTs : createdAt;
       return {
         id: api.id, poNumber: api.poNumber, propertyId: api.propertyId,
         propertyTitle: api.property?.title || '', propertyTier: api.property?.tier || 'STANDARD',
@@ -951,7 +990,8 @@ export default function FixerProPage() {
         propertyImages,
         customerEmail: api.customerEmail,
         customerName: api.customerName, listerName: api.listerName, status: api.status, step: api.step,
-        createdAt: new Date(api.createdAt).getTime(), updatedAt: new Date(api.updatedAt).getTime(),
+        createdAt,
+        updatedAt,
         meetingDate: api.meetingDate, meetingTime: api.meetingTime, meetingVenue: api.meetingVenue,
         customerRating: api.customerRating, customerComment: api.customerComment,
         listerRating: api.listerRating, listerComment: api.listerComment, reselectedOnce: api.reselectedOnce,
@@ -1046,6 +1086,22 @@ export default function FixerProPage() {
           .filter(Boolean)
       : [];
     const locFromDesc = (() => { const m = String(o.description || '').match(/\bLOC:([^|]+)/); return m ? (m[1] ?? '').trim() : ''; })();
+    const siteLocation = (() => {
+      const lat = Number(o?.address?.latitude);
+      const lng = Number(o?.address?.longitude);
+      if (Number.isFinite(lat) && Number.isFinite(lng) && !(Math.abs(lat) < 0.000001 && Math.abs(lng) < 0.000001)) {
+        return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+      }
+      return (locFromDesc && locFromDesc !== 'Unknown')
+        ? locFromDesc
+        : (
+            normalizeLocationText(o?.address?.subdistrict) ||
+            normalizeLocationText(o?.address?.district) ||
+            normalizeLocationText(o?.address?.province) ||
+            normalizeLocationText(o?.subdistrict) ||
+            ""
+          );
+    })();
     
     return {
       id: o.id,
@@ -1054,13 +1110,8 @@ export default function FixerProPage() {
       hasAttachment: attachmentUrls.length > 0,
       images: attachmentUrls,
       issueImage: attachmentUrls[0] || "",
-      subdistrict: (() => {
-        // Prefer GPS coordinates when stored in address
-        if (o.address?.latitude && o.address?.longitude) {
-          return `${Number(o.address.latitude).toFixed(6)}, ${Number(o.address.longitude).toFixed(6)}`;
-        }
-        return (locFromDesc && locFromDesc !== 'Unknown') ? locFromDesc : ((o.address?.subdistrict && o.address.subdistrict !== 'Unknown' ? o.address.subdistrict : '') || (o.address?.district && o.address.district !== 'Unknown' ? o.address.district : '') || (o.address?.province && o.address.province !== 'Unknown' ? o.address.province : '') || o.subdistrict || "");
-      })(),
+      subdistrict: siteLocation,
+      location: siteLocation,
       createdAt: o.createdAt,
       customer: o.user?.name || "Customer",
       orderType: o.orderType?.toLowerCase() || "household",
@@ -1613,7 +1664,7 @@ export default function FixerProPage() {
       const status = String(p.status || '').toUpperCase();
       const step = mapPropStatusToStep(status, p.step);
       const actionNeeded = status === 'NOTIFY_SENT' || status === 'MEETING_SENT' || (status === 'MEETING_CONFIRMED' && p.listerRating == null);
-      const locationParts = [p.province, p.district, p.subdistrict, p.addressLine].filter(Boolean);
+      const siteLocation = getPropSiteLocation(p);
       const propertyFacts = [
         p.propertyType ? `Type: ${p.propertyType}` : '',
         p.listingType ? `Listing: ${p.listingType}` : '',
@@ -1631,10 +1682,11 @@ export default function FixerProPage() {
         customer: firstNameOnly(p.customerName, 'Customer'),
         date: fmtDateTime(p.updatedAt || p.createdAt || Date.now()),
         createdAt: p.updatedAt || p.createdAt || Date.now(),
-        budget: String(p.propertyPrice || 0),
+        budget: toCurrencyLabel(p.propertyPrice),
+        value: toCurrencyLabel(p.propertyPrice),
         fee: toCurrencyLabel(p.propertyFee),
         tier: p.propertyTier || 'STANDARD',
-        location: getPropSiteLocation(p),
+        location: siteLocation,
         subdistrict: p.subdistrict || p.district || p.province || '',
         status,
         step,
@@ -1672,12 +1724,24 @@ export default function FixerProPage() {
       mergedActiveJobs.set(key, job);
       return;
     }
+    const existingIsProperty = Boolean(existing?.isPropertyJob) || String(existing?.type || '').startsWith('prop_') || isPropPoCode(existing?.po || existing?.id || '');
+    const nextIsProperty = Boolean(job?.isPropertyJob) || String(job?.type || '').startsWith('prop_') || isPropPoCode(job?.po || job?.id || '');
+    const keyIsPropertyPo = isPropPoCode(key);
+
+    if (keyIsPropertyPo && nextIsProperty && !existingIsProperty) {
+      mergedActiveJobs.set(key, { ...existing, ...job, isPropertyJob: true });
+      return;
+    }
+    if (keyIsPropertyPo && existingIsProperty && !nextIsProperty) {
+      return;
+    }
+
     const existingStep = Number(existing.step || 0);
     const nextStep = Number(job.step || 0);
     const existingTs = toJobSortTs(existing.createdAt || existing.date);
     const nextTs = toJobSortTs(job.createdAt || job.date);
     if (nextStep > existingStep || (nextStep === existingStep && nextTs >= existingTs)) {
-      mergedActiveJobs.set(key, { ...existing, ...job });
+      mergedActiveJobs.set(key, { ...existing, ...job, isPropertyJob: existingIsProperty || nextIsProperty });
     }
   });
   activeJobs = Array.from(mergedActiveJobs.values()).sort((a: any, b: any) => {
@@ -1736,6 +1800,7 @@ export default function FixerProPage() {
     .filter((p: PropInquiry) => String(p.status || '').toUpperCase() === 'COMPLETED')
     .map((p: PropInquiry) => {
       const completedAt = p.updatedAt || p.createdAt || Date.now();
+      const siteLocation = getPropSiteLocation(p);
       return {
         id: `prop-completed-${p.id}`,
         po: p.poNumber,
@@ -1755,9 +1820,9 @@ export default function FixerProPage() {
         status: 'COMPLETED',
         step: 8,
         stepName: 'Property Inquiry Completed',
-        location: p.province || '',
-        subdistrict: p.district || '',
-        projectDetails: `Property: ${p.propertyTitle || p.poNumber} | Province: ${p.province || '-'} | Meeting: ${p.meetingDate || '-'} ${p.meetingTime || ''} @ ${p.meetingVenue || '-'}`,
+        location: siteLocation,
+        subdistrict: siteLocation,
+        projectDetails: `Property: ${p.propertyTitle || p.poNumber} | Site: ${siteLocation} | Meeting: ${p.meetingDate || '-'} ${p.meetingTime || ''} @ ${p.meetingVenue || '-'}`,
         description: `Customer rating: ${p.customerRating ?? '-'} | Lister rating: ${p.listerRating ?? '-'} | PO ${p.poNumber}`,
         chatHistory: getLocalChatHistory(p.poNumber),
         partnerRating: p.listerRating,
@@ -2156,8 +2221,38 @@ export default function FixerProPage() {
     };
     return null;
   }).filter(Boolean) as any[];
-  const partnerRequestItemsWithProp = [...propRequestCards, ...partnerRequestItems]
-    .sort((a: any, b: any) => parseTs(b.createdAt || b.date) - parseTs(a.createdAt || a.date));
+  const partnerRequestItemsWithProp = Array.from(
+    [...partnerRequestItems, ...propRequestCards].reduce((map: Map<string, any>, item: any) => {
+      const key = String(item?.po || item?.id || '').trim();
+      if (!key || isHiddenTestPo(key)) return map;
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, item);
+        return map;
+      }
+
+      const existingIsProperty = isPropertyWorkflowJob(existing);
+      const nextIsProperty = isPropertyWorkflowJob(item);
+      const keyIsPropertyPo = isPropPoCode(key);
+
+      if (keyIsPropertyPo && nextIsProperty && !existingIsProperty) {
+        map.set(key, { ...existing, ...item, isPropertyJob: true });
+        return map;
+      }
+      if (keyIsPropertyPo && existingIsProperty && !nextIsProperty) {
+        return map;
+      }
+
+      const existingStep = Number(existing?.step || 0);
+      const nextStep = Number(item?.step || 0);
+      const existingTs = parseTs(existing?.createdAt || existing?.date);
+      const nextTs = parseTs(item?.createdAt || item?.date);
+      if (nextStep > existingStep || (nextStep === existingStep && nextTs >= existingTs)) {
+        map.set(key, { ...existing, ...item, isPropertyJob: existingIsProperty || nextIsProperty });
+      }
+      return map;
+    }, new Map<string, any>()).values(),
+  ).sort((a: any, b: any) => parseTs(b.createdAt || b.date) - parseTs(a.createdAt || a.date));
 
   const dynamicNotifications = mockDynReqs.map((r: any) => {
     const displayTime = typeof r.date === "string" && r.date.includes(":") ? r.date : (r.date ? fmtDateTime(r.date) : "");
@@ -3219,8 +3314,8 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
             <div key={req.id} className="px-6 py-4 flex items-center gap-4 transition cursor-default">
               <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center text-lg"></div>
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? req.serviceTh : locale === "zh" ? req.serviceZh : req.service}{(req.po || req.step) ? <span className="text-xs font-normal text-gray-400">{req.po ? ` · ${req.po}` : ''}{req.step ? ` · Step ${req.step} of 11` : ''}</span> : null}</p>
-                <p className="text-xs text-gray-500">{req.customer} &middot; {req.date} &middot; {locale === "th" ? "งบ" : locale === "zh" ? "预算" : "Budget"}: {req.fee || `฿${req.budget || '0'}`}</p>
+                <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? req.serviceTh : locale === "zh" ? req.serviceZh : req.service}{(req.po || req.step) ? <span className="text-xs font-normal text-gray-400">{req.po ? ` · ${req.po}` : ''}{req.step ? ` · Step ${req.step} of ${isPropertyWorkflowJob(req) ? 8 : 11}` : ''}</span> : null}</p>
+                <p className="text-xs text-gray-500">{req.customer} &middot; {req.date} &middot; {getJobAmountPrefix(req, locale)}: {getJobAmountValue(req)}</p>
                 {(req.meetingVenue || req.subdistrict) && <p className="text-xs text-gray-500 mt-0.5">{[req.meetingVenue || req.subdistrict].filter(Boolean).join(' · ')}</p>}
                 <p className="text-xs text-gray-500 mt-1" style={{ whiteSpace: "pre-wrap" }}>{stripWorkflowPrefix(req.description || req.desc || req.statusNote)}</p>
               </div>
@@ -3314,7 +3409,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? job.serviceTh : locale === "zh" ? job.serviceZh : job.service}{job.po ? <span className="text-xs font-normal text-gray-400"> · {job.po}</span> : null}</p>
-                    <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"}</p>
+                    <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {getJobAmountPrefix(job, locale)}: {getJobAmountValue(job)}</p>
                     {job.subdistrict && <p className="text-xs text-gray-500 mt-0.5">{job.subdistrict}</p>}
                   </div>
                   <div className="flex flex-col items-end gap-1 flex-shrink-0">
@@ -3330,14 +3425,15 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
                   <div className="w-2/3 overflow-x-auto pb-4 hide-scrollbar">
                     <div className="flex items-center min-w-max relative px-2">
                     {(() => {
-                        const currentStep = job.mockStep || (job.status === 'COMPLETED' ? 11 : 5);
+                        const flow = getWorkflowProgressConfig(job);
+                        const currentStep = Number(job.mockStep || job.step || (job.status === 'COMPLETED' ? flow.completeStep : flow.fallbackStep));
                         return (
                           <>
                       <div className="absolute left-4 right-4 top-3 -translate-y-1/2 h-1 bg-gray-200 rounded-full"></div>
-                      <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, ((currentStep - 4) / 7) * 100))}%` }}></div>
+                      <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, ((currentStep - flow.startStep) / (flow.steps.length - 1)) * 100))}%` }}></div>
                       
-                      {["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"].map((s, i) => {
-                        const stepNum = i + 4; // Notify starts at 4
+                      {flow.steps.map((s, i) => {
+                        const stepNum = i + flow.startStep;
                         const isCompleted = stepNum < currentStep;
                         const isCurrent = stepNum === currentStep;
                         return (
@@ -3517,7 +3613,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? job.serviceTh : locale === "zh" ? job.serviceZh : job.service}{job.po ? <span className="text-xs font-normal text-gray-400"> · {job.po}</span> : null}</p>
-                  <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {locale === "th" ? "งบ" : "Budget"}: ฿{job.budget || "0"}</p>
+                  <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {getJobAmountPrefix(job, locale)}: {getJobAmountValue(job)}</p>
                   {job.subdistrict && <p className="text-xs text-gray-500 mt-0.5">{job.subdistrict}</p>}
                 </div>
                 <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
@@ -3561,13 +3657,14 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                 <div className="w-2/3 overflow-x-auto pb-4 hide-scrollbar">
                   <div className="flex items-center min-w-max relative px-2">
                     {(() => {
-                      const currentStep = job.mockStep || (job.status === 'COMPLETED' ? 11 : 5);
+                      const flow = getWorkflowProgressConfig(job);
+                      const currentStep = Number(job.mockStep || job.step || (job.status === 'COMPLETED' ? flow.completeStep : flow.fallbackStep));
                       return (
                         <>
                     <div className="absolute left-4 right-4 top-3 -translate-y-1/2 h-1 bg-gray-200 rounded-full"></div>
-                    <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, ((currentStep - 4) / 7) * 100))}%` }}></div>
-                    {["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"].map((s, i) => {
-                      const stepNum = i + 4;
+                    <div className="absolute left-4 top-3 -translate-y-1/2 h-1 bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, ((currentStep - flow.startStep) / (flow.steps.length - 1)) * 100))}%` }}></div>
+                    {flow.steps.map((s, i) => {
+                      const stepNum = i + flow.startStep;
                       const isCompleted = stepNum < currentStep;
                       const isCurrent = stepNum === currentStep;
                       return (
@@ -3980,7 +4077,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-900 text-sm">{p.propertyTitle} <span className="text-xs font-normal text-gray-400">· {p.poNumber} · Step 4 of 8</span></p>
                   <p className="text-xs text-emerald-700 font-semibold mt-0.5">{locale === "th" ? "ลูกค้าสนใจทรัพย์สินของคุณ — กรุณายืนยัน" : "Customer is interested in your property — please confirm"}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{getPropSiteLocation(p)} · {p.propertyTier} · ฿{p.propertyFee} fee</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{getPropSiteLocation(p)} · {p.propertyTier} · {locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "สร้างเมื่อ" : locale === "zh" ? "创建时间" : "Created"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
                   {Array.isArray(p.propertyImages) && p.propertyImages.length > 0 && (
                     <button
@@ -4013,6 +4110,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
                   <p className="font-semibold text-gray-900 text-sm">{p.propertyTitle} <span className="text-xs font-normal text-gray-400">· {p.poNumber} · Step 7 of 8</span></p>
                   <p className="text-xs text-teal-700 font-semibold mt-0.5">{locale === "th" ? "ลูกค้าส่งคำเชิญนัดหมาย — กรุณายืนยัน" : "Customer sent a meeting invitation — please confirm"}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{p.meetingDate} {p.meetingTime} · {p.meetingVenue || getPropSiteLocation(p)}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "สร้างเมื่อ" : locale === "zh" ? "创建时间" : "Created"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
                   {Array.isArray(p.propertyImages) && p.propertyImages.length > 0 && (
                     <button
@@ -4045,6 +4143,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
                   <p className="font-semibold text-gray-900 text-sm">{p.propertyTitle} <span className="text-xs font-normal text-gray-400">· {p.poNumber} · Step 8 of 8</span></p>
                   <p className="text-xs text-yellow-700 font-semibold mt-0.5">{locale === "th" ? "นัดหมายยืนยันแล้ว — ให้คะแนนลูกค้าเพื่อปิดงาน" : "Meeting confirmed — rate the customer to close this inquiry"}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{p.meetingDate} {p.meetingTime} · {getPropSiteLocation(p)}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "สร้างเมื่อ" : locale === "zh" ? "创建时间" : "Created"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
                   {Array.isArray(p.propertyImages) && p.propertyImages.length > 0 && (
                     <button
@@ -4075,7 +4174,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? req.serviceTh : locale === "zh" ? req.serviceZh : req.service}{(req.po || req.step) ? <span className="text-xs font-normal text-gray-400">{req.po ? ` · ${req.po}` : ''}{req.step ? ` · Step ${req.step} of 11` : ''}</span> : null}</p>
               <p className="text-xs text-amber-600 font-semibold mt-0.5">{req.type === 'variation_partner' ? 'Please decide whether to submit a variation request.' : req.type === 'complete_partner' ? 'Please send project complete request to customer.' : req.type === 'rate_partner' ? 'Please rate the customer to close this job.' : String(req.status || '').toUpperCase() === 'MEETING_REQUESTED' ? 'Please review and confirm the site meeting invitation.' : locale === "th" ? "โปรดพิจารณาและรับงานนี้เพื่อดำเนินการต่อ" : locale === "zh" ? "请审核并接受此工作以继续" : "Please review and accept this job to proceed"}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{req.customer} &middot; {req.date} &middot; {locale === "th" ? "งบ" : locale === "zh" ? "预算" : "Budget"}: {req.fee || `฿${req.budget || '0'}`}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{req.customer} &middot; {req.date} &middot; {getJobAmountPrefix(req, locale)}: {getJobAmountValue(req)}</p>
               {(req.meetingVenue || req.subdistrict) && <p className="text-xs text-gray-500 mt-0.5">{[req.meetingVenue || req.subdistrict].filter(Boolean).join(' · ')}</p>}
               <p className="text-xs text-gray-500 mt-1" style={{ whiteSpace: "pre-wrap" }}>{stripWorkflowPrefix(req.description || req.desc || req.statusNote)}</p>
             </div>

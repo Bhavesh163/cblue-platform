@@ -17,6 +17,12 @@ export class PropertyInquiryService {
 
   constructor(private readonly prisma: PrismaService) {}
 
+  private normalizeEmail(value?: string | null) {
+    return String(value || '')
+      .trim()
+      .toLowerCase();
+  }
+
   private async resolveLinkedUserIds(userId: string) {
     const fallbackId = String(userId || '').trim();
     if (!fallbackId) return [] as string[];
@@ -26,7 +32,32 @@ export class PropertyInquiryService {
       select: { id: true, subscriberId: true, email: true },
     });
 
-    if (!user) return [fallbackId];
+    if (!user) {
+      const linkedIds = new Set<string>();
+
+      const bySubscriberId = await this.prisma.user.findMany({
+        where: { subscriberId: fallbackId },
+        select: { id: true },
+      });
+      bySubscriberId.forEach((item) => linkedIds.add(item.id));
+
+      const normalizedFallbackEmail = this.normalizeEmail(fallbackId);
+      if (normalizedFallbackEmail) {
+        const byEmail = await this.prisma.user.findMany({
+          where: {
+            email: {
+              equals: normalizedFallbackEmail,
+              mode: 'insensitive',
+            },
+          },
+          select: { id: true },
+        });
+        byEmail.forEach((item) => linkedIds.add(item.id));
+      }
+
+      if (linkedIds.size === 0) linkedIds.add(fallbackId);
+      return Array.from(linkedIds);
+    }
 
     const linkedIds = new Set<string>([user.id]);
 
@@ -55,6 +86,67 @@ export class PropertyInquiryService {
     }
 
     return Array.from(linkedIds);
+  }
+
+  private async resolveLinkedEmails(userId: string, linkedIds?: string[]) {
+    const fallbackId = String(userId || '').trim();
+    if (!fallbackId) return [] as string[];
+
+    const emails = new Set<string>();
+    const addEmail = (value?: string | null) => {
+      const normalized = this.normalizeEmail(value);
+      if (normalized) emails.add(normalized);
+    };
+
+    const requesterIds =
+      linkedIds && linkedIds.length > 0
+        ? linkedIds
+        : await this.resolveLinkedUserIds(fallbackId);
+
+    if (requesterIds.length > 0) {
+      const users = await this.prisma.user.findMany({
+        where: { id: { in: requesterIds } },
+        select: { email: true, subscriberId: true },
+      });
+
+      const subscriberIds = new Set<string>();
+      users.forEach((item) => {
+        addEmail(item.email);
+        if (item.subscriberId) subscriberIds.add(item.subscriberId);
+      });
+
+      if (subscriberIds.size > 0) {
+        const subscribers = await this.prisma.subscriber.findMany({
+          where: { id: { in: Array.from(subscriberIds) } },
+          select: { email: true },
+        });
+        subscribers.forEach((item) => addEmail(item.email));
+      }
+    }
+
+    const fallbackSubscriber = await this.prisma.subscriber.findUnique({
+      where: { id: fallbackId },
+      select: { email: true },
+    });
+    addEmail(fallbackSubscriber?.email);
+
+    if (fallbackId.includes('@')) addEmail(fallbackId);
+
+    return Array.from(emails);
+  }
+
+  private hasAnyLinkedEmail(
+    requesterEmails: string[],
+    candidates: Array<string | null | undefined>,
+  ) {
+    if (requesterEmails.length === 0) return false;
+    const requesterEmailSet = new Set(
+      requesterEmails.map((value) => this.normalizeEmail(value)).filter(Boolean),
+    );
+    return candidates.some((value) => {
+      const normalized = this.normalizeEmail(value);
+      return normalized ? requesterEmailSet.has(normalized) : false;
+    });
   }
 
   private async ensurePropertyInquiryChatTable() {
@@ -86,9 +178,25 @@ export class PropertyInquiryService {
     }
 
     const requesterIds = await this.resolveLinkedUserIds(userId);
-    if (requesterIds.length === 0) {
+    const requesterEmails = await this.resolveLinkedEmails(userId, requesterIds);
+    if (requesterIds.length === 0 && requesterEmails.length === 0) {
       throw new ForbiddenException('Not authorized for this inquiry');
     }
+
+    const customerEmailFilters = requesterEmails.flatMap((email) => [
+      { customerEmail: { equals: email, mode: 'insensitive' as const } },
+      { customer: { email: { equals: email, mode: 'insensitive' as const } } },
+    ]);
+    const listerEmailFilters = requesterEmails.flatMap((email) => [
+      { lister: { email: { equals: email, mode: 'insensitive' as const } } },
+      {
+        property: {
+          user: {
+            email: { equals: email, mode: 'insensitive' as const },
+          },
+        },
+      },
+    ]);
 
     const inquiry = await this.prisma.propertyInquiry.findFirst({
       where: {
@@ -97,6 +205,8 @@ export class PropertyInquiryService {
           { customerId: { in: requesterIds } },
           { listerUserId: { in: requesterIds } },
           { property: { userId: { in: requesterIds } } },
+          ...customerEmailFilters,
+          ...listerEmailFilters,
         ],
       },
       select: { id: true, poNumber: true },
@@ -242,7 +352,7 @@ export class PropertyInquiryService {
         customerId,
         listerUserId: property.userId,
         customerName: dto.customerName || customer.name || '',
-        customerEmail: dto.customerEmail || customer.email || '',
+        customerEmail: this.normalizeEmail(dto.customerEmail || customer.email),
         listerName: dto.listerName || lister.name || property.contactName || '',
       },
     });
@@ -250,10 +360,18 @@ export class PropertyInquiryService {
 
   async findByCustomer(customerId: string) {
     const customerIds = await this.resolveLinkedUserIds(customerId);
-    if (customerIds.length === 0) return [];
+    const customerEmails = await this.resolveLinkedEmails(customerId, customerIds);
+    if (customerIds.length === 0 && customerEmails.length === 0) return [];
+
+    const customerEmailFilters = customerEmails.flatMap((email) => [
+      { customerEmail: { equals: email, mode: 'insensitive' as const } },
+      { customer: { email: { equals: email, mode: 'insensitive' as const } } },
+    ]);
 
     return this.prisma.propertyInquiry.findMany({
-      where: { customerId: { in: customerIds } },
+      where: {
+        OR: [{ customerId: { in: customerIds } }, ...customerEmailFilters],
+      },
       include: {
         property: {
           select: {
@@ -289,13 +407,26 @@ export class PropertyInquiryService {
 
   async findByLister(listerUserId: string) {
     const listerIds = await this.resolveLinkedUserIds(listerUserId);
-    if (listerIds.length === 0) return [];
+    const listerEmails = await this.resolveLinkedEmails(listerUserId, listerIds);
+    if (listerIds.length === 0 && listerEmails.length === 0) return [];
+
+    const listerEmailFilters = listerEmails.flatMap((email) => [
+      { lister: { email: { equals: email, mode: 'insensitive' as const } } },
+      {
+        property: {
+          user: {
+            email: { equals: email, mode: 'insensitive' as const },
+          },
+        },
+      },
+    ]);
 
     return this.prisma.propertyInquiry.findMany({
       where: {
         OR: [
           { listerUserId: { in: listerIds } },
           { property: { userId: { in: listerIds } } },
+          ...listerEmailFilters,
         ],
       },
       include: {
@@ -334,15 +465,31 @@ export class PropertyInquiryService {
   async update(id: string, userId: string, dto: UpdatePropertyInquiryDto) {
     const inquiry = await this.prisma.propertyInquiry.findUnique({
       where: { id },
+      include: {
+        customer: { select: { email: true } },
+        lister: { select: { email: true } },
+        property: {
+          select: {
+            user: { select: { email: true } },
+          },
+        },
+      },
     });
     if (!inquiry) {
       throw new NotFoundException('Inquiry not found');
     }
     // Allow canonicalized bridge identities (same subscriber/email) to update.
     const requesterIds = await this.resolveLinkedUserIds(userId);
+    const requesterEmails = await this.resolveLinkedEmails(userId, requesterIds);
     const isAllowed =
       requesterIds.includes(inquiry.customerId) ||
-      requesterIds.includes(inquiry.listerUserId);
+      requesterIds.includes(inquiry.listerUserId) ||
+      this.hasAnyLinkedEmail(requesterEmails, [
+        inquiry.customerEmail,
+        inquiry.customer?.email,
+        inquiry.lister?.email,
+        inquiry.property?.user?.email,
+      ]);
     if (!isAllowed) {
       throw new ForbiddenException('Not authorized to update this inquiry');
     }

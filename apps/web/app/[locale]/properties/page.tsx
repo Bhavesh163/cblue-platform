@@ -67,10 +67,17 @@ function normalizeCoordinate(value: unknown) {
   return Number.isFinite(numeric) ? numeric : null;
 }
 
+function hasValidGpsCoordinatePair(latitude: number | null, longitude: number | null) {
+  if (latitude === null || longitude === null) return false;
+  // 0,0 is a common unset fallback and should not override full address details.
+  if (Math.abs(latitude) < 0.000001 && Math.abs(longitude) < 0.000001) return false;
+  return true;
+}
+
 function getPropertySiteLocation(property: Partial<Property>) {
   const latitude = normalizeCoordinate(property.latitude);
   const longitude = normalizeCoordinate(property.longitude);
-  if (latitude !== null && longitude !== null) {
+  if (latitude !== null && longitude !== null && hasValidGpsCoordinatePair(latitude, longitude)) {
     return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
   }
 
@@ -113,10 +120,16 @@ function normalizeImageUrl(value: unknown) {
   return "";
 }
 
+function extractImageUrlCandidate(image: any) {
+  if (typeof image === "string") return image;
+  if (!image || typeof image !== "object") return "";
+  return image.url || image.key || image.imageUrl || image.publicUrl || image.src || "";
+}
+
 function sanitizeProperty(raw: any): Property {
   const imagesRaw = Array.isArray(raw?.images) ? raw.images : [];
   const images = imagesRaw
-    .map((img: any) => normalizeImageUrl(typeof img === "string" ? img : img?.url))
+    .map((img: any) => normalizeImageUrl(extractImageUrlCandidate(img)))
     .filter(Boolean)
     .map((url: string) => ({ url }));
 
@@ -156,12 +169,13 @@ function dedupeProperties(items: Property[]) {
   for (const item of items) {
     const key = [
       item.userId || "",
-      String(item.title || "").trim().toLowerCase(),
       String(item.propertyType || "").toUpperCase(),
       String(item.listingType || "").toUpperCase(),
       Number(item.price || 0),
       String(item.province || "").trim().toLowerCase(),
       String(item.district || "").trim().toLowerCase(),
+      String(item.subdistrict || "").trim().toLowerCase(),
+      String(item.addressLine || "").trim().toLowerCase(),
       Number(item.bedrooms || 0),
       Number(item.bathrooms || 0),
       Number(item.area || 0),
@@ -175,10 +189,14 @@ function dedupeProperties(items: Property[]) {
 
     const existingHasImage = (existing.images?.length || 0) > 0;
     const nextHasImage = (item.images?.length || 0) > 0;
+    const existingHasUsableLocation = getPropertySiteLocation(existing) !== "Unknown";
+    const nextHasUsableLocation = getPropertySiteLocation(item) !== "Unknown";
+    const existingQuality = (existingHasImage ? 2 : 0) + (existingHasUsableLocation ? 1 : 0);
+    const nextQuality = (nextHasImage ? 2 : 0) + (nextHasUsableLocation ? 1 : 0);
     const existingTs = parsePropertyTimestamp(existing.updatedAt || existing.createdAt);
     const nextTs = parsePropertyTimestamp(item.updatedAt || item.createdAt);
 
-    if ((nextHasImage && !existingHasImage) || (nextHasImage === existingHasImage && nextTs >= existingTs)) {
+    if (nextQuality > existingQuality || (nextQuality === existingQuality && nextTs >= existingTs)) {
       bestByKey.set(key, item);
     }
   }
@@ -360,29 +378,58 @@ function PropertiesPageContent() {
     return new Intl.NumberFormat("th-TH").format(price);
   }
 
-  async function canActivateInquiryWithCustomer(authToken: string) {
-    if (!authToken) return false;
+  async function getInquirySessionType(authToken: string): Promise<"customer" | "partner" | "unknown"> {
+    if (!authToken) return "unknown";
     try {
       const res = await fetch("/api/v1/users/me", {
         headers: { Authorization: `Bearer ${authToken}` },
       });
-      if (!res.ok) return false;
+      if (!res.ok) return "unknown";
       const me = await res.json();
-      return !Boolean(me?.fixer);
+      return me?.fixer ? "partner" : "customer";
     } catch {
-      return false;
+      return "unknown";
     }
   }
 
   async function handleContactLister(prop: Property) {
-    if (!subscriber) {
+    const readStoredSubscriber = () => {
+      try {
+        const stored = localStorage.getItem("subscriber");
+        return stored ? JSON.parse(stored) : null;
+      } catch {
+        return null;
+      }
+    };
+
+    const activeSubscriber = subscriber || readStoredSubscriber();
+    if (!subscriber && activeSubscriber) {
+      setSubscriber(activeSubscriber);
+    }
+
+    if (!activeSubscriber) {
       setPendingContactProp(prop);
       setShowLoginGate(true);
       return;
     }
-    const token = localStorage.getItem("subscriber_token") || "";
-    const isCustomerSession = await canActivateInquiryWithCustomer(token);
-    if (!isCustomerSession) {
+
+    let token = localStorage.getItem("subscriber_token") || "";
+    if (!token) {
+      setPendingContactProp(prop);
+      setShowLoginGate(true);
+      return;
+    }
+
+    let inquirySessionType = await getInquirySessionType(token);
+    if (inquirySessionType !== "customer") {
+      const refreshedToken = await refreshSubscriberSession(token);
+      if (refreshedToken) {
+        token = refreshedToken;
+        inquirySessionType = await getInquirySessionType(token);
+      }
+    }
+
+    if (inquirySessionType === "partner") {
       setPendingContactProp(prop);
       setAuthMode("login");
       setAuthError(locale === "th" ? "กรุณาเข้าสู่ระบบด้วยบัญชีลูกค้าเพื่อส่งแจ้งเตือน" : locale === "zh" ? "请使用客户账号登录后再发送通知。" : "Please log in with a customer account to activate inquiry notifications.");
@@ -521,8 +568,8 @@ function PropertiesPageContent() {
                     return;
                   }
                   const authData = await authRes.json();
-                  const canActivateInquiry = await canActivateInquiryWithCustomer(authData.accessToken || "");
-                  if (!canActivateInquiry) {
+                  const inquirySession = await getInquirySessionType(authData.accessToken || "");
+                  if (inquirySession !== "customer") {
                     setAuthError(locale === "th" ? "บัญชีนี้ไม่ใช่บัญชีลูกค้า กรุณาเข้าสู่ระบบด้วยบัญชีลูกค้าเพื่อส่งแจ้งเตือน" : locale === "zh" ? "此账户不是客户账户。请使用客户账户登录后再发送通知。" : "This account is not a customer account. Please log in with a customer account to activate inquiry notifications.");
                     return;
                   }
@@ -637,28 +684,40 @@ function PropertiesPageContent() {
                       onClick={async () => {
                         const currentFlow = showContactFlow;
                         if (!currentFlow) return;
+                        const readStoredSubscriber = () => {
+                          try {
+                            const stored = localStorage.getItem("subscriber");
+                            return stored ? JSON.parse(stored) : null;
+                          } catch {
+                            return null;
+                          }
+                        };
+                        const activeSubscriber = subscriber || readStoredSubscriber();
                         try {
-                          const storedToken = localStorage.getItem("subscriber_token") || "";
-                          const refreshedToken = storedToken ? await refreshSubscriberSession(storedToken) : null;
-                          if (storedToken && !refreshedToken) {
-                            clearSubscriberSession();
-                            setShowContactFlow(null);
-                            setPendingContactProp(currentFlow);
-                            setShowLoginGate(true);
-                            alert(loginRequiredMessage);
-                            return;
-                          }
-
-                          const token = refreshedToken || storedToken;
-                          if (!token) {
+                          let token = localStorage.getItem("subscriber_token") || "";
+                          if (!token || !activeSubscriber) {
                             setShowContactFlow(null);
                             setPendingContactProp(currentFlow);
                             setShowLoginGate(true);
                             return;
                           }
 
-                          const canProceedAsCustomer = await canActivateInquiryWithCustomer(token);
-                          if (!canProceedAsCustomer) {
+                          let inquirySession = await getInquirySessionType(token);
+                          if (inquirySession !== "customer") {
+                            const refreshedToken = await refreshSubscriberSession(token);
+                            if (!refreshedToken) {
+                              clearSubscriberSession();
+                              setShowContactFlow(null);
+                              setPendingContactProp(currentFlow);
+                              setShowLoginGate(true);
+                              alert(loginRequiredMessage);
+                              return;
+                            }
+                            token = refreshedToken;
+                            inquirySession = await getInquirySessionType(token);
+                          }
+
+                          if (inquirySession === "partner") {
                             setShowContactFlow(null);
                             setPendingContactProp(currentFlow);
                             setAuthMode("login");
@@ -674,8 +733,8 @@ function PropertiesPageContent() {
                               poNumber,
                               propertyId: currentFlow.id,
                               listerUserId: currentFlow.userId || "",
-                              customerName: subscriber?.name || "",
-                              customerEmail: subscriber?.email || "",
+                              customerName: activeSubscriber?.name || "",
+                              customerEmail: activeSubscriber?.email || "",
                               listerName: currentFlow.contactName || currentFlow.title,
                             }),
                           });
@@ -699,6 +758,14 @@ function PropertiesPageContent() {
                             const msg = Array.isArray(errData?.message)
                               ? errData.message.join(", ")
                               : errData?.message || (locale === "th" ? "ไม่สามารถส่งคำขอได้ กรุณาเข้าสู่ระบบใหม่แล้วลองอีกครั้ง" : locale === "zh" ? "无法发送询盘。请重新登录后再试。" : "Could not send the inquiry. Please log in again and retry.");
+                            if (/partner|customer account/i.test(String(msg))) {
+                              setShowContactFlow(null);
+                              setPendingContactProp(currentFlow);
+                              setAuthMode("login");
+                              setAuthError(locale === "th" ? "บัญชีนี้ไม่ใช่บัญชีลูกค้า กรุณาเข้าสู่ระบบด้วยบัญชีลูกค้าเพื่อส่งแจ้งเตือน" : locale === "zh" ? "此账户不是客户账户。请使用客户账户登录后再发送通知。" : "This account is not a customer account. Please log in with a customer account to activate inquiry notifications.");
+                              setShowLoginGate(true);
+                              return;
+                            }
                             alert(msg);
                             return;
                           }

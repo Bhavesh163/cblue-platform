@@ -144,6 +144,11 @@ const normalizeImageUrl = (value: unknown) => {
 
   return '';
 };
+const extractImageUrlCandidate = (image: any) => {
+  if (typeof image === 'string') return image;
+  if (!image || typeof image !== 'object') return '';
+  return image.url || image.key || image.imageUrl || image.publicUrl || image.src || '';
+};
 const extensionFromMimeType = (mimeType?: string | null) => {
   const mime = String(mimeType || '').toLowerCase();
   if (!mime) return 'bin';
@@ -1046,7 +1051,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         if (data?.images && Array.isArray(data.images)) {
           setPropModalImages(
             data.images
-              .map((i: { url: string }) => normalizeImageUrl(i?.url))
+              .map((i: any) => normalizeImageUrl(extractImageUrlCandidate(i)))
               .filter(Boolean),
           );
         } else {
@@ -1080,7 +1085,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const getPropSiteLocation = (p: Partial<PropInquiry>) => {
     const lat = Number(p.latitude);
     const lng = Number(p.longitude);
-    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    if (Number.isFinite(lat) && Number.isFinite(lng) && !(Math.abs(lat) < 0.000001 && Math.abs(lng) < 0.000001)) {
       return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
     }
     return [
@@ -1242,9 +1247,13 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     function mapApiInquiry(api: any): PropInquiry {
       const propertyImages = Array.isArray(api?.property?.images)
         ? api.property.images
-            .map((image: any) => normalizeImageUrl(typeof image === 'string' ? image : image?.url))
+            .map((image: any) => normalizeImageUrl(extractImageUrlCandidate(image)))
             .filter(Boolean)
         : [];
+      const createdAtTs = new Date(api?.createdAt || 0).getTime();
+      const updatedAtTs = new Date(api?.updatedAt || api?.createdAt || 0).getTime();
+      const createdAt = Number.isFinite(createdAtTs) && createdAtTs > 0 ? createdAtTs : Date.now();
+      const updatedAt = Number.isFinite(updatedAtTs) && updatedAtTs > 0 ? updatedAtTs : createdAt;
       return {
         id: api.id, poNumber: api.poNumber, propertyId: api.propertyId,
         propertyTitle: api.property?.title || '', propertyTier: api.property?.tier || 'STANDARD',
@@ -1261,7 +1270,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         propertyImages,
         customerEmail: api.customerEmail,
         customerName: api.customerName, listerName: api.listerName, status: api.status, step: api.step,
-        createdAt: new Date(api.createdAt).getTime(), updatedAt: new Date(api.updatedAt).getTime(),
+        createdAt,
+        updatedAt,
         meetingDate: api.meetingDate, meetingTime: api.meetingTime, meetingVenue: api.meetingVenue,
         customerRating: api.customerRating, customerComment: api.customerComment,
         listerRating: api.listerRating, listerComment: api.listerComment, reselectedOnce: api.reselectedOnce,
@@ -1673,7 +1683,15 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         budget: order.estimatedPrice ? `฿${Number(order.estimatedPrice).toLocaleString()}` : '฿0',
         tier,
         desc: 'Partner accepted the PO. Please pay the processing fee and notify to proceed.',
-        location: (() => { if (order?.address?.latitude && order?.address?.longitude) return `${Number(order.address.latitude).toFixed(6)}, ${Number(order.address.longitude).toFixed(6)}`; const m = String(order?.description || '').match(/\bLOC:([^|]+)/); return (m ? (m[1] ?? '').trim() : '') || String(order?.address?.subdistrict || order?.subdistrict || order?.location || ''); })(),
+        location: (() => {
+          const lat = Number(order?.address?.latitude);
+          const lng = Number(order?.address?.longitude);
+          if (Number.isFinite(lat) && Number.isFinite(lng) && !(Math.abs(lat) < 0.000001 && Math.abs(lng) < 0.000001)) {
+            return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+          }
+          const m = String(order?.description || '').match(/\bLOC:([^|]+)/);
+          return (m ? (m[1] ?? '').trim() : '') || String(order?.address?.subdistrict || order?.subdistrict || order?.location || '');
+        })(),
         type: 'payment_pending',
         step: 6,
       });
@@ -1857,7 +1875,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         createdAt: parseDateMs(o.createdAt),
         budget: o.estimatedPrice ? `฿${Number(o.estimatedPrice).toLocaleString()}` : '฿0',
         location: (() => {
-          if (o.address?.latitude && o.address?.longitude) return `${Number(o.address.latitude).toFixed(6)}, ${Number(o.address.longitude).toFixed(6)}`;
+          const lat = Number(o?.address?.latitude);
+          const lng = Number(o?.address?.longitude);
+          if (Number.isFinite(lat) && Number.isFinite(lng) && !(Math.abs(lat) < 0.000001 && Math.abs(lng) < 0.000001)) {
+            return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+          }
           const m = String(o.description || '').match(/\bLOC:([^|]+)/);
           return (m ? (m[1] ?? '').trim() : '') || o.address?.subdistrict || o.subdistrict || 'Unknown';
         })(),
@@ -1947,9 +1969,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     .map((p: PropInquiry) => {
       const status = String(p.status || "").toUpperCase();
       const siteLocation = getPropSiteLocation(p);
+      const cardTs = Number(p.updatedAt || p.createdAt || Date.now());
       const step =
         status === 'NOTIFY_SENT'
-          ? 4
+          ? 3
           : status === 'ACCEPTED'
           ? 5
           : status === 'PAID'
@@ -1986,20 +2009,88 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         partnerName: p.listerName,
         location: siteLocation,
         subdistrict: p.subdistrict || p.district || p.province,
-        budget: toCurrencyLabel(p.propertyFee || p.propertyPrice),
+        budget: toCurrencyLabel(p.propertyPrice),
+        value: toCurrencyLabel(p.propertyPrice),
+        fee: toCurrencyLabel(p.propertyFee),
         tier: p.propertyTier || 'Standard',
         step,
         actionNeeded,
         actionNeededDetail,
         status,
-        createdAt: p.updatedAt || p.createdAt,
+        date: toDisplayDateTime(cardTs),
+        createdAt: cardTs,
         propInquiry: p,
       };
     });
-  const combinedActiveWithProp = [...propActiveItems, ...combinedActive].sort(
-    (a: any, b: any) => parseDateMs(b.createdAt || b.date) - parseDateMs(a.createdAt || a.date),
-  );
-  const allRequestItemsWithProp = [...propRequestItems, ...allRequestItems];
+  const combinedActiveWithProp = Array.from(
+    [...combinedActive, ...propActiveItems].reduce((map: Map<string, any>, item: any) => {
+      const key = String(item?.po || item?.id || '').trim();
+      if (!key) return map;
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, item);
+        return map;
+      }
+
+      const existingIsProperty = String(existing?.type || '').startsWith('prop_') || isPropPoCode(existing?.po || existing?.id || '');
+      const nextIsProperty = String(item?.type || '').startsWith('prop_') || isPropPoCode(item?.po || item?.id || '');
+      const keyIsPropertyPo = isPropPoCode(key);
+
+      if (keyIsPropertyPo && nextIsProperty && !existingIsProperty) {
+        map.set(key, item);
+        return map;
+      }
+      if (keyIsPropertyPo && existingIsProperty && !nextIsProperty) {
+        return map;
+      }
+
+      const existingStep = Number(existing?.step || 0);
+      const nextStep = Number(item?.step || 0);
+      const existingTs = parseDateMs(existing?.createdAt || existing?.date);
+      const nextTs = parseDateMs(item?.createdAt || item?.date);
+
+      if (nextStep > existingStep || (nextStep === existingStep && nextTs >= existingTs)) {
+        map.set(key, { ...existing, ...item });
+      }
+
+      return map;
+    }, new Map<string, any>()).values(),
+  ).sort((a: any, b: any) => parseDateMs(b.createdAt || b.date) - parseDateMs(a.createdAt || a.date));
+
+  const allRequestItemsWithProp = Array.from(
+    [...allRequestItems, ...propRequestItems].reduce((map: Map<string, any>, item: any) => {
+      const key = String(item?.po || item?.id || '').trim();
+      if (!key) return map;
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, item);
+        return map;
+      }
+
+      const existingIsProperty = String(existing?.type || '').startsWith('prop_') || isPropPoCode(existing?.po || existing?.id || '');
+      const nextIsProperty = String(item?.type || '').startsWith('prop_') || isPropPoCode(item?.po || item?.id || '');
+      const keyIsPropertyPo = isPropPoCode(key);
+
+      if (keyIsPropertyPo && nextIsProperty && !existingIsProperty) {
+        map.set(key, item);
+        return map;
+      }
+      if (keyIsPropertyPo && existingIsProperty && !nextIsProperty) {
+        return map;
+      }
+
+      const existingStep = Number(existing?.step || 0);
+      const nextStep = Number(item?.step || 0);
+      const existingTs = parseDateMs(existing?.createdAt || existing?.date);
+      const nextTs = parseDateMs(item?.createdAt || item?.date);
+
+      if (nextStep > existingStep || (nextStep === existingStep && nextTs >= existingTs)) {
+        map.set(key, { ...existing, ...item });
+      }
+
+      return map;
+    }, new Map<string, any>()).values(),
+  ).sort((a: any, b: any) => parseDateMs(b.createdAt || b.date) - parseDateMs(a.createdAt || a.date));
 
   const actionableRequestPos = new Set(
     allRequestItems
@@ -2615,13 +2706,21 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     return null;
   };
 
-  const renderActiveCard = (item: any, idx: number) => (
+  const renderActiveCard = (item: any, idx: number) => {
+    const isPropertyCard = item.type === 'prop_waiting' || isPropPoCode(item.po);
+    const amountPrefix = isPropertyCard
+      ? (locale === "th" ? "มูลค่า:" : locale === "zh" ? "总价:" : "Value:")
+      : (locale === "th" ? "งบประมาณ:" : locale === "zh" ? "预算:" : "Budget:");
+    const amountValue = isPropertyCard
+      ? toCurrencyLabel(item.value || item.budget || item.propertyPrice || item.price || 0)
+      : (item.budget || ('฿' + Number(item.price || 0).toLocaleString()));
+    return (
     <div key={idx} className="p-5 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
       <div className="flex items-start gap-4 flex-1 min-w-0">
          <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold shrink-0 ${item.type === 'prop_waiting' ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-600'}`}>{(locale === "th" ? (item.titleTh || item.serviceTh || item.title || item.service || "C") : locale === "zh" ? (item.titleZh || item.serviceZh || item.title || item.service || "C") : (item.title || item.service || "C")).charAt(0)}</div>
          <div className="min-w-0">
            <h3 className="font-bold text-gray-900">{locale === "th" ? (item.titleTh || item.serviceTh || item.title || item.service) : locale === "zh" ? (item.titleZh || item.serviceZh || item.title || item.service) : (item.title || item.service)} <span className="text-sm font-normal text-gray-400">· {item.po || `PO-${item.id?.slice(0,8) || '2605-8471'}`} | {item.location || item.subdistrict || 'Unknown'}</span></h3>
-           <p className="text-sm text-gray-600 mt-0.5">{item.fixerAlias || item.partnerName || item.customer || "Customer"} · {item.date || "11/5/2026 14:30"} · {locale === "th" ? "งบประมาณ:" : locale === "zh" ? "预算:" : "Budget:"} {item.budget || ('฿' + Number(item.price || 0).toLocaleString())}</p>
+           <p className="text-sm text-gray-600 mt-0.5">{item.fixerAlias || item.partnerName || item.customer || "Customer"} · {item.date || toDisplayDateTime(item.createdAt || Date.now())} · {amountPrefix} {amountValue}</p>
            {item.type === 'prop_waiting' && (
              <p className="text-xs text-amber-700 mt-1">
                {locale === "th"
@@ -2635,7 +2734,6 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       </div>
       <div className="w-full xl:w-[560px] shrink-0 mt-2 xl:mt-0">
         {(() => {
-          const isPropertyCard = item.type === 'prop_waiting' || isPropPoCode(item.po);
           const steps = isPropertyCard ? PROPERTY_ACTIVE_STEPS : FIXER_ACTIVE_STEPS;
           const startStep = isPropertyCard ? 1 : 4;
           const fallbackStep = isPropertyCard ? 4 : 5;
@@ -2679,6 +2777,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       </div>
     </div>
   );
+  };
   const activeOrders = workflowOrders.filter((o: any) => !['COMPLETED', 'CANCELLED', 'DONE'].includes(String(o.status || '').toUpperCase()));
   const historyOrders = workflowOrders.filter((o: any) => ['COMPLETED', 'CANCELLED', 'DONE'].includes(String(o.status || '').toUpperCase()));
   const allHistory = Array.from(
@@ -2707,8 +2806,26 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         status: 'COMPLETED',
         step: 11,
         stepName: getWorkflowStepName(11),
-        location: (() => { if (entry?.address?.latitude && entry?.address?.longitude) return `${Number(entry.address.latitude).toFixed(6)}, ${Number(entry.address.longitude).toFixed(6)}`; const m = String(entry?.description || '').match(/\bLOC:([^|]+)/); const fromDesc = m ? (m[1] ?? '').trim() : ''; return fromDesc || entry.address?.subdistrict || entry.subdistrict || entry.location || existing.location || ''; })(),
-        subdistrict: (() => { if (entry?.address?.latitude && entry?.address?.longitude) return `${Number(entry.address.latitude).toFixed(6)}, ${Number(entry.address.longitude).toFixed(6)}`; const m = String(entry?.description || '').match(/\bLOC:([^|]+)/); const fromDesc = m ? (m[1] ?? '').trim() : ''; return fromDesc || entry.address?.subdistrict || entry.subdistrict || entry.location || existing.subdistrict || ''; })(),
+        location: (() => {
+          const lat = Number(entry?.address?.latitude);
+          const lng = Number(entry?.address?.longitude);
+          if (Number.isFinite(lat) && Number.isFinite(lng) && !(Math.abs(lat) < 0.000001 && Math.abs(lng) < 0.000001)) {
+            return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+          }
+          const m = String(entry?.description || '').match(/\bLOC:([^|]+)/);
+          const fromDesc = m ? (m[1] ?? '').trim() : '';
+          return fromDesc || entry.address?.subdistrict || entry.subdistrict || entry.location || existing.location || '';
+        })(),
+        subdistrict: (() => {
+          const lat = Number(entry?.address?.latitude);
+          const lng = Number(entry?.address?.longitude);
+          if (Number.isFinite(lat) && Number.isFinite(lng) && !(Math.abs(lat) < 0.000001 && Math.abs(lng) < 0.000001)) {
+            return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+          }
+          const m = String(entry?.description || '').match(/\bLOC:([^|]+)/);
+          const fromDesc = m ? (m[1] ?? '').trim() : '';
+          return fromDesc || entry.address?.subdistrict || entry.subdistrict || entry.location || existing.subdistrict || '';
+        })(),
         projectDetails,
         description: projectDetails,
         tier: entry.tier || existing.tier || 'Standard',
@@ -2837,7 +2954,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                       <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center text-lg">🏠</div>
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-gray-900 text-sm">{p.propertyTitle} <span className="text-xs font-normal text-gray-400">· {p.poNumber}</span></p>
-                        <p className="text-xs text-gray-500 mt-0.5">{p.province} · {p.listerName}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{getPropSiteLocation(p)} · {p.listerName}</p>
                         <p className="text-xs text-emerald-600 font-semibold mt-0.5">
                           ✅ {locale === "th" ? "ปิดงานแล้ว" : "Completed"} · ⭐ {p.customerRating ?? "-"}/5 ({locale === "th" ? "คุณให้" : "you"}) · ⭐ {p.listerRating ?? "-"}/5 ({locale === "th" ? "ผู้ลงประกาศให้" : "lister"})
                           {p.updatedAt ? ` · ${new Date(p.updatedAt).toLocaleDateString()}` : ""}
@@ -3222,7 +3339,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   disabled={propRateStars === 0}
                   className="flex-1 py-2.5 bg-yellow-500 text-white rounded-xl font-bold text-sm hover:bg-yellow-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={async () => {
-                    const alreadyRatedByLister = propRateModal?.listerRating !== undefined && propRateModal?.listerRating !== null;
+                    const alreadyRatedByLister = propRateModal?.listerRating != null;
                     await updatePropInquiry(
                       propRateModal!.id,
                       {
@@ -3617,7 +3734,14 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 po={variationApproveModal.po || '-'}
                 partnerName={firstNameOnly(variationApproveModal.customer || variationApproveOrder?.customer || variationApproveOrder?.fixerName, 'Partner')}
                 budget={toCurrencyLabel(variationApproveModal.budget || variationApproveOrder?.budget || variationApproveOrder?.fee)}
-                location={(variationApproveOrder?.address?.latitude && variationApproveOrder?.address?.longitude) ? `${Number(variationApproveOrder.address.latitude).toFixed(6)}, ${Number(variationApproveOrder.address.longitude).toFixed(6)}` : (variationApproveOrder?.address?.subdistrict || variationApproveOrder?.subdistrict || variationApproveOrder?.location || variationApproveModal?.location || variationApproveModal?.subdistrict || 'Unknown')}
+                location={(() => {
+                  const lat = Number(variationApproveOrder?.address?.latitude);
+                  const lng = Number(variationApproveOrder?.address?.longitude);
+                  if (Number.isFinite(lat) && Number.isFinite(lng) && !(Math.abs(lat) < 0.000001 && Math.abs(lng) < 0.000001)) {
+                    return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+                  }
+                  return variationApproveOrder?.address?.subdistrict || variationApproveOrder?.subdistrict || variationApproveOrder?.location || variationApproveModal?.location || variationApproveModal?.subdistrict || 'Unknown';
+                })()}
                 projectDetails={stripWorkflowPrefix(variationApproveOrder?.description || variationApproveModal.desc || variationApproveModal.title || '')}
               />
               {(() => {
@@ -3727,7 +3851,14 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 po={completeApproveModal.po || '-'}
                 partnerName={firstNameOnly(completeApproveModal.customer || completeApproveOrder?.customer || completeApproveOrder?.fixerName, 'Partner')}
                 budget={toCurrencyLabel(completeApproveModal.budget || completeApproveOrder?.budget || completeApproveOrder?.fee)}
-                location={(completeApproveOrder?.address?.latitude && completeApproveOrder?.address?.longitude) ? `${Number(completeApproveOrder.address.latitude).toFixed(6)}, ${Number(completeApproveOrder.address.longitude).toFixed(6)}` : (completeApproveOrder?.address?.subdistrict || completeApproveOrder?.subdistrict || completeApproveOrder?.location || completeApproveModal?.location || completeApproveModal?.subdistrict || 'Unknown')}
+                location={(() => {
+                  const lat = Number(completeApproveOrder?.address?.latitude);
+                  const lng = Number(completeApproveOrder?.address?.longitude);
+                  if (Number.isFinite(lat) && Number.isFinite(lng) && !(Math.abs(lat) < 0.000001 && Math.abs(lng) < 0.000001)) {
+                    return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+                  }
+                  return completeApproveOrder?.address?.subdistrict || completeApproveOrder?.subdistrict || completeApproveOrder?.location || completeApproveModal?.location || completeApproveModal?.subdistrict || 'Unknown';
+                })()}
                 projectDetails={stripWorkflowPrefix(completeApproveOrder?.description || completeApproveModal.desc || completeApproveModal.title || '')}
               />
               {(() => {
