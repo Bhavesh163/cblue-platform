@@ -141,7 +141,9 @@ export class PropertyInquiryService {
   ) {
     if (requesterEmails.length === 0) return false;
     const requesterEmailSet = new Set(
-      requesterEmails.map((value) => this.normalizeEmail(value)).filter(Boolean),
+      requesterEmails
+        .map((value) => this.normalizeEmail(value))
+        .filter(Boolean),
     );
     return candidates.some((value) => {
       const normalized = this.normalizeEmail(value);
@@ -178,7 +180,10 @@ export class PropertyInquiryService {
     }
 
     const requesterIds = await this.resolveLinkedUserIds(userId);
-    const requesterEmails = await this.resolveLinkedEmails(userId, requesterIds);
+    const requesterEmails = await this.resolveLinkedEmails(
+      userId,
+      requesterIds,
+    );
     if (requesterIds.length === 0 && requesterEmails.length === 0) {
       throw new ForbiddenException('Not authorized for this inquiry');
     }
@@ -360,7 +365,10 @@ export class PropertyInquiryService {
 
   async findByCustomer(customerId: string) {
     const customerIds = await this.resolveLinkedUserIds(customerId);
-    const customerEmails = await this.resolveLinkedEmails(customerId, customerIds);
+    const customerEmails = await this.resolveLinkedEmails(
+      customerId,
+      customerIds,
+    );
     if (customerIds.length === 0 && customerEmails.length === 0) return [];
 
     const customerEmailFilters = customerEmails.flatMap((email) => [
@@ -407,7 +415,10 @@ export class PropertyInquiryService {
 
   async findByLister(listerUserId: string) {
     const listerIds = await this.resolveLinkedUserIds(listerUserId);
-    const listerEmails = await this.resolveLinkedEmails(listerUserId, listerIds);
+    const listerEmails = await this.resolveLinkedEmails(
+      listerUserId,
+      listerIds,
+    );
     if (listerIds.length === 0 && listerEmails.length === 0) return [];
 
     const listerEmailFilters = listerEmails.flatMap((email) => [
@@ -480,7 +491,10 @@ export class PropertyInquiryService {
     }
     // Allow canonicalized bridge identities (same subscriber/email) to update.
     const requesterIds = await this.resolveLinkedUserIds(userId);
-    const requesterEmails = await this.resolveLinkedEmails(userId, requesterIds);
+    const requesterEmails = await this.resolveLinkedEmails(
+      userId,
+      requesterIds,
+    );
     const isAllowed =
       requesterIds.includes(inquiry.customerId) ||
       requesterIds.includes(inquiry.listerUserId) ||

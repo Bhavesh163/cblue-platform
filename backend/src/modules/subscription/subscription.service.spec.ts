@@ -10,10 +10,37 @@ jest.mock('bcrypt', () => ({
   compare: jest.fn().mockResolvedValue(false),
 }));
 
+type SubscriberMock = {
+  findUnique: jest.Mock;
+  findFirst: jest.Mock;
+  findMany: jest.Mock;
+  create: jest.Mock;
+  update: jest.Mock;
+};
+
+type UserMock = {
+  findFirst: jest.Mock;
+  findUnique: jest.Mock;
+  create: jest.Mock;
+  update: jest.Mock;
+};
+
+type PrismaMock = {
+  subscriber: SubscriberMock;
+  user: UserMock;
+  $transaction: jest.Mock;
+};
+
+type JwtMock = {
+  sign: jest.Mock;
+  signAsync: jest.Mock;
+  verifyAsync: jest.Mock;
+};
+
 describe('SubscriptionService', () => {
   let service: SubscriptionService;
-  let prismaService: any;
-  let jwtService: any;
+  let prismaService: PrismaMock;
+  let jwtService: JwtMock;
 
   beforeEach(async () => {
     prismaService = {
@@ -30,14 +57,21 @@ describe('SubscriptionService', () => {
         create: jest.fn(),
         update: jest.fn(),
       },
-      $transaction: jest.fn((callback) => {
-        // mock the transaction object (tx)
-        const tx = {
-          user: prismaService.user,
-          subscriber: prismaService.subscriber,
-        };
-        return Promise.resolve(callback(tx));
-      }),
+      $transaction: jest.fn(
+        (
+          callback: (tx: {
+            user: UserMock;
+            subscriber: SubscriberMock;
+          }) => unknown,
+        ) => {
+          // mock the transaction object (tx)
+          const tx = {
+            user: prismaService.user,
+            subscriber: prismaService.subscriber,
+          };
+          return Promise.resolve(callback(tx));
+        },
+      ),
     };
 
     jwtService = {
@@ -152,7 +186,7 @@ describe('SubscriptionService', () => {
 
       expect(result).toHaveProperty('accessToken', 'test_token');
       expect(prismaService.user.create).toHaveBeenCalledTimes(2);
-      expect(prismaService.user.create.mock.calls[1][0]).toEqual({
+      expect(prismaService.user.create).toHaveBeenNthCalledWith(2, {
         data: {
           email: 'test@example.com',
           name: 'Test User',

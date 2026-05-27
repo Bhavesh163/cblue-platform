@@ -55,11 +55,7 @@ export class PropertyInquiryController {
     @CurrentUser('id') userId: string,
     @Body() dto: PropertyInquiryChatMessageDto,
   ) {
-    return this.propertyInquiryService.sendChatByPo(
-      userId,
-      poNumber,
-      dto.text,
-    );
+    return this.propertyInquiryService.sendChatByPo(userId, poNumber, dto.text);
   }
 
   @Put(':id')

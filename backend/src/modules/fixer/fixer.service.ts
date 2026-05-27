@@ -30,6 +30,26 @@ export interface SelectedFixer {
   selectedReason?: string;
 }
 
+type PriceListRow = Record<string, unknown>;
+
+type EstimatedBreakdownItem = {
+  service: string;
+  qty: number;
+  unit: string;
+  unitRate: number;
+  total: number;
+};
+
+interface RankedFixer extends SelectedFixer {
+  estimatedTotal: number | null;
+  estimatedUnit: string;
+  estimatedQty: number;
+  priceList: PriceListRow[];
+  estimatedBreakdown: EstimatedBreakdownItem[] | null;
+  matchScore: number;
+  matchIcon: string;
+}
+
 @Injectable()
 export class FixerService {
   private readonly logger = new Logger(FixerService.name);
@@ -489,7 +509,7 @@ export class FixerService {
     province: string,
     description?: string,
     nominateId?: string,
-  ) {
+  ): Promise<SelectedFixer[]> {
     try {
       const allFixers = await this.prisma.fixer.findMany({
         include: { user: true, skills: true },
@@ -510,7 +530,7 @@ export class FixerService {
       const customerQty = this.extractQuantityFromDescription(description);
       const searchTerms = this.buildSearchTerms(service, description);
 
-      const formattedPool = pool.map((f) => {
+      const formattedPool = pool.map((f): RankedFixer => {
         let basePrice = 0;
         let matchedUnit = '';
         let matchedQty = 1;
@@ -520,28 +540,22 @@ export class FixerService {
           .join(' ');
         const profileText = `${skillText} ${f.description || ''} ${f.pastProjectType || ''} ${f.bio || ''}`;
 
-        let rawPriceList = f.priceList;
+        let rawPriceList: unknown = f.priceList;
         if (typeof rawPriceList === 'string') {
           try {
-            rawPriceList = JSON.parse(rawPriceList);
+            rawPriceList = JSON.parse(rawPriceList) as unknown;
           } catch {
             /* ignore parse errors */
+            rawPriceList = null;
           }
         }
 
-        const estimatedBreakdown: Array<{
-          service: string;
-          qty: number;
-          unit: string;
-          unitRate: number;
-          total: number;
-        }> = [];
-        if (
-          rawPriceList &&
-          Array.isArray(rawPriceList) &&
-          rawPriceList.length > 0
-        ) {
-          const list = rawPriceList as Record<string, unknown>[];
+        const list: PriceListRow[] = Array.isArray(rawPriceList)
+          ? (rawPriceList as PriceListRow[])
+          : [];
+
+        const estimatedBreakdown: EstimatedBreakdownItem[] = [];
+        if (list.length > 0) {
           const rankedList = list
             .map((item) => {
               const itemText = [
@@ -676,13 +690,11 @@ export class FixerService {
           searchTerms,
         );
         const overallScore = Math.max(matchedScore, fallbackProfileScore);
-        const minListedPrice = Array.isArray(rawPriceList)
-          ? (rawPriceList as Record<string, unknown>[]).reduce((min, item) => {
-              const value = Number(item.finalPrice) || 0;
-              if (value <= 0) return min;
-              return min === 0 ? value : Math.min(min, value);
-            }, 0)
-          : 0;
+        const minListedPrice = list.reduce((min, item) => {
+          const value = Number(item.finalPrice) || 0;
+          if (value <= 0) return min;
+          return min === 0 ? value : Math.min(min, value);
+        }, 0);
 
         return {
           id: f.id,
@@ -695,7 +707,7 @@ export class FixerService {
           estimatedTotal: basePrice > 0 ? basePrice : null,
           estimatedUnit: matchedUnit,
           estimatedQty: matchedQty,
-          priceList: Array.isArray(rawPriceList) ? rawPriceList : [],
+          priceList: list,
           estimatedBreakdown:
             estimatedBreakdown.length > 0 ? estimatedBreakdown : null,
           matchScore: overallScore,
@@ -724,10 +736,10 @@ export class FixerService {
           'grandeur',
         ].includes(tier);
 
-      const results: any[] = [];
-      const usedIds = new Set();
+      const results: RankedFixer[] = [];
+      const usedIds = new Set<string>();
 
-      const pick = (partner, reason) => {
+      const pick = (partner: RankedFixer | undefined, reason: string) => {
         if (partner && !usedIds.has(partner.id)) {
           partner.selectedReason = reason;
           results.push(partner);
