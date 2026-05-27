@@ -79,10 +79,22 @@ export class PropertyInquiryService {
     // Get customer info
     const customer = await this.prisma.user.findUnique({
       where: { id: customerId },
-      select: { id: true, email: true, name: true },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        fixer: { select: { id: true } },
+      },
     });
     if (!customer) {
       throw new NotFoundException('Customer user not found');
+    }
+
+    // Property notify/inquiry is customer-only.
+    if (customer.fixer) {
+      throw new ForbiddenException(
+        'This account is registered as a partner. Please use a customer account to send property inquiries.',
+      );
     }
 
     return this.prisma.propertyInquiry.create({

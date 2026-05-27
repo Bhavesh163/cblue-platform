@@ -599,13 +599,15 @@ function PropertiesPageContent() {
                     </div>
                     <button
                       onClick={async () => {
+                        const currentFlow = showContactFlow;
+                        if (!currentFlow) return;
                         try {
                           const storedToken = localStorage.getItem("subscriber_token") || "";
                           const refreshedToken = storedToken ? await refreshSubscriberSession(storedToken) : null;
                           if (storedToken && !refreshedToken) {
                             clearSubscriberSession();
                             setShowContactFlow(null);
-                            setPendingContactProp(showContactFlow);
+                            setPendingContactProp(currentFlow);
                             setShowLoginGate(true);
                             alert(loginRequiredMessage);
                             return;
@@ -614,7 +616,17 @@ function PropertiesPageContent() {
                           const token = refreshedToken || storedToken;
                           if (!token) {
                             setShowContactFlow(null);
-                            setPendingContactProp(showContactFlow);
+                            setPendingContactProp(currentFlow);
+                            setShowLoginGate(true);
+                            return;
+                          }
+
+                          const canProceedAsCustomer = await canActivateInquiryWithCustomer(token);
+                          if (!canProceedAsCustomer) {
+                            setShowContactFlow(null);
+                            setPendingContactProp(currentFlow);
+                            setAuthMode("login");
+                            setAuthError(locale === "th" ? "บัญชีนี้ไม่ใช่บัญชีลูกค้า กรุณาเข้าสู่ระบบด้วยบัญชีลูกค้าเพื่อส่งแจ้งเตือน" : locale === "zh" ? "此账户不是客户账户。请使用客户账户登录后再发送通知。" : "This account is not a customer account. Please log in with a customer account to activate inquiry notifications.");
                             setShowLoginGate(true);
                             return;
                           }
@@ -624,11 +636,11 @@ function PropertiesPageContent() {
                             headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
                             body: JSON.stringify({
                               poNumber,
-                              propertyId: showContactFlow.id,
-                              listerUserId: showContactFlow.userId || "",
+                              propertyId: currentFlow.id,
+                              listerUserId: currentFlow.userId || "",
                               customerName: subscriber?.name || "",
                               customerEmail: subscriber?.email || "",
-                              listerName: showContactFlow.contactName || showContactFlow.title,
+                              listerName: currentFlow.contactName || currentFlow.title,
                             }),
                           });
 
@@ -638,7 +650,7 @@ function PropertiesPageContent() {
                             if (!retriedToken) {
                               clearSubscriberSession();
                               setShowContactFlow(null);
-                              setPendingContactProp(showContactFlow);
+                              setPendingContactProp(currentFlow);
                               setShowLoginGate(true);
                               alert(loginRequiredMessage);
                               return;
