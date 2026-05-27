@@ -1352,8 +1352,29 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const buildPropChatFeed = (): any[] => {
     if (typeof window === "undefined") return [];
     const items: any[] = [];
+    const now = Date.now();
+    const isChatOpen = (p: PropInquiry) => {
+      const status = String(p.status || "").toUpperCase();
+      if (status === "COMPLETED") return false;
+      if (status === "PAID" || status === "MEETING_SENT") return true;
+      if (status !== "MEETING_CONFIRMED") return false;
+
+      if (p.customerRating !== undefined && p.listerRating !== undefined) {
+        return false;
+      }
+
+      if (p.meetingDate) {
+        const meetingAt = new Date(`${p.meetingDate}T${p.meetingTime || '00:00'}`).getTime();
+        if (Number.isFinite(meetingAt) && meetingAt > 0) {
+          const chatExpiresAt = meetingAt + 14 * 24 * 60 * 60 * 1000;
+          if (now >= chatExpiresAt) return false;
+        }
+      }
+      return true;
+    };
+
     const activePOs = propInquiries
-      .filter((p: PropInquiry) => ["PAID", "MEETING_SENT", "MEETING_CONFIRMED"].includes(p.status))
+      .filter((p: PropInquiry) => isChatOpen(p))
       .map((p: PropInquiry) => p.poNumber);
     for (const po of activePOs) {
       try {
@@ -2304,6 +2325,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div>
               <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {p.poNumber} · Step 3 of 8</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{p.province}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "สร้างเมื่อ" : locale === "zh" ? "创建时间" : "Created"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "รอผู้ลงประกาศยืนยัน — หากไม่ตอบสนองสามารถเลือกใหม่ได้" : locale === "zh" ? "等待房源方确认 — 如无响应可重新选择" : "Waiting for lister to accept — you may reselect if no response"}</p>
             </div>
           </div>
@@ -2334,6 +2356,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div>
               <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {p.poNumber}</span></h3>
               <p className="text-sm text-red-600 font-semibold mt-0.5">{locale === "th" ? "ผู้ลงประกาศปฏิเสธคำขอ" : locale === "zh" ? "房源方已拒绝" : "Lister declined your inquiry"}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "อัปเดตเมื่อ" : locale === "zh" ? "更新时间" : "Updated"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "กรุณาเลือกทรัพย์สินใหม่จาก Real Estate Page" : "Please select another property from the Real Estate Page."}</p>
             </div>
           </div>
@@ -2351,6 +2374,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div>
               <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {p.poNumber} · Step 5 of 8</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{p.listerName} · {p.province}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "อัปเดตเมื่อ" : locale === "zh" ? "更新时间" : "Updated"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "ผู้ลงประกาศยืนยันแล้ว — ชำระค่าดำเนินการเพื่อรับข้อมูลติดต่อ" : locale === "zh" ? "房源方已确认 — 支付处理费以获取联系方式" : "Lister accepted — pay the processing fee to get contact info"}</p>
             </div>
           </div>
@@ -2377,6 +2401,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div>
               <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {p.poNumber} · Step 7 of 8</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{p.listerName} · {p.province}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "อัปเดตเมื่อ" : locale === "zh" ? "更新时间" : "Updated"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "ชำระแล้ว — ส่งคำเชิญนัดหมายเพื่อเยี่ยมชมทรัพย์สิน" : locale === "zh" ? "已付款 — 发送会议邀请以预约参观" : "Fee paid — send a meeting invitation to schedule a property viewing"}</p>
             </div>
           </div>
@@ -2400,6 +2425,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div>
               <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {p.poNumber} · Step 8 of 8</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{p.listerName} · {p.province}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "อัปเดตเมื่อ" : locale === "zh" ? "更新时间" : "Updated"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "นัดหมายยืนยันแล้ว — ให้คะแนนเพื่อปิดงาน" : locale === "zh" ? "会议已确认 — 评分以结案" : "Meeting confirmed — rate to close this inquiry"}</p>
             </div>
           </div>

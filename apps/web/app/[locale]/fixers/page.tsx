@@ -533,7 +533,7 @@ export default function FixerProPage() {
   const [declineModalOpen, setDeclineModalOpen] = useState(false);
   const [declineComment, setDeclineComment] = useState('');
   // Property inquiry state for lister/fixer — polls cblue_prop_inquiries every 1000ms
-  interface PropInquiry { id: string; poNumber: string; propertyId: string; propertyTitle: string; propertyTier: string; propertyFee: number; propertyType: string; listingType: string; propertyPrice: number; province: string; district: string; customerEmail: string; customerName: string; listerName: string; status: string; step: number; createdAt: number; updatedAt: number; meetingDate?: string; meetingTime?: string; meetingVenue?: string; customerRating?: number; customerComment?: string; listerRating?: number; listerComment?: string; reselectedOnce?: boolean; }
+  interface PropInquiry { id: string; poNumber: string; propertyId: string; propertyTitle: string; propertyTier: string; propertyFee: number; propertyType: string; listingType: string; propertyPrice: number; province: string; district: string; subdistrict?: string; addressLine?: string; area?: number | null; bedrooms?: number | null; bathrooms?: number | null; propertyImages?: string[]; customerEmail: string; customerName: string; listerName: string; status: string; step: number; createdAt: number; updatedAt: number; meetingDate?: string; meetingTime?: string; meetingVenue?: string; customerRating?: number; customerComment?: string; listerRating?: number; listerComment?: string; reselectedOnce?: boolean; }
   const [propInquiries, setPropInquiries] = useState<PropInquiry[]>([]);
   const [propAcceptModal, setPropAcceptModal] = useState<PropInquiry | null>(null);
   const [propMeetingConfirmModal, setPropMeetingConfirmModal] = useState<PropInquiry | null>(null);
@@ -910,13 +910,24 @@ export default function FixerProPage() {
   useEffect(() => {
     const TIER_FEES: Record<string, number> = { ECONOMY: 100, STANDARD: 400, UPPER: 600, LUXURY: 800, GRANDEUR: 1000 };
     function mapApiInquiry(api: any): PropInquiry {
+      const propertyImages = Array.isArray(api?.property?.images)
+        ? api.property.images
+            .map((image: any) => normalizeImageUrl(typeof image === 'string' ? image : image?.url))
+            .filter(Boolean)
+        : [];
       return {
         id: api.id, poNumber: api.poNumber, propertyId: api.propertyId,
         propertyTitle: api.property?.title || '', propertyTier: api.property?.tier || 'STANDARD',
         propertyFee: TIER_FEES[api.property?.tier || 'STANDARD'] ?? 400,
         propertyType: api.property?.propertyType || '', listingType: api.property?.listingType || '',
         propertyPrice: api.property?.price || 0, province: api.property?.province || '',
-        district: api.property?.district || '', customerEmail: api.customerEmail,
+        district: api.property?.district || '', subdistrict: api.property?.subdistrict || '',
+        addressLine: api.property?.addressLine || '',
+        area: typeof api.property?.area === 'number' ? api.property.area : null,
+        bedrooms: typeof api.property?.bedrooms === 'number' ? api.property.bedrooms : null,
+        bathrooms: typeof api.property?.bathrooms === 'number' ? api.property.bathrooms : null,
+        propertyImages,
+        customerEmail: api.customerEmail,
         customerName: api.customerName, listerName: api.listerName, status: api.status, step: api.step,
         createdAt: new Date(api.createdAt).getTime(), updatedAt: new Date(api.updatedAt).getTime(),
         meetingDate: api.meetingDate, meetingTime: api.meetingTime, meetingVenue: api.meetingVenue,
@@ -937,10 +948,12 @@ export default function FixerProPage() {
             res = await load(token);
           }
         }
-        if (!res.ok) { setPropInquiries([]); return; }
+        if (!res.ok) return;
         const data = await res.json();
         setPropInquiries(Array.isArray(data) ? data.map(mapApiInquiry).filter((p: PropInquiry) => ["NOTIFY_SENT", "ACCEPTED", "PAID", "MEETING_SENT", "MEETING_CONFIRMED", "COMPLETED"].includes(p.status)) : []);
-      } catch { setPropInquiries([]); }
+      } catch {
+        // Keep the last visible inquiry state during transient failures.
+      }
     }
     loadProps();
     const id = setInterval(loadProps, 10000);
@@ -1188,9 +1201,32 @@ export default function FixerProPage() {
   const buildPropChatFeed = (): any[] => {
     if (typeof window === "undefined") return [];
     const items: any[] = [];
-    // Show chat rooms for prop inquiries this partner is involved in (PAID or later)
+    // Show chat rooms while inquiry is active: after payment until step 8 completion
+    // or max 14 days after meeting confirmation (whichever is earlier).
+    const now = Date.now();
+    const isChatOpen = (p: PropInquiry) => {
+      const status = String(p.status || "").toUpperCase();
+      if (status === "COMPLETED") return false;
+      if (status === "PAID" || status === "MEETING_SENT") return true;
+      if (status !== "MEETING_CONFIRMED") return false;
+
+      if (p.customerRating !== undefined && p.listerRating !== undefined) {
+        return false;
+      }
+
+      if (p.meetingDate) {
+        const meetingAt = new Date(`${p.meetingDate}T${p.meetingTime || '00:00'}`).getTime();
+        if (Number.isFinite(meetingAt) && meetingAt > 0) {
+          const chatExpiresAt = meetingAt + 14 * 24 * 60 * 60 * 1000;
+          if (now >= chatExpiresAt) return false;
+        }
+      }
+
+      return true;
+    };
+
     const activePropPOs = propInquiries
-      .filter((p: PropInquiry) => ["PAID", "MEETING_SENT", "MEETING_CONFIRMED"].includes(p.status))
+      .filter((p: PropInquiry) => isChatOpen(p))
       .map((p: PropInquiry) => p.poNumber);
     for (const po of activePropPOs) {
       try {
@@ -1443,10 +1479,19 @@ export default function FixerProPage() {
     }
   };
   const propActiveJobs = propInquiries
-    .filter((p: PropInquiry) => ['ACCEPTED', 'PAID', 'MEETING_SENT', 'MEETING_CONFIRMED'].includes(String(p.status || '').toUpperCase()))
+    .filter((p: PropInquiry) => ['NOTIFY_SENT', 'ACCEPTED', 'PAID', 'MEETING_SENT', 'MEETING_CONFIRMED'].includes(String(p.status || '').toUpperCase()))
     .map((p: PropInquiry) => {
       const status = String(p.status || '').toUpperCase();
       const step = mapPropStatusToStep(status, p.step);
+      const actionNeeded = status === 'NOTIFY_SENT' || status === 'MEETING_SENT' || (status === 'MEETING_CONFIRMED' && p.listerRating === undefined);
+      const locationParts = [p.province, p.district, p.subdistrict, p.addressLine].filter(Boolean);
+      const propertyFacts = [
+        p.propertyType ? `Type: ${p.propertyType}` : '',
+        p.listingType ? `Listing: ${p.listingType}` : '',
+        typeof p.area === 'number' && p.area > 0 ? `Area: ${Number(p.area).toLocaleString()} sq.m.` : '',
+        typeof p.bedrooms === 'number' ? `Beds: ${p.bedrooms}` : '',
+        typeof p.bathrooms === 'number' ? `Baths: ${p.bathrooms}` : '',
+      ].filter(Boolean).join(' | ');
       return {
         id: `prop-active-${p.id}`,
         orderId: p.id,
@@ -1460,12 +1505,22 @@ export default function FixerProPage() {
         budget: String(p.propertyPrice || 0),
         fee: toCurrencyLabel(p.propertyFee),
         tier: p.propertyTier || 'STANDARD',
-        location: p.province || '',
-        subdistrict: p.district || '',
+        location: locationParts.join(', ') || p.province || '',
+        subdistrict: p.subdistrict || p.district || p.province || '',
         status,
         step,
         mockStep: step,
-        actionNeeded: status === 'MEETING_SENT' || (status === 'MEETING_CONFIRMED' && p.listerRating === undefined),
+        actionNeeded,
+        actionNeededDetail:
+          status === 'NOTIFY_SENT'
+            ? 'Action Needed: Accept this property inquiry request.'
+            : status === 'MEETING_SENT'
+            ? 'Action Needed: Confirm the customer meeting invitation.'
+            : status === 'MEETING_CONFIRMED' && p.listerRating === undefined
+            ? 'Action Needed: Submit rating to close step 8.'
+            : '',
+        description: propertyFacts,
+        propertyImages: p.propertyImages || [],
         isPropertyJob: true,
       };
     });
@@ -1895,12 +1950,85 @@ export default function FixerProPage() {
 
   // Inject prop inquiry items: NOTIFY_SENT = step 4 accept, MEETING_SENT = step 7 confirm, MEETING_CONFIRMED = step 8 rate
   const propRequestCards: any[] = propInquiries.map((p: PropInquiry) => {
-    if (p.status === "NOTIFY_SENT") return { id: `prop-accept-${p.poNumber}`, type: "prop_accept", po: p.poNumber, propInquiry: p, createdAt: p.createdAt };
-    if (p.status === "MEETING_SENT") return { id: `prop-meet-confirm-${p.poNumber}`, type: "prop_meeting_confirm", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
-    if (p.status === "MEETING_CONFIRMED" && p.listerRating === undefined) return { id: `prop-rate-p-${p.poNumber}`, type: "prop_rate_partner", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
+    const createdAt = Number(p.updatedAt || p.createdAt || Date.now());
+    const locationParts = [p.province, p.district, p.subdistrict, p.addressLine].filter(Boolean);
+    const details = [
+      p.propertyType ? `Type: ${p.propertyType}` : '',
+      p.listingType ? `Listing: ${p.listingType}` : '',
+      typeof p.area === 'number' && p.area > 0 ? `Area: ${Number(p.area).toLocaleString()} sq.m.` : '',
+      typeof p.bedrooms === 'number' ? `Beds: ${p.bedrooms}` : '',
+      typeof p.bathrooms === 'number' ? `Baths: ${p.bathrooms}` : '',
+      locationParts.length > 0 ? `Location: ${locationParts.join(', ')}` : '',
+    ].filter(Boolean).join(' | ');
+    if (p.status === "NOTIFY_SENT") return {
+      id: `prop-accept-${p.poNumber}`,
+      type: "prop_accept",
+      workflowType: "prop_accept",
+      po: p.poNumber,
+      step: 4,
+      service: p.propertyTitle,
+      serviceTh: p.propertyTitle,
+      serviceZh: p.propertyTitle,
+      customer: firstNameOnly(p.customerName, 'Customer'),
+      date: fmtDateTime(createdAt),
+      createdAt,
+      fee: toCurrencyLabel(p.propertyFee),
+      budget: toCurrencyLabel(p.propertyPrice),
+      tier: p.propertyTier || 'STANDARD',
+      location: locationParts.join(', '),
+      subdistrict: p.subdistrict || p.district || p.province,
+      description: details,
+      propertyImages: p.propertyImages || [],
+      propInquiry: p,
+    };
+    if (p.status === "MEETING_SENT") return {
+      id: `prop-meet-confirm-${p.poNumber}`,
+      type: "prop_meeting_confirm",
+      workflowType: "prop_meeting_confirm",
+      po: p.poNumber,
+      step: 7,
+      service: p.propertyTitle,
+      serviceTh: p.propertyTitle,
+      serviceZh: p.propertyTitle,
+      customer: firstNameOnly(p.customerName, 'Customer'),
+      date: fmtDateTime(createdAt),
+      createdAt,
+      fee: toCurrencyLabel(p.propertyFee),
+      budget: toCurrencyLabel(p.propertyPrice),
+      tier: p.propertyTier || 'STANDARD',
+      location: locationParts.join(', '),
+      subdistrict: p.subdistrict || p.district || p.province,
+      description: details,
+      meetingVenue: p.meetingVenue || '',
+      propertyImages: p.propertyImages || [],
+      propInquiry: p,
+    };
+    if (p.status === "MEETING_CONFIRMED" && p.listerRating === undefined) return {
+      id: `prop-rate-p-${p.poNumber}`,
+      type: "prop_rate_partner",
+      workflowType: "prop_rate_partner",
+      po: p.poNumber,
+      step: 8,
+      service: p.propertyTitle,
+      serviceTh: p.propertyTitle,
+      serviceZh: p.propertyTitle,
+      customer: firstNameOnly(p.customerName, 'Customer'),
+      date: fmtDateTime(createdAt),
+      createdAt,
+      fee: toCurrencyLabel(p.propertyFee),
+      budget: toCurrencyLabel(p.propertyPrice),
+      tier: p.propertyTier || 'STANDARD',
+      location: locationParts.join(', '),
+      subdistrict: p.subdistrict || p.district || p.province,
+      description: details,
+      meetingVenue: p.meetingVenue || '',
+      propertyImages: p.propertyImages || [],
+      propInquiry: p,
+    };
     return null;
   }).filter(Boolean) as any[];
-  const partnerRequestItemsWithProp = [...propRequestCards, ...partnerRequestItems];
+  const partnerRequestItemsWithProp = [...propRequestCards, ...partnerRequestItems]
+    .sort((a: any, b: any) => parseTs(b.createdAt || b.date) - parseTs(a.createdAt || a.date));
 
   const dynamicNotifications = mockDynReqs.map((r: any) => {
     const displayTime = typeof r.date === "string" && r.date.includes(":") ? r.date : (r.date ? fmtDateTime(r.date) : "");
@@ -2687,7 +2815,7 @@ export default function FixerProPage() {
 
         {/* Tab Content */}
         <div className={`mt-6 ${activeTab !== 'overview' ? 'hidden' : ''}`}>
-          <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={partnerRequestItems} scheduledMeetings={allScheduledMeetings} completedJobs={allCompletedJobs} earnings={earningsSeries} stats={stats} notifications={displayNotifications} chats={chatFeed} onJobClick={handleJobClick} onTabChange={(tab) => setActiveTab(tab as TabKey)} />
+          <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={partnerRequestItemsWithProp} scheduledMeetings={allScheduledMeetings} completedJobs={allCompletedJobs} earnings={earningsSeries} stats={stats} notifications={displayNotifications} chats={chatFeed} onJobClick={handleJobClick} onTabChange={(tab) => setActiveTab(tab as TabKey)} />
         </div>
         {activeTab === "requests" && <PartnerRequests locale={locale} incomingJobs={partnerRequestItemsWithProp} onJobClick={handleJobClick} priceList={(partner as any)?.priceList} onPropAccept={(p: PropInquiry) => setPropAcceptModal(p)} onPropMeetingConfirm={(p: PropInquiry) => setPropMeetingConfirmModal(p)} onPropRatePartner={(p: PropInquiry) => { setPropPartnerRateStars(0); setPropPartnerRateComment(""); setPropPartnerRateModal(p); }} />}
         {activeTab === "active" && <PartnerJobs locale={locale} activeJobs={activeJobs} onJobClick={handleJobClick} priceList={(partner as any)?.priceList} />}
@@ -3054,6 +3182,9 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
                     {job.earnings && <span className="text-xs font-bold text-gray-700">{job.earnings}</span>}
                   </div>
                 </div>
+                {job.actionNeededDetail && (
+                  <p className="text-xs text-red-600 mt-1">{job.actionNeededDetail}</p>
+                )}
                 <div className="mt-2 w-full pt-1">
                   <div className="w-2/3 overflow-x-auto pb-4 hide-scrollbar">
                     <div className="flex items-center min-w-max relative px-2">
@@ -3282,6 +3413,9 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                   )}
                 </div>
               </div>
+              {job.actionNeededDetail && (
+                <p className="text-xs text-red-600 mt-1">{job.actionNeededDetail}</p>
+              )}
               <div className="mt-2 w-full pt-1">
                 <div className="w-2/3 overflow-x-auto pb-4 hide-scrollbar">
                   <div className="flex items-center min-w-max relative px-2">
@@ -3705,7 +3839,23 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-900 text-sm">{p.propertyTitle} <span className="text-xs font-normal text-gray-400">· {p.poNumber} · Step 4 of 8</span></p>
                   <p className="text-xs text-emerald-700 font-semibold mt-0.5">{locale === "th" ? "ลูกค้าสนใจทรัพย์สินของคุณ — กรุณายืนยัน" : "Customer is interested in your property — please confirm"}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{p.province} · {p.propertyTier} · ฿{p.propertyFee} fee</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{[p.province, p.district, p.subdistrict].filter(Boolean).join(' · ')} · {p.propertyTier} · ฿{p.propertyFee} fee</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "สร้างเมื่อ" : locale === "zh" ? "创建时间" : "Created"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
+                  {Array.isArray(p.propertyImages) && p.propertyImages.length > 0 && (
+                    <button
+                      type="button"
+                      className="text-xs font-semibold text-sky-700 hover:text-sky-800 mt-1"
+                      onClick={async () => {
+                        await downloadAttachmentUrls({
+                          urls: p.propertyImages,
+                          po: p.poNumber,
+                          prefix: 'property-photo',
+                        });
+                      }}
+                    >
+                      {locale === "th" ? `ดาวน์โหลดรูป (${p.propertyImages.length})` : locale === "zh" ? `下载图片 (${p.propertyImages.length})` : `Download Photos (${p.propertyImages.length})`}
+                    </button>
+                  )}
                 </div>
                 <button onClick={() => onPropAccept?.(p)} className="px-4 py-2 bg-green-700 text-white text-xs font-bold rounded-lg hover:bg-green-800 transition">
                   {locale === "th" ? "ดูรายละเอียด" : "Review"}
@@ -3722,6 +3872,22 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
                   <p className="font-semibold text-gray-900 text-sm">{p.propertyTitle} <span className="text-xs font-normal text-gray-400">· {p.poNumber} · Step 7 of 8</span></p>
                   <p className="text-xs text-teal-700 font-semibold mt-0.5">{locale === "th" ? "ลูกค้าส่งคำเชิญนัดหมาย — กรุณายืนยัน" : "Customer sent a meeting invitation — please confirm"}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{p.meetingDate} {p.meetingTime} · {p.meetingVenue}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "สร้างเมื่อ" : locale === "zh" ? "创建时间" : "Created"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
+                  {Array.isArray(p.propertyImages) && p.propertyImages.length > 0 && (
+                    <button
+                      type="button"
+                      className="text-xs font-semibold text-sky-700 hover:text-sky-800 mt-1"
+                      onClick={async () => {
+                        await downloadAttachmentUrls({
+                          urls: p.propertyImages,
+                          po: p.poNumber,
+                          prefix: 'property-photo',
+                        });
+                      }}
+                    >
+                      {locale === "th" ? `ดาวน์โหลดรูป (${p.propertyImages.length})` : locale === "zh" ? `下载图片 (${p.propertyImages.length})` : `Download Photos (${p.propertyImages.length})`}
+                    </button>
+                  )}
                 </div>
                 <button onClick={() => onPropMeetingConfirm?.(p)} className="px-4 py-2 bg-teal-600 text-white text-xs font-bold rounded-lg hover:bg-teal-700 transition">
                   {locale === "th" ? "ยืนยัน" : "Confirm"}
@@ -3738,6 +3904,22 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
                   <p className="font-semibold text-gray-900 text-sm">{p.propertyTitle} <span className="text-xs font-normal text-gray-400">· {p.poNumber} · Step 8 of 8</span></p>
                   <p className="text-xs text-yellow-700 font-semibold mt-0.5">{locale === "th" ? "นัดหมายยืนยันแล้ว — ให้คะแนนลูกค้าเพื่อปิดงาน" : "Meeting confirmed — rate the customer to close this inquiry"}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{p.meetingDate} {p.meetingTime} · {p.province}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "สร้างเมื่อ" : locale === "zh" ? "创建时间" : "Created"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
+                  {Array.isArray(p.propertyImages) && p.propertyImages.length > 0 && (
+                    <button
+                      type="button"
+                      className="text-xs font-semibold text-sky-700 hover:text-sky-800 mt-1"
+                      onClick={async () => {
+                        await downloadAttachmentUrls({
+                          urls: p.propertyImages,
+                          po: p.poNumber,
+                          prefix: 'property-photo',
+                        });
+                      }}
+                    >
+                      {locale === "th" ? `ดาวน์โหลดรูป (${p.propertyImages.length})` : locale === "zh" ? `下载图片 (${p.propertyImages.length})` : `Download Photos (${p.propertyImages.length})`}
+                    </button>
+                  )}
                 </div>
                 <button onClick={() => onPropRatePartner?.(p)} className="px-4 py-2 bg-yellow-500 text-white text-xs font-bold rounded-lg hover:bg-yellow-600 transition">
                   ⭐ {locale === "th" ? "ให้คะแนน" : "Rate"}

@@ -54,22 +54,26 @@ export class PropertyInquiryService {
   }
 
   async create(customerId: string, dto: CreatePropertyInquiryDto) {
-    // Verify lister user exists
-    const lister = await this.prisma.user.findUnique({
-      where: { id: dto.listerUserId },
-      select: { id: true },
-    });
-    if (!lister) {
-      throw new NotFoundException('Lister user not found');
-    }
-
     // Verify property exists
     const property = await this.prisma.property.findUnique({
       where: { id: dto.propertyId },
-      select: { id: true },
+      select: {
+        id: true,
+        userId: true,
+        contactName: true,
+      },
     });
     if (!property) {
       throw new NotFoundException('Property not found');
+    }
+
+    // Always derive lister from the property owner for workflow consistency.
+    const lister = await this.prisma.user.findUnique({
+      where: { id: property.userId },
+      select: { id: true, name: true },
+    });
+    if (!lister) {
+      throw new NotFoundException('Lister user not found');
     }
 
     // Get customer info
@@ -86,10 +90,10 @@ export class PropertyInquiryService {
         poNumber: dto.poNumber,
         propertyId: dto.propertyId,
         customerId,
-        listerUserId: dto.listerUserId,
+        listerUserId: property.userId,
         customerName: dto.customerName || customer.name || '',
         customerEmail: dto.customerEmail || customer.email || '',
-        listerName: dto.listerName,
+        listerName: dto.listerName || lister.name || property.contactName || '',
       },
     });
   }
@@ -104,6 +108,7 @@ export class PropertyInquiryService {
         property: {
           select: {
             id: true,
+            userId: true,
             title: true,
             tier: true,
             price: true,
@@ -111,6 +116,18 @@ export class PropertyInquiryService {
             listingType: true,
             province: true,
             district: true,
+            subdistrict: true,
+            addressLine: true,
+            area: true,
+            bedrooms: true,
+            bathrooms: true,
+            images: {
+              select: {
+                url: true,
+                sortOrder: true,
+              },
+              orderBy: { sortOrder: 'asc' },
+            },
           },
         },
       },
@@ -123,11 +140,17 @@ export class PropertyInquiryService {
     if (listerIds.length === 0) return [];
 
     return this.prisma.propertyInquiry.findMany({
-      where: { listerUserId: { in: listerIds } },
+      where: {
+        OR: [
+          { listerUserId: { in: listerIds } },
+          { property: { userId: { in: listerIds } } },
+        ],
+      },
       include: {
         property: {
           select: {
             id: true,
+            userId: true,
             title: true,
             tier: true,
             price: true,
@@ -135,6 +158,18 @@ export class PropertyInquiryService {
             listingType: true,
             province: true,
             district: true,
+            subdistrict: true,
+            addressLine: true,
+            area: true,
+            bedrooms: true,
+            bathrooms: true,
+            images: {
+              select: {
+                url: true,
+                sortOrder: true,
+              },
+              orderBy: { sortOrder: 'asc' },
+            },
           },
         },
       },
