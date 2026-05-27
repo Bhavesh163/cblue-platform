@@ -31,6 +31,10 @@ interface Property {
   bathrooms: number | null;
   province: string;
   district: string;
+  subdistrict?: string;
+  addressLine?: string;
+  latitude?: number | null;
+  longitude?: number | null;
   contactName?: string;
   contactEmail?: string;
   images: { url: string }[];
@@ -49,6 +53,34 @@ function normalizeDistrict(value: unknown) {
   const text = String(value || "").trim();
   if (!text || PLACEHOLDER_LOCATION_PATTERN.test(text)) return "";
   return text;
+}
+
+function normalizeOptionalLocationText(value: unknown) {
+  const text = String(value || "").trim();
+  if (!text || PLACEHOLDER_LOCATION_PATTERN.test(text)) return "";
+  return text;
+}
+
+function normalizeCoordinate(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function getPropertySiteLocation(property: Partial<Property>) {
+  const latitude = normalizeCoordinate(property.latitude);
+  const longitude = normalizeCoordinate(property.longitude);
+  if (latitude !== null && longitude !== null) {
+    return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+  }
+
+  const parts = [
+    normalizeOptionalLocationText(property.addressLine),
+    normalizeOptionalLocationText(property.subdistrict),
+    normalizeOptionalLocationText(property.district),
+    normalizeOptionalLocationText(property.province),
+  ].filter(Boolean);
+  return parts.join(", ") || "Unknown";
 }
 
 function normalizeImageUrl(value: unknown) {
@@ -94,6 +126,10 @@ function sanitizeProperty(raw: any): Property {
     description: String(raw?.description || "").trim(),
     province: String(raw?.province || "").trim(),
     district: normalizeDistrict(raw?.district),
+    subdistrict: normalizeOptionalLocationText(raw?.subdistrict),
+    addressLine: normalizeOptionalLocationText(raw?.addressLine),
+    latitude: normalizeCoordinate(raw?.latitude),
+    longitude: normalizeCoordinate(raw?.longitude),
     contactEmail: String(raw?.contactEmail || "").trim().toLowerCase(),
     images,
   };
@@ -557,10 +593,10 @@ function PropertiesPageContent() {
             <div className="p-6 pt-2 overflow-y-auto flex-1">
               {/* Property info */}
               <div className="flex items-center gap-3 bg-gray-50 rounded-xl p-3 mb-5">
-                <span className="text-3xl">🏠</span>
                 <div>
                   <p className="font-bold text-gray-900">{showContactFlow.title}</p>
                   <p className="text-sm text-green-700 font-semibold">฿{formatPrice(showContactFlow.price)}{showContactFlow.listingType === "RENT" ? "/mo" : ""}</p>
+                  <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "สถานที่" : locale === "zh" ? "项目地点" : "Site Location"}: {getPropertySiteLocation(showContactFlow)}</p>
                 </div>
               </div>
 
@@ -572,7 +608,6 @@ function PropertiesPageContent() {
                 return (
                   <div>
                     <div className="text-center mb-4">
-                      <div className="text-5xl mb-2">📋</div>
                       <p className="text-xs text-gray-400">{locale === "th" ? "CBLUE ออกให้เป็นฝ่ายที่สาม" : locale === "zh" ? "CBLUE作为第三方签发" : "Issued by CBLUE as third party"}</p>
                       <div className="bg-gray-50 rounded-xl p-3 my-3 inline-block">
                         <p className="text-xs text-gray-500 mb-1">{locale === "th" ? "เลขที่ PO" : locale === "zh" ? "PO编号" : "PO Number"}</p>
@@ -583,6 +618,7 @@ function PropertiesPageContent() {
                       <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ทรัพย์สิน" : locale === "zh" ? "房产" : "Property"}</span><span className="font-semibold text-right max-w-[60%] line-clamp-1">{showContactFlow.title}</span></div>
                       <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ราคา" : locale === "zh" ? "价格" : "Price"}</span><span className="font-semibold">฿{formatPrice(showContactFlow.price)}{showContactFlow.listingType === "RENT" ? "/mo" : ""}</span></div>
                       <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "จังหวัด" : locale === "zh" ? "省份" : "Province"}</span><span className="font-semibold">{showContactFlow.province}</span></div>
+                      <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}</span><span className="font-semibold text-right max-w-[60%] break-words">{getPropertySiteLocation(showContactFlow)}</span></div>
                       <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ระดับบริการ (กำหนดโดยผู้ลงประกาศ)" : locale === "zh" ? "服务等级（由房源方设定）" : "Service Tier (set by lister)"}</span><span className="font-semibold">{tierLabel}</span></div>
                       <div className="flex justify-between border-t border-gray-100 pt-2">
                         <span className="text-gray-600 font-semibold">{locale === "th" ? "ค่าดำเนินการ (ชำระในแดชบอร์ด)" : locale === "zh" ? "处理费（在控制台支付）" : "Processing Fee (pay in Dashboard)"}</span>
@@ -675,7 +711,7 @@ function PropertiesPageContent() {
                       }}
                       className="w-full py-3 bg-green-700 text-white font-bold rounded-xl hover:bg-green-800 transition"
                     >
-                      {locale === "th" ? "📡 แจ้งผู้ลงประกาศ" : locale === "zh" ? "📡 通知房源方" : "📡 Notify Lister"}
+                      {locale === "th" ? "แจ้งผู้ลงประกาศ" : locale === "zh" ? "通知房源方" : "Notify Lister"}
                     </button>
                   </div>
                 );
@@ -684,7 +720,6 @@ function PropertiesPageContent() {
               {/* Step 2 of 3: Sending animation */}
               {contactStep === "notify" && (
                 <div className="text-center py-6">
-                  <div className="text-5xl mb-4 animate-bounce">📡</div>
                   <h3 className="text-lg font-bold text-gray-900 mb-2">
                     {locale === "th" ? "กำลังส่งแจ้งเตือน..." : locale === "zh" ? "正在通知房源方..." : "Notifying lister..."}
                   </h3>
@@ -703,7 +738,6 @@ function PropertiesPageContent() {
               {/* Step 3 of 3: Done */}
               {contactStep === "done" && (
                 <div className="text-center py-4">
-                  <div className="text-5xl mb-4">🎉</div>
                   <h3 className="text-xl font-bold text-gray-900 mb-2">
                     {locale === "th" ? "ส่งการสอบถามสำเร็จ!" : locale === "zh" ? "询盘已发送！" : "Inquiry Sent!"}
                   </h3>
@@ -715,15 +749,9 @@ function PropertiesPageContent() {
                       : "The lister has been notified. Track the status in your Dashboard."}
                   </p>
                   <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-4 text-sm text-left">
-                    <p className="font-semibold text-emerald-800 mb-2">
-                      {locale === "th" ? "ขั้นตอนถัดไป:" : locale === "zh" ? "后续步骤：" : "Next steps:"}
+                    <p className="text-emerald-800 font-semibold">
+                      {locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}: <span className="font-bold">{getPropertySiteLocation(showContactFlow)}</span>
                     </p>
-                    <ol className="space-y-1 text-emerald-700 text-xs list-decimal list-inside">
-                      <li>{locale === "th" ? "รอผู้ลงประกาศยืนยัน (ขั้นตอนที่ 4)" : locale === "zh" ? "等待房源方确认（步骤4）" : "Lister accepts your inquiry (Step 4 of 8)"}</li>
-                      <li>{locale === "th" ? "ชำระค่าดำเนินการในแดชบอร์ด (ขั้นตอนที่ 5)" : locale === "zh" ? "在控制台支付处理费（步骤5）" : "Pay processing fee in Dashboard (Step 5 of 8)"}</li>
-                      <li>{locale === "th" ? "รับข้อมูลติดต่อและนัดหมาย (ขั้นตอนที่ 7)" : locale === "zh" ? "获取联系方式并预约（步骤7）" : "Get contact info & schedule viewing (Step 7 of 8)"}</li>
-                      <li>{locale === "th" ? "ให้คะแนนหลังเสร็จสิ้น (ขั้นตอนที่ 8)" : locale === "zh" ? "完成后评分（步骤8）" : "Rate after completion (Step 8 of 8)"}</li>
-                    </ol>
                   </div>
                   <div className="bg-gray-50 rounded-xl p-3 mb-4 text-xs text-gray-500">
                     PO: <span className="font-mono font-bold text-emerald-700">{poNumber}</span>
@@ -948,13 +976,13 @@ function PropertiesPageContent() {
                       {prop.area && <span>{prop.area} sqm</span>}
                     </div>
                     <p className="text-xs text-gray-400 mt-2">
-                      {prop.province}{prop.district ? `, ${prop.district}` : ""}
+                      {getPropertySiteLocation(prop)}
                     </p>
                     <button
                       onClick={() => { void handleContactLister(prop); }}
                       className="mt-3 w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg transition"
                     >
-                      📩 {locale === "th" ? "ติดต่อผู้ลงประกาศ" : locale === "zh" ? "联系发布者" : "Contact Lister"}
+                      {locale === "th" ? "ติดต่อผู้ลงประกาศ" : locale === "zh" ? "联系发布者" : "Contact Lister"}
                     </button>
                   </div>
                 </div>
@@ -1012,7 +1040,7 @@ function PropertiesPageContent() {
                             {prop.bathrooms && <span>{prop.bathrooms} bath</span>}
                             {prop.area && <span>{prop.area} sqm</span>}
                           </div>
-                          <p className="text-xs text-gray-400 mt-1">{prop.province}</p>
+                          <p className="text-xs text-gray-400 mt-1">{getPropertySiteLocation(prop)}</p>
                         </div>
                       </Link>
                     ))}

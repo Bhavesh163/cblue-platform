@@ -1,4 +1,12 @@
-import { IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import {
+  IsEnum,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+} from 'class-validator';
 import { PropertyInquiryStatus } from '@prisma/client';
 
 export class CreatePropertyInquiryDto {
@@ -64,4 +72,10 @@ export class UpdatePropertyInquiryDto {
 
   @IsOptional()
   reselectedOnce?: boolean;
+}
+
+export class PropertyInquiryChatMessageDto {
+  @IsString()
+  @IsNotEmpty()
+  text: string;
 }

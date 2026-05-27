@@ -985,7 +985,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const [variationApproveModal, setVariationApproveModal] = useState<any>(null);
   const [completeApproveModal, setCompleteApproveModal] = useState<any>(null);
   // Property inquiry workflow state (cblue_prop_inquiries — not ghis-gated)
-  interface PropInquiry { id: string; poNumber: string; propertyId: string; propertyTitle: string; propertyTier: string; propertyFee: number; propertyType: string; listingType: string; propertyPrice: number; province: string; district: string; customerEmail: string; customerName: string; listerName: string; status: string; step: number; createdAt: number; updatedAt: number; meetingDate?: string; meetingTime?: string; meetingVenue?: string; customerRating?: number; customerComment?: string; listerRating?: number; listerComment?: string; reselectedOnce?: boolean; }
+  interface PropInquiry { id: string; poNumber: string; propertyId: string; propertyTitle: string; propertyTier: string; propertyFee: number; propertyType: string; listingType: string; propertyPrice: number; province: string; district: string; subdistrict?: string; addressLine?: string; latitude?: number | null; longitude?: number | null; area?: number | null; bedrooms?: number | null; bathrooms?: number | null; propertyImages?: string[]; customerEmail: string; customerName: string; listerName: string; status: string; step: number; createdAt: number; updatedAt: number; meetingDate?: string; meetingTime?: string; meetingVenue?: string; customerRating?: number | null; customerComment?: string; listerRating?: number | null; listerComment?: string; reselectedOnce?: boolean; }
   const [propInquiries, setPropInquiries] = useState<PropInquiry[]>([]);
   const [propPayModal, setPropPayModal] = useState<PropInquiry | null>(null);
   const [propMeetingModal, setPropMeetingModal] = useState<PropInquiry | null>(null);
@@ -1005,7 +1005,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       const existing = JSON.parse(localStorage.getItem(key) || "[]");
       if (Array.isArray(existing) && existing.length > 0) {
         if (!localStorage.getItem(`chat_title_${po}`)) {
-          localStorage.setItem(`chat_title_${po}`, `🏠 ${inquiry.propertyTitle || po}`);
+          localStorage.setItem(`chat_title_${po}`, `${inquiry.propertyTitle || po}`);
         }
         return;
       }
@@ -1026,7 +1026,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       };
 
       localStorage.setItem(key, JSON.stringify([bootstrapMessage]));
-      localStorage.setItem(`chat_title_${po}`, `🏠 ${inquiry.propertyTitle || po}`);
+  localStorage.setItem(`chat_title_${po}`, `${inquiry.propertyTitle || po}`);
       localStorage.setItem(`chat_from_${po}`, "dashboard");
       window.dispatchEvent(new Event("cblue-chat-updated"));
     } catch {
@@ -1072,6 +1072,26 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     const ts = new Date(value || 0).getTime();
     return Number.isFinite(ts) ? ts : 0;
   };
+  const normalizePropLocationPart = (value: any) => {
+    const text = String(value || '').trim();
+    if (!text || /^--\s*select/i.test(text)) return '';
+    return text;
+  };
+  const getPropSiteLocation = (p: Partial<PropInquiry>) => {
+    const lat = Number(p.latitude);
+    const lng = Number(p.longitude);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    }
+    return [
+      normalizePropLocationPart(p.addressLine),
+      normalizePropLocationPart(p.subdistrict),
+      normalizePropLocationPart(p.district),
+      normalizePropLocationPart(p.province),
+    ].filter(Boolean).join(', ') || normalizePropLocationPart(p.province) || 'Unknown';
+  };
+  const hasPendingCustomerPropRating = (p: Partial<PropInquiry>) => p.customerRating == null;
+  const hasPendingListerPropRating = (p: Partial<PropInquiry>) => p.listerRating == null;
   const readStoredChatHistory = (po: any) => {
     if (!mockReady || typeof window === 'undefined' || !po) return [];
     try {
@@ -1220,13 +1240,26 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   useEffect(() => {
     const TIER_FEES: Record<string, number> = { ECONOMY: 100, STANDARD: 400, UPPER: 600, LUXURY: 800, GRANDEUR: 1000 };
     function mapApiInquiry(api: any): PropInquiry {
+      const propertyImages = Array.isArray(api?.property?.images)
+        ? api.property.images
+            .map((image: any) => normalizeImageUrl(typeof image === 'string' ? image : image?.url))
+            .filter(Boolean)
+        : [];
       return {
         id: api.id, poNumber: api.poNumber, propertyId: api.propertyId,
         propertyTitle: api.property?.title || '', propertyTier: api.property?.tier || 'STANDARD',
         propertyFee: TIER_FEES[api.property?.tier || 'STANDARD'] ?? 400,
         propertyType: api.property?.propertyType || '', listingType: api.property?.listingType || '',
         propertyPrice: api.property?.price || 0, province: api.property?.province || '',
-        district: api.property?.district || '', customerEmail: api.customerEmail,
+        district: api.property?.district || '', subdistrict: api.property?.subdistrict || '',
+        addressLine: api.property?.addressLine || '',
+        latitude: typeof api.property?.latitude === 'number' ? api.property.latitude : null,
+        longitude: typeof api.property?.longitude === 'number' ? api.property.longitude : null,
+        area: typeof api.property?.area === 'number' ? api.property.area : null,
+        bedrooms: typeof api.property?.bedrooms === 'number' ? api.property.bedrooms : null,
+        bathrooms: typeof api.property?.bathrooms === 'number' ? api.property.bathrooms : null,
+        propertyImages,
+        customerEmail: api.customerEmail,
         customerName: api.customerName, listerName: api.listerName, status: api.status, step: api.step,
         createdAt: new Date(api.createdAt).getTime(), updatedAt: new Date(api.updatedAt).getTime(),
         meetingDate: api.meetingDate, meetingTime: api.meetingTime, meetingVenue: api.meetingVenue,
@@ -1352,6 +1385,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const buildPropChatFeed = (): any[] => {
     if (typeof window === "undefined") return [];
     const items: any[] = [];
+    let viewerUserId = "";
+    try {
+      viewerUserId = String(JSON.parse(localStorage.getItem("subscriber") || "{}")?.id || "").trim();
+    } catch {}
     const now = Date.now();
     const isChatOpen = (p: PropInquiry) => {
       const status = String(p.status || "").toUpperCase();
@@ -1359,7 +1396,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       if (status === "PAID" || status === "MEETING_SENT") return true;
       if (status !== "MEETING_CONFIRMED") return false;
 
-      if (p.customerRating !== undefined && p.listerRating !== undefined) {
+      if (p.customerRating != null && p.listerRating != null) {
         return false;
       }
 
@@ -1385,15 +1422,24 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         const last = reversed.find((m: any) => m?.text?.trim());
         if (!last) continue;
         const inq = propInquiries.find((p: PropInquiry) => p.poNumber === po);
-        const incomingMsg = reversed.find((m: any) => m?.text?.trim() && m.sender !== "system" && m.sender !== "customer");
+        const incomingMsg = reversed.find((m: any) => {
+          const text = String(m?.text || '').trim();
+          if (!text) return false;
+          const sender = String(m?.sender || '').trim().toLowerCase();
+          if (sender === 'system') return false;
+          const senderUserId = String(m?.senderUserId || m?.sender || '').trim();
+          if (viewerUserId && senderUserId && senderUserId === viewerUserId) return false;
+          return true;
+        });
+        const sortTs = parseDateMs(last?.createdAt || last?.time || Date.now());
         items.push({
           id: po, po,
-          name: inq ? `🏠 ${inq.propertyTitle}` : `Property Chat - ${po}`,
+          name: inq ? `${inq.propertyTitle}` : `Property Chat - ${po}`,
           lastMsg: last.text,
           time: last.time || "",
           incomingMsg: incomingMsg?.text || "",
           hasIncoming: Boolean(incomingMsg),
-          sort: Date.now(),
+          sort: sortTs,
           isPropChat: true,
         });
       } catch {}
@@ -1465,17 +1511,107 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     return items;
   };
 
+  const buildPropBackendChatFeed = async () => {
+    if (typeof window === "undefined") return [];
+    const token = localStorage.getItem("subscriber_token") || "";
+    if (!token) return [];
+
+    const viewerUserId = String(subscriber?.id || "").trim();
+    const now = Date.now();
+    const isChatOpen = (p: PropInquiry) => {
+      const status = String(p.status || "").toUpperCase();
+      if (status === "COMPLETED") return false;
+      if (status === "PAID" || status === "MEETING_SENT") return true;
+      if (status !== "MEETING_CONFIRMED") return false;
+      if (p.customerRating != null && p.listerRating != null) return false;
+      if (p.meetingDate) {
+        const meetingAt = new Date(`${p.meetingDate}T${p.meetingTime || '00:00'}`).getTime();
+        if (Number.isFinite(meetingAt) && meetingAt > 0) {
+          const chatExpiresAt = meetingAt + 14 * 24 * 60 * 60 * 1000;
+          if (now >= chatExpiresAt) return false;
+        }
+      }
+      return true;
+    };
+
+    const items: any[] = [];
+    const activeInquiries = propInquiries.filter((p: PropInquiry) => isChatOpen(p));
+
+    for (const inquiry of activeInquiries) {
+      const po = inquiry.poNumber;
+      if (!po) continue;
+      try {
+        const res = await fetch(`/api/v1/property-inquiries/by-po/${encodeURIComponent(po)}/chat`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) continue;
+
+        const rows = await res.json();
+        if (!Array.isArray(rows) || rows.length === 0) continue;
+
+        const mapped = rows
+          .map((row: any) => ({
+            id: row?.id || `${po}-${Date.now()}`,
+            sender: row?.senderUserId || 'system',
+            senderUserId: row?.senderUserId || '',
+            senderName: row?.senderName || '',
+            text: String(row?.text || '').trim(),
+            createdAt: row?.createdAt ? new Date(row.createdAt).getTime() : Date.now(),
+            time: row?.createdAt ? toDisplayDateTime(row.createdAt) : '',
+          }))
+          .filter((msg: any) => msg.text);
+
+        if (mapped.length === 0) continue;
+
+        try {
+          localStorage.setItem(`chat_messages_${po}`, JSON.stringify(mapped));
+          if (!localStorage.getItem(`chat_title_${po}`)) {
+            localStorage.setItem(`chat_title_${po}`, inquiry.propertyTitle || po);
+          }
+        } catch {
+          // Non-blocking cache write.
+        }
+
+        const latest = mapped[mapped.length - 1];
+        const incoming = [...mapped]
+          .reverse()
+          .find((msg: any) => !viewerUserId || String(msg.senderUserId || msg.sender || '') !== viewerUserId);
+
+        items.push({
+          id: po,
+          po,
+          name: inquiry.propertyTitle || `Property Chat - ${po}`,
+          lastMsg: latest?.text || '',
+          time: latest?.time || '',
+          incomingMsg: incoming?.text || '',
+          incomingTime: incoming?.time || '',
+          hasIncoming: Boolean(incoming),
+          sort: Number(latest?.createdAt || 0),
+          source: 'prop-backend',
+          isPropChat: true,
+        });
+      } catch {
+        // Keep local fallback when backend property chat cannot be fetched.
+      }
+    }
+
+    items.sort((a, b) => Number(b.sort || 0) - Number(a.sort || 0));
+    return items;
+  };
+
   useEffect(() => {
     let isMounted = true;
 
     const syncChats = async () => {
       const localItems = buildChatFeed();
       const propChatItems = buildPropChatFeed();
+      const propBackendItems = await buildPropBackendChatFeed();
       const backendItems = await buildBackendChatFeed();
 
       const merged = new Map<string, any>();
       for (const item of propChatItems) merged.set(item.po, item);
       for (const item of localItems) merged.set(item.po, item);
+      for (const item of propBackendItems) merged.set(item.po, item);
       for (const item of backendItems) merged.set(item.po, item);
 
       const mergedList = Array.from(merged.values()).sort((a: any, b: any) => Number(b.sort || 0) - Number(a.sort || 0));
@@ -1499,7 +1635,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       window.removeEventListener("cblue-chat-updated", syncEvent as EventListener);
       clearInterval(timer);
     };
-  }, [orders, subscriber?.id]);
+  }, [orders, propInquiries, subscriber?.id]);
 
   // F4: Auto-create payment_pending requests for backend CONFIRMED orders (cross-browser bridge).
   // When Suppadesh accepts a PO on their browser, the backend order goes CONFIRMED. Ghis's page
@@ -1802,29 +1938,64 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       if (p.status === "DECLINED") return { id: `prop-declined-${p.poNumber}`, type: "prop_declined", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
       if (p.status === "ACCEPTED") return { id: `prop-pay-${p.poNumber}`, type: "prop_pay_fee", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
       if (p.status === "PAID") return { id: `prop-meet-${p.poNumber}`, type: "prop_meeting_invite", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
-      if (p.status === "MEETING_CONFIRMED" && p.customerRating === undefined) return { id: `prop-rate-${p.poNumber}`, type: "prop_rate", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
+      if (p.status === "MEETING_CONFIRMED" && hasPendingCustomerPropRating(p)) return { id: `prop-rate-${p.poNumber}`, type: "prop_rate", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
       return null;
     })
     .filter(Boolean) as any[];
   const propActiveItems: any[] = propInquiries
-    .filter((p: PropInquiry) => p.status === "NOTIFY_SENT")
-    .map((p: PropInquiry) => ({
-      id: `prop-waiting-${p.poNumber}`,
-      type: "prop_waiting",
-      po: p.poNumber,
-      title: p.propertyTitle,
-      service: p.propertyTitle,
-      fixerAlias: p.listerName,
-      partnerName: p.listerName,
-      location: [p.province, p.district].filter(Boolean).join(', '),
-      subdistrict: p.district || p.province,
-      budget: toCurrencyLabel(p.propertyFee || p.propertyPrice),
-      tier: p.propertyTier || "Standard",
-      step: 4,
-      actionNeeded: false,
-      createdAt: p.createdAt,
-      propInquiry: p,
-    }));
+    .filter((p: PropInquiry) => ["NOTIFY_SENT", "ACCEPTED", "PAID", "MEETING_SENT", "MEETING_CONFIRMED"].includes(String(p.status || "").toUpperCase()))
+    .map((p: PropInquiry) => {
+      const status = String(p.status || "").toUpperCase();
+      const siteLocation = getPropSiteLocation(p);
+      const step =
+        status === 'NOTIFY_SENT'
+          ? 4
+          : status === 'ACCEPTED'
+          ? 5
+          : status === 'PAID'
+          ? 7
+          : status === 'MEETING_SENT'
+          ? 7
+          : status === 'MEETING_CONFIRMED'
+          ? 8
+          : 4;
+      const actionNeeded =
+        status === 'ACCEPTED' ||
+        status === 'PAID' ||
+        (status === 'MEETING_CONFIRMED' && hasPendingCustomerPropRating(p));
+      const actionNeededDetail =
+        status === 'ACCEPTED'
+          ? 'Pay processing fee to proceed to chat and meeting flow.'
+          : status === 'PAID'
+          ? 'Send site meeting invitation to the lister.'
+          : status === 'MEETING_CONFIRMED' && hasPendingCustomerPropRating(p)
+          ? 'Submit rating to close step 8.'
+          : status === 'NOTIFY_SENT'
+          ? 'Waiting for lister acceptance.'
+          : status === 'MEETING_SENT'
+          ? 'Waiting for lister to confirm your meeting invitation.'
+          : '';
+
+      return {
+        id: `prop-active-${p.poNumber}`,
+        type: status === 'NOTIFY_SENT' ? 'prop_waiting' : 'prop_active',
+        po: p.poNumber,
+        title: p.propertyTitle,
+        service: p.propertyTitle,
+        fixerAlias: p.listerName,
+        partnerName: p.listerName,
+        location: siteLocation,
+        subdistrict: p.subdistrict || p.district || p.province,
+        budget: toCurrencyLabel(p.propertyFee || p.propertyPrice),
+        tier: p.propertyTier || 'Standard',
+        step,
+        actionNeeded,
+        actionNeededDetail,
+        status,
+        createdAt: p.updatedAt || p.createdAt,
+        propInquiry: p,
+      };
+    });
   const combinedActiveWithProp = [...propActiveItems, ...combinedActive].sort(
     (a: any, b: any) => parseDateMs(b.createdAt || b.date) - parseDateMs(a.createdAt || a.date),
   );
@@ -1906,7 +2077,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           dot: "bg-amber-500",
         };
       }
-      if (p.status === "MEETING_CONFIRMED" && p.customerRating === undefined) {
+      if (p.status === "MEETING_CONFIRMED" && hasPendingCustomerPropRating(p)) {
         return {
           id: `prop-alert-rate-${p.poNumber}`,
           msg: `Meeting confirmed for ${p.propertyTitle}. Please rate to finish step 8.`,
@@ -1917,7 +2088,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           dot: "bg-yellow-500",
         };
       }
-      if (p.status === "MEETING_CONFIRMED" && p.customerRating !== undefined && p.listerRating === undefined) {
+      if (p.status === "MEETING_CONFIRMED" && !hasPendingCustomerPropRating(p) && hasPendingListerPropRating(p)) {
         return {
           id: `prop-alert-wait-lister-rate-${p.poNumber}`,
           msg: `You rated ${p.propertyTitle}. Waiting for lister rating to close this inquiry.`,
@@ -2324,7 +2495,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div className="w-10 h-10 rounded-lg bg-gray-50 text-gray-500 flex items-center justify-center font-bold text-lg">⏳</div>
             <div>
               <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {p.poNumber} · Step 3 of 8</span></h3>
-              <p className="text-sm text-gray-600 mt-0.5">{p.province}</p>
+              <p className="text-sm text-gray-600 mt-0.5">{getPropSiteLocation(p)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "สร้างเมื่อ" : locale === "zh" ? "创建时间" : "Created"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "รอผู้ลงประกาศยืนยัน — หากไม่ตอบสนองสามารถเลือกใหม่ได้" : locale === "zh" ? "等待房源方确认 — 如无响应可重新选择" : "Waiting for lister to accept — you may reselect if no response"}</p>
             </div>
@@ -2338,7 +2509,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   await updatePropInquiry(p.id, { status: "CANCELLED", reselectedOnce: true });
                 }}
               >
-                {locale === "th" ? "🔄 เลือกใหม่" : locale === "zh" ? "🔄 重新选择" : "🔄 Reselect"}
+                {locale === "th" ? "เลือกใหม่" : locale === "zh" ? "重新选择" : "Reselect"}
               </button>
             )}
             <span className="px-3 py-2 bg-gray-100 text-gray-500 rounded-lg text-xs font-semibold whitespace-nowrap">
@@ -2373,7 +2544,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-lg">🏠</div>
             <div>
               <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {p.poNumber} · Step 5 of 8</span></h3>
-              <p className="text-sm text-gray-600 mt-0.5">{p.listerName} · {p.province}</p>
+              <p className="text-sm text-gray-600 mt-0.5">{p.listerName} · {getPropSiteLocation(p)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "อัปเดตเมื่อ" : locale === "zh" ? "更新时间" : "Updated"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "ผู้ลงประกาศยืนยันแล้ว — ชำระค่าดำเนินการเพื่อรับข้อมูลติดต่อ" : locale === "zh" ? "房源方已确认 — 支付处理费以获取联系方式" : "Lister accepted — pay the processing fee to get contact info"}</p>
             </div>
@@ -2400,7 +2571,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div className="w-10 h-10 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center font-bold text-lg">📅</div>
             <div>
               <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {p.poNumber} · Step 7 of 8</span></h3>
-              <p className="text-sm text-gray-600 mt-0.5">{p.listerName} · {p.province}</p>
+              <p className="text-sm text-gray-600 mt-0.5">{p.listerName} · {getPropSiteLocation(p)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "อัปเดตเมื่อ" : locale === "zh" ? "更新时间" : "Updated"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "ชำระแล้ว — ส่งคำเชิญนัดหมายเพื่อเยี่ยมชมทรัพย์สิน" : locale === "zh" ? "已付款 — 发送会议邀请以预约参观" : "Fee paid — send a meeting invitation to schedule a property viewing"}</p>
             </div>
@@ -2411,7 +2582,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               className="bg-teal-600 text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-teal-700 transition shadow-sm whitespace-nowrap"
               onClick={() => { setPropMeetingDate(""); setPropMeetingTime(""); setPropMeetingVenue(""); setPropMeetingModal(p); }}
             >
-              {locale === "th" ? "📅 ส่งคำเชิญนัดหมาย" : locale === "zh" ? "📅 发送会议邀请" : "📅 Send Meeting Invitation"}
+              {locale === "th" ? "ส่งคำเชิญนัดหมาย" : locale === "zh" ? "发送会议邀请" : "Send Meeting Invitation"}
             </button>
           </div>
         </div>
@@ -2424,7 +2595,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div className="w-10 h-10 rounded-lg bg-yellow-50 text-yellow-600 flex items-center justify-center font-bold text-lg">⭐</div>
             <div>
               <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {p.poNumber} · Step 8 of 8</span></h3>
-              <p className="text-sm text-gray-600 mt-0.5">{p.listerName} · {p.province}</p>
+              <p className="text-sm text-gray-600 mt-0.5">{p.listerName} · {getPropSiteLocation(p)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "อัปเดตเมื่อ" : locale === "zh" ? "更新时间" : "Updated"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "นัดหมายยืนยันแล้ว — ให้คะแนนเพื่อปิดงาน" : locale === "zh" ? "会议已确认 — 评分以结案" : "Meeting confirmed — rate to close this inquiry"}</p>
             </div>
@@ -2435,7 +2606,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               className="bg-yellow-500 text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-yellow-600 transition shadow-sm whitespace-nowrap"
               onClick={() => { setPropRateStars(0); setPropRateComment(""); setPropRateModal(p); }}
             >
-              {locale === "th" ? "⭐ ให้คะแนน & ปิดงาน" : locale === "zh" ? "⭐ 评分并结案" : "⭐ Rate & Close"}
+              {locale === "th" ? "ให้คะแนนและปิดงาน" : locale === "zh" ? "评分并结案" : "Rate & Close"}
             </button>
           </div>
         </div>
@@ -2449,7 +2620,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       <div className="flex items-start gap-4 flex-1 min-w-0">
          <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold shrink-0 ${item.type === 'prop_waiting' ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-600'}`}>{(locale === "th" ? (item.titleTh || item.serviceTh || item.title || item.service || "C") : locale === "zh" ? (item.titleZh || item.serviceZh || item.title || item.service || "C") : (item.title || item.service || "C")).charAt(0)}</div>
          <div className="min-w-0">
-           <h3 className="font-bold text-gray-900">{locale === "th" ? (item.titleTh || item.serviceTh || item.title || item.service) : locale === "zh" ? (item.titleZh || item.serviceZh || item.title || item.service) : (item.title || item.service)} <span className="text-sm font-normal text-gray-400">· {item.po || `PO-${item.id?.slice(0,8) || '2605-8471'}`} | {item.subdistrict || item.location || 'Saphansong'}</span></h3>
+           <h3 className="font-bold text-gray-900">{locale === "th" ? (item.titleTh || item.serviceTh || item.title || item.service) : locale === "zh" ? (item.titleZh || item.serviceZh || item.title || item.service) : (item.title || item.service)} <span className="text-sm font-normal text-gray-400">· {item.po || `PO-${item.id?.slice(0,8) || '2605-8471'}`} | {item.location || item.subdistrict || 'Unknown'}</span></h3>
            <p className="text-sm text-gray-600 mt-0.5">{item.fixerAlias || item.partnerName || item.customer || "Customer"} · {item.date || "11/5/2026 14:30"} · {locale === "th" ? "งบประมาณ:" : locale === "zh" ? "预算:" : "Budget:"} {item.budget || ('฿' + Number(item.price || 0).toLocaleString())}</p>
            {item.type === 'prop_waiting' && (
              <p className="text-xs text-amber-700 mt-1">
@@ -2886,9 +3057,12 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       {propPayModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl overflow-hidden">
-            <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4">
-              <h3 className="text-white font-bold text-lg">💳 {locale === "th" ? "ชำระค่าดำเนินการ" : locale === "zh" ? "支付处理费" : "Pay Processing Fee"}</h3>
-              <p className="text-green-100 text-sm mt-1">{propPayModal.poNumber} · Step 5 of 8</p>
+            <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-white font-bold text-lg">{locale === "th" ? "ชำระค่าดำเนินการ" : locale === "zh" ? "支付处理费" : "Pay Processing Fee"}</h3>
+                <p className="text-green-100 text-sm mt-1">{propPayModal.poNumber} · Step 5 of 8</p>
+              </div>
+              <button onClick={() => setPropPayModal(null)} className="text-white/90 hover:text-white text-xl leading-none" aria-label="Close">&times;</button>
             </div>
             <div className="px-6 py-5 space-y-4">
               {propModalImages.length > 0 && (
@@ -2912,6 +3086,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               <div className="bg-gray-50 rounded-xl p-4 text-sm space-y-2">
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ทรัพย์สิน" : "Property"}</span><span className="font-semibold text-right max-w-[60%] line-clamp-1">{propPayModal.propertyTitle}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "จังหวัด" : "Province"}</span><span className="font-semibold">{propPayModal.province}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}</span><span className="font-semibold text-right max-w-[60%] break-words">{getPropSiteLocation(propPayModal)}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ผู้ลงประกาศ" : "Lister"}</span><span className="font-semibold">{propPayModal.listerName}</span></div>
                 <div className="flex justify-between border-t border-gray-100 pt-2">
                   <span className="text-gray-700 font-semibold">{locale === "th" ? "ค่าดำเนินการ" : "Processing Fee"}</span>
@@ -2920,8 +3095,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               </div>
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
                 {locale === "th"
-                  ? "🧪 ช่วงทดสอบ: ข้ามการชำระเงินได้ฟรี หลังกด 'Free Pass' คุณจะได้รับข้อมูลติดต่อผู้ลงประกาศ"
-                  : "🧪 Testing period: payment is skipped for free. After clicking 'Free Pass' you will receive the lister's contact info."}
+                  ? "ช่วงทดสอบ: ข้ามการชำระเงินได้ฟรี หลังกด 'Free Pass' คุณจะได้รับข้อมูลติดต่อผู้ลงประกาศ"
+                  : "Testing period: payment is skipped for free. After clicking 'Free Pass' you will receive the lister's contact info."}
               </div>
               <div className="flex gap-3">
                 <button onClick={() => setPropPayModal(null)} className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl font-semibold text-sm">
@@ -2939,7 +3114,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                     setPropPayModal(null);
                   }}
                 >
-                  🧪 Testing period — Free Pass
+                  Testing period — Free Pass
                 </button>
               </div>
             </div>
@@ -2951,9 +3126,12 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       {propMeetingModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl overflow-hidden">
-            <div className="bg-gradient-to-r from-teal-500 to-cyan-500 px-6 py-4">
-              <h3 className="text-white font-bold text-lg">📅 {locale === "th" ? "ส่งคำเชิญนัดหมาย" : locale === "zh" ? "发送会议邀请" : "Send Meeting Invitation"}</h3>
-              <p className="text-teal-100 text-sm mt-1">{propMeetingModal.poNumber} · Step 7 of 8</p>
+            <div className="bg-gradient-to-r from-teal-500 to-cyan-500 px-6 py-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-white font-bold text-lg">{locale === "th" ? "ส่งคำเชิญนัดหมาย" : locale === "zh" ? "发送会议邀请" : "Send Meeting Invitation"}</h3>
+                <p className="text-teal-100 text-sm mt-1">{propMeetingModal.poNumber} · Step 7 of 8</p>
+              </div>
+              <button onClick={() => setPropMeetingModal(null)} className="text-white/90 hover:text-white text-xl leading-none" aria-label="Close">&times;</button>
             </div>
             <div className="px-6 py-5 space-y-4">
               {propModalImages.length > 0 && (
@@ -2975,6 +3153,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 </button>
               )}
               <p className="text-sm text-gray-600">{locale === "th" ? `นัดหมายเยี่ยมชม: ${propMeetingModal.propertyTitle}` : `Schedule a viewing for: ${propMeetingModal.propertyTitle}`}</p>
+              <p className="text-xs text-gray-500">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}: {getPropSiteLocation(propMeetingModal)}</p>
               <div className="space-y-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "วันที่" : "Date"}</label>
@@ -3001,7 +3180,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                     setPropMeetingModal(null);
                   }}
                 >
-                  {locale === "th" ? "📅 ส่งคำเชิญ" : "📅 Send Invite"}
+                  {locale === "th" ? "ส่งคำเชิญ" : "Send Invite"}
                 </button>
               </div>
             </div>
@@ -3013,12 +3192,16 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       {propRateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl overflow-hidden">
-            <div className="bg-gradient-to-r from-yellow-500 to-amber-500 px-6 py-4">
-              <h3 className="text-white font-bold text-lg">⭐ {locale === "th" ? "ให้คะแนนและปิดงาน" : locale === "zh" ? "评分并结案" : "Rate & Close"}</h3>
-              <p className="text-yellow-100 text-sm mt-1">{propRateModal.poNumber} · Step 8 of 8</p>
+            <div className="bg-gradient-to-r from-yellow-500 to-amber-500 px-6 py-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-white font-bold text-lg">{locale === "th" ? "ให้คะแนนและปิดงาน" : locale === "zh" ? "评分并结案" : "Rate & Close"}</h3>
+                <p className="text-yellow-100 text-sm mt-1">{propRateModal.poNumber} · Step 8 of 8</p>
+              </div>
+              <button onClick={() => setPropRateModal(null)} className="text-white/90 hover:text-white text-xl leading-none" aria-label="Close">&times;</button>
             </div>
             <div className="px-6 py-5 space-y-4">
               <p className="text-sm text-gray-600">{locale === "th" ? `ให้คะแนนประสบการณ์กับ: ${propRateModal.listerName}` : `Rate your experience with: ${propRateModal.listerName}`}</p>
+              <p className="text-xs text-gray-500">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}: {getPropSiteLocation(propRateModal)}</p>
               <div>
                 <p className="text-xs font-semibold text-gray-600 mb-2">{locale === "th" ? "คะแนน" : "Rating"}</p>
                 <div className="flex gap-2 justify-center">
@@ -3052,12 +3235,12 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                     setPropRateModal(null);
                     alert(
                       alreadyRatedByLister
-                        ? (locale === "th" ? "⭐ ขอบคุณ! งานนี้ปิดแล้วและย้ายไปประวัติ" : "⭐ Thank you! This inquiry is now closed and moved to history.")
-                        : (locale === "th" ? "⭐ ขอบคุณ! บันทึกคะแนนแล้ว กำลังรอผู้ลงประกาศให้คะแนนเพื่อปิดงาน" : "⭐ Thank you! Your rating is saved. Waiting for lister rating to close this inquiry."),
+                        ? (locale === "th" ? "ขอบคุณ! งานนี้ปิดแล้วและย้ายไปประวัติ" : "Thank you! This inquiry is now closed and moved to history.")
+                        : (locale === "th" ? "ขอบคุณ! บันทึกคะแนนแล้ว กำลังรอผู้ลงประกาศให้คะแนนเพื่อปิดงาน" : "Thank you! Your rating is saved. Waiting for lister rating to close this inquiry."),
                     );
                   }}
                 >
-                  {locale === "th" ? "⭐ ส่งคะแนน" : "⭐ Submit Rating"}
+                  {locale === "th" ? "ส่งคะแนน" : "Submit Rating"}
                 </button>
               </div>
             </div>

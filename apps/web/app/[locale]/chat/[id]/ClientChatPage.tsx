@@ -23,6 +23,7 @@ const fmtDateTime = (d: Date | number | string) => {
 
 export default function ClientChatPage({ orderId, locale }: { orderId: string, locale: string }) {
   const router = useRouter();
+  const isPropertyPoChat = /^PRE-/i.test(orderId);
   const [mounted, setMounted] = useState(false);
   const [chatTitle, setChatTitle] = useState(`Chat - ${orderId}`);
   const defaultMessages = useRef([
@@ -98,6 +99,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
     };
 
     const resolveOrderDbId = async () => {
+      if (isPropertyPoChat) return "";
       if (isUuid(orderId)) return orderId;
       // Check cached PO→UUID mapping stored at booking time
       const cached = localStorage.getItem(`po_to_order_${orderId}`);
@@ -144,12 +146,19 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
 
     const syncFromApi = async () => {
       if (!token) return;
-      const resolvedOrderId = await resolveOrderDbId();
-      if (!resolvedOrderId) return;
-      setOrderDbId(resolvedOrderId);
 
       try {
-        const res = await fetch(`/api/v1/orders/${resolvedOrderId}/chat`, {
+        let endpoint = "";
+        if (isPropertyPoChat) {
+          endpoint = `/api/v1/property-inquiries/by-po/${encodeURIComponent(orderId)}/chat`;
+        } else {
+          const resolvedOrderId = await resolveOrderDbId();
+          if (!resolvedOrderId) return;
+          setOrderDbId(resolvedOrderId);
+          endpoint = `/api/v1/orders/${resolvedOrderId}/chat`;
+        }
+
+        const res = await fetch(endpoint, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) return;
@@ -210,7 +219,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
       window.removeEventListener("storage", handleStorage);
       window.removeEventListener("cblue-chat-updated", handleChatUpdate as EventListener);
     };
-  }, [orderId]);
+  }, [orderId, isPropertyPoChat]);
 
   useEffect(() => {
     const listEl = chatListRef.current;
@@ -224,6 +233,46 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
     const key = `chat_messages_${orderId}`;
     const messageText = inputText.trim();
     const token = localStorage.getItem("subscriber_token") || "";
+
+    if (token && isPropertyPoChat) {
+      try {
+        const res = await fetch(`/api/v1/property-inquiries/by-po/${encodeURIComponent(orderId)}/chat`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ text: messageText }),
+        });
+
+        if (res.ok) {
+          const created = await res.json();
+          const createdMessage = {
+            id: created?.id || Date.now(),
+            sender: created?.senderUserId || currentEmailRef.current,
+            senderName: created?.senderName || currentNameRef.current,
+            text: created?.text || messageText,
+            time: created?.createdAt ? fmtDateTime(created.createdAt) : fmtDateTime(new Date()),
+            createdAt: created?.createdAt ? new Date(created.createdAt).getTime() : Date.now(),
+          };
+
+          setMessages(prev => {
+            const updated = [...prev, createdMessage];
+            try {
+              localStorage.setItem(key, JSON.stringify(updated));
+              bcRef.current?.postMessage(updated);
+              window.dispatchEvent(new Event("storage"));
+              window.dispatchEvent(new CustomEvent("cblue-chat-updated", { detail: { orderId } }));
+            } catch {}
+            return updated;
+          });
+          setInputText("");
+          return;
+        }
+      } catch {
+        // API fallback to local-only message below.
+      }
+    }
 
     if (token && orderDbId) {
       try {

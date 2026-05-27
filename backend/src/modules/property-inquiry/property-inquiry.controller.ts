@@ -10,6 +10,7 @@ import {
 import { PropertyInquiryService } from './property-inquiry.service';
 import {
   CreatePropertyInquiryDto,
+  PropertyInquiryChatMessageDto,
   UpdatePropertyInquiryDto,
 } from './dto/property-inquiry.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -38,6 +39,27 @@ export class PropertyInquiryController {
   @Get('lister')
   findByLister(@CurrentUser('id') userId: string) {
     return this.propertyInquiryService.findByLister(userId);
+  }
+
+  @Get('by-po/:poNumber/chat')
+  listChatByPo(
+    @Param('poNumber') poNumber: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.propertyInquiryService.listChatByPo(userId, poNumber);
+  }
+
+  @Post('by-po/:poNumber/chat')
+  sendChatByPo(
+    @Param('poNumber') poNumber: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: PropertyInquiryChatMessageDto,
+  ) {
+    return this.propertyInquiryService.sendChatByPo(
+      userId,
+      poNumber,
+      dto.text,
+    );
   }
 
   @Put(':id')
