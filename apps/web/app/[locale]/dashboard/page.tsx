@@ -2941,7 +2941,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           </div>
           {/* Property Inquiry History */}
           {(() => {
-            const propHist = propInquiries.filter(p => p.status === "COMPLETED");
+            const propHist = propInquiries.filter(p => String(p.status || '').toUpperCase() === "COMPLETED");
             if (propHist.length === 0) return null;
             return (
               <div className="mt-2 border-t border-gray-100">

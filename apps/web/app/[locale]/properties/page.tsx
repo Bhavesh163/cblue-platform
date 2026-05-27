@@ -1061,7 +1061,38 @@ function PropertiesPageContent() {
           {/* CTA to register property */}
           {!searched && (
             <div className="py-12 space-y-12">
-              {/* Latest 20 Properties (newest first) */}
+              <div className="text-center">
+                <div className="mb-6">
+                  <h3 className="text-xl font-bold text-gray-900">{locale === "th" ? "เลือกตามประเภทอสังหาฯ" : locale === "zh" ? "按房产类型浏览" : "Browse by Property Type"}</h3>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 max-w-7xl mx-auto px-4">
+                  {PROPERTY_TYPES.map((type) => (
+                    <button
+                      key={type}
+                      onClick={() => handleSearch({ propertyType: type })}
+                      className="bg-white rounded-xl p-4 border border-gray-200 text-center hover:border-green-500 hover:shadow-md transition cursor-pointer flex flex-col items-center justify-center gap-2"
+                    >
+                      <h3 className="font-semibold text-gray-900 text-sm sm:text-base">{getPropertyTypeLabel(type)}</h3>
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
+                  <button
+                    onClick={() => handleSearch()}
+                    className="px-8 py-3 text-sm font-semibold text-white bg-green-700 hover:bg-green-800 rounded-xl transition-colors"
+                  >
+                    {t("searchProperty")}
+                  </button>
+                  <Link
+                    href={`${prefix}/properties/register`}
+                    className="px-8 py-3 text-sm font-semibold text-green-700 border border-green-700 hover:bg-green-50 rounded-xl transition-colors text-center"
+                  >
+                    {t("listProperty")}
+                  </Link>
+                </div>
+              </div>
+
+              {/* Latest 20 Properties (newest first) — moved to bottom of page */}
               {latestProperties.length > 0 && (
                 <div>
                   <div className="text-center mb-8">
@@ -1114,37 +1145,6 @@ function PropertiesPageContent() {
                   </div>
                 </div>
               )}
-
-              <div className="text-center">
-                <div className="mb-6">
-                  <h3 className="text-xl font-bold text-gray-900">{locale === "th" ? "เลือกตามประเภทอสังหาฯ" : locale === "zh" ? "按房产类型浏览" : "Browse by Property Type"}</h3>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 max-w-7xl mx-auto px-4">
-                  {PROPERTY_TYPES.map((type) => (
-                    <button
-                      key={type}
-                      onClick={() => handleSearch({ propertyType: type })}
-                      className="bg-white rounded-xl p-4 border border-gray-200 text-center hover:border-green-500 hover:shadow-md transition cursor-pointer flex flex-col items-center justify-center gap-2"
-                    >
-                      <h3 className="font-semibold text-gray-900 text-sm sm:text-base">{getPropertyTypeLabel(type)}</h3>
-                    </button>
-                  ))}
-                </div>
-                <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
-                  <button
-                    onClick={() => handleSearch()}
-                    className="px-8 py-3 text-sm font-semibold text-white bg-green-700 hover:bg-green-800 rounded-xl transition-colors"
-                  >
-                    {t("searchProperty")}
-                  </button>
-                  <Link
-                    href={`${prefix}/properties/register`}
-                    className="px-8 py-3 text-sm font-semibold text-green-700 border border-green-700 hover:bg-green-50 rounded-xl transition-colors text-center"
-                  >
-                    {t("listProperty")}
-                  </Link>
-                </div>
-              </div>
             </div>
           )}
         </div>
