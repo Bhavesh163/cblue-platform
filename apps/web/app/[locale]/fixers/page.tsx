@@ -4759,7 +4759,7 @@ function PartnerProperties({ locale, prefix, properties }: { locale: string; pre
   const PROPERTY_TYPE_OPTIONS = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "OFFICE", "WAREHOUSE", "SHOPHOUSE", "APARTMENT"];
   const LISTING_TYPE_OPTIONS = ["SALE", "RENT"];
   const TIER_OPTIONS = ["ECONOMY", "STANDARD", "UPPER", "LUXURY", "GRANDEUR"];
-  const MAX_FILES = 10;
+  const MAX_FILES = 5;
 
   const [items, setItems] = useState<any[]>([]);
   const [viewing, setViewing] = useState<any | null>(null);
@@ -4821,14 +4821,24 @@ function PartnerProperties({ locale, prefix, properties }: { locale: string; pre
     const subdistrict = normalizeLocationText(raw?.subdistrict || raw?.address?.subdistrict);
     const addressLine = normalizeLocationText(raw?.addressLine || raw?.address?.addressLine);
 
+    const sourceFiles = Array.isArray(raw?.fileUrls)
+      ? raw.fileUrls
+      : Array.isArray(raw?.existingFiles)
+      ? raw.existingFiles
+      : Array.isArray(raw?.images)
+      ? raw.images
+      : Array.isArray(raw?.propertyImages)
+      ? raw.propertyImages
+      : [];
+
     const fileUrls: string[] = Array.from(
       new Set(
-        (Array.isArray(raw?.images) ? raw.images : Array.isArray(raw?.propertyImages) ? raw.propertyImages : [])
+        sourceFiles
           .map((item: any) => normalizeImageUrl(extractImageUrlCandidate(item)))
           .filter(Boolean),
       ),
     );
-    const primaryImage = fileUrls.find((url) => getFileKind(url) === "image") || "";
+    const primaryImage = normalizeImageUrl(raw?.primaryImage || "") || fileUrls.find((url) => getFileKind(url) === "image") || "";
 
     return {
       id: String(raw?.id || ""),
@@ -5214,8 +5224,16 @@ function PartnerProperties({ locale, prefix, properties }: { locale: string; pre
       </div>
 
       {viewing && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="w-full max-w-4xl max-h-[92vh] overflow-hidden bg-white rounded-2xl shadow-xl border border-gray-200">
+        <div className="fixed inset-0 z-[80] bg-black/60 flex items-start justify-center p-4 pt-10 sm:pt-12">
+          <div className="relative w-full max-w-4xl max-h-[92vh] overflow-hidden bg-white rounded-2xl shadow-xl border border-gray-200">
+            <button
+              type="button"
+              onClick={() => setViewing(null)}
+              aria-label="Close"
+              className="absolute right-4 top-4 h-8 w-8 rounded-full bg-white text-gray-600 shadow-md hover:text-gray-900"
+            >
+              ✕
+            </button>
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <h3 className="font-bold text-gray-900 truncate">{locale === "th" ? viewing.titleTh : locale === "zh" ? viewing.titleZh : viewing.title}</h3>
@@ -5321,8 +5339,16 @@ function PartnerProperties({ locale, prefix, properties }: { locale: string; pre
       )}
 
       {editing && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="w-full max-w-4xl max-h-[92vh] overflow-hidden bg-white rounded-2xl shadow-xl border border-gray-200">
+        <div className="fixed inset-0 z-[80] bg-black/60 flex items-start justify-center p-4 pt-10 sm:pt-12">
+          <div className="relative w-full max-w-4xl max-h-[92vh] overflow-hidden bg-white rounded-2xl shadow-xl border border-gray-200">
+            <button
+              type="button"
+              onClick={() => setEditing(null)}
+              aria-label="Close"
+              className="absolute right-4 top-4 h-8 w-8 rounded-full bg-white text-gray-600 shadow-md hover:text-gray-900"
+            >
+              ✕
+            </button>
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-bold text-gray-900">{locale === "th" ? "แก้ไขข้อมูลอสังหาริมทรัพย์" : locale === "zh" ? "编辑房源信息" : "Edit Property"}</h3>
               <button onClick={() => setEditing(null)} className="text-gray-500 hover:text-gray-700">✕</button>
@@ -5516,10 +5542,10 @@ function PartnerProperties({ locale, prefix, properties }: { locale: string; pre
                 />
                 <p className="text-xs text-gray-500">
                   {locale === "th"
-                    ? "รองรับไฟล์รูปภาพและ PDF (สูงสุด 10 ไฟล์)"
+                    ? `รองรับไฟล์รูปภาพและ PDF (สูงสุด ${MAX_FILES} ไฟล์)`
                     : locale === "zh"
-                    ? "支持图片和 PDF 文件（最多 10 个）"
-                    : "Supports image and PDF files (up to 10 files)."}
+                    ? `支持图片和 PDF 文件（最多 ${MAX_FILES} 个）`
+                    : `Supports image and PDF files (up to ${MAX_FILES} files).`}
                 </p>
               </div>
 

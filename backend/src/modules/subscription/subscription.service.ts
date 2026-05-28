@@ -639,6 +639,19 @@ export class SubscriptionService {
     name: string,
     resetToken: string,
   ): Promise<boolean> {
+    type SmtpSendMailOptions = {
+      from: string;
+      to: string;
+      subject: string;
+      text: string;
+      html: string;
+    };
+    type SmtpTransporter = {
+      sendMail: (options: SmtpSendMailOptions) => Promise<unknown>;
+    };
+    type MailjetMessageStatus = { Status?: string };
+    type MailjetSendApiResponse = { Messages?: MailjetMessageStatus[] };
+
     const mailjetApiKey = this.configService.get<string>('mailjet.apiKey');
     const mailjetApiSecret =
       this.configService.get<string>('mailjet.apiSecret');
@@ -722,6 +735,31 @@ export class SubscriptionService {
       );
     };
 
+    const parseMailjetSendApiResponse = (
+      raw: string,
+    ): MailjetSendApiResponse | null => {
+      if (!raw) return null;
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        if (!parsed || typeof parsed !== 'object') return null;
+
+        const maybeMessages = (parsed as { Messages?: unknown }).Messages;
+        if (!Array.isArray(maybeMessages)) return { Messages: [] };
+
+        const messages: MailjetMessageStatus[] = maybeMessages.map(
+          (message) => {
+            if (!message || typeof message !== 'object') return {};
+            const status = (message as { Status?: unknown }).Status;
+            return { Status: typeof status === 'string' ? status : undefined };
+          },
+        );
+
+        return { Messages: messages };
+      } catch {
+        return null;
+      }
+    };
+
     let apiError: string | null = null;
     for (const fromEmail of fromCandidates) {
       const body = {
@@ -754,18 +792,10 @@ export class SubscriptionService {
         });
 
         const rawResponse = await response.text();
-        let parsedResponse: any = null;
-        try {
-          parsedResponse = rawResponse ? JSON.parse(rawResponse) : null;
-        } catch {
-          parsedResponse = null;
-        }
-
-        const messageStatuses = Array.isArray(parsedResponse?.Messages)
-          ? parsedResponse.Messages.map((message: any) =>
-              String(message?.Status || '').toLowerCase(),
-            )
-          : [];
+        const parsedResponse = parseMailjetSendApiResponse(rawResponse);
+        const messageStatuses = (parsedResponse?.Messages || []).map(
+          (message) => String(message.Status || '').toLowerCase(),
+        );
         const hasSuccessfulMessageStatus = messageStatuses.some((status) =>
           ['success', 'queued'].includes(status),
         );
@@ -813,7 +843,16 @@ export class SubscriptionService {
       }
     }
 
-    const transporter = nodemailer.createTransport({
+    const smtpTransportFactory = nodemailer as unknown as {
+      createTransport: (options: {
+        host: string;
+        port: number;
+        secure: boolean;
+        auth: { user: string; pass: string };
+      }) => SmtpTransporter;
+    };
+
+    const transporter = smtpTransportFactory.createTransport({
       host: 'in-v3.mailjet.com',
       port: 587,
       secure: false,
