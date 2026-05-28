@@ -11,7 +11,12 @@ import {
   Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { PropertyType, ListingType, PropertyTier } from '@prisma/client';
+import {
+  PropertyType,
+  ListingType,
+  PropertyTier,
+  PropertyStatus,
+} from '@prisma/client';
 
 export class PropertyImageDto {
   @IsString()
@@ -33,6 +38,10 @@ export class CreatePropertyDto {
   @IsOptional()
   @IsEnum(PropertyTier)
   tier?: PropertyTier;
+
+  @IsOptional()
+  @IsEnum(PropertyStatus)
+  status?: PropertyStatus;
 
   @IsString()
   @IsNotEmpty()

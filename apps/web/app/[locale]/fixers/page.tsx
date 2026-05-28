@@ -3100,7 +3100,7 @@ export default function FixerProPage() {
         {activeTab === "requests" && <PartnerRequests locale={locale} incomingJobs={partnerRequestItemsWithProp} onJobClick={handleJobClick} priceList={(partner as any)?.priceList} onPropAccept={(p: PropInquiry) => setPropAcceptModal(p)} onPropMeetingConfirm={(p: PropInquiry) => setPropMeetingConfirmModal(p)} onPropRatePartner={(p: PropInquiry) => { setPropPartnerRateStars(0); setPropPartnerRateComment(""); setPropPartnerRateModal(p); }} />}
         {activeTab === "active" && <PartnerJobs locale={locale} activeJobs={activeJobs} onJobClick={handleJobClick} priceList={(partner as any)?.priceList} />}
         
-        {activeTab === "properties" && <PartnerProperties locale={locale} prefix={prefix} properties={myProperties} />}
+        {activeTab === "properties" && <PartnerProperties locale={locale} prefix={prefix} properties={myProperties} propertyInquiries={propInquiries} />}
         {activeTab === "history" && <PartnerHistory locale={locale} completedJobs={allCompletedJobs} />}
         {activeTab === "chat" && <PartnerChats locale={locale} chats={chatFeed} />}
         {activeTab === "notifications" && <PartnerNotifications locale={locale} notifications={displayNotifications} />}
@@ -4755,10 +4755,12 @@ function PartnerProfile({ locale, prefix, partner }: { locale: string; prefix: s
 
 
 /* ===== PARTNER PROPERTIES ===== */
-function PartnerProperties({ locale, prefix, properties }: { locale: string; prefix: string; properties: any[] }) {
+function PartnerProperties({ locale, prefix, properties, propertyInquiries }: { locale: string; prefix: string; properties: any[]; propertyInquiries?: any[] }) {
   const PROPERTY_TYPE_OPTIONS = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "OFFICE", "WAREHOUSE", "SHOPHOUSE", "APARTMENT"];
   const LISTING_TYPE_OPTIONS = ["SALE", "RENT"];
   const TIER_OPTIONS = ["ECONOMY", "STANDARD", "UPPER", "LUXURY", "GRANDEUR"];
+  const ACCEPTED_STATUSES = new Set(["ACCEPTED", "PAID", "MEETING_SENT", "MEETING_CONFIRMED", "COMPLETED"]);
+  const MEETING_STATUSES = new Set(["MEETING_SENT", "MEETING_CONFIRMED", "COMPLETED"]);
   const MAX_FILES = 5;
 
   const [items, setItems] = useState<any[]>([]);
@@ -4800,6 +4802,89 @@ function PartnerProperties({ locale, prefix, properties }: { locale: string; pre
     if (upper === "SHOPHOUSE") return locale === "th" ? "ตึกแถว" : locale === "zh" ? "商铺" : "Shophouse";
     if (upper === "APARTMENT") return locale === "th" ? "อพาร์ตเมนต์" : locale === "zh" ? "公寓" : "Apartment";
     return upper || "-";
+  };
+
+  const tierLabel = (value: string) => {
+    const upper = String(value || "STANDARD").toUpperCase();
+    if (upper === "ECONOMY") return locale === "th" ? "ประหยัด" : locale === "zh" ? "经济" : "Economy";
+    if (upper === "STANDARD") return locale === "th" ? "มาตรฐาน" : locale === "zh" ? "标准" : "Standard";
+    if (upper === "UPPER") return locale === "th" ? "ระดับสูง" : locale === "zh" ? "高阶" : "Upper";
+    if (upper === "LUXURY") return locale === "th" ? "ลักชัวรี" : locale === "zh" ? "豪华" : "Luxury";
+    if (upper === "GRANDEUR") return locale === "th" ? "พรีเมียม" : locale === "zh" ? "尊享" : "Grandeur";
+    return upper || "-";
+  };
+
+  const toDisplayDateTime = (value: any) => {
+    const date = new Date(value || 0);
+    if (Number.isNaN(date.getTime()) || date.getTime() <= 0) return "-";
+    const targetLocale = locale === "th" ? "th-TH" : locale === "zh" ? "zh-CN" : "en-GB";
+    return date.toLocaleString(targetLocale, {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const toPercent = (numerator: number, denominator: number) => {
+    if (!denominator) return 0;
+    return Math.round((numerator / denominator) * 100);
+  };
+
+  const getVisibilityLabel = (status: string) => {
+    const upper = String(status || "").toUpperCase();
+    if (upper === "ACTIVE") return locale === "th" ? "สาธารณะ" : locale === "zh" ? "公开" : "Public";
+    if (upper === "DRAFT") return locale === "th" ? "หยุดแสดง" : locale === "zh" ? "暂停" : "Paused";
+    return locale === "th" ? "เก็บถาวร" : locale === "zh" ? "已归档" : "Archived";
+  };
+
+  const getComplianceHints = (item: any) => {
+    const hints: string[] = [];
+    if (!String(item?.title || "").trim()) hints.push(locale === "th" ? "ชื่อประกาศ" : locale === "zh" ? "标题" : "Title");
+    if (!String(item?.propertyType || "").trim()) hints.push(locale === "th" ? "ประเภททรัพย์สิน" : locale === "zh" ? "房产类型" : "Property type");
+    if (!String(item?.listingType || "").trim()) hints.push(locale === "th" ? "ประเภทการประกาศ" : locale === "zh" ? "交易类型" : "Listing type");
+    if (!String(item?.tier || "").trim()) hints.push(locale === "th" ? "ระดับบริการ" : locale === "zh" ? "服务等级" : "Tier");
+    if (!Number.isFinite(Number(item?.price)) || Number(item?.price) <= 0) hints.push(locale === "th" ? "ราคา" : locale === "zh" ? "价格" : "Price");
+    if (!String(item?.province || "").trim()) hints.push(locale === "th" ? "จังหวัด" : locale === "zh" ? "省份" : "Province");
+    if (!String(item?.district || "").trim()) hints.push(locale === "th" ? "เขต/อำเภอ" : locale === "zh" ? "区/县" : "District");
+    if (!String(item?.subdistrict || "").trim()) hints.push(locale === "th" ? "แขวง/ตำบล" : locale === "zh" ? "街道/分区" : "Subdistrict");
+    if (!String(item?.addressLine || "").trim()) hints.push(locale === "th" ? "ที่อยู่" : locale === "zh" ? "地址" : "Address");
+    if (!Array.isArray(item?.fileUrls) || item.fileUrls.length === 0) hints.push(locale === "th" ? "ไฟล์แนบ" : locale === "zh" ? "附件" : "Attachments");
+    return hints;
+  };
+
+  const getQualityScore = (item: any) => {
+    const checks = [
+      Boolean(String(item?.title || "").trim()),
+      Boolean(String(item?.propertyType || "").trim()),
+      Boolean(String(item?.listingType || "").trim()),
+      Boolean(String(item?.tier || "").trim()),
+      Number.isFinite(Number(item?.price)) && Number(item?.price) > 0,
+      Boolean(String(item?.province || "").trim()),
+      Boolean(String(item?.district || "").trim()),
+      Boolean(String(item?.subdistrict || "").trim()),
+      Boolean(String(item?.addressLine || "").trim()),
+      Array.isArray(item?.fileUrls) && item.fileUrls.length > 0,
+    ];
+    const passed = checks.filter(Boolean).length;
+    return Math.round((passed / checks.length) * 100);
+  };
+
+  const getPropertyMetrics = (propertyId: string) => {
+    const relevant = (propertyInquiries || []).filter(
+      (inquiry: any) => String(inquiry?.propertyId || "") === String(propertyId || ""),
+    );
+    const total = relevant.length;
+    const accepted = relevant.filter((inquiry: any) => ACCEPTED_STATUSES.has(String(inquiry?.status || "").toUpperCase())).length;
+    const meeting = relevant.filter((inquiry: any) => MEETING_STATUSES.has(String(inquiry?.status || "").toUpperCase())).length;
+    const completed = relevant.filter((inquiry: any) => String(inquiry?.status || "").toUpperCase() === "COMPLETED").length;
+    return {
+      total,
+      acceptedRate: toPercent(accepted, total),
+      meetingRate: toPercent(meeting, total),
+      completedRate: toPercent(completed, total),
+    };
   };
 
   const getFileKind = (url: string) => {
@@ -4860,6 +4945,8 @@ function PartnerProperties({ locale, prefix, properties }: { locale: string; pre
       district,
       subdistrict,
       addressLine,
+      latitude: toNumberOrUndefined(raw?.latitude ?? raw?.address?.latitude),
+      longitude: toNumberOrUndefined(raw?.longitude ?? raw?.address?.longitude),
       contactName: String(raw?.contactName || "").trim(),
       contactPhone: String(raw?.contactPhone || "").trim(),
       contactEmail: String(raw?.contactEmail || "").trim(),
@@ -4967,6 +5054,149 @@ function PartnerProperties({ locale, prefix, properties }: { locale: string; pre
     return normalizeImageUrl(raw) || raw;
   };
 
+  const buildPropertyPayload = (source: any, imageUrls: string[]) => {
+    const payload: any = {
+      title: String(source?.title || "").trim(),
+      description: String(source?.description || "").trim(),
+      propertyType: String(source?.propertyType || "").trim().toUpperCase(),
+      listingType: String(source?.listingType || "").trim().toUpperCase(),
+      tier: String(source?.tier || "STANDARD").trim().toUpperCase(),
+      status: String(source?.status || "ACTIVE").trim().toUpperCase(),
+      price: toNumberSafe(source?.price, 0),
+      area: toNumberOrUndefined(source?.area),
+      bedrooms: toNumberOrUndefined(source?.bedrooms),
+      bathrooms: toNumberOrUndefined(source?.bathrooms),
+      floors: toNumberOrUndefined(source?.floors),
+      yearBuilt: toNumberOrUndefined(source?.yearBuilt),
+      province: String(source?.province || "").trim(),
+      district: String(source?.district || "").trim(),
+      subdistrict: String(source?.subdistrict || "").trim(),
+      addressLine: String(source?.addressLine || "").trim(),
+      latitude: toNumberOrUndefined(source?.latitude),
+      longitude: toNumberOrUndefined(source?.longitude),
+      contactName: String(source?.contactName || "").trim(),
+      contactPhone: String(source?.contactPhone || "").trim(),
+      contactEmail: String(source?.contactEmail || "").trim(),
+      images: imageUrls.slice(0, MAX_FILES).map((url, idx) => ({
+        url,
+        key: `property/${String(source?.id || "new")}/file-${idx + 1}`,
+      })),
+    };
+
+    Object.keys(payload).forEach((key) => {
+      if (payload[key] === undefined) delete payload[key];
+    });
+
+    return payload;
+  };
+
+  const duplicateProperty = async (property: any) => {
+    const normalized = normalizePropertyItem(property);
+    let token = localStorage.getItem("subscriber_token") || "";
+    if (!token) {
+      alert(locale === "th" ? "กรุณาเข้าสู่ระบบใหม่" : locale === "zh" ? "请重新登录" : "Please log in again.");
+      return;
+    }
+
+    const payload = buildPropertyPayload(
+      {
+        ...normalized,
+        title:
+          locale === "th"
+            ? `${normalized.title} (คัดลอก)`
+            : locale === "zh"
+            ? `${normalized.title}（副本）`
+            : `${normalized.title} (Copy)`,
+        status: "DRAFT",
+      },
+      normalized.fileUrls,
+    );
+
+    const createReq = (authToken: string) =>
+      fetch("/api/v1/properties", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+    let res = await createReq(token);
+    if (!res.ok && [401, 403].includes(res.status)) {
+      const refreshedToken = await refreshSubscriberSession(token);
+      if (refreshedToken) {
+        token = refreshedToken;
+        res = await createReq(token);
+      }
+    }
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      alert(
+        String(err?.message || "") ||
+          (locale === "th"
+            ? "ไม่สามารถคัดลอกประกาศได้"
+            : locale === "zh"
+            ? "无法复制房源"
+            : "Could not duplicate this listing."),
+      );
+      return;
+    }
+
+    const created = await res.json().catch(() => null);
+    const normalizedCreated = normalizePropertyItem(created || payload);
+    setItems((prev) => [normalizedCreated, ...prev]);
+  };
+
+  const togglePropertyStatus = async (property: any) => {
+    const normalized = normalizePropertyItem(property);
+    const nextStatus = normalized.status === "ACTIVE" ? "DRAFT" : "ACTIVE";
+    let token = localStorage.getItem("subscriber_token") || "";
+    if (!token || !normalized.id) {
+      alert(locale === "th" ? "กรุณาเข้าสู่ระบบใหม่" : locale === "zh" ? "请重新登录" : "Please log in again.");
+      return;
+    }
+
+    const updateReq = (authToken: string) =>
+      fetch(`/api/v1/properties/${normalized.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+
+    let res = await updateReq(token);
+    if (!res.ok && [401, 403].includes(res.status)) {
+      const refreshedToken = await refreshSubscriberSession(token);
+      if (refreshedToken) {
+        token = refreshedToken;
+        res = await updateReq(token);
+      }
+    }
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      alert(
+        String(err?.message || "") ||
+          (locale === "th"
+            ? "ไม่สามารถเปลี่ยนสถานะประกาศได้"
+            : locale === "zh"
+            ? "无法切换房源状态"
+            : "Could not change listing status."),
+      );
+      return;
+    }
+
+    const updated = await res.json().catch(() => null);
+    const normalizedUpdated = normalizePropertyItem(updated || { ...normalized, status: nextStatus });
+    setItems((prev) => prev.map((item) => (item.id === normalizedUpdated.id ? normalizedUpdated : item)));
+    setViewing((prev: any) => (prev?.id === normalizedUpdated.id ? normalizedUpdated : prev));
+    setEditing((prev: any) => (prev?.id === normalizedUpdated.id ? { ...prev, status: normalizedUpdated.status } : prev));
+  };
+
   const openDetail = (property: any) => {
     setViewing(normalizePropertyItem(property));
     setSaveError("");
@@ -4999,6 +5229,30 @@ function PartnerProperties({ locale, prefix, properties }: { locale: string; pre
       return;
     }
 
+    const complianceHints = getComplianceHints({
+      ...editing,
+      fileUrls: [
+        ...(Array.isArray(editing.existingFiles) ? editing.existingFiles : []),
+        ...(Array.isArray(editing.newFiles) ? editing.newFiles : []),
+      ],
+    });
+    if (complianceHints.length > 0) {
+      const proceed = confirm(
+        (locale === "th"
+          ? "แจ้งเตือนความครบถ้วนก่อนอัปเดต:\n"
+          : locale === "zh"
+          ? "更新前合规提醒:\n"
+          : "Compliance warning before update:\n") +
+          `- ${complianceHints.join("\n- ")}\n\n` +
+          (locale === "th"
+            ? "ต้องการบันทึกต่อหรือไม่?"
+            : locale === "zh"
+            ? "是否继续保存？"
+            : "Do you want to continue saving?"),
+      );
+      if (!proceed) return;
+    }
+
     setSaving(true);
     setSaveError("");
     try {
@@ -5017,34 +5271,15 @@ function PartnerProperties({ locale, prefix, properties }: { locale: string; pre
       const preparedNewFiles = await Promise.all(pickedFiles.map((f) => convertFileForUpload(f)));
       const mergedUrls = Array.from(new Set([...existingFiles, ...preparedNewFiles.filter(Boolean)])).slice(0, MAX_FILES);
 
-      const payload: any = {
-        title,
-        description: String(editing.description || "").trim(),
-        propertyType,
-        listingType,
-        tier: String(editing.tier || "STANDARD").trim().toUpperCase(),
-        price: toNumberSafe(editing.price, 0),
-        area: toNumberOrUndefined(editing.area),
-        bedrooms: toNumberOrUndefined(editing.bedrooms),
-        bathrooms: toNumberOrUndefined(editing.bathrooms),
-        floors: toNumberOrUndefined(editing.floors),
-        yearBuilt: toNumberOrUndefined(editing.yearBuilt),
-        province: String(editing.province || "").trim(),
-        district: String(editing.district || "").trim(),
-        subdistrict: String(editing.subdistrict || "").trim(),
-        addressLine: String(editing.addressLine || "").trim(),
-        contactName: String(editing.contactName || "").trim(),
-        contactPhone: String(editing.contactPhone || "").trim(),
-        contactEmail: String(editing.contactEmail || "").trim(),
-        images: mergedUrls.map((url, idx) => ({
-          url,
-          key: `property/${editing.id}/file-${idx + 1}`,
-        })),
-      };
-
-      Object.keys(payload).forEach((key) => {
-        if (payload[key] === undefined) delete payload[key];
-      });
+      const payload = buildPropertyPayload(
+        {
+          ...editing,
+          title,
+          propertyType,
+          listingType,
+        },
+        mergedUrls,
+      );
 
       const updateReq = (authToken: string) =>
         fetch(`/api/v1/properties/${editing.id}`, {
@@ -5140,9 +5375,18 @@ function PartnerProperties({ locale, prefix, properties }: { locale: string; pre
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
-        <h2 className="font-bold text-gray-900 flex items-center gap-2">
-          {locale === "th" ? "อสังหาริมทรัพย์ของคุณ" : locale === "zh" ? "您的房产" : "Your Properties"}
-        </h2>
+        <div>
+          <h2 className="font-bold text-gray-900 flex items-center gap-2">
+            {locale === "th" ? "อสังหาริมทรัพย์ของคุณ" : locale === "zh" ? "您的房产" : "Your Properties"}
+          </h2>
+          <p className="text-xs text-gray-500 mt-1">
+            {locale === "th"
+              ? `แสดงทั้งหมด ${items.length} รายการ`
+              : locale === "zh"
+              ? `共显示 ${items.length} 条`
+              : `Showing all ${items.length} listings`}
+          </p>
+        </div>
         <Link href={`${prefix}/properties/register`} className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition whitespace-nowrap">
           {locale === "th" ? "ลงประกาศใหม่" : locale === "zh" ? "发布新房源" : "List New"}
         </Link>
@@ -5150,94 +5394,229 @@ function PartnerProperties({ locale, prefix, properties }: { locale: string; pre
 
       <div className="divide-y divide-gray-50">
         {items.length > 0 ? (
-          items.map((p: any) => (
-            <div key={p.id} className="p-6 hover:bg-gray-50/50 transition cursor-pointer" onClick={() => openDetail(p)}>
-              <div className="flex items-center gap-4 mb-4">
-                <div className="w-16 h-16 rounded-xl overflow-hidden bg-teal-100 border border-teal-100 shrink-0">
-                  <img
-                    src={p.primaryImage || "/images/scenic-house.jpg"}
-                    alt={p.title || "Property"}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-start gap-3">
-                    <div className="min-w-0">
-                      <h3 className="font-bold text-gray-900 truncate">{locale === "th" ? p.titleTh : locale === "zh" ? p.titleZh : p.title}</h3>
-                      <p className="text-sm text-gray-500 mt-1 truncate">{p.location} &middot; ฿{Number(p.price || 0).toLocaleString()}</p>
-                      <p className="text-xs text-gray-400 mt-1 truncate">
-                        {propertyTypeLabel(p.propertyType)} &middot; {listingLabel(p.listingType)} &middot; {p.fileUrls.length} {locale === "th" ? "ไฟล์" : locale === "zh" ? "文件" : "files"}
-                      </p>
+          items.map((p: any) => {
+            const metrics = getPropertyMetrics(p.id);
+            const qualityScore = getQualityScore(p);
+            const complianceHints = getComplianceHints(p);
+            const mapCoordinates =
+              Number.isFinite(Number(p.latitude)) && Number.isFinite(Number(p.longitude))
+                ? `${Number(p.latitude).toFixed(6)}, ${Number(p.longitude).toFixed(6)}`
+                : "-";
+
+            return (
+              <div key={p.id} className="p-6 hover:bg-gray-50/50 transition cursor-pointer" onClick={() => openDetail(p)}>
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-16 h-16 rounded-xl overflow-hidden bg-teal-100 border border-teal-100 shrink-0">
+                    <img
+                      src={p.primaryImage || "/images/scenic-house.jpg"}
+                      alt={p.title || "Property"}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-start gap-3">
+                      <div className="min-w-0">
+                        <h3 className="font-bold text-gray-900 truncate">
+                          {locale === "th" ? p.titleTh : locale === "zh" ? p.titleZh : p.title}
+                          <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 align-middle">{tierLabel(p.tier)}</span>
+                        </h3>
+                        <p className="text-sm text-gray-500 mt-1 truncate">{p.location} &middot; ฿{Number(p.price || 0).toLocaleString()}</p>
+                        <p className="text-xs text-gray-400 mt-1 truncate">
+                          {propertyTypeLabel(p.propertyType)} &middot; {listingLabel(p.listingType)} &middot; {p.fileUrls.length} {locale === "th" ? "ไฟล์" : locale === "zh" ? "文件" : "files"}
+                        </p>
+                      </div>
+                      <span className={`text-xs px-3 py-1 rounded-full font-bold ${p.status === "ACTIVE" || p.status === "CREATED" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                        {p.status}
+                      </span>
                     </div>
-                    <span className={`text-xs px-3 py-1 rounded-full font-bold ${p.status === "ACTIVE" || p.status === "CREATED" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
-                      {p.status}
-                    </span>
                   </div>
                 </div>
-              </div>
 
-              <div className="flex items-center gap-3 text-sm mt-4 pt-4 border-t border-gray-100">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openDetail(p);
-                  }}
-                  className="px-4 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-700 font-semibold rounded-lg transition"
-                >
-                  {locale === "th" ? "ดูรายละเอียด" : locale === "zh" ? "查看详情" : "Details"}
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openEdit(p);
-                  }}
-                  className="px-4 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-lg transition"
-                >
-                  {locale === "th" ? "แก้ไข" : locale === "zh" ? "编辑" : "Edit"}
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeProperty(p.id);
-                  }}
-                  disabled={removingId === p.id}
-                  className="ml-auto px-4 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {removingId === p.id
-                    ? locale === "th"
-                      ? "กำลังลบ..."
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-3">
+                  <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-wide text-gray-500">{locale === "th" ? "สถานะ" : locale === "zh" ? "状态" : "Status"}</p>
+                    <p className="text-xs font-semibold text-gray-900 mt-1">{p.status}</p>
+                  </div>
+                  <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-wide text-gray-500">{locale === "th" ? "อัปเดตล่าสุด" : locale === "zh" ? "最近更新" : "Last updated"}</p>
+                    <p className="text-xs font-semibold text-gray-900 mt-1">{toDisplayDateTime(p.updatedAt || p.createdAt)}</p>
+                  </div>
+                  <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-wide text-gray-500">{locale === "th" ? "การมองเห็น" : locale === "zh" ? "可见性" : "Visibility"}</p>
+                    <p className="text-xs font-semibold text-gray-900 mt-1">{getVisibilityLabel(p.status)}</p>
+                  </div>
+                  <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-wide text-gray-500">{locale === "th" ? "คะแนนคุณภาพ" : locale === "zh" ? "质量评分" : "Quality score"}</p>
+                    <p className="text-xs font-semibold text-gray-900 mt-1">{qualityScore}%</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-3">
+                  <div className="rounded-md border border-sky-100 bg-sky-50 px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-wide text-sky-700">{locale === "th" ? "จำนวนคำขอ" : locale === "zh" ? "询盘数" : "Inquiries"}</p>
+                    <p className="text-xs font-semibold text-sky-900 mt-1">{metrics.total}</p>
+                  </div>
+                  <div className="rounded-md border border-sky-100 bg-sky-50 px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-wide text-sky-700">{locale === "th" ? "อัตราตอบรับ" : locale === "zh" ? "接受率" : "Accept rate"}</p>
+                    <p className="text-xs font-semibold text-sky-900 mt-1">{metrics.acceptedRate}%</p>
+                  </div>
+                  <div className="rounded-md border border-sky-100 bg-sky-50 px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-wide text-sky-700">{locale === "th" ? "แปลงเป็นนัดหมาย" : locale === "zh" ? "会面转化" : "Meeting conversion"}</p>
+                    <p className="text-xs font-semibold text-sky-900 mt-1">{metrics.meetingRate}%</p>
+                  </div>
+                  <div className="rounded-md border border-sky-100 bg-sky-50 px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-wide text-sky-700">{locale === "th" ? "แปลงเป็นสำเร็จ" : locale === "zh" ? "完成转化" : "Completed conversion"}</p>
+                    <p className="text-xs font-semibold text-sky-900 mt-1">{metrics.completedRate}%</p>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-gray-200 p-3 mb-3 bg-white">
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <p className="text-xs font-semibold text-gray-600 uppercase">{locale === "th" ? "สื่อพอร์ตโฟลิโอ" : locale === "zh" ? "媒体资料" : "Portfolio media"}</p>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-gray-500">{p.fileUrls.length} {locale === "th" ? "ไฟล์" : locale === "zh" ? "个文件" : "attachments"}</span>
+                      <button
+                        type="button"
+                        className="text-xs font-semibold text-sky-700 hover:text-sky-800"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const downloaded = await downloadAttachmentUrls({ urls: p.fileUrls, prefix: "property-file" });
+                          if (!downloaded) {
+                            alert(locale === "th" ? "ไม่พบไฟล์ที่ดาวน์โหลดได้" : locale === "zh" ? "未找到可下载文件" : "No downloadable file found.");
+                          }
+                        }}
+                      >
+                        {locale === "th" ? "ดาวน์โหลดทั้งหมด" : locale === "zh" ? "下载全部" : "Download all"}
+                      </button>
+                    </div>
+                  </div>
+                  {p.fileUrls.length > 0 ? (
+                    <div className="flex gap-2 overflow-x-auto pb-1">
+                      {p.fileUrls.slice(0, 6).map((fileUrl: string, index: number) => {
+                        const kind = getFileKind(fileUrl);
+                        return kind === "image" ? (
+                          <img key={`${fileUrl}-${index}`} src={fileUrl} alt="property media" className="w-14 h-14 rounded-md object-cover border border-gray-200 shrink-0" />
+                        ) : (
+                          <div key={`${fileUrl}-${index}`} className="w-14 h-14 rounded-md border border-gray-200 bg-gray-50 shrink-0 flex items-center justify-center text-[10px] font-bold text-gray-600">
+                            {kind === "pdf" ? "PDF" : "FILE"}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-500">{locale === "th" ? "ยังไม่มีไฟล์แนบ" : locale === "zh" ? "暂无附件" : "No attachments yet."}</p>
+                  )}
+                </div>
+
+                <div className="rounded-lg border border-gray-200 p-3 mb-3 bg-white">
+                  <p className="text-xs font-semibold text-gray-600 uppercase mb-2">{locale === "th" ? "ตำแหน่งโครงการ" : locale === "zh" ? "位置信息" : "Location clarity"}</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-gray-700">
+                    <p><span className="text-gray-500">{locale === "th" ? "จังหวัด" : locale === "zh" ? "省份" : "Province"}:</span> {p.province || "-"}</p>
+                    <p><span className="text-gray-500">{locale === "th" ? "เขต/อำเภอ" : locale === "zh" ? "区/县" : "District"}:</span> {p.district || "-"}</p>
+                    <p><span className="text-gray-500">{locale === "th" ? "แขวง/ตำบล" : locale === "zh" ? "街道/分区" : "Subdistrict"}:</span> {p.subdistrict || "-"}</p>
+                    <p><span className="text-gray-500">{locale === "th" ? "พิกัดแผนที่" : locale === "zh" ? "坐标" : "Map coordinates"}:</span> {mapCoordinates}</p>
+                  </div>
+                  <p className="text-xs text-gray-700 mt-2"><span className="text-gray-500">{locale === "th" ? "ที่อยู่เต็ม" : locale === "zh" ? "完整地址" : "Full address"}:</span> {p.addressLine || "-"}</p>
+                </div>
+
+                {complianceHints.length > 0 && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 mb-3">
+                    <span className="font-semibold">{locale === "th" ? "คำเตือนก่อนเผยแพร่/อัปเดต:" : locale === "zh" ? "发布/更新前提醒:" : "Pre-publish/update warning:"}</span>{" "}
+                    {complianceHints.join(", ")}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center gap-2 text-sm mt-4 pt-4 border-t border-gray-100">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openDetail(p);
+                    }}
+                    className="px-4 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-700 font-semibold rounded-lg transition"
+                  >
+                    {locale === "th" ? "ดูรายละเอียด" : locale === "zh" ? "查看详情" : "Details"}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openEdit(p);
+                    }}
+                    className="px-4 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-lg transition"
+                  >
+                    {locale === "th" ? "แก้ไข" : locale === "zh" ? "编辑" : "Edit"}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void duplicateProperty(p);
+                    }}
+                    className="px-4 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold rounded-lg transition"
+                  >
+                    {locale === "th" ? "ทำซ้ำ" : locale === "zh" ? "复制" : "Duplicate"}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void togglePropertyStatus(p);
+                    }}
+                    className="px-4 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold rounded-lg transition"
+                  >
+                    {String(p.status || "").toUpperCase() === "ACTIVE"
+                      ? locale === "th"
+                        ? "หยุดแสดง"
+                        : locale === "zh"
+                        ? "暂停"
+                        : "Pause"
+                      : locale === "th"
+                      ? "เปิดใช้งาน"
                       : locale === "zh"
-                      ? "删除中..."
-                      : "Removing..."
-                    : locale === "th"
-                    ? "ลบ"
-                    : locale === "zh"
-                    ? "删除"
-                    : "Delete"}
-                </button>
+                      ? "启用"
+                      : "Activate"}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeProperty(p.id);
+                    }}
+                    disabled={removingId === p.id}
+                    className="ml-auto px-4 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {removingId === p.id
+                      ? locale === "th"
+                        ? "กำลังลบ..."
+                        : locale === "zh"
+                        ? "删除中..."
+                        : "Removing..."
+                      : locale === "th"
+                      ? "ลบ"
+                      : locale === "zh"
+                      ? "删除"
+                      : "Delete"}
+                  </button>
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         ) : (
           <p className="text-sm text-gray-500 p-6 text-center">{locale === "th" ? "ไม่มีประกาศอสังหาริมทรัพย์" : locale === "zh" ? "没有房产列表" : "No properties listed"}</p>
         )}
       </div>
 
       {viewing && (
-        <div className="fixed inset-0 z-[80] bg-black/60 flex items-start justify-center p-4 pt-10 sm:pt-12">
+        <div className="fixed inset-0 z-[80] bg-black/60 flex items-start justify-center p-4 pt-14 sm:pt-16">
           <div className="relative w-full max-w-4xl max-h-[92vh] overflow-hidden bg-white rounded-2xl shadow-xl border border-gray-200">
             <button
               type="button"
               onClick={() => setViewing(null)}
               aria-label="Close"
-              className="absolute right-4 top-4 h-8 w-8 rounded-full bg-white text-gray-600 shadow-md hover:text-gray-900"
+              className="absolute right-4 top-4 z-20 h-8 w-8 rounded-full border border-gray-200 bg-white text-gray-600 shadow-md hover:text-gray-900"
             >
               ✕
             </button>
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <h3 className="font-bold text-gray-900 truncate">{locale === "th" ? viewing.titleTh : locale === "zh" ? viewing.titleZh : viewing.title}</h3>
-                <p className="text-xs text-gray-500 mt-1">{propertyTypeLabel(viewing.propertyType)} &middot; {listingLabel(viewing.listingType)} &middot; {viewing.status}</p>
+                <p className="text-xs text-gray-500 mt-1">{tierLabel(viewing.tier)} &middot; {propertyTypeLabel(viewing.propertyType)} &middot; {listingLabel(viewing.listingType)} &middot; {viewing.status}</p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <button onClick={() => openEdit(viewing)} className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-lg transition">
@@ -5268,8 +5647,19 @@ function PartnerProperties({ locale, prefix, properties }: { locale: string; pre
               </div>
 
               <div className="rounded-lg border border-gray-200 p-4">
-                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">{locale === "th" ? "ที่อยู่" : locale === "zh" ? "地址" : "Location"}</p>
-                <p className="text-sm text-gray-800">{viewing.location || "-"}</p>
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">{locale === "th" ? "ตำแหน่งโครงการ" : locale === "zh" ? "位置信息" : "Location clarity"}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-800">
+                  <p><span className="text-gray-500">{locale === "th" ? "จังหวัด" : locale === "zh" ? "省份" : "Province"}:</span> {viewing.province || "-"}</p>
+                  <p><span className="text-gray-500">{locale === "th" ? "เขต/อำเภอ" : locale === "zh" ? "区/县" : "District"}:</span> {viewing.district || "-"}</p>
+                  <p><span className="text-gray-500">{locale === "th" ? "แขวง/ตำบล" : locale === "zh" ? "街道/分区" : "Subdistrict"}:</span> {viewing.subdistrict || "-"}</p>
+                  <p>
+                    <span className="text-gray-500">{locale === "th" ? "พิกัดแผนที่" : locale === "zh" ? "坐标" : "Map coordinates"}:</span>{" "}
+                    {Number.isFinite(Number(viewing.latitude)) && Number.isFinite(Number(viewing.longitude))
+                      ? `${Number(viewing.latitude).toFixed(6)}, ${Number(viewing.longitude).toFixed(6)}`
+                      : "-"}
+                  </p>
+                </div>
+                <p className="text-sm text-gray-800 mt-2"><span className="text-gray-500">{locale === "th" ? "ที่อยู่เต็ม" : locale === "zh" ? "完整地址" : "Full address"}:</span> {viewing.addressLine || "-"}</p>
               </div>
 
               <div className="rounded-lg border border-gray-200 p-4">
@@ -5339,13 +5729,13 @@ function PartnerProperties({ locale, prefix, properties }: { locale: string; pre
       )}
 
       {editing && (
-        <div className="fixed inset-0 z-[80] bg-black/60 flex items-start justify-center p-4 pt-10 sm:pt-12">
+        <div className="fixed inset-0 z-[80] bg-black/60 flex items-start justify-center p-4 pt-14 sm:pt-16">
           <div className="relative w-full max-w-4xl max-h-[92vh] overflow-hidden bg-white rounded-2xl shadow-xl border border-gray-200">
             <button
               type="button"
               onClick={() => setEditing(null)}
               aria-label="Close"
-              className="absolute right-4 top-4 h-8 w-8 rounded-full bg-white text-gray-600 shadow-md hover:text-gray-900"
+              className="absolute right-4 top-4 z-20 h-8 w-8 rounded-full border border-gray-200 bg-white text-gray-600 shadow-md hover:text-gray-900"
             >
               ✕
             </button>
@@ -5358,6 +5748,23 @@ function PartnerProperties({ locale, prefix, properties }: { locale: string; pre
               {saveError && (
                 <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{saveError}</div>
               )}
+
+              {(() => {
+                const hints = getComplianceHints({
+                  ...editing,
+                  fileUrls: [
+                    ...(Array.isArray(editing.existingFiles) ? editing.existingFiles : []),
+                    ...(Array.isArray(editing.newFiles) ? editing.newFiles : []),
+                  ],
+                });
+                if (hints.length === 0) return null;
+                return (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                    <span className="font-semibold">{locale === "th" ? "คำเตือนก่อนเผยแพร่/อัปเดต:" : locale === "zh" ? "发布/更新前提醒:" : "Pre-publish/update warning:"}</span>{" "}
+                    {hints.join(", ")}
+                  </div>
+                );
+              })()}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="sm:col-span-2">

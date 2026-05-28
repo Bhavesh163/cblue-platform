@@ -12,6 +12,7 @@ interface PropertyDetail {
   description: string;
   propertyType: string;
   listingType: string;
+  tier?: string | null;
   price: number;
   area: number | null;
   bedrooms: number | null;
@@ -165,6 +166,19 @@ export default function PropertyDetailPage() {
     return locale === "th" ? fallback.th : locale === "zh" ? fallback.zh : fallback.en;
   };
 
+  const getTierLabel = (tier: string | null | undefined) => {
+    const upper = String(tier || "STANDARD").toUpperCase();
+    const labels: Record<string, { en: string; th: string; zh: string }> = {
+      ECONOMY: { en: "Economy", th: "ประหยัด", zh: "经济" },
+      STANDARD: { en: "Standard", th: "มาตรฐาน", zh: "标准" },
+      UPPER: { en: "Upper", th: "ระดับสูง", zh: "高阶" },
+      LUXURY: { en: "Luxury", th: "ลักชัวรี", zh: "豪华" },
+      GRANDEUR: { en: "Grandeur", th: "พรีเมียม", zh: "尊享" },
+    };
+    const selected = labels[upper] || { en: upper, th: upper, zh: upper };
+    return locale === "th" ? selected.th : locale === "zh" ? selected.zh : selected.en;
+  };
+
   useEffect(() => {
     async function load() {
       try {
@@ -210,6 +224,11 @@ export default function PropertyDetailPage() {
     );
   }
 
+  const siteLocation = getPropertySiteLocation(property);
+  const contactDisplayName =
+    String(property.contactName || "CBLUE Lister").trim().split(/\s+/)[0] ||
+    "CBLUE";
+
   return (
     <div className="bg-gray-50 min-h-screen">
       {/* Image Gallery */}
@@ -250,6 +269,9 @@ export default function PropertyDetailPage() {
                   </span>
                   <span className="text-sm text-gray-500">
                     {getPropertyTypeLabel(property.propertyType)}
+                  </span>
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700">
+                    {locale === "th" ? "ระดับ" : locale === "zh" ? "等级" : "Tier"}: {getTierLabel(property.tier)}
                   </span>
                 </div>
                 <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{property.title}</h1>
@@ -306,16 +328,8 @@ export default function PropertyDetailPage() {
                 </h2>
                 <div className="text-gray-700 space-y-1">
                   <p>
-                    {locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}: {getPropertySiteLocation(property)}
+                    {locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}: {siteLocation}
                   </p>
-                  {property.addressLine && <p>{property.addressLine}</p>}
-                  <p>{[
-                      cleanLocationPart(property.subdistrict),
-                      cleanLocationPart(property.district),
-                      cleanLocationPart(property.province),
-                    ]
-                      .filter(Boolean)
-                      .join(", ")}</p>
                   {property.postalCode && <p>{property.postalCode}</p>}
                 </div>
               </div>
@@ -325,10 +339,7 @@ export default function PropertyDetailPage() {
             <div>
               <div className="bg-white rounded-xl border border-gray-200 p-6 sticky top-24 space-y-4">
                 <h3 className="font-semibold text-gray-900">{t("contactName")}</h3>
-                <p className="text-gray-700">{property.contactName || "CBLUE Lister"}</p>
-                <p className="text-xs text-gray-500">
-                  {locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}: {getPropertySiteLocation(property)}
-                </p>
+                <p className="text-gray-700">{contactDisplayName}</p>
                 <Link
                   href={`${prefix}/properties?contact=${encodeURIComponent(property.id)}`}
                   className="block w-full py-3 text-center text-sm font-semibold text-white bg-green-700 hover:bg-green-800 rounded-xl transition"
