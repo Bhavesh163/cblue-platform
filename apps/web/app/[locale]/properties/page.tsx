@@ -460,6 +460,42 @@ function PropertiesPageContent() {
   const TIER_FEES: Record<string, number> = { ECONOMY: 100, STANDARD: 400, UPPER: 600, LUXURY: 800, GRANDEUR: 1000 };
   const TIER_LABELS: Record<string, string> = { ECONOMY: "Economy", STANDARD: "Standard", UPPER: "Upper", LUXURY: "Luxury", GRANDEUR: "Grandeur" };
 
+  const getTierLabel = (tier: string | null | undefined) => {
+    const key = String(tier || "STANDARD").toUpperCase();
+    const fallback = TIER_LABELS[key] || "Standard";
+    if (locale === "th") {
+      const thaiLabels: Record<string, string> = {
+        ECONOMY: "ประหยัด",
+        STANDARD: "มาตรฐาน",
+        UPPER: "ระดับสูง",
+        LUXURY: "ลักชัวรี",
+        GRANDEUR: "พรีเมียม",
+      };
+      return thaiLabels[key] || fallback;
+    }
+    if (locale === "zh") {
+      const chineseLabels: Record<string, string> = {
+        ECONOMY: "经济",
+        STANDARD: "标准",
+        UPPER: "高阶",
+        LUXURY: "豪华",
+        GRANDEUR: "尊享",
+      };
+      return chineseLabels[key] || fallback;
+    }
+    return fallback;
+  };
+
+  const getTierBadgeStyle = (tier: string | null | undefined) => {
+    const key = String(tier || "STANDARD").toUpperCase();
+    if (key === "ECONOMY") return "bg-emerald-100 text-emerald-700";
+    if (key === "STANDARD") return "bg-sky-100 text-sky-700";
+    if (key === "UPPER") return "bg-indigo-100 text-indigo-700";
+    if (key === "LUXURY") return "bg-amber-100 text-amber-700";
+    if (key === "GRANDEUR") return "bg-rose-100 text-rose-700";
+    return "bg-gray-100 text-gray-700";
+  };
+
 
 
   const typeKeys: Record<string, string> = {
@@ -1038,6 +1074,9 @@ function PropertiesPageContent() {
                       <span className="text-xs text-gray-500">
                         {getPropertyTypeLabel(prop.propertyType)}
                       </span>
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${getTierBadgeStyle(prop.tier)}`}>
+                        {getTierLabel(prop.tier)}
+                      </span>
                     </div>
                     <h3 className="font-semibold text-gray-900 line-clamp-1">{prop.title}</h3>
                     <p className="text-lg font-bold text-green-700 mt-1">
@@ -1133,6 +1172,9 @@ function PropertiesPageContent() {
                             </span>
                             <span className="text-xs text-gray-500">
                               {getPropertyTypeLabel(prop.propertyType)}
+                            </span>
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${getTierBadgeStyle(prop.tier)}`}>
+                              {getTierLabel(prop.tier)}
                             </span>
                           </div>
                           <h3 className="font-semibold text-gray-900 text-sm line-clamp-1">{prop.title}</h3>

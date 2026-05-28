@@ -2012,8 +2012,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         po: p.poNumber,
         title: p.propertyTitle,
         service: p.propertyTitle,
-        fixerAlias: p.listerName,
-        partnerName: p.listerName,
+        fixerAlias: firstNameOnly(p.listerName, 'Lister'),
+        partnerName: firstNameOnly(p.listerName, 'Lister'),
         location: siteLocation,
         subdistrict: p.subdistrict || p.district || p.province,
         budget: toCurrencyLabel(p.propertyPrice),
@@ -2642,7 +2642,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-lg">🏠</div>
             <div>
               <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {p.poNumber} · Step 5 of 8</span></h3>
-              <p className="text-sm text-gray-600 mt-0.5">{p.listerName} · {getPropSiteLocation(p)}</p>
+              <p className="text-sm text-gray-600 mt-0.5">{firstNameOnly(p.listerName, 'Lister')} · {getPropSiteLocation(p)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "อัปเดตเมื่อ" : locale === "zh" ? "更新时间" : "Updated"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "ผู้ลงประกาศยืนยันแล้ว — ชำระค่าดำเนินการเพื่อรับข้อมูลติดต่อ" : locale === "zh" ? "房源方已确认 — 支付处理费以获取联系方式" : "Lister accepted — pay the processing fee to get contact info"}</p>
             </div>
@@ -2669,7 +2669,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div className="w-10 h-10 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center font-bold text-lg">📅</div>
             <div>
               <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {p.poNumber} · Step 7 of 8</span></h3>
-              <p className="text-sm text-gray-600 mt-0.5">{p.listerName} · {getPropSiteLocation(p)}</p>
+              <p className="text-sm text-gray-600 mt-0.5">{firstNameOnly(p.listerName, 'Lister')} · {getPropSiteLocation(p)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "อัปเดตเมื่อ" : locale === "zh" ? "更新时间" : "Updated"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "ชำระแล้ว — ส่งคำเชิญนัดหมายเพื่อเยี่ยมชมทรัพย์สิน" : locale === "zh" ? "已付款 — 发送会议邀请以预约参观" : "Fee paid — send a meeting invitation to schedule a property viewing"}</p>
             </div>
@@ -2693,7 +2693,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div className="w-10 h-10 rounded-lg bg-yellow-50 text-yellow-600 flex items-center justify-center font-bold text-lg">⭐</div>
             <div>
               <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {p.poNumber} · Step 8 of 8</span></h3>
-              <p className="text-sm text-gray-600 mt-0.5">{p.listerName} · {getPropSiteLocation(p)}</p>
+              <p className="text-sm text-gray-600 mt-0.5">{firstNameOnly(p.listerName, 'Lister')} · {getPropSiteLocation(p)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "อัปเดตเมื่อ" : locale === "zh" ? "更新时间" : "Updated"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "นัดหมายยืนยันแล้ว — ให้คะแนนเพื่อปิดงาน" : locale === "zh" ? "会议已确认 — 评分以结案" : "Meeting confirmed — rate to close this inquiry"}</p>
             </div>
@@ -2841,7 +2841,155 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       return map;
     }, new Map<string, any>()).values(),
   ).sort((a: any, b: any) => parseDateMs(b.completedAt || b.statusChangedAt || b.createdAt || b.date) - parseDateMs(a.completedAt || a.statusChangedAt || a.createdAt || a.date));
-  const propertiesCount = orders ? orders.filter((o: any) => o.type === "property").length : 0;
+  const getPropertyTierStyle = (tier: string | null | undefined) => {
+    const upper = String(tier || 'STANDARD').toUpperCase();
+    if (upper === 'ECONOMY') return 'bg-emerald-100 text-emerald-700';
+    if (upper === 'STANDARD') return 'bg-sky-100 text-sky-700';
+    if (upper === 'UPPER') return 'bg-indigo-100 text-indigo-700';
+    if (upper === 'LUXURY') return 'bg-amber-100 text-amber-700';
+    if (upper === 'GRANDEUR') return 'bg-rose-100 text-rose-700';
+    return 'bg-gray-100 text-gray-700';
+  };
+
+  const getPropertyTypeLabel = (propertyType: string | null | undefined) => {
+    const upper = String(propertyType || '').toUpperCase();
+    if (upper === 'CONDO') return locale === 'th' ? 'คอนโด' : locale === 'zh' ? '公寓' : 'Condo';
+    if (upper === 'HOUSE') return locale === 'th' ? 'บ้าน' : locale === 'zh' ? '别墅' : 'House';
+    if (upper === 'TOWNHOUSE') return locale === 'th' ? 'ทาวน์เฮาส์' : locale === 'zh' ? '联排别墅' : 'Townhouse';
+    if (upper === 'LAND') return locale === 'th' ? 'ที่ดิน' : locale === 'zh' ? '土地' : 'Land';
+    if (upper === 'COMMERCIAL') return locale === 'th' ? 'อาคารพาณิชย์' : locale === 'zh' ? '商业' : 'Commercial';
+    if (upper === 'OFFICE') return locale === 'th' ? 'ออฟฟิศ' : locale === 'zh' ? '办公室' : 'Office';
+    if (upper === 'WAREHOUSE') return locale === 'th' ? 'โกดัง' : locale === 'zh' ? '仓库' : 'Warehouse';
+    if (upper === 'SHOPHOUSE') return locale === 'th' ? 'ตึกแถว' : locale === 'zh' ? '商铺' : 'Shophouse';
+    if (upper === 'APARTMENT') return locale === 'th' ? 'อพาร์ตเมนต์' : locale === 'zh' ? '公寓楼' : 'Apartment';
+    return upper || '-';
+  };
+
+  const getListingTypeLabel = (listingType: string | null | undefined) => {
+    const upper = String(listingType || '').toUpperCase();
+    if (upper === 'SALE') return locale === 'th' ? 'ขาย' : locale === 'zh' ? '出售' : 'Sale';
+    if (upper === 'RENT') return locale === 'th' ? 'เช่า' : locale === 'zh' ? '出租' : 'Rent';
+    return upper || '-';
+  };
+
+  const getPropertyFlowSnapshot = (inquiry: PropInquiry) => {
+    const status = String(inquiry.status || '').toUpperCase();
+    if (status === 'NOTIFY_SENT') {
+      return {
+        label: locale === 'th' ? 'รอยืนยัน' : locale === 'zh' ? '等待确认' : 'Waiting',
+        badge: 'bg-amber-100 text-amber-700',
+        stepText: 'Step 4 of 8',
+        nextAction: locale === 'th' ? 'รอผู้ลงประกาศตอบรับคำขอ' : locale === 'zh' ? '等待房源方接受请求' : 'Wait for lister acceptance',
+        responsible: locale === 'th' ? 'ผู้ลงประกาศ' : locale === 'zh' ? '房源方' : 'Lister',
+        actionNeeded: false,
+      };
+    }
+    if (status === 'ACCEPTED') {
+      return {
+        label: locale === 'th' ? 'รอชำระ' : locale === 'zh' ? '待支付' : 'Payment Pending',
+        badge: 'bg-emerald-100 text-emerald-700',
+        stepText: 'Step 5 of 8',
+        nextAction: locale === 'th' ? 'กด Testing period - Free Pass เพื่อไปขั้นตอนถัดไป' : locale === 'zh' ? '点击 Testing period - Free Pass 继续流程' : 'Click Testing period - Free Pass to proceed',
+        responsible: locale === 'th' ? 'คุณ' : locale === 'zh' ? '您' : 'You',
+        actionNeeded: true,
+      };
+    }
+    if (status === 'PAID') {
+      return {
+        label: locale === 'th' ? 'พร้อมนัดหมาย' : locale === 'zh' ? '可发送会面邀请' : 'Ready for Meeting Invite',
+        badge: 'bg-teal-100 text-teal-700',
+        stepText: 'Step 7 of 8',
+        nextAction: locale === 'th' ? 'ส่งคำเชิญนัดหมายหน้างานให้ผู้ลงประกาศ' : locale === 'zh' ? '向房源方发送现场会面邀请' : 'Send a site meeting invitation to lister',
+        responsible: locale === 'th' ? 'คุณ' : locale === 'zh' ? '您' : 'You',
+        actionNeeded: true,
+      };
+    }
+    if (status === 'MEETING_SENT') {
+      return {
+        label: locale === 'th' ? 'รอยืนยันนัดหมาย' : locale === 'zh' ? '待确认会面' : 'Meeting Pending',
+        badge: 'bg-cyan-100 text-cyan-700',
+        stepText: 'Step 7 of 8',
+        nextAction: locale === 'th' ? 'รอผู้ลงประกาศยืนยันนัดหมาย' : locale === 'zh' ? '等待房源方确认会面' : 'Wait for lister meeting confirmation',
+        responsible: locale === 'th' ? 'ผู้ลงประกาศ' : locale === 'zh' ? '房源方' : 'Lister',
+        actionNeeded: false,
+      };
+    }
+    if (status === 'MEETING_CONFIRMED') {
+      const pendingRating = hasPendingCustomerPropRating(inquiry);
+      return {
+        label: locale === 'th' ? 'นัดหมายยืนยันแล้ว' : locale === 'zh' ? '会面已确认' : 'Meeting Confirmed',
+        badge: 'bg-yellow-100 text-yellow-700',
+        stepText: 'Step 8 of 8',
+        nextAction: pendingRating
+          ? locale === 'th'
+            ? 'ให้คะแนนเพื่อปิดงาน'
+            : locale === 'zh'
+            ? '评分并结案'
+            : 'Rate to close this inquiry'
+          : locale === 'th'
+          ? 'รอผู้ลงประกาศให้คะแนนเพื่อปิดงาน'
+          : locale === 'zh'
+          ? '等待房源方评分结案'
+          : 'Waiting for lister rating to close',
+        responsible: pendingRating
+          ? locale === 'th'
+            ? 'คุณ'
+            : locale === 'zh'
+            ? '您'
+            : 'You'
+          : locale === 'th'
+          ? 'ผู้ลงประกาศ'
+          : locale === 'zh'
+          ? '房源方'
+          : 'Lister',
+        actionNeeded: pendingRating,
+      };
+    }
+    if (status === 'COMPLETED') {
+      return {
+        label: locale === 'th' ? 'เสร็จสิ้น' : locale === 'zh' ? '已完成' : 'Completed',
+        badge: 'bg-emerald-100 text-emerald-700',
+        stepText: 'Step 8 of 8',
+        nextAction: locale === 'th' ? 'งานเสร็จสมบูรณ์แล้ว' : locale === 'zh' ? '流程已完成' : 'Workflow completed',
+        responsible: locale === 'th' ? 'ไม่มี' : locale === 'zh' ? '无' : 'None',
+        actionNeeded: false,
+      };
+    }
+
+    return {
+      label: status || '-',
+      badge: 'bg-gray-100 text-gray-700',
+      stepText: `Step ${Number(inquiry.step || 0) || 0} of 8`,
+      nextAction: locale === 'th' ? 'ตรวจสอบสถานะล่าสุด' : locale === 'zh' ? '查看最新状态' : 'Review latest status',
+      responsible: locale === 'th' ? 'ระบบ' : locale === 'zh' ? '系统' : 'System',
+      actionNeeded: false,
+    };
+  };
+
+  const getPropertyComplianceHints = (inquiry: PropInquiry) => {
+    const missing: string[] = [];
+    if (!String(inquiry.propertyTitle || '').trim()) missing.push(locale === 'th' ? 'ชื่อประกาศ' : locale === 'zh' ? '标题' : 'Title');
+    if (!String(inquiry.propertyType || '').trim()) missing.push(locale === 'th' ? 'ประเภททรัพย์สิน' : locale === 'zh' ? '房产类型' : 'Property type');
+    if (!String(inquiry.listingType || '').trim()) missing.push(locale === 'th' ? 'ประเภทการประกาศ' : locale === 'zh' ? '交易类型' : 'Listing type');
+    if (!String(inquiry.propertyTier || '').trim()) missing.push(locale === 'th' ? 'ระดับบริการ' : locale === 'zh' ? '服务等级' : 'Tier');
+    if (!Number.isFinite(Number(inquiry.propertyPrice)) || Number(inquiry.propertyPrice) <= 0) missing.push(locale === 'th' ? 'ราคา' : locale === 'zh' ? '价格' : 'Price');
+    if (!String(inquiry.province || '').trim()) missing.push(locale === 'th' ? 'จังหวัด' : locale === 'zh' ? '省份' : 'Province');
+    if (!String(inquiry.district || '').trim()) missing.push(locale === 'th' ? 'เขต/อำเภอ' : locale === 'zh' ? '区/县' : 'District');
+    if (!Array.isArray(inquiry.propertyImages) || inquiry.propertyImages.length === 0) missing.push(locale === 'th' ? 'ไฟล์รูปภาพ' : locale === 'zh' ? '图片附件' : 'Media attachments');
+    return missing;
+  };
+
+  const propertyTabItems = [...propInquiries].sort((a, b) => parseDateMs(b.updatedAt || b.createdAt) - parseDateMs(a.updatedAt || a.createdAt));
+  const acceptedStatuses = new Set(['ACCEPTED', 'PAID', 'MEETING_SENT', 'MEETING_CONFIRMED', 'COMPLETED']);
+  const meetingStatuses = new Set(['MEETING_SENT', 'MEETING_CONFIRMED', 'COMPLETED']);
+  const sentCount = propertyTabItems.length;
+  const acceptedCount = propertyTabItems.filter((p) => acceptedStatuses.has(String(p.status || '').toUpperCase())).length;
+  const meetingCount = propertyTabItems.filter((p) => meetingStatuses.has(String(p.status || '').toUpperCase())).length;
+  const completedCount = propertyTabItems.filter((p) => String(p.status || '').toUpperCase() === 'COMPLETED').length;
+  const acceptedRate = sentCount > 0 ? Math.round((acceptedCount / sentCount) * 100) : 0;
+  const meetingRate = sentCount > 0 ? Math.round((meetingCount / sentCount) * 100) : 0;
+  const completedRate = sentCount > 0 ? Math.round((completedCount / sentCount) * 100) : 0;
+  const propertiesCount = propertyTabItems.length;
   const stats = { active: combinedActiveWithProp.length, completed: allHistory.length, messages: 0, rating: "4.8" };
   const totalReqCount = allRequestItemsWithProp.length;
   const getWorkflowOrderSnapshot = (po: any) =>
@@ -2907,28 +3055,162 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       )}
 
       {activeTab === "properties" && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
-          <div className="px-6 py-4 border-b border-gray-100">
-            <h2 className="font-bold text-gray-900">Properties</h2>
+        <div className="mt-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100">
+              <h2 className="font-bold text-gray-900">Properties</h2>
+              <p className="text-xs text-gray-500 mt-1">
+                {locale === 'th'
+                  ? `คำขอทั้งหมด ${sentCount} รายการ`
+                  : locale === 'zh'
+                  ? `总询盘 ${sentCount} 条`
+                  : `${sentCount} inquiries tracked`}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 p-4">
+              <div className="rounded-lg border border-sky-100 bg-sky-50 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wide text-sky-700">{locale === 'th' ? 'ส่งคำขอ' : locale === 'zh' ? '已发送' : 'Sent'}</p>
+                <p className="text-sm font-bold text-sky-900 mt-1">{sentCount}</p>
+              </div>
+              <div className="rounded-lg border border-sky-100 bg-sky-50 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wide text-sky-700">{locale === 'th' ? 'ตอบรับ' : locale === 'zh' ? '接受' : 'Accepted'}</p>
+                <p className="text-sm font-bold text-sky-900 mt-1">{acceptedCount} ({acceptedRate}%)</p>
+              </div>
+              <div className="rounded-lg border border-sky-100 bg-sky-50 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wide text-sky-700">{locale === 'th' ? 'นัดหมาย' : locale === 'zh' ? '会面' : 'Meetings'}</p>
+                <p className="text-sm font-bold text-sky-900 mt-1">{meetingCount} ({meetingRate}%)</p>
+              </div>
+              <div className="rounded-lg border border-sky-100 bg-sky-50 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wide text-sky-700">{locale === 'th' ? 'สำเร็จ' : locale === 'zh' ? '已完成' : 'Completed'}</p>
+                <p className="text-sm font-bold text-sky-900 mt-1">{completedCount} ({completedRate}%)</p>
+              </div>
+            </div>
           </div>
-          <div className="divide-y divide-gray-50">
-            {orders.filter((o: any) => o.type === "property").length === 0 ? (
-              <div className="p-8 text-center text-gray-500">No property orders found.</div>
+
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50">
+            {propertyTabItems.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">No property inquiries found.</div>
             ) : (
-              orders.filter((o: any) => o.type === "property").map((o: any, i: number) => (
-                <div key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer" onClick={() => handleOrderClick ? handleOrderClick(o) : null}>
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-2xl shadow-sm"></div>
-                    <div>
-                      <h3 className="font-bold text-gray-900">{o.service} <span className="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-0.5 rounded ml-2">{o.description?.toUpperCase().includes('TIER:ECONOMY') ? 'ECONOMY' : o.description?.toUpperCase().includes('TIER:STANDARD') ? 'Standard' : (o.tier || 'Standard')}</span></h3>
-                      <p className="text-sm text-gray-500 mt-1">{o.status} &middot; {fmtDate(o.createdAt || Date.now())}</p>
+              propertyTabItems.map((p: PropInquiry) => {
+                const statusMeta = getPropertyFlowSnapshot(p);
+                const complianceHints = getPropertyComplianceHints(p);
+                const media = Array.isArray(p.propertyImages) ? p.propertyImages.map((url) => normalizeImageUrl(url)).filter(Boolean) : [];
+                const listerFirstName = firstNameOnly(p.listerName, 'Lister');
+                const siteLocation = getPropSiteLocation(p);
+                const updatedAt = p.updatedAt || p.createdAt || Date.now();
+
+                return (
+                  <div key={p.id} className="p-6 space-y-4">
+                    <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <span className={`inline-flex text-xs font-bold px-2.5 py-1 rounded-full uppercase ${getPropertyTierStyle(p.propertyTier)}`}>
+                          {p.propertyTier || 'STANDARD'}
+                        </span>
+                        <h3 className="font-bold text-gray-900 mt-2">{p.propertyTitle} <span className="text-sm font-normal text-gray-400">· {p.poNumber}</span></h3>
+                        <p className="text-sm text-gray-600 mt-1">{listerFirstName} · {siteLocation}</p>
+                      </div>
+                      <div className="flex flex-col items-start md:items-end gap-1">
+                        <span className={`text-xs font-bold px-3 py-1 rounded-full ${statusMeta.badge}`}>{statusMeta.label}</span>
+                        <span className="text-xs text-gray-500">{locale === 'th' ? 'อัปเดตล่าสุด' : locale === 'zh' ? '最近更新' : 'Last updated'}: {fmtDateTime(updatedAt)}</span>
+                        {statusMeta.actionNeeded && (
+                          <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-red-50 text-red-700">{locale === 'th' ? 'ต้องดำเนินการ' : locale === 'zh' ? '需要操作' : 'Action Needed'}</span>
+                        )}
+                      </div>
                     </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
+                        <p className="text-[10px] uppercase tracking-wide text-gray-500">{locale === 'th' ? 'สถานะ' : locale === 'zh' ? '状态' : 'Status'}</p>
+                        <p className="text-xs font-semibold text-gray-900 mt-1">{statusMeta.label}</p>
+                      </div>
+                      <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
+                        <p className="text-[10px] uppercase tracking-wide text-gray-500">{locale === 'th' ? 'อัปเดตล่าสุด' : locale === 'zh' ? '最近更新' : 'Last updated'}</p>
+                        <p className="text-xs font-semibold text-gray-900 mt-1">{fmtDateTime(updatedAt)}</p>
+                      </div>
+                      <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
+                        <p className="text-[10px] uppercase tracking-wide text-gray-500">{locale === 'th' ? 'การดำเนินการ' : locale === 'zh' ? '待办' : 'Action needed'}</p>
+                        <p className="text-xs font-semibold text-gray-900 mt-1">{statusMeta.actionNeeded ? (locale === 'th' ? 'ต้องดำเนินการ' : locale === 'zh' ? '需要操作' : 'Required') : (locale === 'th' ? 'ไม่มี' : locale === 'zh' ? '无' : 'None')}</p>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-gray-200 p-3 bg-white">
+                      <p className="text-xs font-semibold text-gray-600 uppercase mb-2">{locale === 'th' ? 'สรุปทรัพย์สิน' : locale === 'zh' ? '房源摘要' : 'Property summary'}</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-gray-700">
+                        <p><span className="text-gray-500">{locale === 'th' ? 'ประเภท' : locale === 'zh' ? '类型' : 'Type'}:</span> {getPropertyTypeLabel(p.propertyType)}</p>
+                        <p><span className="text-gray-500">{locale === 'th' ? 'รูปแบบประกาศ' : locale === 'zh' ? '交易类型' : 'Listing'}:</span> {getListingTypeLabel(p.listingType)}</p>
+                        <p><span className="text-gray-500">{locale === 'th' ? 'ระดับบริการ' : locale === 'zh' ? '服务等级' : 'Tier'}:</span> {String(p.propertyTier || 'STANDARD').toUpperCase()}</p>
+                        <p><span className="text-gray-500">{locale === 'th' ? 'ราคา' : locale === 'zh' ? '价格' : 'Price'}:</span> {toCurrencyLabel(p.propertyPrice)}</p>
+                        <p className="sm:col-span-2"><span className="text-gray-500">{locale === 'th' ? 'สถานที่' : locale === 'zh' ? '位置' : 'Location'}:</span> {siteLocation}</p>
+                        <p><span className="text-gray-500">{locale === 'th' ? 'ผู้ลงประกาศ' : locale === 'zh' ? '房源方' : 'Lister'}:</span> {listerFirstName}</p>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-gray-200 p-3 bg-white">
+                      <p className="text-xs font-semibold text-gray-600 uppercase mb-2">{locale === 'th' ? 'Workflow Snapshot' : locale === 'zh' ? '流程快照' : 'Workflow snapshot'}</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-gray-700">
+                        <p><span className="text-gray-500">Step:</span> {statusMeta.stepText}</p>
+                        <p><span className="text-gray-500">{locale === 'th' ? 'การดำเนินการถัดไป' : locale === 'zh' ? '下一步动作' : 'Next action'}:</span> {statusMeta.nextAction}</p>
+                        <p><span className="text-gray-500">{locale === 'th' ? 'ผู้รับผิดชอบ' : locale === 'zh' ? '责任方' : 'Responsible'}:</span> {statusMeta.responsible}</p>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-gray-200 p-3 bg-white">
+                      <div className="flex items-center justify-between gap-3 mb-2">
+                        <p className="text-xs font-semibold text-gray-600 uppercase">{locale === 'th' ? 'สรุปไฟล์สื่อ' : locale === 'zh' ? '媒体摘要' : 'Media summary'}</p>
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs text-gray-500">{media.length} {locale === 'th' ? 'ไฟล์' : locale === 'zh' ? '个附件' : 'attachments'}</span>
+                          {media.length > 0 && (
+                            <button
+                              type="button"
+                              className="text-xs font-semibold text-sky-700 hover:text-sky-800"
+                              onClick={() => {
+                                void downloadImageUrls(media, `property-${p.poNumber}`);
+                              }}
+                            >
+                              {locale === 'th' ? 'ดาวน์โหลดทั้งหมด' : locale === 'zh' ? '下载全部' : 'Download all'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      {media.length > 0 ? (
+                        <div className="flex gap-2 overflow-x-auto pb-1">
+                          {media.slice(0, 6).map((url, index) => (
+                            <img key={`${p.id}-media-${index}`} src={url} alt="property media" className="w-14 h-14 rounded-md object-cover border border-gray-200 shrink-0" />
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-500">{locale === 'th' ? 'ยังไม่มีไฟล์แนบ' : locale === 'zh' ? '暂无附件' : 'No media uploaded yet.'}</p>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                      <div className="rounded-md border border-sky-100 bg-sky-50 px-3 py-2">
+                        <p className="text-[10px] uppercase tracking-wide text-sky-700">{locale === 'th' ? 'ส่งคำขอ' : locale === 'zh' ? '已发送' : 'Sent'}</p>
+                        <p className="text-xs font-semibold text-sky-900 mt-1">{sentCount}</p>
+                      </div>
+                      <div className="rounded-md border border-sky-100 bg-sky-50 px-3 py-2">
+                        <p className="text-[10px] uppercase tracking-wide text-sky-700">{locale === 'th' ? 'ตอบรับ' : locale === 'zh' ? '接受' : 'Accepted'}</p>
+                        <p className="text-xs font-semibold text-sky-900 mt-1">{acceptedCount}</p>
+                      </div>
+                      <div className="rounded-md border border-sky-100 bg-sky-50 px-3 py-2">
+                        <p className="text-[10px] uppercase tracking-wide text-sky-700">{locale === 'th' ? 'นัดหมาย' : locale === 'zh' ? '会面' : 'Meetings'}</p>
+                        <p className="text-xs font-semibold text-sky-900 mt-1">{meetingCount}</p>
+                      </div>
+                      <div className="rounded-md border border-sky-100 bg-sky-50 px-3 py-2">
+                        <p className="text-[10px] uppercase tracking-wide text-sky-700">{locale === 'th' ? 'สำเร็จ' : locale === 'zh' ? '已完成' : 'Completed'}</p>
+                        <p className="text-xs font-semibold text-sky-900 mt-1">{completedCount}</p>
+                      </div>
+                    </div>
+
+                    {complianceHints.length > 0 && (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                        <span className="font-semibold">{locale === 'th' ? 'คำเตือนความพร้อมก่อนส่งคำขอ:' : locale === 'zh' ? '发送前合规提醒:' : 'Compliance/readiness hints:'}</span>{' '}
+                        {complianceHints.join(', ')}
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <Link href={`${prefix}/properties/edit/${o.id}`} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-bold rounded-lg transition">Edit</Link>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
@@ -2961,7 +3243,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                       <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center text-lg">🏠</div>
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-gray-900 text-sm">{p.propertyTitle} <span className="text-xs font-normal text-gray-400">· {p.poNumber}</span></p>
-                        <p className="text-xs text-gray-500 mt-0.5">{getPropSiteLocation(p)} · {p.listerName}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{getPropSiteLocation(p)} · {firstNameOnly(p.listerName, 'Lister')}</p>
                         <p className="text-xs text-emerald-600 font-semibold mt-0.5">
                           ✅ {locale === "th" ? "ปิดงานแล้ว" : "Completed"} · ⭐ {p.customerRating ?? "-"}/5 ({locale === "th" ? "คุณให้" : "you"}) · ⭐ {p.listerRating ?? "-"}/5 ({locale === "th" ? "ผู้ลงประกาศให้" : "lister"})
                           {p.updatedAt ? ` · ${new Date(p.updatedAt).toLocaleDateString()}` : ""}
@@ -3118,7 +3400,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                           <span className="text-gray-900 font-bold">🏠 {p.propertyTitle} ({p.poNumber})</span>
                           <span className="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-bold">{p.meetingDate}{p.meetingTime ? ` · ${p.meetingTime}` : ''}</span>
                         </div>
-                        <p className="text-sm text-gray-600">{locale === "th" ? "สถานที่:" : "Venue:"} {p.meetingVenue || 'TBD'} | {locale === "th" ? "ผู้ลงประกาศ:" : "Lister:"} {p.listerName}</p>
+                        <p className="text-sm text-gray-600">{locale === "th" ? "สถานที่:" : "Venue:"} {p.meetingVenue || 'TBD'} | {locale === "th" ? "ผู้ลงประกาศ:" : "Lister:"} {firstNameOnly(p.listerName, 'Lister')}</p>
                       </div>
                     ),
                   }));
@@ -3212,7 +3494,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ระดับบริการ" : locale === "zh" ? "服务等级" : "Tier"}</span><span className="font-semibold uppercase">{propPayModal.propertyTier || "STANDARD"}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "จังหวัด" : "Province"}</span><span className="font-semibold">{propPayModal.province}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}</span><span className="font-semibold text-right max-w-[60%] break-words">{getPropSiteLocation(propPayModal)}</span></div>
-                <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ผู้ลงประกาศ" : "Lister"}</span><span className="font-semibold">{propPayModal.listerName}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ผู้ลงประกาศ" : "Lister"}</span><span className="font-semibold">{firstNameOnly(propPayModal.listerName, 'Lister')}</span></div>
                 <div className="flex justify-between border-t border-gray-100 pt-2">
                   <span className="text-gray-700 font-semibold">{locale === "th" ? "ค่าดำเนินการ" : "Processing Fee"}</span>
                   <span className="font-extrabold text-green-700 text-lg">฿{propPayModal.propertyFee}</span>
@@ -3326,7 +3608,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               <button onClick={() => setPropRateModal(null)} className="text-white/90 hover:text-white text-xl leading-none" aria-label="Close">&times;</button>
             </div>
             <div className="px-6 py-5 space-y-4">
-              <p className="text-sm text-gray-600">{locale === "th" ? `ให้คะแนนประสบการณ์กับ: ${propRateModal.listerName}` : `Rate your experience with: ${propRateModal.listerName}`}</p>
+              <p className="text-sm text-gray-600">{locale === "th" ? `ให้คะแนนประสบการณ์กับ: ${firstNameOnly(propRateModal.listerName, 'Lister')}` : `Rate your experience with: ${firstNameOnly(propRateModal.listerName, 'Lister')}`}</p>
               <p className="text-xs font-semibold text-yellow-700 uppercase">{locale === "th" ? "ระดับบริการ" : locale === "zh" ? "服务等级" : "Tier"}: {propRateModal.propertyTier || "STANDARD"}</p>
               <p className="text-xs text-gray-500">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}: {getPropSiteLocation(propRateModal)}</p>
               <div>

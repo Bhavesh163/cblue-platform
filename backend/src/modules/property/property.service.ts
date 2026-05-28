@@ -17,6 +17,75 @@ export class PropertyService {
 
   constructor(private readonly prisma: PrismaService) {}
 
+  private normalizeEmail(value?: string | null) {
+    return String(value || '')
+      .trim()
+      .toLowerCase();
+  }
+
+  private async resolveLinkedUserIds(userRef: string) {
+    const fallbackId = String(userRef || '').trim();
+    if (!fallbackId) return [] as string[];
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: fallbackId },
+      select: { id: true, subscriberId: true, email: true },
+    });
+
+    if (!user) {
+      const linkedIds = new Set<string>();
+
+      const bySubscriberId = await this.prisma.user.findMany({
+        where: { subscriberId: fallbackId },
+        select: { id: true },
+      });
+      bySubscriberId.forEach((item) => linkedIds.add(item.id));
+
+      const normalizedFallbackEmail = this.normalizeEmail(fallbackId);
+      if (normalizedFallbackEmail) {
+        const byEmail = await this.prisma.user.findMany({
+          where: {
+            email: {
+              equals: normalizedFallbackEmail,
+              mode: 'insensitive',
+            },
+          },
+          select: { id: true },
+        });
+        byEmail.forEach((item) => linkedIds.add(item.id));
+      }
+
+      if (linkedIds.size === 0) linkedIds.add(fallbackId);
+      return Array.from(linkedIds);
+    }
+
+    const linkedIds = new Set<string>([user.id]);
+
+    if (user.subscriberId) {
+      const bySubscriberId = await this.prisma.user.findMany({
+        where: { subscriberId: user.subscriberId },
+        select: { id: true },
+      });
+      bySubscriberId.forEach((item) => linkedIds.add(item.id));
+    }
+
+    const normalizedEmail = this.normalizeEmail(user.email);
+    if (normalizedEmail) {
+      const byEmail = await this.prisma.user.findMany({
+        where: {
+          email: {
+            equals: normalizedEmail,
+            mode: 'insensitive',
+          },
+        },
+        select: { id: true },
+      });
+      byEmail.forEach((item) => linkedIds.add(item.id));
+    }
+
+    return Array.from(linkedIds);
+  }
+
   async create(
     currentUser: { id?: string; email?: string; phone?: string } | undefined,
     dto: CreatePropertyDto,
@@ -481,9 +550,12 @@ export class PropertyService {
   }
 
   async findByUser(userId: string) {
+    const linkedUserIds = await this.resolveLinkedUserIds(userId);
+    if (linkedUserIds.length === 0) return [];
+
     return this.prisma.property.findMany({
       where: {
-        userId,
+        userId: { in: linkedUserIds },
         status: { not: 'REMOVED' },
       },
       orderBy: { createdAt: 'desc' },
@@ -498,7 +570,9 @@ export class PropertyService {
       where: { id },
     });
 
-    if (!property || property.userId !== userId) {
+    const linkedUserIds = new Set(await this.resolveLinkedUserIds(userId));
+
+    if (!property || !linkedUserIds.has(property.userId)) {
       return null;
     }
 
@@ -555,7 +629,9 @@ export class PropertyService {
       where: { id },
     });
 
-    if (!property || property.userId !== userId) {
+    const linkedUserIds = new Set(await this.resolveLinkedUserIds(userId));
+
+    if (!property || !linkedUserIds.has(property.userId)) {
       return null;
     }
 
