@@ -5510,6 +5510,17 @@ function PartnerProperties({ locale, prefix, properties, propertyInquiries }: { 
     }
   };
 
+  const syncPropertiesFromServer = async (authToken: string) => {
+    const res = await fetch('/api/v1/properties/my', {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    if (!res.ok) return;
+
+    const data = await res.json().catch(() => []);
+    if (!Array.isArray(data)) return;
+    setItems(data.map(normalizePropertyItem));
+  };
+
   const removeProperty = async (id: string) => {
     if (!id) return;
     const ok = confirm(
@@ -5524,7 +5535,10 @@ function PartnerProperties({ locale, prefix, properties, propertyInquiries }: { 
     setRemovingId(id);
     try {
       let token = localStorage.getItem("subscriber_token") || "";
-      if (!token) return;
+      if (!token) {
+        alert(locale === 'th' ? 'กรุณาเข้าสู่ระบบใหม่' : locale === 'zh' ? '请重新登录' : 'Please log in again.');
+        return;
+      }
       const removeReq = (authToken: string) =>
         fetch(`/api/v1/properties/${id}`, {
           method: "DELETE",
@@ -5539,13 +5553,47 @@ function PartnerProperties({ locale, prefix, properties, propertyInquiries }: { 
           res = await removeReq(token);
         }
       }
-      if (!res.ok) return;
+
+      if (!res.ok) {
+        if (res.status === 404) {
+          setItems((prev) => prev.filter((item) => item.id !== id));
+          setViewing((prev: any) => (prev?.id === id ? null : prev));
+          setEditing((prev: any) => (prev?.id === id ? null : prev));
+          await syncPropertiesFromServer(token);
+          alert(
+            locale === 'th'
+              ? 'รายการนี้อาจถูกลบไปก่อนแล้ว ระบบได้รีเฟรชรายการล่าสุดให้แล้ว'
+              : locale === 'zh'
+              ? '该房源可能已被删除，列表已同步为最新状态'
+              : 'This listing may already be deleted. The latest list has been synced.',
+          );
+          return;
+        }
+
+        const err = await res.json().catch(() => null);
+        alert(
+          String(err?.message || '') ||
+            (locale === 'th'
+              ? 'ไม่สามารถลบประกาศได้ในขณะนี้ กรุณาลองใหม่'
+              : locale === 'zh'
+              ? '当前无法删除该房源，请稍后重试'
+              : 'Could not delete this listing right now. Please try again.'),
+        );
+        return;
+      }
 
       setItems((prev) => prev.filter((item) => item.id !== id));
       setViewing((prev: any) => (prev?.id === id ? null : prev));
       setEditing((prev: any) => (prev?.id === id ? null : prev));
+      await syncPropertiesFromServer(token);
     } catch {
-      // Keep UI unchanged on transient delete failures.
+      alert(
+        locale === 'th'
+          ? 'เกิดข้อผิดพลาดขณะลบประกาศ กรุณาลองใหม่'
+          : locale === 'zh'
+          ? '删除房源时发生错误，请重试'
+          : 'An error occurred while deleting the listing. Please try again.',
+      );
     } finally {
       setRemovingId("");
     }
@@ -5571,9 +5619,9 @@ function PartnerProperties({ locale, prefix, properties, propertyInquiries }: { 
         </Link>
       </div>
 
-      <div className="divide-y divide-gray-50">
+      <div className="p-3 sm:p-4 space-y-3 bg-gradient-to-b from-white to-slate-50/40">
         {items.length > 0 ? (
-          items.map((p: any) => {
+          items.map((p: any, index: number) => {
             const metrics = getPropertyMetrics(p.id);
             const qualityScore = getQualityScore(p);
             const complianceHints = getComplianceHints(p);
@@ -5583,7 +5631,11 @@ function PartnerProperties({ locale, prefix, properties, propertyInquiries }: { 
                 : "-";
 
             return (
-              <div key={p.id} className="p-6 hover:bg-gray-50/50 transition cursor-pointer" onClick={() => openDetail(p)}>
+              <div
+                key={p.id}
+                className={`p-5 sm:p-6 rounded-xl border shadow-sm transition cursor-pointer ${index % 2 === 0 ? 'bg-white border-slate-200 hover:border-slate-300' : 'bg-slate-50/70 border-slate-300 hover:border-slate-400'}`}
+                onClick={() => openDetail(p)}
+              >
                 <div className="flex items-center gap-4 mb-4">
                   <div className="w-16 h-16 rounded-xl overflow-hidden bg-teal-100 border border-teal-100 shrink-0">
                     <img
@@ -5595,6 +5647,13 @@ function PartnerProperties({ locale, prefix, properties, propertyInquiries }: { 
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-start gap-3">
                       <div className="min-w-0">
+                        <p className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">
+                          {locale === 'th'
+                            ? `ประกาศลำดับที่ ${index + 1}`
+                            : locale === 'zh'
+                            ? `房源 #${index + 1}`
+                            : `Listing #${index + 1}`}
+                        </p>
                         <h3 className="font-bold text-gray-900 truncate">
                           {locale === "th" ? p.titleTh : locale === "zh" ? p.titleZh : p.title}
                           <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 align-middle">{tierLabel(p.tier)}</span>

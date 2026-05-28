@@ -288,6 +288,54 @@ export class PropertyService {
     return false;
   }
 
+  private hasLinkedPropertyAccess(
+    property:
+      | {
+          userId: string;
+          contactEmail?: string | null;
+          contactPhone?: string | null;
+          contactName?: string | null;
+          title?: string | null;
+          description?: string | null;
+          listingType?: string | null;
+          price?: number | null;
+        }
+      | null
+      | undefined,
+    linkedUserIds: string[],
+    linkedEmails: string[],
+    linkedPhones: string[],
+    linkedNameTokens: string[],
+  ) {
+    if (!property) return false;
+
+    const linkedUserIdSet = new Set(linkedUserIds);
+    const linkedEmailSet = new Set(linkedEmails);
+    const linkedPhoneSet = new Set(linkedPhones);
+    const propertyEmail = this.normalizeEmail(property.contactEmail);
+    const propertyPhone = this.normalizePhone(property.contactPhone);
+    const propertyNameTokens = this.normalizeNameTokens(property.contactName);
+
+    const hasDirectAccess =
+      linkedUserIdSet.has(property.userId) ||
+      (propertyEmail && linkedEmailSet.has(propertyEmail)) ||
+      (propertyPhone && linkedPhoneSet.has(propertyPhone));
+
+    const hasPhoneAndNameBridge =
+      !!propertyPhone &&
+      linkedPhoneSet.has(propertyPhone) &&
+      linkedNameTokens.length > 0 &&
+      propertyNameTokens.length > 0 &&
+      linkedNameTokens.some((token) =>
+        propertyNameTokens.some(
+          (candidate) => candidate.includes(token) || token.includes(candidate),
+        ),
+      ) &&
+      !this.isLikelySyntheticPropertyCandidate(property);
+
+    return hasDirectAccess || hasPhoneAndNameBridge;
+  }
+
   async create(
     currentUser: { id?: string; email?: string; phone?: string } | undefined,
     dto: CreatePropertyDto,
@@ -833,17 +881,17 @@ export class PropertyService {
     const linkedUserIds = await this.resolveLinkedUserIds(userId);
     const linkedEmails = await this.resolveLinkedEmails(userId, linkedUserIds);
     const linkedPhones = await this.resolveLinkedPhones(userId, linkedUserIds);
-
-    const linkedUserIdSet = new Set(linkedUserIds);
-    const linkedEmailSet = new Set(linkedEmails);
-    const linkedPhoneSet = new Set(linkedPhones);
-    const propertyEmail = this.normalizeEmail(property?.contactEmail);
-    const propertyPhone = this.normalizePhone(property?.contactPhone);
-    const hasAccess =
-      !!property &&
-      (linkedUserIdSet.has(property.userId) ||
-        (propertyEmail && linkedEmailSet.has(propertyEmail)) ||
-        (propertyPhone && linkedPhoneSet.has(propertyPhone)));
+    const linkedNameTokens = await this.resolveLinkedNameTokens(
+      userId,
+      linkedUserIds,
+    );
+    const hasAccess = this.hasLinkedPropertyAccess(
+      property,
+      linkedUserIds,
+      linkedEmails,
+      linkedPhones,
+      linkedNameTokens,
+    );
 
     if (!hasAccess) {
       return null;
@@ -905,17 +953,17 @@ export class PropertyService {
     const linkedUserIds = await this.resolveLinkedUserIds(userId);
     const linkedEmails = await this.resolveLinkedEmails(userId, linkedUserIds);
     const linkedPhones = await this.resolveLinkedPhones(userId, linkedUserIds);
-
-    const linkedUserIdSet = new Set(linkedUserIds);
-    const linkedEmailSet = new Set(linkedEmails);
-    const linkedPhoneSet = new Set(linkedPhones);
-    const propertyEmail = this.normalizeEmail(property?.contactEmail);
-    const propertyPhone = this.normalizePhone(property?.contactPhone);
-    const hasAccess =
-      !!property &&
-      (linkedUserIdSet.has(property.userId) ||
-        (propertyEmail && linkedEmailSet.has(propertyEmail)) ||
-        (propertyPhone && linkedPhoneSet.has(propertyPhone)));
+    const linkedNameTokens = await this.resolveLinkedNameTokens(
+      userId,
+      linkedUserIds,
+    );
+    const hasAccess = this.hasLinkedPropertyAccess(
+      property,
+      linkedUserIds,
+      linkedEmails,
+      linkedPhones,
+      linkedNameTokens,
+    );
 
     if (!hasAccess) {
       return null;

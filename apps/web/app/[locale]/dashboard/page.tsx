@@ -3272,11 +3272,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden p-3 sm:p-4 space-y-3 bg-gradient-to-b from-white to-slate-50/40">
             {propertyTabItems.length === 0 ? (
               <div className="p-8 text-center text-gray-500">No property inquiries found.</div>
             ) : (
-              propertyTabItems.map((p: PropInquiry) => {
+              propertyTabItems.map((p: PropInquiry, index: number) => {
                 const statusMeta = getPropertyFlowSnapshot(p);
                 const complianceHints = getPropertyComplianceHints(p);
                 const media = Array.isArray(p.propertyImages) ? p.propertyImages.map((url) => normalizeImageUrl(url)).filter(Boolean) : [];
@@ -3285,9 +3285,19 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 const updatedAt = p.updatedAt || p.createdAt || Date.now();
 
                 return (
-                  <div key={p.id} className="p-6 space-y-4">
+                  <div
+                    key={p.id}
+                    className={`p-5 sm:p-6 rounded-xl border shadow-sm space-y-4 ${index % 2 === 0 ? 'bg-white border-slate-200' : 'bg-slate-50/70 border-slate-300'}`}
+                  >
                     <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
                       <div className="min-w-0">
+                        <p className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">
+                          {locale === 'th'
+                            ? `คำขอลำดับที่ ${index + 1}`
+                            : locale === 'zh'
+                            ? `询盘 #${index + 1}`
+                            : `Enquiry #${index + 1}`}
+                        </p>
                         <span className={`inline-flex text-xs font-bold px-2.5 py-1 rounded-full uppercase ${getPropertyTierStyle(p.propertyTier)}`}>
                           {p.propertyTier || 'STANDARD'}
                         </span>
