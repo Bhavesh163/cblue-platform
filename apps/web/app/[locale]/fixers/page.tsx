@@ -642,7 +642,7 @@ export default function FixerProPage() {
       const existing = JSON.parse(localStorage.getItem(key) || "[]");
       if (Array.isArray(existing) && existing.length > 0) {
         if (!localStorage.getItem(`chat_title_${po}`)) {
-          localStorage.setItem(`chat_title_${po}`, `${inquiry.propertyTitle || po}`);
+          localStorage.setItem(`chat_title_${po}`, getPropChatRoomTitle(inquiry));
         }
         return;
       }
@@ -662,9 +662,10 @@ export default function FixerProPage() {
         time: fmtDateTime(now),
       };
 
-      localStorage.setItem(key, JSON.stringify([bootstrapMessage]));
-  localStorage.setItem(`chat_title_${po}`, `${inquiry.propertyTitle || po}`);
+        localStorage.setItem(key, JSON.stringify([bootstrapMessage]));
+        localStorage.setItem(`chat_title_${po}`, getPropChatRoomTitle(inquiry));
       localStorage.setItem(`chat_from_${po}`, "fixers");
+        localStorage.removeItem(`chat_closed_${po}`);
       window.dispatchEvent(new Event("cblue-chat-updated"));
     } catch {
       // Best-effort chat bootstrap for property flow.
@@ -1259,6 +1260,43 @@ export default function FixerProPage() {
     } catch {}
   }, []);
 
+  const getPropOrderLabel = (poNumber: string | null | undefined) => {
+    const value = String(poNumber || '-');
+    if (locale === 'th') return `ออเดอร์: ${value}`;
+    if (locale === 'zh') return `订单: ${value}`;
+    return `Order: ${value}`;
+  };
+  const getPropChatRoomTitle = (p: Partial<PropInquiry>) => {
+    const title = String(p.propertyTitle || '').trim() || (locale === 'th' ? 'อสังหาริมทรัพย์' : locale === 'zh' ? '房产' : 'Property');
+    const listingType = String(p.listingType || '').toUpperCase();
+    const listingLabel =
+      listingType === 'SALE'
+        ? locale === 'th'
+          ? 'ขาย'
+          : locale === 'zh'
+          ? '出售'
+          : 'Sale'
+        : listingType === 'RENT'
+        ? locale === 'th'
+          ? 'เช่า'
+          : locale === 'zh'
+          ? '出租'
+          : 'Rent'
+        : listingType || '-';
+    return `${title} · ${listingLabel} · ${getPropSiteLocation(p as any)} · ${toCurrencyLabel((p as any).propertyPrice)}`;
+  };
+  const hasCompletionChatMarker = (messages: any[]) =>
+    Array.isArray(messages) &&
+    messages.some((message: any) => {
+      const text = String(message?.text || '').toLowerCase();
+      if (!text) return false;
+      return (
+        text.includes('workflow completed') ||
+        text.includes('job is now complete') ||
+        text.includes('rated this project')
+      );
+    });
+
   const buildChatFeed = () => {
     if (typeof window === "undefined") return [];
     let viewerEmail = "";
@@ -1321,6 +1359,10 @@ export default function FixerProPage() {
         if (localStorage.getItem(`chat_closed_${po}`)) continue;
         const parsed = JSON.parse(localStorage.getItem(key) || "[]");
         if (!Array.isArray(parsed) || parsed.length === 0) continue;
+        if (hasCompletionChatMarker(parsed)) {
+          localStorage.setItem(`chat_closed_${po}`, '1');
+          continue;
+        }
         const reversed = [...parsed].reverse();
         const latestVisible = reversed.find((m: any) => isVisibleMessage(m));
         if (!latestVisible) continue;
@@ -1402,7 +1444,7 @@ export default function FixerProPage() {
         })();
         items.push({
           id: po, po,
-          name: inq ? `${inq.propertyTitle}` : `Property Chat - ${po}`,
+          name: inq ? getPropChatRoomTitle(inq) : `Property Chat - ${po}`,
           lastMsg: last.text,
           time: last.time || "",
           incomingMsg: incomingMsg?.text || "",
@@ -1456,6 +1498,11 @@ export default function FixerProPage() {
           return true;
         });
         if (visible.length === 0) continue;
+        const workflowClosed = ['COMPLETED', 'CANCELLED', 'DONE'].includes(String(order?.status || '').toUpperCase());
+        if (workflowClosed || hasCompletionChatMarker(visible)) {
+          try { localStorage.setItem(`chat_closed_${po}`, '1'); } catch {}
+          continue;
+        }
 
         const latestVisible = visible[visible.length - 1];
         const incoming = [...visible].reverse().find((m: any) => String(m?.senderUserId || "") !== viewerUserId);
@@ -1542,7 +1589,7 @@ export default function FixerProPage() {
         try {
           localStorage.setItem(`chat_messages_${po}`, JSON.stringify(mapped));
           if (!localStorage.getItem(`chat_title_${po}`)) {
-            localStorage.setItem(`chat_title_${po}`, inquiry.propertyTitle || po);
+            localStorage.setItem(`chat_title_${po}`, getPropChatRoomTitle(inquiry));
           }
         } catch {
           // Non-blocking cache write.
@@ -1556,7 +1603,7 @@ export default function FixerProPage() {
         items.push({
           id: po,
           po,
-          name: inquiry.propertyTitle || `Property Chat - ${po}`,
+          name: getPropChatRoomTitle(inquiry),
           service: po,
           lastMsg: latest?.text || '',
           time: latest?.time || '',
@@ -1919,7 +1966,7 @@ export default function FixerProPage() {
         location: siteLocation,
         subdistrict: siteLocation,
         projectDetails: `Property: ${p.propertyTitle || p.poNumber} | Site: ${siteLocation} | Meeting: ${p.meetingDate || '-'} ${p.meetingTime || ''} @ ${p.meetingVenue || '-'}`,
-        description: `Customer rating: ${p.customerRating ?? '-'} | Lister rating: ${p.listerRating ?? '-'} | PO ${p.poNumber}`,
+        description: `Customer rating: ${p.customerRating ?? '-'} | Lister rating: ${p.listerRating ?? '-'} | ${getPropOrderLabel(p.poNumber)}`,
         chatHistory: getLocalChatHistory(p.poNumber),
         partnerRating: p.listerRating,
       };
@@ -2633,7 +2680,7 @@ export default function FixerProPage() {
             <div className="bg-gradient-to-r from-emerald-600 to-green-600 px-6 py-4 flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-white font-bold text-lg">{locale === "th" ? "ยืนยันการสอบถาม" : locale === "zh" ? "确认询盘" : "Confirm Property Inquiry"}</h3>
-                <p className="text-green-100 text-sm mt-1">{propAcceptModal.poNumber} · Step 4 of 8</p>
+                <p className="text-green-100 text-sm mt-1">{getPropOrderLabel(propAcceptModal.poNumber)} · Step 4 of 8</p>
               </div>
               <button onClick={() => setPropAcceptModal(null)} className="text-white/90 hover:text-white text-xl leading-none" aria-label="Close">&times;</button>
             </div>
@@ -2676,7 +2723,7 @@ export default function FixerProPage() {
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}</span><span className="font-semibold text-right max-w-[60%] break-words">{getPropSiteLocation(propAcceptModal)}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ระดับบริการ" : "Service Tier"}</span><span className="font-semibold">{propAcceptModal.propertyTier}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ผู้สนใจ (นิรนาม)" : "Interested Party"}</span><span className="font-semibold text-gray-400">{locale === "th" ? "ไม่ระบุตัวตน" : "Anonymous"}</span></div>
-                <div className="flex justify-between border-t border-gray-100 pt-2"><span className="text-gray-500">{locale === "th" ? "PO" : "PO"}</span><span className="font-mono font-bold text-emerald-700">{propAcceptModal.poNumber}</span></div>
+                <div className="flex justify-between border-t border-gray-100 pt-2"><span className="text-gray-500">{locale === "th" ? "ออเดอร์" : locale === "zh" ? "订单" : "Order"}</span><span className="font-mono font-bold text-emerald-700">{propAcceptModal.poNumber}</span></div>
               </div>
               <p className="text-xs text-gray-500">{locale === "th" ? "หลังยืนยัน ลูกค้าจะชำระค่าดำเนินการและได้รับข้อมูลติดต่อของคุณ" : "After acceptance, the customer pays the processing fee and receives your contact info."}</p>
               <div className="flex gap-3">
@@ -2712,7 +2759,7 @@ export default function FixerProPage() {
             <div className="bg-gradient-to-r from-teal-500 to-cyan-500 px-6 py-4 flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-white font-bold text-lg">{locale === "th" ? "ยืนยันนัดหมาย" : locale === "zh" ? "确认会议" : "Confirm Meeting"}</h3>
-                <p className="text-teal-100 text-sm mt-1">{propMeetingConfirmModal.poNumber} · Step 7 of 8</p>
+                <p className="text-teal-100 text-sm mt-1">{getPropOrderLabel(propMeetingConfirmModal.poNumber)} · Step 7 of 8</p>
               </div>
               <button onClick={() => setPropMeetingConfirmModal(null)} className="text-white/90 hover:text-white text-xl leading-none" aria-label="Close">&times;</button>
             </div>
@@ -2782,7 +2829,7 @@ export default function FixerProPage() {
             <div className="bg-gradient-to-r from-yellow-500 to-amber-500 px-6 py-4 flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-white font-bold text-lg">{locale === "th" ? "ให้คะแนนลูกค้า" : locale === "zh" ? "评价客户" : "Rate Customer"}</h3>
-                <p className="text-yellow-100 text-sm mt-1">{propPartnerRateModal.poNumber} · Step 8 of 8</p>
+                <p className="text-yellow-100 text-sm mt-1">{getPropOrderLabel(propPartnerRateModal.poNumber)} · Step 8 of 8</p>
               </div>
               <button onClick={() => setPropPartnerRateModal(null)} className="text-white/90 hover:text-white text-xl leading-none" aria-label="Close">&times;</button>
             </div>
@@ -2812,18 +2859,22 @@ export default function FixerProPage() {
                     await updatePropInquiry(
                       propPartnerRateModal!.id,
                       {
-                        status: "COMPLETED",
                         step: 8,
                         listerRating: propPartnerRateStars,
                         listerComment: propPartnerRateComment,
                       },
                       propPartnerRateModal!.poNumber,
                     );
+                    const customerAlreadyRated = propPartnerRateModal?.customerRating != null;
                     setPropPartnerRateModal(null);
                     alert(
                       locale === "th"
-                        ? "ขอบคุณ! ส่งคะแนนแล้ว งานนี้ปิดและย้ายไปประวัติ"
-                        : "Thank you! Rating submitted. This inquiry is now closed and moved to history.",
+                        ? customerAlreadyRated
+                          ? "ขอบคุณ! ส่งคะแนนแล้ว งานนี้ปิดและย้ายไปประวัติ"
+                          : "ขอบคุณ! ส่งคะแนนแล้ว กำลังรอลูกค้าให้คะแนนเพื่อปิดงาน"
+                        : customerAlreadyRated
+                        ? "Thank you! Rating submitted. This inquiry is now closed and moved to history."
+                        : "Thank you! Rating submitted. Waiting for customer rating to close this inquiry.",
                     );
                   }}
                 >
@@ -4317,7 +4368,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
               <div key={req.id} className="px-6 py-4 flex items-center gap-4">
                 <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center text-lg">🏠</div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-900 text-sm">{p.propertyTitle} <span className="text-xs font-normal text-gray-400">· {p.poNumber} · Step 4 of 8</span></p>
+                  <p className="font-semibold text-gray-900 text-sm">{p.propertyTitle} <span className="text-xs font-normal text-gray-400">· {locale === 'th' ? `ออเดอร์: ${p.poNumber}` : locale === 'zh' ? `订单: ${p.poNumber}` : `Order: ${p.poNumber}`} · Step 4 of 8</span></p>
                   <p className="text-xs text-emerald-700 font-semibold mt-0.5">{locale === "th" ? "ลูกค้าสนใจทรัพย์สินของคุณ — กรุณายืนยัน" : "Customer is interested in your property — please confirm"}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{getPropSiteLocation(p)} · {p.propertyTier} · {locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "สร้างเมื่อ" : locale === "zh" ? "创建时间" : "Created"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
@@ -4349,7 +4400,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
               <div key={req.id} className="px-6 py-4 flex items-center gap-4">
                 <div className="w-10 h-10 rounded-lg bg-teal-50 flex items-center justify-center text-lg">📅</div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-900 text-sm">{p.propertyTitle} <span className="text-xs font-normal text-gray-400">· {p.poNumber} · Step 7 of 8</span></p>
+                  <p className="font-semibold text-gray-900 text-sm">{p.propertyTitle} <span className="text-xs font-normal text-gray-400">· {locale === 'th' ? `ออเดอร์: ${p.poNumber}` : locale === 'zh' ? `订单: ${p.poNumber}` : `Order: ${p.poNumber}`} · Step 7 of 8</span></p>
                   <p className="text-xs text-teal-700 font-semibold mt-0.5">{locale === "th" ? "ลูกค้าส่งคำเชิญนัดหมาย — กรุณายืนยัน" : "Customer sent a meeting invitation — please confirm"}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{p.meetingDate} {p.meetingTime} · {p.meetingVenue || getPropSiteLocation(p)}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
@@ -4382,7 +4433,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
               <div key={req.id} className="px-6 py-4 flex items-center gap-4">
                 <div className="w-10 h-10 rounded-lg bg-yellow-50 flex items-center justify-center text-lg">⭐</div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-900 text-sm">{p.propertyTitle} <span className="text-xs font-normal text-gray-400">· {p.poNumber} · Step 8 of 8</span></p>
+                  <p className="font-semibold text-gray-900 text-sm">{p.propertyTitle} <span className="text-xs font-normal text-gray-400">· {locale === 'th' ? `ออเดอร์: ${p.poNumber}` : locale === 'zh' ? `订单: ${p.poNumber}` : `Order: ${p.poNumber}`} · Step 8 of 8</span></p>
                   <p className="text-xs text-yellow-700 font-semibold mt-0.5">{locale === "th" ? "นัดหมายยืนยันแล้ว — ให้คะแนนลูกค้าเพื่อปิดงาน" : "Meeting confirmed — rate the customer to close this inquiry"}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{p.meetingDate} {p.meetingTime} · {getPropSiteLocation(p)}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>

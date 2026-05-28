@@ -949,6 +949,13 @@ function PropertyTab({ locale, prefix, properties }: { locale: string; prefix: s
 function CustomerHistoryCard({ item, idx, compact = false, locale = "en" }: { item: any; idx: number; compact?: boolean; locale?: string }) {
   const [collapsed, setCollapsed] = useState(true);
   const chatPreview = collapsed ? [] : (Array.isArray(item.chatHistory) ? item.chatHistory.slice(compact ? -2 : -4) : []);
+  const orderText = isPropPoCode(String(item?.po || ''))
+    ? locale === 'th'
+      ? `ออเดอร์: ${item.po}`
+      : locale === 'zh'
+      ? `订单: ${item.po}`
+      : `Order: ${item.po}`
+    : item?.po;
   const fmtDate = (value: any) => {
     const ts = typeof value === "number" ? value : new Date(value || 0).getTime();
     if (!Number.isFinite(ts) || ts <= 0) return "";
@@ -958,7 +965,7 @@ function CustomerHistoryCard({ item, idx, compact = false, locale = "en" }: { it
     <div key={`${item.po || item.id || idx}`} className="p-5 hover:bg-gray-50 transition cursor-pointer" onClick={() => setCollapsed(c => !c)}>
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
-          <h3 className="font-bold text-gray-900">{item.service} <span className="text-sm font-normal text-gray-400">· {item.po} · {item.counterpartName || item.fixerName || 'Partner'}</span></h3>
+          <h3 className="font-bold text-gray-900">{item.service} <span className="text-sm font-normal text-gray-400">· {orderText} · {item.counterpartName || item.fixerName || 'Partner'}</span></h3>
           <p className="text-sm text-gray-500 mt-1">Completed {fmtDate(item.completedAt || item.statusChangedAt || item.createdAt || item.date)}</p>
         </div>
         <div className="flex flex-col items-start sm:items-end gap-1 flex-shrink-0">
@@ -1031,7 +1038,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       const existing = JSON.parse(localStorage.getItem(key) || "[]");
       if (Array.isArray(existing) && existing.length > 0) {
         if (!localStorage.getItem(`chat_title_${po}`)) {
-          localStorage.setItem(`chat_title_${po}`, `${inquiry.propertyTitle || po}`);
+          localStorage.setItem(`chat_title_${po}`, getPropChatRoomTitle(inquiry));
         }
         return;
       }
@@ -1051,9 +1058,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         time: toDisplayDateTime(now),
       };
 
-      localStorage.setItem(key, JSON.stringify([bootstrapMessage]));
-  localStorage.setItem(`chat_title_${po}`, `${inquiry.propertyTitle || po}`);
+        localStorage.setItem(key, JSON.stringify([bootstrapMessage]));
+        localStorage.setItem(`chat_title_${po}`, getPropChatRoomTitle(inquiry));
       localStorage.setItem(`chat_from_${po}`, "dashboard");
+        localStorage.removeItem(`chat_closed_${po}`);
       window.dispatchEvent(new Event("cblue-chat-updated"));
     } catch {
       // Best-effort chat bootstrap for property flow.
@@ -1116,6 +1124,31 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       normalizePropLocationPart(p.province),
     ].filter(Boolean).join(', ') || normalizePropLocationPart(p.province) || 'Unknown';
   };
+  const getPropOrderLabel = (poNumber: string | null | undefined) => {
+    const value = String(poNumber || '-');
+    if (locale === 'th') return `ออเดอร์: ${value}`;
+    if (locale === 'zh') return `订单: ${value}`;
+    return `Order: ${value}`;
+  };
+  const getPropChatRoomTitle = (p: Partial<PropInquiry>) => {
+    const title = String(p.propertyTitle || '').trim() || (locale === 'th' ? 'อสังหาริมทรัพย์' : locale === 'zh' ? '房产' : 'Property');
+    const listingType = String(p.listingType || '').toUpperCase();
+    const listingLabel =
+      listingType === 'SALE'
+        ? locale === 'th'
+          ? 'ขาย'
+          : locale === 'zh'
+          ? '出售'
+          : 'Sale'
+        : listingType === 'RENT'
+        ? locale === 'th'
+          ? 'เช่า'
+          : locale === 'zh'
+          ? '出租'
+          : 'Rent'
+        : listingType || '-';
+    return `${title} · ${listingLabel} · ${getPropSiteLocation(p)} · ${toCurrencyLabel(p.propertyPrice)}`;
+  };
   const hasPendingCustomerPropRating = (p: Partial<PropInquiry>) => p.customerRating == null;
   const hasPendingListerPropRating = (p: Partial<PropInquiry>) => p.listerRating == null;
   const getPropInquiryDisplayStep = (statusValue: string, stepValue?: number | null) => {
@@ -1142,6 +1175,17 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     if (["DECLINED", "CANCELLED", "COMPLETED"].includes(status)) return false;
     return hasPendingCustomerPropRating(p) && getPropInquiryDisplayStep(status, Number(p.step || 0)) >= 8;
   };
+  const hasCompletionChatMarker = (messages: any[]) =>
+    Array.isArray(messages) &&
+    messages.some((message: any) => {
+      const text = String(message?.text || '').toLowerCase();
+      if (!text) return false;
+      return (
+        text.includes('workflow completed') ||
+        text.includes('job is now complete') ||
+        text.includes('rated this project')
+      );
+    });
   const readStoredChatHistory = (po: any) => {
     if (!mockReady || typeof window === 'undefined' || !po) return [];
     try {
@@ -1424,6 +1468,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         if (localStorage.getItem(`chat_closed_${po}`)) continue;
         const parsed = JSON.parse(localStorage.getItem(key) || "[]");
         if (!Array.isArray(parsed) || parsed.length === 0) continue;
+        if (hasCompletionChatMarker(parsed)) {
+          localStorage.setItem(`chat_closed_${po}`, '1');
+          continue;
+        }
         const reversed = [...parsed].reverse();
         const latestVisible = reversed.find((m: any) => isVisibleMessage(m));
         if (!latestVisible) continue;
@@ -1498,7 +1546,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         const sortTs = parseDateMs(last?.createdAt || last?.time || Date.now());
         items.push({
           id: po, po,
-          name: inq ? `${inq.propertyTitle}` : `Property Chat - ${po}`,
+          name: inq ? getPropChatRoomTitle(inq) : `Property Chat - ${po}`,
           lastMsg: last.text,
           time: last.time || "",
           incomingMsg: incomingMsg?.text || "",
@@ -1547,6 +1595,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           return true;
         });
         if (visible.length === 0) continue;
+        const workflowClosed = ['COMPLETED', 'CANCELLED', 'DONE'].includes(String(order?.status || '').toUpperCase());
+        if (workflowClosed || hasCompletionChatMarker(visible)) {
+          try { localStorage.setItem(`chat_closed_${po}`, '1'); } catch {}
+          continue;
+        }
 
         const latestVisible = visible[visible.length - 1];
         const incoming = [...visible].reverse().find((m: any) => String(m?.senderUserId || "") !== viewerUserId);
@@ -1630,7 +1683,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         try {
           localStorage.setItem(`chat_messages_${po}`, JSON.stringify(mapped));
           if (!localStorage.getItem(`chat_title_${po}`)) {
-            localStorage.setItem(`chat_title_${po}`, inquiry.propertyTitle || po);
+            localStorage.setItem(`chat_title_${po}`, getPropChatRoomTitle(inquiry));
           }
         } catch {
           // Non-blocking cache write.
@@ -1644,7 +1697,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         items.push({
           id: po,
           po,
-          name: inquiry.propertyTitle || `Property Chat - ${po}`,
+          name: getPropChatRoomTitle(inquiry),
           lastMsg: latest?.text || '',
           time: latest?.time || '',
           incomingMsg: incoming?.text || '',
@@ -2297,7 +2350,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       const stableTime = x.date || toDisplayDateTime(x.createdAt) || "";
       const createdAt = x.createdAt || parseDateMs(x.date);
       if (x.type === "notice") return { id: `a-${x.id}`, msg: x.desc || "Workflow updated.", msgTh: x.descTh || "อัปเดตขั้นตอนการทำงาน", msgZh: x.descZh || "工作流程已更新。", time: stableTime, createdAt, dot: "bg-indigo-400" };
-      if (x.type === "payment_pending") return { id: `a-${x.id}`, msg: "Partner accepted PO — please proceed to pay fee.", msgTh: "พาร์ทเนอร์ยอมรับ PO — กรุณาชำระค่าธรรมเนียม", msgZh: "合作伙伴已接受PO — 请支付费用。", time: stableTime, createdAt, dot: "bg-blue-500" };
+      if (x.type === "payment_pending") return { id: `a-${x.id}`, msg: "Partner accepted Order — please proceed to pay fee.", msgTh: "พาร์ทเนอร์ยอมรับออเดอร์แล้ว — กรุณาชำระค่าธรรมเนียม", msgZh: "合作伙伴已接受订单 — 请支付费用。", time: stableTime, createdAt, dot: "bg-blue-500" };
       if (x.type === "chat_ready") return { id: `a-${x.id}`, msg: "Chat is active — send meeting invitation when ready.", msgTh: "แชทพร้อมใช้งาน — ส่งคำเชิญนัดหมายเมื่อพร้อม", msgZh: "聊天已激活 — 准备好后发送会议邀请。", time: stableTime, createdAt, dot: "bg-sky-500" };
       if (x.type === "meeting_pending_partner") return { id: `a-${x.id}`, msg: "Meeting invitation sent — waiting for partner confirmation.", msgTh: "ส่งคำเชิญนัดหมายแล้ว — รอการยืนยันจากพาร์ทเนอร์", msgZh: "会议邀请已发送 — 等待合作伙伴确认。", time: stableTime, createdAt, dot: "bg-amber-500" };
       if (x.type === "meeting_scheduled") return { id: `a-${x.id}`, msg: "Confirm meeting at site", msgTh: "ยืนยันนัดหมายที่สถานที่", msgZh: "确认现场会议", time: stableTime, createdAt, dot: "bg-teal-500" };
@@ -2677,7 +2730,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div>
               <h3 className="font-bold text-gray-900">{item.title || item.po} <span className="text-sm font-normal text-gray-500">· {item.po} · Step 6 of 11 · Fee &amp; Proceed</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{item.customer} · {item.date}</p>
-              <p className="text-xs text-gray-500 mt-1">{item.desc || (locale === "th" ? "พาร์ทเนอร์ยอมรับ PO แล้ว กรุณาชำระค่าธรรมเนียมและดำเนินการต่อ" : locale === "zh" ? "合作伙伴已接受PO，请支付处理费用以继续。" : "Partner accepted your PO. Please pay the processing fee to proceed.")}</p>
+              <p className="text-xs text-gray-500 mt-1">{item.desc || (locale === "th" ? "พาร์ทเนอร์ยอมรับออเดอร์แล้ว กรุณาชำระค่าธรรมเนียมและดำเนินการต่อ" : locale === "zh" ? "合作伙伴已接受订单，请支付处理费用以继续。" : "Partner accepted your Order. Please pay the processing fee to proceed.")}</p>
             </div>
           </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-end">
@@ -2777,7 +2830,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-lg bg-gray-50 text-gray-500 flex items-center justify-center font-bold text-lg">⏳</div>
             <div>
-              <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {p.poNumber} · Step 3 of 8</span></h3>
+              <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {getPropOrderLabel(p.poNumber)} · Step 3 of 8</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{getPropSiteLocation(p)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "สร้างเมื่อ" : locale === "zh" ? "创建时间" : "Created"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "รอผู้ลงประกาศยืนยัน — หากไม่ตอบสนองสามารถเลือกใหม่ได้" : locale === "zh" ? "等待房源方确认 — 如无响应可重新选择" : "Waiting for lister to accept — you may reselect if no response"}</p>
@@ -2808,7 +2861,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-lg bg-red-50 text-red-500 flex items-center justify-center font-bold text-lg">❌</div>
             <div>
-              <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {p.poNumber}</span></h3>
+              <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {getPropOrderLabel(p.poNumber)}</span></h3>
               <p className="text-sm text-red-600 font-semibold mt-0.5">{locale === "th" ? "ผู้ลงประกาศปฏิเสธคำขอ" : locale === "zh" ? "房源方已拒绝" : "Lister declined your inquiry"}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "อัปเดตเมื่อ" : locale === "zh" ? "更新时间" : "Updated"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "กรุณาเลือกทรัพย์สินใหม่จาก Real Estate Page" : "Please select another property from the Real Estate Page."}</p>
@@ -2826,7 +2879,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-lg">🏠</div>
             <div>
-              <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {p.poNumber} · Step 5 of 8</span></h3>
+              <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {getPropOrderLabel(p.poNumber)} · Step 5 of 8</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{firstNameOnly(p.listerName, 'Lister')} · {getPropSiteLocation(p)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "อัปเดตเมื่อ" : locale === "zh" ? "更新时间" : "Updated"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "ผู้ลงประกาศยืนยันแล้ว — ชำระค่าดำเนินการเพื่อรับข้อมูลติดต่อ" : locale === "zh" ? "房源方已确认 — 支付处理费以获取联系方式" : "Lister accepted — pay the processing fee to get contact info"}</p>
@@ -2853,7 +2906,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center font-bold text-lg">📅</div>
             <div>
-              <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {p.poNumber} · Step 7 of 8</span></h3>
+              <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {getPropOrderLabel(p.poNumber)} · Step 7 of 8</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{firstNameOnly(p.listerName, 'Lister')} · {getPropSiteLocation(p)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "อัปเดตเมื่อ" : locale === "zh" ? "更新时间" : "Updated"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "ชำระแล้ว — ส่งคำเชิญนัดหมายเพื่อเยี่ยมชมทรัพย์สิน" : locale === "zh" ? "已付款 — 发送会议邀请以预约参观" : "Fee paid — send a meeting invitation to schedule a property viewing"}</p>
@@ -2877,7 +2930,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-lg bg-yellow-50 text-yellow-600 flex items-center justify-center font-bold text-lg">⭐</div>
             <div>
-              <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {p.poNumber} · Step 8 of 8</span></h3>
+              <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {getPropOrderLabel(p.poNumber)} · Step 8 of 8</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{firstNameOnly(p.listerName, 'Lister')} · {getPropSiteLocation(p)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "อัปเดตเมื่อ" : locale === "zh" ? "更新时间" : "Updated"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "นัดหมายยืนยันแล้ว — ให้คะแนนเพื่อปิดงาน" : locale === "zh" ? "会议已确认 — 评分以结案" : "Meeting confirmed — rate to close this inquiry"}</p>
@@ -2911,7 +2964,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       <div className="flex items-start gap-4 flex-1 min-w-0">
          <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold shrink-0 ${item.type === 'prop_waiting' ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-600'}`}>{(locale === "th" ? (item.titleTh || item.serviceTh || item.title || item.service || "C") : locale === "zh" ? (item.titleZh || item.serviceZh || item.title || item.service || "C") : (item.title || item.service || "C")).charAt(0)}</div>
          <div className="min-w-0">
-           <h3 className="font-bold text-gray-900">{locale === "th" ? (item.titleTh || item.serviceTh || item.title || item.service) : locale === "zh" ? (item.titleZh || item.serviceZh || item.title || item.service) : (item.title || item.service)} <span className="text-sm font-normal text-gray-400">· {item.po || `PO-${item.id?.slice(0,8) || '2605-8471'}`} | {item.location || item.subdistrict || 'Unknown'}</span></h3>
+           <h3 className="font-bold text-gray-900">{locale === "th" ? (item.titleTh || item.serviceTh || item.title || item.service) : locale === "zh" ? (item.titleZh || item.serviceZh || item.title || item.service) : (item.title || item.service)} <span className="text-sm font-normal text-gray-400">· {isPropertyCard ? getPropOrderLabel(item.po) : (item.po || `PO-${item.id?.slice(0,8) || '2605-8471'}`)} | {item.location || item.subdistrict || 'Unknown'}</span></h3>
            <p className="text-sm text-gray-600 mt-0.5">{item.fixerAlias || item.partnerName || item.customer || "Customer"} · {item.date || toDisplayDateTime(item.createdAt || Date.now())} · {amountPrefix} {amountValue}</p>
            {item.type === 'prop_waiting' && (
              <p className="text-xs text-amber-700 mt-1">
@@ -2972,8 +3025,35 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   };
   const activeOrders = workflowOrders.filter((o: any) => !['COMPLETED', 'CANCELLED', 'DONE'].includes(String(o.status || '').toUpperCase()));
   const historyOrders = workflowOrders.filter((o: any) => ['COMPLETED', 'CANCELLED', 'DONE'].includes(String(o.status || '').toUpperCase()));
+  const propCompletedHistoryEntries = propInquiries
+    .filter((p: PropInquiry) => String(p.status || '').toUpperCase() === 'COMPLETED')
+    .map((p: PropInquiry) => {
+      const completedAt = p.updatedAt || p.createdAt || Date.now();
+      const siteLocation = getPropSiteLocation(p);
+      return {
+        id: `prop-completed-${p.id}`,
+        po: p.poNumber,
+        service: p.propertyTitle || 'Property Inquiry',
+        counterpartName: firstNameOnly(p.listerName, 'Lister'),
+        partnerName: firstNameOnly(p.listerName, 'Lister'),
+        completedAt,
+        createdAt: p.createdAt || completedAt,
+        statusChangedAt: completedAt,
+        fee: toCurrencyLabel(p.propertyFee),
+        budget: toCurrencyLabel(p.propertyPrice),
+        status: 'COMPLETED',
+        step: 11,
+        stepName: 'Property Inquiry Completed',
+        location: siteLocation,
+        subdistrict: siteLocation,
+        projectDetails: `Property: ${p.propertyTitle || p.poNumber} | Site: ${siteLocation} | Meeting: ${p.meetingDate || '-'} ${p.meetingTime || ''} @ ${p.meetingVenue || '-'}`,
+        description: `Customer rating: ${p.customerRating ?? '-'} | Lister rating: ${p.listerRating ?? '-'} | ${getPropOrderLabel(p.poNumber)}`,
+        tier: p.propertyTier || 'STANDARD',
+        chatHistory: readStoredChatHistory(p.poNumber),
+      };
+    });
   const allHistory = Array.from(
-    [...historyOrders, ...visibleMockHistory.filter((x: any) => x.po)].reduce((map: Map<string, any>, entry: any) => {
+    [...historyOrders, ...visibleMockHistory.filter((x: any) => x.po), ...propCompletedHistoryEntries].reduce((map: Map<string, any>, entry: any) => {
       const po = extractPo(entry) || entry.po || entry.id;
       if (!po || isHiddenTestPo(po)) return map;
       const existing = map.get(po) || {};
@@ -3301,7 +3381,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                         <span className={`inline-flex text-xs font-bold px-2.5 py-1 rounded-full uppercase ${getPropertyTierStyle(p.propertyTier)}`}>
                           {p.propertyTier || 'STANDARD'}
                         </span>
-                        <h3 className="font-bold text-gray-900 mt-2">{p.propertyTitle} <span className="text-sm font-normal text-gray-400">· {p.poNumber}</span></h3>
+                        <h3 className="font-bold text-gray-900 mt-2">{p.propertyTitle} <span className="text-sm font-normal text-gray-400">· {getPropOrderLabel(p.poNumber)}</span></h3>
                         <p className="text-sm text-gray-600 mt-1">{listerFirstName} · {siteLocation}</p>
                       </div>
                       <div className="flex flex-col items-start md:items-end gap-1">
@@ -3423,47 +3503,6 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               allHistory.map((o: any, i: number) => <CustomerHistoryCard key={o.po || o.id || i} item={o} idx={i} locale={locale} />)
             )}
           </div>
-          {/* Property Inquiry History */}
-          {(() => {
-            const propHist = propInquiries.filter(p => String(p.status || '').toUpperCase() === "COMPLETED");
-            if (propHist.length === 0) return null;
-            return (
-              <div className="mt-2 border-t border-gray-100">
-                <div className="px-6 py-3 bg-emerald-50">
-                  <h3 className="font-semibold text-emerald-800 text-sm">🏠 {locale === "th" ? "ประวัติคำขออสังหาฯ" : "Property Inquiry History"}</h3>
-                </div>
-                <div className="divide-y divide-gray-50">
-                  {propHist.slice().reverse().map((p: any, i: number) => (
-                    <div key={p.id || i} className="px-6 py-4 flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center text-lg">🏠</div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-gray-900 text-sm">{p.propertyTitle} <span className="text-xs font-normal text-gray-400">· {p.poNumber}</span></p>
-                        <p className="text-xs text-gray-500 mt-0.5">{getPropSiteLocation(p)} · {firstNameOnly(p.listerName, 'Lister')}</p>
-                        <p className="text-xs text-emerald-600 font-semibold mt-0.5">
-                          ✅ {locale === "th" ? "ปิดงานแล้ว" : "Completed"} · ⭐ {p.customerRating ?? "-"}/5 ({locale === "th" ? "คุณให้" : "you"}) · ⭐ {p.listerRating ?? "-"}/5 ({locale === "th" ? "ผู้ลงประกาศให้" : "lister"})
-                          {p.updatedAt ? ` · ${new Date(p.updatedAt).toLocaleDateString()}` : ""}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          {(() => {
-                            try {
-                              const parsed = JSON.parse(localStorage.getItem(`chat_messages_${p.poNumber}`) || "[]");
-                              const count = Array.isArray(parsed)
-                                ? parsed.filter((m: any) => String(m?.text || "").trim()).length
-                                : 0;
-                              return `${locale === "th" ? "บันทึกแชท" : locale === "zh" ? "聊天记录" : "Chat records"}: ${count}`;
-                            } catch {
-                              return `${locale === "th" ? "บันทึกแชท" : locale === "zh" ? "聊天记录" : "Chat records"}: 0`;
-                            }
-                          })()}
-                        </p>
-                      </div>
-                      <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-full">{locale === "th" ? "สำเร็จ" : "Done"}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
         </div>
       )}
 
@@ -3479,7 +3518,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   key={c.id}
                   className="p-6 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer"
                   onClick={() => {
-                    try { localStorage.setItem(`chat_from_${c.po}`, "dashboard"); } catch {}
+                    try {
+                      localStorage.setItem(`chat_from_${c.po}`, "dashboard");
+                      if (c.name) localStorage.setItem(`chat_title_${c.po}`, c.name);
+                    } catch {}
                     window.location.href = `${prefix}/chat/${c.po}`;
                   }}
                 >
@@ -3592,7 +3634,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                     node: (
                       <div key={p.poNumber} className="bg-white rounded-xl shadow-sm border border-emerald-200 p-5">
                         <div className="flex justify-between items-center mb-2">
-                          <span className="text-gray-900 font-bold">🏠 {p.propertyTitle} ({p.poNumber})</span>
+                          <span className="text-gray-900 font-bold">🏠 {p.propertyTitle} ({getPropOrderLabel(p.poNumber)})</span>
                           <span className="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-bold">{p.meetingDate}{p.meetingTime ? ` · ${p.meetingTime}` : ''}</span>
                         </div>
                         <p className="text-sm text-gray-600">{locale === "th" ? "สถานที่:" : "Venue:"} {p.meetingVenue || 'TBD'} | {locale === "th" ? "ผู้ลงประกาศ:" : "Lister:"} {firstNameOnly(p.listerName, 'Lister')}</p>
@@ -3661,7 +3703,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4 flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-white font-bold text-lg">{locale === "th" ? "ชำระค่าดำเนินการ" : locale === "zh" ? "支付处理费" : "Pay Processing Fee"}</h3>
-                <p className="text-green-100 text-sm mt-1">{propPayModal.poNumber} · Step 5 of 8</p>
+                <p className="text-green-100 text-sm mt-1">{getPropOrderLabel(propPayModal.poNumber)} · Step 5 of 8</p>
               </div>
               <button onClick={() => setPropPayModal(null)} className="text-white/90 hover:text-white text-xl leading-none" aria-label="Close">&times;</button>
             </div>
@@ -3731,7 +3773,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div className="bg-gradient-to-r from-teal-500 to-cyan-500 px-6 py-4 flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-white font-bold text-lg">{locale === "th" ? "ส่งคำเชิญนัดหมาย" : locale === "zh" ? "发送会议邀请" : "Send Meeting Invitation"}</h3>
-                <p className="text-teal-100 text-sm mt-1">{propMeetingModal.poNumber} · Step 7 of 8</p>
+                <p className="text-teal-100 text-sm mt-1">{getPropOrderLabel(propMeetingModal.poNumber)} · Step 7 of 8</p>
               </div>
               <button onClick={() => setPropMeetingModal(null)} className="text-white/90 hover:text-white text-xl leading-none" aria-label="Close">&times;</button>
             </div>
@@ -3798,7 +3840,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div className="bg-gradient-to-r from-yellow-500 to-amber-500 px-6 py-4 flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-white font-bold text-lg">{locale === "th" ? "ให้คะแนนและปิดงาน" : locale === "zh" ? "评分并结案" : "Rate & Close"}</h3>
-                <p className="text-yellow-100 text-sm mt-1">{propRateModal.poNumber} · Step 8 of 8</p>
+                <p className="text-yellow-100 text-sm mt-1">{getPropOrderLabel(propRateModal.poNumber)} · Step 8 of 8</p>
               </div>
               <button onClick={() => setPropRateModal(null)} className="text-white/90 hover:text-white text-xl leading-none" aria-label="Close">&times;</button>
             </div>
@@ -3829,18 +3871,22 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                     await updatePropInquiry(
                       propRateModal!.id,
                       {
-                        status: "COMPLETED",
                         step: 8,
                         customerRating: propRateStars,
                         customerComment: propRateComment,
                       },
                       propRateModal!.poNumber,
                     );
+                    const listerAlreadyRated = propRateModal?.listerRating != null;
                     setPropRateModal(null);
                     alert(
                       locale === "th"
-                        ? "ขอบคุณ! งานนี้ปิดแล้วและย้ายไปประวัติ"
-                        : "Thank you! This inquiry is now closed and moved to history.",
+                        ? listerAlreadyRated
+                          ? "ขอบคุณ! งานนี้ปิดแล้วและย้ายไปประวัติ"
+                          : "ขอบคุณ! ส่งคะแนนแล้ว กำลังรอผู้ลงประกาศให้คะแนนเพื่อปิดงาน"
+                        : listerAlreadyRated
+                        ? "Thank you! This inquiry is now closed and moved to history."
+                        : "Thank you! Your rating is submitted. Waiting for the lister rating to close this inquiry.",
                     );
                   }}
                 >

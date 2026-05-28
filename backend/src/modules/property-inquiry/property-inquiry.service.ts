@@ -518,9 +518,23 @@ export class PropertyInquiryService {
 
     const ratingProvided =
       dto.customerRating !== undefined || dto.listerRating !== undefined;
-    const nextStatus = ratingProvided
-      ? PropertyInquiryStatus.COMPLETED
-      : dto.status;
+    const mergedCustomerRating =
+      dto.customerRating !== undefined
+        ? dto.customerRating
+        : inquiry.customerRating;
+    const mergedListerRating =
+      dto.listerRating !== undefined ? dto.listerRating : inquiry.listerRating;
+    const bothRatingsSubmitted =
+      mergedCustomerRating != null && mergedListerRating != null;
+
+    let nextStatus = dto.status;
+    if (ratingProvided && !bothRatingsSubmitted) {
+      nextStatus = PropertyInquiryStatus.MEETING_CONFIRMED;
+    }
+    if (bothRatingsSubmitted) {
+      nextStatus = PropertyInquiryStatus.COMPLETED;
+    }
+
     const nextStep = ratingProvided ? 8 : dto.step;
 
     return this.prisma.propertyInquiry.update({
