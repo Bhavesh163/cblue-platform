@@ -119,27 +119,34 @@ const normalizeImageUrl = (value: unknown) => {
   const raw = String(value || '').trim();
   if (!raw) return '';
 
-  if (raw.startsWith('data:image/')) {
+  if (raw.startsWith('data:')) {
     const compact = raw.replace(/\s+/g, '');
-    const normalized = compact.includes(';base64,')
-      ? compact
-      : compact.replace(/;bas(?!e64,)/i, ';base64,');
+    const normalized = compact.replace(/;bas(?!e64,)/i, ';base64,');
     const commaIndex = normalized.indexOf(',');
     if (commaIndex <= 0) return '';
     const header = normalized.slice(0, commaIndex);
     const payload = normalized.slice(commaIndex + 1).replace(/\s+/g, '');
     if (!payload) return '';
-    const fixedHeader = /;base64$/i.test(header) ? header : `${header};base64`;
+    const fixedHeader = /;base64$/i.test(header)
+      ? header
+      : header.includes(';')
+      ? header
+      : `${header};base64`;
     return `${fixedHeader},${payload}`;
   }
 
   if (
     raw.startsWith('http://') ||
     raw.startsWith('https://') ||
+    raw.startsWith('//') ||
     raw.startsWith('/') ||
     raw.startsWith('blob:')
   ) {
     return raw;
+  }
+
+  if (/^[A-Za-z0-9][A-Za-z0-9._~!$&'()*+,;=:@/-]*$/.test(raw)) {
+    return raw.startsWith('/') ? raw : `/${raw}`;
   }
 
   return '';
@@ -3339,11 +3346,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   disabled={propRateStars === 0}
                   className="flex-1 py-2.5 bg-yellow-500 text-white rounded-xl font-bold text-sm hover:bg-yellow-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={async () => {
-                    const alreadyRatedByLister = propRateModal?.listerRating != null;
                     await updatePropInquiry(
                       propRateModal!.id,
                       {
-                        status: alreadyRatedByLister ? "COMPLETED" : "MEETING_CONFIRMED",
+                        status: "COMPLETED",
                         step: 8,
                         customerRating: propRateStars,
                         customerComment: propRateComment,
@@ -3351,9 +3357,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                     );
                     setPropRateModal(null);
                     alert(
-                      alreadyRatedByLister
-                        ? (locale === "th" ? "ขอบคุณ! งานนี้ปิดแล้วและย้ายไปประวัติ" : "Thank you! This inquiry is now closed and moved to history.")
-                        : (locale === "th" ? "ขอบคุณ! บันทึกคะแนนแล้ว กำลังรอผู้ลงประกาศให้คะแนนเพื่อปิดงาน" : "Thank you! Your rating is saved. Waiting for lister rating to close this inquiry."),
+                      locale === "th"
+                        ? "ขอบคุณ! งานนี้ปิดแล้วและย้ายไปประวัติ"
+                        : "Thank you! This inquiry is now closed and moved to history.",
                     );
                   }}
                 >

@@ -650,7 +650,11 @@ export class SubscriptionService {
       .replace(/^['"]|['"]$/g, '');
     const fromCandidates = Array.from(
       new Set(
-        [normalizedConfiguredFromEmail, 'noreply@cblue.co.th']
+        [
+          normalizedConfiguredFromEmail,
+          'noreply@lblue.tech',
+          'noreply@cblue.co.th',
+        ]
           .map((v) => v.trim())
           .filter(Boolean),
       ),
@@ -749,7 +753,27 @@ export class SubscriptionService {
           body: JSON.stringify(body),
         });
 
-        if (response.ok) {
+        const rawResponse = await response.text();
+        let parsedResponse: any = null;
+        try {
+          parsedResponse = rawResponse ? JSON.parse(rawResponse) : null;
+        } catch {
+          parsedResponse = null;
+        }
+
+        const messageStatuses = Array.isArray(parsedResponse?.Messages)
+          ? parsedResponse.Messages.map((message: any) =>
+              String(message?.Status || '').toLowerCase(),
+            )
+          : [];
+        const hasSuccessfulMessageStatus = messageStatuses.some((status) =>
+          ['success', 'queued'].includes(status),
+        );
+
+        if (
+          response.ok &&
+          (messageStatuses.length === 0 || hasSuccessfulMessageStatus)
+        ) {
           this.logger.log(
             `Password reset email sent to ${email} via Mailjet API (${fromEmail})`,
           );
@@ -759,7 +783,14 @@ export class SubscriptionService {
           return true;
         }
 
-        apiError = await response.text();
+        apiError =
+          rawResponse ||
+          (parsedResponse ? JSON.stringify(parsedResponse) : 'Unknown error');
+        if (response.ok && !hasSuccessfulMessageStatus) {
+          this.logger.error(
+            `Mailjet API non-success message status from ${fromEmail}: ${apiError}`,
+          );
+        }
         this.logger.error(
           `Mailjet API error [${response.status}] from ${fromEmail}: ${apiError}`,
         );

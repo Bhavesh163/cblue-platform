@@ -40,27 +40,34 @@ function normalizeImageUrl(value: unknown) {
   const raw = String(value || "").trim();
   if (!raw) return "";
 
-  if (raw.startsWith("data:image/")) {
+  if (raw.startsWith("data:")) {
     const compact = raw.replace(/\s+/g, "");
-    const normalized = compact.includes(";base64,")
-      ? compact
-      : compact.replace(/;bas(?!e64,)/i, ";base64,");
+    const normalized = compact.replace(/;bas(?!e64,)/i, ";base64,");
     const commaIndex = normalized.indexOf(",");
     if (commaIndex <= 0) return "";
     const header = normalized.slice(0, commaIndex);
     const payload = normalized.slice(commaIndex + 1).replace(/\s+/g, "");
     if (!payload) return "";
-    const fixedHeader = /;base64$/i.test(header) ? header : `${header};base64`;
+    const fixedHeader = /;base64$/i.test(header)
+      ? header
+      : header.includes(";")
+      ? header
+      : `${header};base64`;
     return `${fixedHeader},${payload}`;
   }
 
   if (
     raw.startsWith("http://") ||
     raw.startsWith("https://") ||
+    raw.startsWith("//") ||
     raw.startsWith("/") ||
     raw.startsWith("blob:")
   ) {
     return raw;
+  }
+
+  if (/^[A-Za-z0-9][A-Za-z0-9._~!$&'()*+,;=:@/-]*$/.test(raw)) {
+    return raw.startsWith("/") ? raw : `/${raw}`;
   }
 
   return "";

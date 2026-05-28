@@ -323,7 +323,6 @@ export default function PropertyRegisterPage() {
         return;
       }
       const requestBodyWithImages = JSON.stringify({ ...payload, ...(compressedImages.length > 0 ? { images: compressedImages } : {}) });
-      const requestBodyWithoutImages = JSON.stringify(payload);
       const submitListing = (authToken: string | null, body: string) => fetch("/api/v1/properties", {
         method: "POST",
         headers: {
@@ -343,23 +342,6 @@ export default function PropertyRegisterPage() {
         }
         token = retriedToken;
         res = await submitListing(token, requestBodyWithImages);
-      }
-
-      // Fallback path: if image payload caused a server-side failure,
-      // retry once without images so listing can still be published.
-      if (!res.ok && res.status >= 500 && compressedImages.length > 0) {
-        let retryRes = await submitListing(token, requestBodyWithoutImages);
-        if (!retryRes.ok && [401, 403].includes(retryRes.status)) {
-          const retriedToken = await refreshSubscriberSession(token);
-          if (!retriedToken) {
-            setSubscriber(null);
-            setError(sessionExpiredMessage);
-            return;
-          }
-          token = retriedToken;
-          retryRes = await submitListing(token, requestBodyWithoutImages);
-        }
-        res = retryRes;
       }
 
       if (res.ok) {

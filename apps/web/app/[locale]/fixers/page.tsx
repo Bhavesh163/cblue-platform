@@ -116,27 +116,36 @@ const normalizeImageUrl = (value: unknown) => {
   const raw = String(value || "").trim();
   if (!raw) return "";
 
-  if (raw.startsWith("data:image/")) {
+  if (raw.startsWith("data:")) {
     const compact = raw.replace(/\s+/g, "");
-    const normalized = compact.includes(";base64,")
-      ? compact
-      : compact.replace(/;bas(?!e64,)/i, ";base64,");
+    const normalized = compact.replace(/;bas(?!e64,)/i, ";base64,");
     const commaIndex = normalized.indexOf(",");
     if (commaIndex <= 0) return "";
     const header = normalized.slice(0, commaIndex);
     const payload = normalized.slice(commaIndex + 1).replace(/\s+/g, "");
     if (!payload) return "";
-    const fixedHeader = /;base64$/i.test(header) ? header : `${header};base64`;
+    const fixedHeader = /;base64$/i.test(header)
+      ? header
+      : header.includes(';')
+      ? header
+      : `${header};base64`;
     return `${fixedHeader},${payload}`;
   }
 
   if (
     raw.startsWith("http://") ||
     raw.startsWith("https://") ||
+    raw.startsWith("//") ||
     raw.startsWith("/") ||
     raw.startsWith("blob:")
   ) {
     return raw;
+  }
+
+  // Allow path-like keys (for example, `property/upload/image-1`) so they can
+  // still be resolved and downloaded when absolute URLs are unavailable.
+  if (/^[A-Za-z0-9][A-Za-z0-9._~!$&'()*+,;=:@/-]*$/.test(raw)) {
+    return raw.startsWith("/") ? raw : `/${raw}`;
   }
 
   return "";
@@ -172,6 +181,7 @@ const extensionFromMimeType = (mimeType?: string | null) => {
   return match?.[1] || "bin";
 };
 const inferFilenameFromUrl = (url: string, fallback: string) => {
+  if (url.startsWith('data:')) return fallback;
   try {
     const base = typeof window !== "undefined" ? window.location.origin : "http://localhost";
     const parsed = new URL(url, base);
@@ -185,6 +195,15 @@ const inferFilenameFromUrl = (url: string, fallback: string) => {
     }
   } catch {}
   return fallback;
+};
+const sanitizeFilename = (value: string, fallback: string) => {
+  const cleaned = String(value || '').trim();
+  const withoutQuery = cleaned.split('?')[0] ?? '';
+  const withoutHash = withoutQuery.split('#')[0] ?? '';
+  const safe = withoutHash
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
+    .slice(0, 160);
+  return safe || fallback;
 };
 const triggerDownload = (href: string, filename: string, revoke = false) => {
   const link = document.createElement("a");
@@ -240,7 +259,10 @@ const downloadSingleAttachmentUrl = async (
   const url = normalizeImageUrl(rawUrl);
   if (!url) return false;
 
-  const fallbackName = inferFilenameFromUrl(url, `${prefix}-${index + 1}`);
+  const fallbackName = sanitizeFilename(
+    inferFilenameFromUrl(url, `${prefix}-${index + 1}`),
+    `${prefix}-${index + 1}`,
+  );
 
   if (url.startsWith("blob:")) {
     triggerDownload(url, fallbackName);
@@ -253,7 +275,10 @@ const downloadSingleAttachmentUrl = async (
       if (!response.ok) return false;
       const blob = await response.blob();
       const ext = extensionFromMimeType(blob.type);
-      const fileName = fallbackName.includes(".") ? fallbackName : `${fallbackName}.${ext}`;
+      const fileName = sanitizeFilename(
+        fallbackName.includes(".") ? fallbackName : `${fallbackName}.${ext}`,
+        `${prefix}-${index + 1}.${ext}`,
+      );
       downloadBlobFile(blob, fileName);
       return true;
     } catch {
@@ -282,11 +307,17 @@ const downloadSingleAttachmentUrl = async (
     }
 
     const blob = await response.blob();
-    const headerName = parseFilenameFromContentDisposition(
-      response.headers.get("content-disposition"),
+    const headerName = sanitizeFilename(
+      parseFilenameFromContentDisposition(
+        response.headers.get("content-disposition"),
+      ),
+      '',
     );
     const ext = extensionFromMimeType(blob.type);
-    const fileName = headerName || (fallbackName.includes(".") ? fallbackName : `${fallbackName}.${ext}`);
+    const fileName = sanitizeFilename(
+      headerName || (fallbackName.includes(".") ? fallbackName : `${fallbackName}.${ext}`),
+      `${prefix}-${index + 1}.${ext}`,
+    );
     downloadBlobFile(blob, fileName);
     return true;
   } catch {
@@ -302,11 +333,17 @@ const downloadAttachmentUrls = async ({
   po,
   prefix = "attachment",
 }: {
-  urls: string[];
+  urls: unknown[];
   po?: string;
   prefix?: string;
 }) => {
-  const uniqueUrls = Array.from(new Set((urls || []).map(normalizeImageUrl).filter(Boolean)));
+  const uniqueUrls = Array.from(
+    new Set(
+      (urls || [])
+        .map((value) => normalizeImageUrl(extractImageUrlCandidate(value)))
+        .filter(Boolean),
+    ),
+  );
   let downloadCount = 0;
 
   for (const [i, url] of uniqueUrls.entries()) {
@@ -756,7 +793,13 @@ export default function FixerProPage() {
       } catch {}
 
       const uniqueDirectUrls = Array.from(
-        new Set(directUrls.map(normalizeImageUrl).filter(Boolean)),
+        new Set(
+          directUrls
+            .map((value: unknown) =>
+              normalizeImageUrl(extractImageUrlCandidate(value)),
+            )
+            .filter(Boolean),
+        ),
       );
       if (uniqueDirectUrls.length > 0) {
         if (isMounted) { setWaitModalAttachmentUrls(uniqueDirectUrls); setLoadingAttachments(false); }
@@ -786,7 +829,9 @@ export default function FixerProPage() {
         const attachments = await res.json();
         const backendUrls = Array.isArray(attachments)
           ? attachments
-              .map((attachment: any) => normalizeImageUrl(attachment?.url))
+              .map((attachment: any) =>
+                normalizeImageUrl(extractImageUrlCandidate(attachment)),
+              )
               .filter(Boolean)
           : [];
         if (isMounted) { setWaitModalAttachmentUrls(Array.from(new Set(backendUrls))); setLoadingAttachments(false); }
@@ -2586,11 +2631,10 @@ export default function FixerProPage() {
                   disabled={propPartnerRateStars === 0}
                   className="flex-1 py-2.5 bg-yellow-500 text-white rounded-xl font-bold text-sm hover:bg-yellow-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={async () => {
-                    const customerAlreadyRated = propPartnerRateModal?.customerRating != null;
                     await updatePropInquiry(
                       propPartnerRateModal!.id,
                       {
-                        status: customerAlreadyRated ? "COMPLETED" : "MEETING_CONFIRMED",
+                        status: "COMPLETED",
                         step: 8,
                         listerRating: propPartnerRateStars,
                         listerComment: propPartnerRateComment,
@@ -2598,9 +2642,9 @@ export default function FixerProPage() {
                     );
                     setPropPartnerRateModal(null);
                     alert(
-                      customerAlreadyRated
-                        ? (locale === "th" ? "ขอบคุณ! ส่งคะแนนแล้ว งานนี้ปิดและย้ายไปประวัติ" : "Thank you! Rating submitted. This inquiry is now closed and moved to history.")
-                        : (locale === "th" ? "ขอบคุณ! บันทึกคะแนนแล้ว กำลังรอลูกค้าให้คะแนนเพื่อปิดงาน" : "Thank you! Rating submitted. Waiting for customer rating to close this inquiry."),
+                      locale === "th"
+                        ? "ขอบคุณ! ส่งคะแนนแล้ว งานนี้ปิดและย้ายไปประวัติ"
+                        : "Thank you! Rating submitted. This inquiry is now closed and moved to history.",
                     );
                   }}
                 >

@@ -5,6 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { PropertyInquiryStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   CreatePropertyInquiryDto,
@@ -402,6 +403,7 @@ export class PropertyInquiryService {
             images: {
               select: {
                 url: true,
+                key: true,
                 sortOrder: true,
               },
               orderBy: { sortOrder: 'asc' },
@@ -462,6 +464,7 @@ export class PropertyInquiryService {
             images: {
               select: {
                 url: true,
+                key: true,
                 sortOrder: true,
               },
               orderBy: { sortOrder: 'asc' },
@@ -508,11 +511,18 @@ export class PropertyInquiryService {
       throw new ForbiddenException('Not authorized to update this inquiry');
     }
 
+    const ratingProvided =
+      dto.customerRating !== undefined || dto.listerRating !== undefined;
+    const nextStatus = ratingProvided
+      ? PropertyInquiryStatus.COMPLETED
+      : dto.status;
+    const nextStep = ratingProvided ? 8 : dto.step;
+
     return this.prisma.propertyInquiry.update({
       where: { id },
       data: {
-        ...(dto.status !== undefined && { status: dto.status }),
-        ...(dto.step !== undefined && { step: dto.step }),
+        ...(nextStatus !== undefined && { status: nextStatus }),
+        ...(nextStep !== undefined && { step: nextStep }),
         ...(dto.meetingDate !== undefined && { meetingDate: dto.meetingDate }),
         ...(dto.meetingTime !== undefined && { meetingTime: dto.meetingTime }),
         ...(dto.meetingVenue !== undefined && {
