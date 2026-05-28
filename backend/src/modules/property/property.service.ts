@@ -212,6 +212,82 @@ export class PropertyService {
     return Array.from(phones);
   }
 
+  private normalizeNameTokens(value?: string | null) {
+    const normalized = String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ');
+    if (!normalized) return [] as string[];
+
+    const tokens = new Set<string>();
+    tokens.add(normalized);
+
+    const first = normalized.split(' ')[0] || '';
+    if (first.length >= 2) tokens.add(first);
+
+    return Array.from(tokens);
+  }
+
+  private async resolveLinkedNameTokens(userRef: string, linkedUserIds?: string[]) {
+    const fallbackRef = String(userRef || '').trim();
+    if (!fallbackRef) return [] as string[];
+
+    const names = new Set<string>();
+    const addName = (value?: string | null) => {
+      this.normalizeNameTokens(value).forEach((token) => names.add(token));
+    };
+
+    const requesterIds =
+      linkedUserIds && linkedUserIds.length > 0
+        ? linkedUserIds
+        : await this.resolveLinkedUserIds(fallbackRef);
+
+    if (requesterIds.length > 0) {
+      const linkedUsers = await this.prisma.user.findMany({
+        where: { id: { in: requesterIds } },
+        select: { name: true, subscriberId: true },
+      });
+
+      const subscriberIds = new Set<string>();
+      linkedUsers.forEach((user) => {
+        addName(user.name);
+        if (user.subscriberId) subscriberIds.add(user.subscriberId);
+      });
+
+      if (subscriberIds.size > 0) {
+        const subscribers = await this.prisma.subscriber.findMany({
+          where: { id: { in: Array.from(subscriberIds) } },
+          select: { name: true },
+        });
+        subscribers.forEach((subscriber) => addName(subscriber.name));
+      }
+    }
+
+    const fallbackSubscriber = await this.prisma.subscriber.findUnique({
+      where: { id: fallbackRef },
+      select: { name: true },
+    });
+    addName(fallbackSubscriber?.name);
+
+    return Array.from(names);
+  }
+
+  private isLikelySyntheticPropertyCandidate(property: {
+    title?: string | null;
+    description?: string | null;
+    contactEmail?: string | null;
+    listingType?: string | null;
+    price?: number | null;
+  }) {
+    const haystack = `${property.title || ''} ${property.description || ''}`.toLowerCase();
+    if (/\b(test|probe|debug|dummy|sample|qa)\b/i.test(haystack)) return true;
+    if (this.normalizeEmail(property.contactEmail).endsWith('@example.com')) return true;
+    if (String(property.listingType || '').toUpperCase() === 'SALE' && Number(property.price || 0) <= 1) {
+      return true;
+    }
+    return false;
+  }
+
   async create(
     currentUser: { id?: string; email?: string; phone?: string } | undefined,
     dto: CreatePropertyDto,
@@ -679,6 +755,10 @@ export class PropertyService {
     const linkedUserIds = await this.resolveLinkedUserIds(userId);
     const linkedEmails = await this.resolveLinkedEmails(userId, linkedUserIds);
     const linkedPhones = await this.resolveLinkedPhones(userId, linkedUserIds);
+    const linkedNameTokens = await this.resolveLinkedNameTokens(
+      userId,
+      linkedUserIds,
+    );
 
     const ownershipScopes: Prisma.PropertyWhereInput[] = [];
     if (linkedUserIds.length > 0) {
@@ -697,7 +777,7 @@ export class PropertyService {
 
     if (ownershipScopes.length === 0) return [];
 
-    return this.prisma.property.findMany({
+    const ownedProperties = await this.prisma.property.findMany({
       where: {
         status: { not: 'REMOVED' },
         OR: ownershipScopes,
@@ -707,6 +787,42 @@ export class PropertyService {
         images: { orderBy: { sortOrder: 'asc' } },
       },
     });
+
+    const mergedById = new Map(ownedProperties.map((property) => [property.id, property]));
+    const bridgePhones = new Set<string>([
+      ...linkedPhones,
+      ...ownedProperties
+        .map((property) => this.normalizePhone(property.contactPhone))
+        .filter(Boolean),
+    ]);
+
+    if (bridgePhones.size > 0 && linkedNameTokens.length > 0) {
+      const bridgedCandidates = await this.prisma.property.findMany({
+        where: {
+          status: { not: 'REMOVED' },
+          contactPhone: { in: Array.from(bridgePhones) },
+          OR: linkedNameTokens.map((token) => ({
+            contactName: {
+              contains: token,
+              mode: 'insensitive' as const,
+            },
+          })),
+        },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          images: { orderBy: { sortOrder: 'asc' } },
+        },
+      });
+
+      for (const property of bridgedCandidates) {
+        if (this.isLikelySyntheticPropertyCandidate(property)) continue;
+        mergedById.set(property.id, property);
+      }
+    }
+
+    return Array.from(mergedById.values()).sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+    );
   }
 
   async update(id: string, userId: string, data: Partial<CreatePropertyDto>) {

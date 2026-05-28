@@ -2121,6 +2121,43 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       .filter((item: any) => item?.type === 'prop_rate' && item?.po)
       .map((item: any) => String(item.po)),
   );
+  const parseWorkflowStep = (value: any) => {
+    if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, Math.floor(value));
+    const text = String(value ?? '').trim();
+    if (!text) return 0;
+    const direct = Number(text);
+    if (Number.isFinite(direct)) return Math.max(0, Math.floor(direct));
+    const match = text.match(/step\s*(\d+)|^(\d+)/i);
+    const extracted = Number(match?.[1] || match?.[2] || 0);
+    return Number.isFinite(extracted) ? Math.max(0, Math.floor(extracted)) : 0;
+  };
+  const derivePropWorkflowStep = (item: any) => {
+    const numericCandidates = [
+      item?.step,
+      item?.mockStep,
+      item?.propInquiry?.step,
+      item?.stepText,
+      item?.stepName,
+      item?.title,
+      item?.desc,
+      item?.description,
+    ].map(parseWorkflowStep);
+    const inferred = Math.max(0, ...numericCandidates);
+    const looksLikeRateAction = /\brate\b/i.test(
+      `${item?.type || ''} ${item?.title || ''} ${item?.desc || ''} ${item?.description || ''}`,
+    );
+    return Math.max(inferred, looksLikeRateAction ? 8 : 0);
+  };
+  const normalizePropInquiryStatus = (statusValue: any, fallbackStep: number) => {
+    const normalized = String(statusValue || '').toUpperCase();
+    if (['NOTIFY_SENT', 'ACCEPTED', 'PAID', 'MEETING_SENT', 'MEETING_CONFIRMED', 'COMPLETED', 'CANCELLED', 'DECLINED'].includes(normalized)) {
+      return normalized;
+    }
+    if (fallbackStep >= 8) return 'MEETING_CONFIRMED';
+    if (fallbackStep >= 7) return 'MEETING_SENT';
+    if (fallbackStep >= 5) return 'ACCEPTED';
+    return 'NOTIFY_SENT';
+  };
   const toNumericValue = (value: any) => {
     const parsed = Number(String(value ?? '').replace(/[^0-9.]/g, ''));
     return Number.isFinite(parsed) ? parsed : 0;
@@ -2130,13 +2167,18 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       const po = String(item?.po || '').trim();
       if (!po || !isPropPoCode(po)) return false;
       if (propRateRequestPos.has(po)) return false;
-      const step = Number(item?.step || item?.propInquiry?.step || 0);
+      const step = derivePropWorkflowStep(item);
       return step >= 8;
     })
     .map((item: any) => {
       const po = String(item?.po || '').trim();
       if (!po) return null;
       const source = item?.propInquiry || {};
+      const resolvedStep = derivePropWorkflowStep(item) || 8;
+      const resolvedStatus = normalizePropInquiryStatus(
+        source.status || item?.status,
+        resolvedStep,
+      );
       const ts = parseDateMs(
         source.updatedAt || source.createdAt || item?.createdAt || item?.date || Date.now(),
       );
@@ -2166,8 +2208,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         customerEmail: String(source.customerEmail || subscriber?.email || ''),
         customerName: String(source.customerName || subscriber?.name || 'Customer'),
         listerName: String(source.listerName || item?.fixerAlias || item?.partnerName || 'Lister'),
-        status: String(source.status || item?.status || 'MEETING_CONFIRMED'),
-        step: Number(item?.step || source.step || 8),
+        status: resolvedStatus,
+        step: resolvedStep,
         createdAt: ts,
         updatedAt: ts,
         meetingDate: source.meetingDate,

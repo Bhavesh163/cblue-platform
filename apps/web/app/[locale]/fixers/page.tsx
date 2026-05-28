@@ -1702,12 +1702,22 @@ export default function FixerProPage() {
   }, []);
 
   const completedHistoryPos = new Set(mockHistory.map((h: any) => h.po));
+  const parseWorkflowStep = (value: any) => {
+    if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, Math.floor(value));
+    const text = String(value ?? '').trim();
+    if (!text) return 0;
+    const direct = Number(text);
+    if (Number.isFinite(direct)) return Math.max(0, Math.floor(direct));
+    const match = text.match(/step\s*(\d+)|^(\d+)/i);
+    const extracted = Number(match?.[1] || match?.[2] || 0);
+    return Number.isFinite(extracted) ? Math.max(0, Math.floor(extracted)) : 0;
+  };
   let activeJobs = mappedOrders.filter(o => !['COMPLETED', 'CANCELLED'].includes(o.status) && !completedHistoryPos.has(o.po));
   activeJobs = activeJobs.map(job => {
       const stepLookup = mockActiveState.find((x: any) => x.po === job.po);
       const backendStep = getWorkflowStepFromStatus(job.status);
-      const partnerWorkflowStep = Math.max(0, ...partnerDynReqs.filter((x: any) => x.po === job.po).map((x: any) => Number(x.step || 0)));
-      const step = Math.max(Number(stepLookup?.step || 0), backendStep, partnerWorkflowStep);
+      const partnerWorkflowStep = Math.max(0, ...partnerDynReqs.filter((x: any) => x.po === job.po).map((x: any) => parseWorkflowStep(x.step)));
+      const step = Math.max(parseWorkflowStep(stepLookup?.step), backendStep, partnerWorkflowStep);
       // For partner view: actionNeeded = partner has a pending workflow request OR backend requires partner action
       // Exclude accept_sent which is a permanent marker, not an action item
       const hasPartnerDynAction = partnerDynReqs.some((r: any) => r.po === job.po && r.type !== 'accept_sent');
@@ -1717,7 +1727,7 @@ export default function FixerProPage() {
       return { ...job, step, mockStep: step, actionNeeded: partnerActionNeeded };
   });
   const mapPropStatusToStep = (status: string, step: number) => {
-    const explicitStep = Number(step || 0);
+    const explicitStep = parseWorkflowStep(step);
     const normalizedStatus = String(status || '').toUpperCase();
     switch (normalizedStatus) {
       case 'ACCEPTED':
@@ -1732,6 +1742,16 @@ export default function FixerProPage() {
       default:
         return explicitStep > 0 ? explicitStep : 5;
     }
+  };
+  const normalizePropInquiryStatus = (statusValue: any, fallbackStep: number) => {
+    const normalized = String(statusValue || '').toUpperCase();
+    if (['NOTIFY_SENT', 'ACCEPTED', 'PAID', 'MEETING_SENT', 'MEETING_CONFIRMED', 'COMPLETED', 'CANCELLED', 'DECLINED'].includes(normalized)) {
+      return normalized;
+    }
+    if (fallbackStep >= 8) return 'MEETING_CONFIRMED';
+    if (fallbackStep >= 7) return 'MEETING_SENT';
+    if (fallbackStep >= 5) return 'ACCEPTED';
+    return 'NOTIFY_SENT';
   };
   const propActiveJobs = propInquiries
     .filter((p: PropInquiry) => ['NOTIFY_SENT', 'ACCEPTED', 'PAID', 'MEETING_SENT', 'MEETING_CONFIRMED'].includes(String(p.status || '').toUpperCase()))
@@ -2317,15 +2337,29 @@ export default function FixerProPage() {
       if (existingPropRateRequestPos.has(po)) return false;
       const status = String(job?.status || '').toUpperCase();
       if (['COMPLETED', 'CANCELLED'].includes(status)) return false;
-      return Number(job?.step || job?.propInquiry?.step || 0) >= 8;
+      const inferredStep = Math.max(
+        parseWorkflowStep(job?.step),
+        parseWorkflowStep(job?.mockStep),
+        parseWorkflowStep(job?.propInquiry?.step),
+        parseWorkflowStep(job?.stepText),
+        /\brate\b/i.test(`${job?.type || ''} ${job?.service || ''} ${job?.description || ''}`) ? 8 : 0,
+      );
+      return inferredStep >= 8;
     })
     .map((job: any) => {
       const po = String(job?.po || '').trim();
       if (!po) return null;
       const source = job?.propInquiry || {};
-      const status = String(source.status || job?.status || 'MEETING_CONFIRMED').toUpperCase();
+      const inferredStep = Math.max(
+        parseWorkflowStep(job?.step),
+        parseWorkflowStep(job?.mockStep),
+        parseWorkflowStep(source.step),
+        parseWorkflowStep(job?.stepText),
+        /\brate\b/i.test(`${job?.type || ''} ${job?.service || ''} ${job?.description || ''}`) ? 8 : 0,
+      );
+      const status = normalizePropInquiryStatus(source.status || job?.status, inferredStep || 8);
       if (['COMPLETED', 'CANCELLED'].includes(status)) return null;
-      const step = mapPropStatusToStep(status, Number(job?.step || source.step || 8));
+      const step = mapPropStatusToStep(status, inferredStep || 8);
       if (step < 8) return null;
 
       const createdAt = Number(
