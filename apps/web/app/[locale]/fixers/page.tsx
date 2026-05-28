@@ -1088,10 +1088,25 @@ export default function FixerProPage() {
     }
   }, [propInquiries]);
 
-  const updatePropInquiry = async (id: string, update: Partial<PropInquiry>) => {
+  const updatePropInquiry = async (
+    id: string | null | undefined,
+    update: Partial<PropInquiry>,
+    poNumber?: string | null,
+  ) => {
     try {
       let token = localStorage.getItem("subscriber_token") || "";
-      const updateReq = (authToken: string) => fetch(`/api/v1/property-inquiries/${id}`, {
+      const safeId = String(id || '').trim();
+      const safePo = String(poNumber || '').trim();
+      const usePoFallback = !safeId || safeId.startsWith('fallback-');
+      const path =
+        usePoFallback && safePo
+          ? `/api/v1/property-inquiries/by-po/${encodeURIComponent(safePo)}`
+          : safeId
+          ? `/api/v1/property-inquiries/${safeId}`
+          : '';
+      if (!path) return false;
+
+      const updateReq = (authToken: string) => fetch(path, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
         body: JSON.stringify(update),
@@ -1107,7 +1122,9 @@ export default function FixerProPage() {
       if (res.ok) {
         const updatedFromApi = await res.json().catch(() => null);
         setPropInquiries(prev => prev.map(p => {
-          if (p.id !== id) return p;
+          const sameId = !!safeId && p.id === safeId;
+          const samePo = !!safePo && p.poNumber === safePo;
+          if (!sameId && !samePo) return p;
           return {
             ...p,
             ...update,
@@ -2283,8 +2300,118 @@ export default function FixerProPage() {
     };
     return null;
   }).filter(Boolean) as any[];
+
+  const existingPropRateRequestPos = new Set(
+    propRequestCards
+      .filter((item: any) => item?.type === 'prop_rate_partner' && item?.po)
+      .map((item: any) => String(item.po)),
+  );
+  const toNumericValue = (value: any) => {
+    const parsed = Number(String(value ?? '').replace(/[^0-9.]/g, ''));
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  const propFallbackRateCards: any[] = activeJobs
+    .filter((job: any) => {
+      const po = String(job?.po || '').trim();
+      if (!po || !isPropPoCode(po)) return false;
+      if (existingPropRateRequestPos.has(po)) return false;
+      const status = String(job?.status || '').toUpperCase();
+      if (['COMPLETED', 'CANCELLED'].includes(status)) return false;
+      return Number(job?.step || job?.propInquiry?.step || 0) >= 8;
+    })
+    .map((job: any) => {
+      const po = String(job?.po || '').trim();
+      if (!po) return null;
+      const source = job?.propInquiry || {};
+      const status = String(source.status || job?.status || 'MEETING_CONFIRMED').toUpperCase();
+      if (['COMPLETED', 'CANCELLED'].includes(status)) return null;
+      const step = mapPropStatusToStep(status, Number(job?.step || source.step || 8));
+      if (step < 8) return null;
+
+      const createdAt = Number(
+        source.updatedAt || source.createdAt || job?.createdAt || job?.date || Date.now(),
+      );
+      const fallbackInquiry: PropInquiry = {
+        id: String(source.id || `fallback-${po}`),
+        poNumber: po,
+        propertyId: String(source.propertyId || job?.orderId || po),
+        propertyTitle: String(source.propertyTitle || job?.service || po),
+        propertyTier: String(source.propertyTier || job?.tier || 'STANDARD'),
+        propertyFee: Number(source.propertyFee ?? toNumericValue(job?.fee)),
+        propertyType: String(source.propertyType || ''),
+        listingType: String(source.listingType || ''),
+        propertyPrice: Number(
+          source.propertyPrice ?? toNumericValue(job?.value ?? job?.budget ?? job?.price),
+        ),
+        province: String(source.province || ''),
+        district: String(source.district || ''),
+        subdistrict: String(source.subdistrict || job?.subdistrict || ''),
+        addressLine: String(source.addressLine || job?.location || ''),
+        latitude: source.latitude ?? null,
+        longitude: source.longitude ?? null,
+        area: source.area ?? null,
+        bedrooms: source.bedrooms ?? null,
+        bathrooms: source.bathrooms ?? null,
+        propertyImages: Array.isArray(source.propertyImages) ? source.propertyImages : [],
+        customerEmail: String(source.customerEmail || ''),
+        customerName: String(source.customerName || job?.customer || 'Customer'),
+        listerName: String(source.listerName || partner?.name || 'Lister'),
+        status,
+        step,
+        createdAt,
+        updatedAt: createdAt,
+        meetingDate: source.meetingDate,
+        meetingTime: source.meetingTime,
+        meetingVenue: source.meetingVenue,
+        customerRating: source.customerRating ?? null,
+        customerComment: source.customerComment ?? '',
+        listerRating: source.listerRating ?? null,
+        listerComment: source.listerComment ?? '',
+        reselectedOnce: source.reselectedOnce ?? false,
+      };
+      if (fallbackInquiry.listerRating != null) return null;
+
+      const siteLocation = getPropSiteLocation(fallbackInquiry);
+      const details = [
+        fallbackInquiry.propertyType ? `Type: ${fallbackInquiry.propertyType}` : '',
+        fallbackInquiry.listingType ? `Listing: ${fallbackInquiry.listingType}` : '',
+        typeof fallbackInquiry.area === 'number' && fallbackInquiry.area > 0
+          ? `Area: ${Number(fallbackInquiry.area).toLocaleString()} sq.m.`
+          : '',
+        typeof fallbackInquiry.bedrooms === 'number' ? `Beds: ${fallbackInquiry.bedrooms}` : '',
+        typeof fallbackInquiry.bathrooms === 'number' ? `Baths: ${fallbackInquiry.bathrooms}` : '',
+        siteLocation ? `Location: ${siteLocation}` : '',
+      ].filter(Boolean).join(' | ');
+
+      return {
+        id: `prop-rate-p-fallback-${po}`,
+        type: 'prop_rate_partner',
+        workflowType: 'prop_rate_partner',
+        po,
+        step,
+        service: fallbackInquiry.propertyTitle,
+        serviceTh: fallbackInquiry.propertyTitle,
+        serviceZh: fallbackInquiry.propertyTitle,
+        customer: firstNameOnly(fallbackInquiry.customerName, 'Customer'),
+        date: fmtDateTime(createdAt),
+        createdAt,
+        fee: toCurrencyLabel(fallbackInquiry.propertyFee),
+        budget: toCurrencyLabel(fallbackInquiry.propertyPrice),
+        tier: fallbackInquiry.propertyTier || 'STANDARD',
+        location: siteLocation,
+        subdistrict:
+          fallbackInquiry.subdistrict || fallbackInquiry.district || fallbackInquiry.province,
+        description: details,
+        meetingVenue: fallbackInquiry.meetingVenue || '',
+        propertyImages: fallbackInquiry.propertyImages || [],
+        propInquiry: fallbackInquiry,
+        isPropertyJob: true,
+      };
+    })
+    .filter(Boolean) as any[];
+
   const partnerRequestItemsWithProp = Array.from(
-    [...partnerRequestItems, ...propRequestCards].reduce((map: Map<string, any>, item: any) => {
+    [...partnerRequestItems, ...propRequestCards, ...propFallbackRateCards].reduce((map: Map<string, any>, item: any) => {
       const key = String(item?.po || item?.id || '').trim();
       if (!key || isHiddenTestPo(key)) return map;
       const existing = map.get(key);
@@ -2521,7 +2648,7 @@ export default function FixerProPage() {
               <div className="flex gap-3">
                 <button
                   onClick={async () => {
-                    await updatePropInquiry(propAcceptModal!.id, { status: "DECLINED" });
+                    await updatePropInquiry(propAcceptModal!.id, { status: "DECLINED" }, propAcceptModal!.poNumber);
                     setPropAcceptModal(null);
                   }}
                   className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl font-semibold text-sm"
@@ -2530,7 +2657,7 @@ export default function FixerProPage() {
                 </button>
                 <button
                   onClick={async () => {
-                    await updatePropInquiry(propAcceptModal!.id, { status: "ACCEPTED", step: 4 });
+                    await updatePropInquiry(propAcceptModal!.id, { status: "ACCEPTED", step: 4 }, propAcceptModal!.poNumber);
                     setPropAcceptModal(null);
                     alert(locale === "th" ? "ยืนยันแล้ว! คำขอนี้จะหายไปจากรายการ ลูกค้าจะดำเนินการชำระเงิน" : "Accepted! This inquiry will disappear from your list. The customer will proceed to pay the fee.");
                   }}
@@ -2600,7 +2727,7 @@ export default function FixerProPage() {
                 </button>
                 <button
                   onClick={async () => {
-                    await updatePropInquiry(propMeetingConfirmModal!.id, { status: "MEETING_CONFIRMED", step: 8 });
+                    await updatePropInquiry(propMeetingConfirmModal!.id, { status: "MEETING_CONFIRMED", step: 8 }, propMeetingConfirmModal!.poNumber);
                     setPropMeetingConfirmModal(null);
                     alert(locale === "th" ? "ยืนยันนัดหมายแล้ว! การนัดหมายจะปรากฏในปฏิทิน" : "Meeting confirmed! It will appear in upcoming meetings for both parties.");
                   }}
@@ -2656,6 +2783,7 @@ export default function FixerProPage() {
                         listerRating: propPartnerRateStars,
                         listerComment: propPartnerRateComment,
                       },
+                      propPartnerRateModal!.poNumber,
                     );
                     setPropPartnerRateModal(null);
                     alert(

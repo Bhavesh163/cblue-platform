@@ -2116,8 +2116,82 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     }, new Map<string, any>()).values(),
   ).sort((a: any, b: any) => parseDateMs(b.createdAt || b.date) - parseDateMs(a.createdAt || a.date));
 
+  const propRateRequestPos = new Set(
+    propRequestItems
+      .filter((item: any) => item?.type === 'prop_rate' && item?.po)
+      .map((item: any) => String(item.po)),
+  );
+  const toNumericValue = (value: any) => {
+    const parsed = Number(String(value ?? '').replace(/[^0-9.]/g, ''));
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  const propFallbackRateRequestItems: any[] = combinedActiveWithProp
+    .filter((item: any) => {
+      const po = String(item?.po || '').trim();
+      if (!po || !isPropPoCode(po)) return false;
+      if (propRateRequestPos.has(po)) return false;
+      const step = Number(item?.step || item?.propInquiry?.step || 0);
+      return step >= 8;
+    })
+    .map((item: any) => {
+      const po = String(item?.po || '').trim();
+      if (!po) return null;
+      const source = item?.propInquiry || {};
+      const ts = parseDateMs(
+        source.updatedAt || source.createdAt || item?.createdAt || item?.date || Date.now(),
+      );
+      const fallbackInquiry: PropInquiry = {
+        id: String(source.id || `fallback-${po}`),
+        poNumber: po,
+        propertyId: String(source.propertyId || item?.orderId || po),
+        propertyTitle: String(source.propertyTitle || item?.title || item?.service || po),
+        propertyTier: String(source.propertyTier || item?.tier || 'STANDARD'),
+        propertyFee: Number(source.propertyFee ?? toNumericValue(item?.fee)),
+        propertyType: String(source.propertyType || ''),
+        listingType: String(source.listingType || ''),
+        propertyPrice: Number(
+          source.propertyPrice ??
+            toNumericValue(item?.value ?? item?.budget ?? item?.price),
+        ),
+        province: String(source.province || ''),
+        district: String(source.district || ''),
+        subdistrict: String(source.subdistrict || item?.subdistrict || ''),
+        addressLine: String(source.addressLine || item?.location || ''),
+        latitude: source.latitude ?? null,
+        longitude: source.longitude ?? null,
+        area: source.area ?? null,
+        bedrooms: source.bedrooms ?? null,
+        bathrooms: source.bathrooms ?? null,
+        propertyImages: Array.isArray(source.propertyImages) ? source.propertyImages : [],
+        customerEmail: String(source.customerEmail || subscriber?.email || ''),
+        customerName: String(source.customerName || subscriber?.name || 'Customer'),
+        listerName: String(source.listerName || item?.fixerAlias || item?.partnerName || 'Lister'),
+        status: String(source.status || item?.status || 'MEETING_CONFIRMED'),
+        step: Number(item?.step || source.step || 8),
+        createdAt: ts,
+        updatedAt: ts,
+        meetingDate: source.meetingDate,
+        meetingTime: source.meetingTime,
+        meetingVenue: source.meetingVenue,
+        customerRating: source.customerRating ?? null,
+        customerComment: source.customerComment ?? '',
+        listerRating: source.listerRating ?? null,
+        listerComment: source.listerComment ?? '',
+        reselectedOnce: source.reselectedOnce ?? false,
+      };
+      if (!canShowCustomerPropRateRequest(fallbackInquiry)) return null;
+      return {
+        id: `prop-rate-fallback-${po}`,
+        type: 'prop_rate',
+        po,
+        propInquiry: fallbackInquiry,
+        createdAt: ts,
+      };
+    })
+    .filter(Boolean) as any[];
+
   const allRequestItemsWithProp = Array.from(
-    [...allRequestItems, ...propRequestItems].reduce((map: Map<string, any>, item: any) => {
+    [...allRequestItems, ...propRequestItems, ...propFallbackRateRequestItems].reduce((map: Map<string, any>, item: any) => {
       const key = String(item?.po || item?.id || '').trim();
       if (!key) return map;
       const existing = map.get(key);
@@ -2602,10 +2676,25 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     );
   };
 
-  const updatePropInquiry = async (id: string, update: Partial<PropInquiry>) => {
+  const updatePropInquiry = async (
+    id: string | null | undefined,
+    update: Partial<PropInquiry>,
+    poNumber?: string | null,
+  ) => {
     try {
       let token = localStorage.getItem("subscriber_token") || "";
-      const updateReq = (authToken: string) => fetch(`/api/v1/property-inquiries/${id}`, {
+      const safeId = String(id || '').trim();
+      const safePo = String(poNumber || '').trim();
+      const usePoFallback = !safeId || safeId.startsWith('fallback-');
+      const path =
+        usePoFallback && safePo
+          ? `/api/v1/property-inquiries/by-po/${encodeURIComponent(safePo)}`
+          : safeId
+          ? `/api/v1/property-inquiries/${safeId}`
+          : '';
+      if (!path) return false;
+
+      const updateReq = (authToken: string) => fetch(path, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
         body: JSON.stringify(update),
@@ -2621,7 +2710,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       if (res.ok) {
         const updatedFromApi = await res.json().catch(() => null);
         setPropInquiries(prev => prev.map(p => {
-          if (p.id !== id) return p;
+          const sameId = !!safeId && p.id === safeId;
+          const samePo = !!safePo && p.poNumber === safePo;
+          if (!sameId && !samePo) return p;
           return {
             ...p,
             ...update,
@@ -2656,7 +2747,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 className="flex-1 sm:flex-none px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition whitespace-nowrap"
                 onClick={async () => {
                   if (!confirm(locale === "th" ? "ยืนยันการเลือกผู้ลงประกาศใหม่? คำขอนี้จะถูกยกเลิก" : "Reselect a different property? This inquiry will be cancelled.")) return;
-                  await updatePropInquiry(p.id, { status: "CANCELLED", reselectedOnce: true });
+                  await updatePropInquiry(p.id, { status: "CANCELLED", reselectedOnce: true }, p.poNumber);
                 }}
               >
                 {locale === "th" ? "เลือกใหม่" : locale === "zh" ? "重新选择" : "Reselect"}
@@ -3566,7 +3657,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   onClick={async () => {
                     const current = propPayModal;
                     if (!current) return;
-                    const ok = await updatePropInquiry(current.id, { status: "PAID", step: 5 });
+                    const ok = await updatePropInquiry(current.id, { status: "PAID", step: 5 }, current.poNumber);
                     if (ok) {
                       ensurePropChatBootstrap({ ...current, status: "PAID", step: 5 });
                     }
@@ -3636,7 +3727,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   disabled={!propMeetingDate || !propMeetingTime || !propMeetingVenue}
                   className="flex-1 py-2.5 bg-teal-600 text-white rounded-xl font-bold text-sm hover:bg-teal-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={async () => {
-                    await updatePropInquiry(propMeetingModal!.id, { status: "MEETING_SENT", step: 7, meetingDate: propMeetingDate, meetingTime: propMeetingTime, meetingVenue: propMeetingVenue });
+                    await updatePropInquiry(propMeetingModal!.id, { status: "MEETING_SENT", step: 7, meetingDate: propMeetingDate, meetingTime: propMeetingTime, meetingVenue: propMeetingVenue }, propMeetingModal!.poNumber);
                     setPropMeetingModal(null);
                   }}
                 >
@@ -3691,6 +3782,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                         customerRating: propRateStars,
                         customerComment: propRateComment,
                       },
+                      propRateModal!.poNumber,
                     );
                     setPropRateModal(null);
                     alert(

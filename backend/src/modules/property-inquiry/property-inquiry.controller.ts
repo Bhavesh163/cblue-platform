@@ -58,6 +58,15 @@ export class PropertyInquiryController {
     return this.propertyInquiryService.sendChatByPo(userId, poNumber, dto.text);
   }
 
+  @Put('by-po/:poNumber')
+  updateByPo(
+    @Param('poNumber') poNumber: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: UpdatePropertyInquiryDto,
+  ) {
+    return this.propertyInquiryService.updateByPo(poNumber, userId, dto);
+  }
+
   @Put(':id')
   update(
     @Param('id') id: string,

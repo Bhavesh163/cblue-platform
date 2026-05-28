@@ -307,6 +307,11 @@ export class PropertyInquiryService {
     };
   }
 
+  async updateByPo(poNumber: string, userId: string, dto: UpdatePropertyInquiryDto) {
+    const inquiry = await this.findAuthorizedInquiryByPo(userId, poNumber);
+    return this.update(inquiry.id, userId, dto);
+  }
+
   async create(customerId: string, dto: CreatePropertyInquiryDto) {
     // Verify property exists
     const property = await this.prisma.property.findUnique({

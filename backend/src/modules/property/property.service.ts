@@ -23,6 +23,12 @@ export class PropertyService {
       .toLowerCase();
   }
 
+  private normalizePhone(value?: string | null) {
+    return String(value || '')
+      .trim()
+      .replace(/\D+/g, '');
+  }
+
   private async resolveLinkedUserIds(userRef: string) {
     const fallbackId = String(userRef || '').trim();
     if (!fallbackId) return [] as string[];
@@ -109,6 +115,101 @@ export class PropertyService {
     if (linkedIds.size === 0) linkedIds.add(fallbackId);
 
     return Array.from(linkedIds);
+  }
+
+  private async resolveLinkedEmails(userRef: string, linkedUserIds?: string[]) {
+    const fallbackRef = String(userRef || '').trim();
+    if (!fallbackRef) return [] as string[];
+
+    const emails = new Set<string>();
+    const addEmail = (value?: string | null) => {
+      const normalized = this.normalizeEmail(value);
+      if (normalized) emails.add(normalized);
+    };
+
+    const requesterIds =
+      linkedUserIds && linkedUserIds.length > 0
+        ? linkedUserIds
+        : await this.resolveLinkedUserIds(fallbackRef);
+
+    if (requesterIds.length > 0) {
+      const linkedUsers = await this.prisma.user.findMany({
+        where: { id: { in: requesterIds } },
+        select: { email: true, subscriberId: true },
+      });
+
+      const subscriberIds = new Set<string>();
+      linkedUsers.forEach((user) => {
+        addEmail(user.email);
+        if (user.subscriberId) subscriberIds.add(user.subscriberId);
+      });
+
+      if (subscriberIds.size > 0) {
+        const subscribers = await this.prisma.subscriber.findMany({
+          where: { id: { in: Array.from(subscriberIds) } },
+          select: { email: true },
+        });
+        subscribers.forEach((subscriber) => addEmail(subscriber.email));
+      }
+    }
+
+    const fallbackSubscriber = await this.prisma.subscriber.findUnique({
+      where: { id: fallbackRef },
+      select: { email: true },
+    });
+    addEmail(fallbackSubscriber?.email);
+
+    if (fallbackRef.includes('@')) addEmail(fallbackRef);
+
+    return Array.from(emails);
+  }
+
+  private async resolveLinkedPhones(userRef: string, linkedUserIds?: string[]) {
+    const fallbackRef = String(userRef || '').trim();
+    if (!fallbackRef) return [] as string[];
+
+    const phones = new Set<string>();
+    const addPhone = (value?: string | null) => {
+      const normalized = this.normalizePhone(value);
+      if (normalized) phones.add(normalized);
+    };
+
+    const requesterIds =
+      linkedUserIds && linkedUserIds.length > 0
+        ? linkedUserIds
+        : await this.resolveLinkedUserIds(fallbackRef);
+
+    if (requesterIds.length > 0) {
+      const linkedUsers = await this.prisma.user.findMany({
+        where: { id: { in: requesterIds } },
+        select: { phone: true, subscriberId: true },
+      });
+
+      const subscriberIds = new Set<string>();
+      linkedUsers.forEach((user) => {
+        addPhone(user.phone);
+        if (user.subscriberId) subscriberIds.add(user.subscriberId);
+      });
+
+      if (subscriberIds.size > 0) {
+        const subscribers = await this.prisma.subscriber.findMany({
+          where: { id: { in: Array.from(subscriberIds) } },
+          select: { phone: true },
+        });
+        subscribers.forEach((subscriber) => addPhone(subscriber.phone));
+      }
+    }
+
+    const fallbackSubscriber = await this.prisma.subscriber.findUnique({
+      where: { id: fallbackRef },
+      select: { phone: true },
+    });
+    addPhone(fallbackSubscriber?.phone);
+
+    // Allow direct phone fallback when caller ID is a phone-like value.
+    addPhone(fallbackRef);
+
+    return Array.from(phones);
   }
 
   async create(
@@ -576,12 +677,30 @@ export class PropertyService {
 
   async findByUser(userId: string) {
     const linkedUserIds = await this.resolveLinkedUserIds(userId);
-    if (linkedUserIds.length === 0) return [];
+    const linkedEmails = await this.resolveLinkedEmails(userId, linkedUserIds);
+    const linkedPhones = await this.resolveLinkedPhones(userId, linkedUserIds);
+
+    const ownershipScopes: Prisma.PropertyWhereInput[] = [];
+    if (linkedUserIds.length > 0) {
+      ownershipScopes.push({ userId: { in: linkedUserIds } });
+    }
+    ownershipScopes.push(
+      ...linkedEmails.map((email) => ({
+        contactEmail: { equals: email, mode: 'insensitive' as const },
+      })),
+    );
+    ownershipScopes.push(
+      ...linkedPhones.map((phone) => ({
+        contactPhone: { equals: phone },
+      })),
+    );
+
+    if (ownershipScopes.length === 0) return [];
 
     return this.prisma.property.findMany({
       where: {
-        userId: { in: linkedUserIds },
         status: { not: 'REMOVED' },
+        OR: ownershipScopes,
       },
       orderBy: { createdAt: 'desc' },
       include: {
@@ -595,9 +714,22 @@ export class PropertyService {
       where: { id },
     });
 
-    const linkedUserIds = new Set(await this.resolveLinkedUserIds(userId));
+    const linkedUserIds = await this.resolveLinkedUserIds(userId);
+    const linkedEmails = await this.resolveLinkedEmails(userId, linkedUserIds);
+    const linkedPhones = await this.resolveLinkedPhones(userId, linkedUserIds);
 
-    if (!property || !linkedUserIds.has(property.userId)) {
+    const linkedUserIdSet = new Set(linkedUserIds);
+    const linkedEmailSet = new Set(linkedEmails);
+    const linkedPhoneSet = new Set(linkedPhones);
+    const propertyEmail = this.normalizeEmail(property?.contactEmail);
+    const propertyPhone = this.normalizePhone(property?.contactPhone);
+    const hasAccess =
+      !!property &&
+      (linkedUserIdSet.has(property.userId) ||
+        (propertyEmail && linkedEmailSet.has(propertyEmail)) ||
+        (propertyPhone && linkedPhoneSet.has(propertyPhone)));
+
+    if (!hasAccess) {
       return null;
     }
 
@@ -654,9 +786,22 @@ export class PropertyService {
       where: { id },
     });
 
-    const linkedUserIds = new Set(await this.resolveLinkedUserIds(userId));
+    const linkedUserIds = await this.resolveLinkedUserIds(userId);
+    const linkedEmails = await this.resolveLinkedEmails(userId, linkedUserIds);
+    const linkedPhones = await this.resolveLinkedPhones(userId, linkedUserIds);
 
-    if (!property || !linkedUserIds.has(property.userId)) {
+    const linkedUserIdSet = new Set(linkedUserIds);
+    const linkedEmailSet = new Set(linkedEmails);
+    const linkedPhoneSet = new Set(linkedPhones);
+    const propertyEmail = this.normalizeEmail(property?.contactEmail);
+    const propertyPhone = this.normalizePhone(property?.contactPhone);
+    const hasAccess =
+      !!property &&
+      (linkedUserIdSet.has(property.userId) ||
+        (propertyEmail && linkedEmailSet.has(propertyEmail)) ||
+        (propertyPhone && linkedPhoneSet.has(propertyPhone)));
+
+    if (!hasAccess) {
       return null;
     }
 
