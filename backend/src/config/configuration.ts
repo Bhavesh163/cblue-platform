@@ -44,7 +44,7 @@ export default () => ({
     fromEmail:
       process.env.MAILJET_FROM_EMAIL ||
       process.env.MAIL_FROM_EMAIL ||
-      'noreply@cblue.co.th',
+      'noreply@lblue.tech',
   },
   frontendUrl: process.env.FRONTEND_URL || 'https://cblue.co.th',
   visionService: {

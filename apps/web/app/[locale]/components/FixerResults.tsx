@@ -441,12 +441,35 @@ async function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-async function fileToUploadDataUrl(file: File): Promise<string> {
-  const rawDataUrl = await fileToDataUrl(file);
+async function maybeConvertHeicToJpeg(file: File): Promise<File> {
+  const mime = String(file.type || "").toLowerCase();
+  const isHeic = mime.includes("heic") || mime.includes("heif") || /\.(heic|heif)$/i.test(file.name || "");
+  if (!isHeic) return file;
 
-  // Non-image types (PDF, HEIC on Chrome, etc.) cannot be decoded by canvas.
+  try {
+    const mod = await import("heic2any");
+    const heic2any = (mod.default || mod) as (opts: { blob: Blob; toType: string; quality?: number }) => Promise<Blob | Blob[]>;
+    const converted = await heic2any({
+      blob: file,
+      toType: "image/jpeg",
+      quality: 0.9,
+    });
+    const outputBlob = Array.isArray(converted) ? converted[0] : converted;
+    if (!outputBlob) return file;
+    const basename = (file.name || "image").replace(/\.(heic|heif)$/i, "") || "image";
+    return new File([outputBlob], `${basename}.jpg`, { type: "image/jpeg" });
+  } catch {
+    return file;
+  }
+}
+
+async function fileToUploadDataUrl(file: File): Promise<string> {
+  const sourceFile = await maybeConvertHeicToJpeg(file);
+  const rawDataUrl = await fileToDataUrl(sourceFile);
+
+  // Non-image types (PDF, etc.) cannot be decoded by canvas.
   // The raw File object stored in window.__cblue_files_by_po handles downloads.
-  if (!file.type.startsWith("image/")) return rawDataUrl;
+  if (!sourceFile.type.startsWith("image/")) return rawDataUrl;
 
   // Target: 0.3 MB = 307,200 bytes. Base64 expands by ~4/3, so the dataURL
   // string must stay under 307200 * (4/3) ≈ 409,600 characters.
@@ -479,7 +502,7 @@ async function fileToUploadDataUrl(file: File): Promise<string> {
       // Pass 3 – 700 px, 50 % quality (last resort before giving up)
       resolve(compress(700, 0.50));
     };
-    // HEIC / undecodable formats: canvas fires onerror; raw file object handles download
+    // Undecodable image formats: canvas fires onerror; fallback keeps original payload
     image.onerror = () => resolve(rawDataUrl);
     image.src = rawDataUrl;
   });

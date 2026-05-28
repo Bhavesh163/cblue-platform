@@ -644,15 +644,15 @@ export class SubscriptionService {
       this.configService.get<string>('mailjet.apiSecret');
     const configuredFromEmail =
       this.configService.get<string>('mailjet.fromEmail') ||
-      'noreply@cblue.co.th';
+      'noreply@lblue.tech';
     const normalizedConfiguredFromEmail = configuredFromEmail
       .trim()
       .replace(/^['"]|['"]$/g, '');
     const fromCandidates = Array.from(
       new Set(
         [
-          normalizedConfiguredFromEmail,
           'noreply@lblue.tech',
+          normalizedConfiguredFromEmail,
           'noreply@cblue.co.th',
         ]
           .map((v) => v.trim())
@@ -770,10 +770,7 @@ export class SubscriptionService {
           ['success', 'queued'].includes(status),
         );
 
-        if (
-          response.ok &&
-          (messageStatuses.length === 0 || hasSuccessfulMessageStatus)
-        ) {
+        if (response.ok && hasSuccessfulMessageStatus) {
           this.logger.log(
             `Password reset email sent to ${email} via Mailjet API (${fromEmail})`,
           );
@@ -790,6 +787,10 @@ export class SubscriptionService {
           this.logger.error(
             `Mailjet API non-success message status from ${fromEmail}: ${apiError}`,
           );
+          this.logger.warn(
+            `Mailjet API returned 200 without success/queued status for ${fromEmail}; trying fallback sender.`,
+          );
+          continue;
         }
         this.logger.error(
           `Mailjet API error [${response.status}] from ${fromEmail}: ${apiError}`,

@@ -3547,13 +3547,13 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
       variationModal?.metadata?.issueImageUrl,
       variationModal?.metadata?.issueImage,
     ]
-      .map((item: any) => (typeof item === 'string' ? item : item?.url))
+      .map((item: any) => normalizeImageUrl(extractImageUrlCandidate(item)))
       .filter(Boolean);
     urls.push(...directSources);
-    try { const m = JSON.parse(localStorage.getItem('cblue_po_attachments') || '{}'); if (po && Array.isArray(m[po])) urls.push(...m[po]); } catch {}
-    try { const m = JSON.parse(localStorage.getItem('cblue_order_attachments') || '{}'); const oid = variationModal.orderId || (po ? localStorage.getItem(`po_to_order_${po}`) : ''); if (oid && Array.isArray(m[oid])) urls.push(...m[oid]); } catch {}
+    try { const m = JSON.parse(localStorage.getItem('cblue_po_attachments') || '{}'); if (po && Array.isArray(m[po])) urls.push(...m[po].map((entry: any) => normalizeImageUrl(extractImageUrlCandidate(entry))).filter(Boolean)); } catch {}
+    try { const m = JSON.parse(localStorage.getItem('cblue_order_attachments') || '{}'); const oid = variationModal.orderId || (po ? localStorage.getItem(`po_to_order_${po}`) : ''); if (oid && Array.isArray(m[oid])) urls.push(...m[oid].map((entry: any) => normalizeImageUrl(extractImageUrlCandidate(entry))).filter(Boolean)); } catch {}
     try { const rawFiles = (typeof window !== 'undefined' ? (window as any).__cblue_files_by_po : null) || {}; const files: File[] = po && Array.isArray(rawFiles[po]) ? rawFiles[po] : []; files.forEach(f => { try { urls.push(URL.createObjectURL(f)); } catch {} }); } catch {}
-    const deduped = Array.from(new Set(urls.filter(Boolean)));
+    const deduped = Array.from(new Set(urls.map((entry: any) => normalizeImageUrl(extractImageUrlCandidate(entry))).filter(Boolean)));
     if (deduped.length > 0) { if (isMounted) setVariationAttachUrls(deduped); return; }
     // Fetch from backend as cross-device fallback
     const orderId = variationModal.orderId || (po ? localStorage.getItem(`po_to_order_${po}`) : '');
@@ -3561,7 +3561,17 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
       const token = localStorage.getItem('subscriber_token') || '';
       fetch(`/api/v1/orders/${orderId}/attachments`, { headers: { Authorization: `Bearer ${token}` } })
         .then(r => r.ok ? r.json() : [])
-        .then((data: any[]) => { if (isMounted) setVariationAttachUrls(Array.from(new Set((Array.isArray(data) ? data.map((a: any) => a?.url) : []).filter(Boolean)))); })
+        .then((data: any[]) => {
+          if (!isMounted) return;
+          const backendUrls = Array.from(
+            new Set(
+              (Array.isArray(data) ? data : [])
+                .map((item: any) => normalizeImageUrl(extractImageUrlCandidate(item)))
+                .filter(Boolean),
+            ),
+          );
+          setVariationAttachUrls(backendUrls);
+        })
         .catch(() => {});
     }
     return () => { isMounted = false; };
@@ -4009,16 +4019,25 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
     if (!variationModal) { setVariationAttachUrls([]); return; }
     const po = variationModal.po;
     const urls: string[] = [];
-    try { const m = JSON.parse(localStorage.getItem('cblue_po_attachments') || '{}'); if (po && Array.isArray(m[po])) urls.push(...m[po]); } catch {}
-    try { const orderMap = JSON.parse(localStorage.getItem('cblue_order_attachments') || '{}'); const oid = variationModal.orderId || (po ? localStorage.getItem(`po_to_order_${po}`) : ''); if (oid && Array.isArray(orderMap[oid])) urls.push(...orderMap[oid]); } catch {}
+    try { const m = JSON.parse(localStorage.getItem('cblue_po_attachments') || '{}'); if (po && Array.isArray(m[po])) urls.push(...m[po].map((entry: any) => normalizeImageUrl(extractImageUrlCandidate(entry))).filter(Boolean)); } catch {}
+    try { const orderMap = JSON.parse(localStorage.getItem('cblue_order_attachments') || '{}'); const oid = variationModal.orderId || (po ? localStorage.getItem(`po_to_order_${po}`) : ''); if (oid && Array.isArray(orderMap[oid])) urls.push(...orderMap[oid].map((entry: any) => normalizeImageUrl(extractImageUrlCandidate(entry))).filter(Boolean)); } catch {}
     try { const rawFiles = (typeof window !== 'undefined' ? (window as any).__cblue_files_by_po : null) || {}; const files: File[] = po && Array.isArray(rawFiles[po]) ? rawFiles[po] : []; files.forEach(f => { try { urls.push(URL.createObjectURL(f)); } catch {} }); } catch {}
-    const localUrls = Array.from(new Set(urls.filter(Boolean)));
+    const localUrls = Array.from(new Set(urls.map((entry: any) => normalizeImageUrl(extractImageUrlCandidate(entry))).filter(Boolean)));
     const orderId = variationModal.orderId || (po ? localStorage.getItem(`po_to_order_${po}`) : null);
     if (localUrls.length === 0 && orderId) {
       const token = (typeof window !== 'undefined' ? localStorage.getItem('subscriber_token') : '') || '';
       fetch(`/api/v1/orders/${orderId}/attachments`, { headers: { Authorization: `Bearer ${token}` } })
         .then(r => r.ok ? r.json() : [])
-        .then(data => { if (Array.isArray(data) && data.length > 0) setVariationAttachUrls(data.map((a: any) => a.url || a).filter(Boolean)); })
+        .then(data => {
+          const backendUrls = Array.from(
+            new Set(
+              (Array.isArray(data) ? data : [])
+                .map((item: any) => normalizeImageUrl(extractImageUrlCandidate(item)))
+                .filter(Boolean),
+            ),
+          );
+          if (backendUrls.length > 0) setVariationAttachUrls(backendUrls);
+        })
         .catch(() => {});
     } else {
       setVariationAttachUrls(localUrls);

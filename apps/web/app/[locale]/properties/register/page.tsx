@@ -9,7 +9,7 @@ import { getDistrictsForProvince } from "../../lib/thai-address-data";
 import { getSubdistrictsForDistrict, lookupByPostalCode } from "../../lib/thai-subdistrict-data";
 import GpsDetectButton from "../../components/GpsDetectButton";
 import { clearSubscriberSession, refreshSubscriberSession } from "../../../../lib/subscriberSession";
-const PROPERTY_TYPES = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "APARTMENT"] as const;
+const PROPERTY_TYPES = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "APARTMENT", "OFFICE", "WAREHOUSE", "SHOPHOUSE"] as const;
 
 
 
@@ -37,12 +37,36 @@ export default function PropertyRegisterPage() {
 
   // Compress an image File to ≤0.3 MB base64 data URL
   async function compressPropertyImage(file: File): Promise<string> {
-    if (!file.type.startsWith("image/")) {
+    const maybeConvertHeicToJpeg = async (input: File): Promise<File> => {
+      const mime = String(input.type || "").toLowerCase();
+      const isHeic = mime.includes("heic") || mime.includes("heif") || /\.(heic|heif)$/i.test(input.name || "");
+      if (!isHeic) return input;
+
+      try {
+        const mod = await import("heic2any");
+        const heic2any = (mod.default || mod) as (opts: { blob: Blob; toType: string; quality?: number }) => Promise<Blob | Blob[]>;
+        const converted = await heic2any({
+          blob: input,
+          toType: "image/jpeg",
+          quality: 0.9,
+        });
+        const outputBlob = Array.isArray(converted) ? converted[0] : converted;
+        if (!outputBlob) return input;
+        const basename = (input.name || "image").replace(/\.(heic|heif)$/i, "") || "image";
+        return new File([outputBlob], `${basename}.jpg`, { type: "image/jpeg" });
+      } catch {
+        return input;
+      }
+    };
+
+    const sourceFile = await maybeConvertHeicToJpeg(file);
+
+    if (!sourceFile.type.startsWith("image/")) {
       return new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result as string);
         reader.onerror = reject;
-        reader.readAsDataURL(file);
+        reader.readAsDataURL(sourceFile);
       });
     }
     const TARGET = 300000; // keep payload modest while remaining under 0.3 MB target
@@ -50,10 +74,11 @@ export default function PropertyRegisterPage() {
       { maxDim: 1200, quality: 0.70 },
       { maxDim: 900, quality: 0.60 },
       { maxDim: 700, quality: 0.50 },
+      { maxDim: 560, quality: 0.42 },
     ];
     return new Promise<string>((resolve) => {
       const img = document.createElement("img");
-      const url = URL.createObjectURL(file);
+      const url = URL.createObjectURL(sourceFile);
       img.onload = () => {
         URL.revokeObjectURL(url);
         let result = "";
@@ -77,7 +102,7 @@ export default function PropertyRegisterPage() {
         const reader = new FileReader();
         reader.onload = () => resolve((reader.result as string) || "");
         reader.onerror = () => resolve("");
-        reader.readAsDataURL(file);
+        reader.readAsDataURL(sourceFile);
       };
       img.src = url;
     });
@@ -182,6 +207,7 @@ export default function PropertyRegisterPage() {
     OFFICE: "💼 office",
     APARTMENT: "🏢 apartment",
     WAREHOUSE: "🏭 warehouse",
+    SHOPHOUSE: "🏬 shophouse",
     FACTORY: "🏭 factory"
   };
 
