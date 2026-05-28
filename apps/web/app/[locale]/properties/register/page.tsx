@@ -69,12 +69,17 @@ export default function PropertyRegisterPage() {
         reader.readAsDataURL(sourceFile);
       });
     }
-    const TARGET = 300000; // keep payload modest while remaining under 0.3 MB target
+    // 0.27-0.30 MB binary target; base64 is approximately 4/3 of binary size.
+    const TARGET_MIN_CHARS = 360_000;
+    const TARGET_MAX_CHARS = 400_000;
+    const TARGET_MID_CHARS = 380_000;
     const passes = [
-      { maxDim: 1200, quality: 0.70 },
-      { maxDim: 900, quality: 0.60 },
-      { maxDim: 700, quality: 0.50 },
-      { maxDim: 560, quality: 0.42 },
+      { maxDim: 1600, quality: 0.86 },
+      { maxDim: 1400, quality: 0.82 },
+      { maxDim: 1200, quality: 0.78 },
+      { maxDim: 1050, quality: 0.72 },
+      { maxDim: 900, quality: 0.66 },
+      { maxDim: 760, quality: 0.60 },
     ];
     return new Promise<string>((resolve) => {
       const img = document.createElement("img");
@@ -82,8 +87,13 @@ export default function PropertyRegisterPage() {
       img.onload = () => {
         URL.revokeObjectURL(url);
         let result = "";
+        let bestWithinMax = "";
+        let bestDistance = Number.POSITIVE_INFINITY;
         const tryPass = (idx: number) => {
-          if (idx >= passes.length) { resolve(result || ""); return; }
+          if (idx >= passes.length) {
+            resolve(bestWithinMax || result || "");
+            return;
+          }
           const pass = passes[idx]!;
           const scale = Math.min(1, pass.maxDim / Math.max(img.naturalWidth, img.naturalHeight));
           const canvas = document.createElement("canvas");
@@ -92,7 +102,21 @@ export default function PropertyRegisterPage() {
           canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
           const data = canvas.toDataURL("image/jpeg", pass.quality);
           result = data;
-          if (data.length <= TARGET || idx === passes.length - 1) { resolve(data); return; }
+          if (data.length <= TARGET_MAX_CHARS) {
+            const distance = Math.abs(data.length - TARGET_MID_CHARS);
+            if (distance < bestDistance) {
+              bestDistance = distance;
+              bestWithinMax = data;
+            }
+          }
+          if (data.length >= TARGET_MIN_CHARS && data.length <= TARGET_MAX_CHARS) {
+            resolve(data);
+            return;
+          }
+          if (idx === passes.length - 1) {
+            resolve(bestWithinMax || data);
+            return;
+          }
           tryPass(idx + 1);
         };
         tryPass(0);

@@ -153,7 +153,36 @@ const normalizeImageUrl = (value: unknown) => {
 const extractImageUrlCandidate = (image: any) => {
   if (typeof image === "string") return image;
   if (!image || typeof image !== "object") return "";
-  return image.url || image.key || image.imageUrl || image.publicUrl || image.src || "";
+  const direct =
+    image.url ||
+    image.key ||
+    image.imageUrl ||
+    image.publicUrl ||
+    image.src ||
+    image.fileUrl ||
+    image.downloadUrl ||
+    image.path ||
+    image.href ||
+    image.location ||
+    image.dataUrl ||
+    image.value;
+  if (direct) return direct;
+
+  if (image.file && typeof image.file === "object") {
+    return (
+      image.file.url ||
+      image.file.key ||
+      image.file.imageUrl ||
+      image.file.downloadUrl ||
+      ""
+    );
+  }
+
+  if (image.attributes && typeof image.attributes === "object") {
+    return image.attributes.url || image.attributes.key || "";
+  }
+
+  return "";
 };
 const parseFilenameFromContentDisposition = (value: string | null) => {
   if (!value) return "";
@@ -196,6 +225,10 @@ const inferFilenameFromUrl = (url: string, fallback: string) => {
   } catch {}
   return fallback;
 };
+const mimeTypeFromDataUrl = (url: string) => {
+  const match = url.match(/^data:([^;,]+)[;,]/i);
+  return match?.[1] || "";
+};
 const sanitizeFilename = (value: string, fallback: string) => {
   const cleaned = String(value || '').trim();
   const withoutQuery = cleaned.split('?')[0] ?? '';
@@ -204,6 +237,16 @@ const sanitizeFilename = (value: string, fallback: string) => {
     .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
     .slice(0, 160);
   return safe || fallback;
+};
+const openUrlInNewTab = (url: string) => {
+  const link = document.createElement("a");
+  link.href = url;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 };
 const triggerDownload = (href: string, filename: string, revoke = false) => {
   const link = document.createElement("a");
@@ -270,20 +313,38 @@ const downloadSingleAttachmentUrl = async (
   }
 
   if (url.startsWith("data:")) {
+    const ext = extensionFromMimeType(mimeTypeFromDataUrl(url));
+    const fileName = sanitizeFilename(
+      fallbackName.includes(".") ? fallbackName : `${fallbackName}.${ext}`,
+      `${prefix}-${index + 1}.${ext}`,
+    );
+    try {
+      // Prefer direct data URL download so the browser keeps the user gesture.
+      triggerDownload(url, fileName);
+      return true;
+    } catch {
+      // Fallback to fetch/blob for browsers that reject direct data URL download.
+    }
     try {
       const response = await fetch(url);
       if (!response.ok) return false;
       const blob = await response.blob();
-      const ext = extensionFromMimeType(blob.type);
-      const fileName = sanitizeFilename(
-        fallbackName.includes(".") ? fallbackName : `${fallbackName}.${ext}`,
-        `${prefix}-${index + 1}.${ext}`,
+      const blobExt = extensionFromMimeType(blob.type);
+      const blobName = sanitizeFilename(
+        fallbackName.includes(".") ? fallbackName : `${fallbackName}.${blobExt}`,
+        `${prefix}-${index + 1}.${blobExt}`,
       );
-      downloadBlobFile(blob, fileName);
+      downloadBlobFile(blob, blobName);
       return true;
     } catch {
       return false;
     }
+  }
+
+  // Public absolute URLs often fail CORS on fetch(); open immediately while user gesture is active.
+  if ((url.startsWith("http://") || url.startsWith("https://")) && !shouldAttachAuthHeader(url)) {
+    openUrlInNewTab(url);
+    return true;
   }
 
   try {
@@ -300,8 +361,29 @@ const downloadSingleAttachmentUrl = async (
 
     if (!response.ok) {
       if (url.startsWith("http://") || url.startsWith("https://")) {
-        window.open(url, "_blank", "noopener,noreferrer");
+        openUrlInNewTab(url);
         return true;
+      }
+      if (!shouldAttachAuthHeader(url)) {
+        try {
+          const absolute = new URL(
+            url,
+            typeof window !== "undefined" ? window.location.origin : "http://localhost",
+          ).toString();
+          openUrlInNewTab(absolute);
+          return true;
+        } catch {
+          return false;
+        }
+      }
+      if (url.startsWith("/")) {
+        try {
+          const absolute = `${window.location.origin}${url}`;
+          openUrlInNewTab(absolute);
+          return true;
+        } catch {
+          return false;
+        }
       }
       return false;
     }
@@ -322,8 +404,20 @@ const downloadSingleAttachmentUrl = async (
     return true;
   } catch {
     if (url.startsWith("http://") || url.startsWith("https://")) {
-      window.open(url, "_blank", "noopener,noreferrer");
+      openUrlInNewTab(url);
       return true;
+    }
+    if (!shouldAttachAuthHeader(url)) {
+      try {
+        const absolute = new URL(
+          url,
+          typeof window !== "undefined" ? window.location.origin : "http://localhost",
+        ).toString();
+        openUrlInNewTab(absolute);
+        return true;
+      } catch {
+        return false;
+      }
     }
     return false;
   }
@@ -691,24 +785,41 @@ export default function FixerProPage() {
   };
 
   useEffect(() => {
+    const fallbackImages = Array.from(
+      new Set(
+        [
+          ...(Array.isArray(propAcceptModal?.propertyImages) ? propAcceptModal!.propertyImages : []),
+          ...(Array.isArray(propMeetingConfirmModal?.propertyImages) ? propMeetingConfirmModal!.propertyImages : []),
+        ]
+          .map((value) => normalizeImageUrl(extractImageUrlCandidate(value)))
+          .filter(Boolean),
+      ),
+    );
+
     const pid = propAcceptModal?.propertyId || propMeetingConfirmModal?.propertyId;
-    if (!pid) { setPropPartnerModalImages([]); return; }
+    if (!pid) {
+      setPropPartnerModalImages(fallbackImages);
+      return;
+    }
     let active = true;
     fetch(`/api/v1/properties/${pid}`)
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
         if (!active) return;
         if (data?.images && Array.isArray(data.images)) {
+          const fetchedImages = data.images
+            .map((i: any) => normalizeImageUrl(extractImageUrlCandidate(i)))
+            .filter(Boolean);
           setPropPartnerModalImages(
-            data.images
-              .map((i: any) => normalizeImageUrl(extractImageUrlCandidate(i)))
-              .filter(Boolean),
+            Array.from(new Set([...fallbackImages, ...fetchedImages])),
           );
         } else {
-          setPropPartnerModalImages([]);
+          setPropPartnerModalImages(fallbackImages);
         }
       })
-      .catch(() => { if (active) setPropPartnerModalImages([]); });
+      .catch(() => {
+        if (active) setPropPartnerModalImages(fallbackImages);
+      });
     return () => { active = false; };
   }, [propAcceptModal, propMeetingConfirmModal]);
   const handleJobClick = (job: any) => {
@@ -1176,7 +1287,7 @@ export default function FixerProPage() {
     if (isHiddenTestPo(extractedPo)) return null;
     const attachmentUrls = Array.isArray(o.images)
       ? o.images
-          .map((image: any) => (typeof image === 'string' ? image : image?.url || ''))
+          .map((image: any) => normalizeImageUrl(extractImageUrlCandidate(image)))
           .filter(Boolean)
       : [];
     const locFromDesc = (() => { const m = String(o.description || '').match(/\bLOC:([^|]+)/); return m ? (m[1] ?? '').trim() : ''; })();
@@ -2997,9 +3108,46 @@ export default function FixerProPage() {
                     if (poKey && parsed[poKey] && parsed[poKey].length > 0) freshUrls = parsed[poKey];
                   }
                 } catch {}
+
+                if (freshUrls.length === 0) {
+                  const token = localStorage.getItem('subscriber_token') || '';
+                  const orderId =
+                    waitModalOrder?.orderId ||
+                    (poKey ? localStorage.getItem(`po_to_order_${poKey}`) : '') ||
+                    (poKey ? (mappedOrders as any[]).find((o: any) => o.po === poKey)?.id : '') ||
+                    (isOrderUuid(waitModalOrder?.id) ? waitModalOrder?.id : '');
+
+                  if (token && orderId) {
+                    try {
+                      const res = await fetch(`/api/v1/orders/${orderId}/attachments`, {
+                        headers: { Authorization: `Bearer ${token}` },
+                      });
+                      if (res.ok) {
+                        const rows = await res.json();
+                        freshUrls = Array.from(
+                          new Set(
+                            (Array.isArray(rows) ? rows : [])
+                              .map((entry: any) => normalizeImageUrl(extractImageUrlCandidate(entry)))
+                              .filter(Boolean),
+                          ),
+                        );
+                        if (freshUrls.length > 0) {
+                          setWaitModalAttachmentUrls(freshUrls);
+                        }
+                      }
+                    } catch {
+                      // non-blocking
+                    }
+                  }
+                }
+
                 const downloaded = await downloadAttachmentUrls({ urls: freshUrls, po: poKey, prefix: 'attachment' });
-                if (!downloaded && freshUrls.length > 0) {
-                  alert("Files are attached but still syncing here. Please reopen this modal in a moment, or ask the customer to share them in the chat room if you need them urgently.");
+                if (!downloaded) {
+                  alert(
+                    freshUrls.length > 0
+                      ? "Files are attached but still syncing here. Please reopen this modal in a moment, or ask the customer to share them in the chat room if you need them urgently."
+                      : "No downloadable file found right now.",
+                  );
                 }
               }}>
                 {waitModalAttachmentUrls.length > 0
@@ -4047,7 +4195,10 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
             <div className="flex justify-between items-center rounded-lg border border-amber-100 bg-amber-50 px-4 py-2.5 text-xs">
               <span className="text-amber-800 font-semibold">Uploaded Files</span>
               <span className={`cursor-pointer font-semibold ${variationAttachUrls.length > 0 ? 'text-sky-600 hover:underline' : 'text-gray-400'}`} onClick={async () => {
-                if (variationAttachUrls.length === 0) return;
+                if (variationAttachUrls.length === 0) {
+                  alert('No downloadable file found right now.');
+                  return;
+                }
                 const downloaded = await downloadAttachmentUrls({
                   urls: variationAttachUrls,
                   po: variationModal.po,
@@ -4589,7 +4740,10 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
             <div className="flex justify-between items-center rounded-lg border border-amber-100 bg-amber-50 px-4 py-2.5 text-xs">
               <span className="text-amber-800 font-semibold">Uploaded Files</span>
               <span className={`cursor-pointer font-semibold ${variationAttachUrls.length > 0 ? 'text-sky-600 hover:underline' : 'text-gray-400'}`} onClick={async () => {
-                if (variationAttachUrls.length === 0) return;
+                if (variationAttachUrls.length === 0) {
+                  alert('No downloadable file found right now.');
+                  return;
+                }
                 const downloaded = await downloadAttachmentUrls({
                   urls: variationAttachUrls,
                   po: variationModal.po,
@@ -5273,12 +5427,17 @@ function PartnerProperties({ locale, prefix, properties, propertyInquiries }: { 
     const source = await maybeConvertHeicToJpeg(file);
     if (!source.type.startsWith("image/")) return readFileAsDataUrl(source);
 
-    const TARGET = 300000;
+    // 0.27-0.30 MB target range (base64 string is ~4/3 binary size).
+    const TARGET_MIN_CHARS = 360_000;
+    const TARGET_MAX_CHARS = 400_000;
+    const TARGET_MID_CHARS = 380_000;
     const passes = [
-      { maxDim: 1200, quality: 0.7 },
-      { maxDim: 900, quality: 0.6 },
-      { maxDim: 700, quality: 0.5 },
-      { maxDim: 560, quality: 0.42 },
+      { maxDim: 1600, quality: 0.86 },
+      { maxDim: 1400, quality: 0.82 },
+      { maxDim: 1200, quality: 0.78 },
+      { maxDim: 1050, quality: 0.72 },
+      { maxDim: 900, quality: 0.66 },
+      { maxDim: 760, quality: 0.60 },
     ];
 
     return await new Promise((resolve) => {
@@ -5287,9 +5446,11 @@ function PartnerProperties({ locale, prefix, properties, propertyInquiries }: { 
       img.onload = () => {
         URL.revokeObjectURL(objectUrl);
         let out = "";
+        let bestWithinMax = "";
+        let bestDistance = Number.POSITIVE_INFINITY;
         const run = (index: number) => {
           if (index >= passes.length) {
-            resolve(out || "");
+            resolve(bestWithinMax || out || "");
             return;
           }
           const pass = passes[index]!;
@@ -5304,8 +5465,19 @@ function PartnerProperties({ locale, prefix, properties, propertyInquiries }: { 
           }
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
           out = canvas.toDataURL("image/jpeg", pass.quality);
-          if (out.length <= TARGET || index === passes.length - 1) {
+          if (out.length <= TARGET_MAX_CHARS) {
+            const distance = Math.abs(out.length - TARGET_MID_CHARS);
+            if (distance < bestDistance) {
+              bestDistance = distance;
+              bestWithinMax = out;
+            }
+          }
+          if (out.length >= TARGET_MIN_CHARS && out.length <= TARGET_MAX_CHARS) {
             resolve(out);
+            return;
+          }
+          if (index === passes.length - 1) {
+            resolve(bestWithinMax || out);
             return;
           }
           run(index + 1);

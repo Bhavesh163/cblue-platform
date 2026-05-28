@@ -168,7 +168,40 @@ const normalizeImageUrl = (value: unknown) => {
 const extractImageUrlCandidate = (image: any) => {
   if (typeof image === 'string') return image;
   if (!image || typeof image !== 'object') return '';
-  return image.url || image.key || image.imageUrl || image.publicUrl || image.src || '';
+  const direct =
+    image.url ||
+    image.key ||
+    image.imageUrl ||
+    image.publicUrl ||
+    image.src ||
+    image.fileUrl ||
+    image.downloadUrl ||
+    image.path ||
+    image.href ||
+    image.location ||
+    image.dataUrl ||
+    image.value;
+  if (direct) return direct;
+
+  if (image.file && typeof image.file === 'object') {
+    return (
+      image.file.url ||
+      image.file.key ||
+      image.file.imageUrl ||
+      image.file.downloadUrl ||
+      ''
+    );
+  }
+
+  if (image.attributes && typeof image.attributes === 'object') {
+    return image.attributes.url || image.attributes.key || '';
+  }
+
+  return '';
+};
+const mimeTypeFromDataUrl = (url: string) => {
+  const match = url.match(/^data:([^;,]+)[;,]/i);
+  return match?.[1] || '';
 };
 const extensionFromMimeType = (mimeType?: string | null) => {
   const mime = String(mimeType || '').toLowerCase();
@@ -204,6 +237,16 @@ const shouldAttachAuthHeader = (url: string) => {
     return false;
   }
 };
+const openUrlInNewTab = (url: string) => {
+  const link = document.createElement('a');
+  link.href = url;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
 const downloadImageUrls = async (urls: string[], prefix = 'property-photo') => {
   const uniqueUrls = Array.from(new Set((urls || []).map(normalizeImageUrl).filter(Boolean)));
   for (const [index, url] of uniqueUrls.entries()) {
@@ -211,6 +254,24 @@ const downloadImageUrls = async (urls: string[], prefix = 'property-photo') => {
     try {
       if (url.startsWith('blob:')) {
         triggerDownload(url, fallbackName);
+        continue;
+      }
+
+      if (url.startsWith('data:')) {
+        const ext = extensionFromMimeType(mimeTypeFromDataUrl(url));
+        const fileName = `${fallbackName}.${ext}`;
+        try {
+          // Preserve direct click gesture for data URL downloads.
+          triggerDownload(url, fileName);
+          continue;
+        } catch {
+          // Fallback to fetch/blob below.
+        }
+      }
+
+      // Public absolute URLs frequently fail CORS fetch; open directly while gesture is active.
+      if ((url.startsWith('http://') || url.startsWith('https://')) && !shouldAttachAuthHeader(url)) {
+        openUrlInNewTab(url);
         continue;
       }
 
@@ -225,7 +286,14 @@ const downloadImageUrls = async (urls: string[], prefix = 'property-photo') => {
       });
       if (!response.ok) {
         if (url.startsWith('http://') || url.startsWith('https://')) {
-          window.open(url, '_blank', 'noopener,noreferrer');
+          openUrlInNewTab(url);
+        } else if (!shouldAttachAuthHeader(url)) {
+          try {
+            const absolute = new URL(url, window.location.origin).toString();
+            openUrlInNewTab(absolute);
+          } catch {
+            // no-op
+          }
         }
         continue;
       }
@@ -237,7 +305,14 @@ const downloadImageUrls = async (urls: string[], prefix = 'property-photo') => {
       triggerDownload(blobUrl, fileName, true);
     } catch {
       if (url.startsWith('http://') || url.startsWith('https://')) {
-        window.open(url, '_blank', 'noopener,noreferrer');
+        openUrlInNewTab(url);
+      } else if (!shouldAttachAuthHeader(url)) {
+        try {
+          const absolute = new URL(url, window.location.origin).toString();
+          openUrlInNewTab(absolute);
+        } catch {
+          // no-op
+        }
       }
     }
   }
@@ -1070,24 +1145,41 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
   // Fetch property images when propPayModal or propMeetingModal opens
   useEffect(() => {
+    const fallbackImages = Array.from(
+      new Set(
+        [
+          ...(Array.isArray(propPayModal?.propertyImages) ? propPayModal!.propertyImages : []),
+          ...(Array.isArray(propMeetingModal?.propertyImages) ? propMeetingModal!.propertyImages : []),
+        ]
+          .map((value) => normalizeImageUrl(extractImageUrlCandidate(value)))
+          .filter(Boolean),
+      ),
+    );
+
     const pid = propPayModal?.propertyId || propMeetingModal?.propertyId;
-    if (!pid) { setPropModalImages([]); return; }
+    if (!pid) {
+      setPropModalImages(fallbackImages);
+      return;
+    }
     let active = true;
     fetch(`/api/v1/properties/${pid}`)
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
         if (!active) return;
         if (data?.images && Array.isArray(data.images)) {
+          const fetchedImages = data.images
+            .map((i: any) => normalizeImageUrl(extractImageUrlCandidate(i)))
+            .filter(Boolean);
           setPropModalImages(
-            data.images
-              .map((i: any) => normalizeImageUrl(extractImageUrlCandidate(i)))
-              .filter(Boolean),
+            Array.from(new Set([...fallbackImages, ...fetchedImages])),
           );
         } else {
-          setPropModalImages([]);
+          setPropModalImages(fallbackImages);
         }
       })
-      .catch(() => { if (active) setPropModalImages([]); });
+      .catch(() => {
+        if (active) setPropModalImages(fallbackImages);
+      });
     return () => { active = false; };
   }, [propPayModal, propMeetingModal]);
   // Tracks previous backend order statuses to detect MEETING_REQUESTED → IN_PROGRESS transitions

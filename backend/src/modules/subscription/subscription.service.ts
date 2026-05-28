@@ -351,15 +351,24 @@ export class SubscriptionService {
       data: { resetToken, resetTokenExpiry },
     });
 
+    const recipientEmail = this.normalizeEmail(subscriber.email);
+    if (!recipientEmail) {
+      this.logger.error(
+        `Password reset skipped because subscriber ${subscriber.id} has invalid email`,
+      );
+      return { message: 'If the email exists, a reset link has been sent.' };
+    }
+    const recipientName = String(subscriber.name || '').trim() || 'User';
+
     // Send email via Mailjet (with API + SMTP fallback paths)
     const sent = await this.sendResetEmail(
-      subscriber.email,
-      subscriber.name,
+      recipientEmail,
+      recipientName,
       resetToken,
     );
     if (!sent) {
       this.logger.error(
-        `Password reset email delivery failed for ${subscriber.email}`,
+        `Password reset email delivery failed for ${recipientEmail}`,
       );
     }
 
@@ -652,6 +661,13 @@ export class SubscriptionService {
     type MailjetMessageStatus = { Status?: string };
     type MailjetSendApiResponse = { Messages?: MailjetMessageStatus[] };
 
+    const normalizedRecipientEmail = this.normalizeEmail(email);
+    if (!normalizedRecipientEmail) {
+      this.logger.warn('sendResetEmail received invalid recipient email');
+      return false;
+    }
+    const recipientName = String(name || '').trim() || 'User';
+
     const mailjetApiKey = this.configService.get<string>('mailjet.apiKey');
     const mailjetApiSecret =
       this.configService.get<string>('mailjet.apiSecret');
@@ -664,8 +680,8 @@ export class SubscriptionService {
     const fromCandidates = Array.from(
       new Set(
         [
-          'noreply@lblue.tech',
           normalizedConfiguredFromEmail,
+          'noreply@lblue.tech',
           'noreply@cblue.co.th',
         ]
           .map((v) => v.trim())
@@ -695,7 +711,7 @@ export class SubscriptionService {
                 <div style="padding: 40px;">
                   <h2 style="color: #1e293b; margin-top: 0; font-size: 20px; font-weight: 600;">Password Reset Request</h2>
                   <p style="color: #475569; font-size: 16px; line-height: 1.6; margin-bottom: 24px;">
-                    Hello ${name},
+                    Hello ${recipientName},
                   </p>
                   <p style="color: #475569; font-size: 16px; line-height: 1.6; margin-bottom: 24px;">
                     We received a request to reset your password for your CBLUE account. This link is valid for the next <strong>1 hour</strong>.
@@ -724,7 +740,7 @@ export class SubscriptionService {
               </div>
             </div>
           `;
-    const textPart = `Hello ${name},\n\nWe received a request to reset your password for your CBLUE account.\n\nClick the link below to reset your password (valid for 1 hour):\n${resetUrl}\n\nIf you did not request this, please ignore this email.\n\n© ${new Date().getFullYear()} Construction Blue Co., Ltd. All rights reserved.`;
+    const textPart = `Hello ${recipientName},\n\nWe received a request to reset your password for your CBLUE account.\n\nClick the link below to reset your password (valid for 1 hour):\n${resetUrl}\n\nIf you did not request this, please ignore this email.\n\n© ${new Date().getFullYear()} Construction Blue Co., Ltd. All rights reserved.`;
 
     const isSenderConfigError = (errorText: string) => {
       const lower = errorText.toLowerCase();
@@ -769,7 +785,7 @@ export class SubscriptionService {
               Email: fromEmail,
               Name: 'CBLUE',
             },
-            To: [{ Email: email, Name: name }],
+            To: [{ Email: normalizedRecipientEmail, Name: recipientName }],
             Subject: subject,
             HTMLPart: htmlPart,
             TextPart: textPart,
@@ -797,12 +813,12 @@ export class SubscriptionService {
           (message) => String(message.Status || '').toLowerCase(),
         );
         const hasSuccessfulMessageStatus = messageStatuses.some((status) =>
-          ['success', 'queued'].includes(status),
+          ['success', 'queued', 'sent'].includes(status),
         );
 
         if (response.ok && hasSuccessfulMessageStatus) {
           this.logger.log(
-            `Password reset email sent to ${email} via Mailjet API (${fromEmail})`,
+            `Password reset email sent to ${normalizedRecipientEmail} via Mailjet API (${fromEmail})`,
           );
           this.logger.log(
             `[BACKUP-LINK] /en/subscription/reset-password?token=${resetToken}`,
@@ -867,14 +883,14 @@ export class SubscriptionService {
         try {
           await transporter.sendMail({
             from: `CBLUE <${fromEmail}>`,
-            to: email,
+            to: normalizedRecipientEmail,
             subject,
             text: textPart,
             html: htmlPart,
           });
 
           this.logger.log(
-            `Password reset email sent to ${email} via Mailjet SMTP (${fromEmail})`,
+            `Password reset email sent to ${normalizedRecipientEmail} via Mailjet SMTP (${fromEmail})`,
           );
           if (apiError) {
             this.logger.warn(
@@ -901,12 +917,12 @@ export class SubscriptionService {
       this.logger.error(`Mailjet SMTP transport init failed: ${smtpErrorText}`);
     }
 
-    this.logger.error(`Password reset email could not be sent to ${email}`);
+    this.logger.error(`Password reset email could not be sent to ${normalizedRecipientEmail}`);
     if (apiError) {
       this.logger.error(`Last Mailjet API error: ${apiError}`);
     }
     this.logger.log(
-      `[FALLBACK] Password reset link for ${email}: /en/subscription/reset-password?token=${resetToken}`,
+      `[FALLBACK] Password reset link for ${normalizedRecipientEmail}: /en/subscription/reset-password?token=${resetToken}`,
     );
     return false;
   }

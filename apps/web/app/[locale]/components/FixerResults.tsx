@@ -471,10 +471,13 @@ async function fileToUploadDataUrl(file: File): Promise<string> {
   // The raw File object stored in window.__cblue_files_by_po handles downloads.
   if (!sourceFile.type.startsWith("image/")) return rawDataUrl;
 
-  // Target: 0.3 MB = 307,200 bytes. Base64 expands by ~4/3, so the dataURL
-  // string must stay under 307200 * (4/3) ≈ 409,600 characters.
-  const TARGET_CHARS = 409_600;
-  if (rawDataUrl.length <= TARGET_CHARS) return rawDataUrl;
+  // Target binary size: about 0.27-0.30 MB. Base64 expands by ~4/3.
+  const TARGET_MIN_CHARS = 360_000;
+  const TARGET_MAX_CHARS = 400_000;
+  const TARGET_MID_CHARS = 380_000;
+  if (rawDataUrl.length >= TARGET_MIN_CHARS && rawDataUrl.length <= TARGET_MAX_CHARS) {
+    return rawDataUrl;
+  }
 
   return await new Promise((resolve) => {
     const image = new window.Image();
@@ -491,16 +494,33 @@ async function fileToUploadDataUrl(file: File): Promise<string> {
         return canvas.toDataURL("image/jpeg", quality);
       };
 
-      // Pass 1 – 1200 px, 70 % quality (well under 0.3 MB for typical photos)
-      let out = compress(1200, 0.70);
-      if (out.length <= TARGET_CHARS) { resolve(out); return; }
+      const passes = [
+        { maxDim: 1600, quality: 0.86 },
+        { maxDim: 1400, quality: 0.82 },
+        { maxDim: 1200, quality: 0.78 },
+        { maxDim: 1050, quality: 0.72 },
+        { maxDim: 900, quality: 0.66 },
+        { maxDim: 760, quality: 0.60 },
+      ];
 
-      // Pass 2 – 900 px, 60 % quality
-      out = compress(900, 0.60);
-      if (out.length <= TARGET_CHARS) { resolve(out); return; }
+      let fallback = "";
+      let bestDistance = Number.POSITIVE_INFINITY;
+      for (const pass of passes) {
+        const candidate = compress(pass.maxDim, pass.quality);
+        if (candidate.length <= TARGET_MAX_CHARS) {
+          const distance = Math.abs(candidate.length - TARGET_MID_CHARS);
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            fallback = candidate;
+          }
+        }
+        if (candidate.length >= TARGET_MIN_CHARS && candidate.length <= TARGET_MAX_CHARS) {
+          resolve(candidate);
+          return;
+        }
+      }
 
-      // Pass 3 – 700 px, 50 % quality (last resort before giving up)
-      resolve(compress(700, 0.50));
+      resolve(fallback || compress(700, 0.50));
     };
     // Undecodable image formats: canvas fires onerror; fallback keeps original payload
     image.onerror = () => resolve(rawDataUrl);

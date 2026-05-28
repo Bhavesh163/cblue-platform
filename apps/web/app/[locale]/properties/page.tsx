@@ -130,7 +130,170 @@ function normalizeImageUrl(value: unknown) {
 function extractImageUrlCandidate(image: any) {
   if (typeof image === "string") return image;
   if (!image || typeof image !== "object") return "";
-  return image.url || image.key || image.imageUrl || image.publicUrl || image.src || "";
+  const direct =
+    image.url ||
+    image.key ||
+    image.imageUrl ||
+    image.publicUrl ||
+    image.src ||
+    image.fileUrl ||
+    image.downloadUrl ||
+    image.path ||
+    image.href ||
+    image.location ||
+    image.dataUrl ||
+    image.value;
+  if (direct) return direct;
+
+  if (image.file && typeof image.file === "object") {
+    return (
+      image.file.url ||
+      image.file.key ||
+      image.file.imageUrl ||
+      image.file.downloadUrl ||
+      ""
+    );
+  }
+
+  if (image.attributes && typeof image.attributes === "object") {
+    return image.attributes.url || image.attributes.key || "";
+  }
+
+  return "";
+}
+
+function extensionFromMimeType(mimeType?: string | null) {
+  const mime = String(mimeType || "").toLowerCase();
+  if (!mime) return "bin";
+  if (mime.includes("jpeg")) return "jpg";
+  if (mime.includes("png")) return "png";
+  if (mime.includes("webp")) return "webp";
+  if (mime.includes("gif")) return "gif";
+  if (mime.includes("pdf")) return "pdf";
+  if (mime.includes("heic")) return "heic";
+  const match = mime.match(/\/([a-z0-9.+-]+)$/i);
+  return match?.[1] || "bin";
+}
+
+function mimeTypeFromDataUrl(url: string) {
+  const match = url.match(/^data:([^;,]+)[;,]/i);
+  return match?.[1] || "";
+}
+
+function shouldAttachAuthHeader(url: string) {
+  if (url.startsWith("/api/")) return true;
+  try {
+    if (typeof window === "undefined") return false;
+    const parsed = new URL(url, window.location.origin);
+    return parsed.origin === window.location.origin && parsed.pathname.startsWith("/api/");
+  } catch {
+    return false;
+  }
+}
+
+function triggerDownload(href: string, filename: string, revoke = false) {
+  const link = document.createElement("a");
+  link.href = href;
+  link.download = filename;
+  link.rel = "noopener noreferrer";
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  if (revoke) {
+    setTimeout(() => URL.revokeObjectURL(href), 2000);
+  }
+}
+
+function openUrlInNewTab(url: string) {
+  const link = document.createElement("a");
+  link.href = url;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+async function downloadPropertyFiles(urls: string[], prefix = "property-photo") {
+  const uniqueUrls = Array.from(
+    new Set(
+      (urls || [])
+        .map((value) => normalizeImageUrl(extractImageUrlCandidate(value)))
+        .filter(Boolean),
+    ),
+  );
+
+  let downloaded = 0;
+  for (const [index, url] of uniqueUrls.entries()) {
+    const fallbackName = `${prefix}-${index + 1}`;
+    try {
+      if (url.startsWith("blob:")) {
+        triggerDownload(url, fallbackName);
+        downloaded += 1;
+        continue;
+      }
+
+      if (url.startsWith("data:")) {
+        const ext = extensionFromMimeType(mimeTypeFromDataUrl(url));
+        try {
+          triggerDownload(url, `${fallbackName}.${ext}`);
+          downloaded += 1;
+          continue;
+        } catch {
+          // Fallback below.
+        }
+      }
+
+      if ((url.startsWith("http://") || url.startsWith("https://")) && !shouldAttachAuthHeader(url)) {
+        openUrlInNewTab(url);
+        downloaded += 1;
+        continue;
+      }
+
+      const token = typeof window !== "undefined" ? localStorage.getItem("subscriber_token") || "" : "";
+      const headers: Record<string, string> = {};
+      if (token && shouldAttachAuthHeader(url)) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      const response = await fetch(url, {
+        headers,
+        credentials: "include",
+      });
+      if (!response.ok) {
+        if (!shouldAttachAuthHeader(url)) {
+          try {
+            const absolute = new URL(url, window.location.origin).toString();
+            openUrlInNewTab(absolute);
+            downloaded += 1;
+          } catch {
+            // no-op
+          }
+        }
+        continue;
+      }
+
+      const blob = await response.blob();
+      const ext = extensionFromMimeType(blob.type);
+      const blobUrl = URL.createObjectURL(blob);
+      triggerDownload(blobUrl, `${fallbackName}.${ext}`, true);
+      downloaded += 1;
+    } catch {
+      if (!shouldAttachAuthHeader(url)) {
+        try {
+          const absolute = new URL(url, window.location.origin).toString();
+          openUrlInNewTab(absolute);
+          downloaded += 1;
+        } catch {
+          // no-op
+        }
+      }
+    }
+  }
+
+  return downloaded > 0;
 }
 
 function sanitizeProperty(raw: any): Property {
@@ -692,6 +855,33 @@ function PropertiesPageContent() {
                   <p className="font-bold text-gray-900">{showContactFlow.title}</p>
                   <p className="text-sm text-green-700 font-semibold">฿{formatPrice(showContactFlow.price)}{showContactFlow.listingType === "RENT" ? "/mo" : ""}</p>
                   <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "สถานที่" : locale === "zh" ? "项目地点" : "Site Location"}: {getPropertySiteLocation(showContactFlow)}</p>
+                  {Array.isArray(showContactFlow.images) && showContactFlow.images.length > 0 && (
+                    <button
+                      type="button"
+                      className="mt-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800"
+                      onClick={async () => {
+                        const ok = await downloadPropertyFiles(
+                          showContactFlow.images.map((image) => image.url),
+                          "property-photo",
+                        );
+                        if (!ok) {
+                          alert(
+                            locale === "th"
+                              ? "ไม่พบไฟล์ที่ดาวน์โหลดได้ในขณะนี้"
+                              : locale === "zh"
+                              ? "当前没有可下载的文件。"
+                              : "No downloadable file found right now.",
+                          );
+                        }
+                      }}
+                    >
+                      {locale === "th"
+                        ? `ดาวน์โหลดรูป (${showContactFlow.images.length})`
+                        : locale === "zh"
+                        ? `下载图片 (${showContactFlow.images.length})`
+                        : `Download Photos (${showContactFlow.images.length})`}
+                    </button>
+                  )}
                 </div>
               </div>
 
