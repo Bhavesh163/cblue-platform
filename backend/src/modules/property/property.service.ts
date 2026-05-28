@@ -27,61 +27,86 @@ export class PropertyService {
     const fallbackId = String(userRef || '').trim();
     if (!fallbackId) return [] as string[];
 
+    const linkedIds = new Set<string>();
+    const subscriberIdCandidates = new Set<string>();
+    const normalizedEmails = new Set<string>();
+
+    const pushEmail = (value?: string | null) => {
+      const normalized = this.normalizeEmail(value);
+      if (normalized) normalizedEmails.add(normalized);
+    };
+
     const user = await this.prisma.user.findUnique({
       where: { id: fallbackId },
       select: { id: true, subscriberId: true, email: true },
     });
 
-    if (!user) {
-      const linkedIds = new Set<string>();
-
+    if (user) {
+      linkedIds.add(user.id);
+      if (user.subscriberId) subscriberIdCandidates.add(user.subscriberId);
+      pushEmail(user.email);
+    } else {
       const bySubscriberId = await this.prisma.user.findMany({
         where: { subscriberId: fallbackId },
         select: { id: true },
       });
       bySubscriberId.forEach((item) => linkedIds.add(item.id));
 
-      const normalizedFallbackEmail = this.normalizeEmail(fallbackId);
-      if (normalizedFallbackEmail) {
-        const byEmail = await this.prisma.user.findMany({
-          where: {
+      const fallbackSubscriber = await this.prisma.subscriber.findUnique({
+        where: { id: fallbackId },
+        select: { id: true, email: true },
+      });
+      if (fallbackSubscriber?.id) subscriberIdCandidates.add(fallbackSubscriber.id);
+      pushEmail(fallbackSubscriber?.email);
+
+      if (fallbackId.includes('@')) pushEmail(fallbackId);
+    }
+
+    if (normalizedEmails.size > 0) {
+      const subscribersByEmail = await this.prisma.subscriber.findMany({
+        where: {
+          OR: Array.from(normalizedEmails).map((email) => ({
             email: {
-              equals: normalizedFallbackEmail,
+              equals: email,
               mode: 'insensitive',
             },
-          },
-          select: { id: true },
-        });
-        byEmail.forEach((item) => linkedIds.add(item.id));
-      }
-
-      if (linkedIds.size === 0) linkedIds.add(fallbackId);
-      return Array.from(linkedIds);
-    }
-
-    const linkedIds = new Set<string>([user.id]);
-
-    if (user.subscriberId) {
-      const bySubscriberId = await this.prisma.user.findMany({
-        where: { subscriberId: user.subscriberId },
-        select: { id: true },
+          })),
+        },
+        select: { id: true, email: true },
       });
-      bySubscriberId.forEach((item) => linkedIds.add(item.id));
+      subscribersByEmail.forEach((item) => {
+        subscriberIdCandidates.add(item.id);
+        pushEmail(item.email);
+      });
     }
 
-    const normalizedEmail = this.normalizeEmail(user.email);
-    if (normalizedEmail) {
+    if (subscriberIdCandidates.size > 0) {
+      const bySubscriberIds = await this.prisma.user.findMany({
+        where: { subscriberId: { in: Array.from(subscriberIdCandidates) } },
+        select: { id: true, email: true },
+      });
+      bySubscriberIds.forEach((item) => {
+        linkedIds.add(item.id);
+        pushEmail(item.email);
+      });
+    }
+
+    if (normalizedEmails.size > 0) {
       const byEmail = await this.prisma.user.findMany({
         where: {
-          email: {
-            equals: normalizedEmail,
-            mode: 'insensitive',
-          },
+          OR: Array.from(normalizedEmails).map((email) => ({
+            email: {
+              equals: email,
+              mode: 'insensitive',
+            },
+          })),
         },
         select: { id: true },
       });
       byEmail.forEach((item) => linkedIds.add(item.id));
     }
+
+    if (linkedIds.size === 0) linkedIds.add(fallbackId);
 
     return Array.from(linkedIds);
   }
