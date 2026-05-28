@@ -705,7 +705,7 @@ function PropertiesPageContent() {
                     <div className="text-center mb-4">
                       <p className="text-xs text-gray-400">{locale === "th" ? "CBLUE ออกให้เป็นฝ่ายที่สาม" : locale === "zh" ? "CBLUE作为第三方签发" : "Issued by CBLUE as third party"}</p>
                       <div className="bg-gray-50 rounded-xl p-3 my-3 inline-block">
-                        <p className="text-xs text-gray-500 mb-1">{locale === "th" ? "เลขที่ PO" : locale === "zh" ? "PO编号" : "PO Number"}</p>
+                        <p className="text-xs text-gray-500 mb-1">{locale === "th" ? "เลขที่ออเดอร์" : locale === "zh" ? "订单编号" : "Order Number"}</p>
                         <p className="text-xl font-mono font-extrabold text-emerald-700">{poNumber}</p>
                       </div>
                     </div>
@@ -846,7 +846,7 @@ function PropertiesPageContent() {
                     <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse [animation-delay:0.2s]" />
                     <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse [animation-delay:0.4s]" />
                   </div>
-                  <p className="text-xs text-gray-400 mt-4">PO: {poNumber}</p>
+                  <p className="text-xs text-gray-400 mt-4">{locale === "th" ? "ออเดอร์" : locale === "zh" ? "订单" : "Order"}: {poNumber}</p>
                 </div>
               )}
 
@@ -869,7 +869,7 @@ function PropertiesPageContent() {
                     </p>
                   </div>
                   <div className="bg-gray-50 rounded-xl p-3 mb-4 text-xs text-gray-500">
-                    PO: <span className="font-mono font-bold text-emerald-700">{poNumber}</span>
+                    {locale === "th" ? "ออเดอร์" : locale === "zh" ? "订单" : "Order"}: <span className="font-mono font-bold text-emerald-700">{poNumber}</span>
                   </div>
                   <div className="flex gap-3 justify-center">
                     <Link href={`${prefix}/dashboard`} className="px-6 py-2.5 bg-green-700 text-white rounded-xl font-bold text-sm hover:bg-green-800 transition">

@@ -2832,6 +2832,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div>
               <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {getPropOrderLabel(p.poNumber)} · Step 3 of 8</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{getPropSiteLocation(p)}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "สร้างเมื่อ" : locale === "zh" ? "创建时间" : "Created"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "รอผู้ลงประกาศยืนยัน — หากไม่ตอบสนองสามารถเลือกใหม่ได้" : locale === "zh" ? "等待房源方确认 — 如无响应可重新选择" : "Waiting for lister to accept — you may reselect if no response"}</p>
             </div>
@@ -2881,6 +2882,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div>
               <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {getPropOrderLabel(p.poNumber)} · Step 5 of 8</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{firstNameOnly(p.listerName, 'Lister')} · {getPropSiteLocation(p)}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "อัปเดตเมื่อ" : locale === "zh" ? "更新时间" : "Updated"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "ผู้ลงประกาศยืนยันแล้ว — ชำระค่าดำเนินการเพื่อรับข้อมูลติดต่อ" : locale === "zh" ? "房源方已确认 — 支付处理费以获取联系方式" : "Lister accepted — pay the processing fee to get contact info"}</p>
             </div>
@@ -2908,6 +2910,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div>
               <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {getPropOrderLabel(p.poNumber)} · Step 7 of 8</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{firstNameOnly(p.listerName, 'Lister')} · {getPropSiteLocation(p)}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "อัปเดตเมื่อ" : locale === "zh" ? "更新时间" : "Updated"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "ชำระแล้ว — ส่งคำเชิญนัดหมายเพื่อเยี่ยมชมทรัพย์สิน" : locale === "zh" ? "已付款 — 发送会议邀请以预约参观" : "Fee paid — send a meeting invitation to schedule a property viewing"}</p>
             </div>
@@ -2932,6 +2935,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div>
               <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {getPropOrderLabel(p.poNumber)} · Step 8 of 8</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{firstNameOnly(p.listerName, 'Lister')} · {getPropSiteLocation(p)}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "อัปเดตเมื่อ" : locale === "zh" ? "更新时间" : "Updated"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "นัดหมายยืนยันแล้ว — ให้คะแนนเพื่อปิดงาน" : locale === "zh" ? "会议已确认 — 评分以结案" : "Meeting confirmed — rate to close this inquiry"}</p>
             </div>
@@ -3729,6 +3733,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               <div className="bg-gray-50 rounded-xl p-4 text-sm space-y-2">
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ทรัพย์สิน" : "Property"}</span><span className="font-semibold text-right max-w-[60%] line-clamp-1">{propPayModal.propertyTitle}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ระดับบริการ" : locale === "zh" ? "服务等级" : "Tier"}</span><span className="font-semibold uppercase">{propPayModal.propertyTier || "STANDARD"}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}</span><span className="font-semibold">{toCurrencyLabel(propPayModal.propertyPrice)}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "จังหวัด" : "Province"}</span><span className="font-semibold">{propPayModal.province}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}</span><span className="font-semibold text-right max-w-[60%] break-words">{getPropSiteLocation(propPayModal)}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ผู้ลงประกาศ" : "Lister"}</span><span className="font-semibold">{firstNameOnly(propPayModal.listerName, 'Lister')}</span></div>
@@ -3798,6 +3803,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               )}
               <p className="text-sm text-gray-600">{locale === "th" ? `นัดหมายเยี่ยมชม: ${propMeetingModal.propertyTitle}` : `Schedule a viewing for: ${propMeetingModal.propertyTitle}`}</p>
               <p className="text-xs font-semibold text-teal-700 uppercase">{locale === "th" ? "ระดับบริการ" : locale === "zh" ? "服务等级" : "Tier"}: {propMeetingModal.propertyTier || "STANDARD"}</p>
+              <p className="text-xs text-gray-500">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(propMeetingModal.propertyPrice)}</p>
               <p className="text-xs text-gray-500">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}: {getPropSiteLocation(propMeetingModal)}</p>
               <div className="space-y-3">
                 <div>
@@ -3847,6 +3853,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div className="px-6 py-5 space-y-4">
               <p className="text-sm text-gray-600">{locale === "th" ? `ให้คะแนนประสบการณ์กับ: ${firstNameOnly(propRateModal.listerName, 'Lister')}` : `Rate your experience with: ${firstNameOnly(propRateModal.listerName, 'Lister')}`}</p>
               <p className="text-xs font-semibold text-yellow-700 uppercase">{locale === "th" ? "ระดับบริการ" : locale === "zh" ? "服务等级" : "Tier"}: {propRateModal.propertyTier || "STANDARD"}</p>
+              <p className="text-xs text-gray-500">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(propRateModal.propertyPrice)}</p>
               <p className="text-xs text-gray-500">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}: {getPropSiteLocation(propRateModal)}</p>
               <div>
                 <p className="text-xs font-semibold text-gray-600 mb-2">{locale === "th" ? "คะแนน" : "Rating"}</p>

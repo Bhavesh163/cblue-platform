@@ -2719,6 +2719,7 @@ export default function FixerProPage() {
               <div className="bg-gray-50 rounded-xl p-4 text-sm space-y-2">
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ทรัพย์สิน" : "Property"}</span><span className="font-semibold text-right max-w-[60%] line-clamp-1">{propAcceptModal.propertyTitle}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ประเภท" : "Type"}</span><span className="font-semibold">{propAcceptModal.propertyType}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}</span><span className="font-semibold">{toCurrencyLabel(propAcceptModal.propertyPrice)}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "จังหวัด" : "Province"}</span><span className="font-semibold">{propAcceptModal.province}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}</span><span className="font-semibold text-right max-w-[60%] break-words">{getPropSiteLocation(propAcceptModal)}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ระดับบริการ" : "Service Tier"}</span><span className="font-semibold">{propAcceptModal.propertyTier}</span></div>
@@ -2797,6 +2798,7 @@ export default function FixerProPage() {
               )}
               <div className="bg-gray-50 rounded-xl p-4 text-sm space-y-2">
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ทรัพย์สิน" : "Property"}</span><span className="font-semibold text-right max-w-[60%] line-clamp-1">{propMeetingConfirmModal.propertyTitle}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}</span><span className="font-semibold">{toCurrencyLabel(propMeetingConfirmModal.propertyPrice)}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "วันที่" : "Date"}</span><span className="font-semibold">{propMeetingConfirmModal.meetingDate || 'TBD'}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "เวลา" : "Time"}</span><span className="font-semibold">{propMeetingConfirmModal.meetingTime || 'TBD'}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "สถานที่" : "Venue"}</span><span className="font-semibold">{propMeetingConfirmModal.meetingVenue || 'TBD'}</span></div>
@@ -2835,6 +2837,7 @@ export default function FixerProPage() {
             </div>
             <div className="px-6 py-5 space-y-4">
               <p className="text-sm text-gray-600">{locale === "th" ? `ให้คะแนนประสบการณ์การทำงานกับลูกค้าสำหรับ: ${propPartnerRateModal.propertyTitle}` : `Rate your experience with the customer for: ${propPartnerRateModal.propertyTitle}`}</p>
+              <p className="text-xs text-gray-500">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(propPartnerRateModal.propertyPrice)}</p>
               <p className="text-xs text-gray-500">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}: {getPropSiteLocation(propPartnerRateModal)}</p>
               <div>
                 <p className="text-xs font-semibold text-gray-600 mb-2">{locale === "th" ? "คะแนน" : "Rating"}</p>
