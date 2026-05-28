@@ -1149,8 +1149,19 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         : listingType || '-';
     return `${title} · ${listingLabel} · ${getPropSiteLocation(p)} · ${toCurrencyLabel(p.propertyPrice)}`;
   };
+  const getPropListingTypeLabel = (listingType: string | null | undefined) => {
+    const upper = String(listingType || '').toUpperCase();
+    if (upper === 'SALE') return locale === 'th' ? 'ขาย' : locale === 'zh' ? '出售' : 'Sale';
+    if (upper === 'RENT') return locale === 'th' ? 'เช่า' : locale === 'zh' ? '出租' : 'Rent';
+    return upper || '-';
+  };
   const hasPendingCustomerPropRating = (p: Partial<PropInquiry>) => p.customerRating == null;
   const hasPendingListerPropRating = (p: Partial<PropInquiry>) => p.listerRating == null;
+  const isCustomerSidePropCompleted = (p: Partial<PropInquiry>) => {
+    const status = String(p.status || '').toUpperCase();
+    if (status === 'COMPLETED') return true;
+    return status === 'MEETING_CONFIRMED' && p.customerRating != null;
+  };
   const getPropInquiryDisplayStep = (statusValue: string, stepValue?: number | null) => {
     const status = String(statusValue || '').toUpperCase();
     const explicitStep = Number(stepValue || 0);
@@ -1947,6 +1958,12 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   // Merge: mockActiveItems overrides ACTIVE_MOCK items with same po (for step progression)
   const paidPOs = new Set(visibleMockActiveItems.map((x: any) => x.po));
   const completedPOs = new Set(visibleMockHistory.map((x: any) => x.po));
+  const customerSideCompletedPropPos = new Set(
+    propInquiries
+      .filter((p: PropInquiry) => isCustomerSidePropCompleted(p))
+      .map((p: PropInquiry) => String(p.poNumber || '').trim())
+      .filter((po: string) => isPoCode(po)),
+  );
   const backendActiveItems = workflowOrders
     .filter((o: any) => !['COMPLETED', 'CANCELLED', 'DONE'].includes(String(o?.status || '').toUpperCase()))
     .map((o: any) => {
@@ -2031,7 +2048,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     });
   }
   const combinedActive = Array.from(activeByPo.values())
-    .filter((item: any) => !isHiddenTestPo(item.po))
+    .filter((item: any) => {
+      const po = String(item?.po || '').trim();
+      return !isHiddenTestPo(po) && !(po && customerSideCompletedPropPos.has(po));
+    })
     .sort((a: any, b: any) => parseDateMs(b.createdAt || b.date) - parseDateMs(a.createdAt || a.date));
   // Filter static requests: hide items whose PO already has a dynamic entry (already progressed past step 6)
   const progressedPos = new Set(visibleMockDynRequests.map((x: any) => x.po));
@@ -2058,6 +2078,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     }
   }
   const allRequestItems = Array.from(dedupedRequestMap.values())
+    .filter((item: any) => {
+      const po = String(item?.po || '').trim();
+      return !(po && customerSideCompletedPropPos.has(po));
+    })
     .sort((a: any, b: any) => parseDateMs(b.createdAt || b.date) - parseDateMs(a.createdAt || a.date));
 
   // Inject prop inquiry request cards (not ghis-gated)
@@ -2082,6 +2106,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     .filter(Boolean) as any[];
   const propActiveItems: any[] = propInquiries
     .filter((p: PropInquiry) => {
+      if (isCustomerSidePropCompleted(p)) return false;
       const status = String(p.status || "").toUpperCase();
       if (!["NOTIFY_SENT", "ACCEPTED", "PAID", "MEETING_SENT", "MEETING_CONFIRMED"].includes(status)) return false;
       if (status === 'NOTIFY_SENT' && isStaleCustomerNotifyPropPo(p.poNumber)) return false;
@@ -2125,6 +2150,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         value: toCurrencyLabel(p.propertyPrice),
         fee: toCurrencyLabel(p.propertyFee),
         tier: p.propertyTier || 'Standard',
+        listingType: p.listingType || '',
         step,
         actionNeeded,
         actionNeededDetail,
@@ -2832,7 +2858,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div>
               <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {getPropOrderLabel(p.poNumber)} · Step 3 of 8</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{getPropSiteLocation(p)}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getPropListingTypeLabel(p.listingType)} · {locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "สร้างเมื่อ" : locale === "zh" ? "创建时间" : "Created"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "รอผู้ลงประกาศยืนยัน — หากไม่ตอบสนองสามารถเลือกใหม่ได้" : locale === "zh" ? "等待房源方确认 — 如无响应可重新选择" : "Waiting for lister to accept — you may reselect if no response"}</p>
             </div>
@@ -2882,7 +2908,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div>
               <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {getPropOrderLabel(p.poNumber)} · Step 5 of 8</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{firstNameOnly(p.listerName, 'Lister')} · {getPropSiteLocation(p)}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getPropListingTypeLabel(p.listingType)} · {locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "อัปเดตเมื่อ" : locale === "zh" ? "更新时间" : "Updated"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "ผู้ลงประกาศยืนยันแล้ว — ชำระค่าดำเนินการเพื่อรับข้อมูลติดต่อ" : locale === "zh" ? "房源方已确认 — 支付处理费以获取联系方式" : "Lister accepted — pay the processing fee to get contact info"}</p>
             </div>
@@ -2910,7 +2936,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div>
               <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {getPropOrderLabel(p.poNumber)} · Step 7 of 8</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{firstNameOnly(p.listerName, 'Lister')} · {getPropSiteLocation(p)}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getPropListingTypeLabel(p.listingType)} · {locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "อัปเดตเมื่อ" : locale === "zh" ? "更新时间" : "Updated"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "ชำระแล้ว — ส่งคำเชิญนัดหมายเพื่อเยี่ยมชมทรัพย์สิน" : locale === "zh" ? "已付款 — 发送会议邀请以预约参观" : "Fee paid — send a meeting invitation to schedule a property viewing"}</p>
             </div>
@@ -2935,7 +2961,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div>
               <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {getPropOrderLabel(p.poNumber)} · Step 8 of 8</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{firstNameOnly(p.listerName, 'Lister')} · {getPropSiteLocation(p)}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getPropListingTypeLabel(p.listingType)} · {locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "อัปเดตเมื่อ" : locale === "zh" ? "更新时间" : "Updated"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "นัดหมายยืนยันแล้ว — ให้คะแนนเพื่อปิดงาน" : locale === "zh" ? "会议已确认 — 评分以结案" : "Meeting confirmed — rate to close this inquiry"}</p>
             </div>
@@ -2970,6 +2996,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
          <div className="min-w-0">
            <h3 className="font-bold text-gray-900">{locale === "th" ? (item.titleTh || item.serviceTh || item.title || item.service) : locale === "zh" ? (item.titleZh || item.serviceZh || item.title || item.service) : (item.title || item.service)} <span className="text-sm font-normal text-gray-400">· {isPropertyCard ? getPropOrderLabel(item.po) : (item.po || `PO-${item.id?.slice(0,8) || '2605-8471'}`)} | {item.location || item.subdistrict || 'Unknown'}</span></h3>
            <p className="text-sm text-gray-600 mt-0.5">{item.fixerAlias || item.partnerName || item.customer || "Customer"} · {item.date || toDisplayDateTime(item.createdAt || Date.now())} · {amountPrefix} {amountValue}</p>
+           {isPropertyCard && (
+             <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getPropListingTypeLabel(item?.propInquiry?.listingType || item?.listingType)}</p>
+           )}
            {item.type === 'prop_waiting' && (
              <p className="text-xs text-amber-700 mt-1">
                {locale === "th"
@@ -3030,7 +3059,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const activeOrders = workflowOrders.filter((o: any) => !['COMPLETED', 'CANCELLED', 'DONE'].includes(String(o.status || '').toUpperCase()));
   const historyOrders = workflowOrders.filter((o: any) => ['COMPLETED', 'CANCELLED', 'DONE'].includes(String(o.status || '').toUpperCase()));
   const propCompletedHistoryEntries = propInquiries
-    .filter((p: PropInquiry) => String(p.status || '').toUpperCase() === 'COMPLETED')
+    .filter((p: PropInquiry) => isCustomerSidePropCompleted(p))
     .map((p: PropInquiry) => {
       const completedAt = p.updatedAt || p.createdAt || Date.now();
       const siteLocation = getPropSiteLocation(p);
@@ -3733,6 +3762,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               <div className="bg-gray-50 rounded-xl p-4 text-sm space-y-2">
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ทรัพย์สิน" : "Property"}</span><span className="font-semibold text-right max-w-[60%] line-clamp-1">{propPayModal.propertyTitle}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ระดับบริการ" : locale === "zh" ? "服务等级" : "Tier"}</span><span className="font-semibold uppercase">{propPayModal.propertyTier || "STANDARD"}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}</span><span className="font-semibold">{getPropListingTypeLabel(propPayModal.listingType)}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}</span><span className="font-semibold">{toCurrencyLabel(propPayModal.propertyPrice)}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "จังหวัด" : "Province"}</span><span className="font-semibold">{propPayModal.province}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}</span><span className="font-semibold text-right max-w-[60%] break-words">{getPropSiteLocation(propPayModal)}</span></div>
@@ -3803,6 +3833,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               )}
               <p className="text-sm text-gray-600">{locale === "th" ? `นัดหมายเยี่ยมชม: ${propMeetingModal.propertyTitle}` : `Schedule a viewing for: ${propMeetingModal.propertyTitle}`}</p>
               <p className="text-xs font-semibold text-teal-700 uppercase">{locale === "th" ? "ระดับบริการ" : locale === "zh" ? "服务等级" : "Tier"}: {propMeetingModal.propertyTier || "STANDARD"}</p>
+              <p className="text-xs text-gray-500">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getPropListingTypeLabel(propMeetingModal.listingType)}</p>
               <p className="text-xs text-gray-500">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(propMeetingModal.propertyPrice)}</p>
               <p className="text-xs text-gray-500">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}: {getPropSiteLocation(propMeetingModal)}</p>
               <div className="space-y-3">
@@ -3853,6 +3884,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div className="px-6 py-5 space-y-4">
               <p className="text-sm text-gray-600">{locale === "th" ? `ให้คะแนนประสบการณ์กับ: ${firstNameOnly(propRateModal.listerName, 'Lister')}` : `Rate your experience with: ${firstNameOnly(propRateModal.listerName, 'Lister')}`}</p>
               <p className="text-xs font-semibold text-yellow-700 uppercase">{locale === "th" ? "ระดับบริการ" : locale === "zh" ? "服务等级" : "Tier"}: {propRateModal.propertyTier || "STANDARD"}</p>
+              <p className="text-xs text-gray-500">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getPropListingTypeLabel(propRateModal.listingType)}</p>
               <p className="text-xs text-gray-500">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(propRateModal.propertyPrice)}</p>
               <p className="text-xs text-gray-500">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}: {getPropSiteLocation(propRateModal)}</p>
               <div>

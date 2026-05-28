@@ -492,6 +492,24 @@ const getJobAmountValue = (job: any) => {
   }
   return job?.fee || toCurrencyLabel(job?.budget || 0);
 };
+const normalizePropertyListingType = (value: any) => {
+  const upper = String(value || '').trim().toUpperCase();
+  return upper === 'SALE' || upper === 'RENT' ? upper : '';
+};
+const getPropertyListingTypeLabel = (listingType: any, locale: string) => {
+  const upper = normalizePropertyListingType(listingType);
+  if (upper === 'SALE') return locale === 'th' ? 'ขาย' : locale === 'zh' ? '出售' : 'Sale';
+  if (upper === 'RENT') return locale === 'th' ? 'เช่า' : locale === 'zh' ? '出租' : 'Rent';
+  return '-';
+};
+const getJobListingTypeLabel = (job: any, locale: string) => {
+  if (!isPropertyWorkflowJob(job)) return '';
+  const direct = normalizePropertyListingType(job?.listingType || job?.propInquiry?.listingType);
+  if (direct) return getPropertyListingTypeLabel(direct, locale);
+  const inferred = String(job?.description || '').match(/\bListing:\s*([A-Za-z]+)/i)?.[1] || '';
+  const normalized = normalizePropertyListingType(inferred);
+  return normalized ? getPropertyListingTypeLabel(normalized, locale) : '';
+};
 
 const getLocalChatHistory = (po: any) => {
   if (typeof window === 'undefined' || !po) return [];
@@ -1759,7 +1777,18 @@ export default function FixerProPage() {
     const extracted = Number(match?.[1] || match?.[2] || 0);
     return Number.isFinite(extracted) ? Math.max(0, Math.floor(extracted)) : 0;
   };
-  let activeJobs = mappedOrders.filter(o => !['COMPLETED', 'CANCELLED'].includes(o.status) && !completedHistoryPos.has(o.po));
+  const isPartnerSidePropCompleted = (p: Partial<PropInquiry>) => {
+    const status = String(p.status || '').toUpperCase();
+    if (status === 'COMPLETED') return true;
+    return status === 'MEETING_CONFIRMED' && p.listerRating != null;
+  };
+  const partnerSideCompletedPropPos = new Set(
+    propInquiries
+      .filter((p: PropInquiry) => isPartnerSidePropCompleted(p))
+      .map((p: PropInquiry) => String(p.poNumber || '').trim())
+      .filter((po: string) => isPropPoCode(po)),
+  );
+  let activeJobs = mappedOrders.filter(o => !['COMPLETED', 'CANCELLED'].includes(o.status) && !completedHistoryPos.has(o.po) && !partnerSideCompletedPropPos.has(String(o.po || '').trim()));
   activeJobs = activeJobs.map(job => {
       const stepLookup = mockActiveState.find((x: any) => x.po === job.po);
       const backendStep = getWorkflowStepFromStatus(job.status);
@@ -1801,7 +1830,10 @@ export default function FixerProPage() {
     return 'NOTIFY_SENT';
   };
   const propActiveJobs = propInquiries
-    .filter((p: PropInquiry) => ['NOTIFY_SENT', 'ACCEPTED', 'PAID', 'MEETING_SENT', 'MEETING_CONFIRMED'].includes(String(p.status || '').toUpperCase()))
+    .filter((p: PropInquiry) => {
+      if (isPartnerSidePropCompleted(p)) return false;
+      return ['NOTIFY_SENT', 'ACCEPTED', 'PAID', 'MEETING_SENT', 'MEETING_CONFIRMED'].includes(String(p.status || '').toUpperCase());
+    })
     .map((p: PropInquiry) => {
       const status = String(p.status || '').toUpperCase();
       const step = mapPropStatusToStep(status, p.step);
@@ -1829,6 +1861,7 @@ export default function FixerProPage() {
         value: toCurrencyLabel(p.propertyPrice),
         fee: toCurrencyLabel(p.propertyFee),
         tier: p.propertyTier || 'STANDARD',
+        listingType: p.listingType || '',
         location: siteLocation,
         subdistrict: p.subdistrict || p.district || p.province || '',
         status,
@@ -1940,7 +1973,7 @@ export default function FixerProPage() {
     return bTs - aTs;
   });
   const propCompletedJobs = propInquiries
-    .filter((p: PropInquiry) => String(p.status || '').toUpperCase() === 'COMPLETED')
+    .filter((p: PropInquiry) => isPartnerSidePropCompleted(p))
     .map((p: PropInquiry) => {
       const completedAt = p.updatedAt || p.createdAt || Date.now();
       const siteLocation = getPropSiteLocation(p);
@@ -2522,7 +2555,12 @@ export default function FixerProPage() {
       }
       return map;
     }, new Map<string, any>()).values(),
-  ).sort((a: any, b: any) => parseTs(b.createdAt || b.date) - parseTs(a.createdAt || a.date));
+  )
+    .filter((item: any) => {
+      const po = String(item?.po || '').trim();
+      return !(po && partnerSideCompletedPropPos.has(po));
+    })
+    .sort((a: any, b: any) => parseTs(b.createdAt || b.date) - parseTs(a.createdAt || a.date));
 
   const dynamicNotifications = mockDynReqs.map((r: any) => {
     const displayTime = typeof r.date === "string" && r.date.includes(":") ? r.date : (r.date ? fmtDateTime(r.date) : "");
@@ -2719,6 +2757,7 @@ export default function FixerProPage() {
               <div className="bg-gray-50 rounded-xl p-4 text-sm space-y-2">
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ทรัพย์สิน" : "Property"}</span><span className="font-semibold text-right max-w-[60%] line-clamp-1">{propAcceptModal.propertyTitle}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ประเภท" : "Type"}</span><span className="font-semibold">{propAcceptModal.propertyType}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}</span><span className="font-semibold">{getPropertyListingTypeLabel(propAcceptModal.listingType, locale)}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}</span><span className="font-semibold">{toCurrencyLabel(propAcceptModal.propertyPrice)}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "จังหวัด" : "Province"}</span><span className="font-semibold">{propAcceptModal.province}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}</span><span className="font-semibold text-right max-w-[60%] break-words">{getPropSiteLocation(propAcceptModal)}</span></div>
@@ -2798,6 +2837,7 @@ export default function FixerProPage() {
               )}
               <div className="bg-gray-50 rounded-xl p-4 text-sm space-y-2">
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ทรัพย์สิน" : "Property"}</span><span className="font-semibold text-right max-w-[60%] line-clamp-1">{propMeetingConfirmModal.propertyTitle}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}</span><span className="font-semibold">{getPropertyListingTypeLabel(propMeetingConfirmModal.listingType, locale)}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}</span><span className="font-semibold">{toCurrencyLabel(propMeetingConfirmModal.propertyPrice)}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "วันที่" : "Date"}</span><span className="font-semibold">{propMeetingConfirmModal.meetingDate || 'TBD'}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "เวลา" : "Time"}</span><span className="font-semibold">{propMeetingConfirmModal.meetingTime || 'TBD'}</span></div>
@@ -2837,6 +2877,7 @@ export default function FixerProPage() {
             </div>
             <div className="px-6 py-5 space-y-4">
               <p className="text-sm text-gray-600">{locale === "th" ? `ให้คะแนนประสบการณ์การทำงานกับลูกค้าสำหรับ: ${propPartnerRateModal.propertyTitle}` : `Rate your experience with the customer for: ${propPartnerRateModal.propertyTitle}`}</p>
+              <p className="text-xs text-gray-500">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getPropertyListingTypeLabel(propPartnerRateModal.listingType, locale)}</p>
               <p className="text-xs text-gray-500">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(propPartnerRateModal.propertyPrice)}</p>
               <p className="text-xs text-gray-500">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}: {getPropSiteLocation(propPartnerRateModal)}</p>
               <div>
@@ -3687,6 +3728,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
                   <div className="min-w-0">
                     <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? job.serviceTh : locale === "zh" ? job.serviceZh : job.service}{job.po ? <span className="text-xs font-normal text-gray-400"> · {job.po}</span> : null}</p>
                     <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {getJobAmountPrefix(job, locale)}: {getJobAmountValue(job)}</p>
+                    {getJobListingTypeLabel(job, locale) && <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getJobListingTypeLabel(job, locale)}</p>}
                     {job.subdistrict && <p className="text-xs text-gray-500 mt-0.5">{job.subdistrict}</p>}
                   </div>
                   <div className="flex flex-col items-end gap-1 flex-shrink-0">
@@ -3901,6 +3943,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                 <div className="min-w-0">
                   <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? job.serviceTh : locale === "zh" ? job.serviceZh : job.service}{job.po ? <span className="text-xs font-normal text-gray-400"> · {job.po}</span> : null}</p>
                   <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {getJobAmountPrefix(job, locale)}: {getJobAmountValue(job)}</p>
+                  {getJobListingTypeLabel(job, locale) && <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getJobListingTypeLabel(job, locale)}</p>}
                   {job.subdistrict && <p className="text-xs text-gray-500 mt-0.5">{job.subdistrict}</p>}
                 </div>
                 <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
@@ -4373,7 +4416,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-900 text-sm">{p.propertyTitle} <span className="text-xs font-normal text-gray-400">· {locale === 'th' ? `ออเดอร์: ${p.poNumber}` : locale === 'zh' ? `订单: ${p.poNumber}` : `Order: ${p.poNumber}`} · Step 4 of 8</span></p>
                   <p className="text-xs text-emerald-700 font-semibold mt-0.5">{locale === "th" ? "ลูกค้าสนใจทรัพย์สินของคุณ — กรุณายืนยัน" : "Customer is interested in your property — please confirm"}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{getPropSiteLocation(p)} · {p.propertyTier} · {locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{getPropSiteLocation(p)} · {p.propertyTier} · {locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getPropertyListingTypeLabel(p.listingType, locale)} · {locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "สร้างเมื่อ" : locale === "zh" ? "创建时间" : "Created"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
                   {Array.isArray(p.propertyImages) && p.propertyImages.length > 0 && (
                     <button
@@ -4406,7 +4449,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
                   <p className="font-semibold text-gray-900 text-sm">{p.propertyTitle} <span className="text-xs font-normal text-gray-400">· {locale === 'th' ? `ออเดอร์: ${p.poNumber}` : locale === 'zh' ? `订单: ${p.poNumber}` : `Order: ${p.poNumber}`} · Step 7 of 8</span></p>
                   <p className="text-xs text-teal-700 font-semibold mt-0.5">{locale === "th" ? "ลูกค้าส่งคำเชิญนัดหมาย — กรุณายืนยัน" : "Customer sent a meeting invitation — please confirm"}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{p.meetingDate} {p.meetingTime} · {p.meetingVenue || getPropSiteLocation(p)}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getPropertyListingTypeLabel(p.listingType, locale)} · {locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "สร้างเมื่อ" : locale === "zh" ? "创建时间" : "Created"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
                   {Array.isArray(p.propertyImages) && p.propertyImages.length > 0 && (
                     <button
@@ -4439,7 +4482,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
                   <p className="font-semibold text-gray-900 text-sm">{p.propertyTitle} <span className="text-xs font-normal text-gray-400">· {locale === 'th' ? `ออเดอร์: ${p.poNumber}` : locale === 'zh' ? `订单: ${p.poNumber}` : `Order: ${p.poNumber}`} · Step 8 of 8</span></p>
                   <p className="text-xs text-yellow-700 font-semibold mt-0.5">{locale === "th" ? "นัดหมายยืนยันแล้ว — ให้คะแนนลูกค้าเพื่อปิดงาน" : "Meeting confirmed — rate the customer to close this inquiry"}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{p.meetingDate} {p.meetingTime} · {getPropSiteLocation(p)}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getPropertyListingTypeLabel(p.listingType, locale)} · {locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "สร้างเมื่อ" : locale === "zh" ? "创建时间" : "Created"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
                   {Array.isArray(p.propertyImages) && p.propertyImages.length > 0 && (
                     <button
