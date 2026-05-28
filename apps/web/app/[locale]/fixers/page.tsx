@@ -850,6 +850,7 @@ export default function FixerProPage() {
 
 
   const [isFixer, setIsFixer] = useState(false);
+  const [isLister, setIsLister] = useState(false);
 
   
   useEffect(() => {
@@ -858,12 +859,16 @@ export default function FixerProPage() {
       if (!token) {
         setPartner(null);
         setIsFixer(false);
+        setIsLister(false);
         setOrders([]);
         setMyProperties([]);
         setChatFeed([]);
       } else {
         const stored = localStorage.getItem("subscriber");
         if (stored) setPartner(JSON.parse(stored));
+        // Reset role flags until /users/me and /properties/my re-verify access.
+        setIsFixer(false);
+        setIsLister(false);
       }
     };
     window.addEventListener("storage", handleStorageChange);
@@ -886,11 +891,9 @@ export default function FixerProPage() {
           if (stored) {
             const parsed = JSON.parse(stored);
             setPartner(parsed);
-            
-            // Only eagerly assume they are a fixer if they actually have a fixer tier in their payload
-            if (parsed.tier && parsed.tier !== "Standard") {
-              setIsFixer(true);
-            }
+            // Roles are verified from backend APIs below.
+            setIsFixer(false);
+            setIsLister(false);
           }
         }
 
@@ -951,13 +954,20 @@ export default function FixerProPage() {
           if (ordersRes && ordersRes.ok && isMounted) setOrders(await ordersRes.json());
 
           const propRes = await fetch("/api/v1/properties/my", { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
-          if (propRes && propRes.ok && isMounted) setMyProperties(await propRes.json());
+          if (propRes && propRes.ok && isMounted) {
+            const listedProperties = await propRes.json();
+            setMyProperties(Array.isArray(listedProperties) ? listedProperties : []);
+            setIsLister(Array.isArray(listedProperties) && listedProperties.length > 0);
+          } else if (isMounted) {
+            setMyProperties([]);
+            setIsLister(false);
+          }
 
         } else if (res.status === 401 || res.status === 403) {
           localStorage.removeItem("subscriber_token");
           localStorage.removeItem("subscriber");
           if (isMounted) {
-            setPartner(null); setIsFixer(false);
+            setPartner(null); setIsFixer(false); setIsLister(false);
           }
         }
       } catch { /* ignore */ }
@@ -988,7 +998,9 @@ export default function FixerProPage() {
           setOrders(await ordersRes.json());
         }
         if (propRes && propRes.ok && isMounted) {
-          setMyProperties(await propRes.json());
+          const listedProperties = await propRes.json();
+          setMyProperties(Array.isArray(listedProperties) ? listedProperties : []);
+          setIsLister(Array.isArray(listedProperties) && listedProperties.length > 0);
         }
       } catch {
         // Preserve last visible partner data during transient polling failures.
@@ -1111,6 +1123,7 @@ export default function FixerProPage() {
   };
 
   const isSubscribed = !!partner;
+  const hasPartnerAccess = isFixer || isLister;
 
 
   
@@ -3059,7 +3072,7 @@ export default function FixerProPage() {
         )}
 
         {/* Main Content Area */}
-        {isSubscribed && !isFixer && myProperties.length === 0 && !loading && (
+        {isSubscribed && !hasPartnerAccess && !loading && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 mb-8 text-center max-w-2xl mx-auto">
             <div className="text-5xl mb-4">👷‍♂️</div>
             <h2 className="text-xl font-bold text-gray-900 mb-2">
@@ -3074,7 +3087,7 @@ export default function FixerProPage() {
           </div>
         )}
 
-        {isSubscribed && (isFixer || myProperties.length > 0) && (
+        {isSubscribed && hasPartnerAccess && (
           <>
             <div className="flex gap-1 bg-white rounded-xl shadow-sm border border-gray-200 p-1.5 mb-6 overflow-x-auto">
           {tabs.map((tab) => (
@@ -3111,7 +3124,7 @@ export default function FixerProPage() {
         <div className="my-10 border-t border-gray-200" />
 
         {/* Registration Cards */}
-        {(!isSubscribed || (!isFixer && myProperties.length === 0)) && !loading && (
+        {(!isSubscribed || !hasPartnerAccess) && !loading && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           {/* Register as Fixer & Pro */}
           <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition">
