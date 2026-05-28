@@ -5619,7 +5619,7 @@ function PartnerProperties({ locale, prefix, properties, propertyInquiries }: { 
         </Link>
       </div>
 
-      <div className="p-3 sm:p-4 space-y-3 bg-gradient-to-b from-white to-slate-50/40">
+      <div className="p-3 sm:p-4 space-y-3 bg-gradient-to-b from-slate-50/70 to-white">
         {items.length > 0 ? (
           items.map((p: any, index: number) => {
             const metrics = getPropertyMetrics(p.id);
@@ -5633,7 +5633,7 @@ function PartnerProperties({ locale, prefix, properties, propertyInquiries }: { 
             return (
               <div
                 key={p.id}
-                className={`p-5 sm:p-6 rounded-xl border shadow-sm transition cursor-pointer ${index % 2 === 0 ? 'bg-white border-slate-200 hover:border-slate-300' : 'bg-slate-50/70 border-slate-300 hover:border-slate-400'}`}
+                className={`p-5 sm:p-6 rounded-xl border shadow-sm transition cursor-pointer ${index % 2 === 0 ? 'bg-sky-50/50 border-sky-100 hover:border-sky-200' : 'bg-emerald-50/45 border-emerald-100 hover:border-emerald-200'}`}
                 onClick={() => openDetail(p)}
               >
                 <div className="flex items-center gap-4 mb-4">

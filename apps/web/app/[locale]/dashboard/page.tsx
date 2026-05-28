@@ -3272,7 +3272,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden p-3 sm:p-4 space-y-3 bg-gradient-to-b from-white to-slate-50/40">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden p-3 sm:p-4 space-y-3 bg-gradient-to-b from-slate-50/70 to-white">
             {propertyTabItems.length === 0 ? (
               <div className="p-8 text-center text-gray-500">No property inquiries found.</div>
             ) : (
@@ -3287,7 +3287,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 return (
                   <div
                     key={p.id}
-                    className={`p-5 sm:p-6 rounded-xl border shadow-sm space-y-4 ${index % 2 === 0 ? 'bg-white border-slate-200' : 'bg-slate-50/70 border-slate-300'}`}
+                    className={`p-5 sm:p-6 rounded-xl border shadow-sm space-y-4 ${index % 2 === 0 ? 'bg-amber-50/45 border-amber-100' : 'bg-cyan-50/45 border-cyan-100'}`}
                   >
                     <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
                       <div className="min-w-0">

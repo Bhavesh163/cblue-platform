@@ -336,6 +336,12 @@ export class PropertyService {
     return hasDirectAccess || hasPhoneAndNameBridge;
   }
 
+  private async canAccessPropertyViaVisibleList(userId: string, propertyId: string) {
+    if (!propertyId) return false;
+    const visibleProperties = await this.findByUser(userId);
+    return visibleProperties.some((item) => item.id === propertyId);
+  }
+
   async create(
     currentUser: { id?: string; email?: string; phone?: string } | undefined,
     dto: CreatePropertyDto,
@@ -885,13 +891,17 @@ export class PropertyService {
       userId,
       linkedUserIds,
     );
-    const hasAccess = this.hasLinkedPropertyAccess(
+    let hasAccess = this.hasLinkedPropertyAccess(
       property,
       linkedUserIds,
       linkedEmails,
       linkedPhones,
       linkedNameTokens,
     );
+
+    if (!hasAccess && property?.id) {
+      hasAccess = await this.canAccessPropertyViaVisibleList(userId, property.id);
+    }
 
     if (!hasAccess) {
       return null;
@@ -957,13 +967,17 @@ export class PropertyService {
       userId,
       linkedUserIds,
     );
-    const hasAccess = this.hasLinkedPropertyAccess(
+    let hasAccess = this.hasLinkedPropertyAccess(
       property,
       linkedUserIds,
       linkedEmails,
       linkedPhones,
       linkedNameTokens,
     );
+
+    if (!hasAccess && property?.id) {
+      hasAccess = await this.canAccessPropertyViaVisibleList(userId, property.id);
+    }
 
     if (!hasAccess) {
       return null;
