@@ -482,7 +482,10 @@ export class PropertyService {
 
   async findByUser(userId: string) {
     return this.prisma.property.findMany({
-      where: { userId },
+      where: {
+        userId,
+        status: { not: 'REMOVED' },
+      },
       orderBy: { createdAt: 'desc' },
       include: {
         images: { orderBy: { sortOrder: 'asc' } },
@@ -499,18 +502,51 @@ export class PropertyService {
       return null;
     }
 
-    // Destructure images out — Prisma update expects a nested relation input, not a DTO array.
-    // Image updates are handled separately via the create() flow or a dedicated endpoint.
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { images: _images, ...scalarData } = data;
+    const { images, ...scalarData } = data;
+    const scalarUpdateData: Record<string, unknown> = {
+      ...scalarData,
+    };
+    if (scalarData.features !== undefined) {
+      scalarUpdateData.features = scalarData.features as Prisma.InputJsonValue;
+    } else {
+      delete scalarUpdateData.features;
+    }
 
-    return this.prisma.property.update({
-      where: { id },
-      data: {
-        ...scalarData,
-        features: scalarData.features as Prisma.InputJsonValue,
-      },
-      include: { images: true },
+    return this.prisma.$transaction(async (tx) => {
+      await tx.property.update({
+        where: { id },
+        data: scalarUpdateData as Prisma.PropertyUpdateInput,
+      });
+
+      if (Array.isArray(images)) {
+        await tx.propertyImage.deleteMany({ where: { propertyId: id } });
+
+        const normalizedImages = images
+          .map((img, idx) => ({
+            url: String(img?.url || '').trim(),
+            key: String(img?.key || `property/${id}/file-${idx + 1}`).trim(),
+            sortOrder: idx,
+            isPrimary: idx === 0,
+          }))
+          .filter((img) => Boolean(img.url));
+
+        if (normalizedImages.length > 0) {
+          await tx.propertyImage.createMany({
+            data: normalizedImages.map((img) => ({
+              propertyId: id,
+              url: img.url,
+              key: img.key,
+              sortOrder: img.sortOrder,
+              isPrimary: img.isPrimary,
+            })),
+          });
+        }
+      }
+
+      return tx.property.findUnique({
+        where: { id },
+        include: { images: { orderBy: { sortOrder: 'asc' } } },
+      });
     });
   }
 

@@ -4756,48 +4756,295 @@ function PartnerProfile({ locale, prefix, partner }: { locale: string; prefix: s
 
 /* ===== PARTNER PROPERTIES ===== */
 function PartnerProperties({ locale, prefix, properties }: { locale: string; prefix: string; properties: any[] }) {
-  const [items, setItems] = useState<any[]>(properties || []);
+  const PROPERTY_TYPE_OPTIONS = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "OFFICE", "WAREHOUSE", "SHOPHOUSE", "APARTMENT"];
+  const LISTING_TYPE_OPTIONS = ["SALE", "RENT"];
+  const TIER_OPTIONS = ["ECONOMY", "STANDARD", "UPPER", "LUXURY", "GRANDEUR"];
+  const MAX_FILES = 10;
+
+  const [items, setItems] = useState<any[]>([]);
+  const [viewing, setViewing] = useState<any | null>(null);
   const [editing, setEditing] = useState<any | null>(null);
   const [saving, setSaving] = useState(false);
   const [removingId, setRemovingId] = useState("");
+  const [saveError, setSaveError] = useState("");
+
+  const defaultTitle = locale === "th" ? "ประกาศอสังหาริมทรัพย์" : locale === "zh" ? "房源" : "Property";
+
+  const toNumberSafe = (value: any, fallback = 0) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
+
+  const toNumberOrUndefined = (value: any) => {
+    if (value === null || value === undefined || value === "") return undefined;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
+
+  const listingLabel = (value: string) => {
+    const upper = String(value || "").toUpperCase();
+    if (upper === "SALE") return locale === "th" ? "ขาย" : locale === "zh" ? "出售" : "Sale";
+    if (upper === "RENT") return locale === "th" ? "เช่า" : locale === "zh" ? "出租" : "Rent";
+    return upper || "-";
+  };
+
+  const propertyTypeLabel = (value: string) => {
+    const upper = String(value || "").toUpperCase();
+    if (upper === "CONDO") return locale === "th" ? "คอนโด" : locale === "zh" ? "公寓" : "Condo";
+    if (upper === "HOUSE") return locale === "th" ? "บ้าน" : locale === "zh" ? "别墅" : "House";
+    if (upper === "TOWNHOUSE") return locale === "th" ? "ทาวน์เฮ้าส์" : locale === "zh" ? "联排别墅" : "Townhouse";
+    if (upper === "LAND") return locale === "th" ? "ที่ดิน" : locale === "zh" ? "土地" : "Land";
+    if (upper === "COMMERCIAL") return locale === "th" ? "อาคารพาณิชย์" : locale === "zh" ? "商业" : "Commercial";
+    if (upper === "OFFICE") return locale === "th" ? "ออฟฟิศ" : locale === "zh" ? "办公室" : "Office";
+    if (upper === "WAREHOUSE") return locale === "th" ? "โกดัง" : locale === "zh" ? "仓库" : "Warehouse";
+    if (upper === "SHOPHOUSE") return locale === "th" ? "ตึกแถว" : locale === "zh" ? "商铺" : "Shophouse";
+    if (upper === "APARTMENT") return locale === "th" ? "อพาร์ตเมนต์" : locale === "zh" ? "公寓" : "Apartment";
+    return upper || "-";
+  };
+
+  const getFileKind = (url: string) => {
+    const raw = String(url || "").toLowerCase();
+    if (!raw) return "file";
+    if (raw.startsWith("data:image/")) return "image";
+    if (raw.startsWith("data:application/pdf")) return "pdf";
+    if (/\.(jpg|jpeg|png|gif|webp|bmp|svg|heic|heif)(\?|#|$)/i.test(raw)) return "image";
+    if (/\.(pdf)(\?|#|$)/i.test(raw)) return "pdf";
+    return "file";
+  };
+
+  const normalizePropertyItem = (raw: any) => {
+    const title = String(raw?.title || raw?.service || "").trim() || defaultTitle;
+    const titleTh = String(raw?.titleTh || raw?.serviceTh || title).trim() || title;
+    const titleZh = String(raw?.titleZh || raw?.serviceZh || title).trim() || title;
+    const province = normalizeLocationText(raw?.province || raw?.address?.province);
+    const district = normalizeLocationText(raw?.district || raw?.address?.district);
+    const subdistrict = normalizeLocationText(raw?.subdistrict || raw?.address?.subdistrict);
+    const addressLine = normalizeLocationText(raw?.addressLine || raw?.address?.addressLine);
+
+    const fileUrls: string[] = Array.from(
+      new Set(
+        (Array.isArray(raw?.images) ? raw.images : Array.isArray(raw?.propertyImages) ? raw.propertyImages : [])
+          .map((item: any) => normalizeImageUrl(extractImageUrlCandidate(item)))
+          .filter(Boolean),
+      ),
+    );
+    const primaryImage = fileUrls.find((url) => getFileKind(url) === "image") || "";
+
+    return {
+      id: String(raw?.id || ""),
+      title,
+      titleTh,
+      titleZh,
+      description: String(raw?.description || "").trim(),
+      propertyType: String(raw?.propertyType || "").toUpperCase(),
+      listingType: String(raw?.listingType || "").toUpperCase(),
+      tier: String(raw?.tier || "STANDARD").toUpperCase(),
+      status: String(raw?.status || "ACTIVE").toUpperCase(),
+      price: toNumberSafe(raw?.price ?? raw?.propertyPrice, 0),
+      area: toNumberOrUndefined(raw?.area),
+      bedrooms: toNumberOrUndefined(raw?.bedrooms),
+      bathrooms: toNumberOrUndefined(raw?.bathrooms),
+      floors: toNumberOrUndefined(raw?.floors),
+      yearBuilt: toNumberOrUndefined(raw?.yearBuilt),
+      province,
+      district,
+      subdistrict,
+      addressLine,
+      contactName: String(raw?.contactName || "").trim(),
+      contactPhone: String(raw?.contactPhone || "").trim(),
+      contactEmail: String(raw?.contactEmail || "").trim(),
+      createdAt: raw?.createdAt,
+      updatedAt: raw?.updatedAt,
+      location: [addressLine, subdistrict, district, province].filter(Boolean).join(", ") || [subdistrict, district, province].filter(Boolean).join(", ") || "-",
+      fileUrls,
+      primaryImage,
+    };
+  };
 
   useEffect(() => {
-    setItems(properties || []);
+    setItems((properties || []).map(normalizePropertyItem));
   }, [properties]);
 
-  const openEdit = (property: any) => {
-    setEditing({
-      id: property.id,
-      title: property.service || "",
-      description: property.description || "",
-      price: String(property.price || 0),
-      province: property.province || "",
-      district: property.district || "",
+  const readFileAsDataUrl = async (file: File): Promise<string> => {
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
     });
+  };
+
+  const maybeConvertHeicToJpeg = async (file: File): Promise<File> => {
+    const mime = String(file.type || "").toLowerCase();
+    const isHeic = mime.includes("heic") || mime.includes("heif") || /\.(heic|heif)$/i.test(file.name || "");
+    if (!isHeic) return file;
+
+    try {
+      const mod = await import("heic2any");
+      const heic2any = (mod.default || mod) as (opts: { blob: Blob; toType: string; quality?: number }) => Promise<Blob | Blob[]>;
+      const converted = await heic2any({
+        blob: file,
+        toType: "image/jpeg",
+        quality: 0.9,
+      });
+      const outputBlob = Array.isArray(converted) ? converted[0] : converted;
+      if (!outputBlob) return file;
+      const basename = (file.name || "image").replace(/\.(heic|heif)$/i, "") || "image";
+      return new File([outputBlob], `${basename}.jpg`, { type: "image/jpeg" });
+    } catch {
+      return file;
+    }
+  };
+
+  const compressPropertyImage = async (file: File): Promise<string> => {
+    const source = await maybeConvertHeicToJpeg(file);
+    if (!source.type.startsWith("image/")) return readFileAsDataUrl(source);
+
+    const TARGET = 300000;
+    const passes = [
+      { maxDim: 1200, quality: 0.7 },
+      { maxDim: 900, quality: 0.6 },
+      { maxDim: 700, quality: 0.5 },
+      { maxDim: 560, quality: 0.42 },
+    ];
+
+    return await new Promise((resolve) => {
+      const img = document.createElement("img");
+      const objectUrl = URL.createObjectURL(source);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        let out = "";
+        const run = (index: number) => {
+          if (index >= passes.length) {
+            resolve(out || "");
+            return;
+          }
+          const pass = passes[index]!;
+          const scale = Math.min(1, pass.maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+          canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            resolve("");
+            return;
+          }
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          out = canvas.toDataURL("image/jpeg", pass.quality);
+          if (out.length <= TARGET || index === passes.length - 1) {
+            resolve(out);
+            return;
+          }
+          run(index + 1);
+        };
+        run(0);
+      };
+      img.onerror = async () => {
+        URL.revokeObjectURL(objectUrl);
+        try {
+          resolve(await readFileAsDataUrl(source));
+        } catch {
+          resolve("");
+        }
+      };
+      img.src = objectUrl;
+    });
+  };
+
+  const convertFileForUpload = async (file: File): Promise<string> => {
+    const isImage = file.type.startsWith("image/") || /\.(heic|heif|jpe?g|png|gif|webp|bmp|svg)$/i.test(file.name || "");
+    const raw = isImage ? await compressPropertyImage(file) : await readFileAsDataUrl(file);
+    return normalizeImageUrl(raw) || raw;
+  };
+
+  const openDetail = (property: any) => {
+    setViewing(normalizePropertyItem(property));
+    setSaveError("");
+  };
+
+  const openEdit = (property: any) => {
+    const normalized = normalizePropertyItem(property);
+    setEditing({
+      ...normalized,
+      existingFiles: [...normalized.fileUrls],
+      newFiles: [] as File[],
+    });
+    setSaveError("");
   };
 
   const saveEdit = async () => {
     if (!editing?.id) return;
+
+    const title = String(editing.title || "").trim();
+    const propertyType = String(editing.propertyType || "").trim().toUpperCase();
+    const listingType = String(editing.listingType || "").trim().toUpperCase();
+    if (!title || !propertyType || !listingType) {
+      setSaveError(
+        locale === "th"
+          ? "กรุณากรอกชื่อประกาศ ประเภททรัพย์สิน และประเภทการประกาศ"
+          : locale === "zh"
+          ? "请填写标题、房产类型和交易类型"
+          : "Please fill title, property type, and listing type.",
+      );
+      return;
+    }
+
     setSaving(true);
+    setSaveError("");
     try {
       let token = localStorage.getItem("subscriber_token") || "";
-      if (!token) return;
-      const payload = {
-        title: String(editing.title || "").trim(),
+      if (!token) {
+        setSaveError(locale === "th" ? "กรุณาเข้าสู่ระบบใหม่" : locale === "zh" ? "请重新登录" : "Please log in again.");
+        return;
+      }
+
+      const existingFiles = Array.isArray(editing.existingFiles)
+        ? editing.existingFiles
+            .map((entry: any) => normalizeImageUrl(extractImageUrlCandidate(entry)))
+            .filter(Boolean)
+        : [];
+      const pickedFiles: File[] = Array.isArray(editing.newFiles) ? editing.newFiles : [];
+      const preparedNewFiles = await Promise.all(pickedFiles.map((f) => convertFileForUpload(f)));
+      const mergedUrls = Array.from(new Set([...existingFiles, ...preparedNewFiles.filter(Boolean)])).slice(0, MAX_FILES);
+
+      const payload: any = {
+        title,
         description: String(editing.description || "").trim(),
-        price: Number(editing.price || 0),
+        propertyType,
+        listingType,
+        tier: String(editing.tier || "STANDARD").trim().toUpperCase(),
+        price: toNumberSafe(editing.price, 0),
+        area: toNumberOrUndefined(editing.area),
+        bedrooms: toNumberOrUndefined(editing.bedrooms),
+        bathrooms: toNumberOrUndefined(editing.bathrooms),
+        floors: toNumberOrUndefined(editing.floors),
+        yearBuilt: toNumberOrUndefined(editing.yearBuilt),
         province: String(editing.province || "").trim(),
         district: String(editing.district || "").trim(),
+        subdistrict: String(editing.subdistrict || "").trim(),
+        addressLine: String(editing.addressLine || "").trim(),
+        contactName: String(editing.contactName || "").trim(),
+        contactPhone: String(editing.contactPhone || "").trim(),
+        contactEmail: String(editing.contactEmail || "").trim(),
+        images: mergedUrls.map((url, idx) => ({
+          url,
+          key: `property/${editing.id}/file-${idx + 1}`,
+        })),
       };
 
-      const updateReq = (authToken: string) => fetch(`/api/v1/properties/${editing.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${authToken}`,
-        },
-        body: JSON.stringify(payload),
+      Object.keys(payload).forEach((key) => {
+        if (payload[key] === undefined) delete payload[key];
       });
+
+      const updateReq = (authToken: string) =>
+        fetch(`/api/v1/properties/${editing.id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: JSON.stringify(payload),
+        });
 
       let res = await updateReq(token);
       if (!res.ok && [401, 403].includes(res.status)) {
@@ -4807,31 +5054,33 @@ function PartnerProperties({ locale, prefix, properties }: { locale: string; pre
           res = await updateReq(token);
         }
       }
-      if (!res.ok) return;
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        setSaveError(
+          String(err?.message || "") ||
+            (locale === "th"
+              ? "ไม่สามารถบันทึกข้อมูลได้"
+              : locale === "zh"
+              ? "无法保存数据"
+              : "Could not save property changes."),
+        );
+        return;
+      }
 
       const updated = await res.json().catch(() => null);
-      if (updated) {
-        setItems((prev) => prev.map((item) => {
-          if (item.id !== editing.id) return item;
-          const province = normalizeLocationText(updated.province || item.province);
-          const district = normalizeLocationText(updated.district || item.district);
-          return {
-            ...item,
-            service: updated.title || item.service,
-            serviceTh: updated.titleTh || updated.title || item.serviceTh,
-            serviceZh: updated.titleZh || updated.title || item.serviceZh,
-            description: updated.description ?? item.description,
-            price: Number(updated.price ?? item.price ?? 0),
-            fee: `฿${Number(updated.price ?? item.price ?? 0).toLocaleString()}`,
-            province,
-            district,
-            location: [province, district].filter(Boolean).join(', ') || item.location,
-          };
-        }));
-      }
+      const normalizedUpdated = normalizePropertyItem(updated || { ...editing, images: payload.images });
+      setItems((prev) => prev.map((item) => (item.id === normalizedUpdated.id ? normalizedUpdated : item)));
+      setViewing((prev: any) => (prev?.id === normalizedUpdated.id ? normalizedUpdated : prev));
       setEditing(null);
     } catch {
-      // Non-blocking
+      setSaveError(
+        locale === "th"
+          ? "เกิดข้อผิดพลาดในการบันทึกข้อมูล"
+          : locale === "zh"
+          ? "保存时发生错误"
+          : "An error occurred while saving.",
+      );
     } finally {
       setSaving(false);
     }
@@ -4852,10 +5101,11 @@ function PartnerProperties({ locale, prefix, properties }: { locale: string; pre
     try {
       let token = localStorage.getItem("subscriber_token") || "";
       if (!token) return;
-      const removeReq = (authToken: string) => fetch(`/api/v1/properties/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
+      const removeReq = (authToken: string) =>
+        fetch(`/api/v1/properties/${id}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
 
       let res = await removeReq(token);
       if (!res.ok && [401, 403].includes(res.status)) {
@@ -4868,8 +5118,10 @@ function PartnerProperties({ locale, prefix, properties }: { locale: string; pre
       if (!res.ok) return;
 
       setItems((prev) => prev.filter((item) => item.id !== id));
+      setViewing((prev: any) => (prev?.id === id ? null : prev));
+      setEditing((prev: any) => (prev?.id === id ? null : prev));
     } catch {
-      // Non-blocking
+      // Keep UI unchanged on transient delete failures.
     } finally {
       setRemovingId("");
     }
@@ -4878,94 +5130,415 @@ function PartnerProperties({ locale, prefix, properties }: { locale: string; pre
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
-        <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "อสังหาริมทรัพย์ของคุณ" : locale === "zh" ? "您的房产" : "Your Properties"}</h2>
+        <h2 className="font-bold text-gray-900 flex items-center gap-2">
+          {locale === "th" ? "อสังหาริมทรัพย์ของคุณ" : locale === "zh" ? "您的房产" : "Your Properties"}
+        </h2>
         <Link href={`${prefix}/properties/register`} className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition whitespace-nowrap">
           {locale === "th" ? "ลงประกาศใหม่" : locale === "zh" ? "发布新房源" : "List New"}
         </Link>
       </div>
+
       <div className="divide-y divide-gray-50">
-        {items && items.length > 0 ? items.map((p: any) => (
-          <div key={p.id} className="p-6 hover:bg-gray-50/50 transition">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-16 h-16 rounded-xl overflow-hidden bg-teal-100 border border-teal-100">
-                <img
-                  src={normalizeImageUrl(p?.images?.[0]) || "/images/scenic-house.jpg"}
-                  alt={p.service || "Property"}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="flex-1">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="font-bold text-gray-900">{locale === "th" ? p.serviceTh : locale === "zh" ? p.serviceZh : p.service}</h3>
-                    <p className="text-sm text-gray-500 mt-1">{p.location || "-"} &middot; {p.fee}</p>
-                    <p className="text-xs text-gray-400 mt-1">{p.propertyType || ""} {p.listingType ? `· ${p.listingType}` : ""}</p>
+        {items.length > 0 ? (
+          items.map((p: any) => (
+            <div key={p.id} className="p-6 hover:bg-gray-50/50 transition cursor-pointer" onClick={() => openDetail(p)}>
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-16 h-16 rounded-xl overflow-hidden bg-teal-100 border border-teal-100 shrink-0">
+                  <img
+                    src={p.primaryImage || "/images/scenic-house.jpg"}
+                    alt={p.title || "Property"}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-start gap-3">
+                    <div className="min-w-0">
+                      <h3 className="font-bold text-gray-900 truncate">{locale === "th" ? p.titleTh : locale === "zh" ? p.titleZh : p.title}</h3>
+                      <p className="text-sm text-gray-500 mt-1 truncate">{p.location} &middot; ฿{Number(p.price || 0).toLocaleString()}</p>
+                      <p className="text-xs text-gray-400 mt-1 truncate">
+                        {propertyTypeLabel(p.propertyType)} &middot; {listingLabel(p.listingType)} &middot; {p.fileUrls.length} {locale === "th" ? "ไฟล์" : locale === "zh" ? "文件" : "files"}
+                      </p>
+                    </div>
+                    <span className={`text-xs px-3 py-1 rounded-full font-bold ${p.status === "ACTIVE" || p.status === "CREATED" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                      {p.status}
+                    </span>
                   </div>
-                  <span className={`text-xs px-3 py-1 rounded-full font-bold ${p.status === 'AVAILABLE' || p.status === 'CREATED' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                    {p.status}
-                  </span>
                 </div>
               </div>
+
+              <div className="flex items-center gap-3 text-sm mt-4 pt-4 border-t border-gray-100">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openDetail(p);
+                  }}
+                  className="px-4 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-700 font-semibold rounded-lg transition"
+                >
+                  {locale === "th" ? "ดูรายละเอียด" : locale === "zh" ? "查看详情" : "Details"}
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openEdit(p);
+                  }}
+                  className="px-4 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-lg transition"
+                >
+                  {locale === "th" ? "แก้ไข" : locale === "zh" ? "编辑" : "Edit"}
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeProperty(p.id);
+                  }}
+                  disabled={removingId === p.id}
+                  className="ml-auto px-4 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {removingId === p.id
+                    ? locale === "th"
+                      ? "กำลังลบ..."
+                      : locale === "zh"
+                      ? "删除中..."
+                      : "Removing..."
+                    : locale === "th"
+                    ? "ลบ"
+                    : locale === "zh"
+                    ? "删除"
+                    : "Delete"}
+                </button>
+              </div>
             </div>
-            
-            <div className="flex items-center gap-4 text-sm mt-4 pt-4 border-t border-gray-100">
-              <button onClick={() => openEdit(p)} className="ml-auto px-4 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-lg transition">
-                {locale === "th" ? "แก้ไข" : locale === "zh" ? "编辑" : "Edit"}
-              </button>
-              <button
-                onClick={() => removeProperty(p.id)}
-                disabled={removingId === p.id}
-                className="px-4 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {removingId === p.id
-                  ? (locale === "th" ? "กำลังลบ..." : locale === "zh" ? "删除中..." : "Removing...")
-                  : (locale === "th" ? "ลบ" : locale === "zh" ? "删除" : "Delete")}
-              </button>
-            </div>
-          </div>
-        )) : (
+          ))
+        ) : (
           <p className="text-sm text-gray-500 p-6 text-center">{locale === "th" ? "ไม่มีประกาศอสังหาริมทรัพย์" : locale === "zh" ? "没有房产列表" : "No properties listed"}</p>
         )}
       </div>
 
+      {viewing && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="w-full max-w-4xl max-h-[92vh] overflow-hidden bg-white rounded-2xl shadow-xl border border-gray-200">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="font-bold text-gray-900 truncate">{locale === "th" ? viewing.titleTh : locale === "zh" ? viewing.titleZh : viewing.title}</h3>
+                <p className="text-xs text-gray-500 mt-1">{propertyTypeLabel(viewing.propertyType)} &middot; {listingLabel(viewing.listingType)} &middot; {viewing.status}</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button onClick={() => openEdit(viewing)} className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-lg transition">
+                  {locale === "th" ? "แก้ไข" : locale === "zh" ? "编辑" : "Edit"}
+                </button>
+                <button onClick={() => setViewing(null)} className="text-gray-500 hover:text-gray-700">✕</button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-5 overflow-y-auto max-h-[calc(92vh-74px)]">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
+                  <p className="text-[11px] font-semibold text-gray-500 uppercase">{locale === "th" ? "ราคา" : locale === "zh" ? "价格" : "Price"}</p>
+                  <p className="text-sm font-bold text-gray-900 mt-1">฿{Number(viewing.price || 0).toLocaleString()}</p>
+                </div>
+                <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
+                  <p className="text-[11px] font-semibold text-gray-500 uppercase">{locale === "th" ? "ระดับบริการ" : locale === "zh" ? "服务等级" : "Tier"}</p>
+                  <p className="text-sm font-bold text-gray-900 mt-1">{viewing.tier || "-"}</p>
+                </div>
+                <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
+                  <p className="text-[11px] font-semibold text-gray-500 uppercase">{locale === "th" ? "ขนาดพื้นที่" : locale === "zh" ? "面积" : "Area"}</p>
+                  <p className="text-sm font-bold text-gray-900 mt-1">{viewing.area != null ? `${viewing.area}` : "-"}</p>
+                </div>
+                <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
+                  <p className="text-[11px] font-semibold text-gray-500 uppercase">{locale === "th" ? "ห้องนอน/ห้องน้ำ" : locale === "zh" ? "卧室/浴室" : "Bed/Bath"}</p>
+                  <p className="text-sm font-bold text-gray-900 mt-1">{viewing.bedrooms ?? "-"} / {viewing.bathrooms ?? "-"}</p>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-gray-200 p-4">
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">{locale === "th" ? "ที่อยู่" : locale === "zh" ? "地址" : "Location"}</p>
+                <p className="text-sm text-gray-800">{viewing.location || "-"}</p>
+              </div>
+
+              <div className="rounded-lg border border-gray-200 p-4">
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">{locale === "th" ? "รายละเอียด" : locale === "zh" ? "描述" : "Description"}</p>
+                <p className="text-sm text-gray-800 whitespace-pre-wrap">{viewing.description || "-"}</p>
+              </div>
+
+              <div className="rounded-lg border border-gray-200 p-4">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <p className="text-xs font-semibold text-gray-500 uppercase">{locale === "th" ? "ไฟล์ที่อัปโหลด" : locale === "zh" ? "已上传文件" : "Uploaded Files"}</p>
+                  <button
+                    type="button"
+                    className="text-xs font-semibold text-sky-700 hover:text-sky-800"
+                    onClick={async () => {
+                      const downloaded = await downloadAttachmentUrls({
+                        urls: viewing.fileUrls,
+                        prefix: "property-file",
+                      });
+                      if (!downloaded) {
+                        alert(locale === "th" ? "ไม่พบไฟล์ที่ดาวน์โหลดได้" : locale === "zh" ? "未找到可下载文件" : "No downloadable file found.");
+                      }
+                    }}
+                  >
+                    {locale === "th" ? "ดาวน์โหลดทั้งหมด" : locale === "zh" ? "下载全部" : "Download All"}
+                  </button>
+                </div>
+
+                {viewing.fileUrls.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {viewing.fileUrls.map((fileUrl: string, index: number) => {
+                      const kind = getFileKind(fileUrl);
+                      const fallbackName = `property-file-${index + 1}`;
+                      const fileName = sanitizeFilename(inferFilenameFromUrl(fileUrl, fallbackName), fallbackName);
+                      return (
+                        <div key={`${fileName}-${index}`} className="rounded-lg border border-gray-200 bg-gray-50 overflow-hidden">
+                          {kind === "image" ? (
+                            <img src={fileUrl} alt={fileName} className="w-full h-32 object-cover" />
+                          ) : (
+                            <div className="h-32 flex items-center justify-center text-3xl">{kind === "pdf" ? "📄" : "📎"}</div>
+                          )}
+                          <div className="p-3 space-y-2">
+                            <p className="text-xs font-semibold text-gray-700 truncate" title={fileName}>{fileName}</p>
+                            <button
+                              type="button"
+                              className="w-full py-1.5 rounded-md bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold"
+                              onClick={async () => {
+                                const downloaded = await downloadAttachmentUrls({ urls: [fileUrl], prefix: "property-file" });
+                                if (!downloaded) {
+                                  alert(locale === "th" ? "ไม่สามารถดาวน์โหลดไฟล์นี้ได้" : locale === "zh" ? "无法下载此文件" : "Could not download this file.");
+                                }
+                              }}
+                            >
+                              {locale === "th" ? "ดาวน์โหลด" : locale === "zh" ? "下载" : "Download"}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">{locale === "th" ? "ยังไม่มีไฟล์ที่แนบ" : locale === "zh" ? "暂无附件" : "No files attached."}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {editing && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="w-full max-w-lg bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
+          <div className="w-full max-w-4xl max-h-[92vh] overflow-hidden bg-white rounded-2xl shadow-xl border border-gray-200">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h3 className="font-bold text-gray-900">{locale === "th" ? "แก้ไขประกาศอสังหาริมทรัพย์" : locale === "zh" ? "编辑房源" : "Edit Property"}</h3>
+              <h3 className="font-bold text-gray-900">{locale === "th" ? "แก้ไขข้อมูลอสังหาริมทรัพย์" : locale === "zh" ? "编辑房源信息" : "Edit Property"}</h3>
               <button onClick={() => setEditing(null)} className="text-gray-500 hover:text-gray-700">✕</button>
             </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "ชื่อประกาศ" : locale === "zh" ? "标题" : "Title"}</label>
-                <input value={editing.title} onChange={(e) => setEditing((prev: any) => ({ ...prev, title: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "รายละเอียด" : locale === "zh" ? "描述" : "Description"}</label>
-                <textarea value={editing.description} onChange={(e) => setEditing((prev: any) => ({ ...prev, description: e.target.value }))} rows={4} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none" />
-              </div>
+
+            <div className="p-6 space-y-4 overflow-y-auto max-h-[calc(92vh-74px)]">
+              {saveError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{saveError}</div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "ชื่อประกาศ" : locale === "zh" ? "标题" : "Title"}</label>
+                  <input value={editing.title} onChange={(e) => setEditing((prev: any) => ({ ...prev, title: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "ประเภททรัพย์สิน" : locale === "zh" ? "房产类型" : "Property Type"}</label>
+                  <select value={editing.propertyType} onChange={(e) => setEditing((prev: any) => ({ ...prev, propertyType: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
+                    <option value="">--</option>
+                    {PROPERTY_TYPE_OPTIONS.map((type) => (
+                      <option key={type} value={type}>{propertyTypeLabel(type)}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "ประเภทการประกาศ" : locale === "zh" ? "交易类型" : "Listing Type"}</label>
+                  <select value={editing.listingType} onChange={(e) => setEditing((prev: any) => ({ ...prev, listingType: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
+                    <option value="">--</option>
+                    {LISTING_TYPE_OPTIONS.map((type) => (
+                      <option key={type} value={type}>{listingLabel(type)}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "ระดับบริการ" : locale === "zh" ? "服务等级" : "Tier"}</label>
+                  <select value={editing.tier} onChange={(e) => setEditing((prev: any) => ({ ...prev, tier: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
+                    {TIER_OPTIONS.map((tier) => (
+                      <option key={tier} value={tier}>{tier}</option>
+                    ))}
+                  </select>
+                </div>
+
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "ราคา" : locale === "zh" ? "价格" : "Price"}</label>
                   <input type="number" min="0" value={editing.price} onChange={(e) => setEditing((prev: any) => ({ ...prev, price: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
                 </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "พื้นที่" : locale === "zh" ? "面积" : "Area"}</label>
+                  <input type="number" min="0" value={editing.area ?? ""} onChange={(e) => setEditing((prev: any) => ({ ...prev, area: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "ห้องนอน" : locale === "zh" ? "卧室" : "Bedrooms"}</label>
+                  <input type="number" min="0" value={editing.bedrooms ?? ""} onChange={(e) => setEditing((prev: any) => ({ ...prev, bedrooms: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "ห้องน้ำ" : locale === "zh" ? "浴室" : "Bathrooms"}</label>
+                  <input type="number" min="0" value={editing.bathrooms ?? ""} onChange={(e) => setEditing((prev: any) => ({ ...prev, bathrooms: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "ชั้น" : locale === "zh" ? "楼层" : "Floors"}</label>
+                  <input type="number" min="0" value={editing.floors ?? ""} onChange={(e) => setEditing((prev: any) => ({ ...prev, floors: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "ปีที่สร้าง" : locale === "zh" ? "建成年份" : "Year Built"}</label>
+                  <input type="number" min="1800" value={editing.yearBuilt ?? ""} onChange={(e) => setEditing((prev: any) => ({ ...prev, yearBuilt: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "จังหวัด" : locale === "zh" ? "省份" : "Province"}</label>
                   <input value={editing.province} onChange={(e) => setEditing((prev: any) => ({ ...prev, province: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
                 </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "เขต/อำเภอ" : locale === "zh" ? "区/县" : "District"}</label>
+                  <input value={editing.district} onChange={(e) => setEditing((prev: any) => ({ ...prev, district: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "แขวง/ตำบล" : locale === "zh" ? "街道/分区" : "Subdistrict"}</label>
+                  <input value={editing.subdistrict} onChange={(e) => setEditing((prev: any) => ({ ...prev, subdistrict: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "ที่อยู่" : locale === "zh" ? "详细地址" : "Address Line"}</label>
+                  <input value={editing.addressLine} onChange={(e) => setEditing((prev: any) => ({ ...prev, addressLine: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "ชื่อผู้ติดต่อ" : locale === "zh" ? "联系人姓名" : "Contact Name"}</label>
+                  <input value={editing.contactName} onChange={(e) => setEditing((prev: any) => ({ ...prev, contactName: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "เบอร์โทรผู้ติดต่อ" : locale === "zh" ? "联系电话" : "Contact Phone"}</label>
+                  <input value={editing.contactPhone} onChange={(e) => setEditing((prev: any) => ({ ...prev, contactPhone: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "อีเมลผู้ติดต่อ" : locale === "zh" ? "联系邮箱" : "Contact Email"}</label>
+                  <input type="email" value={editing.contactEmail} onChange={(e) => setEditing((prev: any) => ({ ...prev, contactEmail: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "รายละเอียด" : locale === "zh" ? "描述" : "Description"}</label>
+                  <textarea value={editing.description} onChange={(e) => setEditing((prev: any) => ({ ...prev, description: e.target.value }))} rows={4} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none" />
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "เขต/อำเภอ" : locale === "zh" ? "区/县" : "District"}</label>
-                <input value={editing.district} onChange={(e) => setEditing((prev: any) => ({ ...prev, district: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+
+              <div className="rounded-lg border border-gray-200 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-gray-600 uppercase">{locale === "th" ? "ไฟล์ที่อัปโหลด" : locale === "zh" ? "已上传文件" : "Uploaded Files"}</p>
+                  <p className="text-xs text-gray-500">{(editing.existingFiles?.length || 0) + (editing.newFiles?.length || 0)} / {MAX_FILES}</p>
+                </div>
+
+                {Array.isArray(editing.existingFiles) && editing.existingFiles.length > 0 ? (
+                  <div className="space-y-2">
+                    {editing.existingFiles.map((fileUrl: string, index: number) => {
+                      const fallbackName = `property-file-${index + 1}`;
+                      const fileName = sanitizeFilename(inferFilenameFromUrl(fileUrl, fallbackName), fallbackName);
+                      return (
+                        <div key={`${fileName}-${index}`} className="flex items-center justify-between gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
+                          <p className="text-xs text-gray-700 truncate" title={fileName}>{fileName}</p>
+                          <button
+                            type="button"
+                            className="text-xs font-semibold text-red-600 hover:text-red-700"
+                            onClick={() =>
+                              setEditing((prev: any) => ({
+                                ...prev,
+                                existingFiles: (prev?.existingFiles || []).filter((_: string, i: number) => i !== index),
+                              }))
+                            }
+                          >
+                            {locale === "th" ? "ลบ" : locale === "zh" ? "删除" : "Remove"}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">{locale === "th" ? "ยังไม่มีไฟล์เดิม" : locale === "zh" ? "暂无已有文件" : "No existing files."}</p>
+                )}
+
+                {Array.isArray(editing.newFiles) && editing.newFiles.length > 0 && (
+                  <div className="space-y-2">
+                    {editing.newFiles.map((file: File, index: number) => (
+                      <div key={`${file.name}-${index}`} className="flex items-center justify-between gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2">
+                        <p className="text-xs text-emerald-800 truncate" title={file.name}>{file.name}</p>
+                        <button
+                          type="button"
+                          className="text-xs font-semibold text-red-600 hover:text-red-700"
+                          onClick={() =>
+                            setEditing((prev: any) => ({
+                              ...prev,
+                              newFiles: (prev?.newFiles || []).filter((_: File, i: number) => i !== index),
+                            }))
+                          }
+                        >
+                          {locale === "th" ? "ลบ" : locale === "zh" ? "删除" : "Remove"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*,.pdf,application/pdf"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  onChange={(e) => {
+                    const selected = Array.from(e.target.files || []);
+                    setEditing((prev: any) => {
+                      const existingCount = Array.isArray(prev?.existingFiles) ? prev.existingFiles.length : 0;
+                      const currentNew: File[] = Array.isArray(prev?.newFiles) ? prev.newFiles : [];
+                      const slotsLeft = Math.max(0, MAX_FILES - existingCount - currentNew.length);
+                      return {
+                        ...prev,
+                        newFiles: [...currentNew, ...selected.slice(0, slotsLeft)],
+                      };
+                    });
+                    e.currentTarget.value = "";
+                  }}
+                />
+                <p className="text-xs text-gray-500">
+                  {locale === "th"
+                    ? "รองรับไฟล์รูปภาพและ PDF (สูงสุด 10 ไฟล์)"
+                    : locale === "zh"
+                    ? "支持图片和 PDF 文件（最多 10 个）"
+                    : "Supports image and PDF files (up to 10 files)."}
+                </p>
               </div>
+
               <div className="flex justify-end gap-3 pt-2">
                 <button onClick={() => setEditing(null)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700">
                   {locale === "th" ? "ยกเลิก" : locale === "zh" ? "取消" : "Cancel"}
                 </button>
                 <button onClick={saveEdit} disabled={saving} className="px-4 py-2 bg-green-700 hover:bg-green-800 text-white rounded-lg text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed">
                   {saving
-                    ? (locale === "th" ? "กำลังบันทึก..." : locale === "zh" ? "保存中..." : "Saving...")
-                    : (locale === "th" ? "บันทึก" : locale === "zh" ? "保存" : "Save")}
+                    ? locale === "th"
+                      ? "กำลังบันทึก..."
+                      : locale === "zh"
+                      ? "保存中..."
+                      : "Saving..."
+                    : locale === "th"
+                    ? "บันทึก"
+                    : locale === "zh"
+                    ? "保存"
+                    : "Save"}
                 </button>
               </div>
             </div>
