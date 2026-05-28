@@ -86,6 +86,20 @@ const firstNameOnly = (value: any, fallback = 'User') => {
 };
 const HIDDEN_TEST_POS = new Set(["PO-2605-6716", "PO-2605-9605", "PO-2605-8699", "PO-2605-9701", "PO-2605-6146", "PO-2605-8471", "PO-2605-9593"]);
 const isHiddenTestPo = (value: any) => HIDDEN_TEST_POS.has(String(value || '').trim().toUpperCase());
+const STALE_CUSTOMER_NOTIFY_PROP_POS = new Set([
+  "PRE-2605-9968",
+  "PRE-2605-2386",
+  "PRE-2605-3964",
+  "PRE-2605-4985",
+  "PRE-2605-5592",
+  "PRE-2605-3437",
+  "PRE-2605-8356",
+  "PRE-2605-8421",
+]);
+const isStaleCustomerNotifyPropPo = (value: any) =>
+  STALE_CUSTOMER_NOTIFY_PROP_POS.has(
+    String(value || '').trim().toUpperCase(),
+  );
 const WORKFLOW_STEP_NAMES: Record<number, string> = {
   5: 'Accept',
   6: 'Fee & Proceed',
@@ -1104,6 +1118,30 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   };
   const hasPendingCustomerPropRating = (p: Partial<PropInquiry>) => p.customerRating == null;
   const hasPendingListerPropRating = (p: Partial<PropInquiry>) => p.listerRating == null;
+  const getPropInquiryDisplayStep = (statusValue: string, stepValue?: number | null) => {
+    const status = String(statusValue || '').toUpperCase();
+    const explicitStep = Number(stepValue || 0);
+    const baseStep =
+      status === 'NOTIFY_SENT'
+        ? 3
+        : status === 'ACCEPTED'
+        ? 5
+        : status === 'PAID'
+        ? 7
+        : status === 'MEETING_SENT'
+        ? 7
+        : status === 'MEETING_CONFIRMED' || status === 'COMPLETED'
+        ? 8
+        : 4;
+    return Number.isFinite(explicitStep) && explicitStep > 0
+      ? Math.max(baseStep, explicitStep)
+      : baseStep;
+  };
+  const canShowCustomerPropRateRequest = (p: Partial<PropInquiry>) => {
+    const status = String(p.status || '').toUpperCase();
+    if (["DECLINED", "CANCELLED", "COMPLETED"].includes(status)) return false;
+    return hasPendingCustomerPropRating(p) && getPropInquiryDisplayStep(status, Number(p.step || 0)) >= 8;
+  };
   const readStoredChatHistory = (po: any) => {
     if (!mockReady || typeof window === 'undefined' || !po) return [];
     try {
@@ -1299,7 +1337,16 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         }
         if (!res.ok) { setPropInquiries([]); return; }
         const data = await res.json();
-        setPropInquiries(Array.isArray(data) ? data.map(mapApiInquiry) : []);
+        const mapped = Array.isArray(data) ? data.map(mapApiInquiry) : [];
+        setPropInquiries(
+          mapped.filter(
+            (inquiry: PropInquiry) =>
+              !(
+                isStaleCustomerNotifyPropPo(inquiry.poNumber) &&
+                String(inquiry.status || '').toUpperCase() === 'NOTIFY_SENT'
+              ),
+          ),
+        );
       } catch { setPropInquiries([]); }
     }
     loadPropInquiries();
@@ -1962,43 +2009,48 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
   // Inject prop inquiry request cards (not ghis-gated)
   const propRequestItems: any[] = propInquiries
-    .filter((p: PropInquiry) => ["DECLINED", "ACCEPTED", "PAID", "MEETING_CONFIRMED"].includes(p.status))
+    .filter((p: PropInquiry) => {
+      const status = String(p.status || '').toUpperCase();
+      return (
+        status === 'DECLINED' ||
+        status === 'ACCEPTED' ||
+        status === 'PAID' ||
+        canShowCustomerPropRateRequest(p)
+      );
+    })
     .map((p: PropInquiry) => {
-      if (p.status === "DECLINED") return { id: `prop-declined-${p.poNumber}`, type: "prop_declined", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
-      if (p.status === "ACCEPTED") return { id: `prop-pay-${p.poNumber}`, type: "prop_pay_fee", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
-      if (p.status === "PAID") return { id: `prop-meet-${p.poNumber}`, type: "prop_meeting_invite", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
-      if (p.status === "MEETING_CONFIRMED" && hasPendingCustomerPropRating(p)) return { id: `prop-rate-${p.poNumber}`, type: "prop_rate", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
+      const status = String(p.status || '').toUpperCase();
+      if (status === "DECLINED") return { id: `prop-declined-${p.poNumber}`, type: "prop_declined", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
+      if (status === "ACCEPTED") return { id: `prop-pay-${p.poNumber}`, type: "prop_pay_fee", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
+      if (status === "PAID") return { id: `prop-meet-${p.poNumber}`, type: "prop_meeting_invite", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
+      if (canShowCustomerPropRateRequest(p)) return { id: `prop-rate-${p.poNumber}`, type: "prop_rate", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
       return null;
     })
     .filter(Boolean) as any[];
   const propActiveItems: any[] = propInquiries
-    .filter((p: PropInquiry) => ["NOTIFY_SENT", "ACCEPTED", "PAID", "MEETING_SENT", "MEETING_CONFIRMED"].includes(String(p.status || "").toUpperCase()))
+    .filter((p: PropInquiry) => {
+      const status = String(p.status || "").toUpperCase();
+      if (!["NOTIFY_SENT", "ACCEPTED", "PAID", "MEETING_SENT", "MEETING_CONFIRMED"].includes(status)) return false;
+      if (status === 'NOTIFY_SENT' && isStaleCustomerNotifyPropPo(p.poNumber)) return false;
+      return true;
+    })
     .map((p: PropInquiry) => {
       const status = String(p.status || "").toUpperCase();
       const siteLocation = getPropSiteLocation(p);
       const cardTs = Number(p.updatedAt || p.createdAt || Date.now());
-      const step =
-        status === 'NOTIFY_SENT'
-          ? 3
-          : status === 'ACCEPTED'
-          ? 5
-          : status === 'PAID'
-          ? 7
-          : status === 'MEETING_SENT'
-          ? 7
-          : status === 'MEETING_CONFIRMED'
-          ? 8
-          : 4;
+      const step = getPropInquiryDisplayStep(status, p.step);
+      const pendingCustomerRating = canShowCustomerPropRateRequest(p);
       const actionNeeded =
         status === 'ACCEPTED' ||
         status === 'PAID' ||
-        (status === 'MEETING_CONFIRMED' && hasPendingCustomerPropRating(p));
+        status === 'MEETING_SENT' ||
+        pendingCustomerRating;
       const actionNeededDetail =
         status === 'ACCEPTED'
           ? 'Pay processing fee to proceed to chat and meeting flow.'
           : status === 'PAID'
           ? 'Send site meeting invitation to the lister.'
-          : status === 'MEETING_CONFIRMED' && hasPendingCustomerPropRating(p)
+          : pendingCustomerRating
           ? 'Submit rating to close step 8.'
           : status === 'NOTIFY_SENT'
           ? 'Waiting for lister acceptance.'
@@ -2175,7 +2227,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           dot: "bg-amber-500",
         };
       }
-      if (p.status === "MEETING_CONFIRMED" && hasPendingCustomerPropRating(p)) {
+      if (canShowCustomerPropRateRequest(p)) {
         return {
           id: `prop-alert-rate-${p.poNumber}`,
           msg: `Meeting confirmed for ${p.propertyTitle}. Please rate to finish step 8.`,
@@ -2186,7 +2238,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           dot: "bg-yellow-500",
         };
       }
-      if (p.status === "MEETING_CONFIRMED" && !hasPendingCustomerPropRating(p) && hasPendingListerPropRating(p)) {
+      if (String(p.status || '').toUpperCase() === "MEETING_CONFIRMED" && !hasPendingCustomerPropRating(p) && hasPendingListerPropRating(p)) {
         return {
           id: `prop-alert-wait-lister-rate-${p.poNumber}`,
           msg: `You rated ${p.propertyTitle}. Waiting for lister rating to close this inquiry.`,

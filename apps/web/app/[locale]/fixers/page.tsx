@@ -1721,7 +1721,8 @@ export default function FixerProPage() {
     .map((p: PropInquiry) => {
       const status = String(p.status || '').toUpperCase();
       const step = mapPropStatusToStep(status, p.step);
-      const actionNeeded = status === 'NOTIFY_SENT' || status === 'MEETING_SENT' || (status === 'MEETING_CONFIRMED' && p.listerRating == null);
+      const pendingPartnerRating = p.listerRating == null && step >= 8 && !['COMPLETED', 'CANCELLED'].includes(status);
+      const actionNeeded = status === 'NOTIFY_SENT' || status === 'MEETING_SENT' || pendingPartnerRating;
       const siteLocation = getPropSiteLocation(p);
       const propertyFacts = [
         p.propertyType ? `Type: ${p.propertyType}` : '',
@@ -1755,7 +1756,7 @@ export default function FixerProPage() {
             ? 'Accept this property inquiry request.'
             : status === 'MEETING_SENT'
             ? 'Confirm the customer meeting invitation.'
-            : status === 'MEETING_CONFIRMED' && p.listerRating == null
+            : pendingPartnerRating
             ? 'Submit rating to close step 8.'
             : '',
         description: propertyFacts,
@@ -2202,6 +2203,9 @@ export default function FixerProPage() {
 
   // Inject prop inquiry items: NOTIFY_SENT = step 4 accept, MEETING_SENT = step 7 confirm, MEETING_CONFIRMED = step 8 rate
   const propRequestCards: any[] = propInquiries.map((p: PropInquiry) => {
+    const status = String(p.status || '').toUpperCase();
+    const step = mapPropStatusToStep(status, p.step);
+    const pendingPartnerRating = p.listerRating == null && step >= 8 && !['COMPLETED', 'CANCELLED'].includes(status);
     const createdAt = Number(p.updatedAt || p.createdAt || Date.now());
     const siteLocation = getPropSiteLocation(p);
     const details = [
@@ -2212,12 +2216,12 @@ export default function FixerProPage() {
       typeof p.bathrooms === 'number' ? `Baths: ${p.bathrooms}` : '',
       siteLocation ? `Location: ${siteLocation}` : '',
     ].filter(Boolean).join(' | ');
-    if (p.status === "NOTIFY_SENT") return {
+    if (status === "NOTIFY_SENT") return {
       id: `prop-accept-${p.poNumber}`,
       type: "prop_accept",
       workflowType: "prop_accept",
       po: p.poNumber,
-      step: 4,
+      step,
       service: p.propertyTitle,
       serviceTh: p.propertyTitle,
       serviceZh: p.propertyTitle,
@@ -2233,12 +2237,12 @@ export default function FixerProPage() {
       propertyImages: p.propertyImages || [],
       propInquiry: p,
     };
-    if (p.status === "MEETING_SENT") return {
+    if (status === "MEETING_SENT") return {
       id: `prop-meet-confirm-${p.poNumber}`,
       type: "prop_meeting_confirm",
       workflowType: "prop_meeting_confirm",
       po: p.poNumber,
-      step: 7,
+      step,
       service: p.propertyTitle,
       serviceTh: p.propertyTitle,
       serviceZh: p.propertyTitle,
@@ -2255,12 +2259,12 @@ export default function FixerProPage() {
       propertyImages: p.propertyImages || [],
       propInquiry: p,
     };
-    if (p.status === "MEETING_CONFIRMED" && p.listerRating == null) return {
+    if (pendingPartnerRating) return {
       id: `prop-rate-p-${p.poNumber}`,
       type: "prop_rate_partner",
       workflowType: "prop_rate_partner",
       po: p.poNumber,
-      step: 8,
+      step,
       service: p.propertyTitle,
       serviceTh: p.propertyTitle,
       serviceZh: p.propertyTitle,
