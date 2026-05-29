@@ -131,7 +131,7 @@ export class OrderService {
       where: { userId },
       include: {
         address: true,
-        fixer: { include: { user: true } },
+        fixer: true,
         images: {
           where: { type: { in: ['order_attachment', 'order_photo'] } },
           orderBy: { createdAt: 'desc' },
@@ -142,7 +142,33 @@ export class OrderService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return orders.filter((order) => !isHiddenTestOrder(order.description));
+    const fixerUserIds = Array.from(
+      new Set(
+        orders
+          .map((order) => String(order.fixer?.userId || '').trim())
+          .filter(Boolean),
+      ),
+    );
+    const fixerUsers = fixerUserIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: fixerUserIds } },
+          select: { id: true, name: true, email: true, role: true },
+        })
+      : [];
+    const fixerUserMap = new Map(fixerUsers.map((user) => [user.id, user]));
+
+    return orders
+      .filter((order) => !isHiddenTestOrder(order.description))
+      .map((order) => ({
+        ...order,
+        fixer: order.fixer
+          ? {
+              ...order.fixer,
+              user: fixerUserMap.get(String(order.fixer.userId || '').trim()) ||
+                null,
+            }
+          : null,
+      }));
   }
 
   async findMyFixerOrders(userId: string) {
@@ -163,7 +189,6 @@ export class OrderService {
       where: { fixerId },
       include: {
         address: true,
-        user: true,
         images: {
           where: { type: { in: ['order_attachment', 'order_photo'] } },
           orderBy: { createdAt: 'desc' },
@@ -174,7 +199,26 @@ export class OrderService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return orders.filter((order) => !isHiddenTestOrder(order.description));
+    const customerIds = Array.from(new Set(orders.map((order) => order.userId)));
+    const customers = customerIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: customerIds } },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+          },
+        })
+      : [];
+    const customerMap = new Map(customers.map((user) => [user.id, user]));
+
+    return orders
+      .filter((order) => !isHiddenTestOrder(order.description))
+      .map((order) => ({
+        ...order,
+        user: customerMap.get(order.userId) || null,
+      }));
   }
 
   private async getOrderForParticipant(orderId: string, userId: string) {
@@ -206,25 +250,34 @@ export class OrderService {
 
     const messages = await this.prisma.orderChatMessage.findMany({
       where: { orderId },
-      include: {
-        senderUser: {
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const senderIds = Array.from(
+      new Set(messages.map((message) => message.senderUserId).filter(Boolean)),
+    );
+    const senders = senderIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: senderIds } },
           select: {
             id: true,
             name: true,
             email: true,
             role: true,
           },
-        },
-      },
-      orderBy: { createdAt: 'asc' },
-    });
+        })
+      : [];
+    const senderMap = new Map(senders.map((sender) => [sender.id, sender]));
 
     return messages.map((m) => ({
       id: m.id,
       orderId: m.orderId,
       senderUserId: m.senderUserId,
       senderRole: m.senderRole,
-      senderName: m.senderUser?.name || m.senderUser?.email || 'User',
+      senderName:
+        senderMap.get(m.senderUserId)?.name ||
+        senderMap.get(m.senderUserId)?.email ||
+        'User',
       text: m.text,
       createdAt: m.createdAt,
     }));

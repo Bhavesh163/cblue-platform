@@ -974,21 +974,41 @@ export default function FixerResults({
         const estStr = String(selectedFixer.price || 0).replace(/[^0-9.]/g, '');
         const estPrice = parseFloat(estStr) || 0;
         const addressId = await ensureOrderAddressId(token);
+        let createStatus: number | undefined;
 
-        const createRes = await authedFetch("/api/v1/orders", {
+        const orderPayloadBase = {
+          orderType: bookingType === "household" ? "HOUSEHOLD" : "PROJECT",
+          serviceCategory: service,
+          description: `${poNumber} | TIER:${typeof selectedFixer?.tier === "string" ? selectedFixer.tier.toUpperCase() : "STANDARD"} | LOC:${bookingLocation} | ${description}`,
+          fixerId: selectedFixer.id,
+          estimatedPrice: estPrice,
+        };
+
+        let createRes = await authedFetch("/api/v1/orders", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
+            ...orderPayloadBase,
             ...(addressId ? { addressId } : {}),
-            orderType: bookingType === "household" ? "HOUSEHOLD" : "PROJECT",
-            serviceCategory: service,
-            description: `${poNumber} | TIER:${typeof selectedFixer?.tier === "string" ? selectedFixer.tier.toUpperCase() : "STANDARD"} | LOC:${bookingLocation} | ${description}`,
-            fixerId: selectedFixer.id,
-            estimatedPrice: estPrice,
           })
         });
+
+        createStatus = createRes?.status;
+
+        // If address ownership drifted after token refresh, retry once without addressId
+        // so backend can create a fallback address for the current session user.
+        if (!createRes?.ok && addressId) {
+          createRes = await authedFetch("/api/v1/orders", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(orderPayloadBase),
+          });
+          createStatus = createRes?.status;
+        }
 
         if (createRes?.ok) {
           try {
@@ -1000,12 +1020,6 @@ export default function FixerResults({
           } catch {
             createdOrderId = "";
           }
-        } else if (storedAttachments.length > 0) {
-          attachmentSyncFailed = true;
-          console.error("Order creation failed before attachment sync", {
-            poNumber,
-            status: createRes?.status,
-          });
         }
 
         if (!createdOrderId && poNumber && token) {
@@ -1033,6 +1047,10 @@ export default function FixerResults({
 
         if (!createdOrderId && storedAttachments.length > 0) {
           attachmentSyncFailed = true;
+          console.error("Order creation failed before attachment sync", {
+            poNumber,
+            status: createStatus,
+          });
         }
 
         if (createdOrderId && storedAttachments.length > 0) {
