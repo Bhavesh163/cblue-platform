@@ -1080,6 +1080,10 @@ export default function FixerResults({
             fixerId: selectedFixer.id,
             description,
             hasAttachment: storedAttachments.length > 0,
+            images: storedAttachments,
+            attachments: storedAttachments,
+            imageUrls: storedAttachments,
+            issueImage: storedAttachments[0] || "",
           };
           const idx = existing.findIndex((x: any) => x.po === poNumber);
           if (idx >= 0) existing[idx] = { ...existing[idx], ...pendingAcceptJob };
@@ -1126,6 +1130,10 @@ export default function FixerResults({
                 description: description || `New project request. Please review and accept.`,
                 location: bookingLocation,
                 hasAttachment: storedAttachments.length > 0,
+                images: storedAttachments,
+                attachments: storedAttachments,
+                imageUrls: storedAttachments,
+                issueImage: storedAttachments[0] || "",
                 type: "pending_accept",
                 status: "CREATED",
                 step: 5,

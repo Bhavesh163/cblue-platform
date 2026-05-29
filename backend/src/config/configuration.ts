@@ -32,6 +32,7 @@ export default () => ({
   mailjet: {
     apiKey:
       process.env.MAILJET_API_KEY ||
+      process.env.MAILJET_KEY ||
       process.env.MAILJET_API_SUBACCOUNT_KEY ||
       process.env.MAILJET_API_KEY_PUBLIC ||
       process.env.MAILJET_APIKEY_PUBLIC ||
@@ -42,6 +43,7 @@ export default () => ({
       '',
     apiSecret:
       process.env.MAILJET_SECRET_KEY ||
+      process.env.MAILJET_SECRET ||
       process.env.MAILJET_SECRET_SUBACCOUNT_KEY ||
       process.env.MAILJET_SUBACCOUNT_SECRET_KEY ||
       process.env.MAILJET_API_SECRET ||
@@ -55,6 +57,8 @@ export default () => ({
       process.env.MAILJET_FROM_EMAIL ||
       process.env.MAILJET_FROM_ADDRESS ||
       process.env.MAILJET_FROM ||
+      process.env.MAILJET_SENDER_EMAIL ||
+      process.env.MAILJET_SENDER ||
       process.env.MAIL_FROM_ADDRESS ||
       process.env.MAIL_FROM_EMAIL ||
       'noreply@lblue.tech',

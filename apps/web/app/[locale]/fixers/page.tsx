@@ -674,6 +674,43 @@ const normalizePoLookupValue = (value: any) =>
     .trim()
     .toUpperCase()
     .replace(/\s+/g, '');
+const fetchWithSubscriberAuthRetry = async ({
+  endpoint,
+  token,
+}: {
+  endpoint: string;
+  token?: string;
+}) => {
+  if (typeof window === 'undefined') {
+    return { token: '', response: null as Response | null };
+  }
+
+  let authToken = String(token || localStorage.getItem('subscriber_token') || '').trim();
+  if (!authToken) {
+    return { token: '', response: null as Response | null };
+  }
+
+  const send = async (bearerToken: string) => {
+    try {
+      return await fetch(endpoint, {
+        headers: { Authorization: `Bearer ${bearerToken}` },
+      });
+    } catch {
+      return null;
+    }
+  };
+
+  let response = await send(authToken);
+  if (response && [401, 403].includes(response.status)) {
+    const refreshed = await refreshSubscriberSession(authToken);
+    if (refreshed) {
+      authToken = refreshed;
+      response = await send(authToken);
+    }
+  }
+
+  return { token: authToken, response };
+};
 const rememberPoOrderId = (po: any, orderId: any) => {
   const poKey = normalizePoLookupValue(po);
   const resolvedOrderId = String(orderId || '').trim();
@@ -733,14 +770,18 @@ const resolveOrderIdByPo = async ({
     return mappedLocal;
   }
 
-  const authToken = String(token || localStorage.getItem('subscriber_token') || '').trim();
+  let authToken = String(token || localStorage.getItem('subscriber_token') || '').trim();
   if (!authToken) return '';
 
   for (const endpoint of ['/api/v1/orders/fixer', '/api/v1/orders/my']) {
     try {
-      const response = await fetch(endpoint, {
-        headers: { Authorization: `Bearer ${authToken}` },
+      const attempt = await fetchWithSubscriberAuthRetry({
+        endpoint,
+        token: authToken,
       });
+      authToken = attempt.token || authToken;
+      const response = attempt.response;
+      if (!response) continue;
       if (!response.ok) continue;
       const rows = await response.json();
       const list = Array.isArray(rows) ? rows : [];
@@ -772,16 +813,20 @@ const fetchAttachmentUrlsByPoFromOrders = async ({
     return { orderId: '', urls: [] as string[] };
   }
 
-  const authToken = String(token || localStorage.getItem('subscriber_token') || '').trim();
+  let authToken = String(token || localStorage.getItem('subscriber_token') || '').trim();
   if (!authToken) {
     return { orderId: '', urls: [] as string[] };
   }
 
   for (const endpoint of ['/api/v1/orders/fixer', '/api/v1/orders/my']) {
     try {
-      const response = await fetch(endpoint, {
-        headers: { Authorization: `Bearer ${authToken}` },
+      const attempt = await fetchWithSubscriberAuthRetry({
+        endpoint,
+        token: authToken,
       });
+      authToken = attempt.token || authToken;
+      const response = attempt.response;
+      if (!response) continue;
       if (!response.ok) continue;
       const rows = await response.json();
       const list = Array.isArray(rows) ? rows : [];
@@ -801,9 +846,19 @@ const fetchAttachmentUrlsByPoFromOrders = async ({
           [
             ...(Array.isArray(matched?.images) ? matched.images : []),
             ...(Array.isArray(matched?.attachments) ? matched.attachments : []),
+            ...(Array.isArray(matched?.files) ? matched.files : []),
+            ...(Array.isArray(matched?.imageUrls) ? matched.imageUrls : []),
+            ...(Array.isArray(matched?.projectImages) ? matched.projectImages : []),
+            ...(Array.isArray(matched?.metadata?.images) ? matched.metadata.images : []),
+            ...(Array.isArray(matched?.metadata?.attachments) ? matched.metadata.attachments : []),
+            ...(Array.isArray(matched?.metadata?.files) ? matched.metadata.files : []),
             matched?.issueImage,
             matched?.image,
             matched?.fileUrl,
+            matched?.attachmentUrl,
+            matched?.documentUrl,
+            matched?.metadata?.issueImage,
+            matched?.metadata?.issueImageUrl,
           ]
             .flatMap((entry) => collectAttachmentUrls(entry))
             .filter(Boolean),
@@ -1279,9 +1334,15 @@ export default function FixerProPage() {
           return;
         }
 
-        const res = await fetch(`/api/v1/orders/${attachmentOrderId}/attachments`, {
-          headers: { Authorization: `Bearer ${token}` },
+        const attachmentAttempt = await fetchWithSubscriberAuthRetry({
+          endpoint: `/api/v1/orders/${attachmentOrderId}/attachments`,
+          token,
         });
+        const res = attachmentAttempt.response;
+        if (!res) {
+          if (isMounted) { setWaitModalAttachmentUrls([]); setLoadingAttachments(false); }
+          return;
+        }
         if (!res.ok) {
           if (isMounted) { setWaitModalAttachmentUrls([]); setLoadingAttachments(false); }
           return;
@@ -1628,11 +1689,29 @@ export default function FixerProPage() {
       extractedPo = `PO-${yy}${mm}-${numericSeed.padStart(4, '0')}`;
     }
     if (isHiddenTestPo(extractedPo)) return null;
-    const attachmentUrls = Array.isArray(o.images)
-      ? o.images
-          .map((image: any) => normalizeImageUrl(extractImageUrlCandidate(image)))
-          .filter(Boolean)
-      : [];
+    const attachmentUrls = Array.from(
+      new Set(
+        [
+          ...(Array.isArray(o.images) ? o.images : []),
+          ...(Array.isArray(o.attachments) ? o.attachments : []),
+          ...(Array.isArray(o.files) ? o.files : []),
+          ...(Array.isArray(o.imageUrls) ? o.imageUrls : []),
+          ...(Array.isArray(o.projectImages) ? o.projectImages : []),
+          ...(Array.isArray(o.metadata?.images) ? o.metadata.images : []),
+          ...(Array.isArray(o.metadata?.attachments) ? o.metadata.attachments : []),
+          ...(Array.isArray(o.metadata?.files) ? o.metadata.files : []),
+          o.issueImage,
+          o.image,
+          o.fileUrl,
+          o.attachmentUrl,
+          o.documentUrl,
+          o.metadata?.issueImage,
+          o.metadata?.issueImageUrl,
+        ]
+          .flatMap((entry: any) => collectAttachmentUrls(entry))
+          .filter(Boolean),
+      ),
+    );
     const locFromDesc = (() => { const m = String(o.description || '').match(/\bLOC:([^|]+)/); return m ? (m[1] ?? '').trim() : ''; })();
     const siteLocation = (() => {
       const lat = Number(o?.address?.latitude);
@@ -2176,6 +2255,11 @@ export default function FixerProPage() {
                   tier: pending.tier,
                   desc: pending.desc,
                   description: pending.description || pending.desc || '',
+                  hasAttachment: Boolean(pending.hasAttachment),
+                  images: Array.isArray(pending.images) ? pending.images : [],
+                  attachments: Array.isArray(pending.attachments) ? pending.attachments : [],
+                  imageUrls: Array.isArray(pending.imageUrls) ? pending.imageUrls : [],
+                  issueImage: pending.issueImage || '',
                   meetingDate: pending.meetingDate,
                   meetingTime: pending.meetingTime,
                   meetingDateLabel: pending.meetingDate || '',
@@ -2211,6 +2295,57 @@ export default function FixerProPage() {
         if (hourlyChanged) {
           try { localStorage.setItem('partner_mock_dyn_req', JSON.stringify(partnerReqs)); } catch {}
         }
+
+        try {
+          const poAttachmentMap = JSON.parse(localStorage.getItem('cblue_po_attachments') || '{}');
+          partnerReqs = partnerReqs.map((req: any) => {
+            const existingUrls = Array.from(
+              new Set(
+                [
+                  req?.issueImage,
+                  req?.image,
+                  req?.fileUrl,
+                  req?.attachmentUrl,
+                  req?.documentUrl,
+                  ...(Array.isArray(req?.images) ? req.images : []),
+                  ...(Array.isArray(req?.attachments) ? req.attachments : []),
+                  ...(Array.isArray(req?.files) ? req.files : []),
+                  ...(Array.isArray(req?.imageUrls) ? req.imageUrls : []),
+                  ...(Array.isArray(req?.metadata?.images) ? req.metadata.images : []),
+                  ...(Array.isArray(req?.metadata?.attachments) ? req.metadata.attachments : []),
+                  ...(Array.isArray(req?.metadata?.files) ? req.metadata.files : []),
+                  req?.metadata?.issueImage,
+                  req?.metadata?.issueImageUrl,
+                ]
+                  .flatMap((entry) => collectAttachmentUrls(entry))
+                  .filter(Boolean),
+              ),
+            );
+            if (existingUrls.length > 0 || !req?.po) return req;
+
+            const poFallbackUrls = Array.from(
+              new Set(
+                Object.entries(poAttachmentMap || {})
+                  .filter(([cachedPo]) => normalizePoLookupValue(cachedPo) === normalizePoLookupValue(req.po))
+                  .flatMap(([, value]) => collectAttachmentUrls(value))
+                  .filter(Boolean),
+              ),
+            );
+
+            if (poFallbackUrls.length === 0) return req;
+            return {
+              ...req,
+              hasAttachment: true,
+              images: poFallbackUrls,
+              attachments: poFallbackUrls,
+              imageUrls: poFallbackUrls,
+              issueImage: poFallbackUrls[0] || req?.issueImage || '',
+            };
+          });
+        } catch {
+          // non-blocking
+        }
+
         setPartnerDynReqs(partnerReqs);
       } catch {}
     };
@@ -3495,9 +3630,14 @@ export default function FixerProPage() {
 
                   if (token && orderId) {
                     try {
-                      const res = await fetch(`/api/v1/orders/${orderId}/attachments`, {
-                        headers: { Authorization: `Bearer ${token}` },
+                      const attachmentAttempt = await fetchWithSubscriberAuthRetry({
+                        endpoint: `/api/v1/orders/${orderId}/attachments`,
+                        token,
                       });
+                      const res = attachmentAttempt.response;
+                      if (!res) {
+                        throw new Error('Attachment request failed');
+                      }
                       if (res.ok) {
                         const rows = await res.json();
                         freshUrls = Array.from(
@@ -4379,9 +4519,12 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
       });
       if (!orderId || !token) return;
       try {
-        const res = await fetch(`/api/v1/orders/${orderId}/attachments`, {
-          headers: { Authorization: `Bearer ${token}` },
+        const attachmentAttempt = await fetchWithSubscriberAuthRetry({
+          endpoint: `/api/v1/orders/${orderId}/attachments`,
+          token,
         });
+        const res = attachmentAttempt.response;
+        if (!res) return;
         if (!res.ok) return;
         const data = await res.json();
         if (!isMounted) return;
@@ -4888,9 +5031,12 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
         });
         if (!orderId || !token) return;
         try {
-          const res = await fetch(`/api/v1/orders/${orderId}/attachments`, {
-            headers: { Authorization: `Bearer ${token}` },
+          const attachmentAttempt = await fetchWithSubscriberAuthRetry({
+            endpoint: `/api/v1/orders/${orderId}/attachments`,
+            token,
           });
+          const res = attachmentAttempt.response;
+          if (!res) return;
           if (!res.ok) return;
           const data = await res.json();
           const backendUrls = Array.from(
