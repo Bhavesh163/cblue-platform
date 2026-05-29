@@ -913,6 +913,29 @@ export default function FixerResults({
     let attachmentSyncFailed = false;
     let token = localStorage.getItem("subscriber_token") || "";
 
+    const persistAttachmentCache = (
+      storageKey: string,
+      cacheKey: string,
+      attachments: string[],
+    ) => {
+      if (attachments.length === 0) return;
+
+      const totalChars = attachments.reduce(
+        (sum, value) => sum + String(value || "").length,
+        0,
+      );
+      if (totalChars > 750_000) return;
+
+      try {
+        const raw = localStorage.getItem(storageKey) || "{}";
+        const parsed = JSON.parse(raw);
+        parsed[cacheKey] = attachments;
+        localStorage.setItem(storageKey, JSON.stringify(parsed));
+      } catch {
+        // Non-blocking when localStorage is near quota.
+      }
+    };
+
     const authedFetch = async (
       input: RequestInfo | URL,
       init: RequestInit,
@@ -965,10 +988,7 @@ export default function FixerResults({
 
         storedAttachments = await Promise.all(limited.map((f) => fileToUploadDataUrl(f)));
 
-        const byPoRaw = localStorage.getItem("cblue_po_attachments") || "{}";
-        const byPo = JSON.parse(byPoRaw);
-        byPo[poNumber] = storedAttachments;
-        localStorage.setItem("cblue_po_attachments", JSON.stringify(byPo));
+        persistAttachmentCache("cblue_po_attachments", poNumber, storedAttachments);
       }
     } catch {
       // Non-blocking for demo flow
@@ -1072,10 +1092,7 @@ export default function FixerResults({
 
         if (createdOrderId && storedAttachments.length > 0) {
           try {
-            const byOrderRaw = localStorage.getItem("cblue_order_attachments") || "{}";
-            const byOrder = JSON.parse(byOrderRaw);
-            byOrder[createdOrderId] = storedAttachments;
-            localStorage.setItem("cblue_order_attachments", JSON.stringify(byOrder));
+            persistAttachmentCache("cblue_order_attachments", createdOrderId, storedAttachments);
 
             // Persist attachments to backend for cross-device visibility.
             // First attempt a single batch upload, then fallback to sequential single-file uploads.
@@ -1192,10 +1209,6 @@ export default function FixerResults({
             fixerId: selectedFixer.id,
             description,
             hasAttachment: storedAttachments.length > 0,
-            images: storedAttachments,
-            attachments: storedAttachments,
-            imageUrls: storedAttachments,
-            issueImage: storedAttachments[0] || "",
           };
           const idx = existing.findIndex((x: any) => x.po === poNumber);
           if (idx >= 0) existing[idx] = { ...existing[idx], ...pendingAcceptJob };
@@ -1254,10 +1267,6 @@ export default function FixerResults({
                 description: description || `New project request. Please review and accept.`,
                 location: bookingLocation,
                 hasAttachment: storedAttachments.length > 0,
-                images: storedAttachments,
-                attachments: storedAttachments,
-                imageUrls: storedAttachments,
-                issueImage: storedAttachments[0] || "",
                 type: "pending_accept",
                 status: "CREATED",
                 step: 5,

@@ -2525,7 +2525,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     .map((x: any) => {
       const stableTime = x.date || toDisplayDateTime(x.createdAt) || "";
       const createdAt = x.createdAt || parseDateMs(x.date);
-      if (x.type === "notice") return { id: `a-${x.id}`, msg: x.desc || "Workflow updated.", msgTh: x.descTh || "อัปเดตขั้นตอนการทำงาน", msgZh: x.descZh || "工作流程已更新。", time: stableTime, createdAt, dot: "bg-indigo-400" };
+      if (x.type === "notice") return { id: `a-${x.id}`, msg: x.msg || x.desc || "Workflow updated.", msgTh: x.msgTh || x.descTh || "อัปเดตขั้นตอนการทำงาน", msgZh: x.msgZh || x.descZh || "工作流程已更新。", time: stableTime, createdAt, dot: "bg-indigo-400" };
       if (x.type === "payment_pending") return { id: `a-${x.id}`, msg: "Partner accepted Order — please proceed to pay fee.", msgTh: "พาร์ทเนอร์ยอมรับออเดอร์แล้ว — กรุณาชำระค่าธรรมเนียม", msgZh: "合作伙伴已接受订单 — 请支付费用。", time: stableTime, createdAt, dot: "bg-blue-500" };
       if (x.type === "chat_ready") return { id: `a-${x.id}`, msg: "Chat is active — send meeting invitation when ready.", msgTh: "แชทพร้อมใช้งาน — ส่งคำเชิญนัดหมายเมื่อพร้อม", msgZh: "聊天已激活 — 准备好后发送会议邀请。", time: stableTime, createdAt, dot: "bg-sky-500" };
       if (x.type === "meeting_pending_partner") return { id: `a-${x.id}`, msg: "Meeting invitation sent — waiting for partner confirmation.", msgTh: "ส่งคำเชิญนัดหมายแล้ว — รอการยืนยันจากพาร์ทเนอร์", msgZh: "会议邀请已发送 — 等待合作伙伴确认。", time: stableTime, createdAt, dot: "bg-amber-500" };
@@ -3755,7 +3755,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       <div className={`flex flex-col gap-6 ${activeTab !== 'overview' ? 'hidden' : ''}`}>
           
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 my-6">
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 md:col-span-2">
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 md:col-span-1">
                 <div className="flex justify-between items-center mb-4">
                   <div className="flex flex-col">
                     <h2 className="text-xl font-bold text-gray-800">⏰ {locale === "th" ? "การนัดหมายที่จะมาถึง" : locale === "zh" ? "即将到来的会议" : "Upcoming Meetings"}</h2>
@@ -3802,7 +3802,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mt-4 text-center text-sm text-gray-400">{locale === "th" ? "ไม่มีการนัดหมายที่จะมาถึง" : locale === "zh" ? "暂无会议" : "No upcoming meetings"}</div>
                 )}
               </div>
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 md:col-span-1">
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 md:col-span-2">
                 <h3 className="font-bold text-gray-800 mb-4 flex items-center justify-between">{locale === "th" ? "การแจ้งเตือนล่าสุด" : locale === "zh" ? "最近通知" : "Recent Alerts"} <span className="text-xs text-sky-600 cursor-pointer" onClick={() => setActiveTab("alerts")}>{locale === "th" ? "ดูทั้งหมด" : locale === "zh" ? "查看全部" : "View All"}</span></h3>
                 <div className="space-y-4">
                   {overviewAlerts.length > 0 ? (

@@ -4701,7 +4701,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
 
       {/* Meetings, alerts, and chats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 md:col-span-2">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 md:col-span-1">
           <h3 className="font-bold text-gray-900 mb-3 flex items-center justify-between">⏰ {locale === "th" ? "การนัดหมายที่จะมาถึง" : locale === "zh" ? "即将到来的会议" : "Upcoming Meetings"} <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("requests")}>{locale === "th" ? "ดูทั้งหมด" : locale === "zh" ? "查看全部" : "View All"}</span></h3>
           {scheduledMeetings.length > 0 ? (
             <div className="space-y-2">
@@ -4719,7 +4719,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
             </div>
           )}
         </div>
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 md:col-span-1">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 md:col-span-2">
           <h3 className="font-bold text-gray-900 mb-3 flex items-center justify-between">{locale === "th" ? "การแจ้งเตือนล่าสุด" : locale === "zh" ? "最近通知" : "Recent Alerts"} <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("notifications")}>View All</span></h3>
           <div className="space-y-2">
             {notifications.slice(0, 3).map((n) => (
@@ -5868,74 +5868,6 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
             <div className="flex gap-3 pt-1">
               <button onClick={() => { if (!variationDesc.trim()) return; const priceListRows = buildVariationPriceListRows(variationRows); if (variationModal?.po) { storeVariationPriceList(variationModal.po, priceListRows); } const tableText = priceListRows.length > 0 ? `\n\nPrice List:\n${formatVariationPriceListText(priceListRows)}` : ''; handlePartnerAction(variationModal, 'variation', `Partner variation request: ${variationDesc.trim()}${tableText}`); setVariationRows(EMPTY_VAR_ROWS()); setVariationModal(null); }} disabled={!variationDesc.trim()} className="flex-1 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition text-sm">Submit Variation</button>
               <button onClick={() => { setVariationRows(EMPTY_VAR_ROWS()); setVariationModal(null); }} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">Cancel</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    )}
-    {completeModal && (
-      <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto">
-        <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-y-auto max-h-[calc(100dvh-6rem)] mx-auto">
-          <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4">
-            <h3 className="text-white font-bold text-lg">Mark Job Complete</h3>
-            <p className="text-green-100 text-sm mt-1">{completeModal.po} · {completeModal.service}</p>
-          </div>
-          <div className="px-6 py-5 space-y-4">
-            <WorkflowModalMeta
-              step={10}
-              typeOfWork={completeModal.service || 'Project'}
-              actionText="Send the project complete request to the customer for final confirmation."
-              po={completeModal.po || '-'}
-              counterpartLabel="Customer"
-              counterpartName={firstNameOnly(completeModal.customer, 'Customer')}
-              budget={toCurrencyLabel(completeModal.budget || completeModal.fee)}
-              location={(() => { const loc = completeModal.location || completeModal.subdistrict || ''; if (loc && loc !== 'Unknown') return loc; try { const active = JSON.parse(localStorage.getItem('ghis_mock_active') || '[]'); const job = (active as any[]).find((x: any) => x.po === completeModal.po); const m = String(job?.description || '').match(/\bLOC:([^|]+)/); if (m) return (m[1] ?? '').trim(); } catch {} return 'Unknown'; })()}
-              projectDetails={stripWorkflowPrefix(completeModal.description || completeModal.desc || completeModal.projectDetails || completeModal.service || '')}
-            />
-            {/* Budget breakdown — priceList-first (reads description from ghis_mock_active), then localStorage fallback */}
-            {(() => {
-              let bd: BudgetBreakdownItem[] | null = null;
-              try {
-                const pl = priceList ?? [];
-                let descForBd = '';
-                try { const active = JSON.parse(localStorage.getItem('ghis_mock_active') || '[]'); const job = (active as any[]).find((x: any) => x.po === completeModal.po); if (job?.description) descForBd = String(job.description); } catch {}
-                if (pl.length > 0 && descForBd) {
-                  const computed = computeBudgetBreakdown(descForBd, pl);
-                  if (computed && computed.length > 0) {
-                    bd = computed;
-                    try { localStorage.setItem(`cblue_po_breakdown_${completeModal.po}`, JSON.stringify(bd)); } catch {}
-                  }
-                }
-              } catch {}
-              if (!bd || bd.length === 0) {
-                try { const s = localStorage.getItem(`cblue_po_breakdown_${completeModal.po}`); if (s) { const p = JSON.parse(s); if (Array.isArray(p) && p.length > 0) bd = p; } } catch {}
-              }
-              if (!bd || bd.length === 0) return null;
-              return (
-                <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3">
-                  <span className="text-gray-500 text-xs block mb-1">Budget Breakdown</span>
-                  <div className="font-mono text-xs space-y-0.5">
-                    {bd.map((it, i) => (
-                      <div key={i} className="flex justify-between gap-2">
-                        <span className="text-gray-600">{i + 1}) {it!.service} {it.qty.toLocaleString()} {it.unit} × ฿{it.unitRate.toLocaleString()}</span>
-                        <span className="font-semibold text-green-700 shrink-0">= ฿{it!.total.toLocaleString()}</span>
-                      </div>
-                    ))}
-                    <div className="flex justify-between gap-2 pt-1 border-t border-green-200 font-bold text-sm">
-                      <span className="text-gray-700">Budget</span>
-                      <span className="text-green-800">= ฿{bd.reduce((s, it) => s + (it?.total ?? 0), 0).toLocaleString()}</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-2">Completion Note <span className="text-gray-400 font-normal">(optional)</span></label>
-              <textarea value={completeNote} onChange={e => setCompleteNote(e.target.value)} rows={3} placeholder="e.g. All tasks finished, site cleaned, client signed off..." className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 resize-none" />
-            </div>
-            <div className="flex gap-3 pt-1">
-              <button onClick={() => { handlePartnerAction(completeModal, 'complete', completeNote.trim() || 'Job marked complete by partner'); setCompleteModal(null); }} className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-xl transition text-sm">Confirm Complete</button>
-              <button onClick={() => setCompleteModal(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">Cancel</button>
             </div>
           </div>
         </div>
