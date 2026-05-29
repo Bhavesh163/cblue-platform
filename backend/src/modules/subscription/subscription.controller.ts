@@ -5,12 +5,21 @@ import {
   HttpCode,
   HttpStatus,
   Headers,
+  Res,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import type { Response } from 'express';
 import { SubscriptionService } from './subscription.service';
 import { CreateSubscriberDto } from './dto/create-subscriber.dto';
 import { LoginSubscriberDto } from './dto/login-subscriber.dto';
 import { ForgotPasswordDto, ResetPasswordDto } from './dto/forgot-password.dto';
+
+const isResetPasswordDebugHeaderEnabled = () =>
+  ['1', 'true', 'yes', 'on'].includes(
+    String(process.env.RESET_PASSWORD_DEBUG_HEADER || '')
+      .trim()
+      .toLowerCase(),
+  );
 
 @Controller('subscription')
 export class SubscriptionController {
@@ -39,8 +48,22 @@ export class SubscriptionController {
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { ttl: 60000, limit: 3 } })
-  forgotPassword(@Body() dto: ForgotPasswordDto) {
-    return this.subscriptionService.forgotPassword(dto);
+  async forgotPassword(
+    @Body() dto: ForgotPasswordDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const result = await this.subscriptionService.forgotPassword(dto);
+
+    if (isResetPasswordDebugHeaderEnabled()) {
+      response.setHeader('X-Cblue-Reset-Debug-Trace', result.debug.traceId);
+      response.setHeader('X-Cblue-Reset-Debug-Path', result.debug.path);
+      response.setHeader(
+        'X-Cblue-Reset-Debug-Sent',
+        result.debug.sent ? 'true' : 'false',
+      );
+    }
+
+    return { message: result.message };
   }
 
   @Post('reset-password')

@@ -30,6 +30,23 @@ type BridgeSubscriber = {
   company: string | null;
 };
 
+type ResetEmailDeliveryPath = 'mailjet_v31' | 'mailjet_v3' | 'mailjet_smtp' | 'none';
+
+type ResetEmailSendResult = {
+  sent: boolean;
+  path: ResetEmailDeliveryPath;
+  fromEmail?: string;
+};
+
+type ForgotPasswordServiceResponse = {
+  message: string;
+  debug: {
+    traceId: string;
+    path: ResetEmailDeliveryPath;
+    sent: boolean;
+  };
+};
+
 @Injectable()
 export class SubscriptionService {
   private readonly logger = new Logger(SubscriptionService.name);
@@ -279,7 +296,9 @@ export class SubscriptionService {
     };
   }
 
-  async forgotPassword(dto: ForgotPasswordDto) {
+  async forgotPassword(dto: ForgotPasswordDto): Promise<ForgotPasswordServiceResponse> {
+    const traceId = crypto.randomUUID();
+    const genericMessage = 'If the email exists, a reset link has been sent.';
     const normalizedEmail = this.normalizeEmail(dto.email);
     let subscriber = normalizedEmail
       ? await this.findSubscriberByEmail(normalizedEmail)
@@ -380,7 +399,17 @@ export class SubscriptionService {
           `forgotPassword: no subscriber match for ${normalizedEmail}`,
         );
       }
-      return { message: 'If the email exists, a reset link has been sent.' };
+      this.logger.log(
+        `[forgotPassword:${traceId}] no matching subscriber; returning generic response`,
+      );
+      return {
+        message: genericMessage,
+        debug: {
+          traceId,
+          path: 'none',
+          sent: false,
+        },
+      };
     }
 
     // Generate secure random token
@@ -403,27 +432,55 @@ export class SubscriptionService {
       this.logger.error(
         `Password reset skipped because subscriber ${subscriber.id} has invalid email`,
       );
-      return { message: 'If the email exists, a reset link has been sent.' };
+      this.logger.warn(
+        `[forgotPassword:${traceId}] recipient candidates empty; returning generic response`,
+      );
+      return {
+        message: genericMessage,
+        debug: {
+          traceId,
+          path: 'none',
+          sent: false,
+        },
+      };
     }
     const recipientName = String(subscriber.name || '').trim() || 'User';
 
     // Send email via Mailjet (with API + SMTP fallback paths)
     let sent = false;
+    let selectedPath: ResetEmailDeliveryPath = 'none';
     for (const recipientEmail of recipientCandidates) {
-      sent = await this.sendResetEmail(
+      const deliveryResult = await this.sendResetEmail(
         recipientEmail,
         recipientName,
         resetToken,
+        traceId,
+      );
+      sent = deliveryResult.sent;
+      selectedPath = deliveryResult.path;
+      this.logger.log(
+        `[forgotPassword:${traceId}] delivery attempt recipient=${recipientEmail} path=${deliveryResult.path} sent=${deliveryResult.sent}`,
       );
       if (sent) break;
     }
     if (!sent) {
       this.logger.error(
-        `Password reset email delivery failed for ${recipientCandidates.join(', ')}`,
+        `[forgotPassword:${traceId}] password reset delivery failed for ${recipientCandidates.join(', ')}`,
+      );
+    } else {
+      this.logger.log(
+        `[forgotPassword:${traceId}] password reset delivered using ${selectedPath}`,
       );
     }
 
-    return { message: 'If the email exists, a reset link has been sent.' };
+    return {
+      message: genericMessage,
+      debug: {
+        traceId,
+        path: selectedPath,
+        sent,
+      },
+    };
   }
 
   async resetPassword(dto: ResetPasswordDto) {
@@ -698,7 +755,8 @@ export class SubscriptionService {
     email: string,
     name: string,
     resetToken: string,
-  ): Promise<boolean> {
+    traceId?: string,
+  ): Promise<ResetEmailSendResult> {
     type SmtpSendMailOptions = {
       from: string;
       to: string;
@@ -713,9 +771,12 @@ export class SubscriptionService {
     type MailjetSendApiResponse = { Messages?: MailjetMessageStatus[] };
 
     const normalizedRecipientEmail = this.normalizeEmail(email);
+    const tracePrefix = traceId ? `[forgotPassword:${traceId}] ` : '';
     if (!normalizedRecipientEmail) {
-      this.logger.warn('sendResetEmail received invalid recipient email');
-      return false;
+      this.logger.warn(
+        `${tracePrefix}sendResetEmail received invalid recipient email`,
+      );
+      return { sent: false, path: 'none' };
     }
     const recipientName = String(name || '').trim() || 'User';
 
@@ -749,11 +810,13 @@ export class SubscriptionService {
     );
 
     if (!mailjetApiKey || !mailjetApiSecret) {
-      this.logger.warn('Mailjet not configured — skipping email send');
+      this.logger.warn(
+        `${tracePrefix}Mailjet not configured — skipping email send`,
+      );
       this.logger.log(
         `[DEV] Password reset link for ${email}: /reset-password?token=${resetToken}`,
       );
-      return false;
+      return { sent: false, path: 'none' };
     }
 
     const frontendUrl = (
@@ -899,7 +962,7 @@ export class SubscriptionService {
           this.logger.log(
             `[BACKUP-LINK] /en/subscription/reset-password?token=${resetToken}`,
           );
-          return true;
+          return { sent: true, path: 'mailjet_v31', fromEmail };
         }
 
         apiError =
@@ -980,7 +1043,7 @@ export class SubscriptionService {
           this.logger.log(
             `[BACKUP-LINK] /en/subscription/reset-password?token=${resetToken}`,
           );
-          return true;
+          return { sent: true, path: 'mailjet_v3', fromEmail };
         }
 
         const legacyError = rawResponse || 'Unknown legacy Mailjet error';
@@ -1045,7 +1108,7 @@ export class SubscriptionService {
           this.logger.log(
             `[BACKUP-LINK] /en/subscription/reset-password?token=${resetToken}`,
           );
-          return true;
+          return { sent: true, path: 'mailjet_smtp', fromEmail };
         } catch (smtpError) {
           const smtpErrorText =
             smtpError instanceof Error ? smtpError.message : String(smtpError);
@@ -1069,6 +1132,6 @@ export class SubscriptionService {
     this.logger.log(
       `[FALLBACK] Password reset link for ${normalizedRecipientEmail}: /en/subscription/reset-password?token=${resetToken}`,
     );
-    return false;
+    return { sent: false, path: 'none' };
   }
 }
