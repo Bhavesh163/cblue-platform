@@ -13,9 +13,82 @@ export type BudgetBreakdownItem = {
   total: number;
 };
 
+export type VariationPriceListItem = {
+  item: string;
+  qty: number | null;
+  unit: string;
+  rate: number | null;
+  amount: number | null;
+};
+
 /** Strip the workflow metadata prefix prepended to order descriptions */
 const stripPrefix = (value: unknown): string =>
   String(value || '').replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?(LOC:[^|]+\|\s*)?/i, '').trim();
+
+const toNumericValue = (value: unknown): number | null => {
+  const raw = String(value || '').replace(/[^0-9.]/g, '').trim();
+  if (!raw) return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const toDisplayNumber = (value: number | null): string => {
+  if (value == null || !Number.isFinite(value)) return '';
+  return Number.isInteger(value)
+    ? value.toLocaleString()
+    : value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+};
+
+const extractVariationPriceListSection = (value: unknown): string => {
+  const text = String(value || '').trim();
+  if (!text) return '';
+
+  const explicitSection = text.match(/(?:^|\n)Price List:\s*([\s\S]*)$/i)?.[1];
+  if (explicitSection) return explicitSection.trim();
+
+  return /^(?:\s*(?:[-•]|\d+\)))\s/m.test(text) ? text : '';
+};
+
+const parseVariationPriceListLine = (value: string): VariationPriceListItem | null => {
+  const normalizedLine = String(value || '')
+    .trim()
+    .replace(/^\s*(?:[-•]|\d+\))\s*/, '')
+    .trim();
+  if (!normalizedLine) return null;
+
+  if (normalizedLine.includes('|')) {
+    const parts = normalizedLine.split('|').map((part) => part.trim()).filter(Boolean);
+    const qtyUnitMatch = parts[1]?.match(/([\d,]+(?:\.\d+)?)\s+(.+)/i);
+    return {
+      item: parts[0] || normalizedLine,
+      qty: toNumericValue(qtyUnitMatch?.[1]),
+      unit: String(qtyUnitMatch?.[2] || '').trim(),
+      rate: toNumericValue(parts[2]),
+      amount: toNumericValue(parts[3]),
+    };
+  }
+
+  const formattedMatch = normalizedLine.match(
+    /^(.*?)\s+(\d[\d,]*(?:\.\d+)?)\s+(.+?)\s+x\s*฿([\d,]+(?:\.\d+)?)\/unit\s*=\s*฿([\d,]+(?:\.\d+)?)$/i,
+  );
+  if (formattedMatch) {
+    return {
+      item: formattedMatch[1]?.trim() || normalizedLine,
+      qty: toNumericValue(formattedMatch[2]),
+      unit: String(formattedMatch[3] || '').trim(),
+      rate: toNumericValue(formattedMatch[4]),
+      amount: toNumericValue(formattedMatch[5]),
+    };
+  }
+
+  return {
+    item: normalizedLine,
+    qty: null,
+    unit: '',
+    rate: null,
+    amount: null,
+  };
+};
 
 /**
  * Parse a project description and a partner's priceList to build a line-item
@@ -142,6 +215,67 @@ export function readStoredBreakdown(po: string): BudgetBreakdownItem[] | null {
     return parsed as BudgetBreakdownItem[];
   } catch {
     return null;
+  }
+}
+
+export function stripVariationPriceList(value: unknown): string {
+  return String(value || '').replace(/\n*\s*Price List:\s*[\s\S]*$/i, '').trim();
+}
+
+export function parseVariationPriceList(value: unknown): VariationPriceListItem[] {
+  const section = extractVariationPriceListSection(value);
+  if (!section) return [];
+
+  return section
+    .split(/\n+/)
+    .map((line) => parseVariationPriceListLine(line))
+    .filter((line): line is VariationPriceListItem => Boolean(line?.item));
+}
+
+export function formatVariationPriceListItem(
+  item: VariationPriceListItem,
+  index: number,
+): string {
+  const qtyLabel = item.qty != null ? ` ${toDisplayNumber(item.qty)}${item.unit ? ` ${item.unit}` : ''}` : '';
+  const rateLabel = item.rate != null ? ` x ฿${toDisplayNumber(item.rate)}/unit` : '';
+  const computedAmount = item.amount != null
+    ? item.amount
+    : item.qty != null && item.rate != null
+    ? item.qty * item.rate
+    : null;
+  const amountLabel = computedAmount != null ? ` = ฿${toDisplayNumber(computedAmount)}` : '';
+  return `${index + 1}) ${item.item}${qtyLabel}${rateLabel}${amountLabel}`.trim();
+}
+
+export function formatVariationPriceListText(items: VariationPriceListItem[]): string {
+  return items.map((item, index) => formatVariationPriceListItem(item, index)).join('\n');
+}
+
+export function readStoredVariationPriceList(po: string): VariationPriceListItem[] {
+  if (typeof window === 'undefined' || !po) return [];
+  try {
+    const raw = localStorage.getItem(`cblue_variation_price_list_${po}`);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? (parsed as VariationPriceListItem[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function storeVariationPriceList(
+  po: string,
+  items: VariationPriceListItem[],
+): void {
+  if (typeof window === 'undefined' || !po) return;
+  try {
+    if (!items || items.length === 0) {
+      localStorage.removeItem(`cblue_variation_price_list_${po}`);
+      return;
+    }
+    localStorage.setItem(`cblue_variation_price_list_${po}`, JSON.stringify(items));
+  } catch {
+    // non-blocking
   }
 }
 

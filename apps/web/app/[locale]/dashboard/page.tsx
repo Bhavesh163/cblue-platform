@@ -7,7 +7,17 @@ import { useTranslations, useLocale } from "next-intl";
 import { refreshSubscriberSession } from "../../../lib/subscriberSession";
 import { useRouter } from "next/navigation";
 import PdpaConsent from "../components/PdpaConsent";
-import { computeBudgetBreakdown, resolvePartnerPriceList, readStoredBreakdown, type BudgetBreakdownItem } from "../../../lib/computeBudgetBreakdown";
+import {
+  computeBudgetBreakdown,
+  formatVariationPriceListItem,
+  parseVariationPriceList,
+  readStoredBreakdown,
+  readStoredVariationPriceList,
+  resolvePartnerPriceList,
+  storeVariationPriceList,
+  stripVariationPriceList,
+  type BudgetBreakdownItem,
+} from "../../../lib/computeBudgetBreakdown";
 
 interface SubscriberInfo {
   id: string;
@@ -3734,21 +3744,51 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 my-6">
               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                <h3 className="font-bold text-gray-800 mb-4 flex items-center justify-between">{locale === "th" ? "แชทที่เข้ามาล่าสุด" : locale === "zh" ? "最近收到的消息" : "Recent Incoming Chats"} <span className="text-xs text-sky-600 cursor-pointer" onClick={() => setActiveTab("chat")}>{locale === "th" ? "ดูทั้งหมด" : locale === "zh" ? "查看全部" : "View All"}</span></h3>
-                <div className="space-y-4">
-                      {overviewIncomingChats.length > 0 ? (
-                    <>
-                      {overviewIncomingChats.map((c: any) => (
-                        <div key={c.id} className="bg-white rounded-lg p-4 border border-gray-100 shadow-sm">
-                          <p className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-2"><span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">C</span> {c.name} <span className="text-xs text-gray-400 font-normal ml-auto">{c.incomingTime || ""}</span></p>
-                          <p className="text-sm text-gray-600">{c.incomingMsg}</p>
-                        </div>
-                      ))}
-                    </>
-                  ) : (
-                    <p className="text-sm text-gray-400 text-center py-4">{locale === "th" ? "ไม่มีแชทล่าสุด" : locale === "zh" ? "暂无最近聊天。" : "No recent incoming chats."}</p>
-                  )}
+                <div className="flex justify-between items-center mb-4">
+                  <div className="flex flex-col">
+                    <h2 className="text-xl font-bold text-gray-800">⏰ {locale === "th" ? "การนัดหมายที่จะมาถึง" : locale === "zh" ? "即将到来的会议" : "Upcoming Meetings"}</h2>
+                    <span className="text-gray-500 font-bold text-sm">{upcomingMeetings.length + propConfirmedMeetings.length}</span>
+                  </div>
+                  <button className="text-sm font-bold text-sky-600 hover:text-sky-700" onClick={() => setActiveTab("requests")}>{locale === "th" ? "ดูทั้งหมด" : locale === "zh" ? "查看全部" : "View All"}</button>
                 </div>
+                {(upcomingMeetings.length > 0 || propConfirmedMeetings.length > 0) ? (
+                  <div className="space-y-3 mt-4">
+                    {(() => {
+                      const propItems = propConfirmedMeetings.map((p: PropInquiry) => ({
+                        key: p.poNumber,
+                        ts: parseDateMs(`${p.meetingDate}T${p.meetingTime || '00:00'}`),
+                        node: (
+                          <div key={p.poNumber} className="bg-white rounded-xl shadow-sm border border-emerald-200 p-5">
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="text-gray-900 font-bold">🏠 {p.propertyTitle} ({getPropOrderLabel(p.poNumber)})</span>
+                              <span className="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-bold">{p.meetingDate}{p.meetingTime ? ` · ${p.meetingTime}` : ''}</span>
+                            </div>
+                            <p className="text-sm text-gray-600">{locale === "th" ? "สถานที่:" : "Venue:"} {p.meetingVenue || 'TBD'} | {locale === "th" ? "ผู้ลงประกาศ:" : "Lister:"} {firstNameOnly(p.listerName, 'Lister')}</p>
+                          </div>
+                        ),
+                      }));
+                      const fixerItems = upcomingMeetings.map((m: any) => ({
+                        key: m.id,
+                        ts: m.meetingDate ? parseDateMs(`${m.meetingDate}T${m.meetingTime || '00:00'}`) : parseDateMs(m.createdAt || m.date),
+                        node: (
+                          <div key={m.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="text-gray-900 font-bold">{m.title} ({m.po})</span>
+                              <span className="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-bold">{m.meetingDate || m.date}{m.meetingTime ? ` · ${m.meetingTime}` : ''}</span>
+                            </div>
+                            <p className="text-sm text-gray-600">{locale === "th" ? "สถานที่:" : locale === "zh" ? "地点:" : "Location:"} {m.venue || m.meetingVenue || m.subdistrict || 'TBD'} | {locale === "th" ? "ผู้ให้บริการ:" : locale === "zh" ? "服务提供商:" : "Provider:"} {m.customer}</p>
+                          </div>
+                        ),
+                      }));
+                      return [...propItems, ...fixerItems]
+                        .sort((a, b) => a.ts - b.ts)
+                        .slice(0, 3)
+                        .map(item => item.node);
+                    })()}
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mt-4 text-center text-sm text-gray-400">{locale === "th" ? "ไม่มีการนัดหมายที่จะมาถึง" : locale === "zh" ? "暂无会议" : "No upcoming meetings"}</div>
+                )}
               </div>
               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                 <h3 className="font-bold text-gray-800 mb-4 flex items-center justify-between">{locale === "th" ? "การแจ้งเตือนล่าสุด" : locale === "zh" ? "最近通知" : "Recent Alerts"} <span className="text-xs text-sky-600 cursor-pointer" onClick={() => setActiveTab("alerts")}>{locale === "th" ? "ดูทั้งหมด" : locale === "zh" ? "查看全部" : "View All"}</span></h3>
@@ -3765,7 +3805,28 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 </div>
               </div>
           </div>
-<div className="mb-6">
+
+          <div className="mb-6">
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+              <h3 className="font-bold text-gray-800 mb-4 flex items-center justify-between">{locale === "th" ? "แชทที่เข้ามาล่าสุด" : locale === "zh" ? "最近收到的消息" : "Recent Incoming Chats"} <span className="text-xs text-sky-600 cursor-pointer" onClick={() => setActiveTab("chat")}>{locale === "th" ? "ดูทั้งหมด" : locale === "zh" ? "查看全部" : "View All"}</span></h3>
+              <div className="space-y-4">
+                {overviewIncomingChats.length > 0 ? (
+                  <>
+                    {overviewIncomingChats.map((c: any) => (
+                      <div key={c.id} className="bg-white rounded-lg p-4 border border-gray-100 shadow-sm">
+                        <p className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-2"><span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">C</span> {c.name} <span className="text-xs text-gray-400 font-normal ml-auto">{c.incomingTime || ""}</span></p>
+                        <p className="text-sm text-gray-600">{c.incomingMsg}</p>
+                      </div>
+                    ))}
+                  </>
+                ) : (
+                  <p className="text-sm text-gray-400 text-center py-4">{locale === "th" ? "ไม่มีแชทล่าสุด" : locale === "zh" ? "暂无最近聊天。" : "No recent incoming chats."}</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="mb-6">
             <div className="flex justify-between items-center mb-4">
               <div className="flex flex-col">
                 <h2 className="text-xl font-bold text-gray-800">Incoming Requests</h2>
@@ -3775,57 +3836,6 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <div className="flex flex-col gap-3">
               {overviewRequestItems.map((m: any) => renderRequestCard(m))}
             </div>
-          </div>
-
-          
-          
-          <div>
-            <div className="flex justify-between items-center mb-4 mt-6">
-              <div className="flex flex-col">
-                <h2 className="text-xl font-bold text-gray-800">⏰ {locale === "th" ? "การนัดหมายที่จะมาถึง" : locale === "zh" ? "即将到来的会议" : "Upcoming Meetings"}</h2>
-                <span className="text-gray-500 font-bold text-sm">{upcomingMeetings.length + propConfirmedMeetings.length}</span>
-              </div>
-              <button className="text-sm font-bold text-sky-600 hover:text-sky-700" onClick={() => setActiveTab("requests")}>{locale === "th" ? "ดูทั้งหมด" : locale === "zh" ? "查看全部" : "View All"}</button>
-            </div>
-            {(upcomingMeetings.length > 0 || propConfirmedMeetings.length > 0) ? (
-              <div className="space-y-3 mt-4">
-                {(() => {
-                  // Merge prop + fixer meetings, sort by date asc, show oldest 3 not-yet-due
-                  const propItems = propConfirmedMeetings.map((p: PropInquiry) => ({
-                    key: p.poNumber,
-                    ts: parseDateMs(`${p.meetingDate}T${p.meetingTime || '00:00'}`),
-                    node: (
-                      <div key={p.poNumber} className="bg-white rounded-xl shadow-sm border border-emerald-200 p-5">
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="text-gray-900 font-bold">🏠 {p.propertyTitle} ({getPropOrderLabel(p.poNumber)})</span>
-                          <span className="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-bold">{p.meetingDate}{p.meetingTime ? ` · ${p.meetingTime}` : ''}</span>
-                        </div>
-                        <p className="text-sm text-gray-600">{locale === "th" ? "สถานที่:" : "Venue:"} {p.meetingVenue || 'TBD'} | {locale === "th" ? "ผู้ลงประกาศ:" : "Lister:"} {firstNameOnly(p.listerName, 'Lister')}</p>
-                      </div>
-                    ),
-                  }));
-                  const fixerItems = upcomingMeetings.map((m: any) => ({
-                    key: m.id,
-                    ts: m.meetingDate ? parseDateMs(`${m.meetingDate}T${m.meetingTime || '00:00'}`) : parseDateMs(m.createdAt || m.date),
-                    node: (
-                      <div key={m.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="text-gray-900 font-bold">{m.title} ({m.po})</span>
-                          <span className="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-bold">{m.meetingDate || m.date}{m.meetingTime ? ` · ${m.meetingTime}` : ''}</span>
-                        </div>
-                        <p className="text-sm text-gray-600">{locale === "th" ? "สถานที่:" : locale === "zh" ? "地点:" : "Location:"} {m.venue || m.meetingVenue || m.subdistrict || 'TBD'} | {locale === "th" ? "ผู้ให้บริการ:" : locale === "zh" ? "服务提供商:" : "Provider:"} {m.customer}</p>
-                      </div>
-                    ),
-                  }));
-                  return [...propItems, ...fixerItems]
-                    .sort((a, b) => a.ts - b.ts)
-                    .slice(0, 3)
-                    .map(item => item.node);
-                })()}
-              </div>
-            ) : (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mt-4 text-center text-sm text-gray-400">{locale === "th" ? "ไม่มีการนัดหมายที่จะมาถึง" : locale === "zh" ? "暂无会议" : "No upcoming meetings"}</div>
-            )}
           </div>
 
           <div>
@@ -4489,10 +4499,39 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 } catch { /* no breakdown stored */ }
                 return null;
               })()}
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Partner Request</label>
-                <p className="text-sm text-gray-700 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 whitespace-pre-wrap">{String(variationApproveModal.desc || '').replace(/^Partner variation request:\s*/i, '').trim() || variationApproveModal.desc}</p>
-              </div>
+              {(() => {
+                const requestText = String(variationApproveModal.desc || '');
+                const variationItems = (() => {
+                  const stored = readStoredVariationPriceList(variationApproveModal.po);
+                  if (stored.length > 0) return stored;
+                  const parsed = parseVariationPriceList(requestText);
+                  if (parsed.length > 0) {
+                    storeVariationPriceList(variationApproveModal.po, parsed);
+                  }
+                  return parsed;
+                })();
+                const partnerRequest = stripVariationPriceList(
+                  requestText.replace(/^Partner variation request:\s*/i, '').trim(),
+                ) || requestText;
+                return (
+                  <>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Partner Request</label>
+                      <p className="text-sm text-gray-700 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 whitespace-pre-wrap">{partnerRequest}</p>
+                    </div>
+                    {variationItems.length > 0 && (
+                      <div className="bg-purple-50 border border-purple-100 rounded-xl px-4 py-3">
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Price List</label>
+                        <div className="text-sm text-purple-900 space-y-1">
+                          {variationItems.map((item, index) => (
+                            <p key={`${item.item}-${index}`}>{formatVariationPriceListItem(item, index)}</p>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
               <div className="flex gap-3 pt-1">
                 <button
                   onClick={() => {
@@ -4592,6 +4631,20 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                         <span className="text-gray-700">Budget</span>
                         <span className="text-green-800">= ฿{bd.reduce((s, it) => s + (it?.total ?? 0), 0).toLocaleString()}</span>
                       </div>
+                    </div>
+                  </div>
+                );
+              })()}
+              {(() => {
+                const variationItems = readStoredVariationPriceList(completeApproveModal.po);
+                if (variationItems.length === 0) return null;
+                return (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                    <div className="text-xs font-semibold text-gray-500 mb-1.5">Variation Price List</div>
+                    <div className="text-sm text-amber-900 space-y-1">
+                      {variationItems.map((item, index) => (
+                        <p key={`${item.item}-${index}`}>{formatVariationPriceListItem(item, index)}</p>
+                      ))}
                     </div>
                   </div>
                 );

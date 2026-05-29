@@ -6,7 +6,16 @@ import Image from "next/image";
 import { useLocale } from "next-intl";
 import { useRouter } from "next/navigation";
 import PdpaConsent from "../components/PdpaConsent";
-import { computeBudgetBreakdown, BudgetBreakdownItem } from "../../../lib/computeBudgetBreakdown";
+import {
+  computeBudgetBreakdown,
+  formatVariationPriceListItem,
+  formatVariationPriceListText,
+  parseVariationPriceList,
+  readStoredVariationPriceList,
+  storeVariationPriceList,
+  type BudgetBreakdownItem,
+  type VariationPriceListItem,
+} from "../../../lib/computeBudgetBreakdown";
 import { refreshSubscriberSession } from "../../../lib/subscriberSession";
 
 interface PartnerInfo {
@@ -112,6 +121,8 @@ const parseMeetingInviteDetails = (value: string) => {
   };
 };
 const PLACEHOLDER_LOCATION_PATTERN = /^--\s*select/i;
+const RELATIVE_PUBLIC_ASSET_PATTERN = /^(?:\/|_next\/|api\/|images\/|uploads\/|storage\/)/i;
+const PATH_WITH_EXTENSION_PATTERN = /\/[^/?#]+\.[A-Za-z0-9]{2,8}(?:[?#].*)?$/;
 const normalizeImageUrl = (value: unknown) => {
   const raw = String(value || "").trim();
   if (!raw) return "";
@@ -152,9 +163,10 @@ const normalizeImageUrl = (value: unknown) => {
     return `data:image/jpeg;base64,${compactBase64}`;
   }
 
-  // Allow path-like keys (for example, `property/upload/image-1`) so they can
-  // still be resolved and downloaded when absolute URLs are unavailable.
-  if (/^[A-Za-z0-9][A-Za-z0-9._~!$&'()*+,;=:@/-]*$/.test(raw)) {
+  if (
+    /^[A-Za-z0-9][A-Za-z0-9._~!$&'()*+,;=:@/-]*$/.test(raw) &&
+    (RELATIVE_PUBLIC_ASSET_PATTERN.test(raw) || PATH_WITH_EXTENSION_PATTERN.test(raw))
+  ) {
     return raw.startsWith("/") ? raw : `/${raw}`;
   }
 
@@ -193,7 +205,6 @@ const extractImageUrlCandidate = (image: any, depth = 0): string => {
 
   const direct =
     image.url ||
-    image.key ||
     image.imageUrl ||
     image.publicUrl ||
     image.src ||
@@ -261,7 +272,6 @@ const collectAttachmentUrls = (value: unknown, depth = 0): string[] => {
   const candidates = [
     extractImageUrlCandidate(image),
     image.url,
-    image.key,
     image.imageUrl,
     image.publicUrl,
     image.src,
@@ -597,6 +607,107 @@ const downloadAttachmentUrls = async ({
   }
 
   return downloadCount > 0;
+};
+const getAttachmentKind = (url: string) => {
+  const raw = String(url || "").toLowerCase();
+  if (!raw) return "file";
+  if (raw.startsWith("data:image/")) return "image";
+  if (raw.startsWith("data:application/pdf")) return "pdf";
+  if (/\.(jpg|jpeg|png|gif|webp|bmp|svg|heic|heif)(\?|#|$)/i.test(raw)) return "image";
+  if (/\.(pdf)(\?|#|$)/i.test(raw)) return "pdf";
+  return "file";
+};
+const openBlobInNewTab = (blob: Blob) => {
+  const blobUrl = URL.createObjectURL(blob);
+  openUrlInNewTab(blobUrl);
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+};
+const viewSingleAttachmentUrl = async (
+  rawUrl: string,
+  index: number,
+  prefix = "attachment",
+) => {
+  const url = normalizeImageUrl(rawUrl);
+  if (!url) return false;
+
+  if (url.startsWith("blob:")) {
+    openUrlInNewTab(url);
+    return true;
+  }
+
+  if (url.startsWith("data:")) {
+    const decodedBlob = decodeDataUrlToBlob(url);
+    if (decodedBlob) {
+      openBlobInNewTab(decodedBlob);
+      return true;
+    }
+    openUrlInNewTab(url);
+    return true;
+  }
+
+  if ((url.startsWith("http://") || url.startsWith("https://")) && !shouldAttachAuthHeader(url)) {
+    openUrlInNewTab(url);
+    return true;
+  }
+
+  if (!shouldAttachAuthHeader(url)) {
+    try {
+      const absolute = new URL(
+        url,
+        typeof window !== "undefined" ? window.location.origin : "http://localhost",
+      ).toString();
+      openUrlInNewTab(absolute);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  try {
+    const headers: Record<string, string> = {};
+    const token = typeof window !== "undefined" ? localStorage.getItem("subscriber_token") || "" : "";
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+    const response = await fetch(url, {
+      headers,
+      credentials: "include",
+    });
+    if (!response.ok) return false;
+    const blob = await response.blob();
+    const ext = extensionFromMimeType(blob.type);
+    const namedBlob = blob.type ? blob : new Blob([blob], { type: `application/${ext}` });
+    openBlobInNewTab(namedBlob);
+    return true;
+  } catch {
+    return false;
+  }
+};
+type AttachmentViewerState = {
+  title: string;
+  po?: string;
+  prefix?: string;
+  urls: string[];
+} | null;
+const createAttachmentViewerState = ({
+  title,
+  po,
+  prefix = "attachment",
+  urls,
+}: {
+  title: string;
+  po?: string;
+  prefix?: string;
+  urls: unknown[];
+}): Exclude<AttachmentViewerState, null> | null => {
+  const resolvedUrls = Array.from(
+    new Set(
+      (urls || [])
+        .flatMap((value) => collectAttachmentUrls(value))
+        .filter(Boolean),
+    ),
+  );
+  return resolvedUrls.length > 0 ? { title, po, prefix, urls: resolvedUrls } : null;
 };
 const normalizeLocationText = (value: unknown) => {
   const text = String(value || "").trim();
@@ -977,6 +1088,32 @@ const getLocalChatHistory = (po: any) => {
     return [];
   }
 };
+const buildVariationPriceListRows = (
+  rows: { item: string; qty: string; unit: string; rate: string; amount: string }[],
+): VariationPriceListItem[] =>
+  rows
+    .filter((row) => row.item.trim())
+    .map((row) => {
+      const qty = Number.parseFloat(row.qty || '');
+      const rate = Number.parseFloat(row.rate.replace(/,/g, '') || '');
+      const amount = Number.parseFloat(row.amount.replace(/,/g, '') || '');
+      return {
+        item: row.item.trim(),
+        qty: Number.isFinite(qty) && qty > 0 ? qty : null,
+        unit: row.unit.trim(),
+        rate: Number.isFinite(rate) && rate > 0 ? rate : null,
+        amount: Number.isFinite(amount) && amount > 0 ? amount : null,
+      };
+    });
+const resolveVariationPriceListItems = (po?: string, description?: unknown) => {
+  const stored = po ? readStoredVariationPriceList(po) : [];
+  if (stored.length > 0) return stored;
+  const parsed = parseVariationPriceList(description);
+  if (po && parsed.length > 0) {
+    storeVariationPriceList(po, parsed);
+  }
+  return parsed;
+};
 
 function WorkflowModalMeta({
   step,
@@ -1011,6 +1148,94 @@ function WorkflowModalMeta({
       <div>
         <span className="text-gray-500">Project Details</span>
         <p className="mt-1 rounded-lg border border-gray-100 bg-white px-3 py-2 font-bold text-gray-800">{projectDetails || 'Project details from the draft PO.'}</p>
+      </div>
+    </div>
+  );
+}
+
+function AttachmentViewerModal({
+  viewer,
+  onClose,
+}: {
+  viewer: Exclude<AttachmentViewerState, null>;
+  onClose: () => void;
+}) {
+  const attachmentUrls = Array.from(new Set(viewer.urls));
+  return (
+    <div className="fixed inset-0 z-[120] flex items-start justify-center bg-gray-900/70 backdrop-blur-sm p-4 overflow-y-auto pt-20">
+      <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-bold text-gray-900">{viewer.title}</h3>
+            <p className="text-sm text-gray-500 mt-1">
+              {viewer.po ? `${viewer.po} · ` : ''}
+              {attachmentUrls.length} file{attachmentUrls.length === 1 ? '' : 's'} available
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={async () => {
+                await downloadAttachmentUrls({
+                  urls: attachmentUrls,
+                  po: viewer.po,
+                  prefix: viewer.prefix || 'attachment',
+                });
+              }}
+              className="px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-sm font-semibold transition"
+            >
+              Download All
+            </button>
+            <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">
+              &times;
+            </button>
+          </div>
+        </div>
+        <div className="px-6 py-5 space-y-3 max-h-[calc(100dvh-10rem)] overflow-y-auto">
+          {attachmentUrls.map((url, index) => {
+            const fallbackName = `${viewer.prefix || 'attachment'}-${index + 1}`;
+            const fileName = sanitizeFilename(inferFilenameFromUrl(url, fallbackName), fallbackName);
+            const kind = getAttachmentKind(url);
+            const badgeLabel = kind === 'image' ? 'Image' : kind === 'pdf' ? 'PDF' : 'File';
+            return (
+              <div key={`${fileName}-${index}`} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold uppercase tracking-wide text-gray-500">{badgeLabel}</span>
+                    <span className="text-xs text-gray-400">File {index + 1}</span>
+                  </div>
+                  <p className="text-sm font-semibold text-gray-900 truncate mt-1">{fileName}</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const opened = await viewSingleAttachmentUrl(url, index, viewer.prefix || 'attachment');
+                      if (!opened) {
+                        alert('Could not open this file right now.');
+                      }
+                    }}
+                    className="px-3 py-2 rounded-xl border border-sky-200 text-sky-700 hover:bg-sky-50 text-sm font-semibold transition"
+                  >
+                    View
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const downloaded = await downloadSingleAttachmentUrl(url, index, viewer.prefix || 'attachment');
+                      if (!downloaded) {
+                        alert('Could not download this file right now.');
+                      }
+                    }}
+                    className="px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-sm font-semibold transition"
+                  >
+                    Download
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -1088,6 +1313,7 @@ export default function FixerProPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [waitModalOrder, setWaitModalOrder] = useState<any>(null);
   const [waitModalAttachmentUrls, setWaitModalAttachmentUrls] = useState<string[]>([]);
+  const [attachmentViewer, setAttachmentViewer] = useState<AttachmentViewerState>(null);
   const [loadingAttachments, setLoadingAttachments] = useState(false);
   const [declineModalOpen, setDeclineModalOpen] = useState(false);
   const [declineComment, setDeclineComment] = useState('');
@@ -1366,6 +1592,94 @@ export default function FixerProPage() {
       isMounted = false;
     };
   }, [waitModalOrder]);
+
+  const openWaitModalAttachmentViewer = async () => {
+    const poKey = waitModalOrder?.po;
+    let freshUrls: string[] = waitModalAttachmentUrls;
+    try {
+      const raw = localStorage.getItem('cblue_po_attachments');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (poKey) {
+          const matched = Object.entries(parsed || {}).find(
+            ([cachedPo, value]) =>
+              normalizePoLookupValue(cachedPo) === normalizePoLookupValue(poKey) &&
+              Array.isArray(value) &&
+              value.length > 0,
+          );
+          if (matched && Array.isArray(matched[1])) {
+            freshUrls = matched[1] as string[];
+          }
+        }
+      }
+    } catch {}
+
+    if (freshUrls.length === 0) {
+      const token = localStorage.getItem('subscriber_token') || '';
+      const orderLookup = await fetchAttachmentUrlsByPoFromOrders({
+        po: poKey,
+        token,
+      });
+      if (orderLookup.urls.length > 0) {
+        freshUrls = Array.from(
+          new Set(
+            orderLookup.urls
+              .flatMap((entry) => collectAttachmentUrls(entry))
+              .filter(Boolean),
+          ),
+        );
+      }
+      const mappedOrderId = poKey
+        ? (mappedOrders as any[]).find(
+            (order: any) => normalizePoLookupValue(order?.po) === normalizePoLookupValue(poKey),
+          )?.id
+        : '';
+      const orderId = await resolveOrderIdByPo({
+        po: poKey,
+        fallbackOrderId:
+          waitModalOrder?.orderId ||
+          orderLookup.orderId ||
+          mappedOrderId ||
+          (isOrderUuid(waitModalOrder?.id) ? waitModalOrder?.id : ''),
+        token,
+      });
+
+      if (token && orderId) {
+        try {
+          const attachmentAttempt = await fetchWithSubscriberAuthRetry({
+            endpoint: `/api/v1/orders/${orderId}/attachments`,
+            token,
+          });
+          const res = attachmentAttempt.response;
+          if (res?.ok) {
+            const rows = await res.json();
+            freshUrls = Array.from(
+              new Set(
+                (Array.isArray(rows) ? rows : [])
+                  .flatMap((entry: any) => collectAttachmentUrls(entry))
+                  .filter(Boolean),
+              ),
+            );
+          }
+        } catch {
+          // non-blocking
+        }
+      }
+    }
+
+    const viewer = createAttachmentViewerState({
+      title: 'Uploaded Files',
+      po: poKey,
+      prefix: 'attachment',
+      urls: freshUrls,
+    });
+    if (!viewer) {
+      alert('No downloadable file found right now.');
+      return;
+    }
+    setWaitModalAttachmentUrls(viewer.urls);
+    setAttachmentViewer(viewer);
+  };
 
 
 
@@ -2678,6 +2992,12 @@ export default function FixerProPage() {
         const numeric = Number(raw);
         return Number.isFinite(numeric) ? numeric : 0;
       }
+      const ddmmyyyy = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:[ T](\d{2}):(\d{2}))?$/);
+      if (ddmmyyyy) {
+        const [, day, month, year, hour = '00', minute = '00'] = ddmmyyyy;
+        const parsed = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute)).getTime();
+        return Number.isNaN(parsed) ? 0 : parsed;
+      }
       const asDate = new Date(raw).getTime();
       return Number.isNaN(asDate) ? 0 : asDate;
     }
@@ -3153,21 +3473,101 @@ export default function FixerProPage() {
 
   const dynamicNotifications = mockDynReqs.map((r: any) => {
     const displayTime = typeof r.date === "string" && r.date.includes(":") ? r.date : (r.date ? fmtDateTime(r.date) : "");
-    if (r.type === "meeting_pending_partner") return { id: `dyn-${r.id}`, msg: "Confirm meeting at site", msgTh: "ยืนยันนัดหมายที่สถานที่", msgZh: "确认现场会议", unread: true, time: displayTime, dot: "bg-amber-500" };
-    if (r.type === "meeting_scheduled") return { id: `dyn-${r.id}`, msg: "Confirm meeting at site", msgTh: "ยืนยันนัดหมายที่สถานที่", msgZh: "确认现场会议", unread: true, time: displayTime, dot: "bg-teal-500" };
-    if (r.type === "variation_pending") return { id: `dyn-${r.id}`, msg: "Request for Approval of Variation", msgTh: "คำขออนุมัติการเปลี่ยนแปลง", msgZh: "申请变更审批", unread: true, time: displayTime, dot: "bg-purple-500" };
-    if (r.type === "complete_pending") return { id: `dyn-${r.id}`, msg: "Request for job complete", msgTh: "คำขอยืนยันงานเสร็จสิ้น", msgZh: "申请完工确认", unread: true, time: displayTime, dot: "bg-green-500" };
+    if (r.type === "meeting_pending_partner") return {
+      id: `dyn-${r.id}`,
+      msg: `${r.po}: Customer sent a site meeting invitation. Review the schedule and confirm it next.`,
+      msgTh: `${r.po}: ลูกค้าส่งคำเชิญนัดหมายหน้างานแล้ว กรุณาตรวจสอบเวลาและยืนยัน`,
+      msgZh: `${r.po}: 客户已发送现场会议邀请。请检查时间并确认。`,
+      unread: true,
+      time: displayTime,
+      dot: "bg-amber-500",
+    };
+    if (r.type === "meeting_scheduled") return {
+      id: `dyn-${r.id}`,
+      msg: `${r.po}: Site meeting confirmed${r.meetingDate ? ` for ${r.meetingDate}` : ''}${r.meetingTime ? ` ${r.meetingTime}` : ''}. Next: attend the meeting, then submit variation if scope changed.`,
+      msgTh: `${r.po}: ยืนยันนัดหมายแล้ว${r.meetingDate ? ` วันที่ ${r.meetingDate}` : ''}${r.meetingTime ? ` เวลา ${r.meetingTime}` : ''} ขั้นตอนถัดไปคือเข้าพบหน้างาน แล้วส่ง variation หากขอบเขตหรือราคามีการเปลี่ยนแปลง`,
+      msgZh: `${r.po}: 现场会议已确认${r.meetingDate ? `，日期 ${r.meetingDate}` : ''}${r.meetingTime ? ` 时间 ${r.meetingTime}` : ''}。下一步：参加会议，如范围或价格变更则提交变更申请。`,
+      unread: true,
+      time: displayTime,
+      dot: "bg-teal-500",
+    };
+    if (r.type === "variation_pending") return {
+      id: `dyn-${r.id}`,
+      msg: `${r.po}: Variation request sent to customer. Wait for approval before sending job complete.`,
+      msgTh: `${r.po}: ส่งคำขอ variation ให้ลูกค้าแล้ว กรุณารออนุมัติก่อนส่งงานเสร็จ`,
+      msgZh: `${r.po}: 已向客户发送变更申请。请等待批准后再提交完工。`,
+      unread: true,
+      time: displayTime,
+      dot: "bg-purple-500",
+    };
+    if (r.type === "complete_pending") return {
+      id: `dyn-${r.id}`,
+      msg: `${r.po}: Job-complete request sent. Wait for customer confirmation to open rating.`,
+      msgTh: `${r.po}: ส่งคำของานเสร็จแล้ว กรุณารอลูกค้ายืนยันเพื่อเปิดขั้นตอนให้คะแนน`,
+      msgZh: `${r.po}: 已发送完工申请。请等待客户确认后开启评分步骤。`,
+      unread: true,
+      time: displayTime,
+      dot: "bg-green-500",
+    };
     return null;
   }).filter(Boolean) as any[];
 
   const partnerWorkflowNotifications = partnerDynReqs.map((r: any) => {
     const displayTime = typeof r.date === "string" && r.date.includes(":") ? r.date : (r.date ? fmtDateTime(r.date) : "");
-    if (r.workflowType === "meeting_confirm_partner" || r.type === "meeting_confirm_partner") return { id: `p-${r.id}`, msg: "Confirm meeting at site", msgTh: "ยืนยันนัดหมายที่สถานที่", msgZh: "确认现场会议", unread: true, time: displayTime, dot: "bg-amber-500" };
-    if (r.type === "variation_partner") return { id: `p-${r.id}`, msg: "Request for Approval of Variation", msgTh: "คำขออนุมัติการเปลี่ยนแปลง", msgZh: "申请变更审批", unread: true, time: displayTime, dot: "bg-purple-500" };
-    if (r.type === "complete_partner") return { id: `p-${r.id}`, msg: "Request for job complete", msgTh: "คำขอยืนยันงานเสร็จสิ้น", msgZh: "申请完工确认", unread: true, time: displayTime, dot: "bg-green-500" };
-    if (r.type === "rate_partner") return { id: `p-${r.id}`, msg: "Rate customer to close job", msgTh: "ให้คะแนนลูกค้าเพื่อปิดงาน", msgZh: "评价客户以关闭工作", unread: true, time: displayTime, dot: "bg-sky-500" };
-    if (r.type === "pending_accept") return { id: `p-${r.id}-${r.notifyAt || r.createdAt || '0'}`, msg: `New job request: ${r.service || "Project"} — please review and accept`, msgTh: `คำของานใหม่: ${r.service || "โครงการ"} — กรุณาตรวจสอบและรับงาน`, msgZh: `新工作请求: ${r.service || "项目"} — 请审核并接受`, unread: true, time: displayTime, dot: "bg-amber-500" };
-    if (r.type === "accept_sent") return { id: `p-${r.id}`, msg: `PO accepted for ${r.service || "Project"} — awaiting customer payment to proceed`, msgTh: `รับ PO สำหรับ ${r.service || "โครงการ"} แล้ว — รอการชำระเงินจากลูกค้า`, msgZh: `已接受 ${r.service || "项目"} 的PO — 等待客户付款`, unread: false, time: displayTime, dot: "bg-green-500" };
+    if (r.workflowType === "meeting_confirm_partner" || r.type === "meeting_confirm_partner") return {
+      id: `p-${r.id}`,
+      msg: `${r.po}: Customer proposed a site meeting${r.meetingDateLabel ? ` on ${r.meetingDateLabel}` : ''}${r.meetingTimeLabel ? ` at ${r.meetingTimeLabel}` : ''}${r.meetingVenue ? ` in ${r.meetingVenue}` : ''}. Confirm it to unlock Step 9.`,
+      msgTh: `${r.po}: ลูกค้าเสนอเวลานัดหมาย${r.meetingDateLabel ? ` วันที่ ${r.meetingDateLabel}` : ''}${r.meetingTimeLabel ? ` เวลา ${r.meetingTimeLabel}` : ''}${r.meetingVenue ? ` ที่ ${r.meetingVenue}` : ''} กรุณายืนยันเพื่อไปขั้นตอนที่ 9`,
+      msgZh: `${r.po}: 客户提议现场会议${r.meetingDateLabel ? `，日期 ${r.meetingDateLabel}` : ''}${r.meetingTimeLabel ? ` 时间 ${r.meetingTimeLabel}` : ''}${r.meetingVenue ? ` 地点 ${r.meetingVenue}` : ''}。请确认以进入第9步。`,
+      unread: true,
+      time: displayTime,
+      dot: "bg-amber-500",
+    };
+    if (r.type === "variation_partner") return {
+      id: `p-${r.id}`,
+      msg: `${r.po}: Site meeting is done. Submit the variation request now if scope or pricing changed.`,
+      msgTh: `${r.po}: นัดหมายหน้างานเสร็จแล้ว กรุณาส่ง variation หากขอบเขตหรือต้นทุนเปลี่ยน`,
+      msgZh: `${r.po}: 现场会议已完成。如范围或价格变更，请立即提交变更申请。`,
+      unread: true,
+      time: displayTime,
+      dot: "bg-purple-500",
+    };
+    if (r.type === "complete_partner") return {
+      id: `p-${r.id}`,
+      msg: `${r.po}: Customer approved the variation. Send the job-complete request next.`,
+      msgTh: `${r.po}: ลูกค้าอนุมัติ variation แล้ว กรุณาส่งคำของานเสร็จเป็นขั้นตอนถัดไป`,
+      msgZh: `${r.po}: 客户已批准变更。下一步请发送完工申请。`,
+      unread: true,
+      time: displayTime,
+      dot: "bg-green-500",
+    };
+    if (r.type === "rate_partner") return {
+      id: `p-${r.id}`,
+      msg: `${r.po}: Customer confirmed completion. Rate the customer to close this job and move it to history.`,
+      msgTh: `${r.po}: ลูกค้ายืนยันงานเสร็จแล้ว กรุณาให้คะแนนลูกค้าเพื่อปิดงานและย้ายไปประวัติ`,
+      msgZh: `${r.po}: 客户已确认完工。请评价客户以关闭此工作并移入历史。`,
+      unread: true,
+      time: displayTime,
+      dot: "bg-sky-500",
+    };
+    if (r.type === "pending_accept") return {
+      id: `p-${r.id}-${r.notifyAt || r.createdAt || '0'}`,
+      msg: `${r.po}: New ${r.service || "project"} request from ${r.customer || 'customer'}. Review the PO and accept or decline it.`,
+      msgTh: `${r.po}: มีคำของาน ${r.service || "โครงการ"} ใหม่จาก ${r.customer || 'ลูกค้า'} กรุณาตรวจสอบ PO แล้วรับหรือปฏิเสธ`,
+      msgZh: `${r.po}: 来自 ${r.customer || '客户'} 的新${r.service || "项目"}请求。请查看PO并接受或拒绝。`,
+      unread: true,
+      time: displayTime,
+      dot: "bg-amber-500",
+    };
+    if (r.type === "accept_sent") return {
+      id: `p-${r.id}`,
+      msg: `${r.po}: You accepted ${r.service || "the job"}. Waiting for customer payment to unlock chat and the next step.`,
+      msgTh: `${r.po}: คุณรับงาน ${r.service || "นี้"} แล้ว กำลังรอลูกค้าชำระเงินเพื่อเปิดแชทและขั้นตอนถัดไป`,
+      msgZh: `${r.po}: 您已接受 ${r.service || "该工作"}。正在等待客户付款以开启聊天和下一步。`,
+      unread: false,
+      time: displayTime,
+      dot: "bg-green-500",
+    };
     return null;
   }).filter(Boolean) as any[];
 
@@ -3257,9 +3657,9 @@ export default function FixerProPage() {
     orderAlertPos.add(po);
     const svc = o.service || "Project";
     const displayTime = o.date || "";
-    if (['CREATED','PENDING','MATCHING'].includes(o.status)) return [{ id: `order-pending-${po}`, msg: `Review PO Details for ${svc}`, msgTh: `ตรวจสอบรายละเอียด PO สำหรับ ${svc}`, msgZh: `查看${svc}的PO详情`, unread: true, time: displayTime, dot: "bg-purple-500" }];
-    if (o.status === 'MEETING_REQUESTED') return [{ id: `order-meeting-${po}`, msg: `Confirm meeting at site for ${svc}`, msgTh: `ยืนยันนัดหมายสถานที่สำหรับ ${svc}`, msgZh: `确认${svc}现场会议`, unread: true, time: displayTime, dot: "bg-amber-500" }];
-    if (o.status === 'IN_PROGRESS') return [{ id: `order-inprogress-${po}`, msg: `Chat room active for ${svc} — coordinate meeting`, msgTh: `ห้องแชทพร้อมสำหรับ ${svc} — นัดหมายกับลูกค้า`, msgZh: `${svc}聊天室已激活 — 协调会议`, unread: false, time: displayTime, dot: "bg-sky-400" }];
+    if (['CREATED','PENDING','MATCHING'].includes(o.status)) return [{ id: `order-pending-${po}`, msg: `${po}: New ${svc} request from ${o.customer || 'customer'}. Review the PO and accept or decline it.`, msgTh: `${po}: มีคำขอ ${svc} ใหม่จาก ${o.customer || 'ลูกค้า'} กรุณาตรวจสอบ PO และรับหรือปฏิเสธ`, msgZh: `${po}: 来自 ${o.customer || '客户'} 的新 ${svc} 请求。请查看PO并接受或拒绝。`, unread: true, time: displayTime, dot: "bg-purple-500" }];
+    if (o.status === 'MEETING_REQUESTED') return [{ id: `order-meeting-${po}`, msg: `${po}: Customer sent a site meeting invitation for ${svc}. Open the request and confirm the schedule.`, msgTh: `${po}: ลูกค้าส่งคำเชิญนัดหมายสำหรับ ${svc} แล้ว กรุณาเปิดคำขอและยืนยันเวลา`, msgZh: `${po}: 客户已为 ${svc} 发送现场会议邀请。请打开请求并确认时间。`, unread: true, time: displayTime, dot: "bg-amber-500" }];
+    if (o.status === 'IN_PROGRESS') return [{ id: `order-inprogress-${po}`, msg: `${po}: Chat room is active for ${svc}. Coordinate the meeting or next onsite action with the customer.`, msgTh: `${po}: ห้องแชทของ ${svc} พร้อมใช้งาน กรุณาประสานนัดหมายหรือขั้นตอนหน้างานครั้งต่อไปกับลูกค้า`, msgZh: `${po}: ${svc} 聊天室已开启。请与客户协调会议或下一步现场工作。`, unread: false, time: displayTime, dot: "bg-sky-400" }];
     return [];
   });
 
@@ -3576,100 +3976,13 @@ export default function FixerProPage() {
               )}
               <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">Project Details</span><span className="font-bold text-gray-800 bg-white p-2 rounded border border-gray-100">{waitModalProjectDetails}</span></div>
               {isMeetingConfirmation && waitModalMeetingDetails.meetingMessage && <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">Customer Invitation</span><span className="text-gray-800 bg-white p-2 rounded border border-gray-100">{waitModalMeetingDetails.meetingMessage}</span></div>}
-              <div className="flex justify-between"><span className="text-gray-500">Uploaded Files</span><span className="font-semibold text-sky-600 cursor-pointer hover:underline" onClick={async () => {
-                const poKey = waitModalOrder?.po;
-                let freshUrls: string[] = waitModalAttachmentUrls;
-                try {
-                  const raw = localStorage.getItem('cblue_po_attachments');
-                  if (raw) {
-                    const parsed = JSON.parse(raw);
-                    if (poKey) {
-                      const matched = Object.entries(parsed || {}).find(
-                        ([cachedPo, value]) =>
-                          normalizePoLookupValue(cachedPo) === normalizePoLookupValue(poKey) &&
-                          Array.isArray(value) &&
-                          value.length > 0,
-                      );
-                      if (matched && Array.isArray(matched[1])) {
-                        freshUrls = matched[1] as string[];
-                      }
-                    }
-                  }
-                } catch {}
-
-                if (freshUrls.length === 0) {
-                  const token = localStorage.getItem('subscriber_token') || '';
-                  const orderLookup = await fetchAttachmentUrlsByPoFromOrders({
-                    po: poKey,
-                    token,
-                  });
-                  if (orderLookup.urls.length > 0) {
-                    freshUrls = Array.from(
-                      new Set(
-                        orderLookup.urls
-                          .flatMap((entry) => collectAttachmentUrls(entry))
-                          .filter(Boolean),
-                      ),
-                    );
-                  }
-                  const mappedOrderId = poKey
-                    ? (mappedOrders as any[]).find(
-                        (order: any) =>
-                          normalizePoLookupValue(order?.po) === normalizePoLookupValue(poKey),
-                      )?.id
-                    : '';
-                  const orderId = await resolveOrderIdByPo({
-                    po: poKey,
-                    fallbackOrderId:
-                      waitModalOrder?.orderId ||
-                      orderLookup.orderId ||
-                      mappedOrderId ||
-                      (isOrderUuid(waitModalOrder?.id) ? waitModalOrder?.id : ''),
-                    token,
-                  });
-
-                  if (token && orderId) {
-                    try {
-                      const attachmentAttempt = await fetchWithSubscriberAuthRetry({
-                        endpoint: `/api/v1/orders/${orderId}/attachments`,
-                        token,
-                      });
-                      const res = attachmentAttempt.response;
-                      if (!res) {
-                        throw new Error('Attachment request failed');
-                      }
-                      if (res.ok) {
-                        const rows = await res.json();
-                        freshUrls = Array.from(
-                          new Set(
-                            (Array.isArray(rows) ? rows : [])
-                              .flatMap((entry: any) => collectAttachmentUrls(entry))
-                              .filter(Boolean),
-                          ),
-                        );
-                        if (freshUrls.length > 0) {
-                          setWaitModalAttachmentUrls(freshUrls);
-                        }
-                      }
-                    } catch {
-                      // non-blocking
-                    }
-                  }
+              <div className="flex justify-between items-center"><span className="text-gray-500">Uploaded Files</span><button type="button" className={`font-semibold ${waitModalAttachmentUrls.length > 0 ? 'text-sky-600 hover:underline' : 'text-gray-400 cursor-default'}`} onClick={() => {
+                if (waitModalAttachmentUrls.length === 0 && !loadingAttachments) {
+                  alert('No downloadable file found right now.');
+                  return;
                 }
-
-                const downloaded = await downloadAttachmentUrls({ urls: freshUrls, po: poKey, prefix: 'attachment' });
-                if (!downloaded) {
-                  alert(
-                    freshUrls.length > 0
-                      ? "Files are attached but still syncing here. Please reopen this modal in a moment, or ask the customer to share them in the chat room if you need them urgently."
-                      : "No downloadable file found right now.",
-                  );
-                }
-              }}>
-                {waitModalAttachmentUrls.length > 0
-                  ? `${waitModalAttachmentUrls.length} file${waitModalAttachmentUrls.length > 1 ? 's' : ''} attached — Click to Download`
-                  : loadingAttachments ? 'Checking files…' : 'Files attached'}
-              </span></div>
+                void openWaitModalAttachmentViewer();
+              }}>{waitModalAttachmentUrls.length > 0 ? 'View & Download' : loadingAttachments ? 'Checking files…' : 'No files yet'}</button></div>
             </div>
 
             <div className="flex gap-4 mt-8">
@@ -3942,6 +4255,8 @@ export default function FixerProPage() {
           </div>
         </div>
       )}
+
+      {attachmentViewer && <AttachmentViewerModal viewer={attachmentViewer} onClose={() => setAttachmentViewer(null)} />}
       {/* Hero Header */}
       <div className="relative overflow-hidden">
         <Image src="/images/scenic-house.jpg" alt="" fill sizes="100vw" className="object-cover" priority />
@@ -4282,6 +4597,62 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
         </div>
       </div>
 
+      {/* Meetings, alerts, and chats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+          <h3 className="font-bold text-gray-900 mb-3 flex items-center justify-between">⏰ {locale === "th" ? "การนัดหมายที่จะมาถึง" : locale === "zh" ? "即将到来的会议" : "Upcoming Meetings"} <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("requests")}>{locale === "th" ? "ดูทั้งหมด" : locale === "zh" ? "查看全部" : "View All"}</span></h3>
+          {scheduledMeetings.length > 0 ? (
+            <div className="space-y-2">
+              {scheduledMeetings.slice(0, 2).map((meeting: any) => (
+                <div key={meeting.id} className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
+                  <p className="text-sm font-bold text-gray-800">{meeting.title} ({meeting.po})</p>
+                  <p className="text-xs text-gray-500 mt-1">{meeting.meetingDate || meeting.date}{meeting.meetingTime ? ` · ${meeting.meetingTime}` : ''}</p>
+                  <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "สถานที่:" : locale === "zh" ? "地点:" : "Location:"} {meeting.meetingVenue || meeting.venue || meeting.subdistrict || '-'} | {locale === "th" ? "ลูกค้า:" : locale === "zh" ? "客户:" : "Customer:"} {meeting.customer}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-gray-500 text-sm italic">
+              {locale === "th" ? "ไม่มีการนัดหมายที่จะมาถึง" : locale === "zh" ? "暂无会议" : "No upcoming meetings"}
+            </div>
+          )}
+        </div>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+          <h3 className="font-bold text-gray-900 mb-3 flex items-center justify-between">{locale === "th" ? "การแจ้งเตือนล่าสุด" : locale === "zh" ? "最近通知" : "Recent Alerts"} <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("notifications")}>View All</span></h3>
+          <div className="space-y-2">
+            {notifications.slice(0, 3).map((n) => (
+              <div key={n.id} className={`flex items-center gap-3 p-3 rounded-lg ${n.unread ? "bg-purple-50 border border-purple-100" : "bg-gray-50"}`}>
+                <span className={`w-2 h-2 rounded-full ${n.dot} flex-shrink-0`} />
+                <p className="text-sm text-gray-700 flex-1">{locale === "th" ? n.msgTh : locale === "zh" ? n.msgZh : n.msg}</p>
+                <span className="text-xs text-gray-400 whitespace-nowrap">{n.time}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+        <h3 className="font-bold text-gray-900 mb-3 flex items-center justify-between">{locale === "th" ? "แชทที่เข้ามาล่าสุด" : locale === "zh" ? "最近收到的来信" : "Recent incoming chats"} <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("chat")}>View All</span></h3>
+        <div className="space-y-2">
+          {recentIncomingChats.length > 0 ? recentIncomingChats.map((c: any) => (
+            <div key={c.id} className={`flex items-center gap-3 p-3 rounded-lg ${c.unread > 0 ? "bg-purple-50 border border-purple-100" : "bg-gray-50"}`}>
+              <div className="relative">
+                <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600">{String(c.name || "C").slice(-3)}</div>
+                {c.online && <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-400 rounded-full border-2 border-white" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-gray-800">{c.name}{c.service && c.service !== c.po && c.service !== c.name && !String(c.name || '').includes(String(c.service || '')) ? <span className="text-gray-400 font-normal"> · {c.service}</span> : null}</p>
+                <p className="text-xs text-gray-500 truncate">{c.incomingMsg}</p>
+              </div>
+              <div className="text-right">
+                <span className="text-xs text-gray-400">{c.incomingTime || ""}</span>
+                {c.unread > 0 && <span className="block mt-0.5 ml-auto w-5 h-5 bg-purple-600 text-white text-[10px] rounded-full flex items-center justify-center font-bold">{c.unread}</span>}
+              </div>
+            </div>
+          )) : <p className="text-sm text-gray-500 py-4 text-center">{locale === "th" ? "ไม่มีแชทล่าสุด" : locale === "zh" ? "没有最近的聊天" : "No recent incoming chats"}</p>}
+        </div>
+      </div>
+
       {/* Incoming Requests Preview */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
@@ -4315,61 +4686,6 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
               </div>
             </div>
           ))}
-        </div>
-      </div>
-
-      {/* Notifications + Chat side by side */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-          <h3 className="font-bold text-gray-900 mb-3 flex items-center justify-between">⏰ {locale === "th" ? "การนัดหมายที่จะมาถึง" : locale === "zh" ? "即将到来的会议" : "Upcoming Meetings"} <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("requests")}>{locale === "th" ? "ดูทั้งหมด" : locale === "zh" ? "查看全部" : "View All"}</span></h3>
-          {scheduledMeetings.length > 0 ? (
-            <div className="space-y-2">
-              {scheduledMeetings.slice(0, 3).map((meeting: any) => (
-                <div key={meeting.id} className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
-                  <p className="text-sm font-bold text-gray-800">{meeting.title} ({meeting.po})</p>
-                  <p className="text-xs text-gray-500 mt-1">{meeting.meetingDate || meeting.date}{meeting.meetingTime ? ` · ${meeting.meetingTime}` : ''}</p>
-                  <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "สถานที่:" : locale === "zh" ? "地点:" : "Location:"} {meeting.meetingVenue || meeting.venue || meeting.subdistrict || '-'} | {locale === "th" ? "ลูกค้า:" : locale === "zh" ? "客户:" : "Customer:"} {meeting.customer}</p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-gray-500 text-sm italic">
-              {locale === "th" ? "ไม่มีการนัดหมายที่จะมาถึง" : locale === "zh" ? "暂无会议" : "No upcoming meetings"}
-            </div>
-          )}
-        </div>
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-          <h3 className="font-bold text-gray-900 mb-3 flex items-center justify-between">{locale === "th" ? "การแจ้งเตือนล่าสุด" : locale === "zh" ? "最近通知" : "Recent Alerts"} <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("notifications")}>View All</span></h3>
-          <div className="space-y-2">
-            {notifications.slice(0, 3).map((n) => (
-              <div key={n.id} className={`flex items-center gap-3 p-3 rounded-lg ${n.unread ? "bg-purple-50 border border-purple-100" : "bg-gray-50"}`}>
-                <span className={`w-2 h-2 rounded-full ${n.dot} flex-shrink-0`} />
-                <p className="text-sm text-gray-700 flex-1">{locale === "th" ? n.msgTh : locale === "zh" ? n.msgZh : n.msg}</p>
-                <span className="text-xs text-gray-400 whitespace-nowrap">{n.time}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-          <h3 className="font-bold text-gray-900 mb-3 flex items-center justify-between">{locale === "th" ? "แชทที่เข้ามาล่าสุด" : locale === "zh" ? "最近收到的来信" : "Recent incoming chats"} <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("chat")}>View All</span></h3>
-          <div className="space-y-2">
-            {recentIncomingChats.length > 0 ? recentIncomingChats.map((c: any) => (
-              <div key={c.id} className={`flex items-center gap-3 p-3 rounded-lg ${c.unread > 0 ? "bg-purple-50 border border-purple-100" : "bg-gray-50"}`}>
-                <div className="relative">
-                  <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600">{String(c.name || "C").slice(-3)}</div>
-                  {c.online && <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-400 rounded-full border-2 border-white" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-800">{c.name}{c.service && c.service !== c.po && c.service !== c.name && !String(c.name || '').includes(String(c.service || '')) ? <span className="text-gray-400 font-normal"> · {c.service}</span> : null}</p>
-                  <p className="text-xs text-gray-500 truncate">{c.incomingMsg}</p>
-                </div>
-                <div className="text-right">
-                  <span className="text-xs text-gray-400">{c.incomingTime || ""}</span>
-                  {c.unread > 0 && <span className="block mt-0.5 ml-auto w-5 h-5 bg-purple-600 text-white text-[10px] rounded-full flex items-center justify-center font-bold">{c.unread}</span>}
-                </div>
-              </div>
-            )) : <p className="text-sm text-gray-500 py-4 text-center">{locale === "th" ? "ไม่มีแชทล่าสุด" : locale === "zh" ? "没有最近的聊天" : "No recent incoming chats"}</p>}
-          </div>
         </div>
       </div>
 
@@ -4471,6 +4787,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
   const [variationDesc, setVariationDesc] = React.useState("");
   const [variationRows, setVariationRows] = React.useState<{item:string;qty:string;unit:string;rate:string;amount:string}[]>(EMPTY_VAR_ROWS());
   const [variationAttachUrls, setVariationAttachUrls] = React.useState<string[]>([]);
+  const [attachmentViewer, setAttachmentViewer] = React.useState<AttachmentViewerState>(null);
   React.useEffect(() => {
     let isMounted = true;
     if (!variationModal) { setVariationAttachUrls([]); return; }
@@ -4737,22 +5054,21 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
             {/* Uploaded Files — lets partner reference customer photos when writing variation */}
             <div className="flex justify-between items-center rounded-lg border border-amber-100 bg-amber-50 px-4 py-2.5 text-xs">
               <span className="text-amber-800 font-semibold">Uploaded Files</span>
-              <span className={`cursor-pointer font-semibold ${variationAttachUrls.length > 0 ? 'text-sky-600 hover:underline' : 'text-gray-400'}`} onClick={async () => {
-                if (variationAttachUrls.length === 0) {
+              <button type="button" className={`font-semibold ${variationAttachUrls.length > 0 ? 'text-sky-600 hover:underline' : 'text-gray-400'}`} onClick={() => {
+                const viewer = createAttachmentViewerState({
+                  title: 'Uploaded Files',
+                  po: variationModal.po,
+                  prefix: 'attachment',
+                  urls: variationAttachUrls,
+                });
+                if (!viewer) {
                   alert('No downloadable file found right now.');
                   return;
                 }
-                const downloaded = await downloadAttachmentUrls({
-                  urls: variationAttachUrls,
-                  po: variationModal.po,
-                  prefix: 'attachment',
-                });
-                if (!downloaded) {
-                  alert('Could not download file. Please ask the customer to share via the chat room.');
-                }
+                setAttachmentViewer(viewer);
               }}>
-                {variationAttachUrls.length > 0 ? `${variationAttachUrls.length} file${variationAttachUrls.length > 1 ? 's' : ''} attached — Click to Download` : 'Files attached'}
-              </span>
+                {variationAttachUrls.length > 0 ? 'View & Download' : 'No files yet'}
+              </button>
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Original Budget</label>
@@ -4839,8 +5155,11 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
               <button
                 onClick={() => {
                   if (!variationDesc.trim()) return;
-                  const tableRows = variationRows.filter(r => r.item.trim());
-                  const tableText = tableRows.length > 0 ? '\n\nPrice List:\n' + tableRows.map(r => { const q = parseFloat(r.qty)||0; const rt = parseFloat(r.rate.replace(/,/g,''))||0; const amt = q > 0 && rt > 0 ? q*rt : parseFloat(r.amount.replace(/,/g,''))||0; return `- ${r.item}${r.qty ? ` | ${r.qty} ${r.unit}` : ''}${r.rate ? ` | ฿${rt.toLocaleString()}/unit` : ''}${amt > 0 ? ` | ฿${amt.toLocaleString()}` : ''}`; }).join('\n') : '';
+                  const priceListRows = buildVariationPriceListRows(variationRows);
+                  if (variationModal?.po) {
+                    storeVariationPriceList(variationModal.po, priceListRows);
+                  }
+                  const tableText = priceListRows.length > 0 ? `\n\nPrice List:\n${formatVariationPriceListText(priceListRows)}` : '';
                   handlePartnerAction(variationModal, 'variation', `Partner variation request: ${variationDesc.trim()}${tableText}`);
                   setVariationRows(EMPTY_VAR_ROWS());
                   setVariationModal(null);
@@ -4952,6 +5271,40 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                 </div>
               );
             })()}
+            {(() => {
+              const variationItems = resolveVariationPriceListItems(
+                completeModal?.po,
+                completeModal?.description || completeModal?.desc || '',
+              );
+              if (variationItems.length === 0) return null;
+              return (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                  <span className="text-gray-500 text-xs block mb-1">Variation Price List</span>
+                  <div className="text-sm text-amber-900 space-y-1">
+                    {variationItems.map((item, index) => (
+                      <p key={`${item.item}-${index}`}>{formatVariationPriceListItem(item, index)}</p>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+            {(() => {
+              const variationItems = resolveVariationPriceListItems(
+                completeModal?.po,
+                completeModal?.description || completeModal?.desc || '',
+              );
+              if (variationItems.length === 0) return null;
+              return (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                  <span className="text-gray-500 text-xs block mb-1">Variation Price List</span>
+                  <div className="text-sm text-amber-900 space-y-1">
+                    {variationItems.map((item, index) => (
+                      <p key={`${item.item}-${index}`}>{formatVariationPriceListItem(item, index)}</p>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-2">Completion Note <span className="text-gray-400 font-normal">(optional)</span></label>
               <textarea
@@ -4976,6 +5329,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
         </div>
       </div>
     )}
+    {attachmentViewer && <AttachmentViewerModal viewer={attachmentViewer} onClose={() => setAttachmentViewer(null)} />}
     </>
   );
 }
@@ -4985,6 +5339,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
   const [variationDesc, setVariationDesc] = React.useState("");
   const [variationRows, setVariationRows] = React.useState<{item:string;qty:string;unit:string;rate:string;amount:string}[]>(EMPTY_VAR_ROWS());
   const [variationAttachUrls, setVariationAttachUrls] = React.useState<string[]>([]);
+  const [attachmentViewer, setAttachmentViewer] = React.useState<AttachmentViewerState>(null);
   React.useEffect(() => {
     if (!variationModal) { setVariationAttachUrls([]); return; }
     const po = variationModal.po;
@@ -5324,22 +5679,21 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
             {/* Uploaded Files — lets partner reference customer photos when writing variation */}
             <div className="flex justify-between items-center rounded-lg border border-amber-100 bg-amber-50 px-4 py-2.5 text-xs">
               <span className="text-amber-800 font-semibold">Uploaded Files</span>
-              <span className={`cursor-pointer font-semibold ${variationAttachUrls.length > 0 ? 'text-sky-600 hover:underline' : 'text-gray-400'}`} onClick={async () => {
-                if (variationAttachUrls.length === 0) {
+              <button type="button" className={`font-semibold ${variationAttachUrls.length > 0 ? 'text-sky-600 hover:underline' : 'text-gray-400'}`} onClick={() => {
+                const viewer = createAttachmentViewerState({
+                  title: 'Uploaded Files',
+                  po: variationModal.po,
+                  prefix: 'attachment',
+                  urls: variationAttachUrls,
+                });
+                if (!viewer) {
                   alert('No downloadable file found right now.');
                   return;
                 }
-                const downloaded = await downloadAttachmentUrls({
-                  urls: variationAttachUrls,
-                  po: variationModal.po,
-                  prefix: 'attachment',
-                });
-                if (!downloaded) {
-                  alert('Could not download file. Please ask the customer to share via the chat room.');
-                }
+                setAttachmentViewer(viewer);
               }}>
-                {variationAttachUrls.length > 0 ? `${variationAttachUrls.length} file${variationAttachUrls.length > 1 ? 's' : ''} attached — Click to Download` : 'Files attached'}
-              </span>
+                {variationAttachUrls.length > 0 ? 'View & Download' : 'No files yet'}
+              </button>
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Original Budget</label>
@@ -5417,7 +5771,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
               <textarea className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none" rows={3} placeholder="Describe the variation scope, extra work, or cost changes..." value={variationDesc} onChange={e => setVariationDesc(e.target.value)} />
             </div>
             <div className="flex gap-3 pt-1">
-              <button onClick={() => { if (!variationDesc.trim()) return; const tableRows = variationRows.filter(r => r.item.trim()); const tableText = tableRows.length > 0 ? '\n\nPrice List:\n' + tableRows.map(r => { const q = parseFloat(r.qty)||0; const rt = parseFloat(r.rate.replace(/,/g,''))||0; const amt = q > 0 && rt > 0 ? q*rt : parseFloat(r.amount.replace(/,/g,''))||0; return `- ${r.item}${r.qty ? ` | ${r.qty} ${r.unit}` : ''}${r.rate ? ` | ฿${rt.toLocaleString()}/unit` : ''}${amt > 0 ? ` | ฿${amt.toLocaleString()}` : ''}`; }).join('\n') : ''; handlePartnerAction(variationModal, 'variation', `Partner variation request: ${variationDesc.trim()}${tableText}`); setVariationRows(EMPTY_VAR_ROWS()); setVariationModal(null); }} disabled={!variationDesc.trim()} className="flex-1 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition text-sm">Submit Variation</button>
+              <button onClick={() => { if (!variationDesc.trim()) return; const priceListRows = buildVariationPriceListRows(variationRows); if (variationModal?.po) { storeVariationPriceList(variationModal.po, priceListRows); } const tableText = priceListRows.length > 0 ? `\n\nPrice List:\n${formatVariationPriceListText(priceListRows)}` : ''; handlePartnerAction(variationModal, 'variation', `Partner variation request: ${variationDesc.trim()}${tableText}`); setVariationRows(EMPTY_VAR_ROWS()); setVariationModal(null); }} disabled={!variationDesc.trim()} className="flex-1 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition text-sm">Submit Variation</button>
               <button onClick={() => { setVariationRows(EMPTY_VAR_ROWS()); setVariationModal(null); }} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">Cancel</button>
             </div>
           </div>
@@ -5527,6 +5881,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
         </div>
       </div>
     )}
+    {attachmentViewer && <AttachmentViewerModal viewer={attachmentViewer} onClose={() => setAttachmentViewer(null)} />}
     </>
   );
 }

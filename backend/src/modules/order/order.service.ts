@@ -245,20 +245,24 @@ export class OrderService {
   private async getOrderForParticipant(orderId: string, userId: string) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
-      include: {
-        fixer: {
-          select: {
-            id: true,
-            userId: true,
-          },
-        },
+      select: {
+        id: true,
+        userId: true,
+        fixerId: true,
       },
     });
 
     if (!order) throw new NotFoundException('Order not found');
 
+    const fixer = order.fixerId
+      ? await this.prisma.fixer.findUnique({
+          where: { id: order.fixerId },
+          select: { userId: true },
+        })
+      : null;
+
     const isCustomer = order.userId === userId;
-    const isFixer = order.fixer?.userId === userId;
+    const isFixer = fixer?.userId === userId;
     if (!isCustomer && !isFixer) {
       throw new ForbiddenException('You do not have access to this order');
     }
@@ -420,9 +424,21 @@ export class OrderService {
   ) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
-      include: { fixer: { select: { userId: true } } },
+      select: {
+        id: true,
+        userId: true,
+        fixerId: true,
+        status: true,
+      },
     });
     if (!order) throw new NotFoundException('Order not found');
+
+    const fixer = order.fixerId
+      ? await this.prisma.fixer.findUnique({
+          where: { id: order.fixerId },
+          select: { userId: true },
+        })
+      : null;
 
     // Role-based access: USER can only advance their own order for specific transitions
     if (callerRole === UserRole.USER) {
