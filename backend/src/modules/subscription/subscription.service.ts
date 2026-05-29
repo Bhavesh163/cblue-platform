@@ -332,6 +332,47 @@ export class SubscriptionService {
       }
     }
 
+    if (!subscriber && normalizedEmail) {
+      const legacyUser = await this.findUserByEmail(normalizedEmail);
+      if (legacyUser) {
+        try {
+          const tempPasswordHash = await bcrypt.hash(
+            crypto.randomBytes(24).toString('hex'),
+            this.SALT_ROUNDS,
+          );
+          const createdSubscriber = await this.prisma.subscriber.create({
+            data: {
+              email: normalizedEmail,
+              passwordHash: tempPasswordHash,
+              name:
+                String(legacyUser.name || '').trim() ||
+                normalizedEmail.split('@')[0] ||
+                'User',
+              phone: String(legacyUser.phone || '').trim(),
+              company: legacyUser.company || null,
+              status: 'ACTIVE',
+            },
+          });
+
+          await this.prisma.user.update({
+            where: { id: legacyUser.id },
+            data: { subscriberId: createdSubscriber.id },
+          });
+
+          subscriber = createdSubscriber;
+          this.logger.log(
+            `forgotPassword auto-created subscriber ${createdSubscriber.id} for legacy user ${legacyUser.id}`,
+          );
+        } catch (error) {
+          this.logger.warn(
+            `forgotPassword legacy bridge create failed for ${normalizedEmail}: ${error instanceof Error ? error.message : 'unknown error'}`,
+          );
+          // If another request created the subscriber first, recover it.
+          subscriber = await this.findSubscriberByEmail(normalizedEmail);
+        }
+      }
+    }
+
     if (!subscriber) {
       // Return success even if email not found (security best practice)
       if (normalizedEmail) {

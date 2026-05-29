@@ -33,6 +33,7 @@ export default () => ({
     apiKey:
       process.env.MAILJET_API_KEY ||
       process.env.MAILJET_KEY ||
+      process.env.MAILJET_APIKEY ||
       process.env.MAILJET_API_SUBACCOUNT_KEY ||
       process.env.MAILJET_API_KEY_PUBLIC ||
       process.env.MAILJET_APIKEY_PUBLIC ||
@@ -44,6 +45,7 @@ export default () => ({
     apiSecret:
       process.env.MAILJET_SECRET_KEY ||
       process.env.MAILJET_SECRET ||
+      process.env.MAILJET_SECRETKEY ||
       process.env.MAILJET_SECRET_SUBACCOUNT_KEY ||
       process.env.MAILJET_SUBACCOUNT_SECRET_KEY ||
       process.env.MAILJET_API_SECRET ||

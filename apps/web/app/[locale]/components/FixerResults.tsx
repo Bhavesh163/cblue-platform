@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { computeBudgetBreakdown, resolvePartnerPriceList } from "../../../lib/computeBudgetBreakdown";
+import { refreshSubscriberSession } from "../../../lib/subscriberSession";
 
 interface Fixer {
   id: string;
@@ -903,6 +904,37 @@ export default function FixerResults({
     let createdOrderId = "";
     let storedAttachments: string[] = [];
     let attachmentSyncFailed = false;
+    let token = localStorage.getItem("subscriber_token") || "";
+
+    const authedFetch = async (
+      input: RequestInfo | URL,
+      init: RequestInit,
+    ): Promise<Response | null> => {
+      if (!token) return null;
+
+      const send = async (bearerToken: string) => {
+        const headers = new Headers(init.headers || {});
+        headers.set("Authorization", `Bearer ${bearerToken}`);
+        return fetch(input, {
+          ...init,
+          headers,
+        });
+      };
+
+      try {
+        let response = await send(token);
+        if ([401, 403].includes(response.status)) {
+          const refreshed = await refreshSubscriberSession(token);
+          if (refreshed) {
+            token = refreshed;
+            response = await send(token);
+          }
+        }
+        return response;
+      } catch {
+        return null;
+      }
+    };
 
     // Store budget breakdown for customer's own modal (step 9 variation approve)
     try {
@@ -937,18 +969,16 @@ export default function FixerResults({
 
     // Attempt to persist the order to database
     try {
-      const token = localStorage.getItem("subscriber_token");
       if (token && selectedFixer) {
         // Extract plain number from string logic (e.g. ฿25,000,000 or similar)
         const estStr = String(selectedFixer.price || 0).replace(/[^0-9.]/g, '');
         const estPrice = parseFloat(estStr) || 0;
         const addressId = await ensureOrderAddressId(token);
 
-        const createRes = await fetch("/api/v1/orders", {
+        const createRes = await authedFetch("/api/v1/orders", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
           },
           body: JSON.stringify({
             ...(addressId ? { addressId } : {}),
@@ -960,7 +990,7 @@ export default function FixerResults({
           })
         });
 
-        if (createRes.ok) {
+        if (createRes?.ok) {
           try {
             const created = await createRes.json();
             createdOrderId = created?.id || "";
@@ -974,8 +1004,31 @@ export default function FixerResults({
           attachmentSyncFailed = true;
           console.error("Order creation failed before attachment sync", {
             poNumber,
-            status: createRes.status,
+            status: createRes?.status,
           });
+        }
+
+        if (!createdOrderId && poNumber && token) {
+          try {
+            const latestOrdersRes = await authedFetch("/api/v1/orders/my", {
+              method: "GET",
+              headers: {},
+            });
+            if (latestOrdersRes?.ok) {
+              const latestOrders = await latestOrdersRes.json();
+              const list = Array.isArray(latestOrders) ? latestOrders : [];
+              const found = list.find((row: any) =>
+                String(row?.description || "").toUpperCase().includes(String(poNumber || "").toUpperCase()),
+              );
+              const recoveredOrderId = String(found?.id || "").trim();
+              if (recoveredOrderId) {
+                createdOrderId = recoveredOrderId;
+                localStorage.setItem(`po_to_order_${poNumber}`, recoveredOrderId);
+              }
+            }
+          } catch {
+            // non-blocking
+          }
         }
 
         if (!createdOrderId && storedAttachments.length > 0) {
@@ -990,21 +1043,42 @@ export default function FixerResults({
             localStorage.setItem("cblue_order_attachments", JSON.stringify(byOrder));
 
             // Persist attachments to backend for cross-device visibility.
-            // Files are uploaded sequentially (not parallel) to avoid overwhelming the proxy.
+            // First attempt a single batch upload, then fallback to sequential single-file uploads.
+            let synced = false;
+            const batchPayload = {
+              attachments: storedAttachments.map((url, idx) => ({
+                url,
+                key: `order/${createdOrderId}/attachment-${idx + 1}`,
+              })),
+            };
+
+            const batchRes = await authedFetch(
+              `/api/v1/orders/${createdOrderId}/attachments/batch`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify(batchPayload),
+              },
+            );
+            if (batchRes?.ok) {
+              synced = true;
+            }
+
             const uploadAttachment = async (url: string, idx: number, attempt = 0): Promise<boolean> => {
               try {
-                const res = await fetch(`/api/v1/orders/${createdOrderId}/attachments`, {
+                const res = await authedFetch(`/api/v1/orders/${createdOrderId}/attachments`, {
                   method: "POST",
                   headers: {
                     "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
                   },
                   body: JSON.stringify({
                     url,
                     key: `order/${createdOrderId}/attachment-${idx + 1}`,
                   }),
                 });
-                if (res.ok) return true;
+                if (res?.ok) return true;
                 // Retry once after a short delay for transient failures
                 if (attempt < 2) {
                   await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
@@ -1019,19 +1093,22 @@ export default function FixerResults({
               return false;
             };
 
-            // Upload sequentially to avoid large concurrent body payloads on CF Workers
-            const uploadResults: boolean[] = [];
-            for (let idx = 0; idx < storedAttachments.length; idx++) {
-              const result = await uploadAttachment(storedAttachments[idx]!, idx);
-              uploadResults.push(result);
-            }
-            if (uploadResults.some((result) => !result)) {
-              attachmentSyncFailed = true;
-              console.error("One or more order attachments failed to persist to backend", {
-                orderId: createdOrderId,
-                poNumber,
-                failedCount: uploadResults.filter((result) => !result).length,
-              });
+            if (!synced) {
+              // Upload sequentially to avoid large concurrent body payloads on CF Workers
+              const uploadResults: boolean[] = [];
+              for (let idx = 0; idx < storedAttachments.length; idx++) {
+                const result = await uploadAttachment(storedAttachments[idx]!, idx);
+                uploadResults.push(result);
+              }
+              synced = uploadResults.every(Boolean);
+              if (!synced) {
+                attachmentSyncFailed = true;
+                console.error("One or more order attachments failed to persist to backend", {
+                  orderId: createdOrderId,
+                  poNumber,
+                  failedCount: uploadResults.filter((result) => !result).length,
+                });
+              }
             }
           } catch {
             attachmentSyncFailed = true;

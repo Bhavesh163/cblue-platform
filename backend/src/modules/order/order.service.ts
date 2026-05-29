@@ -11,6 +11,7 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { CreateOrderChatMessageDto } from './dto/create-order-chat-message.dto';
 import { UploadOrderAttachmentDto } from './dto/upload-order-attachment.dto';
+import { UploadOrderAttachmentsBatchDto } from './dto/upload-order-attachments-batch.dto';
 
 // Valid status transitions
 const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
@@ -305,6 +306,36 @@ export class OrderService {
         key: safeKey,
       },
     });
+  }
+
+  async uploadOrderAttachments(
+    orderId: string,
+    userId: string,
+    dto: UploadOrderAttachmentsBatchDto,
+  ) {
+    await this.getOrderForParticipant(orderId, userId);
+
+    const rows = Array.isArray(dto.attachments) ? dto.attachments : [];
+    if (rows.length === 0) {
+      return [];
+    }
+
+    return this.prisma.$transaction(
+      rows.map((row, index) => {
+        const safeKey =
+          row?.key?.trim() ||
+          `order/${orderId}/${Date.now()}-${index + 1}-${Math.random().toString(36).slice(2, 8)}`;
+
+        return this.prisma.image.create({
+          data: {
+            orderId,
+            type: 'order_attachment',
+            url: row.url,
+            key: safeKey,
+          },
+        });
+      }),
+    );
   }
 
   async updateStatus(
