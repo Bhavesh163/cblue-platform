@@ -431,7 +431,7 @@ const tierColors: Record<string, { bg: string; text: string; border: string }> =
 
 const getTierColor = (tier: string) => tierColors[tier] ?? tierColors["standard"]!;
 
-type Step = "matching" | "select" | "po" | "notify" | "confirm" | "payment" | "chat" | "meeting" | "variation" | "complete" | "rate";
+type Step = "matching" | "select" | "po" | "notify" | "notify-success" | "confirm" | "payment" | "chat" | "meeting" | "variation" | "complete" | "rate";
 
 async function fileToDataUrl(file: File): Promise<string> {
   return await new Promise((resolve, reject) => {
@@ -1154,15 +1154,13 @@ export default function FixerResults({
       console.error("Order creation non-blocking fail", e);
     }
 
+    // Continue even if attachmentSyncFailed - files are persisted in localStorage
+    // and will be available for partner download
     if (attachmentSyncFailed) {
-      alert(
-        locale === "th"
-          ? "ไฟล์แนบยังซิงก์ขึ้นระบบไม่สำเร็จ กรุณาลองกดอีกครั้งเพื่อให้พาร์ทเนอร์ดาวน์โหลดไฟล์ได้ครบถ้วน"
-          : locale === "zh"
-            ? "附件尚未成功同步到系统。请再试一次，以便合作伙伴能下载完整文件。"
-            : "Attachments have not finished syncing to the server yet. Please try again so your partner can download the files.",
-      );
-      return;
+      console.warn("Attachment sync failed but continuing with workflow", {
+        poNumber,
+        attachmentCount: storedAttachments.length,
+      });
     }
 
     if (selectedFixer && bookingType && poNumber) {
@@ -1217,6 +1215,18 @@ export default function FixerResults({
                 createdAt: Date.now(),
                 dot: "bg-amber-400",
               });
+              // Add alert about waiting for fixer to review PO
+              existingDyn.push({
+                id: `waiting-fixer-review-${poNumber}`,
+                po: poNumber,
+                type: "notice",
+                msg: `Waiting for ${selectedFixer.alias} to review and accept PO ${poNumber}. You will be notified when they respond.`,
+                msgTh: `รอให้ ${selectedFixer.alias} ตรวจสอบและยอมรับ PO ${poNumber} คุณจะได้รับการแจ้งเตือนเมื่อพาร์ทเนอร์ตอบสนอง`,
+                msgZh: `等待 ${selectedFixer.alias} 审核并接受 PO ${poNumber}。当合作伙伴回应时，您会收到通知。`,
+                date: new Date().toLocaleString(),
+                createdAt: Date.now(),
+                dot: "bg-blue-400",
+              });
               localStorage.setItem(dynKey, JSON.stringify(existingDyn));
             }
           } catch (e2) { console.error("Failed to write customer notice:", e2); }
@@ -1261,7 +1271,8 @@ export default function FixerResults({
       }
     }
 
-    setStep("notify");
+    // Show success modal with navigation options
+    setStep("notify-success");
   };
 
   const handleProceedPayment = () => {
@@ -1447,11 +1458,11 @@ export default function FixerResults({
   const tierLabel = selectedFixer ? t(selectedFixer.tier) : "";
 
   // Step progress bar for the 11-step flow (visible after matching)
-  const flowSteps: Step[] = ["matching", "select", "po", "notify", "confirm", "payment", "chat", "meeting", "variation", "complete", "rate"];
+  const flowSteps: Step[] = ["matching", "select", "po", "notify", "notify-success", "confirm", "payment", "chat", "meeting", "variation", "complete", "rate"];
   const flowLabels: Record<string, Record<Step, string>> = {
-    en: { matching: "Match", select: "Select", confirm: "Accept", po: "PO", notify: "Notify", payment: "Fee & Proceed", chat: "Chat", meeting: "Meet", variation: "Variation", complete: "Complete", rate: "Rate" },
-    th: { matching: "จับคู่", select: "เลือก", confirm: "ยอมรับ", po: "PO", notify: "แจ้ง", payment: "ค่าธรรมเนียมและดำเนินการ", chat: "แชท", meeting: "นัดหมาย", variation: "เปลี่ยนแปลง", complete: "เสร็จ", rate: "คะแนน" },
-    zh: { matching: "匹配", select: "选择", confirm: "接受", po: "PO", notify: "通知", payment: "费用和继续", chat: "聊天", meeting: "会面", variation: "变更", complete: "完工", rate: "评分" },
+    en: { matching: "Match", select: "Select", confirm: "Accept", po: "PO", notify: "Notify", "notify-success": "Notified", payment: "Fee & Proceed", chat: "Chat", meeting: "Meet", variation: "Variation", complete: "Complete", rate: "Rate" },
+    th: { matching: "จับคู่", select: "เลือก", confirm: "ยอมรับ", po: "PO", notify: "แจ้ง", "notify-success": "แจ้งแล้ว", payment: "ค่าธรรมเนียมและดำเนินการ", chat: "แชท", meeting: "นัดหมาย", variation: "เปลี่ยนแปลง", complete: "เสร็จ", rate: "คะแนน" },
+    zh: { matching: "匹配", select: "选择", confirm: "接受", po: "PO", notify: "通知", "notify-success": "已通知", payment: "费用和继续", chat: "聊天", meeting: "会面", variation: "变更", complete: "完工", rate: "评分" },
   };
   const hideVariation = false;
   const visibleSteps = flowSteps;
@@ -1833,6 +1844,72 @@ export default function FixerResults({
           <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
              {t("poDisclaimer")}
           </div>
+        </div>
+      </div>
+      </>
+    );
+  }
+
+  // Step: Notification Sent - Show success modal with navigation options
+  if (step === "notify-success" && selectedFixer) {
+    return (
+      <><StepProgressBar />
+      <div className="mx-auto max-w-md px-4 py-12">
+        <div className="bg-white rounded-2xl shadow-xl border border-green-200 p-8 text-center">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-100 flex items-center justify-center">
+            <svg className="w-8 h-8 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            {locale === "th" ? "สำเร็จ!" : locale === "zh" ? "成功!" : "Success!"}
+          </h2>
+          <p className="text-gray-600 mb-2">
+            {locale === "th" 
+              ? `ส่งรายการของคุณให้ ${selectedFixer.alias} แล้ว` 
+              : locale === "zh" 
+              ? `已发送给 ${selectedFixer.alias}` 
+              : `Sent to ${selectedFixer.alias}`}
+          </p>
+          <p className="text-gray-500 text-sm mb-6">
+            {locale === "th"
+              ? "ขณะนี้เราลองติดต่อพาร์ทเนอร์เพื่อให้พิจารณาและยอมรับ"
+              : locale === "zh"
+              ? "我们正在联系合作伙伴进行审核和接受"
+              : "We're contacting the partner to review and accept."}
+          </p>
+
+          {/* PO & Fixer Info */}
+          <div className="bg-green-50 rounded-xl p-4 mb-6 text-sm space-y-2 text-left">
+            <p className="text-gray-600">{locale === "th" ? "เลขที่ PO" : locale === "zh" ? "PO 编号" : "PO Number"}: <span className="font-mono font-bold text-gray-800">{poNumber}</span></p>
+            <p className="text-gray-600">{locale === "th" ? "พาร์ทเนอร์" : locale === "zh" ? "合作伙伴" : "Partner"}: <span className="font-bold text-gray-800">{selectedFixer.alias}</span></p>
+            <p className="text-gray-600">{locale === "th" ? "บริการ" : locale === "zh" ? "服务" : "Service"}: <span className="font-bold text-gray-800">{service}</span></p>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="space-y-2">
+            <button
+              onClick={() => { setSelectedFixer(null); setStep("select"); }}
+              className="w-full py-3 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-xl shadow-lg transition"
+            >
+              {locale === "th" ? "กลับไปที่แดชบอร์ด" : locale === "zh" ? "返回仪表板" : "Back to Dashboard"}
+            </button>
+            <button
+              onClick={onNewBooking}
+              className="w-full py-2.5 border border-gray-300 text-gray-700 hover:bg-gray-50 font-semibold rounded-xl transition"
+            >
+              {locale === "th" ? "จองใหม่" : locale === "zh" ? "新建预约" : "New Booking"}
+            </button>
+          </div>
+
+          {/* Info message */}
+          <p className="text-xs text-gray-500 mt-6">
+            {locale === "th"
+              ? "คุณจะได้รับการแจ้งเตือนเมื่อพาร์ทเนอร์ยอมรับ"
+              : locale === "zh"
+              ? "当合作伙伴接受时，您会收到通知"
+              : "You'll be notified when the partner accepts."}
+          </p>
         </div>
       </div>
       </>

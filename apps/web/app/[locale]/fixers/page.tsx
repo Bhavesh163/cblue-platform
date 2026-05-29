@@ -4198,6 +4198,7 @@ export default function FixerProPage() {
                   const backendOrderId = waitModalOrder.orderId
                     || (po ? localStorage.getItem(`po_to_order_${po}`) : '')
                     || (isOrderUuid(waitModalOrder.id) ? waitModalOrder.id : '');
+                  const declineReason = declineComment.trim() || 'Currently unavailable for this project';
 
                   // 1. Store decline comment for admin only (partner-side localStorage)
                   try {
@@ -4205,7 +4206,7 @@ export default function FixerProPage() {
                     logs.push({
                       po,
                       orderId: backendOrderId,
-                      comment: declineComment.trim() || '(no comment)',
+                      comment: declineReason,
                       partnerName: partner?.name || partner?.company || 'Partner',
                       declinedAt: new Date().toISOString(),
                     });
@@ -4220,13 +4221,13 @@ export default function FixerProPage() {
                         await fetch(`/api/v1/orders/${backendOrderId}/status`, {
                           method: 'PUT',
                           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                          body: JSON.stringify({ status: 'CANCELLED', note: 'The service provider is currently occupied with other projects and is unable to proceed with this job. Please re-book with another available professional.' }),
+                          body: JSON.stringify({ status: 'CANCELLED', note: `The selected service provider is unable to proceed with this project. Reason: ${declineReason}. Please select another professional.` }),
                         });
                       }
                     } catch {}
                   }
 
-                  // 3. Add alert to partner's own alerts
+                  // 3. Add alert to partner's own alerts with detailed message
                   try {
                     const partnerAlerts = JSON.parse(localStorage.getItem('partner_alerts') || '[]');
                     partnerAlerts.unshift({
@@ -4234,13 +4235,35 @@ export default function FixerProPage() {
                       type: 'decline_sent',
                       po,
                       title: 'Job Declined',
-                      message: `You have declined ${waitModalOrder.service || 'the job'} (${po}). The customer has been notified by the system.`,
+                      message: `You declined ${waitModalOrder.service || 'the project'} (${po}) · Budget: ${waitModalOrder.budget || 'N/A'}. Reason: ${declineReason}. Customer has been notified to select another professional.`,
+                      msgTh: `คุณปฏิเสธ ${waitModalOrder.service || 'โครงการ'} (${po}) · งบประมาณ: ${waitModalOrder.budget || 'ไม่ระบุ'}. เหตุผล: ${declineReason}. ลูกค้าได้รับแจ้งให้เลือกมืออาชีพอื่น`,
+                      msgZh: `您拒绝了 ${waitModalOrder.service || '项目'} (${po}) · 预算: ${waitModalOrder.budget || 'N/A'}. 原因: ${declineReason}. 客户已被通知选择其他专业人士。`,
                       timestamp: new Date().toISOString(),
+                      createdAt: Date.now(),
+                      dot: 'bg-red-500',
                     });
                     localStorage.setItem('partner_alerts', JSON.stringify(partnerAlerts));
                   } catch {}
 
-                  // 4. Close both modals; backend status change will filter job on next fetch
+                  // 4. Add alert to customer about partner declining (via customer's mock request system)
+                  try {
+                    const dynReqKey = 'ghis_mock_dyn_req';
+                    const existingDyn = JSON.parse(localStorage.getItem(dynReqKey) || '[]');
+                    existingDyn.push({
+                      id: `partner-declined-${po}-${Date.now()}`,
+                      po,
+                      type: 'notice',
+                      msg: `${partner?.name || 'The selected partner'} is unable to proceed with ${waitModalOrder.service || 'your project'} (${po}) due to unavailability. Please select another service provider from the matching list.`,
+                      msgTh: `${partner?.name || 'พาร์ทเนอร์ที่เลือก'} ไม่สามารถดำเนินการ ${waitModalOrder.service || 'โครงการของคุณ'} (${po}) เนื่องจากไม่ว่าง กรุณาเลือกผู้ให้บริการอื่นจากรายชื่อที่จับคู่`,
+                      msgZh: `${partner?.name || '选中的合作伙伴'} 无法继续您的 ${waitModalOrder.service || '项目'} (${po})，原因是无法安排时间。请从匹配列表中选择其他服务提供商。`,
+                      date: new Date().toLocaleString(),
+                      createdAt: Date.now(),
+                      dot: 'bg-red-400',
+                    });
+                    localStorage.setItem(dynReqKey, JSON.stringify(existingDyn));
+                  } catch {}
+
+                  // 5. Close both modals; backend status change will filter job on next fetch
                   setDeclineModalOpen(false);
                   setDeclineComment('');
                   setWaitModalOrder(null);
@@ -5289,19 +5312,12 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
               );
             })()}
             {(() => {
-              const variationItems = resolveVariationPriceListItems(
-                completeModal?.po,
-                completeModal?.description || completeModal?.desc || '',
-              );
-              if (variationItems.length === 0) return null;
+              const partnerNote = completeModal?.partnerRequest || completeModal?.partnerNote || completeModal?.variationRequest || '';
+              if (!partnerNote || partnerNote.trim() === '') return null;
               return (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-                  <span className="text-gray-500 text-xs block mb-1">Variation Price List</span>
-                  <div className="text-sm text-amber-900 space-y-1">
-                    {variationItems.map((item, index) => (
-                      <p key={`${item.item}-${index}`}>{formatVariationPriceListItem(item, index)}</p>
-                    ))}
-                  </div>
+                <div className="bg-purple-50 border border-purple-200 rounded-xl px-4 py-3">
+                  <span className="text-gray-500 text-xs block mb-1">Partner Note</span>
+                  <p className="text-sm text-purple-900">{partnerNote}</p>
                 </div>
               );
             })()}
