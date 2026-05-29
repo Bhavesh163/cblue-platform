@@ -351,8 +351,14 @@ export class SubscriptionService {
       data: { resetToken, resetTokenExpiry },
     });
 
-    const recipientEmail = this.normalizeEmail(subscriber.email);
-    if (!recipientEmail) {
+    const recipientCandidates = Array.from(
+      new Set(
+        [normalizedEmail, this.normalizeEmail(subscriber.email)].filter(
+          Boolean,
+        ),
+      ),
+    );
+    if (recipientCandidates.length === 0) {
       this.logger.error(
         `Password reset skipped because subscriber ${subscriber.id} has invalid email`,
       );
@@ -361,14 +367,18 @@ export class SubscriptionService {
     const recipientName = String(subscriber.name || '').trim() || 'User';
 
     // Send email via Mailjet (with API + SMTP fallback paths)
-    const sent = await this.sendResetEmail(
-      recipientEmail,
-      recipientName,
-      resetToken,
-    );
+    let sent = false;
+    for (const recipientEmail of recipientCandidates) {
+      sent = await this.sendResetEmail(
+        recipientEmail,
+        recipientName,
+        resetToken,
+      );
+      if (sent) break;
+    }
     if (!sent) {
       this.logger.error(
-        `Password reset email delivery failed for ${recipientEmail}`,
+        `Password reset email delivery failed for ${recipientCandidates.join(', ')}`,
       );
     }
 
@@ -775,6 +785,23 @@ export class SubscriptionService {
         return null;
       }
     };
+    const parseMailjetLegacyResponse = (raw: string): number => {
+      if (!raw) return 0;
+      try {
+        const parsed = JSON.parse(raw) as {
+          Sent?: unknown;
+          Messages?: unknown;
+        };
+        const sent = Number(parsed?.Sent ?? 0);
+        if (Number.isFinite(sent) && sent > 0) return sent;
+        if (Array.isArray(parsed?.Messages) && parsed.Messages.length > 0) {
+          return parsed.Messages.length;
+        }
+      } catch {
+        return 0;
+      }
+      return 0;
+    };
 
     let apiError: string | null = null;
     for (const fromEmail of fromCandidates) {
@@ -856,6 +883,75 @@ export class SubscriptionService {
           `Mailjet API send failed from ${fromEmail}: ${apiError}`,
         );
         break;
+      }
+    }
+
+    if (apiError) {
+      this.logger.warn(
+        `Mailjet v3.1 send path failed for ${normalizedRecipientEmail}; trying Mailjet v3 legacy send endpoint.`,
+      );
+    }
+
+    for (const fromEmail of fromCandidates) {
+      const legacyBody = {
+        FromEmail: fromEmail,
+        FromName: 'CBLUE',
+        Subject: subject,
+        'Text-part': textPart,
+        'Html-part': htmlPart,
+        Recipients: [
+          {
+            Email: normalizedRecipientEmail,
+            Name: recipientName,
+          },
+        ],
+      };
+
+      try {
+        const response = await fetch('https://api.mailjet.com/v3/send', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization:
+              'Basic ' +
+              Buffer.from(`${mailjetApiKey}:${mailjetApiSecret}`).toString(
+                'base64',
+              ),
+          },
+          body: JSON.stringify(legacyBody),
+        });
+
+        const rawResponse = await response.text();
+        const sentCount = parseMailjetLegacyResponse(rawResponse);
+
+        if (response.ok && sentCount > 0) {
+          this.logger.log(
+            `Password reset email sent to ${normalizedRecipientEmail} via Mailjet legacy API (${fromEmail})`,
+          );
+          this.logger.log(
+            `[BACKUP-LINK] /en/subscription/reset-password?token=${resetToken}`,
+          );
+          return true;
+        }
+
+        const legacyError = rawResponse || 'Unknown legacy Mailjet error';
+        this.logger.error(
+          `Mailjet legacy API error [${response.status}] from ${fromEmail}: ${legacyError}`,
+        );
+        if (isSenderConfigError(legacyError)) {
+          this.logger.warn(
+            `Mailjet legacy sender '${fromEmail}' appears inactive; trying fallback sender.`,
+          );
+          continue;
+        }
+      } catch (legacyError) {
+        const legacyErrorText =
+          legacyError instanceof Error
+            ? legacyError.message
+            : String(legacyError);
+        this.logger.error(
+          `Mailjet legacy API send failed from ${fromEmail}: ${legacyErrorText}`,
+        );
       }
     }
 

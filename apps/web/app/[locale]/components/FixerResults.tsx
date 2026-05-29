@@ -970,6 +970,16 @@ export default function FixerResults({
           } catch {
             createdOrderId = "";
           }
+        } else if (storedAttachments.length > 0) {
+          attachmentSyncFailed = true;
+          console.error("Order creation failed before attachment sync", {
+            poNumber,
+            status: createRes.status,
+          });
+        }
+
+        if (!createdOrderId && storedAttachments.length > 0) {
+          attachmentSyncFailed = true;
         }
 
         if (createdOrderId && storedAttachments.length > 0) {
@@ -1024,7 +1034,7 @@ export default function FixerResults({
               });
             }
           } catch {
-            // Non-blocking for demo flow
+            attachmentSyncFailed = true;
           }
         }
       }

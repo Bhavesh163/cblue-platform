@@ -48,6 +48,8 @@ export default () => ({
     fromEmail:
       process.env.MAILJET_FROM_EMAIL ||
       process.env.MAILJET_FROM_ADDRESS ||
+      process.env.MAILJET_FROM ||
+      process.env.MAIL_FROM_ADDRESS ||
       process.env.MAIL_FROM_EMAIL ||
       'noreply@lblue.tech',
   },

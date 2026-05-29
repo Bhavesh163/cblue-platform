@@ -150,9 +150,37 @@ const normalizeImageUrl = (value: unknown) => {
 
   return "";
 };
-const extractImageUrlCandidate = (image: any) => {
-  if (typeof image === "string") return image;
+const parseJsonLikeValue = (value: string) => {
+  const text = String(value || "").trim();
+  if (!text) return value;
+  if (!/^[\[{\"]/.test(text)) return value;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return value;
+  }
+};
+const extractImageUrlCandidate = (image: any, depth = 0): string => {
+  if (depth > 5) return "";
+
+  if (typeof image === "string") {
+    const parsed = parseJsonLikeValue(image);
+    if (parsed !== image) {
+      return extractImageUrlCandidate(parsed, depth + 1);
+    }
+    return image;
+  }
+
+  if (Array.isArray(image)) {
+    for (const entry of image) {
+      const candidate = extractImageUrlCandidate(entry, depth + 1);
+      if (candidate) return candidate;
+    }
+    return "";
+  }
+
   if (!image || typeof image !== "object") return "";
+
   const direct =
     image.url ||
     image.key ||
@@ -165,21 +193,32 @@ const extractImageUrlCandidate = (image: any) => {
     image.href ||
     image.location ||
     image.dataUrl ||
-    image.value;
-  if (direct) return direct;
-
-  if (image.file && typeof image.file === "object") {
-    return (
-      image.file.url ||
-      image.file.key ||
-      image.file.imageUrl ||
-      image.file.downloadUrl ||
-      ""
-    );
+    image.value ||
+    image.originalUrl ||
+    image.secureUrl ||
+    image.signedUrl ||
+    image.attachmentUrl ||
+    image.uri;
+  if (direct) {
+    return extractImageUrlCandidate(direct, depth + 1) || String(direct);
   }
 
-  if (image.attributes && typeof image.attributes === "object") {
-    return image.attributes.url || image.attributes.key || "";
+  const nestedCandidates = [
+    image.file,
+    image.attributes,
+    image.attachment,
+    image.asset,
+    image.payload,
+    image.data,
+    image.metadata,
+    image.meta,
+    image.result,
+    image.image,
+  ];
+  for (const nested of nestedCandidates) {
+    if (!nested) continue;
+    const candidate = extractImageUrlCandidate(nested, depth + 1);
+    if (candidate) return candidate;
   }
 
   return "";
@@ -520,6 +559,99 @@ const TIER_STYLE: Record<string, string> = {
 const stripWorkflowPrefix = (value: any) => String(value || '').replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?(LOC:[^|]+\|\s*)?/i, '').trim();
 const ORDER_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const isOrderUuid = (value: any) => ORDER_UUID_PATTERN.test(String(value || '').trim());
+const PO_TO_ORDER_KEY_PREFIX = 'po_to_order_';
+const ORDER_ID_BY_PO_CACHE: Record<string, string> = {};
+const normalizePoLookupValue = (value: any) =>
+  String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, '');
+const rememberPoOrderId = (po: any, orderId: any) => {
+  const poKey = normalizePoLookupValue(po);
+  const resolvedOrderId = String(orderId || '').trim();
+  if (!poKey || !isOrderUuid(resolvedOrderId)) return;
+  ORDER_ID_BY_PO_CACHE[poKey] = resolvedOrderId;
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`${PO_TO_ORDER_KEY_PREFIX}${po}`, resolvedOrderId);
+    }
+  } catch {
+    // non-blocking
+  }
+};
+const findOrderIdFromLocalPoMap = (po?: string) => {
+  if (typeof window === 'undefined') return '';
+  const poKey = normalizePoLookupValue(po);
+  if (!poKey) return '';
+
+  const direct = localStorage.getItem(`${PO_TO_ORDER_KEY_PREFIX}${po || ''}`) || '';
+  if (isOrderUuid(direct)) return direct;
+
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(PO_TO_ORDER_KEY_PREFIX)) continue;
+    const mappedPo = normalizePoLookupValue(key.slice(PO_TO_ORDER_KEY_PREFIX.length));
+    if (mappedPo !== poKey) continue;
+    const mappedOrderId = localStorage.getItem(key) || '';
+    if (isOrderUuid(mappedOrderId)) return mappedOrderId;
+  }
+
+  return '';
+};
+const resolveOrderIdByPo = async ({
+  po,
+  fallbackOrderId,
+  token,
+}: {
+  po?: string;
+  fallbackOrderId?: string;
+  token?: string;
+}) => {
+  const fallback = String(fallbackOrderId || '').trim();
+  if (isOrderUuid(fallback)) {
+    if (po) rememberPoOrderId(po, fallback);
+    return fallback;
+  }
+
+  const poKey = normalizePoLookupValue(po);
+  if (!poKey || typeof window === 'undefined') return '';
+
+  const cached = ORDER_ID_BY_PO_CACHE[poKey];
+  if (isOrderUuid(cached)) return cached;
+
+  const mappedLocal = findOrderIdFromLocalPoMap(po);
+  if (isOrderUuid(mappedLocal)) {
+    rememberPoOrderId(po, mappedLocal);
+    return mappedLocal;
+  }
+
+  const authToken = String(token || localStorage.getItem('subscriber_token') || '').trim();
+  if (!authToken) return '';
+
+  for (const endpoint of ['/api/v1/orders/fixer', '/api/v1/orders/my']) {
+    try {
+      const response = await fetch(endpoint, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (!response.ok) continue;
+      const rows = await response.json();
+      const list = Array.isArray(rows) ? rows : [];
+      const matched = list.find((order: any) => {
+        const extractedPo = extractPoCode(order);
+        return normalizePoLookupValue(extractedPo) === poKey;
+      });
+      const resolved = String(matched?.id || '').trim();
+      if (isOrderUuid(resolved)) {
+        rememberPoOrderId(po, resolved);
+        return resolved;
+      }
+    } catch {
+      // non-blocking
+    }
+  }
+
+  return '';
+};
 const firstNameOnly = (value: any, fallback = 'User') => {
   const cleaned = String(value || '').trim();
   return cleaned ? cleaned.split(/\s+/)[0] || fallback : fallback;
@@ -885,27 +1017,39 @@ export default function FixerProPage() {
         waitModalOrder?.issueImage,
         waitModalOrder?.image,
         waitModalOrder?.fileUrl,
+        waitModalOrder?.attachmentUrl,
+        waitModalOrder?.documentUrl,
+        ...(Array.isArray(waitModalOrder?.attachments) ? waitModalOrder.attachments : []),
+        ...(Array.isArray(waitModalOrder?.files) ? waitModalOrder.files : []),
         ...(Array.isArray(waitModalOrder?.projectImages) ? waitModalOrder.projectImages : []),
         ...(Array.isArray(waitModalOrder?.images) ? waitModalOrder.images : []),
+        ...(Array.isArray(waitModalOrder?.imageUrls) ? waitModalOrder.imageUrls : []),
         ...(Array.isArray(waitModalOrder?.metadata?.images) ? waitModalOrder.metadata.images : []),
+        ...(Array.isArray(waitModalOrder?.metadata?.attachments) ? waitModalOrder.metadata.attachments : []),
+        ...(Array.isArray(waitModalOrder?.metadata?.files) ? waitModalOrder.metadata.files : []),
         waitModalOrder?.metadata?.issueImageUrl,
         waitModalOrder?.metadata?.issueImage,
       ].filter(Boolean);
 
       const poFromDesc = extractPoCode(waitModalOrder);
       const poKey = waitModalOrder?.po || poFromDesc;
-      // Resolve the backend order UUID: orderId (set for new pending_accept items) → po_to_order map
-      // (customer browser only) → look up mappedOrders by PO code → UUID from waitModalOrder.id
-      const attachmentOrderId = waitModalOrder?.orderId
-        || (poKey ? localStorage.getItem(`po_to_order_${poKey}`) : '')
-        || (poKey ? (mappedOrders as any[]).find((o: any) => o.po === poKey)?.id : '')
-        || (isOrderUuid(waitModalOrder?.id) ? waitModalOrder?.id : '');
+      const attachmentOrderId = await resolveOrderIdByPo({
+        po: poKey,
+        fallbackOrderId:
+          waitModalOrder?.orderId ||
+          (isOrderUuid(waitModalOrder?.id) ? waitModalOrder?.id : ''),
+      });
 
       try {
         const poMap = JSON.parse(localStorage.getItem('cblue_po_attachments') || '{}');
         const orderMap = JSON.parse(localStorage.getItem('cblue_order_attachments') || '{}');
-        if (poKey && Array.isArray(poMap[poKey])) {
-          directUrls.push(...poMap[poKey]);
+        if (poKey) {
+          for (const [cachedPo, cachedUrls] of Object.entries(poMap || {})) {
+            if (normalizePoLookupValue(cachedPo) !== normalizePoLookupValue(poKey)) continue;
+            if (Array.isArray(cachedUrls)) {
+              directUrls.push(...cachedUrls);
+            }
+          }
         }
         if (attachmentOrderId && Array.isArray(orderMap[attachmentOrderId])) {
           directUrls.push(...orderMap[attachmentOrderId]);
@@ -1152,11 +1296,25 @@ export default function FixerProPage() {
   useEffect(() => {
     const TIER_FEES: Record<string, number> = { ECONOMY: 100, STANDARD: 400, UPPER: 600, LUXURY: 800, GRANDEUR: 1000 };
     function mapApiInquiry(api: any): PropInquiry {
-      const propertyImages = Array.isArray(api?.property?.images)
-        ? api.property.images
-            .map((image: any) => normalizeImageUrl(extractImageUrlCandidate(image)))
-            .filter(Boolean)
-        : [];
+      const rawImages: any[] = (() => {
+        if (Array.isArray(api?.property?.images)) return api.property.images;
+        if (typeof api?.property?.images === 'string') {
+          const parsed = parseJsonLikeValue(api.property.images);
+          if (Array.isArray(parsed)) return parsed;
+          if (parsed && typeof parsed === 'object') return [parsed];
+          return [];
+        }
+        if (api?.property?.images && typeof api.property.images === 'object') {
+          return [api.property.images];
+        }
+        return [];
+      })();
+      const normalizedPropertyImages: string[] = rawImages
+        .map((image: any) => normalizeImageUrl(extractImageUrlCandidate(image)))
+        .filter((value: string) => Boolean(value));
+      const propertyImages: string[] = Array.from(
+        new Set(normalizedPropertyImages),
+      );
       const createdAtTs = new Date(api?.createdAt || 0).getTime();
       const updatedAtTs = new Date(api?.updatedAt || api?.createdAt || 0).getTime();
       const createdAt = Number.isFinite(createdAtTs) && createdAtTs > 0 ? createdAtTs : Date.now();
@@ -3105,17 +3263,36 @@ export default function FixerProPage() {
                   const raw = localStorage.getItem('cblue_po_attachments');
                   if (raw) {
                     const parsed = JSON.parse(raw);
-                    if (poKey && parsed[poKey] && parsed[poKey].length > 0) freshUrls = parsed[poKey];
+                    if (poKey) {
+                      const matched = Object.entries(parsed || {}).find(
+                        ([cachedPo, value]) =>
+                          normalizePoLookupValue(cachedPo) === normalizePoLookupValue(poKey) &&
+                          Array.isArray(value) &&
+                          value.length > 0,
+                      );
+                      if (matched && Array.isArray(matched[1])) {
+                        freshUrls = matched[1] as string[];
+                      }
+                    }
                   }
                 } catch {}
 
                 if (freshUrls.length === 0) {
                   const token = localStorage.getItem('subscriber_token') || '';
-                  const orderId =
-                    waitModalOrder?.orderId ||
-                    (poKey ? localStorage.getItem(`po_to_order_${poKey}`) : '') ||
-                    (poKey ? (mappedOrders as any[]).find((o: any) => o.po === poKey)?.id : '') ||
-                    (isOrderUuid(waitModalOrder?.id) ? waitModalOrder?.id : '');
+                  const mappedOrderId = poKey
+                    ? (mappedOrders as any[]).find(
+                        (order: any) =>
+                          normalizePoLookupValue(order?.po) === normalizePoLookupValue(poKey),
+                      )?.id
+                    : '';
+                  const orderId = await resolveOrderIdByPo({
+                    po: poKey,
+                    fallbackOrderId:
+                      waitModalOrder?.orderId ||
+                      mappedOrderId ||
+                      (isOrderUuid(waitModalOrder?.id) ? waitModalOrder?.id : ''),
+                    token,
+                  });
 
                   if (token && orderId) {
                     try {
@@ -3964,9 +4141,16 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
       variationModal?.issueImage,
       variationModal?.image,
       variationModal?.fileUrl,
+      variationModal?.attachmentUrl,
+      variationModal?.documentUrl,
+      ...(Array.isArray(variationModal?.attachments) ? variationModal.attachments : []),
+      ...(Array.isArray(variationModal?.files) ? variationModal.files : []),
       ...(Array.isArray(variationModal?.projectImages) ? variationModal.projectImages : []),
       ...(Array.isArray(variationModal?.images) ? variationModal.images : []),
+      ...(Array.isArray(variationModal?.imageUrls) ? variationModal.imageUrls : []),
       ...(Array.isArray(variationModal?.metadata?.images) ? variationModal.metadata.images : []),
+      ...(Array.isArray(variationModal?.metadata?.attachments) ? variationModal.metadata.attachments : []),
+      ...(Array.isArray(variationModal?.metadata?.files) ? variationModal.metadata.files : []),
       variationModal?.metadata?.issueImageUrl,
       variationModal?.metadata?.issueImage,
     ]
@@ -3979,24 +4163,35 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
     const deduped = Array.from(new Set(urls.map((entry: any) => normalizeImageUrl(extractImageUrlCandidate(entry))).filter(Boolean)));
     if (deduped.length > 0) { if (isMounted) setVariationAttachUrls(deduped); return; }
     // Fetch from backend as cross-device fallback
-    const orderId = variationModal.orderId || (po ? localStorage.getItem(`po_to_order_${po}`) : '');
-    if (orderId) {
+    void (async () => {
       const token = localStorage.getItem('subscriber_token') || '';
-      fetch(`/api/v1/orders/${orderId}/attachments`, { headers: { Authorization: `Bearer ${token}` } })
-        .then(r => r.ok ? r.json() : [])
-        .then((data: any[]) => {
-          if (!isMounted) return;
-          const backendUrls = Array.from(
-            new Set(
-              (Array.isArray(data) ? data : [])
-                .map((item: any) => normalizeImageUrl(extractImageUrlCandidate(item)))
-                .filter(Boolean),
-            ),
-          );
-          setVariationAttachUrls(backendUrls);
-        })
-        .catch(() => {});
-    }
+      const orderId = await resolveOrderIdByPo({
+        po,
+        fallbackOrderId:
+          variationModal.orderId ||
+          (isOrderUuid(variationModal?.id) ? variationModal.id : ''),
+        token,
+      });
+      if (!orderId || !token) return;
+      try {
+        const res = await fetch(`/api/v1/orders/${orderId}/attachments`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!isMounted) return;
+        const backendUrls = Array.from(
+          new Set(
+            (Array.isArray(data) ? data : [])
+              .map((item: any) => normalizeImageUrl(extractImageUrlCandidate(item)))
+              .filter(Boolean),
+          ),
+        );
+        setVariationAttachUrls(backendUrls);
+      } catch {
+        // non-blocking
+      }
+    })();
     return () => { isMounted = false; };
   }, [variationModal]);
   const [ratingModal, setRatingModal] = React.useState<any>(null);
@@ -4446,16 +4641,47 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
     if (!variationModal) { setVariationAttachUrls([]); return; }
     const po = variationModal.po;
     const urls: string[] = [];
+    const directSources = [
+      variationModal?.issueImage,
+      variationModal?.image,
+      variationModal?.fileUrl,
+      variationModal?.attachmentUrl,
+      variationModal?.documentUrl,
+      ...(Array.isArray(variationModal?.attachments) ? variationModal.attachments : []),
+      ...(Array.isArray(variationModal?.files) ? variationModal.files : []),
+      ...(Array.isArray(variationModal?.projectImages) ? variationModal.projectImages : []),
+      ...(Array.isArray(variationModal?.images) ? variationModal.images : []),
+      ...(Array.isArray(variationModal?.imageUrls) ? variationModal.imageUrls : []),
+      ...(Array.isArray(variationModal?.metadata?.images) ? variationModal.metadata.images : []),
+      ...(Array.isArray(variationModal?.metadata?.attachments) ? variationModal.metadata.attachments : []),
+      ...(Array.isArray(variationModal?.metadata?.files) ? variationModal.metadata.files : []),
+      variationModal?.metadata?.issueImageUrl,
+      variationModal?.metadata?.issueImage,
+    ]
+      .map((item: any) => normalizeImageUrl(extractImageUrlCandidate(item)))
+      .filter(Boolean);
+    urls.push(...directSources);
     try { const m = JSON.parse(localStorage.getItem('cblue_po_attachments') || '{}'); if (po && Array.isArray(m[po])) urls.push(...m[po].map((entry: any) => normalizeImageUrl(extractImageUrlCandidate(entry))).filter(Boolean)); } catch {}
     try { const orderMap = JSON.parse(localStorage.getItem('cblue_order_attachments') || '{}'); const oid = variationModal.orderId || (po ? localStorage.getItem(`po_to_order_${po}`) : ''); if (oid && Array.isArray(orderMap[oid])) urls.push(...orderMap[oid].map((entry: any) => normalizeImageUrl(extractImageUrlCandidate(entry))).filter(Boolean)); } catch {}
     try { const rawFiles = (typeof window !== 'undefined' ? (window as any).__cblue_files_by_po : null) || {}; const files: File[] = po && Array.isArray(rawFiles[po]) ? rawFiles[po] : []; files.forEach(f => { try { urls.push(URL.createObjectURL(f)); } catch {} }); } catch {}
     const localUrls = Array.from(new Set(urls.map((entry: any) => normalizeImageUrl(extractImageUrlCandidate(entry))).filter(Boolean)));
-    const orderId = variationModal.orderId || (po ? localStorage.getItem(`po_to_order_${po}`) : null);
-    if (localUrls.length === 0 && orderId) {
-      const token = (typeof window !== 'undefined' ? localStorage.getItem('subscriber_token') : '') || '';
-      fetch(`/api/v1/orders/${orderId}/attachments`, { headers: { Authorization: `Bearer ${token}` } })
-        .then(r => r.ok ? r.json() : [])
-        .then(data => {
+    if (localUrls.length === 0) {
+      void (async () => {
+        const token = (typeof window !== 'undefined' ? localStorage.getItem('subscriber_token') : '') || '';
+        const orderId = await resolveOrderIdByPo({
+          po,
+          fallbackOrderId:
+            variationModal.orderId ||
+            (isOrderUuid(variationModal?.id) ? variationModal.id : ''),
+          token,
+        });
+        if (!orderId || !token) return;
+        try {
+          const res = await fetch(`/api/v1/orders/${orderId}/attachments`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) return;
+          const data = await res.json();
           const backendUrls = Array.from(
             new Set(
               (Array.isArray(data) ? data : [])
@@ -4464,8 +4690,10 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
             ),
           );
           if (backendUrls.length > 0) setVariationAttachUrls(backendUrls);
-        })
-        .catch(() => {});
+        } catch {
+          // non-blocking
+        }
+      })();
     } else {
       setVariationAttachUrls(localUrls);
     }

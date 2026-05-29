@@ -127,8 +127,36 @@ function normalizeImageUrl(value: unknown) {
   return "";
 }
 
-function extractImageUrlCandidate(image: any) {
-  if (typeof image === "string") return image;
+function parseJsonLikeValue(value: string) {
+  const text = String(value || "").trim();
+  if (!text) return value;
+  if (!/^[\[{\"]/.test(text)) return value;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return value;
+  }
+}
+
+function extractImageUrlCandidate(image: any, depth = 0): string {
+  if (depth > 5) return "";
+
+  if (typeof image === "string") {
+    const parsed = parseJsonLikeValue(image);
+    if (parsed !== image) {
+      return extractImageUrlCandidate(parsed, depth + 1);
+    }
+    return image;
+  }
+
+  if (Array.isArray(image)) {
+    for (const entry of image) {
+      const candidate = extractImageUrlCandidate(entry, depth + 1);
+      if (candidate) return candidate;
+    }
+    return "";
+  }
+
   if (!image || typeof image !== "object") return "";
   const direct =
     image.url ||
@@ -142,21 +170,32 @@ function extractImageUrlCandidate(image: any) {
     image.href ||
     image.location ||
     image.dataUrl ||
-    image.value;
-  if (direct) return direct;
-
-  if (image.file && typeof image.file === "object") {
-    return (
-      image.file.url ||
-      image.file.key ||
-      image.file.imageUrl ||
-      image.file.downloadUrl ||
-      ""
-    );
+    image.value ||
+    image.originalUrl ||
+    image.secureUrl ||
+    image.signedUrl ||
+    image.attachmentUrl ||
+    image.uri;
+  if (direct) {
+    return extractImageUrlCandidate(direct, depth + 1) || String(direct);
   }
 
-  if (image.attributes && typeof image.attributes === "object") {
-    return image.attributes.url || image.attributes.key || "";
+  const nestedCandidates = [
+    image.file,
+    image.attributes,
+    image.attachment,
+    image.asset,
+    image.payload,
+    image.data,
+    image.metadata,
+    image.meta,
+    image.result,
+    image.image,
+  ];
+  for (const nested of nestedCandidates) {
+    if (!nested) continue;
+    const candidate = extractImageUrlCandidate(nested, depth + 1);
+    if (candidate) return candidate;
   }
 
   return "";
@@ -297,7 +336,18 @@ async function downloadPropertyFiles(urls: string[], prefix = "property-photo") 
 }
 
 function sanitizeProperty(raw: any): Property {
-  const imagesRaw = Array.isArray(raw?.images) ? raw.images : [];
+  const imagesSource = (() => {
+    if (Array.isArray(raw?.images)) return raw.images;
+    if (typeof raw?.images === "string") {
+      const parsed = parseJsonLikeValue(raw.images);
+      if (Array.isArray(parsed)) return parsed;
+      if (parsed && typeof parsed === "object") return [parsed];
+      return [];
+    }
+    if (raw?.images && typeof raw.images === "object") return [raw.images];
+    return [];
+  })();
+  const imagesRaw = Array.isArray(imagesSource) ? imagesSource : [];
   const images = imagesRaw
     .map((img: any) => normalizeImageUrl(extractImageUrlCandidate(img)))
     .filter(Boolean)

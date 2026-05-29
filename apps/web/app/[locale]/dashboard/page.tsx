@@ -165,8 +165,35 @@ const normalizeImageUrl = (value: unknown) => {
 
   return '';
 };
-const extractImageUrlCandidate = (image: any) => {
-  if (typeof image === 'string') return image;
+const parseJsonLikeValue = (value: string) => {
+  const text = String(value || '').trim();
+  if (!text) return value;
+  if (!/^[\[{\"]/.test(text)) return value;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return value;
+  }
+};
+const extractImageUrlCandidate = (image: any, depth = 0): string => {
+  if (depth > 5) return '';
+
+  if (typeof image === 'string') {
+    const parsed = parseJsonLikeValue(image);
+    if (parsed !== image) {
+      return extractImageUrlCandidate(parsed, depth + 1);
+    }
+    return image;
+  }
+
+  if (Array.isArray(image)) {
+    for (const entry of image) {
+      const candidate = extractImageUrlCandidate(entry, depth + 1);
+      if (candidate) return candidate;
+    }
+    return '';
+  }
+
   if (!image || typeof image !== 'object') return '';
   const direct =
     image.url ||
@@ -180,21 +207,32 @@ const extractImageUrlCandidate = (image: any) => {
     image.href ||
     image.location ||
     image.dataUrl ||
-    image.value;
-  if (direct) return direct;
-
-  if (image.file && typeof image.file === 'object') {
-    return (
-      image.file.url ||
-      image.file.key ||
-      image.file.imageUrl ||
-      image.file.downloadUrl ||
-      ''
-    );
+    image.value ||
+    image.originalUrl ||
+    image.secureUrl ||
+    image.signedUrl ||
+    image.attachmentUrl ||
+    image.uri;
+  if (direct) {
+    return extractImageUrlCandidate(direct, depth + 1) || String(direct);
   }
 
-  if (image.attributes && typeof image.attributes === 'object') {
-    return image.attributes.url || image.attributes.key || '';
+  const nestedCandidates = [
+    image.file,
+    image.attributes,
+    image.attachment,
+    image.asset,
+    image.payload,
+    image.data,
+    image.metadata,
+    image.meta,
+    image.result,
+    image.image,
+  ];
+  for (const nested of nestedCandidates) {
+    if (!nested) continue;
+    const candidate = extractImageUrlCandidate(nested, depth + 1);
+    if (candidate) return candidate;
   }
 
   return '';
