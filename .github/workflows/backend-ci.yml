@@ -169,11 +169,17 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           DEPLOY_SHA: ${{ github.sha }}
+          MAILJET_API_KEY: ${{ secrets.MAILJET_API_KEY }}
+          MAILJET_SECRET_KEY: ${{ secrets.MAILJET_SECRET_KEY }}
+          MAILJET_API_SUBACCOUNT_KEY: ${{ secrets.MAILJET_API_SUBACCOUNT_KEY || secrets.MAILJET_API_KEY }}
+          MAILJET_SECRET_SUBACCOUNT_KEY: ${{ secrets.MAILJET_SECRET_SUBACCOUNT_KEY || secrets.MAILJET_SECRET_KEY }}
+          MAILJET_FROM_EMAIL: ${{ secrets.MAILJET_FROM_EMAIL || vars.MAILJET_FROM_EMAIL }}
+          MAILJET_SENDER_EMAIL: ${{ secrets.MAILJET_SENDER_EMAIL || secrets.MAILJET_FROM_EMAIL || vars.MAILJET_SENDER_EMAIL || vars.MAILJET_FROM_EMAIL }}
         with:
           host: ${{ secrets.DROPLET_HOST }}
           username: ${{ secrets.DROPLET_USER }}
           key: ${{ secrets.DROPLET_SSH_KEY }}
-          envs: GH_TOKEN,GH_REPO,DEPLOY_SHA
+          envs: GH_TOKEN,GH_REPO,DEPLOY_SHA,MAILJET_API_KEY,MAILJET_SECRET_KEY,MAILJET_API_SUBACCOUNT_KEY,MAILJET_SECRET_SUBACCOUNT_KEY,MAILJET_FROM_EMAIL,MAILJET_SENDER_EMAIL
           command_timeout: 120m
           script: |
             set -e
@@ -310,6 +316,33 @@ jobs:
             echo "Current backend on :3002: ${PREV_BACKEND:-none}"
             docker rm -f cblue_backend_candidate 2>/dev/null || true
 
+            resolve_runtime_env() {
+              runtime_key="$1"
+              runtime_current_value=$(eval "printf '%s' \"\${$runtime_key:-}\"")
+              runtime_file_value=""
+              runtime_container_value=""
+
+              if [ -n "$runtime_current_value" ]; then
+                printf '%s' "$runtime_current_value"
+                return
+              fi
+
+              if [ -f "$DEPLOY_DIR/backend/.env" ]; then
+                runtime_file_value=$(grep -E "^${runtime_key}=" "$DEPLOY_DIR/backend/.env" | tail -1 | cut -d '=' -f2- | sed 's/^"//;s/"$//' || true)
+                if [ -n "$runtime_file_value" ]; then
+                  printf '%s' "$runtime_file_value"
+                  return
+                fi
+              fi
+
+              if [ -n "$PREV_BACKEND" ]; then
+                runtime_container_value=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$PREV_BACKEND" 2>/dev/null | grep "^${runtime_key}=" | sed "s/^${runtime_key}=//" | head -1 || true)
+                if [ -n "$runtime_container_value" ]; then
+                  printf '%s' "$runtime_container_value"
+                fi
+              fi
+            }
+
             # Resolve DATABASE_URL from backend .env first (if present), then selected postgres container env.
             DATABASE_URL_RUNTIME=""
             if [ -f "$DEPLOY_DIR/backend/.env" ]; then
@@ -346,6 +379,18 @@ jobs:
             if [ -z "$RABBIT_USER" ]; then RABBIT_USER='admin'; fi
             if [ -z "$RABBIT_PASS" ]; then RABBIT_PASS='password'; fi
 
+            MAILJET_API_KEY_RUNTIME=$(resolve_runtime_env MAILJET_API_KEY)
+            MAILJET_SECRET_KEY_RUNTIME=$(resolve_runtime_env MAILJET_SECRET_KEY)
+            MAILJET_API_SUBACCOUNT_KEY_RUNTIME=$(resolve_runtime_env MAILJET_API_SUBACCOUNT_KEY)
+            MAILJET_SECRET_SUBACCOUNT_KEY_RUNTIME=$(resolve_runtime_env MAILJET_SECRET_SUBACCOUNT_KEY)
+            MAILJET_FROM_EMAIL_RUNTIME=$(resolve_runtime_env MAILJET_FROM_EMAIL)
+            MAILJET_SENDER_EMAIL_RUNTIME=$(resolve_runtime_env MAILJET_SENDER_EMAIL)
+
+            if [ -z "$MAILJET_API_SUBACCOUNT_KEY_RUNTIME" ]; then MAILJET_API_SUBACCOUNT_KEY_RUNTIME="$MAILJET_API_KEY_RUNTIME"; fi
+            if [ -z "$MAILJET_SECRET_SUBACCOUNT_KEY_RUNTIME" ]; then MAILJET_SECRET_SUBACCOUNT_KEY_RUNTIME="$MAILJET_SECRET_KEY_RUNTIME"; fi
+            if [ -z "$MAILJET_FROM_EMAIL_RUNTIME" ]; then MAILJET_FROM_EMAIL_RUNTIME="$MAILJET_SENDER_EMAIL_RUNTIME"; fi
+            if [ -z "$MAILJET_SENDER_EMAIL_RUNTIME" ]; then MAILJET_SENDER_EMAIL_RUNTIME="$MAILJET_FROM_EMAIL_RUNTIME"; fi
+
             # Use raw docker commands for deployment to bypass broken docker-compose aliasing
             echo "🚀 Deploying candidate backend container on :3003..."
             # Use the same network as the selected postgres container.
@@ -362,12 +407,12 @@ jobs:
                 -e JWT_SECRET=change-in-production \
                 -e JWT_REFRESH_SECRET=change-in-production \
                 -e JWT_EXPIRATION=15m -e JWT_REFRESH_EXPIRATION=7d \
-                -e MAILJET_API_KEY="c42d1797dc264ce06051686f0e4eb35a" \
-                -e MAILJET_SECRET_KEY="11e8be9931be3c33f338de0fa2171412" \
-                -e MAILJET_API_SUBACCOUNT_KEY="c42d1797dc264ce06051686f0e4eb35a" \
-                -e MAILJET_SECRET_SUBACCOUNT_KEY="11e8be9931be3c33f338de0fa2171412" \
-                -e MAILJET_FROM_EMAIL="noreply@lblue.tech" \
-                -e MAILJET_SENDER_EMAIL="noreply@lblue.tech" \
+                -e MAILJET_API_KEY="$MAILJET_API_KEY_RUNTIME" \
+                -e MAILJET_SECRET_KEY="$MAILJET_SECRET_KEY_RUNTIME" \
+                -e MAILJET_API_SUBACCOUNT_KEY="$MAILJET_API_SUBACCOUNT_KEY_RUNTIME" \
+                -e MAILJET_SECRET_SUBACCOUNT_KEY="$MAILJET_SECRET_SUBACCOUNT_KEY_RUNTIME" \
+                -e MAILJET_FROM_EMAIL="$MAILJET_FROM_EMAIL_RUNTIME" \
+                -e MAILJET_SENDER_EMAIL="$MAILJET_SENDER_EMAIL_RUNTIME" \
                 -e RESET_PASSWORD_DEBUG_HEADER=true \
                 -e FRONTEND_URL="https://cblue.co.th" \
                 -e PORT=3002 -e NODE_ENV=production \
@@ -511,12 +556,12 @@ jobs:
                 -e JWT_SECRET=change-in-production \
                 -e JWT_REFRESH_SECRET=change-in-production \
                 -e JWT_EXPIRATION=15m -e JWT_REFRESH_EXPIRATION=7d \
-                -e MAILJET_API_KEY="c42d1797dc264ce06051686f0e4eb35a" \
-                -e MAILJET_SECRET_KEY="11e8be9931be3c33f338de0fa2171412" \
-                -e MAILJET_API_SUBACCOUNT_KEY="c42d1797dc264ce06051686f0e4eb35a" \
-                -e MAILJET_SECRET_SUBACCOUNT_KEY="11e8be9931be3c33f338de0fa2171412" \
-                -e MAILJET_FROM_EMAIL="noreply@lblue.tech" \
-                -e MAILJET_SENDER_EMAIL="noreply@lblue.tech" \
+                -e MAILJET_API_KEY="$MAILJET_API_KEY_RUNTIME" \
+                -e MAILJET_SECRET_KEY="$MAILJET_SECRET_KEY_RUNTIME" \
+                -e MAILJET_API_SUBACCOUNT_KEY="$MAILJET_API_SUBACCOUNT_KEY_RUNTIME" \
+                -e MAILJET_SECRET_SUBACCOUNT_KEY="$MAILJET_SECRET_SUBACCOUNT_KEY_RUNTIME" \
+                -e MAILJET_FROM_EMAIL="$MAILJET_FROM_EMAIL_RUNTIME" \
+                -e MAILJET_SENDER_EMAIL="$MAILJET_SENDER_EMAIL_RUNTIME" \
                 -e RESET_PASSWORD_DEBUG_HEADER=true \
                 -e FRONTEND_URL="https://cblue.co.th" \
                 -e PORT=3002 -e NODE_ENV=production \

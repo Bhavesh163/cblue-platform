@@ -1727,10 +1727,20 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
     const viewerUserId = String(subscriber?.id || "");
     const items: any[] = [];
+    const chatOpenStatuses = new Set(["IN_PROGRESS", "MEETING_REQUESTED"]);
 
     for (const order of (orders || [])) {
       const orderId = order?.id;
       if (!orderId) continue;
+
+      const po = extractPo(order);
+      if (!po || !isPoCode(po)) continue;
+
+      if (localStorage.getItem(`chat_closed_${po}`)) continue;
+
+      const status = String(order?.status || "").toUpperCase();
+      const hasLocalChatCache = Boolean(localStorage.getItem(`chat_messages_${po}`));
+      if (!chatOpenStatuses.has(status) && !hasLocalChatCache) continue;
 
       try {
         const res = await fetch(`/api/v1/orders/${orderId}/chat`, {
@@ -1740,9 +1750,6 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
         const messages = await res.json();
         if (!Array.isArray(messages) || messages.length === 0) continue;
-
-        const po = extractPo(order);
-        if (!po || !isPoCode(po)) continue;
 
         // Cache PO→UUID so ClientChatPage.resolveOrderDbId() works cross-browser
         try { localStorage.setItem(`po_to_order_${po}`, orderId); } catch {}
@@ -2599,6 +2606,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     .filter(Boolean) as any[];
   const baseAlerts: any[] = [];
   const allAlerts = [...workflowAlerts, ...propWorkflowAlerts, ...baseAlerts].sort((a: any, b: any) => parseDateMs(b.createdAt || b.time) - parseDateMs(a.createdAt || a.time));
+  const alertsPageItems = allAlerts.slice(0, 20);
   const overviewAlerts = allAlerts.slice(0, 3);
   const overviewIncomingChats = chatFeed.filter((c: any) => c.hasIncoming).slice(0, 3);
 
@@ -3735,10 +3743,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             <h2 className="font-bold text-gray-900">{locale === "th" ? "การแจ้งเตือน" : locale === "zh" ? "通知" : "Alerts"}</h2>
           </div>
           <div className="divide-y divide-gray-50">
-            {allAlerts.length === 0 ? (
+            {alertsPageItems.length === 0 ? (
               <div className="p-8 text-center text-gray-500">{locale === "th" ? "ไม่มีการแจ้งเตือนล่าสุด" : locale === "zh" ? "暂无最近通知。" : "No recent alerts."}</div>
             ) : (
-              allAlerts.map((a: any, i: number) => (
+              alertsPageItems.map((a: any, i: number) => (
                 <div key={i} className="p-6 flex items-center gap-4 hover:bg-gray-50 transition cursor-pointer">
                   <span className={`w-3 h-3 rounded-full flex-shrink-0 ${a.dot}`}></span>
                   <div>
@@ -4562,13 +4570,25 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                       type: 'notice',
                       step: 10,
                     };
+                    const variationRequest = stripVariationPriceList(
+                      String(
+                        variationApproveModal.partnerRequest ||
+                        variationApproveModal.partnerNote ||
+                        variationApproveModal.variationRequest ||
+                        variationApproveModal.description ||
+                        variationApproveModal.desc ||
+                        '',
+                      ),
+                    )
+                      .replace(/^Partner variation request:\s*/i, '')
+                      .trim();
                     const newActive = mockActiveItems.map((x: any) => x.po === po ? { ...x, step: 10, mockStep: 10, actionNeeded: false } : x);
                     const newReqs = [...mockDynRequests.filter((x: any) => !(x.po === po && ['variation_pending', 'meeting_pending_partner', 'meeting_scheduled'].includes(x.type))), notice];
                     const partnerReqs = JSON.parse(localStorage.getItem('partner_mock_dyn_req') || '[]') as any[];
                     const complId = `complete-${po}`;
                     const updatedPartnerReqs = [
                       ...partnerReqs.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner', 'complete_partner'].includes(x.type))),
-                      { id: complId, po, title: variationApproveModal.title, customer: variationApproveModal.customer, date: fmtDateTime(createdAt), createdAt, budget: variationApproveModal.budget, tier: variationApproveModal.tier, desc: 'Customer approved the variation. Please submit project complete for confirmation.', location: variationApproveModal.location || variationApproveModal.subdistrict || '', type: 'complete_partner', step: 10 },
+                      { id: complId, po, title: variationApproveModal.title, customer: variationApproveModal.customer, date: fmtDateTime(createdAt), createdAt, budget: variationApproveModal.budget, tier: variationApproveModal.tier, desc: 'Customer approved the variation. Please submit project complete for confirmation.', location: variationApproveModal.location || variationApproveModal.subdistrict || '', partnerRequest: variationRequest, partnerNote: variationRequest, variationRequest, type: 'complete_partner', step: 10 },
                     ];
                     localStorage.setItem('ghis_mock_active', JSON.stringify(newActive));
                     localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(newReqs));

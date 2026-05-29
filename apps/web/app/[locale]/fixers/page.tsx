@@ -13,6 +13,7 @@ import {
   parseVariationPriceList,
   readStoredVariationPriceList,
   storeVariationPriceList,
+  stripVariationPriceList,
   type BudgetBreakdownItem,
   type VariationPriceListItem,
 } from "../../../lib/computeBudgetBreakdown";
@@ -1112,6 +1113,39 @@ const resolveVariationPriceListItems = (po?: string, description?: unknown) => {
   if (po && parsed.length > 0) {
     storeVariationPriceList(po, parsed);
   }
+  return parsed;
+};
+const normalizeVariationPartnerNote = (value: unknown) =>
+  stripVariationPriceList(value)
+    .replace(/^Partner variation request:\s*/i, '')
+    .replace(/^Partner Request:\s*/i, '')
+    .trim();
+const readStoredVariationPartnerNote = (po?: string) => {
+  if (typeof window === 'undefined' || !po) return '';
+  try {
+    return String(localStorage.getItem(`cblue_variation_note_${po}`) || '').trim();
+  } catch {
+    return '';
+  }
+};
+const storeVariationPartnerNote = (po?: string, note?: string) => {
+  if (typeof window === 'undefined' || !po) return;
+  const normalized = String(note || '').trim();
+  try {
+    if (!normalized) {
+      localStorage.removeItem(`cblue_variation_note_${po}`);
+      return;
+    }
+    localStorage.setItem(`cblue_variation_note_${po}`, normalized);
+  } catch {
+    // non-blocking
+  }
+};
+const resolveVariationPartnerNote = (po?: string, description?: unknown) => {
+  const stored = readStoredVariationPartnerNote(po);
+  if (stored) return stored;
+  const parsed = normalizeVariationPartnerNote(description);
+  if (po && parsed) storeVariationPartnerNote(po, parsed);
   return parsed;
 };
 
@@ -2380,10 +2414,20 @@ export default function FixerProPage() {
     let viewerUserId = "";
     try { viewerUserId = JSON.parse(localStorage.getItem("subscriber") || "{}")?.id || ""; } catch {}
     const items: any[] = [];
+    const chatOpenStatuses = new Set(["IN_PROGRESS", "MEETING_REQUESTED"]);
 
     for (const order of (orders || [])) {
       const orderId = order?.id;
       if (!orderId) continue;
+
+      const po = extractPoCode(order);
+      if (!po || !isPoCode(po)) continue;
+
+      if (localStorage.getItem(`chat_closed_${po}`)) continue;
+
+      const status = String(order?.status || "").toUpperCase();
+      const hasLocalChatCache = Boolean(localStorage.getItem(`chat_messages_${po}`));
+      if (!chatOpenStatuses.has(status) && !hasLocalChatCache) continue;
 
       try {
         const res = await fetch(`/api/v1/orders/${orderId}/chat`, {
@@ -2393,9 +2437,6 @@ export default function FixerProPage() {
 
         const messages = await res.json();
         if (!Array.isArray(messages) || messages.length === 0) continue;
-
-        const po = extractPoCode(order);
-        if (!po || !isPoCode(po)) continue;
 
         // Skip closed chat rooms (job completed/rated)
         if (localStorage.getItem(`chat_closed_${po}`)) continue;
@@ -3186,6 +3227,7 @@ export default function FixerProPage() {
           }
         }
         if (lower.includes('customer approved variation')) {
+          const partnerRequest = resolveVariationPartnerNote(po);
           try {
             const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
             const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 10, mockStep: 10, actionNeeded: true } : x);
@@ -3209,6 +3251,9 @@ export default function FixerProPage() {
               location: order.subdistrict || order.location || '',
               subdistrict: order.subdistrict || '',
               description: 'Customer approved the variation. Please submit project complete for confirmation.',
+              partnerRequest,
+              partnerNote: partnerRequest,
+              variationRequest: partnerRequest,
               type: 'complete_partner',
               workflowType: 'complete_partner',
               step: 10,
@@ -3735,10 +3780,11 @@ export default function FixerProPage() {
     if (!po || orderAlertPos.has(po)) return [];
     orderAlertPos.add(po);
     const svc = o.service || "Project";
-    const displayTime = o.date || "";
-    if (['CREATED','PENDING','MATCHING'].includes(o.status)) return [{ id: `order-pending-${po}`, msg: `${po}: New ${svc} request from ${o.customer || 'customer'}. Review the PO and accept or decline it.`, msgTh: `${po}: มีคำขอ ${svc} ใหม่จาก ${o.customer || 'ลูกค้า'} กรุณาตรวจสอบ PO และรับหรือปฏิเสธ`, msgZh: `${po}: 来自 ${o.customer || '客户'} 的新 ${svc} 请求。请查看PO并接受或拒绝。`, unread: true, time: displayTime, dot: "bg-purple-500" }];
-    if (o.status === 'MEETING_REQUESTED') return [{ id: `order-meeting-${po}`, msg: `${po}: Customer sent a site meeting invitation for ${svc}. Open the request and confirm the schedule.`, msgTh: `${po}: ลูกค้าส่งคำเชิญนัดหมายสำหรับ ${svc} แล้ว กรุณาเปิดคำขอและยืนยันเวลา`, msgZh: `${po}: 客户已为 ${svc} 发送现场会议邀请。请打开请求并确认时间。`, unread: true, time: displayTime, dot: "bg-amber-500" }];
-    if (o.status === 'IN_PROGRESS') return [{ id: `order-inprogress-${po}`, msg: `${po}: Chat room is active for ${svc}. Coordinate the meeting or next onsite action with the customer.`, msgTh: `${po}: ห้องแชทของ ${svc} พร้อมใช้งาน กรุณาประสานนัดหมายหรือขั้นตอนหน้างานครั้งต่อไปกับลูกค้า`, msgZh: `${po}: ${svc} 聊天室已开启。请与客户协调会议或下一步现场工作。`, unread: false, time: displayTime, dot: "bg-sky-400" }];
+    const createdAt = parseTs(o.statusChangedAt || o.updatedAt || o.createdAt || o.date);
+    const displayTime = createdAt > 0 ? fmtDateTime(createdAt) : (o.date || "");
+    if (['CREATED','PENDING','MATCHING'].includes(o.status)) return [{ id: `order-pending-${po}`, msg: `${po}: New ${svc} request from ${o.customer || 'customer'}. Review the PO and accept or decline it.`, msgTh: `${po}: มีคำขอ ${svc} ใหม่จาก ${o.customer || 'ลูกค้า'} กรุณาตรวจสอบ PO และรับหรือปฏิเสธ`, msgZh: `${po}: 来自 ${o.customer || '客户'} 的新 ${svc} 请求。请查看PO并接受或拒绝。`, unread: true, time: displayTime, createdAt, dot: "bg-purple-500" }];
+    if (o.status === 'MEETING_REQUESTED') return [{ id: `order-meeting-${po}`, msg: `${po}: Customer sent a site meeting invitation for ${svc}. Open the request, confirm the schedule, and then prepare Step 9 variation if needed.`, msgTh: `${po}: ลูกค้าส่งคำเชิญนัดหมายสำหรับ ${svc} แล้ว กรุณาเปิดคำขอ ยืนยันเวลา และเตรียม Step 9 variation หากจำเป็น`, msgZh: `${po}: 客户已为 ${svc} 发送现场会议邀请。请打开请求、确认时间，并在需要时准备第9步变更。`, unread: true, time: displayTime, createdAt, dot: "bg-amber-500" }];
+    if (o.status === 'IN_PROGRESS') return [{ id: `order-inprogress-${po}`, msg: `${po}: Chat room is active for ${svc}. Coordinate with the customer now, then confirm the site meeting when the invitation arrives.`, msgTh: `${po}: ห้องแชทของ ${svc} พร้อมใช้งานแล้ว กรุณาคุยกับลูกค้าและยืนยันนัดหมายหน้างานเมื่อได้รับคำเชิญ`, msgZh: `${po}: ${svc} 聊天室已开启。请先与客户协调，并在收到现场会议邀请后完成确认。`, unread: true, time: displayTime, createdAt, dot: "bg-sky-400" }];
     return [];
   });
 
@@ -4725,7 +4771,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
             {notifications.slice(0, 3).map((n) => (
               <div key={n.id} className={`flex items-center gap-3 p-3 rounded-lg ${n.unread ? "bg-purple-50 border border-purple-100" : "bg-gray-50"}`}>
                 <span className={`w-2 h-2 rounded-full ${n.dot} flex-shrink-0`} />
-                <p className="text-sm text-gray-700 flex-1">{locale === "th" ? n.msgTh : locale === "zh" ? n.msgZh : n.msg}</p>
+                <p className="text-xs text-gray-700 flex-1">{locale === "th" ? n.msgTh : locale === "zh" ? n.msgZh : n.msg}</p>
                 <span className="text-xs text-gray-400 whitespace-nowrap">{n.time}</span>
               </div>
             ))}
@@ -4996,6 +5042,8 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
       if (action === 'variation') {
         const varId = `var-${po}`;
         const varNote = extraData || 'Your partner has submitted a variation for your approval. Please review and confirm to proceed.';
+        const partnerRequest = normalizeVariationPartnerNote(varNote);
+        if (partnerRequest) storeVariationPartnerNote(po, partnerRequest);
         const next = [...dynReqs.filter((x: any) => x.po !== po), { id: varId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: varNote, location: job.location || job.subdistrict || '', type: 'variation_pending', step: 9 }];
         localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
         // Update active BEFORE writePartnerReqs to prevent race condition in buildChatFeed
@@ -5542,6 +5590,8 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
       if (action === 'variation') {
         const varId = `var-${po}`;
         const varNote = extraData || 'Your partner has submitted a variation for your approval. Please review and confirm to proceed.';
+        const partnerRequest = normalizeVariationPartnerNote(varNote);
+        if (partnerRequest) storeVariationPartnerNote(po, partnerRequest);
         const next = [...dynReqs.filter((x: any) => x.po !== po), { id: varId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: varNote, location: job.location || job.subdistrict || '', type: 'variation_pending', step: 9 }];
         localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
         // Update active BEFORE writePartnerReqs to prevent race condition in buildChatFeed
