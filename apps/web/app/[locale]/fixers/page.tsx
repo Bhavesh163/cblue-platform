@@ -1241,20 +1241,50 @@ function AttachmentViewerModal({
   );
 }
 
-function WorkflowHistoryCard({ item, compact = false }: { item: any; compact?: boolean }) {
+const extractDeclineReason = (value: any) => {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  const match = text.match(/reason:\s*(.+?)(?:\.\s*please select another professional\.?|$)/i);
+  return String(match?.[1] || text).trim();
+};
+
+function WorkflowHistoryCard({ item, compact = false, locale = "en" }: { item: any; compact?: boolean; locale?: string }) {
   const [collapsed, setCollapsed] = React.useState(true);
   const chatPreview = collapsed ? [] : (Array.isArray(item.chatHistory) ? item.chatHistory.slice(compact ? -2 : -4) : []);
+  const isCancelled = String(item.status || '').toUpperCase() === 'CANCELLED';
+  const declineReason = extractDeclineReason(item.declineReason || item.statusNote);
   return (
     <div className="rounded-xl border border-gray-100 bg-white shadow-sm hover:bg-gray-50/60 transition cursor-pointer" onClick={() => setCollapsed(c => !c)}>
       <div className="p-5">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <h3 className="font-bold text-gray-900">{item.service} <span className="text-sm font-normal text-gray-400">· {item.po} · {item.counterpartName || item.customer || 'Customer'}</span></h3>
-            <p className="text-sm text-gray-500 mt-1">Completed {fmtDateTime(item.completedAt || item.statusChangedAt || item.createdAt || item.date || Date.now())}</p>
+            <p className="text-sm text-gray-500 mt-1">
+              {isCancelled
+                ? locale === 'th'
+                  ? 'ปฏิเสธงาน'
+                  : locale === 'zh'
+                  ? '已拒绝'
+                  : 'Declined'
+                : locale === 'th'
+                ? 'เสร็จสิ้น'
+                : locale === 'zh'
+                ? '已完成'
+                : 'Completed'}{' '}
+              {fmtDateTime(item.completedAt || item.statusChangedAt || item.createdAt || item.date || Date.now())}
+            </p>
           </div>
           <div className="flex flex-col items-start sm:items-end gap-1 flex-shrink-0">
             <span className="font-bold text-gray-900">{item.fee || item.budget || '฿0'}</span>
-            <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">Step 11 of 11 · {item.stepName || getWorkflowStepName(item.step)}</span>
+            <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${isCancelled ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>
+              {isCancelled
+                ? locale === 'th'
+                  ? 'ปิดคำขอ · พาร์ทเนอร์ไม่ว่าง'
+                  : locale === 'zh'
+                  ? '请求已关闭 · 合作伙伴无法安排时间'
+                  : 'Request Closed · Partner Unavailable'
+                : `Step 11 of 11 · ${item.stepName || getWorkflowStepName(item.step)}`}
+            </span>
             <span className="text-xs text-sky-600 font-semibold">{collapsed ? '▼ Show details' : '▲ Hide details'}</span>
           </div>
         </div>
@@ -1265,6 +1295,25 @@ function WorkflowHistoryCard({ item, compact = false }: { item: any; compact?: b
               <div><span className="text-gray-500">Tier:</span> {item.tier || 'Standard'}</div>
               <div className="sm:col-span-2"><span className="text-gray-500">Project Details:</span> {item.projectDetails || item.description || 'Project details not available.'}</div>
             </div>
+            {isCancelled && (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-red-700 mb-1">
+                  {locale === 'th' ? 'บันทึกการปฏิเสธ' : locale === 'zh' ? '拒绝说明' : 'Decline Note'}
+                </p>
+                <p className="text-sm text-red-900">
+                  {locale === 'th'
+                    ? 'คำขอนี้ถูกปิดหลังจากคุณปฏิเสธงาน และระบบได้แจ้งลูกค้าให้เลือกผู้ให้บริการรายอื่นแล้ว'
+                    : locale === 'zh'
+                    ? '此请求因您拒绝接单而关闭，系统已通知客户选择其他服务提供商。'
+                    : 'This request was closed after you declined the job, and the customer has been notified to select another professional.'}
+                </p>
+                {declineReason ? (
+                  <p className="text-sm text-red-800 mt-2">
+                    <span className="font-semibold">{locale === 'th' ? 'เหตุผลที่บันทึก:' : locale === 'zh' ? '记录原因：' : 'Reason provided:'}</span> {declineReason}
+                  </p>
+                ) : null}
+              </div>
+            )}
             {chatPreview.length > 0 && (
               <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
                 <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Chat History</p>
@@ -2528,6 +2577,8 @@ export default function FixerProPage() {
   const [mockDynReqs, setMockDynReqs] = useState<any[]>([]);
   const [mockActiveState, setMockActiveState] = useState<any[]>([]);
   const [partnerDynReqs, setPartnerDynReqs] = useState<any[]>([]);
+  const [partnerPersistedAlerts, setPartnerPersistedAlerts] = useState<any[]>([]);
+  const [partnerDeclineLogs, setPartnerDeclineLogs] = useState<any[]>([]);
   const [mockHistory, setMockHistory] = useState<any[]>([]);
   useEffect(() => {
     const checkMock = () => {
@@ -2535,6 +2586,10 @@ export default function FixerProPage() {
         const d = localStorage.getItem("ghis_mock_dyn_req"); if (d) setMockDynReqs(filterVisibleWorkflowItems(JSON.parse(d)));
         const a = localStorage.getItem("ghis_mock_active"); if (a) setMockActiveState(filterVisibleWorkflowItems(JSON.parse(a)));
         const h = localStorage.getItem("ghis_mock_history"); if (h) setMockHistory(filterVisibleWorkflowItems(JSON.parse(h)));
+        const persistedAlerts = localStorage.getItem('partner_alerts');
+        setPartnerPersistedAlerts(persistedAlerts ? JSON.parse(persistedAlerts) : []);
+        const declineLogs = localStorage.getItem('admin_decline_logs');
+        setPartnerDeclineLogs(declineLogs ? JSON.parse(declineLogs) : []);
         const p = localStorage.getItem("partner_mock_dyn_req");
         let partnerReqs: any[] = p
           ? filterVisibleWorkflowItems(JSON.parse(p)).map((item: any) => ({
@@ -2828,9 +2883,13 @@ export default function FixerProPage() {
     const bTs = toJobSortTs(b.createdAt || b.date);
     return bTs - aTs;
   });
-  const backendCompletedJobs = mappedOrders.filter(o => o.status === 'COMPLETED');
-  // Merge localStorage history (same-browser simulation) with backend completed orders
-  const backendCompletedPos = new Set(backendCompletedJobs.map((j: any) => j.po));
+  const backendCompletedJobs = mappedOrders.filter((o: any) => ['COMPLETED', 'CANCELLED'].includes(String(o.status || '').toUpperCase()));
+  const declineReasonByPo = new Map(
+    partnerDeclineLogs
+      .filter((entry: any) => String(entry?.po || '').trim())
+      .map((entry: any) => [String(entry.po).trim(), String(entry.comment || '').trim()]),
+  );
+  // Merge localStorage history (same-browser simulation) with backend completed/cancelled orders.
   const completedJobs = Array.from(
     [...backendCompletedJobs, ...mockHistory.filter((h: any) => h.po)].reduce((map: Map<string, any>, entry: any) => {
       const po = entry.po || entry.id;
@@ -2858,7 +2917,9 @@ export default function FixerProPage() {
         budget: entry.budget || existing.budget || toCurrencyLabel(entry.fee || existing.fee),
         fee: toCurrencyLabel(entry.fee || entry.budget || existing.fee || existing.budget),
         tier: entry.tier || existing.tier || 'Standard',
-        status: 'COMPLETED',
+        status: entry.status || existing.status || 'COMPLETED',
+        statusNote: entry.statusNote || entry.statusHistory?.[0]?.note || existing.statusNote || '',
+        declineReason: declineReasonByPo.get(String(po).trim()) || existing.declineReason || '',
         step: 11,
         stepName: getWorkflowStepName(11),
         location: entry.location || entry.subdistrict || existing.location || existing.subdistrict || '',
@@ -3649,6 +3710,24 @@ export default function FixerProPage() {
     return null;
   }).filter(Boolean) as any[];
 
+  const persistedAlertNotifications = partnerPersistedAlerts
+    .map((alert: any) => {
+      const createdAt = Number(alert?.createdAt || parseTs(alert?.timestamp || alert?.date) || Date.now());
+      const msg = alert?.message || alert?.msg || '';
+      if (!msg) return null;
+      return {
+        id: `partner-alert-${alert.id || createdAt}`,
+        msg,
+        msgTh: alert?.msgTh || msg,
+        msgZh: alert?.msgZh || msg,
+        unread: true,
+        time: typeof alert?.date === 'string' && alert.date.includes(':') ? alert.date : fmtDateTime(createdAt),
+        createdAt,
+        dot: alert?.dot || 'bg-red-500',
+      };
+    })
+    .filter(Boolean) as any[];
+
   // Generate alerts from backend orders with actionable statuses
   const orderAlertPos = new Set<string>();
   const orderAlerts = mappedOrders.flatMap((o: any) => {
@@ -3663,7 +3742,7 @@ export default function FixerProPage() {
     return [];
   });
 
-  const displayNotifications = [...orderAlerts, ...dynamicNotifications, ...partnerWorkflowNotifications, ...propWorkflowNotifications]
+  const displayNotifications = [...persistedAlertNotifications, ...orderAlerts, ...dynamicNotifications, ...partnerWorkflowNotifications, ...propWorkflowNotifications]
     .sort((a: any, b: any) => parseTs(b.createdAt || b.time) - parseTs(a.createdAt || a.time));
 
   const tabs: { key: TabKey; label: string; icon: string; badge?: number }[] = [
@@ -4621,8 +4700,8 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
       </div>
 
       {/* Meetings, alerts, and chats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 md:col-span-2">
           <h3 className="font-bold text-gray-900 mb-3 flex items-center justify-between">⏰ {locale === "th" ? "การนัดหมายที่จะมาถึง" : locale === "zh" ? "即将到来的会议" : "Upcoming Meetings"} <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("requests")}>{locale === "th" ? "ดูทั้งหมด" : locale === "zh" ? "查看全部" : "View All"}</span></h3>
           {scheduledMeetings.length > 0 ? (
             <div className="space-y-2">
@@ -4640,7 +4719,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
             </div>
           )}
         </div>
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 md:col-span-1">
           <h3 className="font-bold text-gray-900 mb-3 flex items-center justify-between">{locale === "th" ? "การแจ้งเตือนล่าสุด" : locale === "zh" ? "最近通知" : "Recent Alerts"} <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("notifications")}>View All</span></h3>
           <div className="space-y-2">
             {notifications.slice(0, 3).map((n) => (
@@ -4789,7 +4868,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
           </div>
           <div className="space-y-3 p-4">
             {completedJobs.slice(0, 2).length > 0 ? completedJobs.slice(0, 2).map((h) => (
-              <WorkflowHistoryCard key={h.id || h.po} item={h} compact />
+              <WorkflowHistoryCard key={h.id || h.po} item={h} compact locale={locale} />
             )) : (
               <div className="py-6 text-center text-gray-500">No completed jobs yet.</div>
             )}
@@ -5910,9 +5989,9 @@ function PartnerHistory({ locale, completedJobs }: { locale: string; completedJo
       </div>
       <div className="space-y-4 p-4">
         {completedJobs.length > 0 ? completedJobs.map((h) => (
-          <WorkflowHistoryCard key={h.id || h.po} item={h} />
+          <WorkflowHistoryCard key={h.id || h.po} item={h} locale={locale} />
         )) : (
-          <div className="py-8 text-center text-gray-500">No completed jobs yet.</div>
+          <div className="py-8 text-center text-gray-500">No completed or declined jobs yet.</div>
         )}
       </div>
     </div>

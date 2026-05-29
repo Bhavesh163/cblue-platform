@@ -1072,6 +1072,7 @@ function PropertyTab({ locale, prefix, properties }: { locale: string; prefix: s
 function CustomerHistoryCard({ item, idx, compact = false, locale = "en" }: { item: any; idx: number; compact?: boolean; locale?: string }) {
   const [collapsed, setCollapsed] = useState(true);
   const chatPreview = collapsed ? [] : (Array.isArray(item.chatHistory) ? item.chatHistory.slice(compact ? -2 : -4) : []);
+  const isCancelled = String(item.status || '').toUpperCase() === 'CANCELLED';
   const orderText = isPropPoCode(String(item?.po || ''))
     ? locale === 'th'
       ? `ออเดอร์: ${item.po}`
@@ -1089,11 +1090,11 @@ function CustomerHistoryCard({ item, idx, compact = false, locale = "en" }: { it
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <h3 className="font-bold text-gray-900">{item.service} <span className="text-sm font-normal text-gray-400">· {orderText} · {item.counterpartName || item.fixerName || 'Partner'}</span></h3>
-          <p className="text-sm text-gray-500 mt-1">{item.status === 'CANCELLED' ? (locale === 'th' ? 'ยกเลิก' : locale === 'zh' ? '已取消' : 'Cancelled') : (locale === 'th' ? 'เสร็จสิ้น' : locale === 'zh' ? '已完成' : 'Completed')} {fmtDate(item.completedAt || item.statusChangedAt || item.createdAt || item.date)}</p>
+          <p className="text-sm text-gray-500 mt-1">{isCancelled ? (locale === 'th' ? 'พาร์ทเนอร์ไม่ว่าง' : locale === 'zh' ? '合作伙伴无法安排时间' : 'Partner Unavailable') : (locale === 'th' ? 'เสร็จสิ้น' : locale === 'zh' ? '已完成' : 'Completed')} {fmtDate(item.completedAt || item.statusChangedAt || item.createdAt || item.date)}</p>
         </div>
         <div className="flex flex-col items-start sm:items-end gap-1 flex-shrink-0">
           <span className="font-bold text-gray-900">{item.fee || item.budget || '฿0'}</span>
-          <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${item.status === 'CANCELLED' ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>Step 11 of 11 · {item.stepName || getWorkflowStepName(item.step)}</span>
+          <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${isCancelled ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>{isCancelled ? (locale === 'th' ? 'ปิดคำขอ · พาร์ทเนอร์ไม่ว่าง' : locale === 'zh' ? '请求已关闭 · 合作伙伴无法安排时间' : 'Request Closed · Partner Unavailable') : `Step 11 of 11 · ${item.stepName || getWorkflowStepName(item.step)}`}</span>
           <span className="text-xs text-sky-600 font-semibold">{collapsed ? '▼ Show details' : '▲ Hide details'}</span>
         </div>
       </div>
@@ -1104,6 +1105,15 @@ function CustomerHistoryCard({ item, idx, compact = false, locale = "en" }: { it
             <div><span className="text-gray-500">{locale === "th" ? "งบประมาณ:" : locale === "zh" ? "预算:" : "Budget:"}</span> {item.fee || item.budget || '฿0'}</div>
             <div className="sm:col-span-2"><span className="text-gray-500">Project Details:</span> {item.projectDetails || 'Project details not available.'}</div>
           </div>
+          {isCancelled && (
+            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+              {locale === 'th'
+                ? `${item.counterpartName || item.fixerName || 'พาร์ทเนอร์ที่เลือก'} ไม่สามารถรับงานนี้ได้ในช่วงเวลาที่วางแผนไว้ ระบบจึงปิดคำขอและแจ้งให้คุณเลือกผู้ให้บริการรายอื่นต่อไป`
+                : locale === 'zh'
+                ? `${item.counterpartName || item.fixerName || '所选合作伙伴'} 无法在计划时间内接下此项目，因此该请求已关闭。请从匹配列表中选择其他服务提供商继续。`
+                : `${item.counterpartName || item.fixerName || 'The selected partner'} could not take this project at the planned time, so this request was closed. Please choose another professional to continue.`}
+            </div>
+          )}
           {chatPreview.length > 0 && (
             <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Chat History</p>
@@ -3250,6 +3260,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         fee,
         budget: entry.budget || existing.budget || fee,
         status: originalStatus || 'COMPLETED',
+        statusNote: entry.statusNote || entry.statusHistory?.[0]?.note || existing.statusNote || '',
         step: 11,
         stepName: getWorkflowStepName(11),
         location: (() => {
@@ -3743,8 +3754,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       
       <div className={`flex flex-col gap-6 ${activeTab !== 'overview' ? 'hidden' : ''}`}>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 my-6">
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 my-6">
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 md:col-span-2">
                 <div className="flex justify-between items-center mb-4">
                   <div className="flex flex-col">
                     <h2 className="text-xl font-bold text-gray-800">⏰ {locale === "th" ? "การนัดหมายที่จะมาถึง" : locale === "zh" ? "即将到来的会议" : "Upcoming Meetings"}</h2>
@@ -3791,7 +3802,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mt-4 text-center text-sm text-gray-400">{locale === "th" ? "ไม่มีการนัดหมายที่จะมาถึง" : locale === "zh" ? "暂无会议" : "No upcoming meetings"}</div>
                 )}
               </div>
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 md:col-span-1">
                 <h3 className="font-bold text-gray-800 mb-4 flex items-center justify-between">{locale === "th" ? "การแจ้งเตือนล่าสุด" : locale === "zh" ? "最近通知" : "Recent Alerts"} <span className="text-xs text-sky-600 cursor-pointer" onClick={() => setActiveTab("alerts")}>{locale === "th" ? "ดูทั้งหมด" : locale === "zh" ? "查看全部" : "View All"}</span></h3>
                 <div className="space-y-4">
                   {overviewAlerts.length > 0 ? (

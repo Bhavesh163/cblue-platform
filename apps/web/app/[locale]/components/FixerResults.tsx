@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { computeBudgetBreakdown, resolvePartnerPriceList } from "../../../lib/computeBudgetBreakdown";
 import { refreshSubscriberSession } from "../../../lib/subscriberSession";
 
@@ -555,6 +556,7 @@ export default function FixerResults({
   initialStep?: string;
   initialOrderData?: any;
 }) {
+  const router = useRouter();
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1889,7 +1891,10 @@ export default function FixerResults({
           {/* Action Buttons */}
           <div className="space-y-2">
             <button
-              onClick={() => { setSelectedFixer(null); setStep("select"); }}
+              onClick={() => {
+                setSelectedFixer(null);
+                router.push(`/${locale}/dashboard`);
+              }}
               className="w-full py-3 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-xl shadow-lg transition"
             >
               {locale === "th" ? "กลับไปที่แดชบอร์ด" : locale === "zh" ? "返回仪表板" : "Back to Dashboard"}
