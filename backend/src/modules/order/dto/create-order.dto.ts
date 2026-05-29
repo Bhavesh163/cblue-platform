@@ -6,7 +6,12 @@ import {
   IsDateString,
   IsNumber,
   IsEnum,
+  IsArray,
+  ArrayMaxSize,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+import { UploadOrderAttachmentDto } from './upload-order-attachment.dto';
 
 export enum OrderType {
   HOUSEHOLD = 'HOUSEHOLD',
@@ -45,4 +50,11 @@ export class CreateOrderDto {
   @IsOptional()
   @IsNumber()
   estimatedPrice?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(5)
+  @ValidateNested({ each: true })
+  @Type(() => UploadOrderAttachmentDto)
+  attachments?: UploadOrderAttachmentDto[];
 }

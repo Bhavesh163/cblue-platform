@@ -556,6 +556,11 @@ export default function FixerResults({
   initialOrderData?: any;
 }) {
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
+
   const t = (key: string) => T[locale]?.[key] || T["en"]![key] || key;
   const [fixers, setFixers] = useState<Fixer[]>([]);
   const [matchError, setMatchError] = useState("");
@@ -975,6 +980,11 @@ export default function FixerResults({
         const estPrice = parseFloat(estStr) || 0;
         const addressId = await ensureOrderAddressId(token);
         let createStatus: number | undefined;
+        let attachmentsPersistedViaCreate = false;
+        const attachmentPayload = storedAttachments.map((url, idx) => ({
+          url,
+          key: `order/${poNumber}/attachment-${idx + 1}`,
+        }));
 
         const orderPayloadBase = {
           orderType: bookingType === "household" ? "HOUSEHOLD" : "PROJECT",
@@ -982,6 +992,7 @@ export default function FixerResults({
           description: `${poNumber} | TIER:${typeof selectedFixer?.tier === "string" ? selectedFixer.tier.toUpperCase() : "STANDARD"} | LOC:${bookingLocation} | ${description}`,
           fixerId: selectedFixer.id,
           estimatedPrice: estPrice,
+          ...(attachmentPayload.length > 0 ? { attachments: attachmentPayload } : {}),
         };
 
         let createRes = await authedFetch("/api/v1/orders", {
@@ -1014,6 +1025,10 @@ export default function FixerResults({
           try {
             const created = await createRes.json();
             createdOrderId = created?.id || "";
+            attachmentsPersistedViaCreate =
+              attachmentPayload.length > 0 &&
+              Array.isArray(created?.images) &&
+              created.images.length >= attachmentPayload.length;
             if (createdOrderId && poNumber) {
               localStorage.setItem(`po_to_order_${poNumber}`, createdOrderId);
             }
@@ -1062,7 +1077,7 @@ export default function FixerResults({
 
             // Persist attachments to backend for cross-device visibility.
             // First attempt a single batch upload, then fallback to sequential single-file uploads.
-            let synced = false;
+            let synced = attachmentsPersistedViaCreate;
             const batchPayload = {
               attachments: storedAttachments.map((url, idx) => ({
                 url,
@@ -1070,18 +1085,20 @@ export default function FixerResults({
               })),
             };
 
-            const batchRes = await authedFetch(
-              `/api/v1/orders/${createdOrderId}/attachments/batch`,
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
+            if (!synced) {
+              const batchRes = await authedFetch(
+                `/api/v1/orders/${createdOrderId}/attachments/batch`,
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify(batchPayload),
                 },
-                body: JSON.stringify(batchPayload),
-              },
-            );
-            if (batchRes?.ok) {
-              synced = true;
+              );
+              if (batchRes?.ok) {
+                synced = true;
+              }
             }
 
             const uploadAttachment = async (url: string, idx: number, attempt = 0): Promise<boolean> => {

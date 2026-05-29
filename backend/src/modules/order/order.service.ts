@@ -74,6 +74,10 @@ export class OrderService {
       addressId = dummyAddress.id;
     }
 
+    const attachmentRows = Array.isArray(dto.attachments)
+      ? dto.attachments.filter((row) => String(row?.url || '').trim())
+      : [];
+
     const order = await this.prisma.order.create({
       data: {
         userId,
@@ -92,10 +96,27 @@ export class OrderService {
             note: 'Order created',
           },
         },
+        ...(attachmentRows.length > 0
+          ? {
+              images: {
+                create: attachmentRows.map((row, index) => ({
+                  type: 'order_attachment',
+                  url: row.url,
+                  key:
+                    row.key?.trim() ||
+                    `order/${Date.now()}-${index + 1}-${Math.random().toString(36).slice(2, 8)}`,
+                })),
+              },
+            }
+          : {}),
         ...(dto.fixerId && { status: OrderStatus.MATCHING }),
       },
       include: {
         address: true,
+        images: {
+          where: { type: { in: ['order_attachment', 'order_photo'] } },
+          orderBy: { createdAt: 'asc' },
+        },
         statusHistory: true,
       },
     });
