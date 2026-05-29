@@ -142,6 +142,16 @@ const normalizeImageUrl = (value: unknown) => {
     return raw;
   }
 
+  // Some legacy attachment rows store only the base64 payload without `data:*;base64,` header.
+  const compactBase64 = raw.replace(/\s+/g, "");
+  if (
+    compactBase64.length > 1024 &&
+    /^[A-Za-z0-9+/=]+$/.test(compactBase64) &&
+    !raw.includes("://")
+  ) {
+    return `data:image/jpeg;base64,${compactBase64}`;
+  }
+
   // Allow path-like keys (for example, `property/upload/image-1`) so they can
   // still be resolved and downloaded when absolute URLs are unavailable.
   if (/^[A-Za-z0-9][A-Za-z0-9._~!$&'()*+,;=:@/-]*$/.test(raw)) {
@@ -222,6 +232,70 @@ const extractImageUrlCandidate = (image: any, depth = 0): string => {
   }
 
   return "";
+};
+const collectAttachmentUrls = (value: unknown, depth = 0): string[] => {
+  if (depth > 6) return [];
+  if (value == null) return [];
+
+  if (typeof value === "string") {
+    const parsed = parseJsonLikeValue(value);
+    if (parsed !== value) {
+      return collectAttachmentUrls(parsed, depth + 1);
+    }
+    const normalized = normalizeImageUrl(value);
+    return normalized ? [normalized] : [];
+  }
+
+  if (Array.isArray(value)) {
+    return Array.from(
+      new Set(
+        value
+          .flatMap((entry) => collectAttachmentUrls(entry, depth + 1))
+          .filter(Boolean),
+      ),
+    );
+  }
+
+  if (typeof value !== "object") return [];
+  const image = value as any;
+  const candidates = [
+    extractImageUrlCandidate(image),
+    image.url,
+    image.key,
+    image.imageUrl,
+    image.publicUrl,
+    image.src,
+    image.fileUrl,
+    image.downloadUrl,
+    image.path,
+    image.href,
+    image.location,
+    image.dataUrl,
+    image.value,
+    image.originalUrl,
+    image.secureUrl,
+    image.signedUrl,
+    image.attachmentUrl,
+    image.uri,
+    image.file,
+    image.attributes,
+    image.attachment,
+    image.asset,
+    image.payload,
+    image.data,
+    image.metadata,
+    image.meta,
+    image.result,
+    image.image,
+  ];
+
+  return Array.from(
+    new Set(
+      candidates
+        .flatMap((entry) => collectAttachmentUrls(entry, depth + 1))
+        .filter(Boolean),
+    ),
+  );
 };
 const parseFilenameFromContentDisposition = (value: string | null) => {
   if (!value) return "";
@@ -304,6 +378,35 @@ const downloadBlobFile = (blob: Blob, filename: string) => {
   const blobUrl = URL.createObjectURL(blob);
   triggerDownload(blobUrl, filename, true);
 };
+const decodeDataUrlToBlob = (value: string): Blob | null => {
+  const normalized = normalizeImageUrl(value);
+  if (!normalized.startsWith("data:")) return null;
+  const commaIndex = normalized.indexOf(",");
+  if (commaIndex <= 0) return null;
+
+  const mimeType = mimeTypeFromDataUrl(normalized) || "application/octet-stream";
+  let payload = normalized.slice(commaIndex + 1).replace(/\s+/g, "");
+  if (!payload) return null;
+
+  // Best-effort payload cleanup for malformed base64 strings coming from legacy rows.
+  payload = payload.replace(/[^A-Za-z0-9+/=]/g, "");
+  if (!payload) return null;
+  const remainder = payload.length % 4;
+  if (remainder !== 0) {
+    payload = `${payload}${"=".repeat(4 - remainder)}`;
+  }
+
+  try {
+    const binary = atob(payload);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return new Blob([bytes], { type: mimeType });
+  } catch {
+    return null;
+  }
+};
 const shouldAttachAuthHeader = (url: string) => {
   if (url.startsWith("/api/")) return true;
   try {
@@ -357,6 +460,11 @@ const downloadSingleAttachmentUrl = async (
       fallbackName.includes(".") ? fallbackName : `${fallbackName}.${ext}`,
       `${prefix}-${index + 1}.${ext}`,
     );
+    const decodedBlob = decodeDataUrlToBlob(url);
+    if (decodedBlob) {
+      downloadBlobFile(decodedBlob, fileName);
+      return true;
+    }
     try {
       // Prefer direct data URL download so the browser keeps the user gesture.
       triggerDownload(url, fileName);
@@ -473,7 +581,7 @@ const downloadAttachmentUrls = async ({
   const uniqueUrls = Array.from(
     new Set(
       (urls || [])
-        .map((value) => normalizeImageUrl(extractImageUrlCandidate(value)))
+        .flatMap((value) => collectAttachmentUrls(value))
         .filter(Boolean),
     ),
   );
@@ -651,6 +759,66 @@ const resolveOrderIdByPo = async ({
   }
 
   return '';
+};
+const fetchAttachmentUrlsByPoFromOrders = async ({
+  po,
+  token,
+}: {
+  po?: string;
+  token?: string;
+}) => {
+  const poKey = normalizePoLookupValue(po);
+  if (!poKey || typeof window === 'undefined') {
+    return { orderId: '', urls: [] as string[] };
+  }
+
+  const authToken = String(token || localStorage.getItem('subscriber_token') || '').trim();
+  if (!authToken) {
+    return { orderId: '', urls: [] as string[] };
+  }
+
+  for (const endpoint of ['/api/v1/orders/fixer', '/api/v1/orders/my']) {
+    try {
+      const response = await fetch(endpoint, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (!response.ok) continue;
+      const rows = await response.json();
+      const list = Array.isArray(rows) ? rows : [];
+      const matched = list.find((order: any) => {
+        const extractedPo = extractPoCode(order);
+        return normalizePoLookupValue(extractedPo) === poKey;
+      });
+      if (!matched) continue;
+
+      const orderId = String(matched?.id || '').trim();
+      if (isOrderUuid(orderId)) {
+        rememberPoOrderId(po, orderId);
+      }
+
+      const urls = Array.from(
+        new Set(
+          [
+            ...(Array.isArray(matched?.images) ? matched.images : []),
+            ...(Array.isArray(matched?.attachments) ? matched.attachments : []),
+            matched?.issueImage,
+            matched?.image,
+            matched?.fileUrl,
+          ]
+            .flatMap((entry) => collectAttachmentUrls(entry))
+            .filter(Boolean),
+        ),
+      );
+
+      if (urls.length > 0 || orderId) {
+        return { orderId, urls };
+      }
+    } catch {
+      // non-blocking
+    }
+  }
+
+  return { orderId: '', urls: [] as string[] };
 };
 const firstNameOnly = (value: any, fallback = 'User') => {
   const cleaned = String(value || '').trim();
@@ -1033,11 +1201,21 @@ export default function FixerProPage() {
 
       const poFromDesc = extractPoCode(waitModalOrder);
       const poKey = waitModalOrder?.po || poFromDesc;
+      const token = localStorage.getItem('subscriber_token') || '';
+      const orderLookup = await fetchAttachmentUrlsByPoFromOrders({
+        po: poKey,
+        token,
+      });
+      if (orderLookup.urls.length > 0) {
+        directUrls.push(...orderLookup.urls);
+      }
       const attachmentOrderId = await resolveOrderIdByPo({
         po: poKey,
         fallbackOrderId:
           waitModalOrder?.orderId ||
+          orderLookup.orderId ||
           (isOrderUuid(waitModalOrder?.id) ? waitModalOrder?.id : ''),
+        token,
       });
 
       try {
@@ -1069,9 +1247,7 @@ export default function FixerProPage() {
       const uniqueDirectUrls = Array.from(
         new Set(
           directUrls
-            .map((value: unknown) =>
-              normalizeImageUrl(extractImageUrlCandidate(value)),
-            )
+            .flatMap((value: unknown) => collectAttachmentUrls(value))
             .filter(Boolean),
         ),
       );
@@ -1081,12 +1257,23 @@ export default function FixerProPage() {
       }
 
       if (!attachmentOrderId) {
+        // Last fallback: try to derive URLs directly from current order lists by PO.
+        const backupLookup = await fetchAttachmentUrlsByPoFromOrders({
+          po: poKey,
+          token,
+        });
+        if (backupLookup.urls.length > 0) {
+          if (isMounted) {
+            setWaitModalAttachmentUrls(backupLookup.urls);
+            setLoadingAttachments(false);
+          }
+          return;
+        }
         if (isMounted) { setWaitModalAttachmentUrls([]); setLoadingAttachments(false); }
         return;
       }
 
       try {
-        const token = localStorage.getItem('subscriber_token') || '';
         if (!token) {
           if (isMounted) { setWaitModalAttachmentUrls([]); setLoadingAttachments(false); }
           return;
@@ -1103,9 +1290,7 @@ export default function FixerProPage() {
         const attachments = await res.json();
         const backendUrls = Array.isArray(attachments)
           ? attachments
-              .map((attachment: any) =>
-                normalizeImageUrl(extractImageUrlCandidate(attachment)),
-              )
+              .flatMap((attachment: any) => collectAttachmentUrls(attachment))
               .filter(Boolean)
           : [];
         if (isMounted) { setWaitModalAttachmentUrls(Array.from(new Set(backendUrls))); setLoadingAttachments(false); }
@@ -3279,6 +3464,19 @@ export default function FixerProPage() {
 
                 if (freshUrls.length === 0) {
                   const token = localStorage.getItem('subscriber_token') || '';
+                  const orderLookup = await fetchAttachmentUrlsByPoFromOrders({
+                    po: poKey,
+                    token,
+                  });
+                  if (orderLookup.urls.length > 0) {
+                    freshUrls = Array.from(
+                      new Set(
+                        orderLookup.urls
+                          .flatMap((entry) => collectAttachmentUrls(entry))
+                          .filter(Boolean),
+                      ),
+                    );
+                  }
                   const mappedOrderId = poKey
                     ? (mappedOrders as any[]).find(
                         (order: any) =>
@@ -3289,6 +3487,7 @@ export default function FixerProPage() {
                     po: poKey,
                     fallbackOrderId:
                       waitModalOrder?.orderId ||
+                      orderLookup.orderId ||
                       mappedOrderId ||
                       (isOrderUuid(waitModalOrder?.id) ? waitModalOrder?.id : ''),
                     token,
@@ -3304,7 +3503,7 @@ export default function FixerProPage() {
                         freshUrls = Array.from(
                           new Set(
                             (Array.isArray(rows) ? rows : [])
-                              .map((entry: any) => normalizeImageUrl(extractImageUrlCandidate(entry)))
+                              .flatMap((entry: any) => collectAttachmentUrls(entry))
                               .filter(Boolean),
                           ),
                         );
@@ -4154,21 +4353,27 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
       variationModal?.metadata?.issueImageUrl,
       variationModal?.metadata?.issueImage,
     ]
-      .map((item: any) => normalizeImageUrl(extractImageUrlCandidate(item)))
+      .flatMap((item: any) => collectAttachmentUrls(item))
       .filter(Boolean);
     urls.push(...directSources);
-    try { const m = JSON.parse(localStorage.getItem('cblue_po_attachments') || '{}'); if (po && Array.isArray(m[po])) urls.push(...m[po].map((entry: any) => normalizeImageUrl(extractImageUrlCandidate(entry))).filter(Boolean)); } catch {}
-    try { const m = JSON.parse(localStorage.getItem('cblue_order_attachments') || '{}'); const oid = variationModal.orderId || (po ? localStorage.getItem(`po_to_order_${po}`) : ''); if (oid && Array.isArray(m[oid])) urls.push(...m[oid].map((entry: any) => normalizeImageUrl(extractImageUrlCandidate(entry))).filter(Boolean)); } catch {}
+    try { const m = JSON.parse(localStorage.getItem('cblue_po_attachments') || '{}'); if (po && Array.isArray(m[po])) urls.push(...m[po].flatMap((entry: any) => collectAttachmentUrls(entry)).filter(Boolean)); } catch {}
+    try { const m = JSON.parse(localStorage.getItem('cblue_order_attachments') || '{}'); const oid = variationModal.orderId || (po ? localStorage.getItem(`po_to_order_${po}`) : ''); if (oid && Array.isArray(m[oid])) urls.push(...m[oid].flatMap((entry: any) => collectAttachmentUrls(entry)).filter(Boolean)); } catch {}
     try { const rawFiles = (typeof window !== 'undefined' ? (window as any).__cblue_files_by_po : null) || {}; const files: File[] = po && Array.isArray(rawFiles[po]) ? rawFiles[po] : []; files.forEach(f => { try { urls.push(URL.createObjectURL(f)); } catch {} }); } catch {}
-    const deduped = Array.from(new Set(urls.map((entry: any) => normalizeImageUrl(extractImageUrlCandidate(entry))).filter(Boolean)));
+    const deduped = Array.from(new Set(urls.flatMap((entry: any) => collectAttachmentUrls(entry)).filter(Boolean)));
     if (deduped.length > 0) { if (isMounted) setVariationAttachUrls(deduped); return; }
     // Fetch from backend as cross-device fallback
     void (async () => {
       const token = localStorage.getItem('subscriber_token') || '';
+      const orderLookup = await fetchAttachmentUrlsByPoFromOrders({ po, token });
+      if (orderLookup.urls.length > 0 && isMounted) {
+        setVariationAttachUrls(orderLookup.urls);
+        return;
+      }
       const orderId = await resolveOrderIdByPo({
         po,
         fallbackOrderId:
           variationModal.orderId ||
+          orderLookup.orderId ||
           (isOrderUuid(variationModal?.id) ? variationModal.id : ''),
         token,
       });
@@ -4183,7 +4388,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
         const backendUrls = Array.from(
           new Set(
             (Array.isArray(data) ? data : [])
-              .map((item: any) => normalizeImageUrl(extractImageUrlCandidate(item)))
+              .flatMap((item: any) => collectAttachmentUrls(item))
               .filter(Boolean),
           ),
         );
@@ -4658,20 +4863,26 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
       variationModal?.metadata?.issueImageUrl,
       variationModal?.metadata?.issueImage,
     ]
-      .map((item: any) => normalizeImageUrl(extractImageUrlCandidate(item)))
+      .flatMap((item: any) => collectAttachmentUrls(item))
       .filter(Boolean);
     urls.push(...directSources);
-    try { const m = JSON.parse(localStorage.getItem('cblue_po_attachments') || '{}'); if (po && Array.isArray(m[po])) urls.push(...m[po].map((entry: any) => normalizeImageUrl(extractImageUrlCandidate(entry))).filter(Boolean)); } catch {}
-    try { const orderMap = JSON.parse(localStorage.getItem('cblue_order_attachments') || '{}'); const oid = variationModal.orderId || (po ? localStorage.getItem(`po_to_order_${po}`) : ''); if (oid && Array.isArray(orderMap[oid])) urls.push(...orderMap[oid].map((entry: any) => normalizeImageUrl(extractImageUrlCandidate(entry))).filter(Boolean)); } catch {}
+    try { const m = JSON.parse(localStorage.getItem('cblue_po_attachments') || '{}'); if (po && Array.isArray(m[po])) urls.push(...m[po].flatMap((entry: any) => collectAttachmentUrls(entry)).filter(Boolean)); } catch {}
+    try { const orderMap = JSON.parse(localStorage.getItem('cblue_order_attachments') || '{}'); const oid = variationModal.orderId || (po ? localStorage.getItem(`po_to_order_${po}`) : ''); if (oid && Array.isArray(orderMap[oid])) urls.push(...orderMap[oid].flatMap((entry: any) => collectAttachmentUrls(entry)).filter(Boolean)); } catch {}
     try { const rawFiles = (typeof window !== 'undefined' ? (window as any).__cblue_files_by_po : null) || {}; const files: File[] = po && Array.isArray(rawFiles[po]) ? rawFiles[po] : []; files.forEach(f => { try { urls.push(URL.createObjectURL(f)); } catch {} }); } catch {}
-    const localUrls = Array.from(new Set(urls.map((entry: any) => normalizeImageUrl(extractImageUrlCandidate(entry))).filter(Boolean)));
+    const localUrls = Array.from(new Set(urls.flatMap((entry: any) => collectAttachmentUrls(entry)).filter(Boolean)));
     if (localUrls.length === 0) {
       void (async () => {
         const token = (typeof window !== 'undefined' ? localStorage.getItem('subscriber_token') : '') || '';
+        const orderLookup = await fetchAttachmentUrlsByPoFromOrders({ po, token });
+        if (orderLookup.urls.length > 0) {
+          setVariationAttachUrls(orderLookup.urls);
+          return;
+        }
         const orderId = await resolveOrderIdByPo({
           po,
           fallbackOrderId:
             variationModal.orderId ||
+            orderLookup.orderId ||
             (isOrderUuid(variationModal?.id) ? variationModal.id : ''),
           token,
         });
@@ -4685,7 +4896,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
           const backendUrls = Array.from(
             new Set(
               (Array.isArray(data) ? data : [])
-                .map((item: any) => normalizeImageUrl(extractImageUrlCandidate(item)))
+                .flatMap((item: any) => collectAttachmentUrls(item))
                 .filter(Boolean),
             ),
           );

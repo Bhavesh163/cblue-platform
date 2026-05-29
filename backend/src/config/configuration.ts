@@ -33,18 +33,24 @@ export default () => ({
     apiKey:
       process.env.MAILJET_API_KEY ||
       process.env.MAILJET_API_SUBACCOUNT_KEY ||
+      process.env.MAILJET_API_KEY_PUBLIC ||
+      process.env.MAILJET_APIKEY_PUBLIC ||
       process.env.MAILJET_SUBACCOUNT_API_KEY ||
       process.env.MAILJET_PUBLIC_KEY ||
+      process.env.MJ_API_KEY_PUBLIC ||
       process.env.MJ_APIKEY_PUBLIC ||
-      '515b1389c9f3ce79b51f58955681dd9c',
+      '',
     apiSecret:
       process.env.MAILJET_SECRET_KEY ||
       process.env.MAILJET_SECRET_SUBACCOUNT_KEY ||
       process.env.MAILJET_SUBACCOUNT_SECRET_KEY ||
       process.env.MAILJET_API_SECRET ||
+      process.env.MAILJET_API_KEY_PRIVATE ||
+      process.env.MAILJET_APIKEY_PRIVATE ||
       process.env.MAILJET_PRIVATE_KEY ||
+      process.env.MJ_API_KEY_PRIVATE ||
       process.env.MJ_APIKEY_PRIVATE ||
-      '95e113e56293d977324d710a3067fb15',
+      '',
     fromEmail:
       process.env.MAILJET_FROM_EMAIL ||
       process.env.MAILJET_FROM_ADDRESS ||

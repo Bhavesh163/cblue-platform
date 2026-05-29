@@ -678,15 +678,23 @@ export class SubscriptionService {
     }
     const recipientName = String(name || '').trim() || 'User';
 
-    const mailjetApiKey = this.configService.get<string>('mailjet.apiKey');
-    const mailjetApiSecret =
-      this.configService.get<string>('mailjet.apiSecret');
+    const normalizeConfigString = (value?: string | null) =>
+      String(value || '')
+        .trim()
+        .replace(/^['"]|['"]$/g, '');
+
+    const mailjetApiKey = normalizeConfigString(
+      this.configService.get<string>('mailjet.apiKey'),
+    );
+    const mailjetApiSecret = normalizeConfigString(
+      this.configService.get<string>('mailjet.apiSecret'),
+    );
     const configuredFromEmail =
       this.configService.get<string>('mailjet.fromEmail') ||
       'noreply@lblue.tech';
-    const normalizedConfiguredFromEmail = configuredFromEmail
-      .trim()
-      .replace(/^['"]|['"]$/g, '');
+    const normalizedConfiguredFromEmail = normalizeConfigString(
+      configuredFromEmail,
+    );
     const fromCandidates = Array.from(
       new Set(
         [
@@ -694,7 +702,7 @@ export class SubscriptionService {
           'noreply@lblue.tech',
           'noreply@cblue.co.th',
         ]
-          .map((v) => v.trim())
+          .map((v) => normalizeConfigString(v))
           .filter(Boolean),
       ),
     );
