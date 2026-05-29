@@ -1089,11 +1089,11 @@ function CustomerHistoryCard({ item, idx, compact = false, locale = "en" }: { it
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <h3 className="font-bold text-gray-900">{item.service} <span className="text-sm font-normal text-gray-400">· {orderText} · {item.counterpartName || item.fixerName || 'Partner'}</span></h3>
-          <p className="text-sm text-gray-500 mt-1">Completed {fmtDate(item.completedAt || item.statusChangedAt || item.createdAt || item.date)}</p>
+          <p className="text-sm text-gray-500 mt-1">{item.status === 'CANCELLED' ? (locale === 'th' ? 'ยกเลิก' : locale === 'zh' ? '已取消' : 'Cancelled') : (locale === 'th' ? 'เสร็จสิ้น' : locale === 'zh' ? '已完成' : 'Completed')} {fmtDate(item.completedAt || item.statusChangedAt || item.createdAt || item.date)}</p>
         </div>
         <div className="flex flex-col items-start sm:items-end gap-1 flex-shrink-0">
           <span className="font-bold text-gray-900">{item.fee || item.budget || '฿0'}</span>
-          <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">Step 11 of 11 · {item.stepName || getWorkflowStepName(item.step)}</span>
+          <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${item.status === 'CANCELLED' ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>Step 11 of 11 · {item.stepName || getWorkflowStepName(item.step)}</span>
           <span className="text-xs text-sky-600 font-semibold">{collapsed ? '▼ Show details' : '▲ Hide details'}</span>
         </div>
       </div>
@@ -3235,6 +3235,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       const completedAt = entry.completedAt || entry.updatedAt || entry.statusChangedAt || entry.createdAt || entry.date || existing.completedAt || Date.now();
       const fee = entry.fee || entry.budget || (entry.estimatedPrice ? `฿${Number(entry.estimatedPrice).toLocaleString()}` : existing.fee || '฿0');
       const projectDetails = stripWorkflowPrefix(entry.description || entry.desc || existing.projectDetails || '');
+      const originalStatus = entry.status || existing.status;
       map.set(po, {
         ...existing,
         ...entry,
@@ -3248,7 +3249,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         statusChangedAt: entry.statusChangedAt || existing.statusChangedAt || completedAt,
         fee,
         budget: entry.budget || existing.budget || fee,
-        status: 'COMPLETED',
+        status: originalStatus || 'COMPLETED',
         step: 11,
         stepName: getWorkflowStepName(11),
         location: (() => {
