@@ -77,6 +77,16 @@ const fmtDateTime = (d: Date | number | string) => {
   const mm = String(dt.getMinutes()).padStart(2,'0');
   return `${fmtDate(dt)} ${hh}:${mm}`;
 };
+const formatWorkflowMeetingLabel = (meetingDate?: string, meetingTime?: string, fallback?: any) => {
+  const iso = String(meetingDate || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    const [y = '', m = '', d = ''] = iso.split('-');
+    const t = String(meetingTime || '').trim();
+    return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}${t ? ` ${t}` : ''}`.trim();
+  }
+  const ts = new Date(fallback || (iso ? `${iso}T${meetingTime || '00:00'}` : 0)).getTime();
+  return Number.isFinite(ts) && ts > 0 ? fmtDateTime(ts) : '';
+};
 const PO_CODE_PATTERN = /PO-(?:\d{8}|\d{4}-\d{4,})/i;
 const PO_CODE_EXACT_PATTERN = /^PO-(?:\d{8}|\d{4}-\d{4,})$/i;
 const isValidPoCode = (value: string) => PO_CODE_EXACT_PATTERN.test(String(value || '').trim());
@@ -1631,10 +1641,14 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       if (normalizedViewerUserId && normalizedSender === normalizedViewerUserId) return true;
       return ["customer", "me", "guest", "system"].includes(normalizedSender);
     };
+    const isWorkflowSystemMessage = (m: any) => {
+      const text = String(m?.text || '').trim().toLowerCase();
+      return String(m?.sender || '').trim().toLowerCase() === 'system' && text.startsWith('[system]');
+    };
     const isVisibleMessage = (m: any) => {
       if (!m || typeof m.text !== "string") return false;
       if (!m.text.trim()) return false;
-      if (m.sender === "system") return false;
+      if (m.sender === "system") return isWorkflowSystemMessage(m);
       const lowerText = m.text.toLowerCase();
       if (lowerText.includes("just be paid by customer")) return false;
       if (lowerText.includes("notify to proceed")) return false;
@@ -1808,8 +1822,33 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           continue;
         }
 
+        try {
+          const cached = JSON.parse(localStorage.getItem(`chat_messages_${po}`) || '[]');
+          const cachedRows = Array.isArray(cached) ? cached : [];
+          const mergedByText = new Map<string, any>();
+          for (const row of [...cachedRows, ...visible.map((m: any) => ({
+            id: m?.id || `backend-${po}-${m?.createdAt || Date.now()}`,
+            sender: 'system',
+            senderUserId: m?.senderUserId || '',
+            text: String(m?.text || '').trim(),
+            createdAt: parseDateMs(m?.createdAt),
+            time: toDisplayDateTime(m?.createdAt),
+          }))]) {
+            const text = String(row?.text || '').trim();
+            if (!text) continue;
+            mergedByText.set(text, row);
+          }
+          localStorage.setItem(`chat_messages_${po}`, JSON.stringify(Array.from(mergedByText.values()).sort((a: any, b: any) => parseDateMs(a.createdAt) - parseDateMs(b.createdAt))));
+        } catch {
+          // Non-blocking cache sync.
+        }
+
         const latestVisible = visible[visible.length - 1];
-        const incoming = [...visible].reverse().find((m: any) => String(m?.senderUserId || "") !== viewerUserId);
+        const incoming = [...visible].reverse().find((m: any) => {
+          const text = String(m?.text || '').trim().toLowerCase();
+          if (text.startsWith('[system]')) return false;
+          return String(m?.senderUserId || "") !== viewerUserId;
+        });
         const title =
           localStorage.getItem(`chat_title_${po}`) ||
           `${String(order?.serviceCategory || "Service").replace(/_/g, " ")} - ${po} - ${order?.estimatedPrice ? `฿${Number(order.estimatedPrice).toLocaleString()}` : "฿0"}`;
@@ -2040,10 +2079,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       if (!po) continue;
       const currentStatus = String(order.status || '').toUpperCase();
       const prevStatus = prevOrderStatuses.current[order.id];
-      if (
-        (prevStatus === 'MEETING_REQUESTED' && currentStatus === 'IN_PROGRESS') ||
-        (['IN_PROGRESS', 'COMPLETED'].includes(currentStatus) && currentStatus !== 'MEETING_REQUESTED')
-      ) {
+      if (prevStatus === 'MEETING_REQUESTED' && currentStatus === 'IN_PROGRESS') {
         toSchedule.add(po);
       }
       prevOrderStatuses.current[order.id] = currentStatus;
@@ -2137,7 +2173,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
   // F7: When partner declines on another browser, backend order becomes CANCELLED — sync customer UI.
   useEffect(() => {
-    if (!mockReady || !subscriber?.email?.includes('ghis')) return;
+    if (!mockReady) return;
     const cancelledOrders = workflowOrders.filter(
       (order: any) => String(order?.status || '').toUpperCase() === 'CANCELLED',
     );
@@ -2146,6 +2182,17 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     const cancelledPos = new Set(
       cancelledOrders.map((order: any) => extractPo(order)).filter((po: string) => isPoCode(po)),
     );
+
+    for (const order of cancelledOrders) {
+      const po = extractPo(order);
+      if (!po || !isPoCode(po)) continue;
+      const createdAt = getOrderEventTs(order);
+      const note = String(order?.statusHistory?.[0]?.note || order?.statusNote || '');
+      const reason = note.match(/Reason:\s*([^.]*)/i)?.[1]?.trim();
+      const service = String(order?.serviceCategory || order?.service || 'your project').replace(/_/g, ' ');
+      const msg = `The selected partner declined ${service} (${po})${reason ? ` (${reason})` : ''}. Please select another matched professional from Book Fixers & Pros.`;
+      appendLocalWorkflowChat(po, `[SYSTEM] ${msg}`, createdAt);
+    }
 
     setMockActiveItems((prev) => {
       const next = prev.filter((item: any) => !cancelledPos.has(item.po));
@@ -2171,17 +2218,19 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       for (const order of cancelledOrders) {
         const po = extractPo(order);
         if (!po || !isPoCode(po)) continue;
+        if (next.some((item: any) => String(item.id) === `partner-declined-${po}`)) continue;
         const createdAt = getOrderEventTs(order);
         const note = String(order?.statusHistory?.[0]?.note || order?.statusNote || '');
         const reason = note.match(/Reason:\s*([^.]*)/i)?.[1]?.trim();
         const service = String(order?.serviceCategory || order?.service || 'your project').replace(/_/g, ' ');
+        const msg = `The selected partner declined ${service} (${po})${reason ? ` (${reason})` : ''}. Please select another matched professional from Book Fixers & Pros.`;
         next.push({
-          id: `partner-declined-backend-${po}`,
+          id: `partner-declined-${po}`,
           po,
           type: 'notice',
-          msg: `The selected partner declined ${service} (${po})${reason ? ` (${reason})` : ''}. Please select another matched professional.`,
-          msgTh: `พาร์ทเนอร์ที่เลือกปฏิเสธ ${service} (${po})${reason ? ` (${reason})` : ''} กรุณาเลือกมืออาชีพรายอื่น`,
-          msgZh: `所选合作伙伴拒绝了 ${service}（${po}）${reason ? `（${reason}）` : ''}。请选择其他匹配的专业人士。`,
+          msg,
+          msgTh: `พาร์ทเนอร์ที่เลือกปฏิเสธ ${service} (${po})${reason ? ` (${reason})` : ''} กรุณาเลือกมืออาชีพรายอื่นจาก Book Fixers & Pros`,
+          msgZh: `所选合作伙伴拒绝了 ${service}（${po}）${reason ? `（${reason}）` : ''}。请从 Book Fixers & Pros 重新选择其他匹配的专业人士。`,
           date: fmtDateTime(createdAt),
           createdAt,
           dot: 'bg-red-400',
@@ -2644,8 +2693,15 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       const ts = parseDateMs(`${p.meetingDate}T${p.meetingTime || '00:00'}`);
       return ts >= Date.now();
     });
+  const pendingMeetingPos = new Set(
+    visibleMockDynRequests
+      .filter((x: any) => x.type === "meeting_pending_partner")
+      .map((x: any) => String(x.po || "").trim())
+      .filter(Boolean),
+  );
   const upcomingMeetings = visibleMockDynRequests
     .filter((x: any) => x.type === "meeting_scheduled")
+    .filter((x: any) => !pendingMeetingPos.has(String(x.po || "").trim()))
     .filter((x: any) => {
       const meetingTs = x.meetingDate
         ? parseDateMs(`${x.meetingDate}T${x.meetingTime || '00:00'}`)
@@ -2672,6 +2728,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     );
   };
   const workflowAlerts = visibleMockDynRequests
+    .filter((x: any) => !(x.type === "meeting_scheduled" && pendingMeetingPos.has(String(x.po || "").trim())))
     .map((x: any) => {
       const po = String(x.po || "").trim();
       const rawCreatedAt = x.createdAt || parseDateMs(x.date);
@@ -2682,8 +2739,14 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       if (x.type === "notice") return { id: `a-${x.id}`, msg: x.msg || x.desc || "Workflow updated.", msgTh: x.msgTh || x.descTh || "อัปเดตขั้นตอนการทำงาน", msgZh: x.msgZh || x.descZh || "工作流程已更新。", time: stableTime, createdAt, dot: "bg-indigo-400" };
       if (x.type === "payment_pending") return { id: `a-${x.id}`, msg: `${x.po || "Order"}: Partner accepted your enquiry. Next: click Testing period - Free Pass in Requests to activate chat and continue.`, msgTh: `${x.po || "ออเดอร์"}: พาร์ทเนอร์ยอมรับคำขอแล้ว ขั้นตอนถัดไปคือกด Testing period - Free Pass ในหน้า Requests เพื่อเปิดแชทและไปต่อ`, msgZh: `${x.po || "订单"}: 合作伙伴已接受您的询价。下一步：在 Requests 中点击 Testing period - Free Pass 以启用聊天并继续。`, time: stableTime, createdAt, dot: "bg-blue-500" };
       if (x.type === "chat_ready") return { id: `a-${x.id}`, msg: `${x.po || "Order"}: Chat room is active. Next: send your site meeting invitation when you are ready.`, msgTh: `${x.po || "ออเดอร์"}: ห้องแชทพร้อมใช้งานแล้ว ขั้นตอนถัดไปคือส่งคำเชิญนัดหมายหน้างานเมื่อพร้อม`, msgZh: `${x.po || "订单"}: 聊天室已开启。下一步：准备好后发送现场会议邀请。`, time: stableTime, createdAt, dot: "bg-sky-500" };
-      if (x.type === "meeting_pending_partner") return { id: `a-${x.id}`, msg: `${x.po || "Order"}: Site meeting invitation sent. Waiting for partner confirmation before moving to variation.`, msgTh: `${x.po || "ออเดอร์"}: ส่งคำเชิญนัดหมายหน้างานแล้ว กำลังรอพาร์ทเนอร์ยืนยันก่อนเข้าสู่ขั้นตอน variation`, msgZh: `${x.po || "订单"}: 现场会议邀请已发送。正在等待合作伙伴确认后再进入变更步骤。`, time: stableTime, createdAt, dot: "bg-amber-500" };
-      if (x.type === "meeting_scheduled") return { id: `a-${x.id}`, msg: `${x.po || "Order"}: Site meeting confirmed${x.meetingDate ? ` for ${x.meetingDate}` : ""}${x.meetingTime ? ` ${x.meetingTime}` : ""}. Next: attend the meeting and wait for partner variation if extra work is needed.`, msgTh: `${x.po || "ออเดอร์"}: ยืนยันนัดหมายหน้างานแล้ว${x.meetingDate ? ` วันที่ ${x.meetingDate}` : ""}${x.meetingTime ? ` เวลา ${x.meetingTime}` : ""} ขั้นตอนถัดไปคือเข้าพบหน้างานและรอ variation จากพาร์ทเนอร์หากมีงานเพิ่ม`, msgZh: `${x.po || "订单"}: 现场会议已确认${x.meetingDate ? `，日期 ${x.meetingDate}` : ""}${x.meetingTime ? ` 时间 ${x.meetingTime}` : ""}。下一步：参加会议，如有额外工作则等待合作伙伴提交变更。`, time: stableTime, createdAt, dot: "bg-teal-500" };
+      if (x.type === "meeting_pending_partner") {
+        const meetingWhen = formatWorkflowMeetingLabel(x.meetingDate, x.meetingTime, x.createdAt);
+        return { id: `a-${x.id}`, msg: `${x.po || "Order"}: Waiting for site meeting confirmation${meetingWhen ? ` for ${meetingWhen}` : ""}. Next: partner will confirm the proposed date and venue.`, msgTh: `${x.po || "ออเดอร์"}: รอการยืนยันนัดหมายหน้างาน${meetingWhen ? ` วันที่ ${meetingWhen}` : ""} ขั้นตอนถัดไปคือรอพาร์ทเนอร์ยืนยันวันเวลาและสถานที่`, msgZh: `${x.po || "订单"}: 等待现场确认现场会议${meetingWhen ? `（${meetingWhen}）` : ""}。下一步：等待合作伙伴确认日期和地点。`, time: stableTime, createdAt, dot: "bg-amber-500" };
+      }
+      if (x.type === "meeting_scheduled") {
+        const meetingWhen = formatWorkflowMeetingLabel(x.meetingDate, x.meetingTime, x.createdAt);
+        return { id: `a-${x.id}`, msg: `${x.po || "Order"}: Site meeting confirmed${meetingWhen ? ` for ${meetingWhen}` : ""}. Next: attend the meeting and wait for partner variation if extra work is needed.`, msgTh: `${x.po || "ออเดอร์"}: ยืนยันนัดหมายหน้างานแล้ว${meetingWhen ? ` วันที่ ${meetingWhen}` : ""} ขั้นตอนถัดไปคือเข้าพบหน้างานและรอ variation จากพาร์ทเนอร์หากมีงานเพิ่ม`, msgZh: `${x.po || "订单"}: 现场会议已确认${meetingWhen ? `（${meetingWhen}）` : ""}。下一步：参加会议，如有额外工作则等待合作伙伴提交变更。`, time: stableTime, createdAt, dot: "bg-teal-500" };
+      }
       if (x.type === "variation_pending") return { id: `a-${x.id}`, msg: `${x.po || "Order"}: Partner submitted a variation request. Next: review the revised scope and approve it to continue.`, msgTh: `${x.po || "ออเดอร์"}: พาร์ทเนอร์ส่งคำขอ variation แล้ว ขั้นตอนถัดไปคือพิจารณาขอบเขตงาน/ราคาใหม่และอนุมัติเพื่อดำเนินการต่อ`, msgZh: `${x.po || "订单"}: 合作伙伴已提交变更申请。下一步：查看调整后的范围并批准以继续。`, time: stableTime, createdAt, dot: "bg-purple-500" };
       if (x.type === "complete_pending") return { id: `a-${x.id}`, msg: `${x.po || "Order"}: Partner submitted the project-complete request. Next: review the completion note and confirm if the work is finished.`, msgTh: `${x.po || "ออเดอร์"}: พาร์ทเนอร์ส่งคำของานเสร็จแล้ว ขั้นตอนถัดไปคืออ่านบันทึกสรุปและยืนยันเมื่อโครงการเสร็จจริง`, msgZh: `${x.po || "订单"}: 合作伙伴已提交完工申请。下一步：查看完工说明，并在工作确实完成后确认。`, time: stableTime, createdAt, dot: "bg-green-500" };
       if (x.type === "rate_pending") return { id: `a-${x.id}`, msg: `${x.po || "Order"}: Project complete confirmed. Next: rate your partner to close this job and move it to history.`, msgTh: `${x.po || "ออเดอร์"}: ยืนยันงานเสร็จแล้ว ขั้นตอนถัดไปคือให้คะแนนพาร์ทเนอร์เพื่อปิดงานและย้ายไปประวัติ`, msgZh: `${x.po || "订单"}: 已确认完工。下一步：评价您的合作伙伴以关闭此工作并移入历史。`, time: stableTime, createdAt, dot: "bg-yellow-500" };
@@ -3987,7 +4050,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                           <div key={m.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
                             <div className="flex justify-between items-center mb-2">
                               <span className="text-xs text-gray-900 font-bold">{m.title} ({m.po})</span>
-                              <span className="bg-amber-100 text-amber-800 text-[10px] px-2 py-1 rounded-full font-bold">{m.meetingDate || m.date}{m.meetingTime ? ` · ${m.meetingTime}` : ''}</span>
+                              <span className="bg-amber-100 text-amber-800 text-[10px] px-2 py-1 rounded-full font-bold">{formatWorkflowMeetingLabel(m.meetingDate, m.meetingTime, m.createdAt || m.date)}</span>
                             </div>
                             <p className="text-[11px] text-gray-600">{locale === "th" ? "สถานที่:" : locale === "zh" ? "地点:" : "Location:"} {m.venue || m.meetingVenue || m.subdistrict || 'TBD'} | {locale === "th" ? "ผู้ให้บริการ:" : locale === "zh" ? "服务提供商:" : "Provider:"} {m.customer}</p>
                           </div>
@@ -4912,7 +4975,27 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                     localStorage.setItem('ghis_mock_active', JSON.stringify(newActive));
                     localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(newReqs));
                     localStorage.setItem('partner_mock_dyn_req', JSON.stringify(updatedPartnerReqs));
+                    try {
+                      const partnerAlerts = JSON.parse(localStorage.getItem('partner_alerts') || '[]');
+                      const completeAlert = {
+                        id: `alert-complete-${po}-${createdAt}`,
+                        type: 'complete_confirmed',
+                        po,
+                        title: 'Job Complete Approved',
+                        message: `${po}: Customer confirmed project complete. Next: rate the customer to close this job and move it to history.`,
+                        msgTh: `${po}: ลูกค้ายืนยันงานเสร็จแล้ว ขั้นตอนถัดไปคือให้คะแนนลูกค้าเพื่อปิดงานและย้ายไปประวัติ`,
+                        msgZh: `${po}: 客户已确认项目完工。下一步：评价客户以关闭此工作并移入历史。`,
+                        timestamp: new Date(createdAt).toISOString(),
+                        createdAt,
+                        dot: 'bg-sky-500',
+                      };
+                      localStorage.setItem('partner_alerts', JSON.stringify([
+                        completeAlert,
+                        ...(Array.isArray(partnerAlerts) ? partnerAlerts.filter((a: any) => String(a?.id) !== completeAlert.id) : []),
+                      ]));
+                    } catch {}
                     window.dispatchEvent(new Event('storage'));
+                    window.dispatchEvent(new Event('cblue-workflow-updated'));
                     setMockActiveItems(newActive);
                     setMockDynRequests(newReqs);
                     if (token && backendOrder?.id) {

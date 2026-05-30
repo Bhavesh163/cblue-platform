@@ -2283,10 +2283,14 @@ export default function FixerProPage() {
       if (normalizedViewerUserId && normalizedSender === normalizedViewerUserId) return true;
       return ["fixer", "partner", "me", "guest", "system"].includes(normalizedSender);
     };
+    const isWorkflowSystemMessage = (m: any) => {
+      const text = String(m?.text || '').trim().toLowerCase();
+      return String(m?.sender || '').trim().toLowerCase() === 'system' && text.startsWith('[system]');
+    };
     const isVisibleMessage = (m: any) => {
       if (!m || typeof m.text !== "string") return false;
       if (!m.text.trim()) return false;
-      if (m.sender === "system") return false;
+      if (m.sender === "system") return isWorkflowSystemMessage(m);
       const lowerText = m.text.toLowerCase();
       if (lowerText.includes("just be paid by customer")) return false;
       if (lowerText.includes("notify to proceed")) return false;
@@ -2314,14 +2318,16 @@ export default function FixerProPage() {
           localStorage.removeItem(`chat_from_${po}`);
           continue;
         }
-        if (completedPoSet.has(po)) {
+        const historyEntry = mockHistory.find((h: any) => h.po === po);
+        const partnerRated = historyEntry?.partnerRating != null;
+        if (completedPoSet.has(po) && partnerRated) {
           localStorage.setItem(`chat_closed_${po}`, '1');
           continue;
         }
-        if (localStorage.getItem(`chat_closed_${po}`)) continue;
+        if (localStorage.getItem(`chat_closed_${po}`) && partnerRated) continue;
         const parsed = JSON.parse(localStorage.getItem(key) || "[]");
         if (!Array.isArray(parsed) || parsed.length === 0) continue;
-        if (hasCompletionChatMarker(parsed)) {
+        if (hasCompletionChatMarker(parsed) && partnerRated) {
           localStorage.setItem(`chat_closed_${po}`, '1');
           continue;
         }
@@ -2476,8 +2482,33 @@ export default function FixerProPage() {
           continue;
         }
 
+        try {
+          const cached = JSON.parse(localStorage.getItem(`chat_messages_${po}`) || '[]');
+          const cachedRows = Array.isArray(cached) ? cached : [];
+          const mergedByText = new Map<string, any>();
+          for (const row of [...cachedRows, ...visible.map((m: any) => ({
+            id: m?.id || `backend-${po}-${m?.createdAt || Date.now()}`,
+            sender: 'system',
+            senderUserId: m?.senderUserId || '',
+            text: String(m?.text || '').trim(),
+            createdAt: new Date(m?.createdAt || Date.now()).getTime(),
+            time: m?.createdAt ? fmtDateTime(m.createdAt) : '',
+          }))]) {
+            const text = String(row?.text || '').trim();
+            if (!text) continue;
+            mergedByText.set(text, row);
+          }
+          localStorage.setItem(`chat_messages_${po}`, JSON.stringify(Array.from(mergedByText.values()).sort((a: any, b: any) => Number(a.createdAt || 0) - Number(b.createdAt || 0))));
+        } catch {
+          // Non-blocking cache sync.
+        }
+
         const latestVisible = visible[visible.length - 1];
-        const incoming = [...visible].reverse().find((m: any) => String(m?.senderUserId || "") !== viewerUserId);
+        const incoming = [...visible].reverse().find((m: any) => {
+          const text = String(m?.text || '').trim().toLowerCase();
+          if (text.startsWith('[system]')) return false;
+          return String(m?.senderUserId || "") !== viewerUserId;
+        });
         const title =
           localStorage.getItem(`chat_title_${po}`) ||
           `${String(order?.serviceCategory || "Service").replace(/_/g, " ")} - ${po} - ${order?.estimatedPrice ? `฿${Number(order.estimatedPrice).toLocaleString()}` : "฿0"}`;
@@ -3358,6 +3389,79 @@ export default function FixerProPage() {
     });
   }, [chatFeed, mappedOrders, mockActiveState, mockHistory, mockDynReqs]);
 
+  // Cross-browser: when customer confirms complete, backend order becomes COMPLETED — sync partner rate request + alerts.
+  useEffect(() => {
+    if (!partner?.id) return;
+    const completedOrders = mappedOrders.filter(
+      (order: any) => String(order?.status || '').toUpperCase() === 'COMPLETED',
+    );
+    if (completedOrders.length === 0) return;
+
+    let changed = false;
+    let nextReqs: any[] = [];
+    let nextAlerts: any[] = [];
+    try { nextReqs = filterVisibleWorkflowItems(JSON.parse(localStorage.getItem('partner_mock_dyn_req') || '[]')); } catch {}
+    try { nextAlerts = JSON.parse(localStorage.getItem('partner_alerts') || '[]'); } catch {}
+    if (!Array.isArray(nextReqs)) nextReqs = [];
+    if (!Array.isArray(nextAlerts)) nextAlerts = [];
+
+    for (const order of completedOrders) {
+      const po = String(order?.po || '').trim();
+      if (!po) continue;
+      const historyEntry = mockHistory.find((h: any) => h.po === po);
+      if (historyEntry?.partnerRating != null) continue;
+      if (nextReqs.some((r: any) => r.po === po && r.type === 'rate_partner')) continue;
+
+      const createdAt = parseTs(order.statusChangedAt || order.updatedAt || order.createdAt) || Date.now();
+      nextReqs = [
+        ...nextReqs.filter((r: any) => !(r.po === po && ['complete_partner', 'variation_partner', 'meeting_confirm_partner'].includes(r.type))),
+        {
+          id: `rate-partner-${po}`,
+          orderId: order.id,
+          po,
+          service: order.service,
+          serviceTh: order.serviceTh,
+          serviceZh: order.serviceZh,
+          customer: order.customer,
+          date: fmtDateTime(createdAt),
+          createdAt,
+          fee: order.fee,
+          budget: order.budget,
+          tier: order.tier,
+          location: order.subdistrict || order.location || '',
+          subdistrict: order.subdistrict || '',
+          description: 'Customer confirmed completion. Please rate the customer to close this job.',
+          type: 'rate_partner',
+          workflowType: 'rate_partner',
+          step: 11,
+        },
+      ];
+      const alertId = `alert-complete-${po}`;
+      if (!nextAlerts.some((a: any) => String(a?.id || '').startsWith(alertId))) {
+        nextAlerts.unshift({
+          id: `${alertId}-${createdAt}`,
+          type: 'complete_confirmed',
+          po,
+          title: 'Job Complete Approved',
+          message: `${po}: Customer confirmed project complete. Next: rate the customer to close this job and move it to history.`,
+          msgTh: `${po}: ลูกค้ายืนยันงานเสร็จแล้ว ขั้นตอนถัดไปคือให้คะแนนลูกค้าเพื่อปิดงานและย้ายไปประวัติ`,
+          msgZh: `${po}: 客户已确认项目完工。下一步：评价客户以关闭此工作并移入历史。`,
+          timestamp: new Date(createdAt).toISOString(),
+          createdAt,
+          dot: 'bg-sky-500',
+        });
+      }
+      changed = true;
+    }
+
+    if (!changed) return;
+    try { localStorage.setItem('partner_mock_dyn_req', JSON.stringify(nextReqs)); } catch {}
+    try { localStorage.setItem('partner_alerts', JSON.stringify(nextAlerts)); } catch {}
+    setPartnerDynReqs(nextReqs);
+    setPartnerPersistedAlerts(nextAlerts);
+    window.dispatchEvent(new Event('cblue-workflow-updated'));
+  }, [mappedOrders, mockHistory, partner?.id]);
+
   const partnerRequestItems = Array.from([
     ...partnerDynReqs.filter((r: any) => !['accept_sent'].includes(String(r.type || '')) && !completedHistoryPos.has(r.po) && !declinedPartnerPos.has(r.po)),
     ...incomingJobs.filter((job: any) => !(String(job.status || '').toUpperCase() === 'MEETING_REQUESTED' && partnerDynReqs.some((req: any) => req.po === job.po && req.workflowType === 'meeting_confirm_partner'))),
@@ -3839,6 +3943,11 @@ export default function FixerProPage() {
     if (['CREATED','PENDING','MATCHING'].includes(o.status)) return [{ id: `order-pending-${po}`, msg: `${po}: New ${svc} request from ${o.customer || 'customer'}. Review the PO and accept or decline it.`, msgTh: `${po}: มีคำขอ ${svc} ใหม่จาก ${o.customer || 'ลูกค้า'} กรุณาตรวจสอบ PO และรับหรือปฏิเสธ`, msgZh: `${po}: 来自 ${o.customer || '客户'} 的新 ${svc} 请求。请查看PO并接受或拒绝。`, unread: true, time: displayTime, createdAt, dot: "bg-purple-500" }];
     if (o.status === 'MEETING_REQUESTED') return [{ id: `order-meeting-${po}`, msg: `${po}: Customer sent a site meeting invitation for ${svc}. Open the request, confirm the schedule, and then prepare Step 9 variation if needed.`, msgTh: `${po}: ลูกค้าส่งคำเชิญนัดหมายสำหรับ ${svc} แล้ว กรุณาเปิดคำขอ ยืนยันเวลา และเตรียม Step 9 variation หากจำเป็น`, msgZh: `${po}: 客户已为 ${svc} 发送现场会议邀请。请打开请求、确认时间，并在需要时准备第9步变更。`, unread: true, time: displayTime, createdAt, dot: "bg-amber-500" }];
     if (o.status === 'IN_PROGRESS') return [{ id: `order-inprogress-${po}`, msg: `${po}: Chat room is active for ${svc}. Coordinate with the customer now, then confirm the site meeting when the invitation arrives.`, msgTh: `${po}: ห้องแชทของ ${svc} พร้อมใช้งานแล้ว กรุณาคุยกับลูกค้าและยืนยันนัดหมายหน้างานเมื่อได้รับคำเชิญ`, msgZh: `${po}: ${svc} 聊天室已开启。请先与客户协调，并在收到现场会议邀请后完成确认。`, unread: true, time: displayTime, createdAt, dot: "bg-sky-400" }];
+    if (o.status === 'COMPLETED') {
+      const historyEntry = mockHistory.find((h: any) => h.po === po);
+      if (historyEntry?.partnerRating != null) return [];
+      return [{ id: `order-rate-${po}`, msg: `${po}: Customer confirmed project complete. Next: rate the customer to close this job and move it to history.`, msgTh: `${po}: ลูกค้ายืนยันงานเสร็จแล้ว ขั้นตอนถัดไปคือให้คะแนนลูกค้าเพื่อปิดงานและย้ายไปประวัติ`, msgZh: `${po}: 客户已确认项目完工。下一步：评价客户以关闭此工作并移入历史。`, unread: true, time: displayTime, createdAt, dot: "bg-sky-500" }];
+    }
     return [];
   });
 
@@ -4404,15 +4513,17 @@ export default function FixerProPage() {
                   try {
                     const dynReqKey = 'ghis_mock_dyn_req';
                     const existingDyn = JSON.parse(localStorage.getItem(dynReqKey) || '[]');
+                    const declineAt = Date.now();
+                    const declineMsg = `${partner?.name || 'The selected partner'} declined ${waitModalOrder.service || 'your project'} (${po})${declineReason ? ` (${declineReason})` : ''}. Please select another matched professional from Book Fixers & Pros.`;
                     const customerNotice = {
-                      id: `partner-declined-${po}-${Date.now()}`,
+                      id: `partner-declined-${po}`,
                       po,
                       type: 'notice',
-                      msg: `${partner?.name || 'The selected partner'} is unable to proceed with ${waitModalOrder.service || 'your project'} (${po}) due to unavailability. Please select another service provider from the matching list.`,
-                      msgTh: `${partner?.name || 'พาร์ทเนอร์ที่เลือก'} ไม่สามารถดำเนินการ ${waitModalOrder.service || 'โครงการของคุณ'} (${po}) เนื่องจากไม่ว่าง กรุณาเลือกผู้ให้บริการอื่นจากรายชื่อที่จับคู่`,
-                      msgZh: `${partner?.name || '选中的合作伙伴'} 无法继续您的 ${waitModalOrder.service || '项目'} (${po})，原因是无法安排时间。请从匹配列表中选择其他服务提供商。`,
-                      date: fmtDateTime(Date.now()),
-                      createdAt: Date.now(),
+                      msg: declineMsg,
+                      msgTh: `${partner?.name || 'พาร์ทเนอร์ที่เลือก'} ปฏิเสธ ${waitModalOrder.service || 'โครงการของคุณ'} (${po})${declineReason ? ` (${declineReason})` : ''} กรุณาเลือกมืออาชีพรายอื่นจาก Book Fixers & Pros`,
+                      msgZh: `${partner?.name || '选中的合作伙伴'} 拒绝了 ${waitModalOrder.service || '您的项目'} (${po})${declineReason ? `（${declineReason}）` : ''}。请从 Book Fixers & Pros 重新选择其他匹配的专业人士。`,
+                      date: fmtDateTime(declineAt),
+                      createdAt: declineAt,
                       dot: 'bg-red-400',
                     };
                     const nextDyn = [
@@ -4421,6 +4532,33 @@ export default function FixerProPage() {
                     ];
                     localStorage.setItem(dynReqKey, JSON.stringify(nextDyn));
                     setMockDynReqs(nextDyn);
+                    try {
+                      const chatKey = `chat_messages_${po}`;
+                      const chatRows = JSON.parse(localStorage.getItem(chatKey) || '[]');
+                      const chatText = `[SYSTEM] ${declineMsg}`;
+                      const nextChat = Array.isArray(chatRows) ? [...chatRows] : [];
+                      if (!nextChat.some((row: any) => String(row?.text || '') === chatText)) {
+                        nextChat.push({
+                          id: `workflow-decline-${po}-${declineAt}`,
+                          sender: 'system',
+                          text: chatText,
+                          time: fmtDateTime(declineAt),
+                          createdAt: declineAt,
+                        });
+                        localStorage.setItem(chatKey, JSON.stringify(nextChat));
+                        window.dispatchEvent(new CustomEvent('cblue-chat-updated', { detail: { orderId: po } }));
+                      }
+                    } catch {}
+                    if (backendOrderId) {
+                      const token = localStorage.getItem('subscriber_token') || '';
+                      if (token) {
+                        fetch(`/api/v1/orders/${backendOrderId}/chat`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                          body: JSON.stringify({ text: `[SYSTEM] ${declineMsg}` }),
+                        }).catch(() => {});
+                      }
+                    }
                   } catch {}
                   try {
                     const active = JSON.parse(localStorage.getItem('ghis_mock_active') || '[]');
