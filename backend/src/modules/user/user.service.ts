@@ -10,13 +10,87 @@ export class UserService {
   async getProfile(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: {
-        addresses: true,
-        fixer: { include: { skills: true, availability: true, images: true } },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        company: true,
+        role: true,
+        createdAt: true,
+        addresses: {
+          select: {
+            id: true,
+            label: true,
+            building: true,
+            street: true,
+            unit: true,
+            notes: true,
+            province: true,
+            district: true,
+            subdistrict: true,
+            postalCode: true,
+            latitude: true,
+            longitude: true,
+            isDefault: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+          orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
+        },
+        fixer: {
+          select: {
+            id: true,
+            userId: true,
+            status: true,
+            tier: true,
+            rating: true,
+            completedJobs: true,
+            responseTime: true,
+            verified: true,
+            aiTier: true,
+            aiScore: true,
+            aiBreakdown: true,
+            aiFlags: true,
+            aiCredentialStatus: true,
+            bio: true,
+            description: true,
+            pastExperience: true,
+            pastProjectType: true,
+            yearsExperience: true,
+            travelRadius: true,
+            availableStartDate: true,
+            serviceProvince: true,
+            serviceDistrict: true,
+            servicePostalCode: true,
+            companyAddress: true,
+            priceList: true,
+            createdAt: true,
+            skills: {
+              select: {
+                id: true,
+                category: true,
+                name: true,
+              },
+            },
+            availability: true,
+            images: true,
+          },
+        },
       },
     });
     if (!user) throw new NotFoundException('User not found');
-    return user;
+    return {
+      ...user,
+      fixer: user.fixer
+        ? {
+            ...user.fixer,
+            contactName: user.name,
+            contactPhone: user.phone,
+            companyName: user.company,
+          }
+        : null,
+    };
   }
 
   async updateProfile(userId: string, dto: UpdateUserDto) {
