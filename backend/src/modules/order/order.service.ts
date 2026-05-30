@@ -196,22 +196,31 @@ export class OrderService {
   }
 
   async findMyFixerOrders(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        fixer: {
-          select: {
-            id: true,
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          fixer: {
+            select: {
+              id: true,
+            },
           },
         },
-      },
-    });
+      });
 
-    if (!user?.fixer) {
+      if (!user?.fixer) {
+        return [];
+      }
+
+      return await this.findByFixer(user.fixer.id);
+    } catch (error) {
+      this.logger.warn(
+        `Returning empty fixer order list after query failed for user ${userId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
       return [];
     }
-
-    return this.findByFixer(user.fixer.id);
   }
 
   async findByFixer(fixerId: string) {
@@ -265,26 +274,46 @@ export class OrderService {
   }
 
   private async getOrderForParticipant(orderId: string, userId: string) {
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
-      select: {
-        id: true,
-        userId: true,
-        fixerId: true,
-      },
-    });
+    let order: { id: string; userId: string; fixerId: string | null } | null = null;
+    try {
+      order = await this.prisma.order.findUnique({
+        where: { id: orderId },
+        select: {
+          id: true,
+          userId: true,
+          fixerId: true,
+        },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Order lookup failed for participant check on ${orderId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      throw new NotFoundException('Order not found');
+    }
 
     if (!order) throw new NotFoundException('Order not found');
 
-    const fixer = order.fixerId
-      ? await this.prisma.fixer.findUnique({
+    let fixerUserId: string | null = null;
+    if (order.fixerId) {
+      try {
+        const fixer = await this.prisma.fixer.findUnique({
           where: { id: order.fixerId },
           select: { userId: true },
-        })
-      : null;
+        });
+        fixerUserId = fixer?.userId || null;
+      } catch (error) {
+        this.logger.warn(
+          `Fixer lookup failed for order ${orderId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
 
     const isCustomer = order.userId === userId;
-    const isFixer = fixer?.userId === userId;
+    const isFixer = fixerUserId === userId;
     if (!isCustomer && !isFixer) {
       throw new ForbiddenException('You do not have access to this order');
     }
@@ -361,16 +390,6 @@ export class OrderService {
           senderRole: sender?.role ?? UserRole.USER,
           text: dto.text.trim(),
         },
-        include: {
-          senderUser: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              role: true,
-            },
-          },
-        },
       });
     } catch (error) {
       this.logger.warn(
@@ -389,13 +408,17 @@ export class OrderService {
       };
     }
 
+    const senderProfile = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true, email: true },
+    });
+
     return {
       id: created.id,
       orderId: created.orderId,
       senderUserId: created.senderUserId,
       senderRole: created.senderRole,
-      senderName:
-        created.senderUser?.name || created.senderUser?.email || 'User',
+      senderName: senderProfile?.name || senderProfile?.email || 'User',
       text: created.text,
       createdAt: created.createdAt,
     };

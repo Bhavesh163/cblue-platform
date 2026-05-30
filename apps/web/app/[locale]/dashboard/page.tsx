@@ -2098,6 +2098,85 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatFeed, mockReady]);
 
+  // F7: When partner declines on another browser, backend order becomes CANCELLED — sync customer UI.
+  useEffect(() => {
+    if (!mockReady || !subscriber?.email?.includes('ghis')) return;
+    const cancelledOrders = workflowOrders.filter(
+      (order: any) => String(order?.status || '').toUpperCase() === 'CANCELLED',
+    );
+    if (cancelledOrders.length === 0) return;
+
+    const cancelledPos = new Set(
+      cancelledOrders.map((order: any) => extractPo(order)).filter((po: string) => isPoCode(po)),
+    );
+
+    setMockActiveItems((prev) => {
+      const next = prev.filter((item: any) => !cancelledPos.has(item.po));
+      if (next.length === prev.length) return prev;
+      try { localStorage.setItem('ghis_mock_active', JSON.stringify(next)); } catch {}
+      return next;
+    });
+
+    setMockDynRequests((prev) => {
+      let changed = false;
+      const next = prev.filter((item: any) => {
+        if (!cancelledPos.has(item.po)) return true;
+        if (['notice'].includes(String(item.type || ''))) return true;
+        changed = true;
+        return false;
+      });
+      for (const order of cancelledOrders) {
+        const po = extractPo(order);
+        if (!po || !isPoCode(po)) continue;
+        if (next.some((item: any) => item.po === po && item.type === 'notice' && String(item.id || '').includes('partner-declined'))) {
+          continue;
+        }
+        const note = String(order?.statusHistory?.[0]?.note || order?.statusNote || '');
+        const reason = note.match(/Reason:\s*([^.]*)/i)?.[1]?.trim();
+        const service = String(order?.serviceCategory || order?.service || 'your project').replace(/_/g, ' ');
+        next.push({
+          id: `partner-declined-backend-${po}`,
+          po,
+          type: 'notice',
+          msg: `The selected partner declined ${service} (${po})${reason ? ` (${reason})` : ''}. Please select another matched professional.`,
+          msgTh: `พาร์ทเนอร์ที่เลือกปฏิเสธ ${service} (${po})${reason ? ` (${reason})` : ''} กรุณาเลือกมืออาชีพรายอื่น`,
+          msgZh: `所选合作伙伴拒绝了 ${service}（${po}）${reason ? `（${reason}）` : ''}。请选择其他匹配的专业人士。`,
+          date: fmtDateTime(Date.now()),
+          createdAt: Date.now(),
+          dot: 'bg-red-400',
+        });
+        changed = true;
+      }
+      if (!changed) return prev;
+      try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(next)); } catch {}
+      return next;
+    });
+
+    setMockHistory((prev) => {
+      let changed = false;
+      const map = new Map(prev.map((item: any) => [item.po, item]));
+      for (const order of cancelledOrders) {
+        const po = extractPo(order);
+        if (!po || map.has(po)) continue;
+        changed = true;
+        map.set(po, {
+          po,
+          title: String(order?.serviceCategory || order?.service || 'Project').replace(/_/g, ' '),
+          status: 'CANCELLED',
+          statusName: 'Partner Unavailable',
+          completedAt: Date.now(),
+          step: 11,
+          stepName: 'Partner Unavailable',
+        });
+      }
+      if (!changed) return prev;
+      const next = Array.from(map.values());
+      try { localStorage.setItem('ghis_mock_history', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders, mockReady]);
+
   const REQUESTS_MOCK = [
     { id: "req1", title: "REINSTATEMENT", customer: "Suppadesh", date: "5/11/2026, 2:30:00 PM", budget: "฿5,000,000", po: "PO-2605-1200", tier: "ECONOMY", desc: "I want a team to carry out a 3000 sq.m. housing project." },
     { id: "req2", title: "FITOUT", customer: "Suppadesh", date: "5/11/2026, 2:35:00 PM", budget: "฿25,000,000", po: "PO-2605-6812", tier: "STANDARD", desc: "I want to have a project team to carry out a 1000 sq.m. office fitout in Bangkok" },

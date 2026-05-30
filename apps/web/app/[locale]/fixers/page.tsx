@@ -751,6 +751,15 @@ const getWorkflowStepFromStatus = (status?: string) => {
       return 5;
   }
 };
+const getPartnerPinnedWorkflowStep = (po?: string) => {
+  const code = String(po || '').trim();
+  if (!code) return 0;
+  try {
+    if (localStorage.getItem(`partner_complete_sent_${code}`)) return 10;
+    if (localStorage.getItem(`partner_variation_sent_${code}`)) return 9;
+  } catch {}
+  return 0;
+};
 const _n = new Date();
 const _fmt = (d: Date) => fmtDateTime(d);
 const notifications: any[] = [
@@ -2765,12 +2774,34 @@ export default function FixerProPage() {
       } catch {}
     };
     checkMock();
+    const onWorkflowUpdated = () => checkMock();
     window.addEventListener('storage', checkMock);
+    window.addEventListener('cblue-workflow-updated', onWorkflowUpdated as EventListener);
     const interval = setInterval(checkMock, 1000);
-    return () => { clearInterval(interval); window.removeEventListener('storage', checkMock); };
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('storage', checkMock);
+      window.removeEventListener('cblue-workflow-updated', onWorkflowUpdated as EventListener);
+    };
   }, []);
 
   const completedHistoryPos = new Set(mockHistory.map((h: any) => h.po));
+  const declinedPartnerPos = new Set<string>();
+  mockHistory.forEach((entry: any) => {
+    const po = String(entry?.po || '').trim();
+    const status = String(entry?.status || '').toUpperCase();
+    if (po && ['CANCELLED', 'DECLINED'].includes(status)) declinedPartnerPos.add(po);
+  });
+  partnerDeclineLogs.forEach((entry: any) => {
+    const po = String(entry?.po || '').trim();
+    if (po) declinedPartnerPos.add(po);
+  });
+  const variationWaitingCustomerPos = new Set(
+    mockDynReqs.filter((r: any) => r.type === 'variation_pending').map((r: any) => String(r.po || '').trim()).filter(Boolean),
+  );
+  const completeWaitingCustomerPos = new Set(
+    mockDynReqs.filter((r: any) => r.type === 'complete_pending').map((r: any) => String(r.po || '').trim()).filter(Boolean),
+  );
   const parseWorkflowStep = (value: any) => {
     if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, Math.floor(value));
     const text = String(value ?? '').trim();
@@ -2792,19 +2823,16 @@ export default function FixerProPage() {
       .map((p: PropInquiry) => String(p.poNumber || '').trim())
       .filter((po: string) => isPropPoCode(po)),
   );
-  let activeJobs = mappedOrders.filter(o => !['COMPLETED', 'CANCELLED'].includes(o.status) && !completedHistoryPos.has(o.po) && !partnerSideCompletedPropPos.has(String(o.po || '').trim()));
+  let activeJobs = mappedOrders.filter(o => !['COMPLETED', 'CANCELLED'].includes(o.status) && !completedHistoryPos.has(o.po) && !declinedPartnerPos.has(o.po) && !partnerSideCompletedPropPos.has(String(o.po || '').trim()));
   activeJobs = activeJobs.map(job => {
       const stepLookup = mockActiveState.find((x: any) => x.po === job.po);
       const backendStep = getWorkflowStepFromStatus(job.status);
       const partnerWorkflowStep = Math.max(0, ...partnerDynReqs.filter((x: any) => x.po === job.po).map((x: any) => parseWorkflowStep(x.step)));
-      const localSubmittedStep = (() => {
-        try {
-          if (localStorage.getItem(`partner_complete_sent_${job.po}`)) return 10;
-          if (localStorage.getItem(`partner_variation_sent_${job.po}`)) return 9;
-        } catch {}
-        return 0;
-      })();
-      const step = Math.max(parseWorkflowStep(stepLookup?.step), backendStep, partnerWorkflowStep, localSubmittedStep);
+      const localSubmittedStep = getPartnerPinnedWorkflowStep(job.po);
+      const waitingCustomerStep =
+        completeWaitingCustomerPos.has(job.po) ? 10 :
+        variationWaitingCustomerPos.has(job.po) ? 9 : 0;
+      const step = Math.max(parseWorkflowStep(stepLookup?.step), backendStep, partnerWorkflowStep, localSubmittedStep, waitingCustomerStep);
       // For partner view: actionNeeded = partner has a pending workflow request OR backend requires partner action
       // Exclude accept_sent which is a permanent marker, not an action item
       const hasPartnerDynAction = partnerDynReqs.some((r: any) => r.po === job.po && r.type !== 'accept_sent');
@@ -3095,6 +3123,7 @@ export default function FixerProPage() {
     // MEETING_REQUESTED always shows for partner to confirm, regardless of mock step state
     let incomingJobs = mappedOrders.filter(o =>
       !completedHistoryPos.has(o.po) &&
+      !declinedPartnerPos.has(o.po) &&
       (
         (['CREATED', 'PENDING', 'MATCHING'].includes(o.status) && !acceptedPos.has(o.po)) ||
         o.status === 'MEETING_REQUESTED'
@@ -3168,8 +3197,15 @@ export default function FixerProPage() {
         const order = mappedOrders.find((x: any) => x.po === po);
         const localActive = mockActiveState.find((x: any) => x.po === po);
         const historyEntry = mockHistory.find((x: any) => x.po === po) || histFromStorage.find((x: any) => x.po === po);
-        const variationAlreadySubmitted = (Number(localActive?.step || 0) >= 9 && localActive?.actionNeeded === false) || Boolean(localStorage.getItem(`partner_variation_sent_${po}`));
-        const completeAlreadySubmitted = (Number(localActive?.step || 0) >= 10 && localActive?.actionNeeded === false) || Boolean(localStorage.getItem(`partner_complete_sent_${po}`));
+        const variationAlreadySubmitted = (Number(localActive?.step || 0) >= 9 && localActive?.actionNeeded === false) || Boolean(localStorage.getItem(`partner_variation_sent_${po}`)) || variationWaitingCustomerPos.has(po);
+        const completeAlreadySubmitted = (Number(localActive?.step || 0) >= 10 && localActive?.actionNeeded === false) || Boolean(localStorage.getItem(`partner_complete_sent_${po}`)) || completeWaitingCustomerPos.has(po);
+        if (variationAlreadySubmitted) {
+          try {
+            const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
+            const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 9, mockStep: 9, actionNeeded: false } : x);
+            localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
+          } catch {}
+        }
         const partnerAlreadyRated = Boolean(historyEntry?.partnerRating);
         const meetingAlreadyConfirmed = Number(localActive?.step || 0) >= 9;
         if (!po || !order) continue;
@@ -3317,10 +3353,10 @@ export default function FixerProPage() {
       try { localStorage.setItem("partner_mock_dyn_req", JSON.stringify(next)); } catch {}
       return next;
     });
-  }, [chatFeed, mappedOrders, mockActiveState, mockHistory]);
+  }, [chatFeed, mappedOrders, mockActiveState, mockHistory, mockDynReqs]);
 
   const partnerRequestItems = Array.from([
-    ...partnerDynReqs.filter((r: any) => !['accept_sent'].includes(String(r.type || '')) && !completedHistoryPos.has(r.po)),
+    ...partnerDynReqs.filter((r: any) => !['accept_sent'].includes(String(r.type || '')) && !completedHistoryPos.has(r.po) && !declinedPartnerPos.has(r.po)),
     ...incomingJobs.filter((job: any) => !(String(job.status || '').toUpperCase() === 'MEETING_REQUESTED' && partnerDynReqs.some((req: any) => req.po === job.po && req.workflowType === 'meeting_confirm_partner'))),
   ].reduce((map: Map<string, any>, item: any) => {
     const key = item.po || item.id;
@@ -4339,6 +4375,7 @@ export default function FixerProPage() {
                     || (po ? localStorage.getItem(`po_to_order_${po}`) : '')
                     || (isOrderUuid(waitModalOrder.id) ? waitModalOrder.id : '');
                   const declineReason = declineComment.trim() || 'Currently unavailable for this project';
+                  const token = localStorage.getItem('subscriber_token') || '';
 
                   // 1. Store decline comment for admin only (partner-side localStorage)
                   try {
@@ -4351,45 +4388,20 @@ export default function FixerProPage() {
                       declinedAt: new Date().toISOString(),
                     });
                     localStorage.setItem('admin_decline_logs', JSON.stringify(logs));
+                    setPartnerDeclineLogs(logs);
                   } catch {}
 
-                  // 2. Update backend order status to CANCELLED so customer sees it
-                  if (backendOrderId) {
-                    try {
-                      const token = localStorage.getItem('subscriber_token');
-                      if (token) {
-                        await fetch(`/api/v1/orders/${backendOrderId}/status`, {
-                          method: 'PUT',
-                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                          body: JSON.stringify({ status: 'CANCELLED', note: `The selected service provider is unable to proceed with this project. Reason: ${declineReason}. Please select another professional.` }),
-                        });
-                      }
-                    } catch {}
-                  }
-
-                  // 3. Add alert to partner's own alerts with detailed message
+                  // 2. Remove partner/customer workflow cards immediately (optimistic UI)
                   try {
-                    const partnerAlerts = JSON.parse(localStorage.getItem('partner_alerts') || '[]');
-                    partnerAlerts.unshift({
-                      id: `decline-${po}-${Date.now()}`,
-                      type: 'decline_sent',
-                      po,
-                      title: 'Job Declined',
-                      message: `You declined ${waitModalOrder.service || 'the project'} (${po}) · Budget: ${waitModalOrder.budget || 'N/A'}. Reason: ${declineReason}. Customer has been notified to select another professional.`,
-                      msgTh: `คุณปฏิเสธ ${waitModalOrder.service || 'โครงการ'} (${po}) · งบประมาณ: ${waitModalOrder.budget || 'ไม่ระบุ'}. เหตุผล: ${declineReason}. ลูกค้าได้รับแจ้งให้เลือกมืออาชีพอื่น`,
-                      msgZh: `您拒绝了 ${waitModalOrder.service || '项目'} (${po}) · 预算: ${waitModalOrder.budget || 'N/A'}. 原因: ${declineReason}. 客户已被通知选择其他专业人士。`,
-                      timestamp: new Date().toISOString(),
-                      createdAt: Date.now(),
-                      dot: 'bg-red-500',
-                    });
-                    localStorage.setItem('partner_alerts', JSON.stringify(partnerAlerts));
+                    const partnerReqs = JSON.parse(localStorage.getItem('partner_mock_dyn_req') || '[]');
+                    const nextPartnerReqs = (Array.isArray(partnerReqs) ? partnerReqs : []).filter((r: any) => r.po !== po);
+                    localStorage.setItem('partner_mock_dyn_req', JSON.stringify(nextPartnerReqs));
+                    setPartnerDynReqs(nextPartnerReqs);
                   } catch {}
-
-                  // 4. Add alert to customer about partner declining (via customer's mock request system)
                   try {
                     const dynReqKey = 'ghis_mock_dyn_req';
                     const existingDyn = JSON.parse(localStorage.getItem(dynReqKey) || '[]');
-                    existingDyn.push({
+                    const customerNotice = {
                       id: `partner-declined-${po}-${Date.now()}`,
                       po,
                       type: 'notice',
@@ -4399,20 +4411,19 @@ export default function FixerProPage() {
                       date: fmtDateTime(Date.now()),
                       createdAt: Date.now(),
                       dot: 'bg-red-400',
-                    });
-                    localStorage.setItem(dynReqKey, JSON.stringify(existingDyn));
-                  } catch {}
-
-                  // 5. Remove the request locally immediately; backend polling will keep it removed cross-browser.
-                  try {
-                    const partnerReqs = JSON.parse(localStorage.getItem('partner_mock_dyn_req') || '[]');
-                    const nextPartnerReqs = (Array.isArray(partnerReqs) ? partnerReqs : []).filter((r: any) => r.po !== po);
-                    localStorage.setItem('partner_mock_dyn_req', JSON.stringify(nextPartnerReqs));
-                    setPartnerDynReqs(nextPartnerReqs);
+                    };
+                    const nextDyn = [
+                      ...existingDyn.filter((r: any) => r.po !== po && !String(r.id || '').startsWith(`pay-${po}`)),
+                      customerNotice,
+                    ];
+                    localStorage.setItem(dynReqKey, JSON.stringify(nextDyn));
+                    setMockDynReqs(nextDyn);
                   } catch {}
                   try {
                     const active = JSON.parse(localStorage.getItem('ghis_mock_active') || '[]');
-                    localStorage.setItem('ghis_mock_active', JSON.stringify((Array.isArray(active) ? active : []).filter((x: any) => x.po !== po)));
+                    const nextActive = (Array.isArray(active) ? active : []).filter((x: any) => x.po !== po);
+                    localStorage.setItem('ghis_mock_active', JSON.stringify(nextActive));
+                    setMockActiveState(nextActive);
                   } catch {}
                   try {
                     const history = JSON.parse(localStorage.getItem('ghis_mock_history') || '[]');
@@ -4436,11 +4447,59 @@ export default function FixerProPage() {
                     setMockHistory(nextHistory);
                   } catch {}
 
-                  // 6. Close both modals.
+                  // 3. Partner alert
+                  try {
+                    const partnerAlerts = JSON.parse(localStorage.getItem('partner_alerts') || '[]');
+                    partnerAlerts.unshift({
+                      id: `decline-${po}-${Date.now()}`,
+                      type: 'decline_sent',
+                      po,
+                      title: 'Job Declined',
+                      message: `You declined ${waitModalOrder.service || 'the project'} (${po}) · Budget: ${waitModalOrder.budget || 'N/A'}. Reason: ${declineReason}. Customer has been notified to select another professional.`,
+                      msgTh: `คุณปฏิเสธ ${waitModalOrder.service || 'โครงการ'} (${po}) · งบประมาณ: ${waitModalOrder.budget || 'ไม่ระบุ'}. เหตุผล: ${declineReason}. ลูกค้าได้รับแจ้งให้เลือกมืออาชีพอื่น`,
+                      msgZh: `您拒绝了 ${waitModalOrder.service || '项目'} (${po}) · 预算: ${waitModalOrder.budget || 'N/A'}. 原因: ${declineReason}. 客户已被通知选择其他专业人士。`,
+                      timestamp: new Date().toISOString(),
+                      createdAt: Date.now(),
+                      dot: 'bg-red-500',
+                    });
+                    localStorage.setItem('partner_alerts', JSON.stringify(partnerAlerts));
+                    setPartnerPersistedAlerts(partnerAlerts);
+                  } catch {}
+
                   setDeclineModalOpen(false);
                   setDeclineComment('');
                   setWaitModalOrder(null);
                   window.dispatchEvent(new Event('storage'));
+                  window.dispatchEvent(new Event('cblue-workflow-updated'));
+
+                  // 4. Sync backend status (non-blocking) so customer browsers receive CANCELLED alerts.
+                  if (backendOrderId && token) {
+                    const currentStatus = String(waitModalOrder.status || '').toUpperCase();
+                    const declinePath: Record<string, string[]> = {
+                      CREATED: ['CANCELLED'],
+                      MATCHING: ['CANCELLED'],
+                      ASSIGNED: ['CANCELLED'],
+                      DEPOSIT_PENDING: ['CANCELLED'],
+                      CONFIRMED: ['CANCELLED'],
+                      IN_PROGRESS: ['CANCELLED'],
+                      MEETING_REQUESTED: ['CANCELLED'],
+                    };
+                    const hops = declinePath[currentStatus] || ['CANCELLED'];
+                    void (async () => {
+                      for (const nextStatus of hops) {
+                        try {
+                          await fetch(`/api/v1/orders/${backendOrderId}/status`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                            body: JSON.stringify({
+                              status: nextStatus,
+                              note: `The selected service provider is unable to proceed with this project. Reason: ${declineReason}. Please select another professional.`,
+                            }),
+                          });
+                        } catch {}
+                      }
+                    })();
+                  }
                 }}
                 disabled={!declineComment.trim()}
                 className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-xl transition"
@@ -4544,7 +4603,7 @@ export default function FixerProPage() {
 
         {/* Tab Content */}
         <div className={`mt-6 ${activeTab !== 'overview' ? 'hidden' : ''}`}>
-          <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={partnerRequestItemsWithProp} scheduledMeetings={allScheduledMeetings} completedJobs={allCompletedJobs} earnings={earningsSeries} stats={stats} notifications={displayNotifications} chats={chatFeed} onJobClick={handleJobClick} onTabChange={(tab) => setActiveTab(tab as TabKey)} />
+          <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={partnerRequestItemsWithProp} scheduledMeetings={allScheduledMeetings} completedJobs={allCompletedJobs} earnings={earningsSeries} stats={stats} notifications={displayNotifications} chats={chatFeed} onJobClick={handleJobClick} onDeclineJob={(job) => { setWaitModalOrder(job); setDeclineModalOpen(true); }} onTabChange={(tab) => setActiveTab(tab as TabKey)} />
         </div>
         {activeTab === "requests" && <PartnerRequests locale={locale} incomingJobs={partnerRequestItemsWithProp} onJobClick={handleJobClick} onDeclineJob={(job) => { setWaitModalOrder(job); setDeclineModalOpen(true); }} priceList={(partner as any)?.priceList} onPropAccept={(p: PropInquiry) => setPropAcceptModal(p)} onPropMeetingConfirm={(p: PropInquiry) => setPropMeetingConfirmModal(p)} onPropRatePartner={(p: PropInquiry) => { setPropPartnerRateStars(0); setPropPartnerRateComment(""); setPropPartnerRateModal(p); }} />}
         {activeTab === "active" && <PartnerJobs locale={locale} activeJobs={activeJobs} onJobClick={handleJobClick} priceList={(partner as any)?.priceList} />}
@@ -4725,7 +4784,7 @@ export default function FixerProPage() {
 }
 
 /* ===== PARTNER OVERVIEW ===== */
-function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledMeetings, completedJobs, earnings, stats, notifications, chats = [], onJobClick, onTabChange }: { locale: string; partner: PartnerInfo | null; activeJobs: any[]; incomingJobs: any[]; scheduledMeetings: any[]; completedJobs: any[]; earnings: any[]; stats: any; notifications: any[]; chats?: any[]; onJobClick?: (job: any) => void; onTabChange?: (tab: string) => void; }) {
+function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledMeetings, completedJobs, earnings, stats, notifications, chats = [], onJobClick, onDeclineJob, onTabChange }: { locale: string; partner: PartnerInfo | null; activeJobs: any[]; incomingJobs: any[]; scheduledMeetings: any[]; completedJobs: any[]; earnings: any[]; stats: any; notifications: any[]; chats?: any[]; onJobClick?: (job: any) => void; onDeclineJob?: (job: any) => void; onTabChange?: (tab: string) => void; }) {
   const earnings12 = earnings;
   const maxEarning = earnings12.length > 0 ? Math.max(...earnings12.map(e => e.amount)) : 0;
   const recentIncomingChats = chats.filter((c: any) => c.hasIncoming).slice(0, 3);
@@ -4876,7 +4935,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
                   <>
                     {req.urgency === "urgent" && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-700">{locale === "th" ? "เร่งด่วน" : locale === "zh" ? "紧急" : "Urgent"}</span>}
                     <button onClick={(e) => { e.stopPropagation(); onJobClick && onJobClick(req); }} className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition">{locale === "th" ? "รับ" : locale === "zh" ? "接受" : "Accept"}</button>
-                    <button className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">{locale === "th" ? "ปฏิเสธ" : locale === "zh" ? "拒绝" : "Decline"}</button>
+                    <button onClick={(e) => { e.stopPropagation(); onDeclineJob ? onDeclineJob(req) : onJobClick?.(req); }} className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">{locale === "th" ? "ปฏิเสธ" : locale === "zh" ? "拒绝" : "Decline"}</button>
                   </>
                 )}
               </div>
@@ -5101,11 +5160,13 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
         try { localStorage.setItem(`partner_variation_sent_${po}`, '1'); } catch {}
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
+        window.dispatchEvent(new Event("cblue-workflow-updated"));
         postSystemMsg(`[SYSTEM] Partner has submitted a variation request for ${po}. Please review in your Requests tab. [VARIATION_DATA]${varNote}[/VARIATION_DATA]`);
       } else if (action === 'complete') {
         const complId = `compl-${po}`;
+        const previousPartnerRequest = resolveVariationPartnerNote(po);
         const completeDesc = extraData?.trim() ? `Partner completion request: ${extraData.trim()}` : 'Work is completed. Please review and mark as complete to close this project.';
-        const next = [...dynReqs.filter((x: any) => x.po !== po), { id: complId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: completeDesc, location: job.location || job.subdistrict || '', type: 'complete_pending', step: 10 }];
+        const next = [...dynReqs.filter((x: any) => x.po !== po), { id: complId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: completeDesc, location: job.location || job.subdistrict || '', partnerRequest: previousPartnerRequest, partnerNote: previousPartnerRequest, variationRequest: previousPartnerRequest, type: 'complete_pending', step: 10 }];
         localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
         // Update active BEFORE writePartnerReqs to prevent race condition in buildChatFeed
         const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
@@ -5114,6 +5175,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
         try { localStorage.setItem(`partner_complete_sent_${po}`, '1'); } catch {}
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['complete_partner', 'variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
+        window.dispatchEvent(new Event("cblue-workflow-updated"));
         postSystemMsg(`[SYSTEM] Partner has marked the job as complete for ${po}. Please review and confirm in your Requests tab. [COMPLETE_DATA]${completeDesc}[/COMPLETE_DATA]`);
       } else if (action === 'rate') {
         const rating = extraData || '5';
@@ -5129,6 +5191,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
         try { localStorage.removeItem(`partner_variation_sent_${po}`); localStorage.removeItem(`partner_complete_sent_${po}`); } catch {}
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && x.type === 'rate_partner')));
         window.dispatchEvent(new Event("storage"));
+        window.dispatchEvent(new Event("cblue-workflow-updated"));
         postSystemMsg(`[SYSTEM] Partner has rated this project ${rating}/5 stars. The job is now complete.`);
       }
     } catch (e) { console.error(e); }
@@ -5681,6 +5744,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
         try { localStorage.setItem(`partner_variation_sent_${po}`, '1'); } catch {}
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
+        window.dispatchEvent(new Event("cblue-workflow-updated"));
         postSystemMsg(`[SYSTEM] Partner has submitted a variation request for ${po}. Please review in your Requests tab. [VARIATION_DATA]${varNote}[/VARIATION_DATA]`);
       } else if (action === 'complete') {
         const complId = `compl-${po}`;
@@ -5692,6 +5756,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
         try { localStorage.setItem(`partner_complete_sent_${po}`, '1'); } catch {}
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['complete_partner', 'variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
+        window.dispatchEvent(new Event("cblue-workflow-updated"));
         postSystemMsg(`[SYSTEM] Partner has marked the job as complete for ${po}. Please review and confirm in your Requests tab. [COMPLETE_DATA]${completeDesc}[/COMPLETE_DATA]`);
       } else if (action === 'rate') {
         const rating = extraData || '5';
@@ -5707,6 +5772,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
         try { localStorage.removeItem(`partner_variation_sent_${po}`); localStorage.removeItem(`partner_complete_sent_${po}`); } catch {}
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && x.type === 'rate_partner')));
         window.dispatchEvent(new Event("storage"));
+        window.dispatchEvent(new Event("cblue-workflow-updated"));
         postSystemMsg(`[SYSTEM] Partner has rated this project ${rating}/5 stars. The job is now complete.`);
       }
     } catch (e) { console.error(e); }
@@ -5997,6 +6063,111 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
             <div className="flex gap-3 pt-1">
               <button onClick={() => { if (!variationDesc.trim()) return; const priceListRows = buildVariationPriceListRows(variationRows); if (variationModal?.po) { storeVariationPriceList(variationModal.po, priceListRows); } const tableText = priceListRows.length > 0 ? `\n\nPrice List:\n${formatVariationPriceListText(priceListRows)}` : ''; handlePartnerAction(variationModal, 'variation', `Partner variation request: ${variationDesc.trim()}${tableText}`); setVariationRows(EMPTY_VAR_ROWS()); setVariationModal(null); }} disabled={!variationDesc.trim()} className="flex-1 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition text-sm">Submit Variation</button>
               <button onClick={() => { setVariationRows(EMPTY_VAR_ROWS()); setVariationModal(null); }} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+    {completeModal && (
+      <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+        <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-y-auto max-h-[calc(100dvh-6rem)] mx-auto">
+          <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4">
+            <h3 className="text-white font-bold text-lg">Mark Job Complete</h3>
+            <p className="text-green-100 text-sm mt-1">{completeModal.po} · {completeModal.service}</p>
+          </div>
+          <div className="px-6 py-5 space-y-4">
+            <WorkflowModalMeta
+              step={10}
+              typeOfWork={completeModal.service || 'Project'}
+              actionText="Send the project complete request to the customer for final confirmation."
+              po={completeModal.po || '-'}
+              counterpartLabel="Customer"
+              counterpartName={firstNameOnly(completeModal.customer, 'Customer')}
+              budget={toCurrencyLabel(completeModal.budget || completeModal.fee)}
+              location={(() => { const loc = completeModal.location || completeModal.subdistrict || ''; if (loc && loc !== 'Unknown') return loc; const m = String(completeModal.description || '').match(/\bLOC:([^|]+)/); return m ? (m[1] ?? '').trim() : 'Unknown'; })()}
+              projectDetails={stripWorkflowPrefix(completeModal.description || completeModal.desc || completeModal.projectDetails || completeModal.service || '')}
+            />
+            {(() => {
+              let bd: BudgetBreakdownItem[] | null = null;
+              try {
+                const pl = priceList ?? [];
+                const descForBd = String(completeModal.description || '');
+                if (pl.length > 0 && descForBd) {
+                  const computed = computeBudgetBreakdown(descForBd, pl);
+                  if (computed && computed.length > 0) {
+                    bd = computed;
+                    try { localStorage.setItem(`cblue_po_breakdown_${completeModal.po}`, JSON.stringify(bd)); } catch {}
+                  }
+                }
+              } catch {}
+              if (!bd || bd.length === 0) {
+                try { const s = localStorage.getItem(`cblue_po_breakdown_${completeModal.po}`); if (s) { const p = JSON.parse(s); if (Array.isArray(p) && p.length > 0) bd = p; } } catch {}
+              }
+              if (!bd || bd.length === 0) return null;
+              return (
+                <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+                  <span className="text-gray-500 text-xs block mb-1">Budget Breakdown</span>
+                  <div className="font-mono text-xs space-y-0.5">
+                    {bd.map((it, i) => (
+                      <div key={i} className="flex justify-between gap-2">
+                        <span className="text-gray-600">{i + 1}) {it!.service} {it.qty.toLocaleString()} {it.unit} × ฿{it.unitRate.toLocaleString()}</span>
+                        <span className="font-semibold text-green-700 shrink-0">= ฿{it!.total.toLocaleString()}</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between gap-2 pt-1 border-t border-green-200 font-bold text-sm">
+                      <span className="text-gray-700">Budget</span>
+                      <span className="text-green-800">= ฿{bd.reduce((s, it) => s + (it?.total ?? 0), 0).toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+            {(() => {
+              const variationItems = resolveVariationPriceListItems(
+                completeModal?.po,
+                completeModal?.description || completeModal?.desc || '',
+              );
+              if (variationItems.length === 0) return null;
+              return (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                  <span className="text-gray-500 text-xs block mb-1">Price List</span>
+                  <div className="text-sm text-amber-900 space-y-1">
+                    {variationItems.map((item, index) => (
+                      <p key={`${item.item}-${index}`}>{formatVariationPriceListItem(item, index)}</p>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+            {(() => {
+              const partnerNote = completeModal?.partnerRequest || completeModal?.partnerNote || completeModal?.variationRequest || resolveVariationPartnerNote(completeModal?.po) || '';
+              if (!partnerNote || partnerNote.trim() === '') return null;
+              return (
+                <div className="bg-purple-50 border border-purple-200 rounded-xl px-4 py-3">
+                  <span className="text-gray-500 text-xs block mb-1">Partner Note</span>
+                  <p className="text-sm text-purple-900 whitespace-pre-wrap">{partnerNote}</p>
+                </div>
+              );
+            })()}
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-2">Completion Note <span className="text-gray-400 font-normal">(optional)</span></label>
+              <textarea
+                value={completeNote}
+                onChange={e => setCompleteNote(e.target.value)}
+                rows={3}
+                placeholder="e.g. All tasks finished, site cleaned, client signed off..."
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 resize-none"
+              />
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => {
+                  handlePartnerAction(completeModal, 'complete', completeNote.trim() || 'Job marked complete by partner');
+                  setCompleteModal(null);
+                }}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-xl transition text-sm"
+              >Confirm Complete</button>
+              <button onClick={() => setCompleteModal(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">Cancel</button>
             </div>
           </div>
         </div>
