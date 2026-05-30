@@ -1412,7 +1412,7 @@ export default function FixerProPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    window.scrollTo(0, 0);
+    requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: "auto" }));
   }, [activeTab]);
 
   const ensurePropChatBootstrap = (inquiry: PropInquiry) => {
@@ -3621,7 +3621,7 @@ export default function FixerProPage() {
       dot: "bg-green-500",
     };
     return null;
-  }).filter(Boolean) as any[];
+  }).filter(Boolean).map((n: any) => ({ createdAt: parseTs(n.time) || Date.now(), ...n })) as any[];
 
   const partnerWorkflowNotifications = partnerDynReqs.map((r: any) => {
     const displayTime = fmtDateTime(r.createdAt || parseTs(r.date) || Date.now());
@@ -3680,7 +3680,7 @@ export default function FixerProPage() {
       dot: "bg-green-500",
     };
     return null;
-  }).filter(Boolean) as any[];
+  }).filter(Boolean).map((n: any) => ({ createdAt: parseTs(n.time) || Date.now(), ...n })) as any[];
 
   const propWorkflowNotifications = propInquiries.map((p: PropInquiry) => {
     const createdAt = Number(p.updatedAt || p.createdAt || Date.now());
@@ -4393,7 +4393,40 @@ export default function FixerProPage() {
                     localStorage.setItem(dynReqKey, JSON.stringify(existingDyn));
                   } catch {}
 
-                  // 5. Close both modals; backend status change will filter job on next fetch
+                  // 5. Remove the request locally immediately; backend polling will keep it removed cross-browser.
+                  try {
+                    const partnerReqs = JSON.parse(localStorage.getItem('partner_mock_dyn_req') || '[]');
+                    const nextPartnerReqs = (Array.isArray(partnerReqs) ? partnerReqs : []).filter((r: any) => r.po !== po);
+                    localStorage.setItem('partner_mock_dyn_req', JSON.stringify(nextPartnerReqs));
+                    setPartnerDynReqs(nextPartnerReqs);
+                  } catch {}
+                  try {
+                    const active = JSON.parse(localStorage.getItem('ghis_mock_active') || '[]');
+                    localStorage.setItem('ghis_mock_active', JSON.stringify((Array.isArray(active) ? active : []).filter((x: any) => x.po !== po)));
+                  } catch {}
+                  try {
+                    const history = JSON.parse(localStorage.getItem('ghis_mock_history') || '[]');
+                    const declinedEntry = {
+                      ...waitModalOrder,
+                      status: 'CANCELLED',
+                      statusName: 'Partner Unavailable',
+                      statusNote: `Reason: ${declineReason}`,
+                      declineReason,
+                      completedAt: Date.now(),
+                      statusChangedAt: Date.now(),
+                      step: 11,
+                      stepName: 'Partner Unavailable',
+                    };
+                    const nextHistory = [
+                      ...(Array.isArray(history) ? history.filter((x: any) => x.po !== po) : []),
+                      declinedEntry,
+                    ];
+                    pruneStorageIfNeeded();
+                    localStorage.setItem('ghis_mock_history', JSON.stringify(nextHistory));
+                    setMockHistory(nextHistory);
+                  } catch {}
+
+                  // 6. Close both modals.
                   setDeclineModalOpen(false);
                   setDeclineComment('');
                   setWaitModalOrder(null);
@@ -4503,7 +4536,7 @@ export default function FixerProPage() {
         <div className={`mt-6 ${activeTab !== 'overview' ? 'hidden' : ''}`}>
           <PartnerOverview locale={locale} partner={partner} activeJobs={activeJobs} incomingJobs={partnerRequestItemsWithProp} scheduledMeetings={allScheduledMeetings} completedJobs={allCompletedJobs} earnings={earningsSeries} stats={stats} notifications={displayNotifications} chats={chatFeed} onJobClick={handleJobClick} onTabChange={(tab) => setActiveTab(tab as TabKey)} />
         </div>
-        {activeTab === "requests" && <PartnerRequests locale={locale} incomingJobs={partnerRequestItemsWithProp} onJobClick={handleJobClick} priceList={(partner as any)?.priceList} onPropAccept={(p: PropInquiry) => setPropAcceptModal(p)} onPropMeetingConfirm={(p: PropInquiry) => setPropMeetingConfirmModal(p)} onPropRatePartner={(p: PropInquiry) => { setPropPartnerRateStars(0); setPropPartnerRateComment(""); setPropPartnerRateModal(p); }} />}
+        {activeTab === "requests" && <PartnerRequests locale={locale} incomingJobs={partnerRequestItemsWithProp} onJobClick={handleJobClick} onDeclineJob={(job) => { setWaitModalOrder(job); setDeclineModalOpen(true); }} priceList={(partner as any)?.priceList} onPropAccept={(p: PropInquiry) => setPropAcceptModal(p)} onPropMeetingConfirm={(p: PropInquiry) => setPropMeetingConfirmModal(p)} onPropRatePartner={(p: PropInquiry) => { setPropPartnerRateStars(0); setPropPartnerRateComment(""); setPropPartnerRateModal(p); }} />}
         {activeTab === "active" && <PartnerJobs locale={locale} activeJobs={activeJobs} onJobClick={handleJobClick} priceList={(partner as any)?.priceList} />}
         
         {activeTab === "properties" && <PartnerProperties locale={locale} prefix={prefix} properties={myProperties} propertyInquiries={propInquiries} />}
@@ -4828,7 +4861,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
               <div className="flex items-center gap-2">
                 <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[req.tier] || ""}`}>{req.tier}</span>
                 {req.workflowType ? (
-                  <button onClick={(e) => { e.stopPropagation(); onTabChange && onTabChange("requests"); }} className="px-3 py-1 bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold rounded-lg transition">Open Request</button>
+                  <button onClick={(e) => { e.stopPropagation(); onTabChange && onTabChange("requests"); requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: "auto" })); }} className="px-3 py-1 bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold rounded-lg transition">Open Request</button>
                 ) : (
                   <>
                     {req.urgency === "urgent" && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-700">{locale === "th" ? "เร่งด่วน" : locale === "zh" ? "紧急" : "Urgent"}</span>}
@@ -5482,7 +5515,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
   );
 }
 
-function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAccept, onPropMeetingConfirm, onPropRatePartner }: { locale: string; incomingJobs: any[]; onJobClick?: (job: any) => void; priceList?: any[]; onPropAccept?: (p: any) => void; onPropMeetingConfirm?: (p: any) => void; onPropRatePartner?: (p: any) => void; }) {
+function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, priceList, onPropAccept, onPropMeetingConfirm, onPropRatePartner }: { locale: string; incomingJobs: any[]; onJobClick?: (job: any) => void; onDeclineJob?: (job: any) => void; priceList?: any[]; onPropAccept?: (p: any) => void; onPropMeetingConfirm?: (p: any) => void; onPropRatePartner?: (p: any) => void; }) {
   const [variationModal, setVariationModal] = React.useState<any>(null);
   const [variationDesc, setVariationDesc] = React.useState("");
   const [variationRows, setVariationRows] = React.useState<{item:string;qty:string;unit:string;rate:string;amount:string}[]>(EMPTY_VAR_ROWS());
@@ -5825,7 +5858,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
                 <>
                   {req.urgency === "urgent" && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-700">{locale === "th" ? "เร่งด่วน" : locale === "zh" ? "紧急" : "Urgent"}</span>}
                   <button onClick={(e) => { e.stopPropagation(); onJobClick && onJobClick(req); }} className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition">{locale === "th" ? "รับ" : locale === "zh" ? "接受" : "Accept"}</button>
-                  <button className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">{locale === "th" ? "ปฏิเสธ" : locale === "zh" ? "拒绝" : "Decline"}</button>
+                  <button onClick={(e) => { e.stopPropagation(); onDeclineJob ? onDeclineJob(req) : onJobClick?.(req); }} className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">{locale === "th" ? "ปฏิเสธ" : locale === "zh" ? "拒绝" : "Decline"}</button>
                 </>
               )}
             </div>

@@ -1085,12 +1085,15 @@ function CustomerHistoryCard({ item, idx, compact = false, locale = "en" }: { it
     if (!Number.isFinite(ts) || ts <= 0) return "";
     return fmtDateTime(ts);
   };
+  const titleClass = compact ? "font-bold text-gray-900 text-sm" : "font-bold text-gray-900";
+  const metaClass = compact ? "text-xs font-normal text-gray-400" : "text-sm font-normal text-gray-400";
+  const mutedClass = compact ? "text-xs text-gray-500 mt-1" : "text-sm text-gray-500 mt-1";
   return (
     <div key={`${item.po || item.id || idx}`} className="p-5 hover:bg-gray-50 transition cursor-pointer" onClick={() => setCollapsed(c => !c)}>
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
-          <h3 className="font-bold text-gray-900">{item.service} <span className="text-sm font-normal text-gray-400">· {orderText} · {item.counterpartName || item.fixerName || 'Partner'}</span></h3>
-          <p className="text-sm text-gray-500 mt-1">{isCancelled ? (locale === 'th' ? 'พาร์ทเนอร์ไม่ว่าง' : locale === 'zh' ? '合作伙伴无法安排时间' : 'Partner Unavailable') : (locale === 'th' ? 'เสร็จสิ้น' : locale === 'zh' ? '已完成' : 'Completed')} {fmtDate(item.completedAt || item.statusChangedAt || item.createdAt || item.date)}</p>
+          <h3 className={titleClass}>{item.service} <span className={metaClass}>· {orderText} · {item.counterpartName || item.fixerName || 'Partner'}</span></h3>
+          <p className={mutedClass}>{isCancelled ? (locale === 'th' ? 'พาร์ทเนอร์ไม่ว่าง' : locale === 'zh' ? '合作伙伴无法安排时间' : 'Partner Unavailable') : (locale === 'th' ? 'เสร็จสิ้น' : locale === 'zh' ? '已完成' : 'Completed')} {fmtDate(item.completedAt || item.statusChangedAt || item.createdAt || item.date)}</p>
         </div>
         <div className="flex flex-col items-start sm:items-end gap-1 flex-shrink-0">
           <span className="font-bold text-gray-900">{item.fee || item.budget || '฿0'}</span>
@@ -1945,7 +1948,13 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       if (existingDynPos.has(po)) continue;
       if (existingActivePos.has(po)) continue;
       if (completedPos.has(po)) continue;
-      const createdAt = typeof order.createdAt === 'number' ? order.createdAt : new Date(order.createdAt || 0).getTime() || Date.now();
+      const createdAt = parseDateMs(
+        order.statusHistory?.[0]?.createdAt ||
+        order.statusChangedAt ||
+        order.updatedAt ||
+        order.createdAt ||
+        Date.now(),
+      );
       const tier = String(order?.description || '').match(/TIER:([A-Za-z]+)/)?.[1] || 'STANDARD';
       toCreate.push({
         id: `pay-${po}`,
@@ -2528,9 +2537,27 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       const bTs = b.meetingDate ? parseDateMs(`${b.meetingDate}T${b.meetingTime || '00:00'}`) : parseDateMs(b.createdAt || b.date);
       return aTs - bTs;
     });
+  const workflowOrderByPo = new Map(
+    workflowOrders
+      .map((order: any) => [extractPo(order), order])
+      .filter(([po]) => po && isPoCode(String(po))) as [string, any][],
+  );
+  const getWorkflowOrderEventTs = (po: string, fallback: any) => {
+    const order = workflowOrderByPo.get(po);
+    return parseDateMs(
+      order?.statusHistory?.[0]?.createdAt ||
+      order?.statusChangedAt ||
+      order?.updatedAt ||
+      fallback,
+    );
+  };
   const workflowAlerts = visibleMockDynRequests
     .map((x: any) => {
-      const createdAt = x.createdAt || parseDateMs(x.date);
+      const po = String(x.po || "").trim();
+      const rawCreatedAt = x.createdAt || parseDateMs(x.date);
+      const createdAt = x.type === "payment_pending" && po
+        ? getWorkflowOrderEventTs(po, rawCreatedAt)
+        : rawCreatedAt;
       const stableTime = toDisplayDateTime(createdAt) || x.date || "";
       if (x.type === "notice") return { id: `a-${x.id}`, msg: x.msg || x.desc || "Workflow updated.", msgTh: x.msgTh || x.descTh || "อัปเดตขั้นตอนการทำงาน", msgZh: x.msgZh || x.descZh || "工作流程已更新。", time: stableTime, createdAt, dot: "bg-indigo-400" };
       if (x.type === "payment_pending") return { id: `a-${x.id}`, msg: `${x.po || "Order"}: Partner accepted your enquiry. Next: click Testing period - Free Pass in Requests to activate chat and continue.`, msgTh: `${x.po || "ออเดอร์"}: พาร์ทเนอร์ยอมรับคำขอแล้ว ขั้นตอนถัดไปคือกด Testing period - Free Pass ในหน้า Requests เพื่อเปิดแชทและไปต่อ`, msgZh: `${x.po || "订单"}: 合作伙伴已接受您的询价。下一步：在 Requests 中点击 Testing period - Free Pass 以启用聊天并继续。`, time: stableTime, createdAt, dot: "bg-blue-500" };
@@ -2605,8 +2632,53 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       return null;
     })
     .filter(Boolean) as any[];
+  const workflowOrderStatusAlerts = workflowOrders.flatMap((order: any) => {
+    const po = extractPo(order);
+    if (!po || !isPoCode(po)) return [];
+    const status = String(order?.status || "").toUpperCase();
+    const service = String(order?.serviceCategory || order?.service || "your enquiry").replace(/_/g, " ");
+    const createdAt = parseDateMs(order.statusHistory?.[0]?.createdAt || order.statusChangedAt || order.updatedAt || order.createdAt || Date.now());
+    const time = toDisplayDateTime(createdAt);
+    if (['ASSIGNED', 'DEPOSIT_PENDING', 'CONFIRMED', 'ACCEPTED'].includes(status)) {
+      return [{
+        id: `a-pay-${po}`,
+        msg: `${po}: Partner accepted your enquiry. Next: click Testing period - Free Pass in Requests to activate chat and continue.`,
+        msgTh: `${po}: พาร์ทเนอร์ยอมรับคำขอแล้ว ขั้นตอนถัดไปคือกด Testing period - Free Pass ในหน้า Requests เพื่อเปิดแชทและไปต่อ`,
+        msgZh: `${po}: 合作伙伴已接受您的询价。下一步：在 Requests 中点击 Testing period - Free Pass 以启用聊天并继续。`,
+        time,
+        createdAt,
+        dot: "bg-blue-500",
+      }];
+    }
+    if (status === 'CANCELLED') {
+      const note = String(order?.statusHistory?.[0]?.note || order?.statusNote || "");
+      const reason = note.match(/Reason:\s*([^.]*)/i)?.[1]?.trim();
+      return [{
+        id: `a-declined-${po}`,
+        msg: `${po}: The selected partner declined ${service}${reason ? ` (${reason})` : ""}. Next: choose another matched professional or create a new enquiry.`,
+        msgTh: `${po}: พาร์ทเนอร์ที่เลือกปฏิเสธ ${service}${reason ? ` (${reason})` : ""} ขั้นตอนถัดไปคือเลือกมืออาชีพรายอื่นหรือสร้างคำขอใหม่`,
+        msgZh: `${po}: 所选合作伙伴已拒绝 ${service}${reason ? `（${reason}）` : ""}。下一步：请选择其他匹配的专业人士或创建新询价。`,
+        time,
+        createdAt,
+        dot: "bg-red-500",
+      }];
+    }
+    return [];
+  });
   const baseAlerts: any[] = [];
-  const allAlerts = [...workflowAlerts, ...propWorkflowAlerts, ...baseAlerts].sort((a: any, b: any) => parseDateMs(b.createdAt || b.time) - parseDateMs(a.createdAt || a.time));
+  const allAlerts = Array.from(
+    [...workflowAlerts, ...workflowOrderStatusAlerts, ...propWorkflowAlerts, ...baseAlerts]
+      .reduce((map: Map<string, any>, alert: any) => {
+        const key = String(alert?.id || `${alert?.msg}-${alert?.createdAt}`).trim();
+        if (!key) return map;
+        const existing = map.get(key);
+        if (!existing || parseDateMs(alert.createdAt || alert.time) >= parseDateMs(existing.createdAt || existing.time)) {
+          map.set(key, alert);
+        }
+        return map;
+      }, new Map<string, any>())
+      .values(),
+  ).sort((a: any, b: any) => parseDateMs(b.createdAt || b.time) - parseDateMs(a.createdAt || a.time));
   const alertsPageItems = allAlerts.slice(0, 19);
   const overviewAlerts = allAlerts.slice(0, 3);
   const overviewIncomingChats = chatFeed.filter((c: any) => c.hasIncoming).slice(0, 3);
@@ -3149,12 +3221,12 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       ? toCurrencyLabel(item.value || item.budget || item.propertyPrice || item.price || 0)
       : (item.budget || ('฿' + Number(item.price || 0).toLocaleString()));
     return (
-    <div key={idx} className="p-5 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
+    <div key={idx} className="p-4 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 text-sm">
       <div className="flex items-start gap-4 flex-1 min-w-0">
-         <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold shrink-0 ${item.type === 'prop_waiting' ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-600'}`}>{(locale === "th" ? (item.titleTh || item.serviceTh || item.title || item.service || "C") : locale === "zh" ? (item.titleZh || item.serviceZh || item.title || item.service || "C") : (item.title || item.service || "C")).charAt(0)}</div>
+         <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold shrink-0 ${item.type === 'prop_waiting' ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-600'}`}>{(locale === "th" ? (item.titleTh || item.serviceTh || item.title || item.service || "C") : locale === "zh" ? (item.titleZh || item.serviceZh || item.title || item.service || "C") : (item.title || item.service || "C")).charAt(0)}</div>
          <div className="min-w-0">
-           <h3 className="font-bold text-gray-900">{locale === "th" ? (item.titleTh || item.serviceTh || item.title || item.service) : locale === "zh" ? (item.titleZh || item.serviceZh || item.title || item.service) : (item.title || item.service)} <span className="text-sm font-normal text-gray-400">· {isPropertyCard ? getPropOrderLabel(item.po) : (item.po || `PO-${item.id?.slice(0,8) || '2605-8471'}`)} | {item.location || item.subdistrict || 'Unknown'}</span></h3>
-           <p className="text-sm text-gray-600 mt-0.5">{item.fixerAlias || item.partnerName || item.customer || "Customer"} · {item.date || toDisplayDateTime(item.createdAt || Date.now())} · {amountPrefix} {amountValue}</p>
+           <h3 className="font-bold text-gray-900 text-sm">{locale === "th" ? (item.titleTh || item.serviceTh || item.title || item.service) : locale === "zh" ? (item.titleZh || item.serviceZh || item.title || item.service) : (item.title || item.service)} <span className="text-xs font-normal text-gray-400">· {isPropertyCard ? getPropOrderLabel(item.po) : (item.po || `PO-${item.id?.slice(0,8) || '2605-8471'}`)} | {item.location || item.subdistrict || 'Unknown'}</span></h3>
+           <p className="text-xs text-gray-600 mt-0.5">{item.fixerAlias || item.partnerName || item.customer || "Customer"} · {item.date || toDisplayDateTime(item.createdAt || Date.now())} · {amountPrefix} {amountValue}</p>
            {isPropertyCard && (
              <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getPropListingTypeLabel(item?.propInquiry?.listingType || item?.listingType)}</p>
            )}
@@ -3169,7 +3241,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
            )}
          </div>
       </div>
-      <div className="w-full xl:w-[560px] shrink-0 mt-2 xl:mt-0">
+      <div className="w-full xl:w-[520px] shrink-0 mt-2 xl:mt-0">
         {(() => {
           const steps = isPropertyCard ? PROPERTY_ACTIVE_STEPS : FIXER_ACTIVE_STEPS;
           const startStep = isPropertyCard ? 1 : 4;
@@ -3767,10 +3839,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 md:col-span-1">
                 <div className="flex justify-between items-center mb-4">
                   <div className="flex flex-col">
-                    <h2 className="text-xl font-bold text-gray-800">⏰ {locale === "th" ? "การนัดหมายที่จะมาถึง" : locale === "zh" ? "即将到来的会议" : "Upcoming Meetings"}</h2>
-                    <span className="text-gray-500 font-bold text-sm">{upcomingMeetings.length + propConfirmedMeetings.length}</span>
+                    <h2 className="text-base font-bold text-gray-800">⏰ {locale === "th" ? "การนัดหมายที่จะมาถึง" : locale === "zh" ? "即将到来的会议" : "Upcoming Meetings"}</h2>
+                    <span className="text-gray-500 font-bold text-xs">{upcomingMeetings.length + propConfirmedMeetings.length}</span>
                   </div>
-                  <button className="text-sm font-bold text-sky-600 hover:text-sky-700" onClick={() => setActiveTab("requests")}>{locale === "th" ? "ดูทั้งหมด" : locale === "zh" ? "查看全部" : "View All"}</button>
+                  <button className="text-xs font-bold text-sky-600 hover:text-sky-700" onClick={() => setActiveTab("requests")}>{locale === "th" ? "ดูทั้งหมด" : locale === "zh" ? "查看全部" : "View All"}</button>
                 </div>
                 {(upcomingMeetings.length > 0 || propConfirmedMeetings.length > 0) ? (
                   <div className="space-y-3 mt-4">
@@ -3779,12 +3851,12 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                         key: p.poNumber,
                         ts: parseDateMs(`${p.meetingDate}T${p.meetingTime || '00:00'}`),
                         node: (
-                            <div key={p.poNumber} className="bg-white rounded-xl shadow-sm border border-emerald-200 p-5">
+                            <div key={p.poNumber} className="bg-white rounded-xl shadow-sm border border-emerald-200 p-4">
                             <div className="flex justify-between items-center mb-2">
-                                <span className="text-sm text-gray-900 font-bold">🏠 {p.propertyTitle} ({getPropOrderLabel(p.poNumber)})</span>
+                                <span className="text-xs text-gray-900 font-bold">🏠 {p.propertyTitle} ({getPropOrderLabel(p.poNumber)})</span>
                                 <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-1 rounded-full font-bold">{p.meetingDate}{p.meetingTime ? ` · ${p.meetingTime}` : ''}</span>
                             </div>
-                            <p className="text-xs text-gray-600">{locale === "th" ? "สถานที่:" : "Venue:"} {p.meetingVenue || 'TBD'} | {locale === "th" ? "ผู้ลงประกาศ:" : "Lister:"} {firstNameOnly(p.listerName, 'Lister')}</p>
+                            <p className="text-[11px] text-gray-600">{locale === "th" ? "สถานที่:" : "Venue:"} {p.meetingVenue || 'TBD'} | {locale === "th" ? "ผู้ลงประกาศ:" : "Lister:"} {firstNameOnly(p.listerName, 'Lister')}</p>
                           </div>
                         ),
                       }));
@@ -3792,12 +3864,12 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                         key: m.id,
                         ts: m.meetingDate ? parseDateMs(`${m.meetingDate}T${m.meetingTime || '00:00'}`) : parseDateMs(m.createdAt || m.date),
                         node: (
-                          <div key={m.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                          <div key={m.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
                             <div className="flex justify-between items-center mb-2">
-                              <span className="text-sm text-gray-900 font-bold">{m.title} ({m.po})</span>
+                              <span className="text-xs text-gray-900 font-bold">{m.title} ({m.po})</span>
                               <span className="bg-amber-100 text-amber-800 text-[10px] px-2 py-1 rounded-full font-bold">{m.meetingDate || m.date}{m.meetingTime ? ` · ${m.meetingTime}` : ''}</span>
                             </div>
-                            <p className="text-xs text-gray-600">{locale === "th" ? "สถานที่:" : locale === "zh" ? "地点:" : "Location:"} {m.venue || m.meetingVenue || m.subdistrict || 'TBD'} | {locale === "th" ? "ผู้ให้บริการ:" : locale === "zh" ? "服务提供商:" : "Provider:"} {m.customer}</p>
+                            <p className="text-[11px] text-gray-600">{locale === "th" ? "สถานที่:" : locale === "zh" ? "地点:" : "Location:"} {m.venue || m.meetingVenue || m.subdistrict || 'TBD'} | {locale === "th" ? "ผู้ให้บริการ:" : locale === "zh" ? "服务提供商:" : "Provider:"} {m.customer}</p>
                           </div>
                         ),
                       }));
@@ -3808,7 +3880,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                     })()}
                   </div>
                 ) : (
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mt-4 text-center text-sm text-gray-400">{locale === "th" ? "ไม่มีการนัดหมายที่จะมาถึง" : locale === "zh" ? "暂无会议" : "No upcoming meetings"}</div>
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mt-4 text-center text-xs text-gray-400">{locale === "th" ? "ไม่มีการนัดหมายที่จะมาถึง" : locale === "zh" ? "暂无会议" : "No upcoming meetings"}</div>
                 )}
               </div>
               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 md:col-span-2">
@@ -3835,8 +3907,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   <>
                     {overviewIncomingChats.map((c: any) => (
                       <div key={c.id} className="bg-white rounded-lg p-4 border border-gray-100 shadow-sm">
-                        <p className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-2"><span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">C</span> {c.name} <span className="text-xs text-gray-400 font-normal ml-auto">{c.incomingTime || ""}</span></p>
-                        <p className="text-sm text-gray-600">{c.incomingMsg}</p>
+                        <p className="text-xs font-bold text-gray-800 flex items-center gap-2 mb-2"><span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px]">C</span> {c.name} <span className="text-[11px] text-gray-400 font-normal ml-auto">{c.incomingTime || ""}</span></p>
+                        <p className="text-xs text-gray-600">{c.incomingMsg}</p>
                       </div>
                     ))}
                   </>
