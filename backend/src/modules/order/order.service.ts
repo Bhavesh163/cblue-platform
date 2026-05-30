@@ -151,20 +151,44 @@ export class OrderService {
   }
 
   async findByUser(userId: string) {
-    const orders = await this.prisma.order.findMany({
-      where: { userId },
-      include: {
-        address: true,
-        fixer: true,
-        images: {
-          where: { type: { in: ['order_attachment', 'order_photo'] } },
-          orderBy: { createdAt: 'desc' },
-          take: 5,
+    let orders: any[];
+    try {
+      orders = await this.prisma.order.findMany({
+        where: { userId },
+        include: {
+          address: true,
+          fixer: true,
+          images: {
+            where: { type: { in: ['order_attachment', 'order_photo'] } },
+            orderBy: { createdAt: 'desc' },
+            take: 5,
+          },
+          statusHistory: { orderBy: { createdAt: 'desc' }, take: 1 },
         },
-        statusHistory: { orderBy: { createdAt: 'desc' }, take: 1 },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        orderBy: { createdAt: 'desc' },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Falling back to scalar customer order query after relation query failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      try {
+        orders = await this.prisma.order.findMany({
+          where: { userId },
+          orderBy: { createdAt: 'desc' },
+        });
+      } catch (fallbackError) {
+        this.logger.warn(
+          `Returning empty customer order list after scalar query failed for ${userId}: ${
+            fallbackError instanceof Error
+              ? fallbackError.message
+              : String(fallbackError)
+          }`,
+        );
+        return [];
+      }
+    }
 
     const fixerUserIds = Array.from(
       new Set(
@@ -173,12 +197,21 @@ export class OrderService {
           .filter(Boolean),
       ),
     );
-    const fixerUsers = fixerUserIds.length
-      ? await this.prisma.user.findMany({
-          where: { id: { in: fixerUserIds } },
-          select: { id: true, name: true, email: true, role: true },
-        })
-      : [];
+    let fixerUsers: any[] = [];
+    try {
+      fixerUsers = fixerUserIds.length
+        ? await this.prisma.user.findMany({
+            where: { id: { in: fixerUserIds } },
+            select: { id: true, name: true, email: true, role: true },
+          })
+        : [];
+    } catch (error) {
+      this.logger.warn(
+        `Skipping fixer user hydration for customer orders after query failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
     const fixerUserMap = new Map(fixerUsers.map((user) => [user.id, user]));
 
     return orders
@@ -342,17 +375,26 @@ export class OrderService {
     const senderIds = Array.from(
       new Set(messages.map((message) => message.senderUserId).filter(Boolean)),
     );
-    const senders = senderIds.length
-      ? await this.prisma.user.findMany({
-          where: { id: { in: senderIds } },
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            role: true,
-          },
-        })
-      : [];
+    let senders: any[] = [];
+    try {
+      senders = senderIds.length
+        ? await this.prisma.user.findMany({
+            where: { id: { in: senderIds } },
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+            },
+          })
+        : [];
+    } catch (error) {
+      this.logger.warn(
+        `Skipping chat sender hydration after user query failed for order ${orderId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
     const senderMap = new Map(senders.map((sender) => [sender.id, sender]));
 
     return messages.map((m) => ({
@@ -376,10 +418,19 @@ export class OrderService {
   ) {
     await this.getOrderForParticipant(orderId, userId);
 
-    const sender = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { role: true },
-    });
+    let sender: { role: UserRole } | null = null;
+    try {
+      sender = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { role: true },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Unable to load chat sender role for ${userId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
 
     let created: any;
     try {
@@ -408,10 +459,19 @@ export class OrderService {
       };
     }
 
-    const senderProfile = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { name: true, email: true },
-    });
+    let senderProfile: { name: string | null; email: string | null } | null = null;
+    try {
+      senderProfile = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { name: true, email: true },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Unable to load chat sender profile for ${userId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
 
     return {
       id: created.id,

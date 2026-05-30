@@ -2428,7 +2428,7 @@ export default function FixerProPage() {
     let viewerUserId = "";
     try { viewerUserId = JSON.parse(localStorage.getItem("subscriber") || "{}")?.id || ""; } catch {}
     const items: any[] = [];
-    const chatOpenStatuses = new Set(["IN_PROGRESS", "MEETING_REQUESTED"]);
+    const chatOpenStatuses = new Set(["IN_PROGRESS", "MEETING_REQUESTED", "COMPLETED"]);
 
     for (const order of (orders || [])) {
       const orderId = order?.id;
@@ -2467,8 +2467,11 @@ export default function FixerProPage() {
           return true;
         });
         if (visible.length === 0) continue;
+        const hasCustomerCompleteNotice = visible.some((m: any) =>
+          String(m?.text || '').toLowerCase().includes('customer confirmed job complete'),
+        );
         const workflowClosed = ['COMPLETED', 'CANCELLED', 'DONE'].includes(String(order?.status || '').toUpperCase());
-        if (workflowClosed || hasCompletionChatMarker(visible)) {
+        if ((workflowClosed && !hasCustomerCompleteNotice) || hasCompletionChatMarker(visible)) {
           try { localStorage.setItem(`chat_closed_${po}`, '1'); } catch {}
           continue;
         }

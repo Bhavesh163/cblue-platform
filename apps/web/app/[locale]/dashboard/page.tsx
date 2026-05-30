@@ -1255,10 +1255,23 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     if (typeof value === "string") {
       const asNum = Number(value);
       if (Number.isFinite(asNum) && asNum > 0) return asNum;
+      const ddmmyyyy = value.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})(?:[ T](\d{2}):(\d{2}))?$/);
+      if (ddmmyyyy) {
+        const [, day, month, year, hour = '00', minute = '00'] = ddmmyyyy;
+        const parsed = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute)).getTime();
+        return Number.isFinite(parsed) ? parsed : 0;
+      }
     }
     const ts = new Date(value || 0).getTime();
     return Number.isFinite(ts) ? ts : 0;
   };
+  const getOrderEventTs = (order: any, fallback: any = Date.now()) =>
+    parseDateMs(
+      order?.statusHistory?.[0]?.createdAt ||
+      order?.statusChangedAt ||
+      order?.updatedAt ||
+      fallback,
+    ) || parseDateMs(fallback) || Date.now();
   const normalizePropLocationPart = (value: any) => {
     const text = String(value || '').trim();
     if (!text || /^--\s*select/i.test(text)) return '';
@@ -1392,6 +1405,29 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       }).catch(() => {});
     } catch {
       // Non-blocking for workflow UI.
+    }
+  };
+  const appendLocalWorkflowChat = (po: string, text: string, createdAt = Date.now()) => {
+    if (!po || typeof window === 'undefined') return;
+    try {
+      const chatKey = `chat_messages_${po}`;
+      const existing = JSON.parse(localStorage.getItem(chatKey) || '[]');
+      const rows = Array.isArray(existing) ? existing : [];
+      if (rows.some((row: any) => String(row?.text || '') === text)) return;
+      const next = [
+        ...rows,
+        {
+          id: `workflow-${po}-${createdAt}`,
+          sender: 'system',
+          text,
+          time: toDisplayDateTime(createdAt),
+          createdAt,
+        },
+      ];
+      localStorage.setItem(chatKey, JSON.stringify(next));
+      window.dispatchEvent(new CustomEvent('cblue-chat-updated', { detail: { orderId: po } }));
+    } catch {
+      // Non-blocking customer chat mirror.
     }
   };
   const handleOrderClick = (o: any) => {
@@ -2058,6 +2094,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       const title = String(backendOrder?.serviceCategory || '').replace(/_/g, ' ') || po;
       const budget = backendOrder?.estimatedPrice ? `฿${Number(backendOrder.estimatedPrice).toLocaleString()}` : '฿0';
       const tier = String(backendOrder?.description || '').match(/TIER:([A-Za-z]+)/)?.[1] || 'Standard';
+      const eventTs = parseDateMs(chatItem.sort || chatItem.createdAt || chatItem.time) || Date.now();
       // Variation detection
       if (lastMsg.includes('[system] partner has submitted a variation')) {
         setMockActiveItems(prev => {
@@ -2070,7 +2107,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           const fullMsg = String(chatItem.lastMsg || '');
           const noteMatch = fullMsg.match(/\[VARIATION_DATA\]([\s\S]*?)\[\/VARIATION_DATA\]/i);
           const desc = noteMatch?.[1]?.trim() || 'Partner has submitted a variation for your approval. Please review and confirm to proceed.';
-          const item = { id: `var-${po}`, po, title, customer: 'Suppadesh', date: fmtDateTime(Date.now()), createdAt: Date.now(), budget, tier, desc, type: 'variation_pending', step: 9 };
+          const item = { id: `var-${po}`, po, title, customer: 'Suppadesh', date: fmtDateTime(eventTs), createdAt: eventTs, budget, tier, desc, type: 'variation_pending', step: 9 };
           const merged = [...prev.filter((x: any) => !(x.po === po && ['variation_pending', 'meeting_invite', 'meeting_pending_partner', 'meeting_scheduled', 'chat_ready'].includes(x.type))), item];
           try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(merged)); } catch {}
           return merged;
@@ -2088,7 +2125,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           const fullMsg = String(chatItem.lastMsg || '');
           const noteMatch = fullMsg.match(/\[COMPLETE_DATA\]([\s\S]*?)\[\/COMPLETE_DATA\]/i);
           const desc = noteMatch?.[1]?.trim() || 'Work is completed. Please review and mark as complete to close this project.';
-          const item = { id: `compl-${po}`, po, title, customer: 'Suppadesh', date: fmtDateTime(Date.now()), createdAt: Date.now(), budget, tier, desc, type: 'complete_pending', step: 10 };
+          const item = { id: `compl-${po}`, po, title, customer: 'Suppadesh', date: fmtDateTime(eventTs), createdAt: eventTs, budget, tier, desc, type: 'complete_pending', step: 10 };
           const merged = [...prev.filter((x: any) => !(x.po === po && ['complete_pending', 'variation_pending', 'meeting_invite', 'meeting_pending_partner', 'meeting_scheduled', 'chat_ready'].includes(x.type))), item];
           try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(merged)); } catch {}
           return merged;
@@ -2121,16 +2158,20 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       let changed = false;
       const next = prev.filter((item: any) => {
         if (!cancelledPos.has(item.po)) return true;
-        if (['notice'].includes(String(item.type || ''))) return true;
+        if (['notice'].includes(String(item.type || ''))) {
+          if (String(item.id || '').includes('partner-declined')) {
+            changed = true;
+            return false;
+          }
+          return true;
+        }
         changed = true;
         return false;
       });
       for (const order of cancelledOrders) {
         const po = extractPo(order);
         if (!po || !isPoCode(po)) continue;
-        if (next.some((item: any) => item.po === po && item.type === 'notice' && String(item.id || '').includes('partner-declined'))) {
-          continue;
-        }
+        const createdAt = getOrderEventTs(order);
         const note = String(order?.statusHistory?.[0]?.note || order?.statusNote || '');
         const reason = note.match(/Reason:\s*([^.]*)/i)?.[1]?.trim();
         const service = String(order?.serviceCategory || order?.service || 'your project').replace(/_/g, ' ');
@@ -2141,8 +2182,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           msg: `The selected partner declined ${service} (${po})${reason ? ` (${reason})` : ''}. Please select another matched professional.`,
           msgTh: `พาร์ทเนอร์ที่เลือกปฏิเสธ ${service} (${po})${reason ? ` (${reason})` : ''} กรุณาเลือกมืออาชีพรายอื่น`,
           msgZh: `所选合作伙伴拒绝了 ${service}（${po}）${reason ? `（${reason}）` : ''}。请选择其他匹配的专业人士。`,
-          date: fmtDateTime(Date.now()),
-          createdAt: Date.now(),
+          date: fmtDateTime(createdAt),
+          createdAt,
           dot: 'bg-red-400',
         });
         changed = true;
@@ -2164,7 +2205,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           title: String(order?.serviceCategory || order?.service || 'Project').replace(/_/g, ' '),
           status: 'CANCELLED',
           statusName: 'Partner Unavailable',
-          completedAt: Date.now(),
+          completedAt: getOrderEventTs(order),
           step: 11,
           stepName: 'Partner Unavailable',
         });
@@ -2758,7 +2799,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       }, new Map<string, any>())
       .values(),
   ).sort((a: any, b: any) => parseDateMs(b.createdAt || b.time) - parseDateMs(a.createdAt || a.time));
-  const alertsPageItems = allAlerts.slice(0, 19);
+  const alertsPageItems = allAlerts.slice(0, 20);
   const overviewAlerts = allAlerts.slice(0, 3);
   const overviewIncomingChats = chatFeed.filter((c: any) => c.hasIncoming).slice(0, 3);
 
@@ -4562,6 +4603,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   const createdAt = Date.now();
                   const dateLabel = meetingDate ? fmtDate(meetingDate + 'T' + (meetingTime || '09:00')) : '';
                   const desc = `Meeting invitation sent. Proposed: ${dateLabel} ${meetingTime} at ${meetingVenue}.${meetingNote.trim() ? ` Note: ${meetingNote.trim()}.` : ''} Waiting for partner confirmation.`;
+                  const chatText = `[SYSTEM] Customer sent meeting invitation for ${meetingModal.po}: ${dateLabel} ${meetingTime} at ${meetingVenue}.${meetingNote.trim() ? ` Note: ${meetingNote.trim()}.` : ''} Next: waiting for partner confirmation before variation.`;
                   const pendingId = `meet-pending-${meetingModal.po}`;
                   // Compute new arrays eagerly and write to localStorage BEFORE setState
                   // (same pattern as payment pill — prevents syncMockState interval from overwriting)
@@ -4590,10 +4632,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                       fetch(`/api/v1/orders/${backendOrder.id}/chat`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                        body: JSON.stringify({ text: `[SYSTEM] Customer sent meeting invitation for ${meetingModal.po}: ${dateLabel} ${meetingTime} at ${meetingVenue}.${meetingNote.trim() ? ` Note: ${meetingNote.trim()}.` : ''}` }),
+                        body: JSON.stringify({ text: chatText }),
                       }).catch(() => {});
                     }
                   } catch {}
+                  appendLocalWorkflowChat(meetingModal.po, chatText, createdAt);
                   setMeetingNote("");
                   setMeetingModal(null);
                 }}
@@ -4879,7 +4922,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                         body: JSON.stringify({ status: 'COMPLETED', note: 'Customer confirmed project complete.' }),
                       }).catch(() => {});
                     }
-                    void postBackendWorkflowMessage(po, `[SYSTEM] Customer confirmed job complete for ${po}. Rating is now open for both parties. Chat room is now closed.`);
+                    const chatText = `[SYSTEM] Customer confirmed job complete for ${po}. Next: rating is now open for both parties. Chat room is now closed.`;
+                    appendLocalWorkflowChat(po, chatText, createdAt);
+                    void postBackendWorkflowMessage(po, chatText);
                     setCompleteApproveModal(null);
                     setActiveTab('requests');
                   }}
