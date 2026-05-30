@@ -806,6 +806,64 @@ export class PropertyService {
   }
 
   async findByUser(userId: string) {
+    try {
+      return await this.findByUserWithLinkedIdentity(userId);
+    } catch (error) {
+      this.logger.warn(
+        `Falling back to direct property lookup for ${userId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return this.findByUserDirectFallback(userId);
+    }
+  }
+
+  private async findByUserDirectFallback(userId: string) {
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, email: true, phone: true },
+      });
+      const ownershipScopes: Prisma.PropertyWhereInput[] = [{ userId }];
+      const email = this.normalizeEmail(user?.email);
+      const phone = this.normalizePhone(user?.phone);
+      if (email) ownershipScopes.push({ contactEmail: { equals: email, mode: 'insensitive' } });
+      if (phone) ownershipScopes.push({ contactPhone: { equals: phone } });
+
+      try {
+        const properties = await this.prisma.property.findMany({
+          where: { OR: ownershipScopes },
+          orderBy: { createdAt: 'desc' },
+          include: {
+            images: { orderBy: { sortOrder: 'asc' } },
+          },
+        });
+        return properties.filter((property) => String(property.status) !== 'REMOVED');
+      } catch (error) {
+        this.logger.warn(
+          `Direct property lookup with images failed for ${userId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+        const properties = await this.prisma.property.findMany({
+          where: { OR: ownershipScopes },
+          orderBy: { createdAt: 'desc' },
+        });
+        return properties
+          .filter((property) => String(property.status) !== 'REMOVED')
+          .map((property) => ({ ...property, images: [] }));
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Direct property fallback failed for ${userId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return [];
+    }
+  }
+
+  private async findByUserWithLinkedIdentity(userId: string) {
     const linkedUserIds = await this.resolveLinkedUserIds(userId);
     const linkedEmails = await this.resolveLinkedEmails(userId, linkedUserIds);
     const linkedPhones = await this.resolveLinkedPhones(userId, linkedUserIds);

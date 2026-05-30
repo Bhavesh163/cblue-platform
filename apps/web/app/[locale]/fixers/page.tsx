@@ -2797,7 +2797,14 @@ export default function FixerProPage() {
       const stepLookup = mockActiveState.find((x: any) => x.po === job.po);
       const backendStep = getWorkflowStepFromStatus(job.status);
       const partnerWorkflowStep = Math.max(0, ...partnerDynReqs.filter((x: any) => x.po === job.po).map((x: any) => parseWorkflowStep(x.step)));
-      const step = Math.max(parseWorkflowStep(stepLookup?.step), backendStep, partnerWorkflowStep);
+      const localSubmittedStep = (() => {
+        try {
+          if (localStorage.getItem(`partner_complete_sent_${job.po}`)) return 10;
+          if (localStorage.getItem(`partner_variation_sent_${job.po}`)) return 9;
+        } catch {}
+        return 0;
+      })();
+      const step = Math.max(parseWorkflowStep(stepLookup?.step), backendStep, partnerWorkflowStep, localSubmittedStep);
       // For partner view: actionNeeded = partner has a pending workflow request OR backend requires partner action
       // Exclude accept_sent which is a permanent marker, not an action item
       const hasPartnerDynAction = partnerDynReqs.some((r: any) => r.po === job.po && r.type !== 'accept_sent');
@@ -3087,8 +3094,11 @@ export default function FixerProPage() {
     ]);
     // MEETING_REQUESTED always shows for partner to confirm, regardless of mock step state
     let incomingJobs = mappedOrders.filter(o =>
-      (['CREATED', 'PENDING', 'MATCHING'].includes(o.status) && !acceptedPos.has(o.po)) ||
-      o.status === 'MEETING_REQUESTED'
+      !completedHistoryPos.has(o.po) &&
+      (
+        (['CREATED', 'PENDING', 'MATCHING'].includes(o.status) && !acceptedPos.has(o.po)) ||
+        o.status === 'MEETING_REQUESTED'
+      )
     );
 
   const parseTs = (v: any) => {
@@ -3310,7 +3320,7 @@ export default function FixerProPage() {
   }, [chatFeed, mappedOrders, mockActiveState, mockHistory]);
 
   const partnerRequestItems = Array.from([
-    ...partnerDynReqs.filter((r: any) => !['accept_sent'].includes(String(r.type || ''))),
+    ...partnerDynReqs.filter((r: any) => !['accept_sent'].includes(String(r.type || '')) && !completedHistoryPos.has(r.po)),
     ...incomingJobs.filter((job: any) => !(String(job.status || '').toUpperCase() === 'MEETING_REQUESTED' && partnerDynReqs.some((req: any) => req.po === job.po && req.workflowType === 'meeting_confirm_partner'))),
   ].reduce((map: Map<string, any>, item: any) => {
     const key = item.po || item.id;
@@ -4861,7 +4871,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
               <div className="flex items-center gap-2">
                 <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[req.tier] || ""}`}>{req.tier}</span>
                 {req.workflowType ? (
-                  <button onClick={(e) => { e.stopPropagation(); onTabChange && onTabChange("requests"); requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: "auto" })); }} className="px-3 py-1 bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold rounded-lg transition">Open Request</button>
+                  <button onClick={(e) => { e.stopPropagation(); onTabChange && onTabChange("requests"); requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: "auto" })); window.setTimeout(() => window.scrollTo({ top: 0, left: 0, behavior: "auto" }), 50); }} className="px-3 py-1 bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold rounded-lg transition">Open Request</button>
                 ) : (
                   <>
                     {req.urgency === "urgent" && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-700">{locale === "th" ? "เร่งด่วน" : locale === "zh" ? "紧急" : "Urgent"}</span>}
@@ -5811,19 +5821,20 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
             );
           }
           // Normal fixer request card
+          const reqWorkflowType = String(req.workflowType || req.type || '');
           return (
           <div key={req.id} className="px-6 py-4 flex items-center gap-4 transition cursor-default">
             <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center text-lg"></div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? req.serviceTh : locale === "zh" ? req.serviceZh : req.service}{(req.po || req.step) ? <span className="text-xs font-normal text-gray-400">{req.po ? ` · ${req.po}` : ''}{req.step ? ` · Step ${req.step} of 11` : ''}</span> : null}</p>
-              <p className="text-xs text-amber-600 font-semibold mt-0.5">{req.type === 'variation_partner' ? 'Please decide whether to submit a variation request.' : req.type === 'complete_partner' ? 'Please send project complete request to customer.' : req.type === 'rate_partner' ? 'Please rate the customer to close this job.' : String(req.status || '').toUpperCase() === 'MEETING_REQUESTED' ? 'Please review and confirm the site meeting invitation.' : locale === "th" ? "โปรดพิจารณาและรับงานนี้เพื่อดำเนินการต่อ" : locale === "zh" ? "请审核并接受此工作以继续" : "Please review and accept this job to proceed"}</p>
+              <p className="text-xs text-amber-600 font-semibold mt-0.5">{reqWorkflowType === 'variation_partner' ? 'Please decide whether to submit a variation request.' : reqWorkflowType === 'complete_partner' ? 'Please send project complete request to customer.' : reqWorkflowType === 'rate_partner' ? 'Please rate the customer to close this job.' : String(req.status || '').toUpperCase() === 'MEETING_REQUESTED' ? 'Please review and confirm the site meeting invitation.' : locale === "th" ? "โปรดพิจารณาและรับงานนี้เพื่อดำเนินการต่อ" : locale === "zh" ? "请审核并接受此工作以继续" : "Please review and accept this job to proceed"}</p>
               <p className="text-xs text-gray-500 mt-0.5">{req.customer} &middot; {req.date} &middot; {getJobAmountPrefix(req, locale)}: {getJobAmountValue(req)}</p>
               {(req.meetingVenue || req.subdistrict) && <p className="text-xs text-gray-500 mt-0.5">{[req.meetingVenue || req.subdistrict].filter(Boolean).join(' · ')}</p>}
               <p className="text-xs text-gray-500 mt-1" style={{ whiteSpace: "pre-wrap" }}>{stripWorkflowPrefix(req.description || req.desc || req.statusNote)}</p>
             </div>
             <div className="flex items-center gap-2">
               <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[req.tier] || ""}`}>{req.tier}</span>
-              {req.type === 'variation_partner' ? (
+              {reqWorkflowType === 'variation_partner' ? (
                 <>
                   <button onClick={(e) => { e.stopPropagation(); setVariationDesc(''); setVariationModal(req);
                       // Refresh breakdown so customer's Approve Variation reads correct multi-item data
@@ -5843,14 +5854,14 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
                         if (pl && pl.length > 0 && req?.po) localStorage.setItem(`cblue_partner_pricelist_${req.po}`, JSON.stringify(pl));
                       } catch {}
                     }} className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg transition">Yes</button>
-                  <button onClick={(e) => { e.stopPropagation(); try { localStorage.setItem(`partner_variation_sent_${req.po}`, '1'); } catch {} writePartnerReqs(prev => prev.filter((x: any) => !(x.po === req.po && x.type === 'variation_partner'))); }} className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">No</button>
+                  <button onClick={(e) => { e.stopPropagation(); try { localStorage.setItem(`partner_variation_sent_${req.po}`, '1'); } catch {} writePartnerReqs(prev => prev.filter((x: any) => !(x.po === req.po && String(x.workflowType || x.type || '') === 'variation_partner'))); }} className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">No</button>
                 </>
-              ) : req.type === 'complete_partner' ? (
+              ) : reqWorkflowType === 'complete_partner' ? (
                 <>
                   <button onClick={(e) => { e.stopPropagation(); setCompleteNote(''); setCompleteModal({ ...req, service: req.service || req.title || 'Project', partnerRequest: req.partnerRequest || resolveVariationPartnerNote(req.po), partnerNote: req.partnerNote || req.partnerRequest || resolveVariationPartnerNote(req.po), variationRequest: req.variationRequest || req.partnerRequest || resolveVariationPartnerNote(req.po) }); }} className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition">Send</button>
-                  <button onClick={(e) => { e.stopPropagation(); try { localStorage.setItem(`partner_complete_sent_${req.po}`, '1'); } catch {} writePartnerReqs(prev => prev.filter((x: any) => !(x.po === req.po && x.type === 'complete_partner'))); }} className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">No</button>
+                  <button onClick={(e) => { e.stopPropagation(); try { localStorage.setItem(`partner_complete_sent_${req.po}`, '1'); } catch {} writePartnerReqs(prev => prev.filter((x: any) => !(x.po === req.po && String(x.workflowType || x.type || '') === 'complete_partner'))); }} className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">No</button>
                 </>
-              ) : req.type === 'rate_partner' ? (
+              ) : reqWorkflowType === 'rate_partner' ? (
                 <button onClick={(e) => { e.stopPropagation(); setRatingStars(5); setRatingModal(req); }} className="px-3 py-1 bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold rounded-lg transition">Start</button>
               ) : String(req.status || '').toUpperCase() === 'MEETING_REQUESTED' ? (
                 <button onClick={(e) => { e.stopPropagation(); onJobClick && onJobClick(req); }} className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg transition">Confirm</button>
