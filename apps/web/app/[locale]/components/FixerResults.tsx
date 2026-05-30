@@ -48,6 +48,12 @@ type BookingType = "household" | "project" | "professional" | "property";
 
 const FIXER_TIERS = ["economy", "standard", "corporate", "specialist", "expert"] as const;
 
+const formatWorkflowDateTime = (value: Date | number | string) => {
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return "";
+  return `${String(dt.getDate()).padStart(2, "0")}/${String(dt.getMonth() + 1).padStart(2, "0")}/${dt.getFullYear()} ${String(dt.getHours()).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}`;
+};
+
 const T: Record<string, Record<string, string>> = {
   en: {
     matchTitle: "Matched Fixers & Professionals",
@@ -583,6 +589,7 @@ export default function FixerResults({
 
 
   const [partnerConfirmed, setPartnerConfirmed] = useState(initialOrderData?.status?.toUpperCase() === "CONFIRMED");
+  const [isNotifyingPartner, setIsNotifyingPartner] = useState(false);
 
   // Meeting state
   const [meetingDate, setMeetingDate] = useState("");
@@ -908,6 +915,8 @@ export default function FixerResults({
   };
 
   const handlePOAcknowledge = async () => {
+    if (isNotifyingPartner) return;
+    setIsNotifyingPartner(true);
     let createdOrderId = "";
     let storedAttachments: string[] = [];
     let attachmentSyncFailed = false;
@@ -1199,7 +1208,7 @@ export default function FixerResults({
             customerName: subscriber?.name || "Ghis Cafe",
             fixerAlias: selectedFixer.alias,
             partnerName: selectedFixer.alias,
-            date: new Date().toLocaleString(),
+            date: formatWorkflowDateTime(Date.now()),
             createdAt: Date.now(),
             budget: totalBudget > 0 ? `฿${totalBudget.toLocaleString()}` : "฿0",
             location: bookingLocation,
@@ -1226,7 +1235,7 @@ export default function FixerResults({
                 msg: `Your request for ${service} (${poNumber}) has been sent to ${selectedFixer.alias}. Awaiting partner acceptance.`,
                 msgTh: `คำขอของคุณสำหรับ ${service} (${poNumber}) ถูกส่งให้ ${selectedFixer.alias} แล้ว รอการยอมรับจากพาร์ทเนอร์`,
                 msgZh: `您的 ${service} (${poNumber}) 请求已发送给 ${selectedFixer.alias}，等待合作伙伴接受。`,
-                date: new Date().toLocaleString(),
+                date: formatWorkflowDateTime(Date.now()),
                 createdAt: Date.now(),
                 dot: "bg-amber-400",
               });
@@ -1238,7 +1247,7 @@ export default function FixerResults({
                 msg: `Waiting for ${selectedFixer.alias} to review and accept PO ${poNumber}. You will be notified when they respond.`,
                 msgTh: `รอให้ ${selectedFixer.alias} ตรวจสอบและยอมรับ PO ${poNumber} คุณจะได้รับการแจ้งเตือนเมื่อพาร์ทเนอร์ตอบสนอง`,
                 msgZh: `等待 ${selectedFixer.alias} 审核并接受 PO ${poNumber}。当合作伙伴回应时，您会收到通知。`,
-                date: new Date().toLocaleString(),
+                date: formatWorkflowDateTime(Date.now()),
                 createdAt: Date.now(),
                 dot: "bg-blue-400",
               });
@@ -1258,7 +1267,7 @@ export default function FixerResults({
                 serviceZh: service,
                 title: service,
                 customer: subscriber?.name || "Ghis Cafe",
-                date: new Date().toLocaleString(),
+                date: formatWorkflowDateTime(Date.now()),
                 createdAt: Date.now(),
                 notifyAt: Date.now(),
                 fee: totalBudget > 0 ? `฿${totalBudget.toLocaleString()}` : "฿0",
@@ -1283,6 +1292,7 @@ export default function FixerResults({
     }
 
     // Show success modal with navigation options
+    setIsNotifyingPartner(false);
     setStep("notify-success");
   };
 
@@ -2310,10 +2320,27 @@ export default function FixerResults({
 
           <button
             onClick={handlePOAcknowledge}
-            className="w-full py-3 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-xl shadow-lg transition"
+            disabled={isNotifyingPartner}
+            className="w-full py-3 bg-sky-600 hover:bg-sky-700 disabled:bg-sky-400 disabled:cursor-wait text-white font-semibold rounded-xl shadow-lg transition"
           >
-            {locale === "th" ? "รับทราบ & ส่งให้พาร์ทเนอร์" : locale === "zh" ? "确认并通知合作伙伴" : "Acknowledge & Notify Partner"}
+            {isNotifyingPartner
+              ? locale === "th"
+                ? "⏳ กำลังส่งให้พาร์ทเนอร์..."
+                : locale === "zh"
+                ? "⏳ 正在通知合作伙伴..."
+                : "⏳ Notifying Partner..."
+              : locale === "th"
+              ? "รับทราบ & ส่งให้พาร์ทเนอร์"
+              : locale === "zh"
+              ? "确认并通知合作伙伴"
+              : "Acknowledge & Notify Partner"}
           </button>
+          {isNotifyingPartner && (
+            <div className="mt-3 flex items-center justify-center gap-2 text-xs text-amber-600">
+              <span className="inline-block h-4 w-4 rounded-full border-2 border-amber-500 border-t-transparent animate-spin" />
+              <span>{locale === "th" ? "ระบบกำลังสร้างคำขอ โปรดรอสักครู่" : locale === "zh" ? "系统正在生成请求，请稍候" : "The request is being generated. Please wait."}</span>
+            </div>
+          )}
           <button
             onClick={() => { setSelectedFixer(null); setStep("select"); }}
             className="mt-3 w-full text-sm text-gray-500 hover:text-gray-700"

@@ -2530,15 +2530,16 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     });
   const workflowAlerts = visibleMockDynRequests
     .map((x: any) => {
-      const stableTime = x.date || toDisplayDateTime(x.createdAt) || "";
       const createdAt = x.createdAt || parseDateMs(x.date);
+      const stableTime = toDisplayDateTime(createdAt) || x.date || "";
       if (x.type === "notice") return { id: `a-${x.id}`, msg: x.msg || x.desc || "Workflow updated.", msgTh: x.msgTh || x.descTh || "อัปเดตขั้นตอนการทำงาน", msgZh: x.msgZh || x.descZh || "工作流程已更新。", time: stableTime, createdAt, dot: "bg-indigo-400" };
-      if (x.type === "payment_pending") return { id: `a-${x.id}`, msg: "Partner accepted Order — please proceed to pay fee.", msgTh: "พาร์ทเนอร์ยอมรับออเดอร์แล้ว — กรุณาชำระค่าธรรมเนียม", msgZh: "合作伙伴已接受订单 — 请支付费用。", time: stableTime, createdAt, dot: "bg-blue-500" };
-      if (x.type === "chat_ready") return { id: `a-${x.id}`, msg: "Chat is active — send meeting invitation when ready.", msgTh: "แชทพร้อมใช้งาน — ส่งคำเชิญนัดหมายเมื่อพร้อม", msgZh: "聊天已激活 — 准备好后发送会议邀请。", time: stableTime, createdAt, dot: "bg-sky-500" };
-      if (x.type === "meeting_pending_partner") return { id: `a-${x.id}`, msg: "Meeting invitation sent — waiting for partner confirmation.", msgTh: "ส่งคำเชิญนัดหมายแล้ว — รอการยืนยันจากพาร์ทเนอร์", msgZh: "会议邀请已发送 — 等待合作伙伴确认。", time: stableTime, createdAt, dot: "bg-amber-500" };
-      if (x.type === "meeting_scheduled") return { id: `a-${x.id}`, msg: "Confirm meeting at site", msgTh: "ยืนยันนัดหมายที่สถานที่", msgZh: "确认现场会议", time: stableTime, createdAt, dot: "bg-teal-500" };
-      if (x.type === "variation_pending") return { id: `a-${x.id}`, msg: "Request for Approval of Variation", msgTh: "คำขออนุมัติการเปลี่ยนแปลง", msgZh: "申请变更审批", time: stableTime, createdAt, dot: "bg-purple-500" };
-      if (x.type === "complete_pending") return { id: `a-${x.id}`, msg: "Request for job complete", msgTh: "คำขอยืนยันงานเสร็จสิ้น", msgZh: "申请完工确认", time: stableTime, createdAt, dot: "bg-green-500" };
+      if (x.type === "payment_pending") return { id: `a-${x.id}`, msg: `${x.po || "Order"}: Partner accepted your enquiry. Next: click Testing period - Free Pass in Requests to activate chat and continue.`, msgTh: `${x.po || "ออเดอร์"}: พาร์ทเนอร์ยอมรับคำขอแล้ว ขั้นตอนถัดไปคือกด Testing period - Free Pass ในหน้า Requests เพื่อเปิดแชทและไปต่อ`, msgZh: `${x.po || "订单"}: 合作伙伴已接受您的询价。下一步：在 Requests 中点击 Testing period - Free Pass 以启用聊天并继续。`, time: stableTime, createdAt, dot: "bg-blue-500" };
+      if (x.type === "chat_ready") return { id: `a-${x.id}`, msg: `${x.po || "Order"}: Chat room is active. Next: send your site meeting invitation when you are ready.`, msgTh: `${x.po || "ออเดอร์"}: ห้องแชทพร้อมใช้งานแล้ว ขั้นตอนถัดไปคือส่งคำเชิญนัดหมายหน้างานเมื่อพร้อม`, msgZh: `${x.po || "订单"}: 聊天室已开启。下一步：准备好后发送现场会议邀请。`, time: stableTime, createdAt, dot: "bg-sky-500" };
+      if (x.type === "meeting_pending_partner") return { id: `a-${x.id}`, msg: `${x.po || "Order"}: Site meeting invitation sent. Waiting for partner confirmation before moving to variation.`, msgTh: `${x.po || "ออเดอร์"}: ส่งคำเชิญนัดหมายหน้างานแล้ว กำลังรอพาร์ทเนอร์ยืนยันก่อนเข้าสู่ขั้นตอน variation`, msgZh: `${x.po || "订单"}: 现场会议邀请已发送。正在等待合作伙伴确认后再进入变更步骤。`, time: stableTime, createdAt, dot: "bg-amber-500" };
+      if (x.type === "meeting_scheduled") return { id: `a-${x.id}`, msg: `${x.po || "Order"}: Site meeting confirmed${x.meetingDate ? ` for ${x.meetingDate}` : ""}${x.meetingTime ? ` ${x.meetingTime}` : ""}. Next: attend the meeting and wait for partner variation if extra work is needed.`, msgTh: `${x.po || "ออเดอร์"}: ยืนยันนัดหมายหน้างานแล้ว${x.meetingDate ? ` วันที่ ${x.meetingDate}` : ""}${x.meetingTime ? ` เวลา ${x.meetingTime}` : ""} ขั้นตอนถัดไปคือเข้าพบหน้างานและรอ variation จากพาร์ทเนอร์หากมีงานเพิ่ม`, msgZh: `${x.po || "订单"}: 现场会议已确认${x.meetingDate ? `，日期 ${x.meetingDate}` : ""}${x.meetingTime ? ` 时间 ${x.meetingTime}` : ""}。下一步：参加会议，如有额外工作则等待合作伙伴提交变更。`, time: stableTime, createdAt, dot: "bg-teal-500" };
+      if (x.type === "variation_pending") return { id: `a-${x.id}`, msg: `${x.po || "Order"}: Partner submitted a variation request. Next: review the revised scope and approve it to continue.`, msgTh: `${x.po || "ออเดอร์"}: พาร์ทเนอร์ส่งคำขอ variation แล้ว ขั้นตอนถัดไปคือพิจารณาขอบเขตงาน/ราคาใหม่และอนุมัติเพื่อดำเนินการต่อ`, msgZh: `${x.po || "订单"}: 合作伙伴已提交变更申请。下一步：查看调整后的范围并批准以继续。`, time: stableTime, createdAt, dot: "bg-purple-500" };
+      if (x.type === "complete_pending") return { id: `a-${x.id}`, msg: `${x.po || "Order"}: Partner submitted the project-complete request. Next: review the completion note and confirm if the work is finished.`, msgTh: `${x.po || "ออเดอร์"}: พาร์ทเนอร์ส่งคำของานเสร็จแล้ว ขั้นตอนถัดไปคืออ่านบันทึกสรุปและยืนยันเมื่อโครงการเสร็จจริง`, msgZh: `${x.po || "订单"}: 合作伙伴已提交完工申请。下一步：查看完工说明，并在工作确实完成后确认。`, time: stableTime, createdAt, dot: "bg-green-500" };
+      if (x.type === "rate_pending") return { id: `a-${x.id}`, msg: `${x.po || "Order"}: Project complete confirmed. Next: rate your partner to close this job and move it to history.`, msgTh: `${x.po || "ออเดอร์"}: ยืนยันงานเสร็จแล้ว ขั้นตอนถัดไปคือให้คะแนนพาร์ทเนอร์เพื่อปิดงานและย้ายไปประวัติ`, msgZh: `${x.po || "订单"}: 已确认完工。下一步：评价您的合作伙伴以关闭此工作并移入历史。`, time: stableTime, createdAt, dot: "bg-yellow-500" };
       return null;
     })
     .filter(Boolean) as any[];
@@ -2606,7 +2607,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     .filter(Boolean) as any[];
   const baseAlerts: any[] = [];
   const allAlerts = [...workflowAlerts, ...propWorkflowAlerts, ...baseAlerts].sort((a: any, b: any) => parseDateMs(b.createdAt || b.time) - parseDateMs(a.createdAt || a.time));
-  const alertsPageItems = allAlerts.slice(0, 20);
+  const alertsPageItems = allAlerts.slice(0, 19);
   const overviewAlerts = allAlerts.slice(0, 3);
   const overviewIncomingChats = chatFeed.filter((c: any) => c.hasIncoming).slice(0, 3);
 
@@ -3778,12 +3779,12 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                         key: p.poNumber,
                         ts: parseDateMs(`${p.meetingDate}T${p.meetingTime || '00:00'}`),
                         node: (
-                          <div key={p.poNumber} className="bg-white rounded-xl shadow-sm border border-emerald-200 p-5">
+                            <div key={p.poNumber} className="bg-white rounded-xl shadow-sm border border-emerald-200 p-5">
                             <div className="flex justify-between items-center mb-2">
-                              <span className="text-gray-900 font-bold">🏠 {p.propertyTitle} ({getPropOrderLabel(p.poNumber)})</span>
-                              <span className="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-bold">{p.meetingDate}{p.meetingTime ? ` · ${p.meetingTime}` : ''}</span>
+                                <span className="text-sm text-gray-900 font-bold">🏠 {p.propertyTitle} ({getPropOrderLabel(p.poNumber)})</span>
+                                <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-1 rounded-full font-bold">{p.meetingDate}{p.meetingTime ? ` · ${p.meetingTime}` : ''}</span>
                             </div>
-                            <p className="text-sm text-gray-600">{locale === "th" ? "สถานที่:" : "Venue:"} {p.meetingVenue || 'TBD'} | {locale === "th" ? "ผู้ลงประกาศ:" : "Lister:"} {firstNameOnly(p.listerName, 'Lister')}</p>
+                            <p className="text-xs text-gray-600">{locale === "th" ? "สถานที่:" : "Venue:"} {p.meetingVenue || 'TBD'} | {locale === "th" ? "ผู้ลงประกาศ:" : "Lister:"} {firstNameOnly(p.listerName, 'Lister')}</p>
                           </div>
                         ),
                       }));
@@ -3793,10 +3794,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                         node: (
                           <div key={m.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
                             <div className="flex justify-between items-center mb-2">
-                              <span className="text-gray-900 font-bold">{m.title} ({m.po})</span>
-                              <span className="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-bold">{m.meetingDate || m.date}{m.meetingTime ? ` · ${m.meetingTime}` : ''}</span>
+                              <span className="text-sm text-gray-900 font-bold">{m.title} ({m.po})</span>
+                              <span className="bg-amber-100 text-amber-800 text-[10px] px-2 py-1 rounded-full font-bold">{m.meetingDate || m.date}{m.meetingTime ? ` · ${m.meetingTime}` : ''}</span>
                             </div>
-                            <p className="text-sm text-gray-600">{locale === "th" ? "สถานที่:" : locale === "zh" ? "地点:" : "Location:"} {m.venue || m.meetingVenue || m.subdistrict || 'TBD'} | {locale === "th" ? "ผู้ให้บริการ:" : locale === "zh" ? "服务提供商:" : "Provider:"} {m.customer}</p>
+                            <p className="text-xs text-gray-600">{locale === "th" ? "สถานที่:" : locale === "zh" ? "地点:" : "Location:"} {m.venue || m.meetingVenue || m.subdistrict || 'TBD'} | {locale === "th" ? "ผู้ให้บริการ:" : locale === "zh" ? "服务提供商:" : "Provider:"} {m.customer}</p>
                           </div>
                         ),
                       }));
@@ -3816,7 +3817,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   {overviewAlerts.length > 0 ? (
                     <>
                       {overviewAlerts.map((a: any) => (
-                        <div key={a.id} className="flex items-start gap-3 text-sm text-gray-700"><div className={`w-2 h-2 mt-1.5 rounded-full ${a.dot} flex-shrink-0`}></div><p>{locale === "th" ? (a.msgTh || a.msg) : locale === "zh" ? (a.msgZh || a.msg) : a.msg} <span className="text-xs text-gray-400 ml-1">{a.time}</span></p></div>
+                        <div key={a.id} className="flex items-start gap-3 text-xs text-gray-700"><div className={`w-2 h-2 mt-1.5 rounded-full ${a.dot} flex-shrink-0`}></div><p>{locale === "th" ? (a.msgTh || a.msg) : locale === "zh" ? (a.msgZh || a.msg) : a.msg} <span className="text-[11px] text-gray-400 ml-1">{a.time}</span></p></div>
                       ))}
                     </>
                   ) : (

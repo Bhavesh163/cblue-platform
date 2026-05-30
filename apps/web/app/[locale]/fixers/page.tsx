@@ -1410,6 +1410,11 @@ export default function FixerProPage() {
   const [propPartnerRateComment, setPropPartnerRateComment] = useState("");
   const [propPartnerModalImages, setPropPartnerModalImages] = useState<string[]>([]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.scrollTo(0, 0);
+  }, [activeTab]);
+
   const ensurePropChatBootstrap = (inquiry: PropInquiry) => {
     if (typeof window === "undefined" || !inquiry?.poNumber) return;
     try {
@@ -2697,7 +2702,7 @@ export default function FixerProPage() {
             const lastNotify = r.notifyAt || r.createdAt || 0;
             if (nowMs - lastNotify >= 60 * 60 * 1000) {
               hourlyChanged = true;
-              return { ...r, notifyAt: nowMs, date: new Date().toLocaleString() };
+              return { ...r, notifyAt: nowMs, date: fmtDateTime(nowMs), createdAt: r.createdAt || nowMs };
             }
           }
           return r;
@@ -3578,7 +3583,7 @@ export default function FixerProPage() {
     .sort((a: any, b: any) => parseTs(b.createdAt || b.date) - parseTs(a.createdAt || a.date));
 
   const dynamicNotifications = mockDynReqs.map((r: any) => {
-    const displayTime = typeof r.date === "string" && r.date.includes(":") ? r.date : (r.date ? fmtDateTime(r.date) : "");
+      const displayTime = fmtDateTime(r.createdAt || parseTs(r.date) || Date.now());
     if (r.type === "meeting_pending_partner") return {
       id: `dyn-${r.id}`,
       msg: `${r.po}: Customer sent a site meeting invitation. Review the schedule and confirm it next.`,
@@ -3619,7 +3624,7 @@ export default function FixerProPage() {
   }).filter(Boolean) as any[];
 
   const partnerWorkflowNotifications = partnerDynReqs.map((r: any) => {
-    const displayTime = typeof r.date === "string" && r.date.includes(":") ? r.date : (r.date ? fmtDateTime(r.date) : "");
+    const displayTime = fmtDateTime(r.createdAt || parseTs(r.date) || Date.now());
     if (r.workflowType === "meeting_confirm_partner" || r.type === "meeting_confirm_partner") return {
       id: `p-${r.id}`,
       msg: `${r.po}: Customer proposed a site meeting${r.meetingDateLabel ? ` on ${r.meetingDateLabel}` : ''}${r.meetingTimeLabel ? ` at ${r.meetingTimeLabel}` : ''}${r.meetingVenue ? ` in ${r.meetingVenue}` : ''}. Confirm it to unlock Step 9.`,
@@ -3766,7 +3771,7 @@ export default function FixerProPage() {
         msgTh: alert?.msgTh || msg,
         msgZh: alert?.msgZh || msg,
         unread: true,
-        time: typeof alert?.date === 'string' && alert.date.includes(':') ? alert.date : fmtDateTime(createdAt),
+        time: fmtDateTime(createdAt),
         createdAt,
         dot: alert?.dot || 'bg-red-500',
       };
@@ -4247,7 +4252,7 @@ export default function FixerProPage() {
                         po,
                         service: waitModalOrder?.service || waitModalOrder?.title || serviceTitle,
                         type: "accept_sent",
-                        date: new Date().toLocaleString(),
+                        date: fmtDateTime(Date.now()),
                         createdAt: Date.now(),
                       });
                     }
@@ -4381,7 +4386,7 @@ export default function FixerProPage() {
                       msg: `${partner?.name || 'The selected partner'} is unable to proceed with ${waitModalOrder.service || 'your project'} (${po}) due to unavailability. Please select another service provider from the matching list.`,
                       msgTh: `${partner?.name || 'พาร์ทเนอร์ที่เลือก'} ไม่สามารถดำเนินการ ${waitModalOrder.service || 'โครงการของคุณ'} (${po}) เนื่องจากไม่ว่าง กรุณาเลือกผู้ให้บริการอื่นจากรายชื่อที่จับคู่`,
                       msgZh: `${partner?.name || '选中的合作伙伴'} 无法继续您的 ${waitModalOrder.service || '项目'} (${po})，原因是无法安排时间。请从匹配列表中选择其他服务提供商。`,
-                      date: new Date().toLocaleString(),
+                      date: fmtDateTime(Date.now()),
                       createdAt: Date.now(),
                       dot: 'bg-red-400',
                     });
@@ -4751,7 +4756,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
           <h3 className="font-bold text-gray-900 mb-3 flex items-center justify-between">⏰ {locale === "th" ? "การนัดหมายที่จะมาถึง" : locale === "zh" ? "即将到来的会议" : "Upcoming Meetings"} <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("requests")}>{locale === "th" ? "ดูทั้งหมด" : locale === "zh" ? "查看全部" : "View All"}</span></h3>
           {scheduledMeetings.length > 0 ? (
             <div className="space-y-2">
-              {scheduledMeetings.slice(0, 2).map((meeting: any) => (
+              {scheduledMeetings.slice(0, 3).map((meeting: any) => (
                 <div key={meeting.id} className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
                   <p className="text-sm font-bold text-gray-800">{meeting.title} ({meeting.po})</p>
                   <p className="text-xs text-gray-500 mt-1">{meeting.meetingDate || meeting.date}{meeting.meetingTime ? ` · ${meeting.meetingTime}` : ''}</p>
@@ -5567,6 +5572,40 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
     } catch {}
   };
 
+  const upsertMockActiveStep = (job: any, step: number, actionNeeded: boolean, createdAt: number) => {
+    try {
+      const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
+      const nextEntry = {
+        ...(active.find((x: any) => x.po === job.po) || job),
+        id: (active.find((x: any) => x.po === job.po) || job)?.id || job.orderId || job.po,
+        orderId: (active.find((x: any) => x.po === job.po) || job)?.orderId || job.orderId || undefined,
+        po: job.po || job.id,
+        title: job.title || job.service || job.po || "Project",
+        service: job.service || job.title || job.po || "Project",
+        customer: job.customer || "Customer",
+        customerName: job.customer || "Customer",
+        date: fmtDateTime(createdAt),
+        createdAt: (active.find((x: any) => x.po === job.po) || job)?.createdAt || createdAt,
+        budget: job.budget || job.fee || "฿0",
+        fee: job.fee || job.budget || "฿0",
+        location: job.location || job.subdistrict || "",
+        subdistrict: job.subdistrict || job.location || "",
+        tier: job.tier || "Standard",
+        description: job.description || job.desc || "",
+        actionNeeded,
+        step,
+        mockStep: step,
+      };
+      const exists = Array.isArray(active) && active.some((x: any) => x.po === nextEntry.po);
+      const updatedActive = exists
+        ? active.map((x: any) => (x.po === nextEntry.po ? { ...x, ...nextEntry } : x))
+        : [...(Array.isArray(active) ? active : []), nextEntry];
+      localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
+    } catch {
+      // non-blocking for local workflow repair
+    }
+  };
+
   const handlePartnerAction = (job: any, action: 'variation' | 'complete' | 'rate', extraData?: string) => {
     try {
       const po = job.po || job.id;
@@ -5594,10 +5633,8 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
         if (partnerRequest) storeVariationPartnerNote(po, partnerRequest);
         const next = [...dynReqs.filter((x: any) => x.po !== po), { id: varId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: varNote, location: job.location || job.subdistrict || '', type: 'variation_pending', step: 9 }];
         localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
-        // Update active BEFORE writePartnerReqs to prevent race condition in buildChatFeed
-        const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
-        const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 9, mockStep: 9, actionNeeded: false } : x);
-        localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
+        // Keep the active-job progress pinned to Step 9 even after the request disappears.
+        upsertMockActiveStep(job, 9, false, createdAt);
         try { localStorage.setItem(`partner_variation_sent_${po}`, '1'); } catch {}
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
@@ -5605,12 +5642,10 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
       } else if (action === 'complete') {
         const complId = `compl-${po}`;
         const completeDesc = extraData?.trim() ? `Partner completion request: ${extraData.trim()}` : 'Work is completed. Please review and mark as complete to close this project.';
-        const next = [...dynReqs.filter((x: any) => x.po !== po), { id: complId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: completeDesc, location: job.location || job.subdistrict || '', type: 'complete_pending', step: 10 }];
+        const previousPartnerRequest = resolveVariationPartnerNote(po);
+        const next = [...dynReqs.filter((x: any) => x.po !== po), { id: complId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: completeDesc, location: job.location || job.subdistrict || '', partnerRequest: previousPartnerRequest, partnerNote: previousPartnerRequest, variationRequest: previousPartnerRequest, type: 'complete_pending', step: 10 }];
         localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
-        // Update active BEFORE writePartnerReqs to prevent race condition in buildChatFeed
-        const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
-        const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 10, mockStep: 10, actionNeeded: false } : x);
-        localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
+        upsertMockActiveStep(job, 10, false, createdAt);
         try { localStorage.setItem(`partner_complete_sent_${po}`, '1'); } catch {}
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['complete_partner', 'variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
@@ -5779,7 +5814,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, priceList, onPropAc
                 </>
               ) : req.type === 'complete_partner' ? (
                 <>
-                  <button onClick={(e) => { e.stopPropagation(); setCompleteNote(''); setCompleteModal(req); }} className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition">Send</button>
+                  <button onClick={(e) => { e.stopPropagation(); setCompleteNote(''); setCompleteModal({ ...req, service: req.service || req.title || 'Project', partnerRequest: req.partnerRequest || resolveVariationPartnerNote(req.po), partnerNote: req.partnerNote || req.partnerRequest || resolveVariationPartnerNote(req.po), variationRequest: req.variationRequest || req.partnerRequest || resolveVariationPartnerNote(req.po) }); }} className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition">Send</button>
                   <button onClick={(e) => { e.stopPropagation(); try { localStorage.setItem(`partner_complete_sent_${req.po}`, '1'); } catch {} writePartnerReqs(prev => prev.filter((x: any) => !(x.po === req.po && x.type === 'complete_partner'))); }} className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">No</button>
                 </>
               ) : req.type === 'rate_partner' ? (
@@ -6032,7 +6067,7 @@ function PartnerNotifications({ locale, notifications }: { locale: string; notif
         <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "การแจ้งเตือนทั้งหมด" : locale === "zh" ? "所有通知" : "All Notifications"}</h2>
       </div>
       <div className="divide-y divide-gray-50">
-        {notifications.map((n) => (
+        {notifications.slice(0, 19).map((n) => (
           <div key={n.id} className={`flex items-center gap-4 px-6 py-4 transition ${n.unread ? "bg-purple-50/50" : "hover:bg-gray-50"}`}>
             <span className={`w-3 h-3 rounded-full ${n.dot} flex-shrink-0`} />
             <p className="text-sm text-gray-800 flex-1">{locale === "th" ? n.msgTh : locale === "zh" ? n.msgZh : n.msg}</p>
