@@ -439,10 +439,10 @@ function PropertiesPageContent() {
     ? "登录已过期。请重新登录后再发送询盘。"
     : "Your session expired. Please log in again before sending the inquiry.";
   const customerOnlyMessage = locale === "th"
-    ? "บัญชีนี้ไม่ใช่บัญชีลูกค้า กรุณาเข้าสู่ระบบด้วยบัญชีลูกค้าเพื่อส่งแจ้งเตือน"
+    ? "กรุณาเข้าสู่ระบบด้วยบัญชี CBLUE ที่ถูกต้องก่อนส่งแจ้งเตือน"
     : locale === "zh"
-    ? "此账户不是客户账户。请使用客户账户登录后再发送通知。"
-    : "This account is not a customer account. Please log in with a customer account to activate inquiry notifications.";
+    ? "请使用有效的 CBLUE 账户登录后再发送通知。"
+    : "Please log in with a valid CBLUE account to activate inquiry notifications.";
 
   const [properties, setProperties] = useState<Property[]>([]);
   const [latestProperties, setLatestProperties] = useState<Property[]>([]);
@@ -603,15 +603,14 @@ function PropertiesPageContent() {
     return new Intl.NumberFormat("th-TH").format(price);
   }
 
-  async function getInquirySessionType(authToken: string): Promise<"customer" | "partner" | "unknown"> {
+  async function getInquirySessionType(authToken: string): Promise<"authenticated" | "unknown"> {
     if (!authToken) return "unknown";
     try {
       const res = await fetch("/api/v1/users/me", {
         headers: { Authorization: `Bearer ${authToken}` },
       });
       if (!res.ok) return "unknown";
-      const me = await res.json();
-      return me?.fixer ? "partner" : "customer";
+      return "authenticated";
     } catch {
       return "unknown";
     }
@@ -646,7 +645,7 @@ function PropertiesPageContent() {
     }
 
     let inquirySessionType = await getInquirySessionType(token);
-    if (inquirySessionType !== "customer") {
+    if (inquirySessionType !== "authenticated") {
       const refreshedToken = await refreshSubscriberSession(token);
       if (refreshedToken) {
         token = refreshedToken;
@@ -654,7 +653,7 @@ function PropertiesPageContent() {
       }
     }
 
-    if (inquirySessionType !== "customer") {
+    if (inquirySessionType !== "authenticated") {
       setPendingContactProp(prop);
       setAuthMode("login");
       setAuthError(customerOnlyMessage);
@@ -830,7 +829,7 @@ function PropertiesPageContent() {
                   }
                   const authData = await authRes.json();
                   const inquirySession = await getInquirySessionType(authData.accessToken || "");
-                  if (inquirySession !== "customer") {
+                  if (inquirySession !== "authenticated") {
                     setAuthError(customerOnlyMessage);
                     return;
                   }
@@ -991,7 +990,7 @@ function PropertiesPageContent() {
                           }
 
                           let inquirySession = await getInquirySessionType(token);
-                          if (inquirySession !== "customer") {
+                          if (inquirySession !== "authenticated") {
                             const refreshedToken = await refreshSubscriberSession(token);
                             if (!refreshedToken) {
                               clearSubscriberSession();
@@ -1005,7 +1004,7 @@ function PropertiesPageContent() {
                             inquirySession = await getInquirySessionType(token);
                           }
 
-                          if (inquirySession !== "customer") {
+                          if (inquirySession !== "authenticated") {
                             setShowContactFlow(null);
                             setPendingContactProp(currentFlow);
                             setAuthMode("login");
@@ -1046,7 +1045,7 @@ function PropertiesPageContent() {
                             const msg = Array.isArray(errData?.message)
                               ? errData.message.join(", ")
                               : errData?.message || (locale === "th" ? "ไม่สามารถส่งคำขอได้ กรุณาเข้าสู่ระบบใหม่แล้วลองอีกครั้ง" : locale === "zh" ? "无法发送询盘。请重新登录后再试。" : "Could not send the inquiry. Please log in again and retry.");
-                            if (/partner|customer account|only customer/i.test(String(msg))) {
+                            if (/login|account|authenticated|unauthorized|forbidden/i.test(String(msg))) {
                               setShowContactFlow(null);
                               setPendingContactProp(currentFlow);
                               setAuthMode("login");

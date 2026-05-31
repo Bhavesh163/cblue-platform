@@ -349,13 +349,6 @@ export class PropertyInquiryService {
       throw new NotFoundException('Customer user not found');
     }
 
-    // Property notify/inquiry is customer-only.
-    if (customer.fixer) {
-      throw new ForbiddenException(
-        'This account is registered as a partner. Please use a customer account to send property inquiries.',
-      );
-    }
-
     return this.prisma.propertyInquiry.create({
       data: {
         poNumber: dto.poNumber,
