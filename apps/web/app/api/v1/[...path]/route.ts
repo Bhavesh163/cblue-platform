@@ -47,6 +47,10 @@ const SKIP_REQ = new Set([
 ]);
 const SKIP_RES = new Set(["content-encoding", "transfer-encoding", "content-length", "connection"]);
 const PASSTHROUGH_ERROR_STATUS = new Set([400, 401, 403, 404, 409, 422, 429]);
+const shouldReturnEmptyListFallback = (method: string, routePath: string) => {
+  if (method !== "GET") return false;
+  return /^orders\/[^/]+\/chat$/.test(routePath);
+};
 
 async function handler(
   request: NextRequest,
@@ -54,9 +58,11 @@ async function handler(
 ): Promise<Response> {
   const backendUrls = getBackendUrls();
   let target = "";
+  let routePath = "";
+  let method = request.method.toUpperCase();
   try {
     const { path } = await context.params;
-    const method = request.method.toUpperCase();
+    routePath = path.join("/");
     const hasRequestBody = !["GET", "HEAD", "OPTIONS"].includes(method);
 
     // Forward headers (skip hop-by-hop)
@@ -93,7 +99,7 @@ async function handler(
     let lastError: unknown = null;
 
     for (let i = 0; i < backendUrls.length; i += 1) {
-      const url = new URL(`/api/v1/${path.join("/")}`, backendUrls[i]);
+      const url = new URL(`/api/v1/${routePath}`, backendUrls[i]);
       request.nextUrl.searchParams.forEach((v, k) => url.searchParams.set(k, v));
       target = url.toString();
 
@@ -126,6 +132,13 @@ async function handler(
       throw lastError instanceof Error ? lastError : new Error("No upstream response");
     }
 
+    if (upstream.status >= 500 && shouldReturnEmptyListFallback(method, routePath)) {
+      return Response.json([], {
+        status: 200,
+        headers: { "cache-control": "no-store" },
+      });
+    }
+
     // Build response (strip hop-by-hop)
     const resHeaders = new Headers();
     upstream.headers.forEach((v, k) => {
@@ -143,6 +156,12 @@ async function handler(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[api-proxy]", request.method, target, msg);
+    if (shouldReturnEmptyListFallback(method, routePath)) {
+      return Response.json([], {
+        status: 200,
+        headers: { "cache-control": "no-store" },
+      });
+    }
     return Response.json(
       { error: "proxy_error", message: msg, backends: backendUrls },
       { status: 500 }, // Change 502 to 500 to prevent CF override
