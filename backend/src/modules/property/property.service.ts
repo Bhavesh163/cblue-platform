@@ -33,6 +33,7 @@ export class PropertyService {
     const fallbackId = String(userRef || '').trim();
     if (!fallbackId) return [] as string[];
 
+    try {
     const linkedIds = new Set<string>();
     const subscriberIdCandidates = new Set<string>();
     const normalizedEmails = new Set<string>();
@@ -115,12 +116,21 @@ export class PropertyService {
     if (linkedIds.size === 0) linkedIds.add(fallbackId);
 
     return Array.from(linkedIds);
+    } catch (error) {
+      this.logger.warn(
+        `Falling back to single linked user id for ${fallbackId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return [fallbackId];
+    }
   }
 
   private async resolveLinkedEmails(userRef: string, linkedUserIds?: string[]) {
     const fallbackRef = String(userRef || '').trim();
     if (!fallbackRef) return [] as string[];
 
+    try {
     const emails = new Set<string>();
     const addEmail = (value?: string | null) => {
       const normalized = this.normalizeEmail(value);
@@ -162,12 +172,22 @@ export class PropertyService {
     if (fallbackRef.includes('@')) addEmail(fallbackRef);
 
     return Array.from(emails);
+    } catch (error) {
+      this.logger.warn(
+        `Falling back to empty linked emails for ${fallbackRef}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      if (fallbackRef.includes('@')) return [this.normalizeEmail(fallbackRef)].filter(Boolean);
+      return [];
+    }
   }
 
   private async resolveLinkedPhones(userRef: string, linkedUserIds?: string[]) {
     const fallbackRef = String(userRef || '').trim();
     if (!fallbackRef) return [] as string[];
 
+    try {
     const phones = new Set<string>();
     const addPhone = (value?: string | null) => {
       const normalized = this.normalizePhone(value);
@@ -210,6 +230,14 @@ export class PropertyService {
     addPhone(fallbackRef);
 
     return Array.from(phones);
+    } catch (error) {
+      this.logger.warn(
+        `Falling back to empty linked phones for ${fallbackRef}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return [];
+    }
   }
 
   private normalizeNameTokens(value?: string | null) {
@@ -232,6 +260,7 @@ export class PropertyService {
     const fallbackRef = String(userRef || '').trim();
     if (!fallbackRef) return [] as string[];
 
+    try {
     const names = new Set<string>();
     const addName = (value?: string | null) => {
       this.normalizeNameTokens(value).forEach((token) => names.add(token));
@@ -270,6 +299,14 @@ export class PropertyService {
     addName(fallbackSubscriber?.name);
 
     return Array.from(names);
+    } catch (error) {
+      this.logger.warn(
+        `Falling back to empty linked name tokens for ${fallbackRef}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return [];
+    }
   }
 
   private isLikelySyntheticPropertyCandidate(property: {
@@ -814,7 +851,18 @@ export class PropertyService {
           error instanceof Error ? error.message : String(error)
         }`,
       );
-      return this.findByUserDirectFallback(userId);
+      try {
+        return await this.findByUserDirectFallback(userId);
+      } catch (fallbackError) {
+        this.logger.warn(
+          `Returning empty property list after lookup failed for ${userId}: ${
+            fallbackError instanceof Error
+              ? fallbackError.message
+              : String(fallbackError)
+          }`,
+        );
+        return [];
+      }
     }
   }
 

@@ -356,68 +356,77 @@ export class OrderService {
 
   async getOrderChatMessages(orderId: string, userId: string) {
     try {
-      await this.getOrderForParticipant(orderId, userId);
+      try {
+        await this.getOrderForParticipant(orderId, userId);
+      } catch (error) {
+        this.logger.warn(
+          `Returning empty chat history after participant check failed for order ${orderId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+        return [];
+      }
+
+      let messages: any[] = [];
+      try {
+        messages = await this.prisma.orderChatMessage.findMany({
+          where: { orderId },
+          orderBy: { createdAt: 'asc' },
+        });
+      } catch (error) {
+        this.logger.warn(
+          `Returning empty chat history after chat query failed for order ${orderId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+        return [];
+      }
+
+      const senderIds = Array.from(
+        new Set(messages.map((message) => message.senderUserId).filter(Boolean)),
+      );
+      let senders: any[] = [];
+      try {
+        senders = senderIds.length
+          ? await this.prisma.user.findMany({
+              where: { id: { in: senderIds } },
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                role: true,
+              },
+            })
+          : [];
+      } catch (error) {
+        this.logger.warn(
+          `Skipping chat sender hydration after user query failed for order ${orderId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+      const senderMap = new Map(senders.map((sender) => [sender.id, sender]));
+
+      return messages.map((m) => ({
+        id: m.id,
+        orderId: m.orderId,
+        senderUserId: m.senderUserId,
+        senderRole: m.senderRole,
+        senderName:
+          senderMap.get(m.senderUserId)?.name ||
+          senderMap.get(m.senderUserId)?.email ||
+          'User',
+        text: m.text,
+        createdAt: m.createdAt,
+      }));
     } catch (error) {
       this.logger.warn(
-        `Returning empty chat history after participant check failed for order ${orderId}: ${
+        `Returning empty chat history after unexpected chat read failure for order ${orderId}: ${
           error instanceof Error ? error.message : String(error)
         }`,
       );
       return [];
     }
-
-    let messages: any[] = [];
-    try {
-      messages = await this.prisma.orderChatMessage.findMany({
-        where: { orderId },
-        orderBy: { createdAt: 'asc' },
-      });
-    } catch (error) {
-      this.logger.warn(
-        `Returning empty chat history after chat query failed for order ${orderId}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-      return [];
-    }
-
-    const senderIds = Array.from(
-      new Set(messages.map((message) => message.senderUserId).filter(Boolean)),
-    );
-    let senders: any[] = [];
-    try {
-      senders = senderIds.length
-        ? await this.prisma.user.findMany({
-            where: { id: { in: senderIds } },
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              role: true,
-            },
-          })
-        : [];
-    } catch (error) {
-      this.logger.warn(
-        `Skipping chat sender hydration after user query failed for order ${orderId}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-    }
-    const senderMap = new Map(senders.map((sender) => [sender.id, sender]));
-
-    return messages.map((m) => ({
-      id: m.id,
-      orderId: m.orderId,
-      senderUserId: m.senderUserId,
-      senderRole: m.senderRole,
-      senderName:
-        senderMap.get(m.senderUserId)?.name ||
-        senderMap.get(m.senderUserId)?.email ||
-        'User',
-      text: m.text,
-      createdAt: m.createdAt,
-    }));
   }
 
   async createOrderChatMessage(

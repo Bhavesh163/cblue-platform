@@ -37,8 +37,12 @@ export class PropertyController {
 
   @Get('my')
   @UseGuards(JwtAuthGuard)
-  findMyProperties(@CurrentUser('id') userId: string) {
-    return this.propertyService.findByUser(userId);
+  async findMyProperties(@CurrentUser('id') userId: string) {
+    try {
+      return await this.propertyService.findByUser(String(userId || '').trim());
+    } catch {
+      return [];
+    }
   }
 
   @Get(':id')

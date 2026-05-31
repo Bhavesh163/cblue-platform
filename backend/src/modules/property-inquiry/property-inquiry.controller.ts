@@ -32,13 +32,25 @@ export class PropertyInquiryController {
   }
 
   @Get('customer')
-  findByCustomer(@CurrentUser('id') userId: string) {
-    return this.propertyInquiryService.findByCustomer(userId);
+  async findByCustomer(@CurrentUser('id') userId: string) {
+    try {
+      return await this.propertyInquiryService.findByCustomer(
+        String(userId || '').trim(),
+      );
+    } catch {
+      return [];
+    }
   }
 
   @Get('lister')
-  findByLister(@CurrentUser('id') userId: string) {
-    return this.propertyInquiryService.findByLister(userId);
+  async findByLister(@CurrentUser('id') userId: string) {
+    try {
+      return await this.propertyInquiryService.findByLister(
+        String(userId || '').trim(),
+      );
+    } catch {
+      return [];
+    }
   }
 
   @Get('by-po/:poNumber/chat')

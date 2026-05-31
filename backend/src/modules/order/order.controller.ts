@@ -39,11 +39,14 @@ export class OrderController {
   }
 
   @Get(':orderId/chat')
-  getOrderChat(
+  async getOrderChat(
     @Param('orderId') orderId: string,
     @CurrentUser('id') userId: string,
   ) {
-    return this.orderService.getOrderChatMessages(orderId, userId);
+    return this.orderService.getOrderChatMessages(
+      orderId,
+      String(userId || '').trim(),
+    );
   }
 
   @Post(':orderId/chat')

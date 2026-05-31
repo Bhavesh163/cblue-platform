@@ -3,6 +3,7 @@ import {
   BadRequestException,
   NotFoundException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { PropertyInquiryStatus } from '@prisma/client';
@@ -14,6 +15,7 @@ import {
 
 @Injectable()
 export class PropertyInquiryService {
+  private readonly logger = new Logger(PropertyInquiryService.name);
   private propertyInquiryChatTableReady = false;
 
   constructor(private readonly prisma: PrismaService) {}
@@ -28,6 +30,7 @@ export class PropertyInquiryService {
     const fallbackId = String(userId || '').trim();
     if (!fallbackId) return [] as string[];
 
+    try {
     const user = await this.prisma.user.findUnique({
       where: { id: fallbackId },
       select: { id: true, subscriberId: true, email: true },
@@ -87,12 +90,21 @@ export class PropertyInquiryService {
     }
 
     return Array.from(linkedIds);
+    } catch (error) {
+      this.logger.warn(
+        `Falling back to single linked user id for ${fallbackId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return [fallbackId];
+    }
   }
 
   private async resolveLinkedEmails(userId: string, linkedIds?: string[]) {
     const fallbackId = String(userId || '').trim();
     if (!fallbackId) return [] as string[];
 
+    try {
     const emails = new Set<string>();
     const addEmail = (value?: string | null) => {
       const normalized = this.normalizeEmail(value);
@@ -134,6 +146,15 @@ export class PropertyInquiryService {
     if (fallbackId.includes('@')) addEmail(fallbackId);
 
     return Array.from(emails);
+    } catch (error) {
+      this.logger.warn(
+        `Falling back to empty linked emails for ${fallbackId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      if (fallbackId.includes('@')) return [this.normalizeEmail(fallbackId)].filter(Boolean);
+      return [];
+    }
   }
 
   private hasAnyLinkedEmail(
@@ -363,6 +384,7 @@ export class PropertyInquiryService {
   }
 
   async findByCustomer(customerId: string) {
+    try {
     const customerIds = await this.resolveLinkedUserIds(customerId);
     const customerEmails = await this.resolveLinkedEmails(
       customerId,
@@ -429,9 +451,18 @@ export class PropertyInquiryService {
         return [];
       }
     }
+    } catch (error) {
+      this.logger.warn(
+        `Returning empty customer inquiry list after lookup failed for ${customerId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return [];
+    }
   }
 
   async findByLister(listerUserId: string) {
+    try {
     const listerIds = await this.resolveLinkedUserIds(listerUserId);
     const listerEmails = await this.resolveLinkedEmails(
       listerUserId,
@@ -507,6 +538,14 @@ export class PropertyInquiryService {
       } catch {
         return [];
       }
+    }
+    } catch (error) {
+      this.logger.warn(
+        `Returning empty lister inquiry list after lookup failed for ${listerUserId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return [];
     }
   }
 
