@@ -93,11 +93,32 @@ function pruneStorageIfNeeded() {
 
 const fmtDate = (d: Date | number | string) => {
   const dt = new Date(d);
+  if (!Number.isFinite(dt.getTime())) return "";
   return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
 };
 const fmtDateTime = (d: Date | number | string) => {
   const dt = new Date(d);
+  if (!Number.isFinite(dt.getTime())) return "";
   return `${fmtDate(dt)} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+};
+const parseMeetingDateTimeMs = (dateValue?: string, timeValue?: string) => {
+  const date = String(dateValue || '').trim();
+  const time = String(timeValue || '').trim();
+  if (!date) return 0;
+  const ddmmyyyy = date.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (ddmmyyyy) {
+    const [, day, month, year] = ddmmyyyy;
+    const [hour = '00', minute = '00'] = time.split(':');
+    const ts = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute)).getTime();
+    return Number.isFinite(ts) ? ts : 0;
+  }
+  const ts = new Date(`${date}T${time || '00:00'}`).getTime();
+  return Number.isFinite(ts) ? ts : 0;
+};
+const formatMeetingDateTimeLabel = (dateValue?: string, timeValue?: string) => {
+  const ts = parseMeetingDateTimeMs(dateValue, timeValue);
+  if (ts > 0) return `${fmtDate(ts)}${timeValue ? ` · ${timeValue}` : ''}`;
+  return [dateValue, timeValue].filter(Boolean).join(' · ');
 };
 const PO_CODE_PATTERN = /PO-(?:\d{8}|\d{4}-\d{4,})/i;
 const PO_CODE_EXACT_PATTERN = /^PO-(?:\d{8}|\d{4}-\d{4,})$/i;
@@ -2804,6 +2825,17 @@ export default function FixerProPage() {
           // non-blocking
         }
 
+        const beforeStaleCleanup = partnerReqs.length;
+        partnerReqs = partnerReqs.filter((req: any) => {
+          const type = String(req?.workflowType || req?.type || '');
+          if (type !== 'meeting_confirm_partner') return true;
+          const meetingTs = parseMeetingDateTimeMs(req.meetingDate || req.meetingDateLabel, req.meetingTime || req.meetingTimeLabel);
+          return !(meetingTs > 0 && meetingTs < Date.now() - 3 * 24 * 60 * 60 * 1000);
+        });
+        if (partnerReqs.length !== beforeStaleCleanup) {
+          try { localStorage.setItem('partner_mock_dyn_req', JSON.stringify(partnerReqs)); } catch {}
+        }
+
         setPartnerDynReqs(partnerReqs);
       } catch {}
     };
@@ -3736,7 +3768,9 @@ export default function FixerProPage() {
     .sort((a: any, b: any) => parseTs(b.createdAt || b.date) - parseTs(a.createdAt || a.date));
 
   const dynamicNotifications = mockDynReqs.map((r: any) => {
-      const displayTime = fmtDateTime(r.createdAt || parseTs(r.date) || Date.now());
+    const eventTs = parseTs(r.createdAt || r.date);
+    const displayTime = eventTs > 0 ? fmtDateTime(eventTs) : "";
+    if (!displayTime) return null;
     if (r.type === "meeting_pending_partner") return {
       id: `dyn-${r.id}`,
       msg: `${r.po}: Customer sent a site meeting invitation. Review the schedule and confirm it next.`,
@@ -3777,7 +3811,14 @@ export default function FixerProPage() {
   }).filter(Boolean).map((n: any) => ({ createdAt: parseTs(n.time) || Date.now(), ...n })) as any[];
 
   const partnerWorkflowNotifications = partnerDynReqs.map((r: any) => {
-    const displayTime = fmtDateTime(r.createdAt || parseTs(r.date) || Date.now());
+    const workflowType = String(r.workflowType || r.type || '');
+    const meetingTs = workflowType === 'meeting_confirm_partner'
+      ? parseMeetingDateTimeMs(r.meetingDate || r.meetingDateLabel, r.meetingTime || r.meetingTimeLabel)
+      : 0;
+    if (workflowType === 'meeting_confirm_partner' && meetingTs > 0 && meetingTs < Date.now() - 3 * 24 * 60 * 60 * 1000) return null;
+    const eventTs = parseTs(r.createdAt || r.notifyAt || r.date) || meetingTs;
+    const displayTime = eventTs > 0 ? fmtDateTime(eventTs) : "";
+    if (!displayTime) return null;
     if (r.workflowType === "meeting_confirm_partner" || r.type === "meeting_confirm_partner") return {
       id: `p-${r.id}`,
       msg: `${r.po}: Customer proposed a site meeting${r.meetingDateLabel ? ` on ${r.meetingDateLabel}` : ''}${r.meetingTimeLabel ? ` at ${r.meetingTimeLabel}` : ''}${r.meetingVenue ? ` in ${r.meetingVenue}` : ''}. Confirm it to unlock Step 9.`,
@@ -3836,7 +3877,7 @@ export default function FixerProPage() {
   }).filter(Boolean).map((n: any) => ({ createdAt: parseTs(n.time) || Date.now(), ...n })) as any[];
 
   const propWorkflowNotifications = propInquiries.map((p: PropInquiry) => {
-    const createdAt = Number(p.updatedAt || p.createdAt || Date.now());
+    const createdAt = parseTs(p.updatedAt || p.createdAt) || Date.now();
     const time = fmtDateTime(createdAt);
     if (p.status === 'NOTIFY_SENT') {
       return {
@@ -3915,9 +3956,9 @@ export default function FixerProPage() {
 
   const persistedAlertNotifications = partnerPersistedAlerts
     .map((alert: any) => {
-      const createdAt = Number(alert?.createdAt || parseTs(alert?.timestamp || alert?.date) || Date.now());
+      const createdAt = parseTs(alert?.createdAt || alert?.timestamp || alert?.date);
       const msg = alert?.message || alert?.msg || '';
-      if (!msg) return null;
+      if (!msg || !createdAt) return null;
       return {
         id: `partner-alert-${alert.id || createdAt}`,
         msg,
@@ -3952,7 +3993,9 @@ export default function FixerProPage() {
   });
 
   const displayNotifications = [...persistedAlertNotifications, ...orderAlerts, ...dynamicNotifications, ...partnerWorkflowNotifications, ...propWorkflowNotifications]
-    .sort((a: any, b: any) => parseTs(b.createdAt || b.time) - parseTs(a.createdAt || a.time));
+    .filter((n: any) => n && parseTs(n.createdAt || n.time) > 0 && !String(n.time || '').includes('NaN'))
+    .sort((a: any, b: any) => parseTs(b.createdAt || b.time) - parseTs(a.createdAt || a.time))
+    .slice(0, 20);
 
   const tabs: { key: TabKey; label: string; icon: string; badge?: number }[] = [
     { key: "overview", label: locale === "th" ? "ภาพรวม" : locale === "zh" ? "概览" : "Overview", icon: "" },
@@ -5002,7 +5045,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
               {scheduledMeetings.slice(0, 3).map((meeting: any) => (
                 <div key={meeting.id} className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
                   <p className="text-sm font-bold text-gray-800">{meeting.title} ({meeting.po})</p>
-                  <p className="text-xs text-gray-500 mt-1">{meeting.meetingDate || meeting.date}{meeting.meetingTime ? ` · ${meeting.meetingTime}` : ''}</p>
+                  <p className="text-xs text-gray-500 mt-1">{formatMeetingDateTimeLabel(meeting.meetingDate || meeting.date, meeting.meetingTime)}</p>
                   <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "สถานที่:" : locale === "zh" ? "地点:" : "Location:"} {meeting.meetingVenue || meeting.venue || meeting.subdistrict || '-'} | {locale === "th" ? "ลูกค้า:" : locale === "zh" ? "客户:" : "Customer:"} {meeting.customer}</p>
                 </div>
               ))}
@@ -6423,7 +6466,7 @@ function PartnerNotifications({ locale, notifications }: { locale: string; notif
         <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "การแจ้งเตือนทั้งหมด" : locale === "zh" ? "所有通知" : "All Notifications"}</h2>
       </div>
       <div className="divide-y divide-gray-50">
-        {notifications.slice(0, 19).map((n) => (
+        {notifications.slice(0, 20).map((n) => (
           <div key={n.id} className={`flex items-center gap-4 px-6 py-4 transition ${n.unread ? "bg-purple-50/50" : "hover:bg-gray-50"}`}>
             <span className={`w-3 h-3 rounded-full ${n.dot} flex-shrink-0`} />
             <p className="text-sm text-gray-800 flex-1">{locale === "th" ? n.msgTh : locale === "zh" ? n.msgZh : n.msg}</p>

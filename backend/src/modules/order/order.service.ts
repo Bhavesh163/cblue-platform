@@ -355,7 +355,16 @@ export class OrderService {
   }
 
   async getOrderChatMessages(orderId: string, userId: string) {
-    await this.getOrderForParticipant(orderId, userId);
+    try {
+      await this.getOrderForParticipant(orderId, userId);
+    } catch (error) {
+      this.logger.warn(
+        `Returning empty chat history after participant check failed for order ${orderId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return [];
+    }
 
     let messages: any[] = [];
     try {

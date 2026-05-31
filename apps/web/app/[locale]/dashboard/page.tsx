@@ -69,10 +69,12 @@ function pruneStorageIfNeeded() {
 
 const fmtDate = (d: Date | number | string) => {
   const dt = new Date(d);
+  if (!Number.isFinite(dt.getTime())) return "";
   return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
 };
 const fmtDateTime = (d: Date | number | string) => {
   const dt = new Date(d);
+  if (!Number.isFinite(dt.getTime())) return "";
   const hh = String(dt.getHours()).padStart(2,'0');
   const mm = String(dt.getMinutes()).padStart(2,'0');
   return `${fmtDate(dt)} ${hh}:${mm}`;
@@ -1163,6 +1165,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const [rateStars, setRateStars] = useState(5);
   const [variationApproveModal, setVariationApproveModal] = useState<any>(null);
   const [completeApproveModal, setCompleteApproveModal] = useState<any>(null);
+  const [cancelJobModal, setCancelJobModal] = useState<any>(null);
+  const [cancelJobReason, setCancelJobReason] = useState("");
+  const [persistedCustomerAlerts, setPersistedCustomerAlerts] = useState<any[]>([]);
   // Property inquiry workflow state (cblue_prop_inquiries — not ghis-gated)
   interface PropInquiry { id: string; poNumber: string; propertyId: string; propertyTitle: string; propertyTier: string; propertyFee: number; propertyType: string; listingType: string; propertyPrice: number; province: string; district: string; subdistrict?: string; addressLine?: string; latitude?: number | null; longitude?: number | null; area?: number | null; bedrooms?: number | null; bathrooms?: number | null; propertyImages?: string[]; customerEmail: string; customerName: string; listerName: string; status: string; step: number; createdAt: number; updatedAt: number; meetingDate?: string; meetingTime?: string; meetingVenue?: string; customerRating?: number | null; customerComment?: string; listerRating?: number | null; listerComment?: string; reselectedOnce?: boolean; }
   const [propInquiries, setPropInquiries] = useState<PropInquiry[]>([]);
@@ -1275,6 +1280,21 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     const ts = new Date(value || 0).getTime();
     return Number.isFinite(ts) ? ts : 0;
   };
+  const formatPropMeetingLabel = (meetingDate?: string, meetingTime?: string) => {
+    const rawDate = String(meetingDate || '').trim();
+    if (!rawDate) return '';
+    const ts = parseDateMs(`${rawDate}T${meetingTime || '00:00'}`);
+    const formatted = ts > 0 ? fmtDate(ts) : rawDate;
+    return `${formatted}${meetingTime ? ` · ${meetingTime}` : ''}`;
+  };
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('cblue_customer_alerts') || '[]');
+      setPersistedCustomerAlerts(Array.isArray(saved) ? saved : []);
+    } catch {
+      setPersistedCustomerAlerts([]);
+    }
+  }, []);
   const getOrderEventTs = (order: any, fallback: any = Date.now()) =>
     parseDateMs(
       order?.statusHistory?.[0]?.createdAt ||
@@ -2849,7 +2869,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     return [];
   });
   const baseAlerts: any[] = [];
-  const allAlerts = Array.from(
+  const generatedAlerts = Array.from(
     [...workflowAlerts, ...workflowOrderStatusAlerts, ...propWorkflowAlerts, ...baseAlerts]
       .reduce((map: Map<string, any>, alert: any) => {
         const key = String(alert?.id || `${alert?.msg}-${alert?.createdAt}`).trim();
@@ -2857,6 +2877,51 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         const existing = map.get(key);
         if (!existing || parseDateMs(alert.createdAt || alert.time) >= parseDateMs(existing.createdAt || existing.time)) {
           map.set(key, alert);
+        }
+        return map;
+      }, new Map<string, any>())
+      .values(),
+  ).sort((a: any, b: any) => parseDateMs(b.createdAt || b.time) - parseDateMs(a.createdAt || a.time));
+  const generatedAlertSignature = generatedAlerts
+    .map((alert: any) => `${alert.id}:${parseDateMs(alert.createdAt || alert.time)}`)
+    .join('|');
+  useEffect(() => {
+    if (generatedAlerts.length === 0) return;
+    setPersistedCustomerAlerts((prev) => {
+      const merged = Array.from(
+        [...prev, ...generatedAlerts]
+          .reduce((map: Map<string, any>, alert: any) => {
+            const createdAt = parseDateMs(alert.createdAt || alert.time);
+            if (!Number.isFinite(createdAt) || createdAt <= 0) return map;
+            const key = String(alert?.id || `${alert?.msg}-${createdAt}`).trim();
+            if (!key) return map;
+            const normalized = { ...alert, createdAt, time: alert.time || fmtDateTime(createdAt) };
+            const existing = map.get(key);
+            if (!existing || createdAt >= parseDateMs(existing.createdAt || existing.time)) {
+              map.set(key, normalized);
+            }
+            return map;
+          }, new Map<string, any>())
+          .values(),
+      )
+        .sort((a: any, b: any) => parseDateMs(b.createdAt || b.time) - parseDateMs(a.createdAt || a.time))
+        .slice(0, 20);
+      try { localStorage.setItem('cblue_customer_alerts', JSON.stringify(merged)); } catch {}
+      return JSON.stringify(prev) === JSON.stringify(merged) ? prev : merged;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [generatedAlertSignature]);
+  const allAlerts = Array.from(
+    [...persistedCustomerAlerts, ...generatedAlerts]
+      .reduce((map: Map<string, any>, alert: any) => {
+        const createdAt = parseDateMs(alert.createdAt || alert.time);
+        if (!Number.isFinite(createdAt) || createdAt <= 0) return map;
+        const key = String(alert?.id || `${alert?.msg}-${createdAt}`).trim();
+        if (!key) return map;
+        const normalized = { ...alert, createdAt, time: alert.time || fmtDateTime(createdAt) };
+        const existing = map.get(key);
+        if (!existing || createdAt >= parseDateMs(existing.createdAt || existing.time)) {
+          map.set(key, normalized);
         }
         return map;
       }, new Map<string, any>())
@@ -3445,24 +3510,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         {item.type !== 'prop_waiting' && <button
           onClick={(e) => {
             e.stopPropagation();
-            if (!confirm(locale === "th" ? "ยืนยันการยกเลิกงาน? ข้อมูลงานจะถูกย้ายไปยังประวัติ" : locale === "zh" ? "确认取消此工作？工作信息将移至历史记录。" : "Cancel this job? All job info will be moved to history.")) return;
-            const po = item.po;
-            try {
-              const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
-              localStorage.setItem("ghis_mock_active", JSON.stringify(active.filter((x: any) => x.po !== po)));
-              const reqs = JSON.parse(localStorage.getItem("ghis_mock_dyn_req") || "[]");
-              localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(reqs.filter((x: any) => x.po !== po)));
-              const partnerReqs = JSON.parse(localStorage.getItem("partner_mock_dyn_req") || "[]");
-              localStorage.setItem("partner_mock_dyn_req", JSON.stringify(partnerReqs.filter((x: any) => x.po !== po)));
-              try { localStorage.removeItem(`chat_messages_${po}`); } catch {}
-              const hist = JSON.parse(localStorage.getItem("ghis_mock_history") || "[]");
-              hist.push({ ...item, status: "CANCELLED", statusName: "Cancelled", stepName: "Cancelled", completedAt: Date.now() });
-              pruneStorageIfNeeded();
-              localStorage.setItem("ghis_mock_history", JSON.stringify(hist));
-              window.dispatchEvent(new Event("storage"));
-            } catch (cancelErr) { console.error("Cancel job error:", cancelErr); }
+            setCancelJobReason("");
+            setCancelJobModal(item);
           }}
-          className="text-xs px-2.5 py-1 rounded-full font-bold bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition"
+          className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100 transition"
         >
           {locale === "th" ? "ยกเลิกงาน" : locale === "zh" ? "取消工作" : "Cancel Job"}
         </button>}
@@ -4037,7 +4088,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                             <div key={p.poNumber} className="bg-white rounded-xl shadow-sm border border-emerald-200 p-4">
                             <div className="flex justify-between items-center mb-2">
                                 <span className="text-xs text-gray-900 font-bold">🏠 {p.propertyTitle} ({getPropOrderLabel(p.poNumber)})</span>
-                                <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-1 rounded-full font-bold">{p.meetingDate}{p.meetingTime ? ` · ${p.meetingTime}` : ''}</span>
+                                <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-1 rounded-full font-bold">{formatPropMeetingLabel(p.meetingDate, p.meetingTime)}</span>
                             </div>
                             <p className="text-[11px] text-gray-600">{locale === "th" ? "สถานที่:" : "Venue:"} {p.meetingVenue || 'TBD'} | {locale === "th" ? "ผู้ลงประกาศ:" : "Lister:"} {firstNameOnly(p.listerName, 'Lister')}</p>
                           </div>
@@ -5014,6 +5065,104 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-xl transition text-sm"
                 >Confirm Complete</button>
                 <button onClick={() => setCompleteApproveModal(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {cancelJobModal && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden mx-auto">
+            <div className="bg-gradient-to-r from-orange-500 to-amber-500 px-6 py-4">
+              <h3 className="text-white font-bold text-lg">{locale === "th" ? "ยืนยันการยกเลิกงาน" : locale === "zh" ? "确认取消工作" : "Confirm Job Cancellation"}</h3>
+              <p className="text-orange-50 text-sm mt-1">{cancelJobModal.po || cancelJobModal.id} · {cancelJobModal.title || cancelJobModal.service}</p>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <p className="text-sm text-gray-600">
+                {locale === "th"
+                  ? "กรุณาระบุเหตุผลการยกเลิก ข้อมูลงาน คำขอ แจ้งเตือน และแชทจะถูกย้ายไปไว้ในประวัติ"
+                  : locale === "zh"
+                  ? "请输入取消原因。该工作的请求、通知和聊天将移至历史记录。"
+                  : "Please enter the cancellation reason. This job, its requests, alerts, and chat will be moved to History."}
+              </p>
+              <textarea
+                value={cancelJobReason}
+                onChange={(e) => setCancelJobReason(e.target.value)}
+                rows={3}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
+                placeholder={locale === "th" ? "เหตุผลการยกเลิก..." : locale === "zh" ? "取消原因..." : "Cancellation reason..."}
+              />
+              <div className="flex gap-3 pt-1">
+                <button
+                  onClick={() => {
+                    const reason = cancelJobReason.trim();
+                    if (!reason) {
+                      alert(locale === "th" ? "กรุณาระบุเหตุผลการยกเลิก" : locale === "zh" ? "请输入取消原因" : "Please enter a cancellation reason.");
+                      return;
+                    }
+                    const item = cancelJobModal;
+                    const po = item.po;
+                    const createdAt = Date.now();
+                    const historyEntry = {
+                      ...item,
+                      status: "CANCELLED",
+                      statusName: "Cancelled by Customer",
+                      stepName: "Cancelled by Customer",
+                      cancelReason: reason,
+                      statusNote: `Customer cancelled. Reason: ${reason}`,
+                      completedAt: createdAt,
+                      statusChangedAt: createdAt,
+                      date: fmtDateTime(createdAt),
+                    };
+                    const cancelAlert = {
+                      id: `cancel-${po}-${createdAt}`,
+                      po,
+                      type: 'notice',
+                      msg: `${po || 'Order'}: You cancelled ${item.title || item.service || 'this job'}. Reason: ${reason}. The job has been moved to History.`,
+                      msgTh: `${po || 'ออเดอร์'}: คุณยกเลิก ${item.title || item.service || 'งานนี้'} เหตุผล: ${reason} งานถูกย้ายไปประวัติแล้ว`,
+                      msgZh: `${po || '订单'}: 您已取消 ${item.title || item.service || '此工作'}。原因：${reason}。该工作已移至历史记录。`,
+                      time: fmtDateTime(createdAt),
+                      createdAt,
+                      dot: 'bg-orange-500',
+                    };
+                    try {
+                      const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
+                      localStorage.setItem("ghis_mock_active", JSON.stringify(active.filter((x: any) => x.po !== po)));
+                      const reqs = JSON.parse(localStorage.getItem("ghis_mock_dyn_req") || "[]");
+                      localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(reqs.filter((x: any) => x.po !== po)));
+                      const partnerReqs = JSON.parse(localStorage.getItem("partner_mock_dyn_req") || "[]");
+                      localStorage.setItem("partner_mock_dyn_req", JSON.stringify(partnerReqs.filter((x: any) => x.po !== po)));
+                      try { localStorage.removeItem(`chat_messages_${po}`); } catch {}
+                      try { localStorage.setItem(`chat_closed_${po}`, '1'); } catch {}
+                      const hist = JSON.parse(localStorage.getItem("ghis_mock_history") || "[]");
+                      const nextHistory = [...(Array.isArray(hist) ? hist.filter((x: any) => x.po !== po) : []), historyEntry];
+                      pruneStorageIfNeeded();
+                      localStorage.setItem("ghis_mock_history", JSON.stringify(nextHistory));
+                      const existingAlerts = JSON.parse(localStorage.getItem('cblue_customer_alerts') || '[]');
+                      const nextAlerts = [cancelAlert, ...(Array.isArray(existingAlerts) ? existingAlerts.filter((a: any) => a.id !== cancelAlert.id) : [])]
+                        .sort((a: any, b: any) => parseDateMs(b.createdAt || b.time) - parseDateMs(a.createdAt || a.time))
+                        .slice(0, 20);
+                      localStorage.setItem('cblue_customer_alerts', JSON.stringify(nextAlerts));
+                      setPersistedCustomerAlerts(nextAlerts);
+                      setMockActiveItems((prev) => prev.filter((x: any) => x.po !== po));
+                      setMockDynRequests((prev) => prev.filter((x: any) => x.po !== po));
+                      setMockHistory(nextHistory);
+                      window.dispatchEvent(new Event("storage"));
+                    } catch (cancelErr) { console.error("Cancel job error:", cancelErr); }
+                    setCancelJobModal(null);
+                    setCancelJobReason("");
+                    setActiveTab("history");
+                  }}
+                  className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-bold py-2.5 rounded-xl transition text-sm"
+                >
+                  {locale === "th" ? "ยืนยันยกเลิก" : locale === "zh" ? "确认取消" : "Confirm Cancel"}
+                </button>
+                <button
+                  onClick={() => { setCancelJobModal(null); setCancelJobReason(""); }}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm"
+                >
+                  {locale === "th" ? "ปิด" : locale === "zh" ? "关闭" : "Close"}
+                </button>
               </div>
             </div>
           </div>

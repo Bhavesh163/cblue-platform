@@ -375,42 +375,60 @@ export class PropertyInquiryService {
       { customer: { email: { equals: email, mode: 'insensitive' as const } } },
     ]);
 
-    return this.prisma.propertyInquiry.findMany({
-      where: {
-        OR: [{ customerId: { in: customerIds } }, ...customerEmailFilters],
-      },
-      include: {
-        property: {
-          select: {
-            id: true,
-            userId: true,
-            title: true,
-            tier: true,
-            price: true,
-            propertyType: true,
-            listingType: true,
-            province: true,
-            district: true,
-            subdistrict: true,
-            addressLine: true,
-            latitude: true,
-            longitude: true,
-            area: true,
-            bedrooms: true,
-            bathrooms: true,
-            images: {
-              select: {
-                url: true,
-                key: true,
-                sortOrder: true,
+    const where = {
+      OR: [{ customerId: { in: customerIds } }, ...customerEmailFilters],
+    };
+
+    try {
+      return await this.prisma.propertyInquiry.findMany({
+        where,
+        include: {
+          property: {
+            select: {
+              id: true,
+              userId: true,
+              title: true,
+              tier: true,
+              price: true,
+              propertyType: true,
+              listingType: true,
+              province: true,
+              district: true,
+              subdistrict: true,
+              addressLine: true,
+              latitude: true,
+              longitude: true,
+              area: true,
+              bedrooms: true,
+              bathrooms: true,
+              images: {
+                select: {
+                  url: true,
+                  key: true,
+                  sortOrder: true,
+                },
+                orderBy: { sortOrder: 'asc' },
               },
-              orderBy: { sortOrder: 'asc' },
             },
           },
         },
-      },
-      orderBy: { updatedAt: 'desc' },
-    });
+        orderBy: { updatedAt: 'desc' },
+      });
+    } catch {
+      try {
+        const rows = await this.prisma.propertyInquiry.findMany({
+          where,
+          include: { property: true },
+          orderBy: { updatedAt: 'desc' },
+        });
+        return rows.map((row) => ({
+          ...row,
+          property: row.property ? { ...row.property, images: [] } : null,
+        }));
+      } catch {
+        return [];
+      }
+    }
   }
 
   async findByLister(listerUserId: string) {
@@ -432,46 +450,64 @@ export class PropertyInquiryService {
       },
     ]);
 
-    return this.prisma.propertyInquiry.findMany({
-      where: {
-        OR: [
-          { listerUserId: { in: listerIds } },
-          { property: { userId: { in: listerIds } } },
-          ...listerEmailFilters,
-        ],
-      },
-      include: {
-        property: {
-          select: {
-            id: true,
-            userId: true,
-            title: true,
-            tier: true,
-            price: true,
-            propertyType: true,
-            listingType: true,
-            province: true,
-            district: true,
-            subdistrict: true,
-            addressLine: true,
-            latitude: true,
-            longitude: true,
-            area: true,
-            bedrooms: true,
-            bathrooms: true,
-            images: {
-              select: {
-                url: true,
-                key: true,
-                sortOrder: true,
+    const where = {
+      OR: [
+        { listerUserId: { in: listerIds } },
+        { property: { userId: { in: listerIds } } },
+        ...listerEmailFilters,
+      ],
+    };
+
+    try {
+      return await this.prisma.propertyInquiry.findMany({
+        where,
+        include: {
+          property: {
+            select: {
+              id: true,
+              userId: true,
+              title: true,
+              tier: true,
+              price: true,
+              propertyType: true,
+              listingType: true,
+              province: true,
+              district: true,
+              subdistrict: true,
+              addressLine: true,
+              latitude: true,
+              longitude: true,
+              area: true,
+              bedrooms: true,
+              bathrooms: true,
+              images: {
+                select: {
+                  url: true,
+                  key: true,
+                  sortOrder: true,
+                },
+                orderBy: { sortOrder: 'asc' },
               },
-              orderBy: { sortOrder: 'asc' },
             },
           },
         },
-      },
-      orderBy: { updatedAt: 'desc' },
-    });
+        orderBy: { updatedAt: 'desc' },
+      });
+    } catch {
+      try {
+        const rows = await this.prisma.propertyInquiry.findMany({
+          where,
+          include: { property: true },
+          orderBy: { updatedAt: 'desc' },
+        });
+        return rows.map((row) => ({
+          ...row,
+          property: row.property ? { ...row.property, images: [] } : null,
+        }));
+      } catch {
+        return [];
+      }
+    }
   }
 
   async update(id: string, userId: string, dto: UpdatePropertyInquiryDto) {
