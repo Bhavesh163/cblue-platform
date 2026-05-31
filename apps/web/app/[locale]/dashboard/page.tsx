@@ -92,6 +92,10 @@ const formatWorkflowMeetingLabel = (meetingDate?: string, meetingTime?: string, 
 const PO_CODE_PATTERN = /PO-(?:\d{8}|\d{4}-\d{4,})/i;
 const PO_CODE_EXACT_PATTERN = /^PO-(?:\d{8}|\d{4}-\d{4,})$/i;
 const isValidPoCode = (value: string) => PO_CODE_EXACT_PATTERN.test(String(value || '').trim());
+const isOrderUuid = (value: any) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    String(value || '').trim(),
+  );
 const PROP_PO_PATTERN = /^PRE-\d{4}-\d{4}$/i;
 const isPropPoCode = (value: string) => PROP_PO_PATTERN.test(String(value || '').trim());
 const extractPoCode = (orderLike: any) => {
@@ -106,9 +110,10 @@ const firstNameOnly = (value: any, fallback = 'User') => {
   const cleaned = String(value || '').trim();
   return cleaned ? cleaned.split(/\s+/)[0] || fallback : fallback;
 };
-const HIDDEN_TEST_POS = new Set(["PO-2605-6716", "PO-2605-9605", "PO-2605-8699", "PO-2605-9701", "PO-2605-6146", "PO-2605-8471", "PO-2605-9593"]);
+const HIDDEN_TEST_POS = new Set(["PO-2605-2747", "PO-2605-6716", "PO-2605-9605", "PO-2605-8699", "PO-2605-9701", "PO-2605-6146", "PO-2605-8471", "PO-2605-9593"]);
 const isHiddenTestPo = (value: any) => HIDDEN_TEST_POS.has(String(value || '').trim().toUpperCase());
 const STALE_CUSTOMER_NOTIFY_PROP_POS = new Set([
+  "PRE-2605-5354",
   "PRE-2605-9968",
   "PRE-2605-2386",
   "PRE-2605-3964",
@@ -122,6 +127,17 @@ const isStaleCustomerNotifyPropPo = (value: any) =>
   STALE_CUSTOMER_NOTIFY_PROP_POS.has(
     String(value || '').trim().toUpperCase(),
   );
+const isLikelyValidImageDataPayload = (payload: string) => {
+  const compact = String(payload || '').replace(/\s+/g, '');
+  if (!compact || compact.length < 128 || !/^[A-Za-z0-9+/]+={0,2}$/.test(compact)) return false;
+  if (/^(.)\1+$/.test(compact.replace(/=+$/, ''))) return false;
+  return (
+    compact.startsWith('/9j/') ||
+    compact.startsWith('iVBORw0KGgo') ||
+    compact.startsWith('R0lGOD') ||
+    compact.startsWith('UklGR')
+  );
+};
 const WORKFLOW_STEP_NAMES: Record<number, string> = {
   5: 'Accept',
   6: 'Fee & Proceed',
@@ -163,6 +179,7 @@ const normalizeImageUrl = (value: unknown) => {
     const header = normalized.slice(0, commaIndex);
     const payload = normalized.slice(commaIndex + 1).replace(/\s+/g, '');
     if (!payload) return '';
+    if (/^data:image\//i.test(header) && !isLikelyValidImageDataPayload(payload)) return '';
     const fixedHeader = /;base64$/i.test(header)
       ? header
       : header.includes(';')
@@ -1355,7 +1372,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const hasPendingListerPropRating = (p: Partial<PropInquiry>) => p.listerRating == null;
   const isCustomerSidePropCompleted = (p: Partial<PropInquiry>) => {
     const status = String(p.status || '').toUpperCase();
-    if (status === 'COMPLETED') return true;
+    if (['COMPLETED', 'DECLINED', 'CANCELLED'].includes(status)) return true;
     return status === 'MEETING_CONFIRMED' && p.customerRating != null;
   };
   const getPropInquiryDisplayStep = (statusValue: string, stepValue?: number | null) => {
@@ -2444,7 +2461,6 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     .filter((p: PropInquiry) => {
       const status = String(p.status || '').toUpperCase();
       return (
-        status === 'DECLINED' ||
         status === 'ACCEPTED' ||
         status === 'PAID' ||
         canShowCustomerPropRateRequest(p)
@@ -2452,7 +2468,6 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     })
     .map((p: PropInquiry) => {
       const status = String(p.status || '').toUpperCase();
-      if (status === "DECLINED") return { id: `prop-declined-${p.poNumber}`, type: "prop_declined", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
       if (status === "ACCEPTED") return { id: `prop-pay-${p.poNumber}`, type: "prop_pay_fee", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
       if (status === "PAID") return { id: `prop-meet-${p.poNumber}`, type: "prop_meeting_invite", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
       if (canShowCustomerPropRateRequest(p)) return { id: `prop-rate-${p.poNumber}`, type: "prop_rate", po: p.poNumber, propInquiry: p, createdAt: p.updatedAt };
@@ -3526,6 +3541,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const propCompletedHistoryEntries = propInquiries
     .filter((p: PropInquiry) => isCustomerSidePropCompleted(p))
     .map((p: PropInquiry) => {
+      const status = String(p.status || '').toUpperCase();
+      const isDeclined = status === 'DECLINED';
+      const isCancelled = status === 'CANCELLED';
       const completedAt = p.updatedAt || p.createdAt || Date.now();
       const siteLocation = getPropSiteLocation(p);
       return {
@@ -3539,9 +3557,15 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         statusChangedAt: completedAt,
         fee: toCurrencyLabel(p.propertyFee),
         budget: toCurrencyLabel(p.propertyPrice),
-        status: 'COMPLETED',
+        status: isDeclined || isCancelled ? 'CANCELLED' : 'COMPLETED',
+        statusName: isDeclined ? 'Lister Unavailable' : isCancelled ? 'Cancelled' : 'Property Inquiry Completed',
+        statusNote: isDeclined
+          ? 'The lister is unavailable. Please select another matched property.'
+          : isCancelled
+          ? 'Property inquiry cancelled.'
+          : '',
         step: 11,
-        stepName: 'Property Inquiry Completed',
+        stepName: isDeclined ? 'Lister Unavailable' : isCancelled ? 'Cancelled' : 'Property Inquiry Completed',
         location: siteLocation,
         subdistrict: siteLocation,
         projectDetails: `Property: ${p.propertyTitle || p.poNumber} | Site: ${siteLocation} | Meeting: ${p.meetingDate || '-'} ${p.meetingTime || ''} @ ${p.meetingVenue || '-'}`,
@@ -5101,10 +5125,18 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                       return;
                     }
                     const item = cancelJobModal;
-                    const po = item.po;
+                    const po = String(item.po || item.poNumber || '').trim();
                     const createdAt = Date.now();
+                    const serviceName = item.title || item.service || item.propertyTitle || 'this job';
+                    const backendOrder = workflowOrders.find((order: any) => extractPo(order) === po);
+                    const backendOrderId = backendOrder?.id || item.orderId || (isOrderUuid(item.id) ? item.id : '');
+                    const isPropertyCancel = isPropPoCode(po) || item.isPropertyJob || item.propInquiry;
+                    const customerChatText = `[SYSTEM] Customer cancelled ${serviceName} (${po}). Reason: ${reason}. This job has been moved to History.`;
+                    const partnerChatText = `[SYSTEM] Customer cancelled ${serviceName} (${po}). Reason: ${reason}. Please check History for the cancelled job record.`;
                     const historyEntry = {
                       ...item,
+                      po,
+                      service: serviceName,
                       status: "CANCELLED",
                       statusName: "Cancelled by Customer",
                       stepName: "Cancelled by Customer",
@@ -5113,15 +5145,28 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                       completedAt: createdAt,
                       statusChangedAt: createdAt,
                       date: fmtDateTime(createdAt),
+                      chatHistory: readStoredChatHistory(po),
                     };
                     const cancelAlert = {
                       id: `cancel-${po}-${createdAt}`,
                       po,
                       type: 'notice',
-                      msg: `${po || 'Order'}: You cancelled ${item.title || item.service || 'this job'}. Reason: ${reason}. The job has been moved to History.`,
-                      msgTh: `${po || 'ออเดอร์'}: คุณยกเลิก ${item.title || item.service || 'งานนี้'} เหตุผล: ${reason} งานถูกย้ายไปประวัติแล้ว`,
-                      msgZh: `${po || '订单'}: 您已取消 ${item.title || item.service || '此工作'}。原因：${reason}。该工作已移至历史记录。`,
+                      msg: `${po || 'Order'}: You cancelled ${serviceName}. Reason: ${reason}. The job has been moved to History.`,
+                      msgTh: `${po || 'ออเดอร์'}: คุณยกเลิก ${serviceName} เหตุผล: ${reason} งานถูกย้ายไปประวัติแล้ว`,
+                      msgZh: `${po || '订单'}: 您已取消 ${serviceName}。原因：${reason}。该工作已移至历史记录。`,
                       time: fmtDateTime(createdAt),
+                      createdAt,
+                      dot: 'bg-orange-500',
+                    };
+                    const partnerCancelAlert = {
+                      id: `customer-cancel-${po}-${createdAt}`,
+                      type: 'customer_cancelled',
+                      po,
+                      title: 'Job Cancelled by Customer',
+                      message: `${po}: Customer cancelled ${serviceName}. Reason: ${reason}. This job has been moved to History.`,
+                      msgTh: `${po}: ลูกค้ายกเลิก ${serviceName}. เหตุผล: ${reason}. งานถูกย้ายไปประวัติแล้ว`,
+                      msgZh: `${po}: 客户已取消 ${serviceName}。原因：${reason}。该工作已移至历史记录。`,
+                      timestamp: new Date(createdAt).toISOString(),
                       createdAt,
                       dot: 'bg-orange-500',
                     };
@@ -5132,7 +5177,21 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                       localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(reqs.filter((x: any) => x.po !== po)));
                       const partnerReqs = JSON.parse(localStorage.getItem("partner_mock_dyn_req") || "[]");
                       localStorage.setItem("partner_mock_dyn_req", JSON.stringify(partnerReqs.filter((x: any) => x.po !== po)));
-                      try { localStorage.removeItem(`chat_messages_${po}`); } catch {}
+                      try {
+                        const chatKey = `chat_messages_${po}`;
+                        const existingChat = JSON.parse(localStorage.getItem(chatKey) || '[]');
+                        const nextChat = Array.isArray(existingChat) ? [...existingChat] : [];
+                        if (!nextChat.some((row: any) => String(row?.text || '') === customerChatText)) {
+                          nextChat.push({
+                            id: `customer-cancel-${po}-${createdAt}`,
+                            sender: 'system',
+                            text: customerChatText,
+                            time: fmtDateTime(createdAt),
+                            createdAt,
+                          });
+                          localStorage.setItem(chatKey, JSON.stringify(nextChat));
+                        }
+                      } catch {}
                       try { localStorage.setItem(`chat_closed_${po}`, '1'); } catch {}
                       const hist = JSON.parse(localStorage.getItem("ghis_mock_history") || "[]");
                       const nextHistory = [...(Array.isArray(hist) ? hist.filter((x: any) => x.po !== po) : []), historyEntry];
@@ -5143,12 +5202,34 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                         .sort((a: any, b: any) => parseDateMs(b.createdAt || b.time) - parseDateMs(a.createdAt || a.time))
                         .slice(0, 20);
                       localStorage.setItem('cblue_customer_alerts', JSON.stringify(nextAlerts));
+                      const partnerAlerts = JSON.parse(localStorage.getItem('partner_alerts') || '[]');
+                      const nextPartnerAlerts = [partnerCancelAlert, ...(Array.isArray(partnerAlerts) ? partnerAlerts.filter((a: any) => a.id !== partnerCancelAlert.id) : [])]
+                        .sort((a: any, b: any) => parseDateMs(b.createdAt || b.timestamp || b.time) - parseDateMs(a.createdAt || a.timestamp || a.time))
+                        .slice(0, 20);
+                      localStorage.setItem('partner_alerts', JSON.stringify(nextPartnerAlerts));
                       setPersistedCustomerAlerts(nextAlerts);
                       setMockActiveItems((prev) => prev.filter((x: any) => x.po !== po));
                       setMockDynRequests((prev) => prev.filter((x: any) => x.po !== po));
                       setMockHistory(nextHistory);
                       window.dispatchEvent(new Event("storage"));
+                      window.dispatchEvent(new CustomEvent('cblue-chat-updated', { detail: { orderId: po } }));
                     } catch (cancelErr) { console.error("Cancel job error:", cancelErr); }
+                    const token = localStorage.getItem('subscriber_token') || '';
+                    if (isPropertyCancel && item.propInquiry?.id) {
+                      void updatePropInquiry(item.propInquiry.id, { status: 'CANCELLED' }, po);
+                    }
+                    if (backendOrderId && token) {
+                      fetch(`/api/v1/orders/${backendOrderId}/status`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                        body: JSON.stringify({ status: 'CANCELLED', note: `Customer cancelled. Reason: ${reason}` }),
+                      }).catch(() => {});
+                      fetch(`/api/v1/orders/${backendOrderId}/chat`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                        body: JSON.stringify({ text: partnerChatText }),
+                      }).catch(() => {});
+                    }
                     setCancelJobModal(null);
                     setCancelJobReason("");
                     setActiveTab("history");

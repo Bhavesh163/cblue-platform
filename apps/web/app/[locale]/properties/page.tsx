@@ -90,6 +90,18 @@ function getPropertySiteLocation(property: Partial<Property>) {
   return parts.join(", ") || "Unknown";
 }
 
+function isLikelyValidImageDataPayload(payload: string) {
+  const compact = String(payload || "").replace(/\s+/g, "");
+  if (!compact || compact.length < 128 || !/^[A-Za-z0-9+/]+={0,2}$/.test(compact)) return false;
+  if (/^(.)\1+$/.test(compact.replace(/=+$/, ""))) return false;
+  return (
+    compact.startsWith("/9j/") ||
+    compact.startsWith("iVBORw0KGgo") ||
+    compact.startsWith("R0lGOD") ||
+    compact.startsWith("UklGR")
+  );
+}
+
 function normalizeImageUrl(value: unknown) {
   const raw = String(value || "").trim();
   if (!raw) return "";
@@ -101,7 +113,7 @@ function normalizeImageUrl(value: unknown) {
     if (commaIndex <= 0) return "";
     const header = normalized.slice(0, commaIndex);
     const payload = normalized.slice(commaIndex + 1).replace(/\s+/g, "");
-    if (!payload) return "";
+    if (!payload || !isLikelyValidImageDataPayload(payload)) return "";
     const fixedHeader = /;base64$/i.test(header)
       ? header
       : header.includes(";")

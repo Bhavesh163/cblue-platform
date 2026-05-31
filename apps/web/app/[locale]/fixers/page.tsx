@@ -145,6 +145,17 @@ const parseMeetingInviteDetails = (value: string) => {
 const PLACEHOLDER_LOCATION_PATTERN = /^--\s*select/i;
 const RELATIVE_PUBLIC_ASSET_PATTERN = /^(?:\/|_next\/|api\/|images\/|uploads\/|storage\/)/i;
 const PATH_WITH_EXTENSION_PATTERN = /\/[^/?#]+\.[A-Za-z0-9]{2,8}(?:[?#].*)?$/;
+const isLikelyValidImageDataPayload = (payload: string) => {
+  const compact = String(payload || "").replace(/\s+/g, "");
+  if (!compact || compact.length < 128 || !/^[A-Za-z0-9+/]+={0,2}$/.test(compact)) return false;
+  if (/^(.)\1+$/.test(compact.replace(/=+$/, ""))) return false;
+  return (
+    compact.startsWith("/9j/") ||
+    compact.startsWith("iVBORw0KGgo") ||
+    compact.startsWith("R0lGOD") ||
+    compact.startsWith("UklGR")
+  );
+};
 const normalizeImageUrl = (value: unknown) => {
   const raw = String(value || "").trim();
   if (!raw) return "";
@@ -157,6 +168,7 @@ const normalizeImageUrl = (value: unknown) => {
     const header = normalized.slice(0, commaIndex);
     const payload = normalized.slice(commaIndex + 1).replace(/\s+/g, "");
     if (!payload) return "";
+    if (/^data:image\//i.test(header) && !isLikelyValidImageDataPayload(payload)) return "";
     const fixedHeader = /;base64$/i.test(header)
       ? header
       : header.includes(';')
@@ -180,6 +192,7 @@ const normalizeImageUrl = (value: unknown) => {
   if (
     compactBase64.length > 1024 &&
     /^[A-Za-z0-9+/=]+$/.test(compactBase64) &&
+    isLikelyValidImageDataPayload(compactBase64) &&
     !raw.includes("://")
   ) {
     return `data:image/jpeg;base64,${compactBase64}`;
@@ -1021,7 +1034,7 @@ const firstNameOnly = (value: any, fallback = 'User') => {
   const cleaned = String(value || '').trim();
   return cleaned ? cleaned.split(/\s+/)[0] || fallback : fallback;
 };
-const HIDDEN_TEST_POS = new Set(["PO-2605-6716", "PO-2605-9605", "PO-2605-8699", "PO-2605-9701", "PO-2605-9593", "PO-2605-8471", "PO-2605-6146"]);
+const HIDDEN_TEST_POS = new Set(["PO-2605-2747", "PO-2605-6716", "PO-2605-9605", "PO-2605-8699", "PO-2605-9701", "PO-2605-9593", "PO-2605-8471", "PO-2605-6146"]);
 const isHiddenTestPo = (value: any) => HIDDEN_TEST_POS.has(String(value || '').trim().toUpperCase());
 const filterVisibleWorkflowItems = (items: any[]) => items.filter((item: any) => !isHiddenTestPo(item?.po));
 const WORKFLOW_STEP_NAMES: Record<number, string> = {
@@ -1434,6 +1447,8 @@ export default function FixerProPage() {
   interface PropInquiry { id: string; poNumber: string; propertyId: string; propertyTitle: string; propertyTier: string; propertyFee: number; propertyType: string; listingType: string; propertyPrice: number; province: string; district: string; subdistrict?: string; addressLine?: string; latitude?: number | null; longitude?: number | null; area?: number | null; bedrooms?: number | null; bathrooms?: number | null; propertyImages?: string[]; customerEmail: string; customerName: string; listerName: string; status: string; step: number; createdAt: number; updatedAt: number; meetingDate?: string; meetingTime?: string; meetingVenue?: string; customerRating?: number | null; customerComment?: string; listerRating?: number | null; listerComment?: string; reselectedOnce?: boolean; }
   const [propInquiries, setPropInquiries] = useState<PropInquiry[]>([]);
   const [propAcceptModal, setPropAcceptModal] = useState<PropInquiry | null>(null);
+  const [propDeclineModal, setPropDeclineModal] = useState<PropInquiry | null>(null);
+  const [propDeclineComment, setPropDeclineComment] = useState('');
   const [propMeetingConfirmModal, setPropMeetingConfirmModal] = useState<PropInquiry | null>(null);
   const [propPartnerRateModal, setPropPartnerRateModal] = useState<PropInquiry | null>(null);
   const [propPartnerRateStars, setPropPartnerRateStars] = useState(0);
@@ -4088,9 +4103,9 @@ export default function FixerProPage() {
               <p className="text-xs text-gray-500">{locale === "th" ? "หลังยืนยัน ลูกค้าจะชำระค่าดำเนินการและได้รับข้อมูลติดต่อของคุณ" : "After acceptance, the customer pays the processing fee and receives your contact info."}</p>
               <div className="flex gap-3">
                 <button
-                  onClick={async () => {
-                    await updatePropInquiry(propAcceptModal!.id, { status: "DECLINED" }, propAcceptModal!.poNumber);
-                    setPropAcceptModal(null);
+                  onClick={() => {
+                    setPropDeclineComment('');
+                    setPropDeclineModal(propAcceptModal);
                   }}
                   className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl font-semibold text-sm"
                 >
@@ -4107,6 +4122,132 @@ export default function FixerProPage() {
                   {locale === "th" ? "ยืนยัน" : "Accept"}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {propDeclineModal && (
+        <div className="fixed inset-0 z-[200] bg-black/70 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-3xl">⚠️</span>
+              <div>
+                <h2 className="text-xl font-bold text-red-700">{locale === "th" ? "ปฏิเสธคำขออสังหาฯ?" : locale === "zh" ? "拒绝房产请求？" : "Decline This Property Inquiry?"}</h2>
+                <p className="text-xs text-gray-500">{propDeclineModal.propertyTitle} · {propDeclineModal.poNumber}</p>
+              </div>
+            </div>
+            <p className="text-gray-600 text-sm mb-3">
+              {locale === "th"
+                ? "กรุณาระบุเหตุผล เหตุผลนี้จะแสดงให้ CBLUE admin เท่านั้น ลูกค้าจะได้รับข้อความสุภาพว่าผู้ลงประกาศไม่พร้อมดำเนินการ"
+                : locale === "zh"
+                ? "请输入原因。该原因仅供 CBLUE 管理员查看；客户只会收到房源方暂不可处理的系统消息。"
+                : "Please provide a reason. This is visible only to CBLUE admin; the customer receives a polite system message that the lister is unavailable."}
+            </p>
+            <textarea
+              className="w-full border border-gray-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-red-300 outline-none mb-4 resize-none"
+              rows={4}
+              placeholder="e.g. Listing unavailable, fully booked for viewings..."
+              value={propDeclineComment}
+              onChange={e => setPropDeclineComment(e.target.value)}
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setPropDeclineModal(null); setPropDeclineComment(''); }}
+                className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl transition"
+              >
+                {locale === "th" ? "กลับ" : locale === "zh" ? "返回" : "Go Back"}
+              </button>
+              <button
+                disabled={!propDeclineComment.trim()}
+                onClick={async () => {
+                  const inquiry = propDeclineModal;
+                  if (!inquiry) return;
+                  const declineAt = Date.now();
+                  const adminComment = propDeclineComment.trim() || 'Lister unavailable for this inquiry';
+                  const po = inquiry.poNumber;
+                  const customerMessage = `${po}: The lister is unavailable and cannot proceed with ${inquiry.propertyTitle}. Please select another matched property.`;
+                  try {
+                    const logs = JSON.parse(localStorage.getItem('admin_decline_logs') || '[]');
+                    logs.push({
+                      po,
+                      propertyInquiryId: inquiry.id,
+                      comment: adminComment,
+                      partnerName: partner?.name || partner?.company || inquiry.listerName || 'Lister',
+                      declinedAt: new Date(declineAt).toISOString(),
+                      workflow: 'property',
+                    });
+                    localStorage.setItem('admin_decline_logs', JSON.stringify(logs));
+                    setPartnerDeclineLogs(logs);
+                  } catch {}
+                  try {
+                    const history = JSON.parse(localStorage.getItem('ghis_mock_history') || '[]');
+                    const historyEntry = {
+                      id: `prop-declined-${po}`,
+                      po,
+                      service: inquiry.propertyTitle || 'Property Inquiry',
+                      title: inquiry.propertyTitle || 'Property Inquiry',
+                      customer: inquiry.customerName || 'Customer',
+                      status: 'CANCELLED',
+                      statusName: 'Lister Unavailable',
+                      statusNote: 'The lister is unavailable. Please select another matched property.',
+                      declineReason: 'Lister unavailable',
+                      completedAt: declineAt,
+                      statusChangedAt: declineAt,
+                      createdAt: inquiry.createdAt || declineAt,
+                      date: fmtDateTime(declineAt),
+                      budget: toCurrencyLabel(inquiry.propertyPrice),
+                      tier: inquiry.propertyTier || 'STANDARD',
+                      step: 8,
+                      stepName: 'Lister Unavailable',
+                      isPropertyJob: true,
+                      propInquiry: inquiry,
+                      chatHistory: getLocalChatHistory(po),
+                    };
+                    const nextHistory = [...(Array.isArray(history) ? history.filter((x: any) => x.po !== po) : []), historyEntry];
+                    localStorage.setItem('ghis_mock_history', JSON.stringify(nextHistory));
+                    setMockHistory(nextHistory);
+                  } catch {}
+                  try {
+                    const partnerAlerts = JSON.parse(localStorage.getItem('partner_alerts') || '[]');
+                    partnerAlerts.unshift({
+                      id: `prop-decline-${po}-${declineAt}`,
+                      type: 'property_decline_sent',
+                      po,
+                      title: 'Property Inquiry Declined',
+                      message: `You declined ${inquiry.propertyTitle} (${po}). Reason: ${adminComment}. Customer has been notified to select another property.`,
+                      timestamp: new Date(declineAt).toISOString(),
+                      createdAt: declineAt,
+                      dot: 'bg-red-500',
+                    });
+                    localStorage.setItem('partner_alerts', JSON.stringify(partnerAlerts.slice(0, 20)));
+                    setPartnerPersistedAlerts(partnerAlerts.slice(0, 20));
+                  } catch {}
+                  try {
+                    const existingAlerts = JSON.parse(localStorage.getItem('cblue_customer_alerts') || '[]');
+                    const nextAlerts = [{
+                      id: `prop-lister-unavailable-${po}-${declineAt}`,
+                      po,
+                      type: 'notice',
+                      msg: customerMessage,
+                      time: fmtDateTime(declineAt),
+                      createdAt: declineAt,
+                      dot: 'bg-red-400',
+                    }, ...(Array.isArray(existingAlerts) ? existingAlerts : [])].slice(0, 20);
+                    localStorage.setItem('cblue_customer_alerts', JSON.stringify(nextAlerts));
+                  } catch {}
+                  await updatePropInquiry(inquiry.id, { status: "DECLINED", step: 8 }, po);
+                  setPropInquiries((prev) => prev.map((p) => p.id === inquiry.id ? { ...p, status: 'DECLINED', step: 8, updatedAt: declineAt } : p));
+                  setPropAcceptModal(null);
+                  setPropDeclineModal(null);
+                  setPropDeclineComment('');
+                  window.dispatchEvent(new Event('storage'));
+                  window.dispatchEvent(new Event('cblue-workflow-updated'));
+                }}
+                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-xl transition"
+              >
+                {locale === "th" ? "ยืนยันปฏิเสธ" : locale === "zh" ? "确认拒绝" : "Confirm Decline"}
+              </button>
             </div>
           </div>
         </div>
@@ -4557,14 +4698,15 @@ export default function FixerProPage() {
                     const dynReqKey = 'ghis_mock_dyn_req';
                     const existingDyn = JSON.parse(localStorage.getItem(dynReqKey) || '[]');
                     const declineAt = Date.now();
-                    const declineMsg = `${partner?.name || 'The selected partner'} declined ${waitModalOrder.service || 'your project'} (${po})${declineReason ? ` (${declineReason})` : ''}. Please select another matched professional from Book Fixers & Pros.`;
+                    const serviceUnavailableMessage = `The selected service provider is unavailable and busy working on other projects, so they cannot proceed with ${waitModalOrder.service || 'your project'} (${po}). Please select another matched professional from Book Fixers & Pros.`;
+                    const declineMsg = serviceUnavailableMessage;
                     const customerNotice = {
                       id: `partner-declined-${po}`,
                       po,
                       type: 'notice',
                       msg: declineMsg,
-                      msgTh: `${partner?.name || 'พาร์ทเนอร์ที่เลือก'} ปฏิเสธ ${waitModalOrder.service || 'โครงการของคุณ'} (${po})${declineReason ? ` (${declineReason})` : ''} กรุณาเลือกมืออาชีพรายอื่นจาก Book Fixers & Pros`,
-                      msgZh: `${partner?.name || '选中的合作伙伴'} 拒绝了 ${waitModalOrder.service || '您的项目'} (${po})${declineReason ? `（${declineReason}）` : ''}。请从 Book Fixers & Pros 重新选择其他匹配的专业人士。`,
+                      msgTh: `ผู้ให้บริการที่เลือกไม่ว่างและติดงานหลายโครงการ จึงไม่สามารถดำเนินการ ${waitModalOrder.service || 'โครงการของคุณ'} (${po}) ได้ กรุณาเลือกมืออาชีพรายอื่นจาก Book Fixers & Pros`,
+                      msgZh: `所选服务提供商目前忙于其他项目，无法继续处理 ${waitModalOrder.service || '您的项目'} (${po})。请从 Book Fixers & Pros 选择其他匹配的专业人士。`,
                       date: fmtDateTime(declineAt),
                       createdAt: declineAt,
                       dot: 'bg-red-400',
@@ -4615,8 +4757,8 @@ export default function FixerProPage() {
                       ...waitModalOrder,
                       status: 'CANCELLED',
                       statusName: 'Partner Unavailable',
-                      statusNote: `Reason: ${declineReason}`,
-                      declineReason,
+                      statusNote: 'The selected service provider is unavailable and busy working on other projects. Please select another matched professional.',
+                      declineReason: 'Partner unavailable',
                       completedAt: Date.now(),
                       statusChangedAt: Date.now(),
                       step: 11,
@@ -4677,7 +4819,7 @@ export default function FixerProPage() {
                             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                             body: JSON.stringify({
                               status: nextStatus,
-                              note: `The selected service provider is unable to proceed with this project. Reason: ${declineReason}. Please select another professional.`,
+                              note: 'The selected service provider is unavailable and busy working on other projects. Please select another professional.',
                             }),
                           });
                         } catch {}
