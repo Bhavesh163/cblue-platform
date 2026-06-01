@@ -614,7 +614,9 @@ export class OrderService {
         OrderStatus.COMPLETED,
         OrderStatus.CANCELLED,
       ];
-      const allowedByRelationship = isCustomer ? customerAllowed : partnerAllowed;
+      const allowedByRelationship = isCustomer
+        ? customerAllowed
+        : partnerAllowed;
       if (!allowedByRelationship.includes(dto.status)) {
         throw new ForbiddenException(
           isCustomer
