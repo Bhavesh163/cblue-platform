@@ -1158,6 +1158,69 @@ const getLocalChatHistory = (po: any) => {
     return [];
   }
 };
+const appendLocalWorkflowSystemChat = (po: any, text: string, createdAt = Date.now()) => {
+  if (typeof window === 'undefined' || !po) return;
+  const chatText = String(text || '').trim();
+  if (!chatText) return;
+  try {
+    const key = `chat_messages_${po}`;
+    const rows = JSON.parse(localStorage.getItem(key) || '[]');
+    const next = Array.isArray(rows) ? [...rows] : [];
+    if (!next.some((row: any) => String(row?.text || '').trim() === chatText)) {
+      next.push({
+        id: `system-${po}-${createdAt}`,
+        sender: 'system',
+        text: chatText,
+        time: fmtDateTime(createdAt),
+        createdAt,
+      });
+      next.sort((a: any, b: any) => parseWorkflowSortTs(a?.createdAt || a?.time) - parseWorkflowSortTs(b?.createdAt || b?.time));
+      localStorage.setItem(key, JSON.stringify(next));
+    }
+  } catch {
+    // Best-effort local chat continuity only.
+  }
+};
+const upsertPartnerPersistedAlert = ({
+  id,
+  po,
+  type,
+  message,
+  msgTh,
+  msgZh,
+  dot,
+  createdAt,
+}: {
+  id: string;
+  po: string;
+  type: string;
+  message: string;
+  msgTh: string;
+  msgZh: string;
+  dot: string;
+  createdAt: number;
+}) => {
+  if (typeof window === 'undefined') return;
+  try {
+    const existing = JSON.parse(localStorage.getItem('partner_alerts') || '[]');
+    const next = [
+      ...(Array.isArray(existing) ? existing.filter((alert: any) => String(alert?.id) !== id) : []),
+      {
+        id,
+        po,
+        type,
+        message,
+        msgTh,
+        msgZh,
+        createdAt,
+        dot,
+      },
+    ].slice(-20);
+    localStorage.setItem('partner_alerts', JSON.stringify(next));
+  } catch {
+    // Best-effort local alert continuity only.
+  }
+};
 const buildVariationPriceListRows = (
   rows: { item: string; qty: string; unit: string; rate: string; amount: string }[],
 ): VariationPriceListItem[] =>
@@ -4669,7 +4732,7 @@ export default function FixerProPage() {
                         venue: existingActive?.venue || confirmedMeetingVenue,
                         step: 9,
                         mockStep: 9,
-                        actionNeeded: true,
+                        actionNeeded: false,
                       };
                       const nextActive = [
                         ...mockActiveState.filter((x: any) => x.po !== po),
@@ -5722,28 +5785,52 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
         const varId = `var-${po}`;
         const varNote = extraData || 'Your partner has submitted a variation for your approval. Please review and confirm to proceed.';
         const partnerRequest = normalizeVariationPartnerNote(varNote);
+        const chatText = `[SYSTEM] Partner has submitted a variation request for ${po}. Please review in your Requests tab. [VARIATION_DATA]${varNote}[/VARIATION_DATA]`;
         if (partnerRequest) storeVariationPartnerNote(po, partnerRequest);
         const next = [...dynReqs.filter((x: any) => x.po !== po), { id: varId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: varNote, location: job.location || job.subdistrict || '', type: 'variation_pending', step: 9, meetingDate: job.meetingDate || '', meetingTime: job.meetingTime || '', meetingVenue: job.meetingVenue || job.venue || '', venue: job.venue || job.meetingVenue || '' }];
         localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
         // Keep the active-job progress pinned to Step 9 even after the request disappears.
         upsertMockActiveStep(job, 9, false, createdAt);
         try { localStorage.setItem(`partner_variation_sent_${po}`, '1'); } catch {}
+        appendLocalWorkflowSystemChat(po, chatText, createdAt);
+        upsertPartnerPersistedAlert({
+          id: `variation-wait-${po}`,
+          po,
+          type: 'variation_waiting_customer',
+          message: `${po}: Variation request sent. Waiting for customer approval while the active job remains open.`,
+          msgTh: `${po}: ส่งคำขอ variation แล้ว กำลังรอลูกค้าอนุมัติ โดยงานยังคงอยู่ใน Active Jobs`,
+          msgZh: `${po}: 已发送变更申请。正在等待客户批准，工作仍保留在 Active Jobs。`,
+          dot: 'bg-purple-500',
+          createdAt,
+        });
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
         window.dispatchEvent(new Event("cblue-workflow-updated"));
-        postSystemMsg(`[SYSTEM] Partner has submitted a variation request for ${po}. Please review in your Requests tab. [VARIATION_DATA]${varNote}[/VARIATION_DATA]`);
+        postSystemMsg(chatText);
       } else if (action === 'complete') {
         const complId = `compl-${po}`;
         const previousPartnerRequest = resolveVariationPartnerNote(po);
         const completeDesc = extraData?.trim() ? `Partner completion request: ${extraData.trim()}` : 'Work is completed. Please review and mark as complete to close this project.';
+        const chatText = `[SYSTEM] Partner has marked the job as complete for ${po}. Please review and confirm in your Requests tab. [COMPLETE_DATA]${completeDesc}[/COMPLETE_DATA]`;
         const next = [...dynReqs.filter((x: any) => x.po !== po), { id: complId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: completeDesc, location: job.location || job.subdistrict || '', partnerRequest: previousPartnerRequest, partnerNote: previousPartnerRequest, variationRequest: previousPartnerRequest, type: 'complete_pending', step: 10, meetingDate: job.meetingDate || '', meetingTime: job.meetingTime || '', meetingVenue: job.meetingVenue || job.venue || '', venue: job.venue || job.meetingVenue || '' }];
         localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
         upsertMockActiveStep(job, 10, false, createdAt);
         try { localStorage.setItem(`partner_complete_sent_${po}`, '1'); } catch {}
+        appendLocalWorkflowSystemChat(po, chatText, createdAt);
+        upsertPartnerPersistedAlert({
+          id: `complete-wait-${po}`,
+          po,
+          type: 'complete_waiting_customer',
+          message: `${po}: Job-complete request sent. Waiting for customer confirmation before rating opens.`,
+          msgTh: `${po}: ส่งคำของานเสร็จแล้ว กำลังรอลูกค้ายืนยันก่อนเปิดขั้นตอนให้คะแนน`,
+          msgZh: `${po}: 已发送完工申请。正在等待客户确认后开启评分步骤。`,
+          dot: 'bg-green-500',
+          createdAt,
+        });
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['complete_partner', 'variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
         window.dispatchEvent(new Event("cblue-workflow-updated"));
-        postSystemMsg(`[SYSTEM] Partner has marked the job as complete for ${po}. Please review and confirm in your Requests tab. [COMPLETE_DATA]${completeDesc}[/COMPLETE_DATA]`);
+        postSystemMsg(chatText);
       } else if (action === 'rate') {
         const rating = extraData || '5';
         // Update active/history BEFORE writePartnerReqs so buildChatFeed sees historyEntry and skips
@@ -6307,28 +6394,52 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
         const varId = `var-${po}`;
         const varNote = extraData || 'Your partner has submitted a variation for your approval. Please review and confirm to proceed.';
         const partnerRequest = normalizeVariationPartnerNote(varNote);
+        const chatText = `[SYSTEM] Partner has submitted a variation request for ${po}. Please review in your Requests tab. [VARIATION_DATA]${varNote}[/VARIATION_DATA]`;
         if (partnerRequest) storeVariationPartnerNote(po, partnerRequest);
         const next = [...dynReqs.filter((x: any) => x.po !== po), { id: varId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: varNote, location: job.location || job.subdistrict || '', type: 'variation_pending', step: 9, meetingDate: job.meetingDate || '', meetingTime: job.meetingTime || '', meetingVenue: job.meetingVenue || job.venue || '', venue: job.venue || job.meetingVenue || '' }];
         localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
         // Keep the active-job progress pinned to Step 9 even after the request disappears.
         upsertMockActiveStep(job, 9, false, createdAt);
         try { localStorage.setItem(`partner_variation_sent_${po}`, '1'); } catch {}
+        appendLocalWorkflowSystemChat(po, chatText, createdAt);
+        upsertPartnerPersistedAlert({
+          id: `variation-wait-${po}`,
+          po,
+          type: 'variation_waiting_customer',
+          message: `${po}: Variation request sent. Waiting for customer approval while the active job remains open.`,
+          msgTh: `${po}: ส่งคำขอ variation แล้ว กำลังรอลูกค้าอนุมัติ โดยงานยังคงอยู่ใน Active Jobs`,
+          msgZh: `${po}: 已发送变更申请。正在等待客户批准，工作仍保留在 Active Jobs。`,
+          dot: 'bg-purple-500',
+          createdAt,
+        });
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
         window.dispatchEvent(new Event("cblue-workflow-updated"));
-        postSystemMsg(`[SYSTEM] Partner has submitted a variation request for ${po}. Please review in your Requests tab. [VARIATION_DATA]${varNote}[/VARIATION_DATA]`);
+        postSystemMsg(chatText);
       } else if (action === 'complete') {
         const complId = `compl-${po}`;
         const completeDesc = extraData?.trim() ? `Partner completion request: ${extraData.trim()}` : 'Work is completed. Please review and mark as complete to close this project.';
         const previousPartnerRequest = resolveVariationPartnerNote(po);
+        const chatText = `[SYSTEM] Partner has marked the job as complete for ${po}. Please review and confirm in your Requests tab. [COMPLETE_DATA]${completeDesc}[/COMPLETE_DATA]`;
         const next = [...dynReqs.filter((x: any) => x.po !== po), { id: complId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: completeDesc, location: job.location || job.subdistrict || '', partnerRequest: previousPartnerRequest, partnerNote: previousPartnerRequest, variationRequest: previousPartnerRequest, type: 'complete_pending', step: 10, meetingDate: job.meetingDate || '', meetingTime: job.meetingTime || '', meetingVenue: job.meetingVenue || job.venue || '', venue: job.venue || job.meetingVenue || '' }];
         localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
         upsertMockActiveStep(job, 10, false, createdAt);
         try { localStorage.setItem(`partner_complete_sent_${po}`, '1'); } catch {}
+        appendLocalWorkflowSystemChat(po, chatText, createdAt);
+        upsertPartnerPersistedAlert({
+          id: `complete-wait-${po}`,
+          po,
+          type: 'complete_waiting_customer',
+          message: `${po}: Job-complete request sent. Waiting for customer confirmation before rating opens.`,
+          msgTh: `${po}: ส่งคำของานเสร็จแล้ว กำลังรอลูกค้ายืนยันก่อนเปิดขั้นตอนให้คะแนน`,
+          msgZh: `${po}: 已发送完工申请。正在等待客户确认后开启评分步骤。`,
+          dot: 'bg-green-500',
+          createdAt,
+        });
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['complete_partner', 'variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
         window.dispatchEvent(new Event("cblue-workflow-updated"));
-        postSystemMsg(`[SYSTEM] Partner has marked the job as complete for ${po}. Please review and confirm in your Requests tab. [COMPLETE_DATA]${completeDesc}[/COMPLETE_DATA]`);
+        postSystemMsg(chatText);
       } else if (action === 'rate') {
         const rating = extraData || '5';
         // Update active/history BEFORE writePartnerReqs so buildChatFeed sees historyEntry and skips

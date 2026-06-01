@@ -110,6 +110,52 @@ const extractPoCode = (orderLike: any) => {
   const desc = String(orderLike?.description || orderLike?.desc || "");
   return desc.match(PO_CODE_PATTERN)?.[0] || "";
 };
+const parseMeetingInviteDetails = (value: string) => {
+  const text = String(value || '');
+  const match = text.match(/customer sent meeting invitation(?: for (PO-(?:\d{8}|\d{4}-\d{4,})))?:\s*(\d{2}\/\d{2}\/\d{4})\s+(\d{2}:\d{2})\s+at\s+(.+?)(?:\.|$)/i);
+  return {
+    po: match?.[1] || '',
+    meetingDate: match?.[2] || '',
+    meetingTime: match?.[3] || '',
+    meetingVenue: String(match?.[4] || '').trim(),
+  };
+};
+const readMeetingInviteSnapshot = (po: string, fallback?: any) => {
+  const normalizedPo = String(po || '').trim();
+  const candidates = [
+    String(fallback?.meetingMessage || ''),
+    String(fallback?.statusNote || ''),
+    String(fallback?.description || ''),
+    String(fallback?.desc || ''),
+  ];
+
+  if (typeof window !== 'undefined' && normalizedPo) {
+    try {
+      const chatRows = JSON.parse(localStorage.getItem(`chat_messages_${normalizedPo}`) || '[]');
+      if (Array.isArray(chatRows)) {
+        for (const row of chatRows) {
+          candidates.unshift(String(row?.text || ''));
+        }
+      }
+    } catch {
+      // Best-effort local recovery only.
+    }
+  }
+
+  for (const candidate of candidates) {
+    const parsed = parseMeetingInviteDetails(candidate);
+    if (parsed.meetingDate || parsed.meetingTime || parsed.meetingVenue) {
+      return parsed;
+    }
+  }
+
+  return {
+    po: normalizedPo,
+    meetingDate: '',
+    meetingTime: '',
+    meetingVenue: '',
+  };
+};
 const stripWorkflowPrefix = (value: any) => String(value || '').replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?(LOC:[^|]+\|\s*)?/i, '').trim();
 const firstNameOnly = (value: any, fallback = 'User') => {
   const cleaned = String(value || '').trim();
@@ -2142,48 +2188,161 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   // backend status changes, customer page detects and updates the request card automatically).
   useEffect(() => {
     if (!mockReady) return;
+    const pendingMeetingByPo = new Map(
+      mockDynRequests
+        .filter((item: any) => item?.type === 'meeting_pending_partner')
+        .map((item: any) => [String(item.po || '').trim(), item]),
+    );
+    const scheduledMeetingPos = new Set(
+      mockDynRequests
+        .filter((item: any) => item?.type === 'meeting_scheduled')
+        .map((item: any) => String(item.po || '').trim()),
+    );
+    const confirmedMeetingByChatPos = new Set(
+      chatFeed
+        .filter((chatItem: any) => /partner confirmed site meeting|meeting confirmed by partner/i.test(String(chatItem?.lastMsg || '')))
+        .map((chatItem: any) => String(chatItem?.po || '').trim())
+        .filter((po: string) => isValidPoCode(po)),
+    );
     const toSchedule = new Set<string>();
+    const scheduledPayloadByPo = new Map<string, any>();
     for (const order of workflowOrders) {
       const po = extractPo(order);
       if (!po) continue;
       const currentStatus = String(order.status || '').toUpperCase();
       const prevStatus = prevOrderStatuses.current[order.id];
-      if (prevStatus === 'MEETING_REQUESTED' && currentStatus === 'IN_PROGRESS') {
+      const pendingMeeting = pendingMeetingByPo.get(po);
+      const hasConfirmedMeetingSignal =
+        (prevStatus === 'MEETING_REQUESTED' && currentStatus === 'IN_PROGRESS') ||
+        (currentStatus === 'IN_PROGRESS' && !scheduledMeetingPos.has(po) && (Boolean(pendingMeeting) || confirmedMeetingByChatPos.has(po)));
+      if (hasConfirmedMeetingSignal) {
+        const existingActive = mockActiveItems.find((item: any) => item?.po === po);
+        const inviteDetails = readMeetingInviteSnapshot(po, pendingMeeting || existingActive || order);
+        const createdAt =
+          parseDateMs(
+            pendingMeeting?.createdAt ||
+              pendingMeeting?.date ||
+              existingActive?.createdAt ||
+              order.statusChangedAt ||
+              order.updatedAt ||
+              order.createdAt ||
+              Date.now(),
+          ) || Date.now();
+        const tier =
+          pendingMeeting?.tier ||
+          existingActive?.tier ||
+          String(order?.description || '').match(/TIER:([A-Za-z]+)/)?.[1] ||
+          'STANDARD';
+        const location =
+          pendingMeeting?.location ||
+          existingActive?.location ||
+          existingActive?.subdistrict ||
+          (() => {
+            const lat = Number(order?.address?.latitude);
+            const lng = Number(order?.address?.longitude);
+            if (Number.isFinite(lat) && Number.isFinite(lng) && !(Math.abs(lat) < 0.000001 && Math.abs(lng) < 0.000001)) {
+              return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+            }
+            const match = String(order?.description || '').match(/\bLOC:([^|]+)/);
+            return (match ? (match[1] ?? '').trim() : '') || String(order?.address?.subdistrict || order?.subdistrict || order?.location || '');
+          })();
+        const meetingDate = inviteDetails.meetingDate || pendingMeeting?.meetingDate || existingActive?.meetingDate || '';
+        const meetingTime = inviteDetails.meetingTime || pendingMeeting?.meetingTime || existingActive?.meetingTime || '';
+        const meetingVenue =
+          inviteDetails.meetingVenue ||
+          pendingMeeting?.meetingVenue ||
+          pendingMeeting?.venue ||
+          existingActive?.meetingVenue ||
+          existingActive?.venue ||
+          '';
+        const meetingSummary = [meetingDate, meetingTime].filter(Boolean).join(' ').trim();
+        scheduledPayloadByPo.set(po, {
+          id: `meet-scheduled-${po}`,
+          po,
+          orderId: order.id,
+          title:
+            pendingMeeting?.title ||
+            existingActive?.title ||
+            String(order?.serviceCategory || order?.service || 'Service').replace(/_/g, ' '),
+          customer:
+            pendingMeeting?.customer ||
+            existingActive?.customer ||
+            order?.fixerName ||
+            order?.partnerName ||
+            'Suppadesh',
+          date: fmtDateTime(createdAt),
+          createdAt,
+          budget:
+            pendingMeeting?.budget ||
+            existingActive?.budget ||
+            (order?.estimatedPrice ? `฿${Number(order.estimatedPrice).toLocaleString()}` : '฿0'),
+          tier,
+          type: 'meeting_scheduled',
+          step: 8,
+          venue: meetingVenue,
+          meetingVenue,
+          meetingDate,
+          meetingTime,
+          location,
+          desc: `Meeting confirmed by partner${meetingSummary ? ` for ${meetingSummary}` : ''}${meetingVenue ? ` at ${meetingVenue}` : ''}. Proceed after the site meeting then mark variation.`,
+        });
         toSchedule.add(po);
       }
       prevOrderStatuses.current[order.id] = currentStatus;
     }
     if (toSchedule.size > 0) {
+      setMockActiveItems(prev => {
+        let changed = false;
+        const next = [...prev];
+        for (const po of toSchedule) {
+          const scheduled = scheduledPayloadByPo.get(po);
+          if (!scheduled) continue;
+          const existingActive = next.find((item: any) => item?.po === po);
+          const activeSnapshot = {
+            ...(existingActive || scheduled),
+            po,
+            title: existingActive?.title || scheduled.title,
+            customer: existingActive?.customer || scheduled.customer,
+            date: existingActive?.date || scheduled.date,
+            createdAt: existingActive?.createdAt || scheduled.createdAt,
+            budget: existingActive?.budget || scheduled.budget,
+            tier: existingActive?.tier || scheduled.tier,
+            location: existingActive?.location || scheduled.location,
+            subdistrict: existingActive?.subdistrict || scheduled.location,
+            meetingDate: scheduled.meetingDate || existingActive?.meetingDate || '',
+            meetingTime: scheduled.meetingTime || existingActive?.meetingTime || '',
+            meetingVenue: scheduled.meetingVenue || existingActive?.meetingVenue || existingActive?.venue || '',
+            venue: scheduled.venue || existingActive?.venue || existingActive?.meetingVenue || '',
+            step: 9,
+            mockStep: 9,
+            actionNeeded: false,
+          };
+          const activeIndex = next.findIndex((item: any) => item?.po === po);
+          if (activeIndex >= 0) next[activeIndex] = activeSnapshot;
+          else next.push(activeSnapshot);
+          changed = true;
+        }
+        if (!changed) return prev;
+        try { localStorage.setItem('ghis_mock_active', JSON.stringify(next)); } catch {}
+        return next;
+      });
       setMockDynRequests(prev => {
         let changed = false;
-        const updated = prev.map((r: any) => {
-          if (r.type === 'meeting_pending_partner' && toSchedule.has(r.po)) {
-            changed = true;
-            const meetingLabel = r.meetingDate
-              ? `${fmtDate(`${r.meetingDate}T${r.meetingTime || '00:00'}`)}${r.meetingTime ? ` ${r.meetingTime}` : ''}`
-              : '';
-            const venueLabel = r.venue ? ` at ${r.venue}` : '';
-            return {
-              ...r,
-              id: `meet-scheduled-${r.po}`,
-              type: 'meeting_scheduled',
-              desc: `Meeting confirmed by partner${meetingLabel ? ` for ${meetingLabel}` : ''}${venueLabel}. Proceed to site meeting, then mark variation when done.`,
-            };
-          }
-          return r;
-        });
-        // Only remove chat_ready and meeting_invite for POs where a meeting was confirmed
-        // (i.e., had meeting_pending_partner). This prevents erasing meeting_invite for jobs
-        // that are simply IN_PROGRESS after step 6 payment (before any meeting is sent).
-        const posWith_meeting_pending = new Set(prev.filter((r: any) => r.type === 'meeting_pending_partner').map((r: any) => r.po));
-        const cleaned = updated.filter((r: any) => !(toSchedule.has(r.po) && posWith_meeting_pending.has(r.po) && (r.type === 'chat_ready' || r.type === 'meeting_invite')));
-        if (!changed && cleaned.length === prev.length) return prev;
-        try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(cleaned)); } catch {}
-        return cleaned;
+        let next = [...prev];
+        for (const po of toSchedule) {
+          const scheduled = scheduledPayloadByPo.get(po);
+          if (!scheduled) continue;
+          next = next.filter((r: any) => !(r.po === po && ['meeting_pending_partner', 'meeting_scheduled', 'chat_ready', 'meeting_invite'].includes(String(r.type || ''))));
+          next.push(scheduled);
+          changed = true;
+        }
+        if (!changed) return prev;
+        try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(next)); } catch {}
+        return next;
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orders, mockReady]);
+  }, [chatFeed, mockActiveItems, mockDynRequests, orders, mockReady]);
 
   // F6: Cross-browser detection of partner variation/complete/rate actions via backend chat messages.
   // When partner posts [SYSTEM] messages, customer's chatFeed picks them up (5s poll) and this
