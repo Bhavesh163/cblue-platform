@@ -157,6 +157,10 @@ const WORKFLOW_CACHE_RECORD_KEYS = [
   'workflowType',
   'msg',
   'dot',
+  'meetingDateLabel',
+  'meetingTimeLabel',
+  'meetingMessage',
+  'meetingNote',
 ] as const;
 const sanitizeWorkflowCacheText = (value: any, maxLength = 240) => {
   const text = String(value ?? '')
@@ -2205,6 +2209,7 @@ export default function FixerProPage() {
     const handleStorageChange = () => {
       const token = localStorage.getItem("subscriber_token");
       if (!token) {
+        // Token gone → logged out: clear everything
         setPartner(null);
         setIsFixer(false);
         setIsLister(false);
@@ -2212,11 +2217,11 @@ export default function FixerProPage() {
         setMyProperties([]);
         setChatFeed([]);
       } else {
+        // Token still present → only sync partner profile, do NOT reset role flags.
+        // isFixer/isLister are verified by fetchUser on mount via /api/v1/users/me.
+        // Resetting them here on every workflow storage event wipes all partner data.
         const stored = localStorage.getItem("subscriber");
         if (stored) setPartner(JSON.parse(stored));
-        // Reset role flags until /users/me and /properties/my re-verify access.
-        setIsFixer(false);
-        setIsLister(false);
       }
     };
     window.addEventListener("storage", handleStorageChange);
@@ -4526,10 +4531,10 @@ export default function FixerProPage() {
     : false;
   const parsedWaitModalMeeting = parseMeetingInviteDetails(String(waitModalOrder?.meetingMessage || waitModalOrder?.statusNote || waitModalOrder?.description || waitModalOrder?.desc || ''));
   const waitModalMeetingDetails = {
-    meetingDateLabel: waitModalOrder?.meetingDateLabel || parsedWaitModalMeeting.meetingDateLabel,
-    meetingTimeLabel: waitModalOrder?.meetingTimeLabel || parsedWaitModalMeeting.meetingTimeLabel,
+    meetingDateLabel: waitModalOrder?.meetingDateLabel || waitModalOrder?.meetingDate || parsedWaitModalMeeting.meetingDateLabel,
+    meetingTimeLabel: waitModalOrder?.meetingTimeLabel || waitModalOrder?.meetingTime || parsedWaitModalMeeting.meetingTimeLabel,
     meetingVenue: waitModalOrder?.meetingVenue || parsedWaitModalMeeting.meetingVenue || waitModalOrder?.subdistrict || 'Unknown',
-    meetingMessage: waitModalOrder?.meetingMessage || '',
+    meetingMessage: waitModalOrder?.meetingMessage || waitModalOrder?.meetingNote || '',
   };
   const waitModalServiceName = waitModalOrder?.serviceTh || waitModalOrder?.service || 'Project';
   const waitModalCounterpart = firstNameOnly(waitModalOrder?.customer || waitModalOrder?.customerAlias, 'Customer');
