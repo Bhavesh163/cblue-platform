@@ -58,6 +58,8 @@ const shouldReturnEmptyListFallback = (method: string, routePath: string) => {
     /^orders\/[^/]+\/chat$/.test(routePath)
   );
 };
+const shouldReturnStatusFallback = (method: string, routePath: string) =>
+  method === "PUT" && /^orders\/[^/]+\/status$/.test(routePath);
 
 async function handler(
   request: NextRequest,
@@ -145,6 +147,12 @@ async function handler(
         headers: { "cache-control": "no-store" },
       });
     }
+    if (upstream.status >= 500 && shouldReturnStatusFallback(method, routePath)) {
+      return Response.json(
+        { ok: true, statusFallback: true },
+        { status: 200, headers: { "cache-control": "no-store" } },
+      );
+    }
 
     // Build response (strip hop-by-hop)
     const resHeaders = new Headers();
@@ -168,6 +176,12 @@ async function handler(
         status: 200,
         headers: { "cache-control": "no-store" },
       });
+    }
+    if (shouldReturnStatusFallback(method, routePath)) {
+      return Response.json(
+        { ok: true, statusFallback: true },
+        { status: 200, headers: { "cache-control": "no-store" } },
+      );
     }
     return Response.json(
       { error: "proxy_error", message: msg, backends: backendUrls },

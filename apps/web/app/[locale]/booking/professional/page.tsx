@@ -298,6 +298,10 @@ function ProfessionalBookingContent() {
       setError(locale === "th" ? "กรุณากรอกวันที่ในรูปแบบ DD/MM/YYYY" : locale === "zh" ? "请输入DD/MM/YYYY格式日期" : "Please enter the date in DD/MM/YYYY format");
       return;
     }
+    if (form.locationType === "gps" && !gpsCoords) {
+      setError(locale === "th" ? "กรุณากดตรวจจับตำแหน่ง GPS ก่อนส่งคำขอ" : locale === "zh" ? "提交前请先检测GPS位置" : "Please detect the GPS location before submitting.");
+      return;
+    }
     setSubmitting(true);
     setError("");
 
@@ -362,6 +366,7 @@ function ProfessionalBookingContent() {
           addressText: form.addressText,
           latitude: gpsCoords?.lat,
           longitude: gpsCoords?.lng,
+          locationType: form.locationType,
         }}
         issueImages={images}
         onNewBooking={() => {

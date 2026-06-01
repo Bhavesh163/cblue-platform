@@ -630,7 +630,7 @@ export default function FixerResults({
     : null;
   const bookingLocation = (bookingAddress?.locationType === 'gps' && gpsLocationStr)
     ? gpsLocationStr
-    : (bookingAddress?.subdistrict || bookingAddress?.district || bookingAddress?.province || gpsLocationStr || "");
+    : (bookingAddress?.subdistrict || bookingAddress?.district || bookingAddress?.province || bookingAddress?.addressText || gpsLocationStr || "");
   const ensureOrderAddressId = async (token: string) => {
     // Allow creation if at least one geographic field is provided OR GPS coordinates
     const hasGeo = bookingAddress?.province || bookingAddress?.district || bookingAddress?.subdistrict;
@@ -1479,21 +1479,22 @@ export default function FixerResults({
   const tierLabel = selectedFixer ? t(selectedFixer.tier) : "";
 
   // Step progress bar for the 11-step flow (visible after matching)
-  const flowSteps: Step[] = ["matching", "select", "po", "notify", "notify-success", "confirm", "payment", "chat", "meeting", "variation", "complete", "rate"];
+  const flowSteps: Step[] = ["matching", "select", "po", "notify", "confirm", "payment", "chat", "meeting", "variation", "complete", "rate"];
   const flowLabels: Record<string, Record<Step, string>> = {
-    en: { matching: "Match", select: "Select", confirm: "Accept", po: "PO", notify: "Notify", "notify-success": "Notified", payment: "Fee & Proceed", chat: "Chat", meeting: "Meet", variation: "Variation", complete: "Complete", rate: "Rate" },
-    th: { matching: "จับคู่", select: "เลือก", confirm: "ยอมรับ", po: "PO", notify: "แจ้ง", "notify-success": "แจ้งแล้ว", payment: "ค่าธรรมเนียมและดำเนินการ", chat: "แชท", meeting: "นัดหมาย", variation: "เปลี่ยนแปลง", complete: "เสร็จ", rate: "คะแนน" },
-    zh: { matching: "匹配", select: "选择", confirm: "接受", po: "PO", notify: "通知", "notify-success": "已通知", payment: "费用和继续", chat: "聊天", meeting: "会面", variation: "变更", complete: "完工", rate: "评分" },
+    en: { matching: "Match", select: "Select", confirm: "Accept", po: "PO", notify: "Notify", "notify-success": "Notify", payment: "Fee & Proceed", chat: "Chat", meeting: "Meet", variation: "Variation", complete: "Complete", rate: "Rate" },
+    th: { matching: "จับคู่", select: "เลือก", confirm: "ยอมรับ", po: "PO", notify: "แจ้ง", "notify-success": "แจ้ง", payment: "ค่าธรรมเนียมและดำเนินการ", chat: "แชท", meeting: "นัดหมาย", variation: "เปลี่ยนแปลง", complete: "เสร็จ", rate: "คะแนน" },
+    zh: { matching: "匹配", select: "选择", confirm: "接受", po: "PO", notify: "通知", "notify-success": "通知", payment: "费用和继续", chat: "聊天", meeting: "会面", variation: "变更", complete: "完工", rate: "评分" },
   };
   const hideVariation = false;
   const visibleSteps = flowSteps;
-  const visibleIndex = visibleSteps.indexOf(step);
+  const visibleStep = step === "notify-success" ? "notify" : step;
+  const visibleIndex = visibleSteps.indexOf(visibleStep);
   const StepProgressBar = () => step === "matching" ? null : (
     <div className="mx-auto max-w-2xl px-4 mb-4">
       <div className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm">
         <div className="flex items-center gap-0.5">
           {visibleSteps.map((s) => {
-            const isCurrent = s === step;
+            const isCurrent = s === visibleStep;
             const isDone = visibleSteps.indexOf(s) < visibleIndex;
             const labels = flowLabels[locale] ?? flowLabels["en"]!;
             return (

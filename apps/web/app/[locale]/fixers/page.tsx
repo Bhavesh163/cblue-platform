@@ -2963,6 +2963,48 @@ export default function FixerProPage() {
         backendStep === 5;
       return { ...job, step, mockStep: step, actionNeeded: partnerActionNeeded };
   });
+  const localWorkflowActiveJobs = isFixer
+    ? mockActiveState
+        .filter((job: any) => {
+          const po = String(job?.po || '').trim();
+          const step = parseWorkflowStep(job?.step || job?.mockStep);
+          return (
+            po &&
+            !isHiddenTestPo(po) &&
+            !isClosedPartnerWorkflowPo(po) &&
+            !completedHistoryPos.has(po) &&
+            !declinedPartnerPos.has(po) &&
+            !completedBackendOrderPos.has(po) &&
+            step >= 6
+          );
+        })
+        .map((job: any) => {
+          const po = String(job?.po || '').trim();
+          const step = parseWorkflowStep(job?.step || job?.mockStep) || 6;
+          const hasPartnerDynAction = partnerDynReqs.some((req: any) => req.po === po && req.type !== 'accept_sent');
+          return {
+            id: job.id || `local-${po}`,
+            orderId: job.orderId || job.id,
+            po,
+            service: job.service || job.serviceTh || job.title || 'Project',
+            serviceTh: job.serviceTh || job.title || job.service || 'Project',
+            serviceZh: job.serviceZh || job.title || job.service || 'Project',
+            customer: job.customer || job.customerName || 'Customer',
+            date: job.date || fmtDateTime(job.createdAt || Date.now()),
+            createdAt: job.createdAt || Date.now(),
+            budget: job.budget || job.fee || '0',
+            fee: job.fee || job.budget || '0',
+            tier: job.tier || 'Standard',
+            location: job.location || job.subdistrict || '',
+            subdistrict: job.subdistrict || job.location || '',
+            description: job.description || job.desc || '',
+            status: job.status || 'CONFIRMED',
+            step,
+            mockStep: step,
+            actionNeeded: hasPartnerDynAction,
+          };
+        })
+    : [];
   const mapPropStatusToStep = (status: string, step: number) => {
     const explicitStep = parseWorkflowStep(step);
     const normalizedStatus = String(status || '').toUpperCase();
@@ -3053,7 +3095,7 @@ export default function FixerProPage() {
     return 0;
   };
   const mergedActiveJobs = new Map<string, any>();
-  [...activeJobs, ...propActiveJobs].forEach((job: any) => {
+  [...activeJobs, ...localWorkflowActiveJobs, ...propActiveJobs].forEach((job: any) => {
     const key = String(job?.po || job?.id || '').trim();
     if (!key || isHiddenTestPo(key)) return;
     const existing = mergedActiveJobs.get(key);
@@ -4048,6 +4090,13 @@ export default function FixerProPage() {
     ? 'Review the proposed site meeting time and confirm it for the customer.'
     : 'Review the draft PO, project details, budget basis, and uploaded files before accepting.';
   const waitModalProjectDetails = stripWorkflowPrefix(waitModalOrder?.projectDetails || waitModalOrder?.description || waitModalOrder?.service || '');
+  const waitModalProjectLocation = (() => {
+    const direct = String(waitModalOrder?.location || waitModalOrder?.subdistrict || '').trim();
+    if (direct && direct !== 'Unknown' && direct !== 'N/A') return direct;
+    const match = String(waitModalOrder?.description || waitModalOrder?.desc || '').match(/\bLOC:([^|]+)/);
+    const fromDescription = match ? String(match[1] || '').trim() : '';
+    return fromDescription || waitModalOrder?.meetingVenue || 'Unknown';
+  })();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50/30">
@@ -4055,7 +4104,7 @@ export default function FixerProPage() {
 
       {/* Property Inquiry Accept Modal (Step 4 of 8) */}
       {propAcceptModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-950/80 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl overflow-hidden">
             <div className="bg-gradient-to-r from-emerald-600 to-green-600 px-6 py-4 flex items-start justify-between gap-3">
               <div>
@@ -4264,7 +4313,7 @@ export default function FixerProPage() {
 
       {/* Property Meeting Confirmation Modal (Step 7 of 8) */}
       {propMeetingConfirmModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-950/80 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl overflow-hidden">
             <div className="bg-gradient-to-r from-teal-500 to-cyan-500 px-6 py-4 flex items-start justify-between gap-3">
               <div>
@@ -4336,7 +4385,7 @@ export default function FixerProPage() {
 
       {/* Property Rate Modal for Partner (Step 8 of 8) */}
       {propPartnerRateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-950/80 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl overflow-hidden">
             <div className="bg-gradient-to-r from-yellow-500 to-amber-500 px-6 py-4 flex items-start justify-between gap-3">
               <div>
@@ -4402,7 +4451,7 @@ export default function FixerProPage() {
 
       {/* PO Accept/Decline Modal */}
       {waitModalOrder && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto pt-20">
+        <div className="fixed inset-0 z-[9999] flex items-start justify-center bg-gray-950/80 backdrop-blur-sm p-4 overflow-y-auto pt-6">
           <div className="bg-white rounded-3xl p-8 max-w-lg w-full max-h-[calc(100dvh-6rem)] overflow-y-auto shadow-2xl animate-in zoom-in-95 duration-200 my-4">
             <div className="flex justify-between items-start mb-4">
               <div className="mb-2 text-sm font-semibold text-purple-600 bg-purple-50 inline-block px-3 py-1 rounded-full">{isMeetingConfirmation ? 'Step 8 of 11' : 'Step 5 of 11'}</div>
@@ -4447,7 +4496,7 @@ export default function FixerProPage() {
                   return <span className="font-bold text-amber-600">{waitModalBudgetDisplay}</span>;
                 })()}
               </div>
-              <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Project Location</span><span className="font-bold text-gray-800 text-right">{waitModalOrder.location || waitModalOrder.subdistrict || waitModalOrder.meetingVenue || 'Unknown'}</span></div>
+              <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Project Location</span><span className="font-bold text-gray-800 text-right">{waitModalProjectLocation}</span></div>
               {isMeetingConfirmation && (
                 <>
                   <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Proposed Date</span><span className="font-bold text-gray-800">{waitModalMeetingDetails.meetingDateLabel || '-'}</span></div>
@@ -5626,7 +5675,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
     </div>
     {/* Variation Modal */}
     {variationModal && (
-      <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto pt-20">
+      <div className="fixed inset-0 z-[9999] flex items-start justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto pt-6">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto max-h-[calc(100dvh-6rem)] overflow-y-auto my-4">
           <div className="bg-amber-500 px-6 py-4">
             <h3 className="text-white font-bold text-lg">Submit Variation</h3>
@@ -5771,7 +5820,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
     )}
     {/* Rating Modal */}
     {ratingModal && (
-      <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+      <div className="fixed inset-0 z-[9999] flex items-start justify-center pt-6 bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-y-auto max-h-[calc(100dvh-6rem)]">
           <div className="bg-sky-600 px-6 py-4">
             <h3 className="text-white font-bold text-lg">Rate Customer</h3>
@@ -5813,7 +5862,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
       </div>
     )}
     {completeModal && (
-      <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+      <div className="fixed inset-0 z-[9999] flex items-start justify-center pt-6 bg-gray-950/80 backdrop-blur-sm p-4 overflow-y-auto">
         <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-y-auto max-h-[calc(100dvh-6rem)] mx-auto">
           <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4">
             <h3 className="text-white font-bold text-lg">Mark Job Complete</h3>
@@ -6280,7 +6329,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
       </div>
     </div>
     {variationModal && (
-      <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto pt-20">
+      <div className="fixed inset-0 z-[9999] flex items-start justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto pt-6">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto max-h-[calc(100dvh-6rem)] overflow-y-auto my-4">
           <div className="bg-amber-500 px-6 py-4">
             <h3 className="text-white font-bold text-lg">Submit Variation</h3>
@@ -6404,7 +6453,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
       </div>
     )}
     {completeModal && (
-      <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+      <div className="fixed inset-0 z-[9999] flex items-start justify-center pt-6 bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
         <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-y-auto max-h-[calc(100dvh-6rem)] mx-auto">
           <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4">
             <h3 className="text-white font-bold text-lg">Mark Job Complete</h3>
@@ -6509,7 +6558,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
       </div>
     )}
     {ratingModal && (
-      <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+      <div className="fixed inset-0 z-[9999] flex items-start justify-center pt-6 bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-y-auto max-h-[calc(100dvh-6rem)]">
           <div className="bg-sky-600 px-6 py-4">
             <h3 className="text-white font-bold text-lg">Rate Customer</h3>

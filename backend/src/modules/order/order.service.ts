@@ -591,9 +591,12 @@ export class OrderService {
         })
       : null;
 
-    // Role-based access: USER can only advance their own order for specific transitions
+    const isCustomer = order.userId === changedBy;
+    const isAssignedFixer = fixer?.userId === changedBy;
+
+    // Role-based access: customers advance their own side; assigned partners advance partner-side steps.
     if (callerRole === UserRole.USER) {
-      if (order.userId !== changedBy) {
+      if (!isCustomer && !isAssignedFixer) {
         throw new ForbiddenException('You do not have access to this order');
       }
       const customerAllowed: OrderStatus[] = [
@@ -602,11 +605,32 @@ export class OrderService {
         OrderStatus.COMPLETED,
         OrderStatus.CANCELLED,
       ];
-      if (!customerAllowed.includes(dto.status)) {
+      const partnerAllowed: OrderStatus[] = [
+        OrderStatus.ASSIGNED,
+        OrderStatus.DEPOSIT_PENDING,
+        OrderStatus.CONFIRMED,
+        OrderStatus.IN_PROGRESS,
+        OrderStatus.MEETING_REQUESTED,
+        OrderStatus.COMPLETED,
+        OrderStatus.CANCELLED,
+      ];
+      const allowedByRelationship = isCustomer ? customerAllowed : partnerAllowed;
+      if (!allowedByRelationship.includes(dto.status)) {
         throw new ForbiddenException(
-          `Customers may only transition to IN_PROGRESS, MEETING_REQUESTED, COMPLETED, or CANCELLED`,
+          isCustomer
+            ? `Customers may only transition to IN_PROGRESS, MEETING_REQUESTED, COMPLETED, or CANCELLED`
+            : `Partners may only transition their assigned orders through partner workflow statuses`,
         );
       }
+    }
+
+    if (order.status === dto.status) {
+      return this.prisma.order.findUnique({
+        where: { id: orderId },
+        include: {
+          statusHistory: { orderBy: { createdAt: 'desc' }, take: 1 },
+        },
+      });
     }
 
     // Validate state transition

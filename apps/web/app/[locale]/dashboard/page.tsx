@@ -4251,7 +4251,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
       {/* Step 5: Pay Processing Fee */}
       {propPayModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-950/80 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl overflow-hidden">
             <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4 flex items-start justify-between gap-3">
               <div>
@@ -4323,7 +4323,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
       {/* Step 7: Send Meeting Invitation */}
       {propMeetingModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-950/80 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl overflow-hidden">
             <div className="bg-gradient-to-r from-teal-500 to-cyan-500 px-6 py-4 flex items-start justify-between gap-3">
               <div>
@@ -4392,7 +4392,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
       {/* Step 8: Rate & Close */}
       {propRateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-950/80 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl overflow-hidden">
             <div className="bg-gradient-to-r from-yellow-500 to-amber-500 px-6 py-4 flex items-start justify-between gap-3">
               <div>
@@ -4459,7 +4459,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
       {/* Rate & Close Modal */}
       {rateModal && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-[9999] flex items-start justify-center pt-6 bg-gray-950/80 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-y-auto max-h-[calc(100dvh-6rem)] mx-auto">
             <div className="bg-gradient-to-r from-yellow-500 to-amber-500 px-6 py-4">
               <h3 className="text-white font-bold text-lg">Rate Your Partner ⭐</h3>
@@ -4516,7 +4516,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       )}
 
       {waitModalOrder && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto pt-20 pb-10">
+        <div className="fixed inset-0 z-[9999] flex items-start justify-center bg-gray-950/80 backdrop-blur-sm p-4 overflow-y-auto pt-6 pb-10">
           <div className="w-full max-w-lg bg-white rounded-3xl shadow-xl flex flex-col overflow-y-auto max-h-[calc(100dvh-6rem)] relative">
             <div className="sticky top-0 bg-white rounded-t-3xl z-10 px-6 pt-5 pb-3 border-b border-gray-100">
               <div className="text-center text-xs font-bold text-sky-700 bg-sky-50 rounded-xl px-4 py-1.5 mb-3">Step 6 of 11</div>
@@ -4584,11 +4584,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 </div>
                 <div className="flex justify-between items-center px-4 py-2.5 bg-gray-50 border-b border-gray-100">
                   <span className="text-xs text-gray-500 uppercase tracking-wider">Project Location</span>
-                  <span className="font-bold text-gray-900">{(() => { const loc = waitModalOrder.request?.location || waitModalOrder.request?.subdistrict || ''; if (loc && loc !== 'Unknown') return loc; const m = String(waitModalOrder.request?.description || waitModalOrder.request?.desc || '').match(/\bLOC:([^|]+)/); return m ? (m[1] ?? '').trim() : 'N/A'; })()}</span>
+                  <span className="font-bold text-gray-900">{(() => { const loc = waitModalOrder.request?.location || waitModalOrder.request?.subdistrict || ''; if (loc && loc !== 'Unknown') return loc; const m = String(waitModalOrder.request?.description || waitModalOrder.request?.desc || '').match(/\bLOC:([^|]+)/); const fromDesc = m ? (m[1] ?? '').trim() : ''; return fromDesc || 'N/A'; })()}</span>
                 </div>
                 <div className="flex flex-col gap-1 px-4 py-2.5 bg-gray-50 border-b border-gray-100">
                   <span className="text-xs text-gray-500 uppercase tracking-wider">Project Details</span>
-                  <span className="font-bold text-gray-900">{String(waitModalOrder.request?.description || waitModalOrder.request?.desc || '').replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?/, '') || 'Project details from the draft PO.'}</span>
+                  <span className="font-bold text-gray-900">{stripWorkflowPrefix(waitModalOrder.request?.description || waitModalOrder.request?.desc || '') || 'Project details from the draft PO.'}</span>
                 </div>
                 <div className="flex justify-between items-center px-4 py-2.5 bg-sky-50">
                   <span className="text-xs text-gray-500 uppercase tracking-wider">Processing Fee</span>
@@ -4690,7 +4690,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
       {/* Meeting Invitation Modal */}
       {meetingModal && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto pt-20 pb-10">
+        <div className="fixed inset-0 z-[9999] flex items-start justify-center bg-gray-950/80 backdrop-blur-sm p-4 overflow-y-auto pt-6 pb-10">
           <div className="w-full max-w-lg bg-white rounded-3xl shadow-xl flex flex-col overflow-y-auto max-h-[calc(100dvh-6rem)] relative">
             <div className="sticky top-0 bg-white rounded-t-3xl z-10 px-6 pt-5 pb-3 border-b border-gray-100">
               <div className="text-center text-xs font-bold text-amber-700 bg-amber-50 rounded-xl px-4 py-1.5">Step 8 of 11</div>
@@ -4713,7 +4713,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 font-semibold uppercase tracking-wider block mb-1">Project Location</label>
-                  <div className="bg-gray-50 rounded-xl px-4 py-2 text-sm font-bold text-gray-800">{meetingModal.location || meetingModal.subdistrict || 'Saphansong'}</div>
+                  <div className="bg-gray-50 rounded-xl px-4 py-2 text-sm font-bold text-gray-800">{(() => { const loc = meetingModal.location || meetingModal.subdistrict || ''; if (loc && loc !== 'Unknown') return loc; const m = String(meetingModal.description || meetingModal.desc || '').match(/\bLOC:([^|]+)/); const fromDesc = m ? (m[1] ?? '').trim() : ''; return fromDesc || 'Unknown'; })()}</div>
                 </div>
               </div>
               <div>
@@ -4814,7 +4814,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       )}
 
       {variationApproveModal && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto pt-20">
+        <div className="fixed inset-0 z-[9999] flex items-start justify-center bg-gray-950/80 backdrop-blur-sm p-4 overflow-y-auto pt-6">
           <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-y-auto max-h-[calc(100dvh-6rem)] mx-auto my-4">
             <div className="bg-gradient-to-r from-purple-600 to-fuchsia-600 px-6 py-4">
               <h3 className="text-white font-bold text-lg">Approve Variation</h3>
@@ -4972,7 +4972,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       )}
 
       {completeApproveModal && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-[9999] flex items-start justify-center pt-6 bg-gray-950/80 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-y-auto max-h-[calc(100dvh-6rem)] mx-auto">
             <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4">
               <h3 className="text-white font-bold text-lg">Confirm Job Complete</h3>
@@ -5124,7 +5124,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
         </div>
       )}
       {cancelJobModal && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-[9999] flex items-start justify-center pt-6 bg-gray-950/80 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden mx-auto">
             <div className="bg-gradient-to-r from-orange-500 to-amber-500 px-6 py-4">
               <h3 className="text-white font-bold text-lg">{locale === "th" ? "ยืนยันการยกเลิกงาน" : locale === "zh" ? "确认取消工作" : "Confirm Job Cancellation"}</h3>
