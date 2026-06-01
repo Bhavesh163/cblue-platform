@@ -40,14 +40,22 @@ type EstimatedBreakdownItem = {
   total: number;
 };
 
+type MatchedBreakdownItem = EstimatedBreakdownItem & {
+  pairIndex: number;
+  matchScore: number;
+};
+
 interface RankedFixer extends SelectedFixer {
   estimatedTotal: number | null;
   estimatedUnit: string;
   estimatedQty: number;
   priceList: PriceListRow[];
   estimatedBreakdown: EstimatedBreakdownItem[] | null;
+  estimatedBreakdownMeta: MatchedBreakdownItem[];
   matchScore: number;
   matchIcon: string;
+  comparisonTotal: number;
+  importantMatchedCount: number;
 }
 
 @Injectable()
@@ -374,33 +382,70 @@ export class FixerService {
       /sqm|m2|sqft|sq\.?m|ตร\.?ม|ตรม|unit|units|ชุด|ห้อง|room|rooms|floor|floors|ชั้น|item|items|job|งาน/i;
     const pattern =
       /(\d[\d,]*\.?\d*)\s*(sqm|m2|sqft|sq\.?m|ตร\.?ม|ตรม|unit|units|ชุด|ห้อง|room|rooms|floor|floors|ชั้น|item|items|job|งาน)?\b/gi;
-    const pairs: Array<{ qty: number; idx: number; contextTerms: string[] }> =
-      [];
+    const pairs: Array<{
+      qty: number;
+      idx: number;
+      endIdx: number;
+      contextTerms: string[];
+    }> = [];
     let m: RegExpExecArray | null;
     while ((m = pattern.exec(normalized)) !== null) {
       const qty = parseFloat((m[1] ?? '').replace(/,/g, ''));
       if (!isNaN(qty) && qty > 0) {
-        pairs.push({ qty, idx: m.index, contextTerms: [] });
+        pairs.push({
+          qty,
+          idx: m.index,
+          endIdx: pattern.lastIndex,
+          contextTerms: [],
+        });
       }
     }
     if (pairs.length <= 1) return [];
     // For each qty match, grab the context window (words around it) to identify the service
     for (let i = 0; i < pairs.length; i++) {
-      const start = pairs[i].idx;
       const end = pairs[i + 1] ? pairs[i + 1].idx : normalized.length;
-      const window = normalized.slice(start, end).trim();
-      const tokens = window
-        .split(/\s+/)
-        .filter(
-          (t) =>
-            t.length > 1 &&
-            !this.fillerTokens.has(t) &&
-            !unitPattern.test(t) &&
-            isNaN(parseFloat(t)),
-        );
+      const window = this.sliceServiceContext(
+        normalized,
+        pairs[i].idx,
+        pairs[i].endIdx,
+        end,
+      );
+      const tokens = this.extractContextTerms(window, unitPattern);
       pairs[i].contextTerms = tokens;
     }
     return pairs.map(({ qty, contextTerms }) => ({ qty, contextTerms }));
+  }
+
+  private sliceServiceContext(
+    normalized: string,
+    startIdx: number,
+    contentStartIdx: number,
+    nextPairIdx: number,
+  ): string {
+    const maxEnd = nextPairIdx > startIdx ? nextPairIdx : normalized.length;
+    const boundarySlice = normalized.slice(contentStartIdx, maxEnd);
+    const separatorMatch = boundarySlice.match(
+      /(?:,|;|\n|\b(?:and|plus|พร้อม|และ)\b)/i,
+    );
+    const endIdx = separatorMatch?.index != null
+      ? contentStartIdx + separatorMatch.index
+      : maxEnd;
+    return normalized.slice(startIdx, endIdx).trim();
+  }
+
+  private extractContextTerms(
+    window: string,
+    unitPattern?: RegExp,
+  ): string[] {
+    return window
+      .split(/\s+/)
+      .filter(
+        (token) =>
+          token.length > 1 &&
+          !this.fillerTokens.has(token) &&
+          !(unitPattern?.test(token) ?? false) &&
+          isNaN(parseFloat(token)),
+      );
   }
 
   private normalizeSearchText(value?: string): string {
@@ -528,6 +573,7 @@ export class FixerService {
       if (pool.length === 0) return [];
 
       const customerQty = this.extractQuantityFromDescription(description);
+      const serviceQtyPairs = this.extractAllServiceQtyPairs(description);
       const searchTerms = this.buildSearchTerms(service, description);
 
       const formattedPool = pool.map((f): RankedFixer => {
@@ -554,7 +600,7 @@ export class FixerService {
           ? (rawPriceList as PriceListRow[])
           : [];
 
-        const estimatedBreakdown: EstimatedBreakdownItem[] = [];
+        const estimatedBreakdownMeta: MatchedBreakdownItem[] = [];
         if (list.length > 0) {
           const rankedList = list
             .map((item) => {
@@ -580,7 +626,7 @@ export class FixerService {
 
           const match = rankedList[0];
 
-          if (match) {
+          if (match && match.score > 0) {
             const matchedItem = match.item;
             const unitRate = parseFloat(String(matchedItem.finalPrice)) || 0;
             const partnerQty =
@@ -590,15 +636,16 @@ export class FixerService {
             const pricePerUnit = unitRate / partnerQty;
 
             // Check for multi-service description (e.g. "500 sqm reinstatement and 500 sqm fitout")
-            const serviceQtyPairs = this.extractAllServiceQtyPairs(description);
             if (serviceQtyPairs.length > 1) {
-              // Sum estimates for each service mention using best-matching price list item
+              // Sum full estimates for each matched service mention. Ranking later
+              // compares only the important high-value lines so partial tiny offers
+              // do not become the "cheapest" result.
               let multiTotal = 0;
-              for (const { qty, contextTerms } of serviceQtyPairs) {
+              for (const [pairIndex, { qty, contextTerms }] of serviceQtyPairs.entries()) {
                 if (contextTerms.length === 0) {
                   const lineTotal = Math.round(pricePerUnit * qty);
                   multiTotal += lineTotal;
-                  estimatedBreakdown.push({
+                  estimatedBreakdownMeta.push({
                     service:
                       typeof matchedItem.service === 'string'
                         ? matchedItem.service
@@ -610,6 +657,8 @@ export class FixerService {
                         : 'sqm',
                     unitRate: Math.round(pricePerUnit),
                     total: lineTotal,
+                    pairIndex,
+                    matchScore: match.score,
                   });
                   continue;
                 }
@@ -643,7 +692,7 @@ export class FixerService {
                   const ctxPricePerUnit = ctxUnitRate / ctxPartnerQty;
                   const lineTotal = Math.round(ctxPricePerUnit * qty);
                   multiTotal += lineTotal;
-                  estimatedBreakdown.push({
+                  estimatedBreakdownMeta.push({
                     service:
                       typeof bestForContext.item.service === 'string'
                         ? bestForContext.item.service
@@ -655,6 +704,8 @@ export class FixerService {
                         : 'sqm',
                     unitRate: Math.round(ctxPricePerUnit),
                     total: lineTotal,
+                    pairIndex,
+                    matchScore: bestForContext.score,
                   });
                 } else {
                   // Context terms present but no service in price list matches them —
@@ -666,7 +717,7 @@ export class FixerService {
             } else {
               // Single service: existing logic
               basePrice = Math.round(pricePerUnit * customerQty);
-              estimatedBreakdown.push({
+              estimatedBreakdownMeta.push({
                 service:
                   typeof matchedItem.service === 'string'
                     ? matchedItem.service
@@ -676,6 +727,8 @@ export class FixerService {
                   typeof matchedItem.unit === 'string' ? matchedItem.unit : '',
                 unitRate: Math.round(pricePerUnit),
                 total: basePrice,
+                pairIndex: 0,
+                matchScore: match.score,
               });
             }
 
@@ -709,7 +762,10 @@ export class FixerService {
           estimatedQty: matchedQty,
           priceList: list,
           estimatedBreakdown:
-            estimatedBreakdown.length > 0 ? estimatedBreakdown : null,
+            estimatedBreakdownMeta.length > 0
+              ? estimatedBreakdownMeta.map(({ pairIndex: _pairIndex, matchScore: _matchScore, ...line }) => line)
+              : null,
+          estimatedBreakdownMeta,
           matchScore: overallScore,
           satisfaction:
             f.rating >= 4.5 ? 90 + Math.random() * 10 : 70 + Math.random() * 20,
@@ -717,13 +773,63 @@ export class FixerService {
           experienceYears: f.yearsExperience || 1,
           selectedReason: '',
           matchIcon: '',
+          comparisonTotal: basePrice > 0 ? basePrice : minListedPrice || 500,
+          importantMatchedCount: 0,
         };
       });
+
+      const pairMaxTotals = new Map<number, number>();
+      for (const partner of formattedPool) {
+        for (const line of partner.estimatedBreakdownMeta) {
+          const currentMax = pairMaxTotals.get(line.pairIndex) || 0;
+          if (line.total > currentMax) {
+            pairMaxTotals.set(line.pairIndex, line.total);
+          }
+        }
+      }
+
+      const significantPairIndices = new Set<number>();
+      const pairTotalsDescending = [...pairMaxTotals.entries()]
+        .filter(([, total]) => total > 0)
+        .sort((a, b) => b[1] - a[1]);
+      const topPairTotal = pairTotalsDescending[0]?.[1] || 0;
+      for (const [pairIndex, total] of pairTotalsDescending) {
+        if (total >= topPairTotal * 0.1) {
+          significantPairIndices.add(pairIndex);
+        }
+      }
+
+      for (const partner of formattedPool) {
+        const importantLines = partner.estimatedBreakdownMeta.filter((line) =>
+          significantPairIndices.has(line.pairIndex),
+        );
+        partner.importantMatchedCount = new Set(
+          importantLines.map((line) => line.pairIndex),
+        ).size;
+        partner.comparisonTotal =
+          importantLines.reduce((sum, line) => sum + line.total, 0) ||
+          partner.comparisonTotal;
+        if (partner.importantMatchedCount > 0) {
+          partner.price = partner.comparisonTotal;
+        }
+      }
 
       const matchedPool = formattedPool.filter(
         (partner) => partner.matchScore > 0,
       );
       const rankingPool = matchedPool.length > 0 ? matchedPool : formattedPool;
+      const maxImportantMatchedCount = Math.max(
+        0,
+        ...rankingPool.map((partner) => partner.importantMatchedCount || 0),
+      );
+      const comparisonPool =
+        maxImportantMatchedCount > 0
+          ? rankingPool.filter(
+              (partner) =>
+                (partner.importantMatchedCount || 0) ===
+                maxImportantMatchedCount,
+            )
+          : rankingPool;
 
       const isUpperTier = (tier: string) =>
         [
@@ -747,14 +853,16 @@ export class FixerService {
         }
       };
 
-      const byPrice = [...rankingPool].sort((a, b) => a.price - b.price);
+      const byPrice = [...comparisonPool].sort(
+        (a, b) => a.comparisonTotal - b.comparisonTotal || a.price - b.price,
+      );
       pick(byPrice[0], '💰 Cheapest in area');
       pick(
         byPrice.find((p) => !usedIds.has(p.id)),
         '💰 Ranked 2nd Cheapest',
       );
 
-      const bySatisfaction = [...rankingPool].sort(
+      const bySatisfaction = [...comparisonPool].sort(
         (a, b) => b.rating - a.rating || b.totalJobs - a.totalJobs,
       );
       pick(
@@ -766,7 +874,7 @@ export class FixerService {
         '⭐ Highly Recommended',
       );
 
-      const upperTiers = rankingPool.filter((f) => isUpperTier(f.tier));
+      const upperTiers = comparisonPool.filter((f) => isUpperTier(f.tier));
       const upperByPrice = [...upperTiers].sort((a, b) => a.price - b.price);
       if (upperByPrice.length > 0)
         pick(
@@ -807,7 +915,7 @@ export class FixerService {
         pick(r, '💡 Suggested Candidate');
       }
 
-      return results.slice(0, 8);
+      return results.slice(0, 8).map(({ estimatedBreakdownMeta, comparisonTotal, importantMatchedCount, ...partner }) => partner);
     } catch (error) {
       console.error('[matchFixers] error', error);
       return [];

@@ -296,5 +296,106 @@ describe('FixerService', () => {
       expect(fitoutCandidate?.estimatedUnit).toBe('sqm');
       expect(fitoutCandidate?.estimatedQty).toBe(1000);
     });
+
+    it('should rank cheapest candidates by important high-value scope instead of tiny partial offers', async () => {
+      prisma.fixer.findMany.mockResolvedValue([
+        {
+          id: 'gatoru',
+          tier: 'ECONOMY',
+          rating: 5,
+          completedJobs: 2,
+          yearsExperience: 2,
+          description: 'Website and chatbot development',
+          pastProjectType: 'digital',
+          bio: 'Digital delivery team',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          priceList: [
+            {
+              service: 'website development',
+              quantity: '1',
+              unit: 'page',
+              finalPrice: '1200',
+            },
+            {
+              service: 'chatbot development',
+              quantity: '100',
+              unit: 'faq',
+              finalPrice: '2000',
+            },
+          ],
+          user: { name: 'Gatoru Sojo', company: 'Gatoru Sojo' },
+          skills: [{ category: 'project', name: 'website development' }],
+        },
+        {
+          id: 'suppadesh',
+          tier: 'ECONOMY',
+          rating: 4.9,
+          completedJobs: 20,
+          yearsExperience: 20,
+          description: 'Office fitout specialist',
+          pastProjectType: 'fitout',
+          bio: 'Commercial fitout team',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          priceList: [
+            {
+              service: 'office fitout',
+              quantity: '1',
+              unit: 'sqm',
+              finalPrice: '27000',
+            },
+          ],
+          user: {
+            name: 'Suppadesh Funpgrsertsuk',
+            company: 'Suppadesh Funpgrsertsuk',
+          },
+          skills: [{ category: 'project', name: 'office fitout' }],
+        },
+        {
+          id: 'bhavesh',
+          tier: 'ECONOMY',
+          rating: 4.8,
+          completedJobs: 18,
+          yearsExperience: 8,
+          description: 'Office fitout and web team',
+          pastProjectType: 'fitout',
+          bio: 'Fitout and software delivery',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          priceList: [
+            {
+              service: 'office fitout',
+              quantity: '1',
+              unit: 'sqm',
+              finalPrice: '33200',
+            },
+            {
+              service: 'website development',
+              quantity: '1',
+              unit: 'page',
+              finalPrice: '1200',
+            },
+          ],
+          user: {
+            name: 'Bhavesh Fungprasertsuk',
+            company: 'Bhavesh Fungprasertsuk',
+          },
+          skills: [{ category: 'project', name: 'office fitout' }],
+        },
+      ]);
+
+      const result = await service.matchFixers(
+        'project',
+        'Pathum Wan',
+        'Bangkok',
+        'I want a team to carry out a 100 sq.m. office fit out, a 10 page website development and a 100 FAQ chatbot development.',
+      );
+
+      expect(result.slice(0, 2).map((candidate: { id: string }) => candidate.id)).toEqual([
+        'suppadesh',
+        'bhavesh',
+      ]);
+    });
   });
 });

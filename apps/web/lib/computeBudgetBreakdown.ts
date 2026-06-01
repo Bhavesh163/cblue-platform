@@ -90,6 +90,29 @@ const parseVariationPriceListLine = (value: string): VariationPriceListItem | nu
   };
 };
 
+const normalizeBudgetText = (value: unknown): string =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/fit\s*[-\s]?out/g, 'fitout')
+    .replace(/re\s*instate(ment)?/g, 'reinstatement');
+
+const CONTEXT_BREAK_PATTERN = /(?:,|;|\n|\b(?:and|plus|พร้อม|และ)\b)/i;
+
+const trimContextWindow = (
+  text: string,
+  startIdx: number,
+  maxEndIdx: number,
+  contentStartIdx: number = startIdx,
+): string => {
+  const hardEnd = maxEndIdx > startIdx ? maxEndIdx : text.length;
+  const boundarySlice = text.slice(contentStartIdx, hardEnd);
+  const boundaryMatch = boundarySlice.match(CONTEXT_BREAK_PATTERN);
+  const endIdx = boundaryMatch?.index != null
+    ? contentStartIdx + boundaryMatch.index
+    : hardEnd;
+  return text.slice(startIdx, endIdx).trim();
+};
+
 /**
  * Parse a project description and a partner's priceList to build a line-item
  * budget breakdown.
@@ -112,18 +135,17 @@ export function computeBudgetBreakdown(
   if (!priceList || priceList.length === 0 || !description) return null;
   const pl = priceList as Array<Record<string, unknown>>;
 
-  const cleanDesc = stripPrefix(description)
-    .toLowerCase()
-    .replace(/fit\s*[-\s]?out/g, 'fitout')
-    .replace(/re\s*instate(ment)?/g, 'reinstatement');
+  const cleanDesc = normalizeBudgetText(stripPrefix(description));
 
   // ── Strict pass ──────────────────────────────────────────────────────────
   const strictPat = /(\d[\d,]*\.?\d*)\s*(sqm|m2|sq\.?m\.?|m²|ตร\.?ม\.?|ตารางเมตร|sq\.?ft\.?|unit)/gi;
-  const pairs: Array<{ qty: number; idx: number }> = [];
+  const pairs: Array<{ qty: number; idx: number; contentStartIdx: number }> = [];
   let m: RegExpExecArray | null;
   while ((m = strictPat.exec(cleanDesc)) !== null) {
     const qty = parseFloat((m[1] ?? '').replace(/,/g, ''));
-    if (!isNaN(qty) && qty > 0 && qty < 1_000_000) pairs.push({ qty, idx: m.index });
+    if (!isNaN(qty) && qty > 0 && qty < 1_000_000) {
+      pairs.push({ qty, idx: m.index, contentStartIdx: strictPat.lastIndex });
+    }
   }
 
   // ── Loose pass ───────────────────────────────────────────────────────────
@@ -136,6 +158,28 @@ export function computeBudgetBreakdown(
   const tokenize = (text: string) =>
     text.split(/[\s.,]+/).filter(t => t.length > 1 && !filler.has(t) && isNaN(parseFloat(t)));
 
+  const scorePriceListItem = (item: Record<string, unknown>, tokens: string[]) => {
+    const itemText = normalizeBudgetText(`${item['service'] ?? ''} ${item['unit'] ?? ''}`);
+    return tokens.filter(token => itemText.includes(token)).length;
+  };
+
+  const findBestServiceMatch = (tokens: string[]) => {
+    let best: Record<string, unknown> | null = null;
+    let bestScore = 0;
+    for (const item of pl) {
+      const score = scorePriceListItem(item, tokens);
+      const cheaper =
+        !best ||
+        (parseFloat(String(item['finalPrice'] ?? 0)) || Infinity) <
+          (parseFloat(String(best['finalPrice'] ?? 0)) || Infinity);
+      if (score > bestScore || (score === bestScore && score > 0 && cheaper)) {
+        bestScore = score;
+        best = item;
+      }
+    }
+    return best && bestScore > 0 ? { item: best, score: bestScore } : null;
+  };
+
   let lm: RegExpExecArray | null;
   while ((lm = loosePat.exec(cleanDesc)) !== null) {
     const qty = parseFloat((lm[1] ?? '').replace(/,/g, ''));
@@ -143,53 +187,44 @@ export function computeBudgetBreakdown(
     // Skip if the strict pass already captured a nearby number
     if (strictIndices.some(idx => Math.abs(idx - lm!.index) < 4)) continue;
 
-    const win = cleanDesc.slice(lm.index, Math.min(lm.index + 80, cleanDesc.length));
+    const win = trimContextWindow(
+      cleanDesc,
+      lm.index,
+      Math.min(lm.index + 80, cleanDesc.length),
+      loosePat.lastIndex,
+    );
     const toks = tokenize(win);
-    let bestScore = 0;
-    for (const item of pl) {
-      const itemText = `${item['service'] ?? ''} ${item['unit'] ?? ''}`
-        .toLowerCase()
-        .replace(/fit\s*[-\s]?out/g, 'fitout')
-        .replace(/re\s*instate(ment)?/g, 'reinstatement');
-      const score = toks.filter(t => itemText.includes(t)).length;
-      if (score > bestScore) bestScore = score;
-    }
     // Only include if context scores against at least one priceList service
-    if (bestScore >= 1) pairs.push({ qty, idx: lm.index });
+    if (findBestServiceMatch(toks)) {
+      pairs.push({ qty, idx: lm.index, contentStartIdx: loosePat.lastIndex });
+    }
   }
 
   pairs.sort((a, b) => a.idx - b.idx);
   if (pairs.length === 0) return null;
 
   // ── Match each qty to best service ───────────────────────────────────────
-  const matchToService = (tokens: string[]) => {
-    let best = pl[0]!;
-    let bestScore = -1;
-    for (const item of pl) {
-      const itemText = `${item['service'] ?? ''} ${item['unit'] ?? ''}`
-        .toLowerCase()
-        .replace(/fit\s*[-\s]?out/g, 'fitout')
-        .replace(/re\s*instate(ment)?/g, 'reinstatement');
-      const score = tokens.filter(t => itemText.includes(t)).length;
-      const cheaper =
-        (parseFloat(String(item['finalPrice'] ?? 0)) || Infinity) <
-        (parseFloat(String(best['finalPrice'] ?? 0)) || Infinity);
-      if (score > bestScore || (score === bestScore && score >= 0 && cheaper)) {
-        bestScore = score;
-        best = item;
-      }
-    }
-    return best;
-  };
-
   const breakdown: BudgetBreakdownItem[] = [];
   for (let i = 0; i < pairs.length; i++) {
     const pair = pairs[i]!;
     const nextPair = pairs[i + 1];
     const end = nextPair ? nextPair.idx : cleanDesc.length;
-    const window = cleanDesc.slice(pair.idx, end);
-    const tokens = tokenize(window).length > 0 ? tokenize(window) : tokenize(cleanDesc);
-    const item = matchToService(tokens);
+    const window = trimContextWindow(
+      cleanDesc,
+      pair.idx,
+      end,
+      pair.contentStartIdx,
+    );
+    const localTokens = tokenize(window);
+    const tokens = localTokens.length > 0
+      ? localTokens
+      : pairs.length === 1
+      ? tokenize(cleanDesc)
+      : [];
+    const match = tokens.length > 0 ? findBestServiceMatch(tokens) : null;
+    if (!match) continue;
+
+    const item = match.item;
     const partnerQty = parseFloat(String(item['amount'] ?? item['quantity'] ?? 1)) || 1;
     const unitRate = Math.round((parseFloat(String(item['finalPrice'] ?? 0)) || 0) / partnerQty);
     breakdown.push({
