@@ -119,6 +119,131 @@ const parseWorkflowSortTs = (value: any) => {
   const parsed = new Date(value || 0).getTime();
   return Number.isFinite(parsed) ? parsed : 0;
 };
+const WORKFLOW_CACHE_RECORD_KEYS = [
+  'id',
+  'orderId',
+  'po',
+  'title',
+  'service',
+  'serviceTh',
+  'serviceZh',
+  'customer',
+  'customerName',
+  'fixerAlias',
+  'partnerName',
+  'date',
+  'createdAt',
+  'budget',
+  'fee',
+  'tier',
+  'description',
+  'desc',
+  'location',
+  'subdistrict',
+  'meetingDate',
+  'meetingTime',
+  'meetingVenue',
+  'venue',
+  'actionNeeded',
+  'step',
+  'mockStep',
+  'type',
+  'status',
+  'statusName',
+  'statusNote',
+  'partnerRequest',
+  'partnerNote',
+  'variationRequest',
+] as const;
+const sanitizeWorkflowCacheText = (value: any, maxLength = 240) => {
+  const text = String(value ?? '')
+    .replace(/data:[^;,]+;base64,[A-Za-z0-9+/=\s]+/gi, '[embedded-file]')
+    .trim();
+  return text.length > maxLength ? text.slice(0, maxLength) : text;
+};
+const toWorkflowCacheRecord = (source: any, overrides: Record<string, any> = {}) => {
+  const base = source && typeof source === 'object' ? source : {};
+  const next: Record<string, any> = {};
+
+  for (const key of WORKFLOW_CACHE_RECORD_KEYS) {
+    const candidate = overrides[key] !== undefined ? overrides[key] : base[key];
+    if (candidate !== undefined) {
+      next[key] = candidate;
+    }
+  }
+
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value !== undefined && next[key] === undefined) {
+      next[key] = value;
+    }
+  }
+
+  const createdAt = parseWorkflowSortTs(next.createdAt || next.date || Date.now()) || Date.now();
+  next.createdAt = createdAt;
+  next.date = sanitizeWorkflowCacheText(next.date || fmtDateTime(createdAt), 64) || fmtDateTime(createdAt);
+
+  for (const key of ['id', 'orderId', 'po'] as const) {
+    if (next[key] !== undefined) next[key] = sanitizeWorkflowCacheText(next[key], 128);
+  }
+  for (const key of ['title', 'service', 'serviceTh', 'serviceZh', 'customer', 'customerName', 'fixerAlias', 'partnerName'] as const) {
+    if (next[key] !== undefined) next[key] = sanitizeWorkflowCacheText(next[key], 240);
+  }
+  for (const key of ['budget', 'fee', 'tier', 'location', 'subdistrict', 'meetingDate', 'meetingTime', 'meetingVenue', 'venue', 'type', 'status', 'statusName'] as const) {
+    if (next[key] !== undefined) next[key] = sanitizeWorkflowCacheText(next[key], 160);
+  }
+  for (const key of ['description', 'desc', 'statusNote', 'partnerRequest', 'partnerNote', 'variationRequest'] as const) {
+    if (next[key] !== undefined) next[key] = sanitizeWorkflowCacheText(next[key], 4000);
+  }
+  if (next.step !== undefined) {
+    const step = Number(next.step);
+    if (Number.isFinite(step) && step > 0) next.step = step;
+    else delete next.step;
+  }
+  if (next.mockStep !== undefined) {
+    const mockStep = Number(next.mockStep);
+    if (Number.isFinite(mockStep) && mockStep > 0) next.mockStep = mockStep;
+    else delete next.mockStep;
+  }
+  if (next.actionNeeded !== undefined) {
+    next.actionNeeded = Boolean(next.actionNeeded);
+  }
+
+  return next;
+};
+const normalizeWorkflowCacheItems = (items: any[]) =>
+  (Array.isArray(items) ? items : [])
+    .map((item) => toWorkflowCacheRecord(item))
+    .filter((item) => Boolean(item.id || item.po));
+const persistWorkflowCacheItems = (key: string, items: any[]) => {
+  const normalized = normalizeWorkflowCacheItems(items);
+  try {
+    pruneStorageIfNeeded();
+    localStorage.setItem(key, JSON.stringify(normalized));
+  } catch (error) {
+    try {
+      pruneStorageIfNeeded();
+      localStorage.setItem(key, JSON.stringify(normalized));
+    } catch (retryError) {
+      console.error(`Failed to persist workflow cache ${key}`, retryError || error);
+    }
+  }
+  return normalized;
+};
+const toggleWorkflowModalChromeLock = (isOpen: boolean) => {
+  if (typeof document === 'undefined') return;
+  document.body.classList.toggle('cblue-workflow-modal-open', isOpen);
+  document.documentElement.classList.toggle('cblue-workflow-modal-open', isOpen);
+  const header = document.querySelector<HTMLElement>('[data-cblue-header-root]');
+  if (!header) return;
+  header.classList.toggle('pointer-events-none', isOpen);
+  header.classList.toggle('select-none', isOpen);
+  header.classList.toggle('blur-sm', isOpen);
+  if (isOpen) {
+    header.setAttribute('aria-hidden', 'true');
+  } else {
+    header.removeAttribute('aria-hidden');
+  }
+};
 const parseMeetingDateTimeMs = (dateValue?: string, timeValue?: string) => {
   const date = String(dateValue || '').trim();
   const time = String(timeValue || '').trim();
@@ -1305,7 +1430,7 @@ const finalizePartnerRatedWorkflow = ({
     chatHistory: getLocalChatHistory(po),
   };
 
-  localStorage.setItem('ghis_mock_active', JSON.stringify(updatedActive));
+  persistWorkflowCacheItems('ghis_mock_active', updatedActive);
   pruneStorageIfNeeded();
   localStorage.setItem(
     'ghis_mock_history',
@@ -1460,7 +1585,7 @@ function AttachmentViewerModal({
 }) {
   const attachmentUrls = Array.from(new Set(viewer.urls));
   return (
-    <div className="fixed inset-0 z-[120] flex items-start justify-center bg-gray-900/70 backdrop-blur-sm p-4 overflow-y-auto pt-20">
+    <div className="fixed inset-0 z-[10020] flex items-start justify-center bg-gray-900/70 backdrop-blur-sm p-4 overflow-y-auto pt-20">
       <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 flex items-start justify-between gap-4">
           <div>
@@ -1669,6 +1794,7 @@ export default function FixerProPage() {
   const [attachmentViewer, setAttachmentViewer] = useState<AttachmentViewerState>(null);
   const [loadingAttachments, setLoadingAttachments] = useState(false);
   const [declineModalOpen, setDeclineModalOpen] = useState(false);
+  const [meetingDeclineInfoOpen, setMeetingDeclineInfoOpen] = useState(false);
   const [declineComment, setDeclineComment] = useState('');
   // Property inquiry state for lister/fixer — polls cblue_prop_inquiries every 1000ms
   interface PropInquiry { id: string; poNumber: string; propertyId: string; propertyTitle: string; propertyTier: string; propertyFee: number; propertyType: string; listingType: string; propertyPrice: number; province: string; district: string; subdistrict?: string; addressLine?: string; latitude?: number | null; longitude?: number | null; area?: number | null; bedrooms?: number | null; bathrooms?: number | null; propertyImages?: string[]; customerEmail: string; customerName: string; listerName: string; status: string; step: number; createdAt: number; updatedAt: number; meetingDate?: string; meetingTime?: string; meetingVenue?: string; customerRating?: number | null; customerComment?: string; listerRating?: number | null; listerComment?: string; reselectedOnce?: boolean; }
@@ -1681,7 +1807,16 @@ export default function FixerProPage() {
   const [propPartnerRateStars, setPropPartnerRateStars] = useState(0);
   const [propPartnerRateComment, setPropPartnerRateComment] = useState("");
   const [propPartnerModalImages, setPropPartnerModalImages] = useState<string[]>([]);
-  const workflowModalOpen = Boolean(waitModalOrder || declineModalOpen);
+  const workflowModalOpen = Boolean(
+    waitModalOrder ||
+    attachmentViewer ||
+    declineModalOpen ||
+    meetingDeclineInfoOpen ||
+    propAcceptModal ||
+    propDeclineModal ||
+    propMeetingConfirmModal ||
+    propPartnerRateModal,
+  );
 
   useEffect(() => {
     if (!workflowModalOpen || typeof document === 'undefined') return;
@@ -1689,9 +1824,11 @@ export default function FixerProPage() {
     const previousHtmlOverflow = document.documentElement.style.overflow;
     document.body.style.overflow = 'hidden';
     document.documentElement.style.overflow = 'hidden';
+    toggleWorkflowModalChromeLock(true);
     return () => {
       document.body.style.overflow = previousBodyOverflow;
       document.documentElement.style.overflow = previousHtmlOverflow;
+      toggleWorkflowModalChromeLock(false);
     };
   }, [workflowModalOpen]);
 
@@ -3048,7 +3185,7 @@ export default function FixerProPage() {
             }
           }
           if (partnerChanged) {
-            try { localStorage.setItem('partner_mock_dyn_req', JSON.stringify(partnerReqs)); } catch {}
+            try { partnerReqs = persistWorkflowCacheItems('partner_mock_dyn_req', partnerReqs); } catch {}
           }
         }
         // Hourly reminder for pending_accept items: refresh notifyAt so alert badge appears fresh
@@ -3065,7 +3202,7 @@ export default function FixerProPage() {
           return r;
         });
         if (hourlyChanged) {
-          try { localStorage.setItem('partner_mock_dyn_req', JSON.stringify(partnerReqs)); } catch {}
+          try { partnerReqs = persistWorkflowCacheItems('partner_mock_dyn_req', partnerReqs); } catch {}
         }
 
         try {
@@ -3129,7 +3266,7 @@ export default function FixerProPage() {
           return !(meetingTs > 0 && meetingTs < Date.now() - 3 * 24 * 60 * 60 * 1000);
         });
         if (partnerReqs.length !== beforeStaleCleanup) {
-          try { localStorage.setItem('partner_mock_dyn_req', JSON.stringify(partnerReqs)); } catch {}
+          try { partnerReqs = persistWorkflowCacheItems('partner_mock_dyn_req', partnerReqs); } catch {}
         }
 
         setPartnerDynReqs(partnerReqs);
@@ -3621,7 +3758,7 @@ export default function FixerProPage() {
           try {
             const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
             const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 9, mockStep: 9, actionNeeded: false } : x);
-            localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
+            persistWorkflowCacheItems("ghis_mock_active", updatedActive);
           } catch {}
         }
         const partnerAlreadyRated = Boolean(historyEntry?.partnerRating);
@@ -3699,7 +3836,7 @@ export default function FixerProPage() {
                 actionNeeded: true,
               },
             ];
-            localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
+            persistWorkflowCacheItems("ghis_mock_active", updatedActive);
           } catch {}
           if (!variationAlreadySubmitted && !partnerAlreadyRated) {
             upsert({
@@ -3745,7 +3882,7 @@ export default function FixerProPage() {
               ...active.filter((x: any) => x.po !== po),
               activeSnapshot,
             ];
-            localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
+            persistWorkflowCacheItems("ghis_mock_active", updatedActive);
           } catch {}
           next = next.filter((x: any) => !(x.po === po && (x.type === 'variation_partner' || x.type === 'meeting_confirm_partner' || x.workflowType === 'meeting_confirm_partner')));
           if (!completeAlreadySubmitted && !partnerAlreadyRated) {
@@ -3794,7 +3931,7 @@ export default function FixerProPage() {
               ...active.filter((x: any) => x.po !== po),
               activeSnapshot,
             ];
-            localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
+            persistWorkflowCacheItems("ghis_mock_active", updatedActive);
           } catch {}
           next = next.filter((x: any) => !(x.po === po && (x.type === 'complete_partner' || x.type === 'variation_partner' || x.type === 'meeting_confirm_partner' || x.workflowType === 'meeting_confirm_partner')));
           if (!partnerAlreadyRated) {
@@ -3827,7 +3964,7 @@ export default function FixerProPage() {
       }
 
       if (!changed) return prev;
-      try { localStorage.setItem("partner_mock_dyn_req", JSON.stringify(next)); } catch {}
+      try { next = persistWorkflowCacheItems("partner_mock_dyn_req", next); } catch {}
       return next;
     });
   }, [chatFeed, mappedOrders, mockActiveState, mockHistory, mockDynReqs, completedBackendOrderPos]);
@@ -3854,9 +3991,9 @@ export default function FixerProPage() {
     });
 
     if (filteredReqs.length === nextReqs.length && filteredAlerts.length === nextAlerts.length) return;
-    try { localStorage.setItem('partner_mock_dyn_req', JSON.stringify(filteredReqs)); } catch {}
+    try { nextReqs = persistWorkflowCacheItems('partner_mock_dyn_req', filteredReqs); } catch { nextReqs = filteredReqs; }
     try { localStorage.setItem('partner_alerts', JSON.stringify(filteredAlerts)); } catch {}
-    setPartnerDynReqs(filteredReqs);
+    setPartnerDynReqs(nextReqs);
     setPartnerPersistedAlerts(filteredAlerts);
     window.dispatchEvent(new Event('cblue-workflow-updated'));
   }, [completedBackendOrderPos, partner?.id]);
@@ -4884,13 +5021,13 @@ export default function FixerProPage() {
                         ...mockActiveState.filter((x: any) => x.po !== po),
                         activeSnapshot,
                       ];
-                      localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(nextReqs));
-                      localStorage.setItem("ghis_mock_active", JSON.stringify(nextActive));
+                      const persistedNextReqs = persistWorkflowCacheItems("ghis_mock_dyn_req", nextReqs);
+                      const persistedNextActive = persistWorkflowCacheItems("ghis_mock_active", nextActive);
                       const nextPartnerReqs = [
                         ...partnerDynReqs.filter((r: any) => !(r.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(r.type))),
                         { id: `variation-${po}`, orderId: backendOrderId || waitModalOrder.orderId || undefined, po, service: waitModalOrder.service || serviceTitle, serviceTh: waitModalOrder.service || serviceTitle, serviceZh: waitModalOrder.service || serviceTitle, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), fee: budgetLabel, budget: String(budgetLabel).replace(/[^0-9]/g, ''), tier: waitModalOrder.tier, description: (mappedOrders as any[]).find((o: any) => o?.po === po)?.description || waitModalOrder?.description || 'Proceed to submit variation request if extra work or price adjustment is required.', location: waitModalOrder?.location || waitModalOrder?.subdistrict || '', type: 'variation_partner', step: 9, meetingDate: confirmedMeetingDate, meetingTime: confirmedMeetingTime, meetingVenue: confirmedMeetingVenue, venue: confirmedMeetingVenue },
                       ];
-                      localStorage.setItem("partner_mock_dyn_req", JSON.stringify(nextPartnerReqs));
+                      const persistedPartnerReqs = persistWorkflowCacheItems("partner_mock_dyn_req", nextPartnerReqs);
                       try {
                         const alertId = `meeting-confirmed-${po}`;
                         const existingAlerts = JSON.parse(localStorage.getItem('partner_alerts') || '[]');
@@ -4910,9 +5047,9 @@ export default function FixerProPage() {
                         localStorage.setItem('partner_alerts', JSON.stringify(nextAlerts));
                         setPartnerPersistedAlerts(nextAlerts);
                       } catch {}
-                      setMockDynReqs(nextReqs);
-                      setMockActiveState(nextActive);
-                      setPartnerDynReqs(nextPartnerReqs);
+                      setMockDynReqs(persistedNextReqs);
+                      setMockActiveState(persistedNextActive);
+                      setPartnerDynReqs(persistedPartnerReqs);
                       window.dispatchEvent(new Event("storage"));
                       // Update backend: MEETING_REQUESTED → IN_PROGRESS (meeting confirmed; customer page polls and auto-detects)
                       if (backendOrderId && !waitModalOrder.mock && token && String(waitModalOrder.status || '').toUpperCase() !== 'IN_PROGRESS') {
@@ -5000,8 +5137,8 @@ export default function FixerProPage() {
                       },
                     ];
 
-                    localStorage.setItem("ghis_mock_active", JSON.stringify(nextActive));
-                    localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(nextReqs));
+                    const persistedNextActive = persistWorkflowCacheItems("ghis_mock_active", nextActive);
+                    const persistedNextReqs = persistWorkflowCacheItems("ghis_mock_dyn_req", nextReqs);
                     // Remove the pending_accept entry from partner's queue now that it's accepted
                     const currentPartnerReqs = JSON.parse(localStorage.getItem("partner_mock_dyn_req") || "[]");
                     const updatedPartnerReqs = currentPartnerReqs.filter((r: any) => !(r.po === po && r.type === "pending_accept"));
@@ -5016,10 +5153,10 @@ export default function FixerProPage() {
                         createdAt: Date.now(),
                       });
                     }
-                    localStorage.setItem("partner_mock_dyn_req", JSON.stringify(updatedPartnerReqs));
-                    setPartnerDynReqs(updatedPartnerReqs);
-                    setMockActiveState(nextActive);
-                    setMockDynReqs(nextReqs);
+                    const persistedPartnerReqs = persistWorkflowCacheItems("partner_mock_dyn_req", updatedPartnerReqs);
+                    setPartnerDynReqs(persistedPartnerReqs);
+                    setMockActiveState(persistedNextActive);
+                    setMockDynReqs(persistedNextReqs);
                     window.dispatchEvent(new Event("storage"));
                     alert(backendAcceptError ? "PO accepted locally. Customer workflow updated, but backend status sync still needs attention." : "PO Accepted Successfully! Customer can now pay fee and proceed.");
                     setWaitModalOrder(null);
@@ -5032,7 +5169,13 @@ export default function FixerProPage() {
                 {isMeetingConfirmation ? 'Confirm Meeting Time' : 'Accept PO'}
               </button>
               <button 
-                onClick={() => setDeclineModalOpen(true)} 
+                onClick={() => {
+                  if (isMeetingConfirmation) {
+                    setMeetingDeclineInfoOpen(true);
+                    return;
+                  }
+                  setDeclineModalOpen(true);
+                }} 
                 className="flex-1 py-3 bg-gray-100 hover:bg-red-50 hover:text-red-700 text-gray-800 font-bold rounded-xl transition"
               >
                 Decline
@@ -5056,7 +5199,7 @@ export default function FixerProPage() {
 
       {/* Decline Confirmation Modal */}
       {declineModalOpen && waitModalOrder && (
-        <div className="fixed inset-0 z-[200] bg-black/70 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10020] bg-black/70 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
             <div className="flex items-center gap-3 mb-4">
               <span className="text-3xl">⚠️</span>
@@ -5109,8 +5252,8 @@ export default function FixerProPage() {
                   try {
                     const partnerReqs = JSON.parse(localStorage.getItem('partner_mock_dyn_req') || '[]');
                     const nextPartnerReqs = (Array.isArray(partnerReqs) ? partnerReqs : []).filter((r: any) => r.po !== po);
-                    localStorage.setItem('partner_mock_dyn_req', JSON.stringify(nextPartnerReqs));
-                    setPartnerDynReqs(nextPartnerReqs);
+                    const persistedPartnerReqs = persistWorkflowCacheItems('partner_mock_dyn_req', nextPartnerReqs);
+                    setPartnerDynReqs(persistedPartnerReqs);
                   } catch {}
                   try {
                     const dynReqKey = 'ghis_mock_dyn_req';
@@ -5133,8 +5276,8 @@ export default function FixerProPage() {
                       ...existingDyn.filter((r: any) => r.po !== po && !String(r.id || '').startsWith(`pay-${po}`)),
                       customerNotice,
                     ];
-                    localStorage.setItem(dynReqKey, JSON.stringify(nextDyn));
-                    setMockDynReqs(nextDyn);
+                    const persistedNextDyn = persistWorkflowCacheItems(dynReqKey, nextDyn);
+                    setMockDynReqs(persistedNextDyn);
                     try {
                       const chatKey = `chat_messages_${po}`;
                       const chatRows = JSON.parse(localStorage.getItem(chatKey) || '[]');
@@ -5166,8 +5309,8 @@ export default function FixerProPage() {
                   try {
                     const active = JSON.parse(localStorage.getItem('ghis_mock_active') || '[]');
                     const nextActive = (Array.isArray(active) ? active : []).filter((x: any) => x.po !== po);
-                    localStorage.setItem('ghis_mock_active', JSON.stringify(nextActive));
-                    setMockActiveState(nextActive);
+                    const persistedNextActive = persistWorkflowCacheItems('ghis_mock_active', nextActive);
+                    setMockActiveState(persistedNextActive);
                   } catch {}
                   try {
                     const history = JSON.parse(localStorage.getItem('ghis_mock_history') || '[]');
@@ -5249,6 +5392,36 @@ export default function FixerProPage() {
                 className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-xl transition"
               >
                 Confirm Decline
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {meetingDeclineInfoOpen && waitModalOrder && (
+        <div className="fixed inset-0 z-[10020] bg-black/70 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-3xl">💬</span>
+              <div>
+                <h2 className="text-xl font-bold text-amber-700">Chat With The Customer First</h2>
+                <p className="text-xs text-gray-500">{waitModalOrder.service || 'Job'} · {waitModalOrder.po}</p>
+              </div>
+            </div>
+            <p className="text-gray-600 text-sm leading-relaxed">
+              If the proposed site meeting time does not work for you, please use the chat room to discuss a new time and venue with the customer before confirming the meeting invitation.
+            </p>
+            <div className="flex gap-3 mt-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setMeetingDeclineInfoOpen(false);
+                  setWaitModalOrder(null);
+                  setActiveTab('requests');
+                }}
+                className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition"
+              >
+                Back To Requests
               </button>
             </div>
           </div>
@@ -5798,9 +5971,11 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
     const previousHtmlOverflow = document.documentElement.style.overflow;
     document.body.style.overflow = 'hidden';
     document.documentElement.style.overflow = 'hidden';
+    toggleWorkflowModalChromeLock(true);
     return () => {
       document.body.style.overflow = previousBodyOverflow;
       document.documentElement.style.overflow = previousHtmlOverflow;
+      toggleWorkflowModalChromeLock(false);
     };
   }, [workflowModalOpen]);
   React.useEffect(() => {
@@ -5878,7 +6053,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
     try {
       const current = JSON.parse(localStorage.getItem("partner_mock_dyn_req") || "[]");
       const next = updater(Array.isArray(current) ? current : []);
-      localStorage.setItem("partner_mock_dyn_req", JSON.stringify(next));
+      persistWorkflowCacheItems("partner_mock_dyn_req", next);
       window.dispatchEvent(new Event("storage"));
     } catch {}
   };
@@ -5914,7 +6089,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
       const updatedActive = Array.isArray(active) && active.some((x: any) => x.po === nextEntry.po)
         ? active.map((x: any) => (x.po === nextEntry.po ? { ...x, ...nextEntry } : x))
         : [...(Array.isArray(active) ? active : []), nextEntry];
-      localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
+      persistWorkflowCacheItems("ghis_mock_active", updatedActive);
     } catch {
       // non-blocking for local workflow repair
     }
@@ -5946,7 +6121,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
         const chatText = `[SYSTEM] Partner has submitted a variation request for ${po}. Please review in your Requests tab. [VARIATION_DATA]${varNote}[/VARIATION_DATA]`;
         if (partnerRequest) storeVariationPartnerNote(po, partnerRequest);
         const next = [...dynReqs.filter((x: any) => x.po !== po), { id: varId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: varNote, location: job.location || job.subdistrict || '', type: 'variation_pending', step: 9, meetingDate: job.meetingDate || '', meetingTime: job.meetingTime || '', meetingVenue: job.meetingVenue || job.venue || '', venue: job.venue || job.meetingVenue || '' }];
-        localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
+        persistWorkflowCacheItems("ghis_mock_dyn_req", next);
         // Keep the active-job progress pinned to Step 9 even after the request disappears.
         upsertMockActiveStep(job, 9, false, createdAt);
         try { localStorage.setItem(`partner_variation_sent_${po}`, '1'); } catch {}
@@ -5971,7 +6146,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
         const completeDesc = extraData?.trim() ? `Partner completion request: ${extraData.trim()}` : 'Work is completed. Please review and mark as complete to close this project.';
         const chatText = `[SYSTEM] Partner has marked the job as complete for ${po}. Please review and confirm in your Requests tab. [COMPLETE_DATA]${completeDesc}[/COMPLETE_DATA]`;
         const next = [...dynReqs.filter((x: any) => x.po !== po), { id: complId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: completeDesc, location: job.location || job.subdistrict || '', partnerRequest: previousPartnerRequest, partnerNote: previousPartnerRequest, variationRequest: previousPartnerRequest, type: 'complete_pending', step: 10, meetingDate: job.meetingDate || '', meetingTime: job.meetingTime || '', meetingVenue: job.meetingVenue || job.venue || '', venue: job.venue || job.meetingVenue || '' }];
-        localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
+        persistWorkflowCacheItems("ghis_mock_dyn_req", next);
         upsertMockActiveStep(job, 10, false, createdAt);
         try { localStorage.setItem(`partner_complete_sent_${po}`, '1'); } catch {}
         appendLocalWorkflowSystemChat(po, chatText, createdAt);
@@ -6413,9 +6588,11 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
     const previousHtmlOverflow = document.documentElement.style.overflow;
     document.body.style.overflow = 'hidden';
     document.documentElement.style.overflow = 'hidden';
+    toggleWorkflowModalChromeLock(true);
     return () => {
       document.body.style.overflow = previousBodyOverflow;
       document.documentElement.style.overflow = previousHtmlOverflow;
+      toggleWorkflowModalChromeLock(false);
     };
   }, [workflowModalOpen]);
   React.useEffect(() => {
@@ -6492,8 +6669,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
   const writePartnerReqs = (updater: (items: any[]) => any[]) => {
     try {
       const current = JSON.parse(localStorage.getItem("partner_mock_dyn_req") || "[]");
-      const next = updater(Array.isArray(current) ? current : []);
-      localStorage.setItem("partner_mock_dyn_req", JSON.stringify(next));
+      persistWorkflowCacheItems("partner_mock_dyn_req", updater(Array.isArray(current) ? current : []));
       window.dispatchEvent(new Event("storage"));
     } catch {}
   };
@@ -6530,7 +6706,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
       const updatedActive = exists
         ? active.map((x: any) => (x.po === nextEntry.po ? { ...x, ...nextEntry } : x))
         : [...(Array.isArray(active) ? active : []), nextEntry];
-      localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
+      persistWorkflowCacheItems("ghis_mock_active", updatedActive);
     } catch {
       // non-blocking for local workflow repair
     }
@@ -6563,7 +6739,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
         const chatText = `[SYSTEM] Partner has submitted a variation request for ${po}. Please review in your Requests tab. [VARIATION_DATA]${varNote}[/VARIATION_DATA]`;
         if (partnerRequest) storeVariationPartnerNote(po, partnerRequest);
         const next = [...dynReqs.filter((x: any) => x.po !== po), { id: varId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: varNote, location: job.location || job.subdistrict || '', type: 'variation_pending', step: 9, meetingDate: job.meetingDate || '', meetingTime: job.meetingTime || '', meetingVenue: job.meetingVenue || job.venue || '', venue: job.venue || job.meetingVenue || '' }];
-        localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
+        persistWorkflowCacheItems("ghis_mock_dyn_req", next);
         // Keep the active-job progress pinned to Step 9 even after the request disappears.
         upsertMockActiveStep(job, 9, false, createdAt);
         try { localStorage.setItem(`partner_variation_sent_${po}`, '1'); } catch {}
@@ -6588,7 +6764,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
         const previousPartnerRequest = resolveVariationPartnerNote(po);
         const chatText = `[SYSTEM] Partner has marked the job as complete for ${po}. Please review and confirm in your Requests tab. [COMPLETE_DATA]${completeDesc}[/COMPLETE_DATA]`;
         const next = [...dynReqs.filter((x: any) => x.po !== po), { id: complId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: completeDesc, location: job.location || job.subdistrict || '', partnerRequest: previousPartnerRequest, partnerNote: previousPartnerRequest, variationRequest: previousPartnerRequest, type: 'complete_pending', step: 10, meetingDate: job.meetingDate || '', meetingTime: job.meetingTime || '', meetingVenue: job.meetingVenue || job.venue || '', venue: job.venue || job.meetingVenue || '' }];
-        localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
+        persistWorkflowCacheItems("ghis_mock_dyn_req", next);
         upsertMockActiveStep(job, 10, false, createdAt);
         try { localStorage.setItem(`partner_complete_sent_${po}`, '1'); } catch {}
         appendLocalWorkflowSystemChat(po, chatText, createdAt);

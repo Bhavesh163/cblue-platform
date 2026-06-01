@@ -79,6 +79,31 @@ const fmtDateTime = (d: Date | number | string) => {
   const mm = String(dt.getMinutes()).padStart(2,'0');
   return `${fmtDate(dt)} ${hh}:${mm}`;
 };
+const toggleWorkflowModalChromeLock = (locked: boolean) => {
+  if (typeof document === 'undefined') return;
+  const body = document.body;
+  const html = document.documentElement;
+  const current = Number(body.dataset.cblueWorkflowModalLocks || '0') || 0;
+  const next = locked ? current + 1 : Math.max(0, current - 1);
+  if (next > 0) {
+    body.dataset.cblueWorkflowModalLocks = String(next);
+  } else {
+    delete body.dataset.cblueWorkflowModalLocks;
+  }
+  const modalActive = next > 0;
+  body.classList.toggle('cblue-workflow-modal-open', modalActive);
+  html.classList.toggle('cblue-workflow-modal-open', modalActive);
+  const header = document.querySelector<HTMLElement>('[data-cblue-header-root]');
+  if (!header) return;
+  header.classList.toggle('pointer-events-none', modalActive);
+  header.classList.toggle('select-none', modalActive);
+  header.classList.toggle('blur-sm', modalActive);
+  if (modalActive) {
+    header.setAttribute('aria-hidden', 'true');
+  } else {
+    header.removeAttribute('aria-hidden');
+  }
+};
 const formatWorkflowMeetingLabel = (meetingDate?: string, meetingTime?: string, fallback?: any) => {
   const iso = String(meetingDate || '').trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
@@ -1276,7 +1301,17 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const [propRateModal, setPropRateModal] = useState<PropInquiry | null>(null);
   const [propRateStars, setPropRateStars] = useState(0);
   const [propRateComment, setPropRateComment] = useState("");
-  const workflowModalOpen = Boolean(waitModalOrder || meetingModal || rateModal || variationApproveModal || completeApproveModal || cancelJobModal);
+  const workflowModalOpen = Boolean(
+    waitModalOrder ||
+    meetingModal ||
+    rateModal ||
+    variationApproveModal ||
+    completeApproveModal ||
+    cancelJobModal ||
+    propPayModal ||
+    propMeetingModal ||
+    propRateModal,
+  );
 
   useEffect(() => {
     if (!workflowModalOpen || typeof document === 'undefined') return;
@@ -1284,9 +1319,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     const previousHtmlOverflow = document.documentElement.style.overflow;
     document.body.style.overflow = 'hidden';
     document.documentElement.style.overflow = 'hidden';
+    toggleWorkflowModalChromeLock(true);
     return () => {
       document.body.style.overflow = previousBodyOverflow;
       document.documentElement.style.overflow = previousHtmlOverflow;
+      toggleWorkflowModalChromeLock(false);
     };
   }, [workflowModalOpen]);
 

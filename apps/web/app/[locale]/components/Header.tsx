@@ -32,7 +32,7 @@ export function Header() {
   ];
 
   return (
-    <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md shadow-sm border-b border-sky-100">
+    <header data-cblue-header-root className="sticky top-0 z-50 bg-white/90 backdrop-blur-md shadow-sm border-b border-sky-100 transition-[filter,opacity] duration-200">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-20 items-center justify-between">
           {/* Logo */}
