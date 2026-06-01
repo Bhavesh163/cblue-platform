@@ -154,6 +154,9 @@ const WORKFLOW_CACHE_RECORD_KEYS = [
   'partnerRequest',
   'partnerNote',
   'variationRequest',
+  'workflowType',
+  'msg',
+  'dot',
 ] as const;
 const sanitizeWorkflowCacheText = (value: any, maxLength = 240) => {
   const text = String(value ?? '')
@@ -227,7 +230,7 @@ const persistWorkflowCacheItems = (key: string, items: any[]) => {
       console.error(`Failed to persist workflow cache ${key}`, retryError || error);
     }
   }
-  return normalized;
+  return items;
 };
 const toggleWorkflowModalChromeLock = (isOpen: boolean) => {
   if (typeof document === 'undefined') return;
@@ -239,9 +242,13 @@ const toggleWorkflowModalChromeLock = (isOpen: boolean) => {
   header.classList.toggle('select-none', isOpen);
   header.classList.toggle('blur-sm', isOpen);
   if (isOpen) {
+    header.style.zIndex = '1';
     header.setAttribute('aria-hidden', 'true');
+    header.setAttribute('data-modal-open', 'true');
   } else {
+    header.style.zIndex = '';
     header.removeAttribute('aria-hidden');
+    header.setAttribute('data-modal-open', 'false');
   }
 };
 const parseMeetingDateTimeMs = (dateValue?: string, timeValue?: string) => {
@@ -1585,7 +1592,7 @@ function AttachmentViewerModal({
 }) {
   const attachmentUrls = Array.from(new Set(viewer.urls));
   return (
-    <div className="fixed inset-0 z-[10020] flex items-start justify-center bg-gray-900/70 backdrop-blur-sm p-4 overflow-y-auto pt-20">
+    <div className="fixed inset-0 z-[99999] flex items-start justify-center bg-gray-900/85 backdrop-blur-lg p-4 overflow-y-auto pt-20">
       <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 flex items-start justify-between gap-4">
           <div>
@@ -1821,13 +1828,10 @@ export default function FixerProPage() {
   useEffect(() => {
     if (!workflowModalOpen || typeof document === 'undefined') return;
     const previousBodyOverflow = document.body.style.overflow;
-    const previousHtmlOverflow = document.documentElement.style.overflow;
     document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
     toggleWorkflowModalChromeLock(true);
     return () => {
       document.body.style.overflow = previousBodyOverflow;
-      document.documentElement.style.overflow = previousHtmlOverflow;
       toggleWorkflowModalChromeLock(false);
     };
   }, [workflowModalOpen]);
@@ -4986,9 +4990,11 @@ export default function FixerProPage() {
                       const confirmedMeetingVenue = waitModalMeetingDetails.meetingVenue || waitModalOrder.meetingVenue || '';
                       // Use PO-based matching (not waitModalOrder.id) because mockDynReqs IDs are
                       // 'meet-pending-{po}', not the backend UUID stored in waitModalOrder.id
+                      const meetingCustNoticeId = `meeting-confirmed-notice-${po}`;
                       const nextReqs = [
-                        ...mockDynReqs.filter((r: any) => !(r.po === po && r.type === 'meeting_pending_partner') && r.id !== schedId),
+                        ...mockDynReqs.filter((r: any) => !(r.po === po && r.type === 'meeting_pending_partner') && r.id !== schedId && r.id !== meetingCustNoticeId),
                         { id: schedId, po, title: waitModalOrder.service || serviceTitle, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), budget: budgetLabel, tier: waitModalOrder.tier, type: 'meeting_scheduled', step: 8, venue: confirmedMeetingVenue, meetingVenue: confirmedMeetingVenue, meetingDate: confirmedMeetingDate, meetingTime: confirmedMeetingTime, desc: `Meeting confirmed by partner${meetingSummary ? ` for ${meetingSummary}` : ''}${confirmedMeetingVenue ? ` at ${confirmedMeetingVenue}` : ''}. Proceed after the site meeting then mark variation.` },
+                        { id: meetingCustNoticeId, po, title: `Meeting Confirmed — ${po}`, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), type: 'notice', step: 8, desc: `Your fixer confirmed the site meeting${confirmedMeetingVenue ? ` at ${confirmedMeetingVenue}` : ''}${meetingSummary ? ` (${meetingSummary})` : ''}. Proceed to Step 9 after the site visit.`, dot: 'bg-green-500' },
                       ];
                       const existingActive = mockActiveState.find((x: any) => x.po === po);
                       const activeSnapshot = {
@@ -5199,7 +5205,7 @@ export default function FixerProPage() {
 
       {/* Decline Confirmation Modal */}
       {declineModalOpen && waitModalOrder && (
-        <div className="fixed inset-0 z-[10020] bg-black/70 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-lg flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
             <div className="flex items-center gap-3 mb-4">
               <span className="text-3xl">⚠️</span>
@@ -5399,7 +5405,7 @@ export default function FixerProPage() {
       )}
 
       {meetingDeclineInfoOpen && waitModalOrder && (
-        <div className="fixed inset-0 z-[10020] bg-black/70 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-lg flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
             <div className="flex items-center gap-3 mb-4">
               <span className="text-3xl">💬</span>
@@ -5968,13 +5974,10 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
   React.useEffect(() => {
     if (!workflowModalOpen || typeof document === 'undefined') return;
     const previousBodyOverflow = document.body.style.overflow;
-    const previousHtmlOverflow = document.documentElement.style.overflow;
     document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
     toggleWorkflowModalChromeLock(true);
     return () => {
       document.body.style.overflow = previousBodyOverflow;
-      document.documentElement.style.overflow = previousHtmlOverflow;
       toggleWorkflowModalChromeLock(false);
     };
   }, [workflowModalOpen]);
@@ -6585,13 +6588,10 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
   React.useEffect(() => {
     if (!workflowModalOpen || typeof document === 'undefined') return;
     const previousBodyOverflow = document.body.style.overflow;
-    const previousHtmlOverflow = document.documentElement.style.overflow;
     document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
     toggleWorkflowModalChromeLock(true);
     return () => {
       document.body.style.overflow = previousBodyOverflow;
-      document.documentElement.style.overflow = previousHtmlOverflow;
       toggleWorkflowModalChromeLock(false);
     };
   }, [workflowModalOpen]);

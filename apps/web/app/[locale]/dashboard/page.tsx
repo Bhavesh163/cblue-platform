@@ -99,9 +99,13 @@ const toggleWorkflowModalChromeLock = (locked: boolean) => {
   header.classList.toggle('select-none', modalActive);
   header.classList.toggle('blur-sm', modalActive);
   if (modalActive) {
+    header.style.zIndex = '1';
     header.setAttribute('aria-hidden', 'true');
+    header.setAttribute('data-modal-open', 'true');
   } else {
+    header.style.zIndex = '';
     header.removeAttribute('aria-hidden');
+    header.setAttribute('data-modal-open', 'false');
   }
 };
 const formatWorkflowMeetingLabel = (meetingDate?: string, meetingTime?: string, fallback?: any) => {
@@ -1316,13 +1320,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   useEffect(() => {
     if (!workflowModalOpen || typeof document === 'undefined') return;
     const previousBodyOverflow = document.body.style.overflow;
-    const previousHtmlOverflow = document.documentElement.style.overflow;
     document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
     toggleWorkflowModalChromeLock(true);
     return () => {
       document.body.style.overflow = previousBodyOverflow;
-      document.documentElement.style.overflow = previousHtmlOverflow;
       toggleWorkflowModalChromeLock(false);
     };
   }, [workflowModalOpen]);
