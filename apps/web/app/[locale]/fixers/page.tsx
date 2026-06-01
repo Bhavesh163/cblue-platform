@@ -138,6 +138,11 @@ const formatMeetingDateTimeLabel = (dateValue?: string, timeValue?: string) => {
   if (ts > 0) return `${fmtDate(ts)}${timeValue ? ` · ${timeValue}` : ''}`;
   return [dateValue, timeValue].filter(Boolean).join(' · ');
 };
+const WORKFLOW_MEETING_VISIBLE_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
+const isWorkflowMeetingVisible = (dateValue?: string, timeValue?: string, fallback?: any) => {
+  const ts = parseMeetingDateTimeMs(dateValue, timeValue) || parseWorkflowSortTs(fallback);
+  return ts > 0 && ts >= Date.now() - WORKFLOW_MEETING_VISIBLE_WINDOW_MS;
+};
 const PO_CODE_PATTERN = /PO-(?:\d{8}|\d{4}-\d{4,})/i;
 const PO_CODE_EXACT_PATTERN = /^PO-(?:\d{8}|\d{4}-\d{4,})$/i;
 const isPoCode = (value: string) => PO_CODE_EXACT_PATTERN.test(String(value || "").trim());
@@ -1221,6 +1226,133 @@ const upsertPartnerPersistedAlert = ({
     // Best-effort local alert continuity only.
   }
 };
+const finalizePartnerRatedWorkflow = ({
+  po,
+  job,
+  createdAt,
+  rating,
+}: {
+  po: string;
+  job: any;
+  createdAt: number;
+  rating: number;
+}) => {
+  const completionChatText = `[SYSTEM] Partner has rated this project ${rating}/5 stars. The job is now complete.`;
+  if (typeof window === 'undefined' || !po) {
+    return { completionChatText };
+  }
+
+  let active: any[] = [];
+  let history: any[] = [];
+  try {
+    const parsedActive = JSON.parse(localStorage.getItem('ghis_mock_active') || '[]');
+    active = Array.isArray(parsedActive) ? parsedActive : [];
+  } catch {
+    active = [];
+  }
+  try {
+    const parsedHistory = JSON.parse(localStorage.getItem('ghis_mock_history') || '[]');
+    history = Array.isArray(parsedHistory) ? parsedHistory : [];
+  } catch {
+    history = [];
+  }
+
+  appendLocalWorkflowSystemChat(po, completionChatText, createdAt);
+
+  const activeSnapshot = active.find((item: any) => item?.po === po) || {};
+  const updatedActive = active.filter((item: any) => item?.po !== po);
+  const normalizedDescription = stripWorkflowPrefix(
+    activeSnapshot?.projectDetails ||
+      activeSnapshot?.description ||
+      activeSnapshot?.desc ||
+      job?.projectDetails ||
+      job?.description ||
+      job?.desc ||
+      activeSnapshot?.service ||
+      job?.service ||
+      job?.title ||
+      '',
+  );
+  const completed = {
+    ...job,
+    ...activeSnapshot,
+    po,
+    service: activeSnapshot?.service || job?.service || job?.title || 'Project',
+    title: activeSnapshot?.title || job?.title || activeSnapshot?.service || job?.service || 'Project',
+    customer: activeSnapshot?.customer || job?.customer || 'Customer',
+    counterpartName: firstNameOnly(activeSnapshot?.customer || job?.customer, 'Customer'),
+    date: fmtDateTime(createdAt),
+    createdAt: activeSnapshot?.createdAt || job?.createdAt || createdAt,
+    completedAt: createdAt,
+    statusChangedAt: createdAt,
+    status: 'COMPLETED',
+    statusName: 'Completed',
+    statusNote: 'Partner rated the customer. This job is complete and now stored in History.',
+    step: 11,
+    stepName: getWorkflowStepName(11),
+    tier: activeSnapshot?.tier || job?.tier || 'Standard',
+    budget: activeSnapshot?.budget || job?.budget || activeSnapshot?.fee || job?.fee || '฿0',
+    fee: activeSnapshot?.fee || job?.fee || activeSnapshot?.budget || job?.budget || '฿0',
+    location: activeSnapshot?.location || job?.location || activeSnapshot?.subdistrict || job?.subdistrict || '',
+    subdistrict: activeSnapshot?.subdistrict || job?.subdistrict || activeSnapshot?.location || job?.location || '',
+    meetingDate: activeSnapshot?.meetingDate || job?.meetingDate || '',
+    meetingTime: activeSnapshot?.meetingTime || job?.meetingTime || '',
+    meetingVenue: activeSnapshot?.meetingVenue || activeSnapshot?.venue || job?.meetingVenue || job?.venue || '',
+    venue: activeSnapshot?.venue || activeSnapshot?.meetingVenue || job?.venue || job?.meetingVenue || '',
+    projectDetails: normalizedDescription,
+    description: normalizedDescription,
+    partnerRating: Number(rating),
+    chatHistory: getLocalChatHistory(po),
+  };
+
+  localStorage.setItem('ghis_mock_active', JSON.stringify(updatedActive));
+  pruneStorageIfNeeded();
+  localStorage.setItem(
+    'ghis_mock_history',
+    JSON.stringify(
+      [...history.filter((item: any) => item?.po !== po), completed].sort(
+        (a: any, b: any) =>
+          parseWorkflowSortTs(b?.completedAt || b?.statusChangedAt || b?.createdAt || b?.date) -
+          parseWorkflowSortTs(a?.completedAt || a?.statusChangedAt || a?.createdAt || a?.date),
+      ),
+    ),
+  );
+  try {
+    localStorage.setItem(`chat_closed_${po}`, '1');
+  } catch {}
+  try {
+    localStorage.removeItem(`partner_variation_sent_${po}`);
+    localStorage.removeItem(`partner_complete_sent_${po}`);
+  } catch {}
+  try {
+    const existingAlerts = JSON.parse(localStorage.getItem('partner_alerts') || '[]');
+    const finalAlert = {
+      id: `partner-rated-${po}`,
+      po,
+      type: 'partner_rated_closed',
+      message: `${po}: You rated the customer ${rating}/5. This job is complete and stored in History.`,
+      msgTh: `${po}: คุณให้คะแนนลูกค้า ${rating}/5 แล้ว งานนี้เสร็จสมบูรณ์และถูกเก็บไว้ในประวัติ`,
+      msgZh: `${po}: 您已为客户评分 ${rating}/5。该工作已完成并保存到历史记录中。`,
+      createdAt,
+      dot: 'bg-slate-500',
+    };
+    const nextAlerts = [
+      finalAlert,
+      ...(Array.isArray(existingAlerts) ? existingAlerts.filter((alert: any) => String(alert?.id) !== finalAlert.id) : []),
+    ]
+      .sort(
+        (a: any, b: any) =>
+          parseWorkflowSortTs(b?.createdAt || b?.timestamp || b?.time) -
+          parseWorkflowSortTs(a?.createdAt || a?.timestamp || a?.time),
+      )
+      .slice(0, 20);
+    localStorage.setItem('partner_alerts', JSON.stringify(nextAlerts));
+  } catch {
+    // Best-effort alert continuity only.
+  }
+
+  return { completionChatText };
+};
 const buildVariationPriceListRows = (
   rows: { item: string; qty: string; unit: string; rate: string; amount: string }[],
 ): VariationPriceListItem[] =>
@@ -1417,6 +1549,7 @@ const extractDeclineReason = (value: any) => {
 function WorkflowHistoryCard({ item, compact = false, locale = "en" }: { item: any; compact?: boolean; locale?: string }) {
   const [collapsed, setCollapsed] = React.useState(true);
   const chatPreview = collapsed ? [] : (Array.isArray(item.chatHistory) ? item.chatHistory.slice(compact ? -2 : -4) : []);
+  const chatCount = Array.isArray(item.chatHistory) ? item.chatHistory.length : 0;
   const isCancelled = String(item.status || '').toUpperCase() === 'CANCELLED';
   const declineReason = extractDeclineReason(item.declineReason || item.statusNote);
   return (
@@ -1439,6 +1572,11 @@ function WorkflowHistoryCard({ item, compact = false, locale = "en" }: { item: a
                 : 'Completed'}{' '}
               {fmtDateTime(item.completedAt || item.statusChangedAt || item.createdAt || item.date || Date.now())}
             </p>
+            {chatCount > 0 ? (
+              <p className="text-xs text-gray-400 mt-1">
+                {chatCount} {chatCount === 1 ? 'chat message archived' : 'chat messages archived'}
+              </p>
+            ) : null}
           </div>
           <div className="flex flex-col items-start sm:items-end gap-1 flex-shrink-0">
             <span className="font-bold text-gray-900">{item.fee || item.budget || '฿0'}</span>
@@ -1543,6 +1681,19 @@ export default function FixerProPage() {
   const [propPartnerRateStars, setPropPartnerRateStars] = useState(0);
   const [propPartnerRateComment, setPropPartnerRateComment] = useState("");
   const [propPartnerModalImages, setPropPartnerModalImages] = useState<string[]>([]);
+  const workflowModalOpen = Boolean(waitModalOrder || declineModalOpen);
+
+  useEffect(() => {
+    if (!workflowModalOpen || typeof document === 'undefined') return;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+    };
+  }, [workflowModalOpen]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -3414,15 +3565,10 @@ export default function FixerProPage() {
   const scheduledMeetings = mockDynReqs
     .filter((r: any) => !isHiddenTestPo(r.po))
     .filter((r: any) => r.type === 'meeting_scheduled')
-    .filter((r: any) => {
-      const ts = r.meetingDate
-        ? parseTs(`${r.meetingDate}T${r.meetingTime || '00:00'}`)
-        : parseTs(r.date || r.createdAt);
-      return ts >= Date.now();
-    })
+    .filter((r: any) => isWorkflowMeetingVisible(r.meetingDate, r.meetingTime, r.date || r.createdAt))
     .sort((a: any, b: any) => {
-      const aTs = a.meetingDate ? parseTs(`${a.meetingDate}T${a.meetingTime || '00:00'}`) : parseTs(a.date || a.createdAt);
-      const bTs = b.meetingDate ? parseTs(`${b.meetingDate}T${b.meetingTime || '00:00'}`) : parseTs(b.date || b.createdAt);
+      const aTs = parseMeetingDateTimeMs(a.meetingDate, a.meetingTime) || parseTs(a.date || a.createdAt);
+      const bTs = parseMeetingDateTimeMs(b.meetingDate, b.meetingTime) || parseTs(b.date || b.createdAt);
       return aTs - bTs;
     });
   const propScheduledMeetings = propInquiries
@@ -5641,6 +5787,22 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
   const [variationRows, setVariationRows] = React.useState<{item:string;qty:string;unit:string;rate:string;amount:string}[]>(EMPTY_VAR_ROWS());
   const [variationAttachUrls, setVariationAttachUrls] = React.useState<string[]>([]);
   const [attachmentViewer, setAttachmentViewer] = React.useState<AttachmentViewerState>(null);
+  const [ratingModal, setRatingModal] = React.useState<any>(null);
+  const [ratingStars, setRatingStars] = React.useState(5);
+  const [completeModal, setCompleteModal] = React.useState<any>(null);
+  const [completeNote, setCompleteNote] = React.useState("");
+  const workflowModalOpen = Boolean(variationModal || completeModal || ratingModal || attachmentViewer);
+  React.useEffect(() => {
+    if (!workflowModalOpen || typeof document === 'undefined') return;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+    };
+  }, [workflowModalOpen]);
   React.useEffect(() => {
     let isMounted = true;
     if (!variationModal) { setVariationAttachUrls([]); return; }
@@ -5712,10 +5874,6 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
     })();
     return () => { isMounted = false; };
   }, [variationModal]);
-  const [ratingModal, setRatingModal] = React.useState<any>(null);
-  const [ratingStars, setRatingStars] = React.useState(5);
-  const [completeModal, setCompleteModal] = React.useState<any>(null);
-  const [completeNote, setCompleteNote] = React.useState("");
   const writePartnerReqs = (updater: (items: any[]) => any[]) => {
     try {
       const current = JSON.parse(localStorage.getItem("partner_mock_dyn_req") || "[]");
@@ -5833,20 +5991,16 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
         postSystemMsg(chatText);
       } else if (action === 'rate') {
         const rating = extraData || '5';
-        // Update active/history BEFORE writePartnerReqs so buildChatFeed sees historyEntry and skips
-        const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
-        const hist = JSON.parse(localStorage.getItem("ghis_mock_history") || "[]");
-        const updated = active.filter((x: any) => x.po !== po);
-        const completed = { ...(active.find((x: any) => x.po === po) || job), step: 11, completedAt: createdAt, partnerRating: Number(rating) };
-        localStorage.setItem("ghis_mock_active", JSON.stringify(updated));
-        pruneStorageIfNeeded();
-        localStorage.setItem("ghis_mock_history", JSON.stringify([...hist.filter((x: any) => x.po !== po), completed].sort((a: any, b: any) => parseWorkflowSortTs(b.completedAt || b.statusChangedAt || b.createdAt || b.date) - parseWorkflowSortTs(a.completedAt || a.statusChangedAt || a.createdAt || a.date))));
-        try { localStorage.setItem(`chat_closed_${po}`, '1'); } catch {}
-        try { localStorage.removeItem(`partner_variation_sent_${po}`); localStorage.removeItem(`partner_complete_sent_${po}`); } catch {}
+        const { completionChatText } = finalizePartnerRatedWorkflow({
+          po,
+          job,
+          createdAt,
+          rating: Number(rating),
+        });
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && x.type === 'rate_partner')));
         window.dispatchEvent(new Event("storage"));
         window.dispatchEvent(new Event("cblue-workflow-updated"));
-        postSystemMsg(`[SYSTEM] Partner has rated this project ${rating}/5 stars. The job is now complete.`);
+        postSystemMsg(completionChatText);
       }
     } catch (e) { console.error(e); }
   };
@@ -6248,6 +6402,22 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
   const [variationRows, setVariationRows] = React.useState<{item:string;qty:string;unit:string;rate:string;amount:string}[]>(EMPTY_VAR_ROWS());
   const [variationAttachUrls, setVariationAttachUrls] = React.useState<string[]>([]);
   const [attachmentViewer, setAttachmentViewer] = React.useState<AttachmentViewerState>(null);
+  const [completeModal, setCompleteModal] = React.useState<any>(null);
+  const [completeNote, setCompleteNote] = React.useState("");
+  const [ratingModal, setRatingModal] = React.useState<any>(null);
+  const [ratingStars, setRatingStars] = React.useState(5);
+  const workflowModalOpen = Boolean(variationModal || completeModal || ratingModal || attachmentViewer);
+  React.useEffect(() => {
+    if (!workflowModalOpen || typeof document === 'undefined') return;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+    };
+  }, [workflowModalOpen]);
   React.useEffect(() => {
     if (!variationModal) { setVariationAttachUrls([]); return; }
     const po = variationModal.po;
@@ -6318,10 +6488,6 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
       setVariationAttachUrls(localUrls);
     }
   }, [variationModal]);
-  const [completeModal, setCompleteModal] = React.useState<any>(null);
-  const [completeNote, setCompleteNote] = React.useState("");
-  const [ratingModal, setRatingModal] = React.useState<any>(null);
-  const [ratingStars, setRatingStars] = React.useState(5);
 
   const writePartnerReqs = (updater: (items: any[]) => any[]) => {
     try {
@@ -6442,20 +6608,16 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
         postSystemMsg(chatText);
       } else if (action === 'rate') {
         const rating = extraData || '5';
-        // Update active/history BEFORE writePartnerReqs so buildChatFeed sees historyEntry and skips
-        const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
-        const hist = JSON.parse(localStorage.getItem("ghis_mock_history") || "[]");
-        const updated = active.filter((x: any) => x.po !== po);
-        const completed = { ...(active.find((x: any) => x.po === po) || job), step: 11, completedAt: createdAt, partnerRating: Number(rating) };
-        localStorage.setItem("ghis_mock_active", JSON.stringify(updated));
-        pruneStorageIfNeeded();
-        localStorage.setItem("ghis_mock_history", JSON.stringify([...hist.filter((x: any) => x.po !== po), completed].sort((a: any, b: any) => parseWorkflowSortTs(b.completedAt || b.statusChangedAt || b.createdAt || b.date) - parseWorkflowSortTs(a.completedAt || a.statusChangedAt || a.createdAt || a.date))));
-        try { localStorage.setItem(`chat_closed_${po}`, '1'); } catch {}
-        try { localStorage.removeItem(`partner_variation_sent_${po}`); localStorage.removeItem(`partner_complete_sent_${po}`); } catch {}
+        const { completionChatText } = finalizePartnerRatedWorkflow({
+          po,
+          job,
+          createdAt,
+          rating: Number(rating),
+        });
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && x.type === 'rate_partner')));
         window.dispatchEvent(new Event("storage"));
         window.dispatchEvent(new Event("cblue-workflow-updated"));
-        postSystemMsg(`[SYSTEM] Partner has rated this project ${rating}/5 stars. The job is now complete.`);
+        postSystemMsg(completionChatText);
       }
     } catch (e) { console.error(e); }
   };

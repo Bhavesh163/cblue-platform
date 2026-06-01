@@ -94,6 +94,28 @@ const formatWorkflowMeetingLabel = (meetingDate?: string, meetingTime?: string, 
   const ts = new Date(fallback || (iso ? `${iso}T${meetingTime || '00:00'}` : 0)).getTime();
   return Number.isFinite(ts) && ts > 0 ? fmtDateTime(ts) : '';
 };
+const WORKFLOW_MEETING_VISIBLE_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
+const parseWorkflowMeetingDateTimeMs = (meetingDate?: string, meetingTime?: string, fallback?: any) => {
+  const rawDate = String(meetingDate || '').trim();
+  const rawTime = String(meetingTime || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+    const ts = new Date(`${rawDate}T${rawTime || '00:00'}`).getTime();
+    if (Number.isFinite(ts) && ts > 0) return ts;
+  }
+  const ddmmyyyy = rawDate.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (ddmmyyyy) {
+    const [, day, month, year] = ddmmyyyy;
+    const [hour = '00', minute = '00'] = rawTime.split(':');
+    const ts = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute)).getTime();
+    if (Number.isFinite(ts) && ts > 0) return ts;
+  }
+  const ts = new Date(fallback || (rawDate ? `${rawDate}T${rawTime || '00:00'}` : 0)).getTime();
+  return Number.isFinite(ts) ? ts : 0;
+};
+const isWorkflowMeetingVisible = (meetingDate?: string, meetingTime?: string, fallback?: any) => {
+  const ts = parseWorkflowMeetingDateTimeMs(meetingDate, meetingTime, fallback);
+  return ts > 0 && ts >= Date.now() - WORKFLOW_MEETING_VISIBLE_WINDOW_MS;
+};
 const PO_CODE_PATTERN = /PO-(?:\d{8}|\d{4}-\d{4,})/i;
 const PO_CODE_EXACT_PATTERN = /^PO-(?:\d{8}|\d{4}-\d{4,})$/i;
 const isValidPoCode = (value: string) => PO_CODE_EXACT_PATTERN.test(String(value || '').trim());
@@ -1254,6 +1276,19 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const [propRateModal, setPropRateModal] = useState<PropInquiry | null>(null);
   const [propRateStars, setPropRateStars] = useState(0);
   const [propRateComment, setPropRateComment] = useState("");
+  const workflowModalOpen = Boolean(waitModalOrder || meetingModal || rateModal || variationApproveModal || completeApproveModal || cancelJobModal);
+
+  useEffect(() => {
+    if (!workflowModalOpen || typeof document === 'undefined') return;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+    };
+  }, [workflowModalOpen]);
 
   const ensurePropChatBootstrap = (inquiry: PropInquiry) => {
     if (typeof window === "undefined" || !inquiry?.poNumber) return;
@@ -2979,15 +3014,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const upcomingMeetings = visibleMockDynRequests
     .filter((x: any) => x.type === "meeting_scheduled")
     .filter((x: any) => !pendingMeetingPos.has(String(x.po || "").trim()))
-    .filter((x: any) => {
-      const meetingTs = x.meetingDate
-        ? parseDateMs(`${x.meetingDate}T${x.meetingTime || '00:00'}`)
-        : parseDateMs(x.createdAt || x.date);
-      return meetingTs >= Date.now();
-    })
+    .filter((x: any) => isWorkflowMeetingVisible(x.meetingDate, x.meetingTime, x.createdAt || x.date))
     .sort((a: any, b: any) => {
-      const aTs = a.meetingDate ? parseDateMs(`${a.meetingDate}T${a.meetingTime || '00:00'}`) : parseDateMs(a.createdAt || a.date);
-      const bTs = b.meetingDate ? parseDateMs(`${b.meetingDate}T${b.meetingTime || '00:00'}`) : parseDateMs(b.createdAt || b.date);
+      const aTs = parseWorkflowMeetingDateTimeMs(a.meetingDate, a.meetingTime, a.createdAt || a.date);
+      const bTs = parseWorkflowMeetingDateTimeMs(b.meetingDate, b.meetingTime, b.createdAt || b.date);
       return aTs - bTs;
     });
   const workflowOrderByPo = new Map(
