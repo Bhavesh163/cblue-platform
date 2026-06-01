@@ -170,6 +170,12 @@ function HouseholdBookingContent() {
         }));
       }
     } catch { /* ignore */ }
+    try {
+      const savedGps = JSON.parse(localStorage.getItem("cblue_last_gps_coords") || "null");
+      const lat = Number(savedGps?.lat);
+      const lng = Number(savedGps?.lng);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) setGpsCoords({ lat, lng });
+    } catch { /* ignore */ }
   }, []);
 
   useEffect(() => {
@@ -330,7 +336,7 @@ function HouseholdBookingContent() {
         recaptchaToken,
         imageCount: images.length,
       };
-      console.log("Household booking submission:", payload);
+      void payload;
       setSuccess(true);
       try { sessionStorage.removeItem("cblue_booking_household"); } catch { /* ignore */ }
     } catch {

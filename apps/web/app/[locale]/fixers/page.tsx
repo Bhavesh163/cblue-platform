@@ -2334,10 +2334,11 @@ export default function FixerProPage() {
     const normalizedViewerEmail = String(viewerEmail || "").trim().toLowerCase();
     const normalizedViewerUserId = String(viewerUserId || "").trim().toLowerCase();
     const parseChatSort = (msg: any) => {
+      const createdTs = parseTs(msg?.createdAt || msg?.time || 0);
+      if (Number.isFinite(createdTs) && createdTs > 0) return createdTs;
       const numericId = Number(String(msg?.id || "").replace(/[^0-9]/g, ""));
       if (Number.isFinite(numericId) && numericId > 0) return numericId;
-      const timeTs = new Date(msg?.time || 0).getTime();
-      return Number.isFinite(timeTs) ? timeTs : 0;
+      return 0;
     };
     const isOwnSender = (sender: any) => {
       const normalizedSender = String(sender || "").trim().toLowerCase();
@@ -2696,10 +2697,17 @@ export default function FixerProPage() {
       const propBackendItems = await buildPropBackendChatFeed();
       const backendItems = isFixer ? await buildBackendChatFeed() : [];
       const merged = new Map<string, any>();
-      for (const item of propChatItems) merged.set(item.po, item);
-      for (const item of localItems) merged.set(item.po, item);
-      for (const item of propBackendItems) merged.set(item.po, item);
-      for (const item of backendItems) merged.set(item.po, item);
+      const upsertNewest = (item: any) => {
+        if (!item?.po) return;
+        const existing = merged.get(item.po);
+        if (!existing || Number(item.sort || 0) >= Number(existing.sort || 0)) {
+          merged.set(item.po, item);
+        }
+      };
+      for (const item of propChatItems) upsertNewest(item);
+      for (const item of localItems) upsertNewest(item);
+      for (const item of propBackendItems) upsertNewest(item);
+      for (const item of backendItems) upsertNewest(item);
       const mergedList = Array.from(merged.values()).sort((a: any, b: any) => Number(b.sort || 0) - Number(a.sort || 0));
       if (isMounted) setChatFeed(mergedList);
     };
@@ -3401,12 +3409,13 @@ export default function FixerProPage() {
             budget: order.budget,
             tier: order.tier,
             description: 'Customer sent a site meeting invitation. Please review and confirm the meeting time.',
-            projectDetails: String(order.description || '').replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?/, '').trim(),
+            projectDetails: stripWorkflowPrefix(order.description || ''),
             meetingMessage: String(chat.lastMsg || ''),
             meetingDateLabel: inviteDetails.meetingDateLabel,
             meetingTimeLabel: inviteDetails.meetingTimeLabel,
             meetingVenue: inviteDetails.meetingVenue || order.subdistrict || '',
             subdistrict: order.subdistrict || '',
+            location: order.location || order.subdistrict || '',
             type: 'meeting_confirm_partner',
             workflowType: 'meeting_confirm_partner',
             status: 'MEETING_REQUESTED',
@@ -3419,7 +3428,32 @@ export default function FixerProPage() {
           next = next.filter((x: any) => !(x.po === po && (x.workflowType === 'meeting_confirm_partner' || x.type === 'meeting_confirm_partner')));
           try {
             const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
-            const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 9, mockStep: 9, actionNeeded: true } : x);
+            const existingActive = active.find((x: any) => x.po === po);
+            const updatedActive = [
+              ...active.filter((x: any) => x.po !== po),
+              {
+                ...(existingActive || {}),
+                id: existingActive?.id || order.id || `active-${po}`,
+                orderId: existingActive?.orderId || order.id,
+                po,
+                service: existingActive?.service || order.service,
+                serviceTh: existingActive?.serviceTh || order.serviceTh || order.service,
+                serviceZh: existingActive?.serviceZh || order.serviceZh || order.service,
+                title: existingActive?.title || order.service,
+                customer: existingActive?.customer || order.customer,
+                date: existingActive?.date || order.date || fmtDateTime(Date.now()),
+                createdAt: existingActive?.createdAt || order.createdAt || Date.now(),
+                budget: existingActive?.budget || order.budget || order.fee,
+                fee: existingActive?.fee || order.fee || order.budget,
+                tier: existingActive?.tier || order.tier,
+                description: existingActive?.description || order.description || '',
+                location: existingActive?.location || order.location || order.subdistrict || '',
+                subdistrict: existingActive?.subdistrict || order.subdistrict || order.location || '',
+                step: 9,
+                mockStep: 9,
+                actionNeeded: true,
+              },
+            ];
             localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
           } catch {}
           if (!variationAlreadySubmitted && !partnerAlreadyRated) {
@@ -3437,6 +3471,8 @@ export default function FixerProPage() {
               budget: order.budget,
               tier: order.tier,
               description: order.description || 'Proceed to submit variation request if extra work or price adjustment is required.',
+              location: order.location || order.subdistrict || '',
+              subdistrict: order.subdistrict || order.location || '',
               type: 'variation_partner',
               workflowType: 'variation_partner',
               step: 9,
@@ -4542,7 +4578,33 @@ export default function FixerProPage() {
                         ...mockDynReqs.filter((r: any) => !(r.po === po && r.type === 'meeting_pending_partner') && r.id !== schedId),
                         { id: schedId, po, title: waitModalOrder.service || serviceTitle, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), budget: budgetLabel, tier: waitModalOrder.tier, type: 'meeting_scheduled', step: 8, venue: waitModalMeetingDetails.meetingVenue, meetingDate: waitModalOrder.meetingDate || waitModalMeetingDetails.meetingDateLabel, meetingTime: waitModalOrder.meetingTime || waitModalMeetingDetails.meetingTimeLabel, desc: `Meeting confirmed by partner${meetingSummary ? ` for ${meetingSummary}` : ''}${waitModalMeetingDetails.meetingVenue ? ` at ${waitModalMeetingDetails.meetingVenue}` : ''}. Proceed after the site meeting then mark variation.` },
                       ];
-                      const nextActive = mockActiveState.map((x: any) => x.po === po ? { ...x, step: 9, mockStep: 9, actionNeeded: true } : x);
+                      const existingActive = mockActiveState.find((x: any) => x.po === po);
+                      const activeSnapshot = {
+                        ...(existingActive || {}),
+                        id: existingActive?.id || backendOrderId || waitModalOrder.id || `active-${po}`,
+                        orderId: backendOrderId || waitModalOrder.orderId || existingActive?.orderId || undefined,
+                        po,
+                        service: existingActive?.service || waitModalOrder.service || serviceTitle,
+                        serviceTh: existingActive?.serviceTh || waitModalOrder.service || serviceTitle,
+                        serviceZh: existingActive?.serviceZh || waitModalOrder.service || serviceTitle,
+                        title: existingActive?.title || waitModalOrder.service || serviceTitle,
+                        customer: existingActive?.customer || waitModalOrder.customer || 'Ghis Cafe',
+                        date: existingActive?.date || waitModalOrder.date || now,
+                        createdAt: existingActive?.createdAt || waitModalOrder.createdAt || Date.now(),
+                        budget: existingActive?.budget || budgetLabel,
+                        fee: existingActive?.fee || budgetLabel,
+                        tier: existingActive?.tier || waitModalOrder.tier,
+                        description: existingActive?.description || waitModalOrder.description || '',
+                        location: existingActive?.location || waitModalProjectLocation,
+                        subdistrict: existingActive?.subdistrict || waitModalProjectLocation,
+                        step: 9,
+                        mockStep: 9,
+                        actionNeeded: true,
+                      };
+                      const nextActive = [
+                        ...mockActiveState.filter((x: any) => x.po !== po),
+                        activeSnapshot,
+                      ];
                       localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(nextReqs));
                       localStorage.setItem("ghis_mock_active", JSON.stringify(nextActive));
                       const nextPartnerReqs = [
@@ -4550,6 +4612,25 @@ export default function FixerProPage() {
                         { id: `variation-${po}`, orderId: backendOrderId || waitModalOrder.orderId || undefined, po, service: waitModalOrder.service || serviceTitle, serviceTh: waitModalOrder.service || serviceTitle, serviceZh: waitModalOrder.service || serviceTitle, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), fee: budgetLabel, budget: String(budgetLabel).replace(/[^0-9]/g, ''), tier: waitModalOrder.tier, description: (mappedOrders as any[]).find((o: any) => o?.po === po)?.description || waitModalOrder?.description || 'Proceed to submit variation request if extra work or price adjustment is required.', location: waitModalOrder?.location || waitModalOrder?.subdistrict || '', type: 'variation_partner', step: 9 },
                       ];
                       localStorage.setItem("partner_mock_dyn_req", JSON.stringify(nextPartnerReqs));
+                      try {
+                        const alertId = `meeting-confirmed-${po}`;
+                        const existingAlerts = JSON.parse(localStorage.getItem('partner_alerts') || '[]');
+                        const nextAlerts = [
+                          ...existingAlerts.filter((alert: any) => alert?.id !== alertId),
+                          {
+                            id: alertId,
+                            po,
+                            type: 'meeting_confirmed',
+                            message: `${po}: You confirmed the site meeting. Active job remains open; next action is Step 9 variation if scope or pricing changes.`,
+                            msgTh: `${po}: คุณยืนยันนัดหมายหน้างานแล้ว งานยังอยู่ใน Active Jobs ขั้นตอนถัดไปคือ Step 9 variation หากขอบเขตหรือราคาเปลี่ยน`,
+                            msgZh: `${po}: 您已确认现场会议。该工作仍保留在 Active Jobs；下一步如范围或价格变化则进行第9步变更。`,
+                            createdAt: Date.now(),
+                            dot: 'bg-purple-500',
+                          },
+                        ].slice(-20);
+                        localStorage.setItem('partner_alerts', JSON.stringify(nextAlerts));
+                        setPartnerPersistedAlerts(nextAlerts);
+                      } catch {}
                       setMockDynReqs(nextReqs);
                       setMockActiveState(nextActive);
                       setPartnerDynReqs(nextPartnerReqs);

@@ -625,8 +625,21 @@ export default function FixerResults({
   };
 
   const getCurrentSenderId = () => readSubscriber()?.email || "customer";
-  const gpsLocationStr = (bookingAddress?.latitude && bookingAddress?.longitude)
-    ? `${Number(bookingAddress.latitude).toFixed(6)}, ${Number(bookingAddress.longitude).toFixed(6)}`
+  const fallbackGpsCoords = (() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const parsed = JSON.parse(localStorage.getItem("cblue_last_gps_coords") || "null");
+      const lat = Number(parsed?.lat);
+      const lng = Number(parsed?.lng);
+      return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+    } catch {
+      return null;
+    }
+  })();
+  const latitude = Number(bookingAddress?.latitude ?? fallbackGpsCoords?.lat);
+  const longitude = Number(bookingAddress?.longitude ?? fallbackGpsCoords?.lng);
+  const gpsLocationStr = Number.isFinite(latitude) && Number.isFinite(longitude)
+    ? `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
     : null;
   const bookingLocation = (bookingAddress?.locationType === 'gps' && gpsLocationStr)
     ? gpsLocationStr
@@ -634,16 +647,16 @@ export default function FixerResults({
   const ensureOrderAddressId = async (token: string) => {
     // Allow creation if at least one geographic field is provided OR GPS coordinates
     const hasGeo = bookingAddress?.province || bookingAddress?.district || bookingAddress?.subdistrict;
-    const hasGps = bookingAddress?.latitude && bookingAddress?.longitude;
+    const hasGps = Number.isFinite(latitude) && Number.isFinite(longitude);
     if (!hasGeo && !hasGps) {
       return "";
     }
 
-    const streetParts = [bookingAddress.houseNumber, bookingAddress.road, bookingAddress.soi]
+    const streetParts = [bookingAddress?.houseNumber, bookingAddress?.road, bookingAddress?.soi]
       .map((part) => String(part || "").trim())
       .filter(Boolean);
     const street = streetParts.join(" ") || undefined;
-    const notes = String(bookingAddress.addressText || "").trim() || undefined;
+    const notes = String(bookingAddress?.addressText || "").trim() || undefined;
 
     try {
       const existingRes = await fetch("/api/v1/users/me/addresses", {
@@ -653,10 +666,10 @@ export default function FixerResults({
         const existing = await existingRes.json();
         if (Array.isArray(existing)) {
           const matched = existing.find((address: any) =>
-            String(address?.province || "") === bookingAddress.province &&
-            String(address?.district || "") === bookingAddress.district &&
-            String(address?.subdistrict || "") === bookingAddress.subdistrict &&
-            String(address?.postalCode || "") === bookingAddress.postalCode,
+            String(address?.province || "") === bookingAddress?.province &&
+            String(address?.district || "") === bookingAddress?.district &&
+            String(address?.subdistrict || "") === bookingAddress?.subdistrict &&
+            String(address?.postalCode || "") === bookingAddress?.postalCode,
           );
           if (matched?.id) return matched.id;
         }
@@ -682,8 +695,8 @@ export default function FixerResults({
           building: bookingAddress?.building || undefined,
           unit: bookingAddress?.floor || undefined,
           notes,
-          latitude: bookingAddress?.latitude,
-          longitude: bookingAddress?.longitude,
+          latitude: hasGps ? latitude : undefined,
+          longitude: hasGps ? longitude : undefined,
         }),
       });
       if (!createRes.ok) return "";

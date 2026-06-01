@@ -1685,9 +1685,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     const normalizedViewerUserId = String(viewerUserId || "").trim().toLowerCase();
     if (!normalizedViewerEmail.includes('ghis')) return [];
     const parseChatSort = (msg: any) => {
+      const createdTs = parseDateMs(msg?.createdAt || msg?.time || 0);
+      if (Number.isFinite(createdTs) && createdTs > 0) return createdTs;
       const numericId = Number(String(msg?.id || "").replace(/[^0-9]/g, ""));
       if (Number.isFinite(numericId) && numericId > 0) return numericId;
-      return parseDateMs(msg?.createdAt || msg?.time || 0);
+      return 0;
     };
     const isOwnSender = (sender: any) => {
       const normalizedSender = String(sender || "").trim().toLowerCase();
@@ -2027,10 +2029,17 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       const backendItems = await buildBackendChatFeed();
 
       const merged = new Map<string, any>();
-      for (const item of propChatItems) merged.set(item.po, item);
-      for (const item of localItems) merged.set(item.po, item);
-      for (const item of propBackendItems) merged.set(item.po, item);
-      for (const item of backendItems) merged.set(item.po, item);
+      const upsertNewest = (item: any) => {
+        if (!item?.po) return;
+        const existing = merged.get(item.po);
+        if (!existing || Number(item.sort || 0) >= Number(existing.sort || 0)) {
+          merged.set(item.po, item);
+        }
+      };
+      for (const item of propChatItems) upsertNewest(item);
+      for (const item of localItems) upsertNewest(item);
+      for (const item of propBackendItems) upsertNewest(item);
+      for (const item of backendItems) upsertNewest(item);
 
       const mergedList = Array.from(merged.values()).sort((a: any, b: any) => Number(b.sort || 0) - Number(a.sort || 0));
       if (isMounted) setChatFeed(mergedList);
@@ -4623,7 +4632,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   const newDynReqs = [
                     ...mockDynRequests.filter((x: any) => x.po !== po && x.id !== chatReqId && x.id !== meetReqId),
                     { id: chatReqId, po, title: waitModalOrder.request?.title, customer: waitModalOrder.request?.customer || 'Suppadesh', date: now, createdAt, budget: waitModalOrder.request?.budget, tier: waitModalOrder.request?.tier, desc: 'Chat room is now active. Open the Chat page to connect with your partner.', type: 'chat_ready', step: 7 },
-                    { id: meetReqId, po, title: waitModalOrder.request?.title, customer: waitModalOrder.request?.customer || 'Suppadesh', date: now, createdAt, budget: waitModalOrder.request?.budget, tier: waitModalOrder.request?.tier, desc: 'Please send a meeting invitation to your partner. Fill in the venue and proposed date/time.', type: 'meeting_invite', step: 8, location: waitModalOrder.request?.location || waitModalOrder?.location || waitModalOrder?.subdistrict || '' },
+                    { id: meetReqId, po, title: waitModalOrder.request?.title, customer: waitModalOrder.request?.customer || 'Suppadesh', date: now, createdAt, budget: waitModalOrder.request?.budget, tier: waitModalOrder.request?.tier, desc: 'Please send a meeting invitation to your partner. Fill in the venue and proposed date/time.', type: 'meeting_invite', step: 8, location: (() => { const loc = waitModalOrder.request?.location || waitModalOrder.request?.subdistrict || waitModalOrder?.location || waitModalOrder?.subdistrict || ''; if (loc && loc !== 'Unknown' && loc !== 'N/A') return loc; const m = String(waitModalOrder.request?.description || waitModalOrder.request?.desc || '').match(/\bLOC:([^|]+)/); return m ? (m[1] ?? '').trim() : ''; })() },
                   ];
                   const newPayments = { ...mockPayments, [waitModalOrder.id]: true };
                   // Write to localStorage synchronously BEFORE setState so interval reads fresh data
@@ -4772,12 +4781,31 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   const desc = `Meeting invitation sent. Proposed: ${dateLabel} ${meetingTime} at ${meetingVenue}.${meetingNote.trim() ? ` Note: ${meetingNote.trim()}.` : ''} Waiting for partner confirmation.`;
                   const chatText = `[SYSTEM] Customer sent meeting invitation for ${meetingModal.po}: ${dateLabel} ${meetingTime} at ${meetingVenue}.${meetingNote.trim() ? ` Note: ${meetingNote.trim()}.` : ''} Next: waiting for partner confirmation before variation.`;
                   const pendingId = `meet-pending-${meetingModal.po}`;
+                  const meetingProjectLocation = (() => { const loc = meetingModal.location || meetingModal.subdistrict || ''; if (loc && loc !== 'Unknown' && loc !== 'N/A') return loc; const m = String(meetingModal.description || meetingModal.desc || '').match(/\bLOC:([^|]+)/); return m ? (m[1] ?? '').trim() : ''; })();
                   // Compute new arrays eagerly and write to localStorage BEFORE setState
                   // (same pattern as payment pill — prevents syncMockState interval from overwriting)
-                  const updatedMeetActive = mockActiveItems.map((x: any) => x.po === meetingModal.po ? { ...x, step: 8, actionNeeded: false } : x);
+                  const existingMeetActive = mockActiveItems.find((x: any) => x.po === meetingModal.po);
+                  const updatedMeetActive = [
+                    ...mockActiveItems.filter((x: any) => x.po !== meetingModal.po),
+                    {
+                      ...(existingMeetActive || meetingModal),
+                      po: meetingModal.po,
+                      title: existingMeetActive?.title || meetingModal.title,
+                      customer: existingMeetActive?.customer || meetingModal.customer,
+                      date: existingMeetActive?.date || meetingModal.date || fmtDateTime(createdAt),
+                      createdAt: existingMeetActive?.createdAt || meetingModal.createdAt || createdAt,
+                      budget: existingMeetActive?.budget || meetingModal.budget,
+                      tier: existingMeetActive?.tier || meetingModal.tier,
+                      location: existingMeetActive?.location || meetingProjectLocation,
+                      subdistrict: existingMeetActive?.subdistrict || meetingProjectLocation,
+                      description: existingMeetActive?.description || meetingModal.description || meetingModal.desc || '',
+                      step: 8,
+                      actionNeeded: false,
+                    },
+                  ];
                   const updatedMeetReqs = [
                     ...mockDynRequests.filter((x: any) => x.id !== meetingModal.id && x.id !== pendingId),
-                    { id: pendingId, po: meetingModal.po, title: meetingModal.title, customer: meetingModal.customer, date: fmtDateTime(createdAt), createdAt, budget: meetingModal.budget, tier: meetingModal.tier, desc, type: 'meeting_pending_partner', step: 8, venue: meetingVenue, meetingDate, meetingTime, meetingNote: meetingNote.trim(), location: meetingModal.location || meetingModal.subdistrict || '' },
+                    { id: pendingId, po: meetingModal.po, title: meetingModal.title, customer: meetingModal.customer, date: fmtDateTime(createdAt), createdAt, budget: meetingModal.budget, tier: meetingModal.tier, desc, type: 'meeting_pending_partner', step: 8, venue: meetingVenue, meetingDate, meetingTime, meetingNote: meetingNote.trim(), location: meetingProjectLocation },
                   ];
                   try {
                     localStorage.setItem('ghis_mock_active', JSON.stringify(updatedMeetActive));

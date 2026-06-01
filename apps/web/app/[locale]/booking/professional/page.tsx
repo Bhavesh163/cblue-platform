@@ -186,6 +186,12 @@ function ProfessionalBookingContent() {
         }));
       }
     } catch {}
+    try {
+      const savedGps = JSON.parse(localStorage.getItem("cblue_last_gps_coords") || "null");
+      const lat = Number(savedGps?.lat);
+      const lng = Number(savedGps?.lng);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) setGpsCoords({ lat, lng });
+    } catch {}
   }, []);
 
   const handleRecaptcha = useCallback((token: string) => setRecaptchaToken(token), []);
@@ -334,8 +340,7 @@ function ProfessionalBookingContent() {
         recaptchaToken,
         imageCount: images.length,
       };
-      console.log("Professional booking submission:", payload);
-
+      void payload;
       setSuccess(true);
       try { sessionStorage.removeItem("cblue_booking_professional"); } catch { /* ignore */ }
     } catch {

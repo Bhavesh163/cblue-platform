@@ -21,7 +21,13 @@ export default function GpsDetectButton({ onDetected }: GpsDetectButtonProps) {
     setError("");
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        onDetected({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        try {
+          localStorage.setItem("cblue_last_gps_coords", JSON.stringify(coords));
+        } catch {
+          // GPS persistence is only a convenience fallback for workflow handoff.
+        }
+        onDetected(coords);
         setLoading(false);
       },
       (err) => {
