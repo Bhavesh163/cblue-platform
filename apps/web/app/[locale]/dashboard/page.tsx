@@ -112,6 +112,12 @@ const firstNameOnly = (value: any, fallback = 'User') => {
 };
 const HIDDEN_TEST_POS = new Set(["PO-2605-2747", "PO-2605-6716", "PO-2605-9605", "PO-2605-8699", "PO-2605-9701", "PO-2605-6146", "PO-2605-8471", "PO-2605-9593"]);
 const isHiddenTestPo = (value: any) => HIDDEN_TEST_POS.has(String(value || '').trim().toUpperCase());
+const CLOSED_CUSTOMER_WORKFLOW_POS = new Set([
+  "PO-2605-8591",
+  "PO-2605-7953",
+  "PO-2605-2121",
+]);
+const isClosedCustomerWorkflowPo = (value: any) => CLOSED_CUSTOMER_WORKFLOW_POS.has(String(value || '').trim().toUpperCase());
 const STALE_CUSTOMER_NOTIFY_PROP_POS = new Set([
   "PRE-2605-5354",
   "PRE-2605-9968",
@@ -1297,6 +1303,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     const ts = new Date(value || 0).getTime();
     return Number.isFinite(ts) ? ts : 0;
   };
+  const subscriberEmail = String(subscriber?.email || '').trim().toLowerCase();
+  const customerStorageSuffix = subscriberEmail.replace(/[^a-z0-9]+/g, '_') || 'anonymous';
+  const customerAlertsStorageKey = `cblue_customer_alerts_${customerStorageSuffix}`;
   const formatPropMeetingLabel = (meetingDate?: string, meetingTime?: string) => {
     const rawDate = String(meetingDate || '').trim();
     if (!rawDate) return '';
@@ -1306,12 +1315,21 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   };
   useEffect(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem('cblue_customer_alerts') || '[]');
-      setPersistedCustomerAlerts(Array.isArray(saved) ? saved : []);
+      const saved = JSON.parse(localStorage.getItem(customerAlertsStorageKey) || '[]');
+      if (Array.isArray(saved) && saved.length > 0) {
+        setPersistedCustomerAlerts(saved);
+        return;
+      }
+      if (subscriberEmail.includes('ghis')) {
+        const legacy = JSON.parse(localStorage.getItem('cblue_customer_alerts') || '[]');
+        setPersistedCustomerAlerts(Array.isArray(legacy) ? legacy : []);
+        return;
+      }
+      setPersistedCustomerAlerts([]);
     } catch {
       setPersistedCustomerAlerts([]);
     }
-  }, []);
+  }, [customerAlertsStorageKey, subscriberEmail]);
   const getOrderEventTs = (order: any, fallback: any = Date.now()) =>
     parseDateMs(
       order?.statusHistory?.[0]?.createdAt ||
@@ -2329,7 +2347,15 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
   // Merge: mockActiveItems overrides ACTIVE_MOCK items with same po (for step progression)
   const paidPOs = new Set(visibleMockActiveItems.map((x: any) => x.po));
-  const completedPOs = new Set(visibleMockHistory.map((x: any) => x.po));
+  const alertClosedPOs = new Set(
+    persistedCustomerAlerts
+      .map((alert: any) => String(alert?.po || alert?.msg || alert?.message || '').match(/PO-(?:\d{8}|\d{4}-\d{4,})/i)?.[0] || '')
+      .filter((po: string) => po && (
+        isClosedCustomerWorkflowPo(po) ||
+        persistedCustomerAlerts.some((alert: any) => String(alert?.po || alert?.msg || alert?.message || '').includes(po) && /cancelled|declined|unavailable|ยกเลิก|ปฏิเสธ/i.test(String(alert?.msg || alert?.message || '')))
+      )),
+  );
+  const completedPOs = new Set([...visibleMockHistory.map((x: any) => x.po), ...alertClosedPOs]);
   const customerSideCompletedPropPos = new Set(
     propInquiries
       .filter((p: PropInquiry) => isCustomerSidePropCompleted(p))
@@ -2337,7 +2363,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       .filter((po: string) => isPoCode(po)),
   );
   const backendActiveItems = workflowOrders
-    .filter((o: any) => !['COMPLETED', 'CANCELLED', 'DONE'].includes(String(o?.status || '').toUpperCase()))
+    .filter((o: any) => {
+      const po = extractPo(o);
+      return !['COMPLETED', 'CANCELLED', 'DONE'].includes(String(o?.status || '').toUpperCase()) && !completedPOs.has(po) && !isClosedCustomerWorkflowPo(po);
+    })
     .map((o: any) => {
       const status = String(o?.status || '').toUpperCase();
       const po = extractPo(o) || `PO-${String(o?.id || '').slice(0, 8).toUpperCase()}`;
@@ -2422,7 +2451,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const combinedActive = Array.from(activeByPo.values())
     .filter((item: any) => {
       const po = String(item?.po || '').trim();
-      return !isHiddenTestPo(po) && !(po && customerSideCompletedPropPos.has(po));
+      return !isHiddenTestPo(po) && !isClosedCustomerWorkflowPo(po) && !(po && customerSideCompletedPropPos.has(po));
     })
     .sort((a: any, b: any) => parseDateMs(b.createdAt || b.date) - parseDateMs(a.createdAt || a.date));
   // Filter static requests: hide items whose PO already has a dynamic entry (already progressed past step 6)
@@ -2452,7 +2481,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
   const allRequestItems = Array.from(dedupedRequestMap.values())
     .filter((item: any) => {
       const po = String(item?.po || '').trim();
-      return !(po && customerSideCompletedPropPos.has(po));
+      return !(po && (customerSideCompletedPropPos.has(po) || completedPOs.has(po) || isClosedCustomerWorkflowPo(po)));
     })
     .sort((a: any, b: any) => parseDateMs(b.createdAt || b.date) - parseDateMs(a.createdAt || a.date));
 
@@ -2921,11 +2950,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       )
         .sort((a: any, b: any) => parseDateMs(b.createdAt || b.time) - parseDateMs(a.createdAt || a.time))
         .slice(0, 20);
-      try { localStorage.setItem('cblue_customer_alerts', JSON.stringify(merged)); } catch {}
+      try { localStorage.setItem(customerAlertsStorageKey, JSON.stringify(merged)); } catch {}
       return JSON.stringify(prev) === JSON.stringify(merged) ? prev : merged;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [generatedAlertSignature]);
+  }, [generatedAlertSignature, customerAlertsStorageKey]);
   const allAlerts = Array.from(
     [...persistedCustomerAlerts, ...generatedAlerts]
       .reduce((map: Map<string, any>, alert: any) => {
@@ -5197,11 +5226,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                       const nextHistory = [...(Array.isArray(hist) ? hist.filter((x: any) => x.po !== po) : []), historyEntry];
                       pruneStorageIfNeeded();
                       localStorage.setItem("ghis_mock_history", JSON.stringify(nextHistory));
-                      const existingAlerts = JSON.parse(localStorage.getItem('cblue_customer_alerts') || '[]');
+                      const existingAlerts = JSON.parse(localStorage.getItem(customerAlertsStorageKey) || '[]');
                       const nextAlerts = [cancelAlert, ...(Array.isArray(existingAlerts) ? existingAlerts.filter((a: any) => a.id !== cancelAlert.id) : [])]
                         .sort((a: any, b: any) => parseDateMs(b.createdAt || b.time) - parseDateMs(a.createdAt || a.time))
                         .slice(0, 20);
-                      localStorage.setItem('cblue_customer_alerts', JSON.stringify(nextAlerts));
+                      localStorage.setItem(customerAlertsStorageKey, JSON.stringify(nextAlerts));
                       const partnerAlerts = JSON.parse(localStorage.getItem('partner_alerts') || '[]');
                       const nextPartnerAlerts = [partnerCancelAlert, ...(Array.isArray(partnerAlerts) ? partnerAlerts.filter((a: any) => a.id !== partnerCancelAlert.id) : [])]
                         .sort((a: any, b: any) => parseDateMs(b.createdAt || b.timestamp || b.time) - parseDateMs(a.createdAt || a.timestamp || a.time))

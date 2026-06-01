@@ -49,7 +49,14 @@ const SKIP_RES = new Set(["content-encoding", "transfer-encoding", "content-leng
 const PASSTHROUGH_ERROR_STATUS = new Set([400, 401, 403, 404, 409, 422, 429]);
 const shouldReturnEmptyListFallback = (method: string, routePath: string) => {
   if (method !== "GET") return false;
-  return /^orders\/[^/]+\/chat$/.test(routePath);
+  return (
+    routePath === "orders/my" ||
+    routePath === "orders/fixer" ||
+    routePath === "properties/my" ||
+    routePath === "property-inquiries/customer" ||
+    routePath === "property-inquiries/lister" ||
+    /^orders\/[^/]+\/chat$/.test(routePath)
+  );
 };
 
 async function handler(

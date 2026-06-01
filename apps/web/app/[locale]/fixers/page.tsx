@@ -1036,6 +1036,14 @@ const firstNameOnly = (value: any, fallback = 'User') => {
 };
 const HIDDEN_TEST_POS = new Set(["PO-2605-2747", "PO-2605-6716", "PO-2605-9605", "PO-2605-8699", "PO-2605-9701", "PO-2605-9593", "PO-2605-8471", "PO-2605-6146"]);
 const isHiddenTestPo = (value: any) => HIDDEN_TEST_POS.has(String(value || '').trim().toUpperCase());
+const CLOSED_PARTNER_WORKFLOW_POS = new Set([
+  "PO-2605-8591",
+  "PO-2605-7953",
+  "PO-2605-2121",
+  "PO-2605-1304",
+  "PO-2605-2863",
+]);
+const isClosedPartnerWorkflowPo = (value: any) => CLOSED_PARTNER_WORKFLOW_POS.has(String(value || '').trim().toUpperCase());
 const filterVisibleWorkflowItems = (items: any[]) => items.filter((item: any) => !isHiddenTestPo(item?.po));
 const WORKFLOW_STEP_NAMES: Record<number, string> = {
   5: 'Accept',
@@ -1878,8 +1886,8 @@ export default function FixerProPage() {
 
         if (res.ok) {
           const user = await res.json();
+          const hasFixer = !!user.fixer;
           if (isMounted) {
-            const hasFixer = !!user.fixer;
             setIsFixer(hasFixer);
             
             // Generate base info
@@ -1917,8 +1925,12 @@ export default function FixerProPage() {
             }
           }
 
-          const ordersRes = await fetch("/api/v1/orders/fixer", { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
-          if (ordersRes && ordersRes.ok && isMounted) setOrders(await ordersRes.json());
+          if (hasFixer) {
+            const ordersRes = await fetch("/api/v1/orders/fixer", { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
+            if (ordersRes && ordersRes.ok && isMounted) setOrders(await ordersRes.json());
+          } else if (isMounted) {
+            setOrders([]);
+          }
 
           const propRes = await fetch("/api/v1/properties/my", { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
           if (propRes && propRes.ok && isMounted) {
@@ -1953,9 +1965,11 @@ export default function FixerProPage() {
         if (!token) return;
 
         const [ordersRes, propRes] = await Promise.all([
-          fetch("/api/v1/orders/fixer", {
-            headers: { Authorization: `Bearer ${token}` },
-          }).catch(() => null),
+          isFixer
+            ? fetch("/api/v1/orders/fixer", {
+                headers: { Authorization: `Bearer ${token}` },
+              }).catch(() => null)
+            : Promise.resolve(null),
           fetch("/api/v1/properties/my", {
             headers: { Authorization: `Bearer ${token}` },
           }).catch(() => null),
@@ -1963,6 +1977,8 @@ export default function FixerProPage() {
 
         if (ordersRes && ordersRes.ok && isMounted) {
           setOrders(await ordersRes.json());
+        } else if (!isFixer && isMounted) {
+          setOrders([]);
         }
         if (propRes && propRes.ok && isMounted) {
           const listedProperties = await propRes.json();
@@ -1983,7 +1999,7 @@ export default function FixerProPage() {
       isMounted = false;
       clearInterval(timer);
     };
-  }, [partner?.id]);
+  }, [partner?.id, isFixer]);
 
   // Poll property inquiries addressed to this lister (NOTIFY_SENT = step 4 accept, PAID = step 5-6 chat, MEETING_SENT = step 7 confirm, MEETING_CONFIRMED = step 8 rate)
   useEffect(() => {
@@ -2708,6 +2724,15 @@ export default function FixerProPage() {
   useEffect(() => {
     const checkMock = () => {
       try {
+        if (!isFixer) {
+          setMockDynReqs([]);
+          setMockActiveState([]);
+          setPartnerDynReqs([]);
+          setPartnerPersistedAlerts([]);
+          setPartnerDeclineLogs([]);
+          setMockHistory([]);
+          return;
+        }
         const d = localStorage.getItem("ghis_mock_dyn_req"); if (d) setMockDynReqs(filterVisibleWorkflowItems(JSON.parse(d)));
         const a = localStorage.getItem("ghis_mock_active"); if (a) setMockActiveState(filterVisibleWorkflowItems(JSON.parse(a)));
         const h = localStorage.getItem("ghis_mock_history"); if (h) setMockHistory(filterVisibleWorkflowItems(JSON.parse(h)));
@@ -2842,6 +2867,7 @@ export default function FixerProPage() {
 
         const beforeStaleCleanup = partnerReqs.length;
         partnerReqs = partnerReqs.filter((req: any) => {
+          if (isClosedPartnerWorkflowPo(req?.po)) return false;
           const type = String(req?.workflowType || req?.type || '');
           if (type !== 'meeting_confirm_partner') return true;
           const meetingTs = parseMeetingDateTimeMs(req.meetingDate || req.meetingDateLabel, req.meetingTime || req.meetingTimeLabel);
@@ -2864,7 +2890,7 @@ export default function FixerProPage() {
       window.removeEventListener('storage', checkMock);
       window.removeEventListener('cblue-workflow-updated', onWorkflowUpdated as EventListener);
     };
-  }, []);
+  }, [isFixer]);
 
   const completedHistoryPos = new Set(mockHistory.map((h: any) => h.po));
   const declinedPartnerPos = new Set<string>();
@@ -2904,7 +2930,7 @@ export default function FixerProPage() {
       .map((p: PropInquiry) => String(p.poNumber || '').trim())
       .filter((po: string) => isPropPoCode(po)),
   );
-  let activeJobs = mappedOrders.filter(o => !['COMPLETED', 'CANCELLED'].includes(o.status) && !completedHistoryPos.has(o.po) && !declinedPartnerPos.has(o.po) && !partnerSideCompletedPropPos.has(String(o.po || '').trim()));
+  let activeJobs = mappedOrders.filter(o => !['COMPLETED', 'CANCELLED'].includes(o.status) && !completedHistoryPos.has(o.po) && !declinedPartnerPos.has(o.po) && !isClosedPartnerWorkflowPo(o.po) && !partnerSideCompletedPropPos.has(String(o.po || '').trim()));
   activeJobs = activeJobs.map(job => {
       const stepLookup = mockActiveState.find((x: any) => x.po === job.po);
       const backendStep = getWorkflowStepFromStatus(job.status);
@@ -3205,6 +3231,7 @@ export default function FixerProPage() {
     let incomingJobs = mappedOrders.filter(o =>
       !completedHistoryPos.has(o.po) &&
       !declinedPartnerPos.has(o.po) &&
+      !isClosedPartnerWorkflowPo(o.po) &&
       (
         (['CREATED', 'PENDING', 'MATCHING'].includes(o.status) && !acceptedPos.has(o.po)) ||
         o.status === 'MEETING_REQUESTED'
@@ -3510,7 +3537,7 @@ export default function FixerProPage() {
   }, [mappedOrders, mockHistory, partner?.id]);
 
   const partnerRequestItems = Array.from([
-    ...partnerDynReqs.filter((r: any) => !['accept_sent'].includes(String(r.type || '')) && !completedHistoryPos.has(r.po) && !declinedPartnerPos.has(r.po)),
+    ...partnerDynReqs.filter((r: any) => !['accept_sent'].includes(String(r.type || '')) && !completedHistoryPos.has(r.po) && !declinedPartnerPos.has(r.po) && !isClosedPartnerWorkflowPo(r.po)),
     ...incomingJobs.filter((job: any) => !(String(job.status || '').toUpperCase() === 'MEETING_REQUESTED' && partnerDynReqs.some((req: any) => req.po === job.po && req.workflowType === 'meeting_confirm_partner'))),
   ].reduce((map: Map<string, any>, item: any) => {
     const key = item.po || item.id;
@@ -3747,7 +3774,7 @@ export default function FixerProPage() {
   const partnerRequestItemsWithProp = Array.from(
     [...partnerRequestItems, ...propRequestCards, ...propFallbackRateCards].reduce((map: Map<string, any>, item: any) => {
       const key = String(item?.po || item?.id || '').trim();
-      if (!key || isHiddenTestPo(key)) return map;
+      if (!key || isHiddenTestPo(key) || isClosedPartnerWorkflowPo(key)) return map;
       const existing = map.get(key);
       if (!existing) {
         map.set(key, item);
@@ -4224,7 +4251,9 @@ export default function FixerProPage() {
                     setPartnerPersistedAlerts(partnerAlerts.slice(0, 20));
                   } catch {}
                   try {
-                    const existingAlerts = JSON.parse(localStorage.getItem('cblue_customer_alerts') || '[]');
+                    const customerEmailKey = String(inquiry.customerEmail || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
+                    const customerAlertsKey = customerEmailKey ? `cblue_customer_alerts_${customerEmailKey}` : 'cblue_customer_alerts';
+                    const existingAlerts = JSON.parse(localStorage.getItem(customerAlertsKey) || '[]');
                     const nextAlerts = [{
                       id: `prop-lister-unavailable-${po}-${declineAt}`,
                       po,
@@ -4234,7 +4263,7 @@ export default function FixerProPage() {
                       createdAt: declineAt,
                       dot: 'bg-red-400',
                     }, ...(Array.isArray(existingAlerts) ? existingAlerts : [])].slice(0, 20);
-                    localStorage.setItem('cblue_customer_alerts', JSON.stringify(nextAlerts));
+                    localStorage.setItem(customerAlertsKey, JSON.stringify(nextAlerts));
                   } catch {}
                   await updatePropInquiry(inquiry.id, { status: "DECLINED", step: 8 }, po);
                   setPropInquiries((prev) => prev.map((p) => p.id === inquiry.id ? { ...p, status: 'DECLINED', step: 8, updatedAt: declineAt } : p));
