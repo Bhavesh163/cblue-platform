@@ -101,6 +101,24 @@ const fmtDateTime = (d: Date | number | string) => {
   if (!Number.isFinite(dt.getTime())) return "";
   return `${fmtDate(dt)} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
 };
+const parseWorkflowSortTs = (value: any) => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value === 'string') {
+    const raw = value.trim();
+    const numeric = Number(raw);
+    if (Number.isFinite(numeric) && numeric > 0) return numeric;
+    const ddmmyyyy = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:[ T](\d{2}):(\d{2}))?$/);
+    if (ddmmyyyy) {
+      const [, day, month, year, hour = '00', minute = '00'] = ddmmyyyy;
+      const parsed = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute)).getTime();
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    const parsed = new Date(raw).getTime();
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  const parsed = new Date(value || 0).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+};
 const parseMeetingDateTimeMs = (dateValue?: string, timeValue?: string) => {
   const date = String(dateValue || '').trim();
   const time = String(timeValue || '').trim();
@@ -3095,9 +3113,16 @@ export default function FixerProPage() {
   const toJobSortTs = (value: any) => {
     if (typeof value === 'number') return value;
     if (typeof value === 'string') {
-      const numeric = Number(value);
+      const raw = value.trim();
+      const numeric = Number(raw);
       if (!Number.isNaN(numeric) && Number.isFinite(numeric)) return numeric;
-      const asDate = new Date(value).getTime();
+      const ddmmyyyy = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:[ T](\d{2}):(\d{2}))?$/);
+      if (ddmmyyyy) {
+        const [, day, month, year, hour = '00', minute = '00'] = ddmmyyyy;
+        const parsed = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute)).getTime();
+        return Number.isNaN(parsed) ? 0 : parsed;
+      }
+      const asDate = new Date(raw).getTime();
       return Number.isNaN(asDate) ? 0 : asDate;
     }
     return 0;
@@ -3185,8 +3210,8 @@ export default function FixerProPage() {
       return map;
     }, new Map<string, any>()).values(),
   ).sort((a: any, b: any) => {
-    const aTs = new Date(a.statusChangedAt || a.completedAt || a.createdAt || a.date || 0).getTime();
-    const bTs = new Date(b.statusChangedAt || b.completedAt || b.createdAt || b.date || 0).getTime();
+    const aTs = toJobSortTs(a.statusChangedAt || a.completedAt || a.createdAt || a.date || 0);
+    const bTs = toJobSortTs(b.statusChangedAt || b.completedAt || b.createdAt || b.date || 0);
     return bTs - aTs;
   });
   const propCompletedJobs = propInquiries
@@ -3230,16 +3255,16 @@ export default function FixerProPage() {
         map.set(key, entry);
         return map;
       }
-      const existingTs = new Date(existing.statusChangedAt || existing.completedAt || existing.createdAt || existing.date || 0).getTime();
-      const nextTs = new Date(entry.statusChangedAt || entry.completedAt || entry.createdAt || entry.date || 0).getTime();
+      const existingTs = toJobSortTs(existing.statusChangedAt || existing.completedAt || existing.createdAt || existing.date || 0);
+      const nextTs = toJobSortTs(entry.statusChangedAt || entry.completedAt || entry.createdAt || entry.date || 0);
       if (nextTs >= existingTs) {
         map.set(key, { ...existing, ...entry });
       }
       return map;
     }, new Map<string, any>()).values(),
   ).sort((a: any, b: any) => {
-    const aTs = new Date(a.statusChangedAt || a.completedAt || a.createdAt || a.date || 0).getTime();
-    const bTs = new Date(b.statusChangedAt || b.completedAt || b.createdAt || b.date || 0).getTime();
+    const aTs = toJobSortTs(a.statusChangedAt || a.completedAt || a.createdAt || a.date || 0);
+    const bTs = toJobSortTs(b.statusChangedAt || b.completedAt || b.createdAt || b.date || 0);
     return bTs - aTs;
   });
   const earningsSeries = (() => {
@@ -3373,6 +3398,13 @@ export default function FixerProPage() {
         const lower = String(chat.lastMsg || "").toLowerCase();
         const order = mappedOrders.find((x: any) => x.po === po);
         const localActive = mockActiveState.find((x: any) => x.po === po);
+        const pendingMeetingReq = next.find((x: any) => x.po === po && (x.type === 'meeting_confirm_partner' || x.workflowType === 'meeting_confirm_partner'));
+        const meetingFields = {
+          meetingDate: localActive?.meetingDate || pendingMeetingReq?.meetingDate || pendingMeetingReq?.meetingDateLabel || '',
+          meetingTime: localActive?.meetingTime || pendingMeetingReq?.meetingTime || pendingMeetingReq?.meetingTimeLabel || '',
+          meetingVenue: localActive?.meetingVenue || localActive?.venue || pendingMeetingReq?.meetingVenue || pendingMeetingReq?.venue || '',
+          venue: localActive?.venue || localActive?.meetingVenue || pendingMeetingReq?.venue || pendingMeetingReq?.meetingVenue || '',
+        };
         const historyEntry = mockHistory.find((x: any) => x.po === po) || histFromStorage.find((x: any) => x.po === po);
         const variationAlreadySubmitted = (Number(localActive?.step || 0) >= 9 && localActive?.actionNeeded === false) || Boolean(localStorage.getItem(`partner_variation_sent_${po}`)) || variationWaitingCustomerPos.has(po);
         const completeAlreadySubmitted = (Number(localActive?.step || 0) >= 10 && localActive?.actionNeeded === false) || Boolean(localStorage.getItem(`partner_complete_sent_${po}`)) || completeWaitingCustomerPos.has(po);
@@ -3414,6 +3446,9 @@ export default function FixerProPage() {
             meetingDateLabel: inviteDetails.meetingDateLabel,
             meetingTimeLabel: inviteDetails.meetingTimeLabel,
             meetingVenue: inviteDetails.meetingVenue || order.subdistrict || '',
+            meetingDate: inviteDetails.meetingDateLabel,
+            meetingTime: inviteDetails.meetingTimeLabel,
+            venue: inviteDetails.meetingVenue || order.subdistrict || '',
             subdistrict: order.subdistrict || '',
             location: order.location || order.subdistrict || '',
             type: 'meeting_confirm_partner',
@@ -3449,6 +3484,7 @@ export default function FixerProPage() {
                 description: existingActive?.description || order.description || '',
                 location: existingActive?.location || order.location || order.subdistrict || '',
                 subdistrict: existingActive?.subdistrict || order.subdistrict || order.location || '',
+                ...meetingFields,
                 step: 9,
                 mockStep: 9,
                 actionNeeded: true,
@@ -3473,6 +3509,7 @@ export default function FixerProPage() {
               description: order.description || 'Proceed to submit variation request if extra work or price adjustment is required.',
               location: order.location || order.subdistrict || '',
               subdistrict: order.subdistrict || order.location || '',
+              ...meetingFields,
               type: 'variation_partner',
               workflowType: 'variation_partner',
               step: 9,
@@ -3486,7 +3523,19 @@ export default function FixerProPage() {
           const partnerRequest = resolveVariationPartnerNote(po);
           try {
             const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
-            const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 10, mockStep: 10, actionNeeded: true } : x);
+            const existingActive = active.find((x: any) => x.po === po);
+            const activeSnapshot = {
+              ...(existingActive || order),
+              po,
+              step: 10,
+              mockStep: 10,
+              actionNeeded: true,
+              ...meetingFields,
+            };
+            const updatedActive = [
+              ...active.filter((x: any) => x.po !== po),
+              activeSnapshot,
+            ];
             localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
           } catch {}
           next = next.filter((x: any) => !(x.po === po && (x.type === 'variation_partner' || x.type === 'meeting_confirm_partner' || x.workflowType === 'meeting_confirm_partner')));
@@ -3506,6 +3555,7 @@ export default function FixerProPage() {
               tier: order.tier,
               location: order.subdistrict || order.location || '',
               subdistrict: order.subdistrict || '',
+              ...meetingFields,
               description: 'Customer approved the variation. Please submit project complete for confirmation.',
               partnerRequest,
               partnerNote: partnerRequest,
@@ -3522,7 +3572,19 @@ export default function FixerProPage() {
         if (lower.includes('customer confirmed job complete')) {
           try {
             const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
-            const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 11, mockStep: 11, actionNeeded: true } : x);
+            const existingActive = active.find((x: any) => x.po === po);
+            const activeSnapshot = {
+              ...(existingActive || order),
+              po,
+              step: 11,
+              mockStep: 11,
+              actionNeeded: true,
+              ...meetingFields,
+            };
+            const updatedActive = [
+              ...active.filter((x: any) => x.po !== po),
+              activeSnapshot,
+            ];
             localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
           } catch {}
           next = next.filter((x: any) => !(x.po === po && (x.type === 'complete_partner' || x.type === 'variation_partner' || x.type === 'meeting_confirm_partner' || x.workflowType === 'meeting_confirm_partner')));
@@ -3542,6 +3604,7 @@ export default function FixerProPage() {
               tier: order.tier,
               location: order.subdistrict || order.location || '',
               subdistrict: order.subdistrict || '',
+              ...meetingFields,
               description: 'Customer confirmed completion. Please rate the customer to close this job.',
               type: 'rate_partner',
               workflowType: 'rate_partner',
@@ -4572,11 +4635,14 @@ export default function FixerProPage() {
                     if (isMeetingConfirmation) {
                       const schedId = `meet-scheduled-${po}`;
                       const meetingSummary = [waitModalMeetingDetails.meetingDateLabel, waitModalMeetingDetails.meetingTimeLabel].filter(Boolean).join(' ');
+                      const confirmedMeetingDate = waitModalOrder.meetingDate || waitModalMeetingDetails.meetingDateLabel || '';
+                      const confirmedMeetingTime = waitModalOrder.meetingTime || waitModalMeetingDetails.meetingTimeLabel || '';
+                      const confirmedMeetingVenue = waitModalMeetingDetails.meetingVenue || waitModalOrder.meetingVenue || '';
                       // Use PO-based matching (not waitModalOrder.id) because mockDynReqs IDs are
                       // 'meet-pending-{po}', not the backend UUID stored in waitModalOrder.id
                       const nextReqs = [
                         ...mockDynReqs.filter((r: any) => !(r.po === po && r.type === 'meeting_pending_partner') && r.id !== schedId),
-                        { id: schedId, po, title: waitModalOrder.service || serviceTitle, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), budget: budgetLabel, tier: waitModalOrder.tier, type: 'meeting_scheduled', step: 8, venue: waitModalMeetingDetails.meetingVenue, meetingDate: waitModalOrder.meetingDate || waitModalMeetingDetails.meetingDateLabel, meetingTime: waitModalOrder.meetingTime || waitModalMeetingDetails.meetingTimeLabel, desc: `Meeting confirmed by partner${meetingSummary ? ` for ${meetingSummary}` : ''}${waitModalMeetingDetails.meetingVenue ? ` at ${waitModalMeetingDetails.meetingVenue}` : ''}. Proceed after the site meeting then mark variation.` },
+                        { id: schedId, po, title: waitModalOrder.service || serviceTitle, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), budget: budgetLabel, tier: waitModalOrder.tier, type: 'meeting_scheduled', step: 8, venue: confirmedMeetingVenue, meetingVenue: confirmedMeetingVenue, meetingDate: confirmedMeetingDate, meetingTime: confirmedMeetingTime, desc: `Meeting confirmed by partner${meetingSummary ? ` for ${meetingSummary}` : ''}${confirmedMeetingVenue ? ` at ${confirmedMeetingVenue}` : ''}. Proceed after the site meeting then mark variation.` },
                       ];
                       const existingActive = mockActiveState.find((x: any) => x.po === po);
                       const activeSnapshot = {
@@ -4597,6 +4663,10 @@ export default function FixerProPage() {
                         description: existingActive?.description || waitModalOrder.description || '',
                         location: existingActive?.location || waitModalProjectLocation,
                         subdistrict: existingActive?.subdistrict || waitModalProjectLocation,
+                        meetingDate: existingActive?.meetingDate || confirmedMeetingDate,
+                        meetingTime: existingActive?.meetingTime || confirmedMeetingTime,
+                        meetingVenue: existingActive?.meetingVenue || confirmedMeetingVenue,
+                        venue: existingActive?.venue || confirmedMeetingVenue,
                         step: 9,
                         mockStep: 9,
                         actionNeeded: true,
@@ -4609,7 +4679,7 @@ export default function FixerProPage() {
                       localStorage.setItem("ghis_mock_active", JSON.stringify(nextActive));
                       const nextPartnerReqs = [
                         ...partnerDynReqs.filter((r: any) => !(r.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(r.type))),
-                        { id: `variation-${po}`, orderId: backendOrderId || waitModalOrder.orderId || undefined, po, service: waitModalOrder.service || serviceTitle, serviceTh: waitModalOrder.service || serviceTitle, serviceZh: waitModalOrder.service || serviceTitle, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), fee: budgetLabel, budget: String(budgetLabel).replace(/[^0-9]/g, ''), tier: waitModalOrder.tier, description: (mappedOrders as any[]).find((o: any) => o?.po === po)?.description || waitModalOrder?.description || 'Proceed to submit variation request if extra work or price adjustment is required.', location: waitModalOrder?.location || waitModalOrder?.subdistrict || '', type: 'variation_partner', step: 9 },
+                        { id: `variation-${po}`, orderId: backendOrderId || waitModalOrder.orderId || undefined, po, service: waitModalOrder.service || serviceTitle, serviceTh: waitModalOrder.service || serviceTitle, serviceZh: waitModalOrder.service || serviceTitle, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), fee: budgetLabel, budget: String(budgetLabel).replace(/[^0-9]/g, ''), tier: waitModalOrder.tier, description: (mappedOrders as any[]).find((o: any) => o?.po === po)?.description || waitModalOrder?.description || 'Proceed to submit variation request if extra work or price adjustment is required.', location: waitModalOrder?.location || waitModalOrder?.subdistrict || '', type: 'variation_partner', step: 9, meetingDate: confirmedMeetingDate, meetingTime: confirmedMeetingTime, meetingVenue: confirmedMeetingVenue, venue: confirmedMeetingVenue },
                       ];
                       localStorage.setItem("partner_mock_dyn_req", JSON.stringify(nextPartnerReqs));
                       try {
@@ -5591,6 +5661,43 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
       window.dispatchEvent(new Event("storage"));
     } catch {}
   };
+  const upsertMockActiveStep = (job: any, step: number, actionNeeded: boolean, createdAt: number) => {
+    try {
+      const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
+      const existing = Array.isArray(active) ? active.find((x: any) => x.po === job.po) : null;
+      const nextEntry = {
+        ...(existing || job),
+        id: existing?.id || job.id || job.orderId || job.po,
+        orderId: existing?.orderId || job.orderId || (isOrderUuid(job.id) ? job.id : undefined),
+        po: job.po || job.id,
+        title: job.title || job.service || job.po || "Project",
+        service: job.service || job.title || job.po || "Project",
+        customer: job.customer || "Customer",
+        customerName: job.customer || "Customer",
+        date: existing?.date || job.date || fmtDateTime(createdAt),
+        createdAt: existing?.createdAt || job.createdAt || createdAt,
+        budget: job.budget || job.fee || "฿0",
+        fee: job.fee || job.budget || "฿0",
+        location: job.location || job.subdistrict || "",
+        subdistrict: job.subdistrict || job.location || "",
+        tier: job.tier || "Standard",
+        description: job.description || job.desc || "",
+        meetingDate: job.meetingDate || existing?.meetingDate || "",
+        meetingTime: job.meetingTime || existing?.meetingTime || "",
+        meetingVenue: job.meetingVenue || job.venue || existing?.meetingVenue || existing?.venue || "",
+        venue: job.venue || job.meetingVenue || existing?.venue || existing?.meetingVenue || "",
+        actionNeeded,
+        step,
+        mockStep: step,
+      };
+      const updatedActive = Array.isArray(active) && active.some((x: any) => x.po === nextEntry.po)
+        ? active.map((x: any) => (x.po === nextEntry.po ? { ...x, ...nextEntry } : x))
+        : [...(Array.isArray(active) ? active : []), nextEntry];
+      localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
+    } catch {
+      // non-blocking for local workflow repair
+    }
+  };
   const handlePartnerAction = (job: any, action: 'variation' | 'complete' | 'rate', extraData?: string) => {
     try {
       const po = job.po || job.id;
@@ -5616,12 +5723,10 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
         const varNote = extraData || 'Your partner has submitted a variation for your approval. Please review and confirm to proceed.';
         const partnerRequest = normalizeVariationPartnerNote(varNote);
         if (partnerRequest) storeVariationPartnerNote(po, partnerRequest);
-        const next = [...dynReqs.filter((x: any) => x.po !== po), { id: varId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: varNote, location: job.location || job.subdistrict || '', type: 'variation_pending', step: 9 }];
+        const next = [...dynReqs.filter((x: any) => x.po !== po), { id: varId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: varNote, location: job.location || job.subdistrict || '', type: 'variation_pending', step: 9, meetingDate: job.meetingDate || '', meetingTime: job.meetingTime || '', meetingVenue: job.meetingVenue || job.venue || '', venue: job.venue || job.meetingVenue || '' }];
         localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
-        // Update active BEFORE writePartnerReqs to prevent race condition in buildChatFeed
-        const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
-        const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 9, mockStep: 9, actionNeeded: false } : x);
-        localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
+        // Keep the active-job progress pinned to Step 9 even after the request disappears.
+        upsertMockActiveStep(job, 9, false, createdAt);
         try { localStorage.setItem(`partner_variation_sent_${po}`, '1'); } catch {}
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
@@ -5631,12 +5736,9 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
         const complId = `compl-${po}`;
         const previousPartnerRequest = resolveVariationPartnerNote(po);
         const completeDesc = extraData?.trim() ? `Partner completion request: ${extraData.trim()}` : 'Work is completed. Please review and mark as complete to close this project.';
-        const next = [...dynReqs.filter((x: any) => x.po !== po), { id: complId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: completeDesc, location: job.location || job.subdistrict || '', partnerRequest: previousPartnerRequest, partnerNote: previousPartnerRequest, variationRequest: previousPartnerRequest, type: 'complete_pending', step: 10 }];
+        const next = [...dynReqs.filter((x: any) => x.po !== po), { id: complId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: completeDesc, location: job.location || job.subdistrict || '', partnerRequest: previousPartnerRequest, partnerNote: previousPartnerRequest, variationRequest: previousPartnerRequest, type: 'complete_pending', step: 10, meetingDate: job.meetingDate || '', meetingTime: job.meetingTime || '', meetingVenue: job.meetingVenue || job.venue || '', venue: job.venue || job.meetingVenue || '' }];
         localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
-        // Update active BEFORE writePartnerReqs to prevent race condition in buildChatFeed
-        const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
-        const updatedActive = active.map((x: any) => x.po === po ? { ...x, step: 10, mockStep: 10, actionNeeded: false } : x);
-        localStorage.setItem("ghis_mock_active", JSON.stringify(updatedActive));
+        upsertMockActiveStep(job, 10, false, createdAt);
         try { localStorage.setItem(`partner_complete_sent_${po}`, '1'); } catch {}
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['complete_partner', 'variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
@@ -5651,7 +5753,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
         const completed = { ...(active.find((x: any) => x.po === po) || job), step: 11, completedAt: createdAt, partnerRating: Number(rating) };
         localStorage.setItem("ghis_mock_active", JSON.stringify(updated));
         pruneStorageIfNeeded();
-        localStorage.setItem("ghis_mock_history", JSON.stringify([...hist, completed]));
+        localStorage.setItem("ghis_mock_history", JSON.stringify([...hist.filter((x: any) => x.po !== po), completed].sort((a: any, b: any) => parseWorkflowSortTs(b.completedAt || b.statusChangedAt || b.createdAt || b.date) - parseWorkflowSortTs(a.completedAt || a.statusChangedAt || a.createdAt || a.date))));
         try { localStorage.setItem(`chat_closed_${po}`, '1'); } catch {}
         try { localStorage.removeItem(`partner_variation_sent_${po}`); localStorage.removeItem(`partner_complete_sent_${po}`); } catch {}
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && x.type === 'rate_partner')));
@@ -6163,6 +6265,10 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
         subdistrict: job.subdistrict || job.location || "",
         tier: job.tier || "Standard",
         description: job.description || job.desc || "",
+        meetingDate: job.meetingDate || (active.find((x: any) => x.po === job.po) || {})?.meetingDate || "",
+        meetingTime: job.meetingTime || (active.find((x: any) => x.po === job.po) || {})?.meetingTime || "",
+        meetingVenue: job.meetingVenue || job.venue || (active.find((x: any) => x.po === job.po) || {})?.meetingVenue || "",
+        venue: job.venue || job.meetingVenue || (active.find((x: any) => x.po === job.po) || {})?.venue || "",
         actionNeeded,
         step,
         mockStep: step,
@@ -6202,7 +6308,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
         const varNote = extraData || 'Your partner has submitted a variation for your approval. Please review and confirm to proceed.';
         const partnerRequest = normalizeVariationPartnerNote(varNote);
         if (partnerRequest) storeVariationPartnerNote(po, partnerRequest);
-        const next = [...dynReqs.filter((x: any) => x.po !== po), { id: varId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: varNote, location: job.location || job.subdistrict || '', type: 'variation_pending', step: 9 }];
+        const next = [...dynReqs.filter((x: any) => x.po !== po), { id: varId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: varNote, location: job.location || job.subdistrict || '', type: 'variation_pending', step: 9, meetingDate: job.meetingDate || '', meetingTime: job.meetingTime || '', meetingVenue: job.meetingVenue || job.venue || '', venue: job.venue || job.meetingVenue || '' }];
         localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
         // Keep the active-job progress pinned to Step 9 even after the request disappears.
         upsertMockActiveStep(job, 9, false, createdAt);
@@ -6215,7 +6321,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
         const complId = `compl-${po}`;
         const completeDesc = extraData?.trim() ? `Partner completion request: ${extraData.trim()}` : 'Work is completed. Please review and mark as complete to close this project.';
         const previousPartnerRequest = resolveVariationPartnerNote(po);
-        const next = [...dynReqs.filter((x: any) => x.po !== po), { id: complId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: completeDesc, location: job.location || job.subdistrict || '', partnerRequest: previousPartnerRequest, partnerNote: previousPartnerRequest, variationRequest: previousPartnerRequest, type: 'complete_pending', step: 10 }];
+        const next = [...dynReqs.filter((x: any) => x.po !== po), { id: complId, po, title: job.service, customer: job.customer, date: fmtDt(createdAt), createdAt, budget: job.budget || job.fee, tier: job.tier, desc: completeDesc, location: job.location || job.subdistrict || '', partnerRequest: previousPartnerRequest, partnerNote: previousPartnerRequest, variationRequest: previousPartnerRequest, type: 'complete_pending', step: 10, meetingDate: job.meetingDate || '', meetingTime: job.meetingTime || '', meetingVenue: job.meetingVenue || job.venue || '', venue: job.venue || job.meetingVenue || '' }];
         localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(next));
         upsertMockActiveStep(job, 10, false, createdAt);
         try { localStorage.setItem(`partner_complete_sent_${po}`, '1'); } catch {}
@@ -6232,7 +6338,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
         const completed = { ...(active.find((x: any) => x.po === po) || job), step: 11, completedAt: createdAt, partnerRating: Number(rating) };
         localStorage.setItem("ghis_mock_active", JSON.stringify(updated));
         pruneStorageIfNeeded();
-        localStorage.setItem("ghis_mock_history", JSON.stringify([...hist, completed]));
+        localStorage.setItem("ghis_mock_history", JSON.stringify([...hist.filter((x: any) => x.po !== po), completed].sort((a: any, b: any) => parseWorkflowSortTs(b.completedAt || b.statusChangedAt || b.createdAt || b.date) - parseWorkflowSortTs(a.completedAt || a.statusChangedAt || a.createdAt || a.date))));
         try { localStorage.setItem(`chat_closed_${po}`, '1'); } catch {}
         try { localStorage.removeItem(`partner_variation_sent_${po}`); localStorage.removeItem(`partner_complete_sent_${po}`); } catch {}
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && x.type === 'rate_partner')));

@@ -86,6 +86,11 @@ const formatWorkflowMeetingLabel = (meetingDate?: string, meetingTime?: string, 
     const t = String(meetingTime || '').trim();
     return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}${t ? ` ${t}` : ''}`.trim();
   }
+  const ddmmyyyy = iso.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (ddmmyyyy) {
+    const t = String(meetingTime || '').trim();
+    return `${iso}${t ? ` ${t}` : ''}`.trim();
+  }
   const ts = new Date(fallback || (iso ? `${iso}T${meetingTime || '00:00'}` : 0)).getTime();
   return Number.isFinite(ts) && ts > 0 ? fmtDateTime(ts) : '';
 };
@@ -2195,10 +2200,38 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       const budget = backendOrder?.estimatedPrice ? `฿${Number(backendOrder.estimatedPrice).toLocaleString()}` : '฿0';
       const tier = String(backendOrder?.description || '').match(/TIER:([A-Za-z]+)/)?.[1] || 'Standard';
       const eventTs = parseDateMs(chatItem.sort || chatItem.createdAt || chatItem.time) || Date.now();
+      const meetingSnapshot = (() => {
+        try {
+          const localReqs = JSON.parse(localStorage.getItem('ghis_mock_dyn_req') || '[]');
+          const fromReq = (Array.isArray(localReqs) ? localReqs : []).find((r: any) => r?.po === po && ['meeting_scheduled', 'meeting_pending_partner'].includes(String(r?.type || '')));
+          const fromActive = mockActiveItems.find((r: any) => r?.po === po);
+          return {
+            meetingDate: fromReq?.meetingDate || fromActive?.meetingDate || '',
+            meetingTime: fromReq?.meetingTime || fromActive?.meetingTime || '',
+            meetingVenue: fromReq?.meetingVenue || fromReq?.venue || fromActive?.meetingVenue || fromActive?.venue || '',
+            venue: fromReq?.venue || fromReq?.meetingVenue || fromActive?.venue || fromActive?.meetingVenue || '',
+          };
+        } catch {
+          const fromActive = mockActiveItems.find((r: any) => r?.po === po);
+          return { meetingDate: fromActive?.meetingDate || '', meetingTime: fromActive?.meetingTime || '', meetingVenue: fromActive?.meetingVenue || fromActive?.venue || '', venue: fromActive?.venue || fromActive?.meetingVenue || '' };
+        }
+      })();
       // Variation detection
       if (lastMsg.includes('[system] partner has submitted a variation')) {
         setMockActiveItems(prev => {
-          const next = prev.map((x: any) => x.po === po ? { ...x, step: 9, actionNeeded: true } : x);
+          const activeSnapshot = {
+            ...(prev.find((x: any) => x.po === po) || backendOrder || {}),
+            po,
+            title,
+            customer: 'Suppadesh',
+            budget,
+            tier,
+            ...meetingSnapshot,
+            step: 9,
+            mockStep: 9,
+            actionNeeded: true,
+          };
+          const next = [...prev.filter((x: any) => x.po !== po), activeSnapshot];
           try { localStorage.setItem('ghis_mock_active', JSON.stringify(next)); } catch {}
           return next;
         });
@@ -2207,7 +2240,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           const fullMsg = String(chatItem.lastMsg || '');
           const noteMatch = fullMsg.match(/\[VARIATION_DATA\]([\s\S]*?)\[\/VARIATION_DATA\]/i);
           const desc = noteMatch?.[1]?.trim() || 'Partner has submitted a variation for your approval. Please review and confirm to proceed.';
-          const item = { id: `var-${po}`, po, title, customer: 'Suppadesh', date: fmtDateTime(eventTs), createdAt: eventTs, budget, tier, desc, type: 'variation_pending', step: 9 };
+          const item = { id: `var-${po}`, po, title, customer: 'Suppadesh', date: fmtDateTime(eventTs), createdAt: eventTs, budget, tier, desc, type: 'variation_pending', step: 9, ...meetingSnapshot };
           const merged = [...prev.filter((x: any) => !(x.po === po && ['variation_pending', 'meeting_invite', 'meeting_pending_partner', 'meeting_scheduled', 'chat_ready'].includes(x.type))), item];
           try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(merged)); } catch {}
           return merged;
@@ -2216,7 +2249,19 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
       // Complete detection
       if (lastMsg.includes('[system] partner has marked the job as complete')) {
         setMockActiveItems(prev => {
-          const next = prev.map((x: any) => x.po === po ? { ...x, step: 10, actionNeeded: true } : x);
+          const activeSnapshot = {
+            ...(prev.find((x: any) => x.po === po) || backendOrder || {}),
+            po,
+            title,
+            customer: 'Suppadesh',
+            budget,
+            tier,
+            ...meetingSnapshot,
+            step: 10,
+            mockStep: 10,
+            actionNeeded: true,
+          };
+          const next = [...prev.filter((x: any) => x.po !== po), activeSnapshot];
           try { localStorage.setItem('ghis_mock_active', JSON.stringify(next)); } catch {}
           return next;
         });
@@ -2225,7 +2270,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
           const fullMsg = String(chatItem.lastMsg || '');
           const noteMatch = fullMsg.match(/\[COMPLETE_DATA\]([\s\S]*?)\[\/COMPLETE_DATA\]/i);
           const desc = noteMatch?.[1]?.trim() || 'Work is completed. Please review and mark as complete to close this project.';
-          const item = { id: `compl-${po}`, po, title, customer: 'Suppadesh', date: fmtDateTime(eventTs), createdAt: eventTs, budget, tier, desc, type: 'complete_pending', step: 10 };
+          const item = { id: `compl-${po}`, po, title, customer: 'Suppadesh', date: fmtDateTime(eventTs), createdAt: eventTs, budget, tier, desc, type: 'complete_pending', step: 10, ...meetingSnapshot };
           const merged = [...prev.filter((x: any) => !(x.po === po && ['complete_pending', 'variation_pending', 'meeting_invite', 'meeting_pending_partner', 'meeting_scheduled', 'chat_ready'].includes(x.type))), item];
           try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(merged)); } catch {}
           return merged;
@@ -3188,7 +3233,21 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
             </div>
             <div className="flex gap-2">
               <button className="bg-teal-600 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-teal-700 transition shadow-sm whitespace-nowrap" onClick={() => {
-                setMockActiveItems(prev => prev.map((x: any) => x.po === item.po ? { ...x, step: 9, actionNeeded: true } : x));
+                setMockActiveItems(prev => {
+                  const activeSnapshot = {
+                    ...(prev.find((x: any) => x.po === item.po) || item),
+                    step: 9,
+                    mockStep: 9,
+                    actionNeeded: true,
+                    meetingDate: item.meetingDate || '',
+                    meetingTime: item.meetingTime || '',
+                    meetingVenue: item.meetingVenue || item.venue || '',
+                    venue: item.venue || item.meetingVenue || '',
+                  };
+                  const next = [...prev.filter((x: any) => x.po !== item.po), activeSnapshot];
+                  try { localStorage.setItem('ghis_mock_active', JSON.stringify(next)); } catch {}
+                  return next;
+                });
                 const varId = `variation-${item.po}`;
                 const createdAt = Date.now();
                 setMockDynRequests(prev => {
@@ -3196,7 +3255,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   if (prev.some((x: any) => x.po === item.po && x.type === 'variation_pending' && x.id !== varId)) {
                     return prev.filter((x: any) => x.id !== item.id);
                   }
-                  const f = prev.filter((x: any) => x.id !== item.id && x.id !== varId); return [...f, { id: varId, po: item.po, title: item.title, customer: item.customer, date: fmtDateTime(createdAt), createdAt, budget: item.budget, tier: item.tier, desc: 'Your partner has submitted a variation for your approval. Please review and confirm to proceed.', type: 'variation_pending', step: 9 }]; });
+                  const f = prev.filter((x: any) => x.id !== item.id && x.id !== varId); return [...f, { id: varId, po: item.po, title: item.title, customer: item.customer, date: fmtDateTime(createdAt), createdAt, budget: item.budget, tier: item.tier, desc: 'Your partner has submitted a variation for your approval. Please review and confirm to proceed.', type: 'variation_pending', step: 9, meetingDate: item.meetingDate || '', meetingTime: item.meetingTime || '', meetingVenue: item.meetingVenue || item.venue || '', venue: item.venue || item.meetingVenue || '' }]; });
                 setActiveTab("requests");
               }}>Meeting Complete ✓</button>
             </div>
@@ -3824,9 +3883,23 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     combinedActiveWithProp.find((item: any) => item.po === po) ||
     visibleMockHistory.find((item: any) => item.po === po) ||
     {};
+  const getWorkflowMeetingSnapshot = (po: any, source: any = {}) => {
+    const fromActive = combinedActiveWithProp.find((item: any) => item.po === po) || {};
+    const fromRequest = allRequestItemsWithProp.find((item: any) => item.po === po) || {};
+    const meetingDateValue = source?.meetingDate || fromRequest?.meetingDate || fromActive?.meetingDate || "";
+    const meetingTimeValue = source?.meetingTime || fromRequest?.meetingTime || fromActive?.meetingTime || "";
+    const venueValue = source?.meetingVenue || source?.venue || fromRequest?.meetingVenue || fromRequest?.venue || fromActive?.meetingVenue || fromActive?.venue || "";
+    return {
+      when: formatWorkflowMeetingLabel(meetingDateValue, meetingTimeValue, source?.createdAt || fromRequest?.createdAt || fromActive?.createdAt),
+      venue: venueValue,
+    };
+  };
   const rateModalOrder = rateModal ? getWorkflowOrderSnapshot(rateModal.po) : null;
   const variationApproveOrder = variationApproveModal ? getWorkflowOrderSnapshot(variationApproveModal.po) : null;
   const completeApproveOrder = completeApproveModal ? getWorkflowOrderSnapshot(completeApproveModal.po) : null;
+  const rateModalMeeting = rateModal ? getWorkflowMeetingSnapshot(rateModal.po, rateModal) : null;
+  const variationApproveMeeting = variationApproveModal ? getWorkflowMeetingSnapshot(variationApproveModal.po, variationApproveModal) : null;
+  const completeApproveMeeting = completeApproveModal ? getWorkflowMeetingSnapshot(completeApproveModal.po, completeApproveModal) : null;
 
     return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 relative z-10 pb-12 -mt-6">
@@ -4485,6 +4558,13 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 location={rateModalOrder?.address?.subdistrict || rateModalOrder?.subdistrict || rateModalOrder?.location || 'Unknown'}
                 projectDetails={stripWorkflowPrefix(rateModalOrder?.description || rateModal.desc || rateModal.title || '')}
               />
+              {(rateModalMeeting?.when || rateModalMeeting?.venue) && (
+                <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm">
+                  <div className="font-bold text-amber-900">Confirmed Site Meeting</div>
+                  {rateModalMeeting.when && <div className="text-amber-800">Time: {rateModalMeeting.when}</div>}
+                  {rateModalMeeting.venue && <div className="text-amber-800">Venue: {rateModalMeeting.venue}</div>}
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-2">Your Rating</label>
                 <div className="flex gap-2 text-3xl">
@@ -4503,7 +4583,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                     const newActive = mockActiveItems.filter((x: any) => x.po !== po);
                     const newReqs = mockDynRequests.filter((x: any) => x.po !== po);
                     const prevHist = JSON.parse(localStorage.getItem('ghis_mock_history') || '[]');
-                    const newHist = [...(prevHist as any[]).filter((x: any) => x.po !== po), completed];
+                    const newHist = [...(prevHist as any[]).filter((x: any) => x.po !== po), completed]
+                      .sort((a: any, b: any) => parseDateMs(b.completedAt || b.statusChangedAt || b.createdAt || b.date) - parseDateMs(a.completedAt || a.statusChangedAt || a.createdAt || a.date));
                     localStorage.setItem('ghis_mock_active', JSON.stringify(newActive));
                     localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(newReqs));
                     localStorage.setItem('ghis_mock_history', JSON.stringify(newHist));
@@ -4799,13 +4880,17 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                       location: existingMeetActive?.location || meetingProjectLocation,
                       subdistrict: existingMeetActive?.subdistrict || meetingProjectLocation,
                       description: existingMeetActive?.description || meetingModal.description || meetingModal.desc || '',
+                      meetingDate,
+                      meetingTime,
+                      meetingVenue,
+                      venue: meetingVenue,
                       step: 8,
                       actionNeeded: false,
                     },
                   ];
                   const updatedMeetReqs = [
                     ...mockDynRequests.filter((x: any) => x.id !== meetingModal.id && x.id !== pendingId),
-                    { id: pendingId, po: meetingModal.po, title: meetingModal.title, customer: meetingModal.customer, date: fmtDateTime(createdAt), createdAt, budget: meetingModal.budget, tier: meetingModal.tier, desc, type: 'meeting_pending_partner', step: 8, venue: meetingVenue, meetingDate, meetingTime, meetingNote: meetingNote.trim(), location: meetingProjectLocation },
+                    { id: pendingId, po: meetingModal.po, title: meetingModal.title, customer: meetingModal.customer, date: fmtDateTime(createdAt), createdAt, budget: meetingModal.budget, tier: meetingModal.tier, desc, type: 'meeting_pending_partner', step: 8, venue: meetingVenue, meetingVenue, meetingDate, meetingTime, meetingNote: meetingNote.trim(), location: meetingProjectLocation },
                   ];
                   try {
                     localStorage.setItem('ghis_mock_active', JSON.stringify(updatedMeetActive));
@@ -4866,6 +4951,13 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 })()}
                 projectDetails={stripWorkflowPrefix(variationApproveOrder?.description || variationApproveModal.desc || variationApproveModal.title || '')}
               />
+              {(variationApproveMeeting?.when || variationApproveMeeting?.venue) && (
+                <div className="rounded-xl border border-purple-100 bg-purple-50 px-4 py-3 text-sm">
+                  <div className="font-bold text-purple-900">Confirmed Site Meeting</div>
+                  {variationApproveMeeting.when && <div className="text-purple-800">Time: {variationApproveMeeting.when}</div>}
+                  {variationApproveMeeting.venue && <div className="text-purple-800">Venue: {variationApproveMeeting.venue}</div>}
+                </div>
+              )}
               {(() => {
                 try {
                   const brkPo = variationApproveModal.po;
@@ -4947,6 +5039,13 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   onClick={() => {
                     const createdAt = Date.now();
                     const po = variationApproveModal.po;
+                    const meetingSnapshot = getWorkflowMeetingSnapshot(po, variationApproveModal);
+                    const meetingFields = {
+                      meetingDate: variationApproveModal.meetingDate || '',
+                      meetingTime: variationApproveModal.meetingTime || '',
+                      meetingVenue: meetingSnapshot.venue || variationApproveModal.meetingVenue || variationApproveModal.venue || '',
+                      venue: meetingSnapshot.venue || variationApproveModal.venue || variationApproveModal.meetingVenue || '',
+                    };
                     const notice = {
                       id: `notice-var-${po}-${createdAt}`,
                       po,
@@ -4959,6 +5058,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                       desc: 'Variation approved. Partner may now submit project complete.',
                       type: 'notice',
                       step: 10,
+                      ...meetingFields,
                     };
                     const variationRequest = stripVariationPriceList(
                       String(
@@ -4972,13 +5072,22 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                     )
                       .replace(/^Partner variation request:\s*/i, '')
                       .trim();
-                    const newActive = mockActiveItems.map((x: any) => x.po === po ? { ...x, step: 10, mockStep: 10, actionNeeded: false } : x);
+                    const existingActive = mockActiveItems.find((x: any) => x.po === po);
+                    const activeSnapshot = {
+                      ...(existingActive || variationApproveModal),
+                      po,
+                      step: 10,
+                      mockStep: 10,
+                      actionNeeded: false,
+                      ...meetingFields,
+                    };
+                    const newActive = [...mockActiveItems.filter((x: any) => x.po !== po), activeSnapshot];
                     const newReqs = [...mockDynRequests.filter((x: any) => !(x.po === po && ['variation_pending', 'meeting_pending_partner', 'meeting_scheduled'].includes(x.type))), notice];
                     const partnerReqs = JSON.parse(localStorage.getItem('partner_mock_dyn_req') || '[]') as any[];
                     const complId = `complete-${po}`;
                     const updatedPartnerReqs = [
                       ...partnerReqs.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner', 'complete_partner'].includes(x.type))),
-                      { id: complId, po, title: variationApproveModal.title, customer: variationApproveModal.customer, date: fmtDateTime(createdAt), createdAt, budget: variationApproveModal.budget, tier: variationApproveModal.tier, desc: 'Customer approved the variation. Please submit project complete for confirmation.', location: variationApproveModal.location || variationApproveModal.subdistrict || '', partnerRequest: variationRequest, partnerNote: variationRequest, variationRequest, type: 'complete_partner', step: 10 },
+                      { id: complId, po, title: variationApproveModal.title, customer: variationApproveModal.customer, date: fmtDateTime(createdAt), createdAt, budget: variationApproveModal.budget, tier: variationApproveModal.tier, desc: 'Customer approved the variation. Please submit project complete for confirmation.', location: variationApproveModal.location || variationApproveModal.subdistrict || '', partnerRequest: variationRequest, partnerNote: variationRequest, variationRequest, type: 'complete_partner', step: 10, ...meetingFields },
                     ];
                     localStorage.setItem('ghis_mock_active', JSON.stringify(newActive));
                     localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(newReqs));
@@ -5024,6 +5133,13 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                 })()}
                 projectDetails={stripWorkflowPrefix(completeApproveOrder?.description || completeApproveModal.desc || completeApproveModal.title || '')}
               />
+              {(completeApproveMeeting?.when || completeApproveMeeting?.venue) && (
+                <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3 text-sm">
+                  <div className="font-bold text-green-900">Confirmed Site Meeting</div>
+                  {completeApproveMeeting.when && <div className="text-green-800">Time: {completeApproveMeeting.when}</div>}
+                  {completeApproveMeeting.venue && <div className="text-green-800">Venue: {completeApproveMeeting.venue}</div>}
+                </div>
+              )}
               {(() => {
                 const brkPo = completeApproveModal.po;
                 let bd: BudgetBreakdownItem[] | null = null;
@@ -5080,6 +5196,13 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   onClick={() => {
                     const createdAt = Date.now();
                     const po = completeApproveModal.po;
+                    const meetingSnapshot = getWorkflowMeetingSnapshot(po, completeApproveModal);
+                    const meetingFields = {
+                      meetingDate: completeApproveModal.meetingDate || '',
+                      meetingTime: completeApproveModal.meetingTime || '',
+                      meetingVenue: meetingSnapshot.venue || completeApproveModal.meetingVenue || completeApproveModal.venue || '',
+                      venue: meetingSnapshot.venue || completeApproveModal.venue || completeApproveModal.meetingVenue || '',
+                    };
                     const backendOrder = workflowOrders.find((o: any) => extractPo(o) === po);
                     const token = localStorage.getItem('subscriber_token') || '';
                     const rateReq = {
@@ -5094,14 +5217,24 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                       desc: 'Job complete! Please rate your partner and close this project.',
                       type: 'rate_pending',
                       step: 11,
+                      ...meetingFields,
                     };
-                    const newActive = mockActiveItems.map((x: any) => x.po === po ? { ...x, step: 11, mockStep: 11, actionNeeded: true } : x);
+                    const existingActive = mockActiveItems.find((x: any) => x.po === po);
+                    const activeSnapshot = {
+                      ...(existingActive || completeApproveModal),
+                      po,
+                      step: 11,
+                      mockStep: 11,
+                      actionNeeded: true,
+                      ...meetingFields,
+                    };
+                    const newActive = [...mockActiveItems.filter((x: any) => x.po !== po), activeSnapshot];
                     const newReqs = [...mockDynRequests.filter((x: any) => !(x.po === po && ['complete_pending', 'variation_pending', 'meeting_pending_partner', 'meeting_scheduled'].includes(x.type))), rateReq];
                     const partnerReqs = JSON.parse(localStorage.getItem('partner_mock_dyn_req') || '[]') as any[];
                     const ratePartnerId = `rate-partner-${po}`;
                     const updatedPartnerReqs = [
                       ...partnerReqs.filter((x: any) => !(x.po === po && ['complete_partner', 'variation_partner', 'meeting_confirm_partner', 'rate_partner'].includes(x.type))),
-                      { id: ratePartnerId, po, title: completeApproveModal.title, customer: completeApproveModal.customer, date: fmtDateTime(createdAt), createdAt, budget: completeApproveModal.budget, tier: completeApproveModal.tier, desc: 'Customer confirmed completion. Please rate the customer to close this job.', type: 'rate_partner', step: 11 },
+                      { id: ratePartnerId, po, title: completeApproveModal.title, customer: completeApproveModal.customer, date: fmtDateTime(createdAt), createdAt, budget: completeApproveModal.budget, tier: completeApproveModal.tier, desc: 'Customer confirmed completion. Please rate the customer to close this job.', type: 'rate_partner', step: 11, ...meetingFields },
                     ];
                     try { localStorage.setItem(`chat_closed_${po}`, '1'); } catch {}
                     localStorage.setItem('ghis_mock_active', JSON.stringify(newActive));
