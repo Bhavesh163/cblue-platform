@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useLocale } from "next-intl";
@@ -2222,6 +2222,17 @@ export default function FixerProPage() {
     };
   }).filter(Boolean) as any[];
 
+  const completedBackendOrderPos = useMemo(
+    () =>
+      new Set(
+        (orders || [])
+          .filter((order: any) => ['COMPLETED', 'CANCELLED', 'DONE'].includes(String(order?.status || '').toUpperCase()))
+          .map((order: any) => String(extractPoCode(order) || '').trim())
+          .filter(Boolean),
+      ),
+    [orders],
+  );
+
   
   const properties = myProperties.map(p => ({
     id: p.id,
@@ -2372,7 +2383,7 @@ export default function FixerProPage() {
         }
         const historyEntry = mockHistory.find((h: any) => h.po === po);
         const partnerRated = historyEntry?.partnerRating != null;
-        if (completedPoSet.has(po) && partnerRated) {
+        if (completedPoSet.has(po)) {
           localStorage.setItem(`chat_closed_${po}`, '1');
           continue;
         }
@@ -2486,7 +2497,7 @@ export default function FixerProPage() {
     let viewerUserId = "";
     try { viewerUserId = JSON.parse(localStorage.getItem("subscriber") || "{}")?.id || ""; } catch {}
     const items: any[] = [];
-    const chatOpenStatuses = new Set(["IN_PROGRESS", "MEETING_REQUESTED", "COMPLETED"]);
+    const chatOpenStatuses = new Set(["IN_PROGRESS", "MEETING_REQUESTED"]);
 
     for (const order of (orders || [])) {
       const orderId = order?.id;
@@ -2525,11 +2536,8 @@ export default function FixerProPage() {
           return true;
         });
         if (visible.length === 0) continue;
-        const hasCustomerCompleteNotice = visible.some((m: any) =>
-          String(m?.text || '').toLowerCase().includes('customer confirmed job complete'),
-        );
         const workflowClosed = ['COMPLETED', 'CANCELLED', 'DONE'].includes(String(order?.status || '').toUpperCase());
-        if ((workflowClosed && !hasCustomerCompleteNotice) || hasCompletionChatMarker(visible)) {
+        if (workflowClosed || hasCompletionChatMarker(visible)) {
           try { localStorage.setItem(`chat_closed_${po}`, '1'); } catch {}
           continue;
         }
@@ -2683,10 +2691,10 @@ export default function FixerProPage() {
   useEffect(() => {
     let isMounted = true;
     const syncChats = async () => {
-      const localItems = buildChatFeed();
+      const localItems = isFixer ? buildChatFeed() : [];
       const propChatItems = buildPropChatFeed();
       const propBackendItems = await buildPropBackendChatFeed();
-      const backendItems = await buildBackendChatFeed();
+      const backendItems = isFixer ? await buildBackendChatFeed() : [];
       const merged = new Map<string, any>();
       for (const item of propChatItems) merged.set(item.po, item);
       for (const item of localItems) merged.set(item.po, item);
@@ -2713,7 +2721,7 @@ export default function FixerProPage() {
       window.removeEventListener("cblue-chat-updated", syncEvent as EventListener);
       clearInterval(timer);
     };
-  }, [orders, partner?.id, propInquiries]);
+  }, [orders, partner?.id, propInquiries, isFixer]);
 
   const [mockDynReqs, setMockDynReqs] = useState<any[]>([]);
   const [mockActiveState, setMockActiveState] = useState<any[]>([]);
@@ -2749,6 +2757,11 @@ export default function FixerProPage() {
                 (['variation_partner', 'complete_partner', 'rate_partner'].includes(item?.type) ? item.type : undefined),
             }))
           : [];
+        partnerReqs = partnerReqs.filter((item: any) => {
+          const po = String(item?.po || '').trim();
+          const type = String(item?.workflowType || item?.type || '');
+          return !(type === 'rate_partner' && completedBackendOrderPos.has(po));
+        });
         // Auto-sync: meeting_pending_partner in ghis_mock_dyn_req → meeting_confirm_partner in partner reqs
         if (d) {
           const ghisReqs: any[] = filterVisibleWorkflowItems(JSON.parse(d));
@@ -2868,7 +2881,9 @@ export default function FixerProPage() {
         const beforeStaleCleanup = partnerReqs.length;
         partnerReqs = partnerReqs.filter((req: any) => {
           if (isClosedPartnerWorkflowPo(req?.po)) return false;
+          const po = String(req?.po || '').trim();
           const type = String(req?.workflowType || req?.type || '');
+          if (type === 'rate_partner' && completedBackendOrderPos.has(po)) return false;
           if (type !== 'meeting_confirm_partner') return true;
           const meetingTs = parseMeetingDateTimeMs(req.meetingDate || req.meetingDateLabel, req.meetingTime || req.meetingTimeLabel);
           return !(meetingTs > 0 && meetingTs < Date.now() - 3 * 24 * 60 * 60 * 1000);
@@ -2890,7 +2905,7 @@ export default function FixerProPage() {
       window.removeEventListener('storage', checkMock);
       window.removeEventListener('cblue-workflow-updated', onWorkflowUpdated as EventListener);
     };
-  }, [isFixer]);
+  }, [isFixer, completedBackendOrderPos]);
 
   const completedHistoryPos = new Set(mockHistory.map((h: any) => h.po));
   const declinedPartnerPos = new Set<string>();
@@ -3301,6 +3316,10 @@ export default function FixerProPage() {
 
       for (const chat of chatFeed) {
         const po = chat.po;
+        if (completedBackendOrderPos.has(String(po || '').trim())) {
+          next = next.filter((x: any) => !(x.po === po && x.type === 'rate_partner'));
+          continue;
+        }
         const lower = String(chat.lastMsg || "").toLowerCase();
         const order = mappedOrders.find((x: any) => x.po === po);
         const localActive = mockActiveState.find((x: any) => x.po === po);
@@ -3461,17 +3480,11 @@ export default function FixerProPage() {
       try { localStorage.setItem("partner_mock_dyn_req", JSON.stringify(next)); } catch {}
       return next;
     });
-  }, [chatFeed, mappedOrders, mockActiveState, mockHistory, mockDynReqs]);
+  }, [chatFeed, mappedOrders, mockActiveState, mockHistory, mockDynReqs, completedBackendOrderPos]);
 
-  // Cross-browser: when customer confirms complete, backend order becomes COMPLETED — sync partner rate request + alerts.
+  // Completed backend orders are terminal for dashboards; do not rebuild old step-11 request cards.
   useEffect(() => {
-    if (!partner?.id) return;
-    const completedOrders = mappedOrders.filter(
-      (order: any) => String(order?.status || '').toUpperCase() === 'COMPLETED',
-    );
-    if (completedOrders.length === 0) return;
-
-    let changed = false;
+    if (!partner?.id || completedBackendOrderPos.size === 0) return;
     let nextReqs: any[] = [];
     let nextAlerts: any[] = [];
     try { nextReqs = filterVisibleWorkflowItems(JSON.parse(localStorage.getItem('partner_mock_dyn_req') || '[]')); } catch {}
@@ -3479,65 +3492,31 @@ export default function FixerProPage() {
     if (!Array.isArray(nextReqs)) nextReqs = [];
     if (!Array.isArray(nextAlerts)) nextAlerts = [];
 
-    for (const order of completedOrders) {
-      const po = String(order?.po || '').trim();
-      if (!po) continue;
-      const historyEntry = mockHistory.find((h: any) => h.po === po);
-      if (historyEntry?.partnerRating != null) continue;
-      if (nextReqs.some((r: any) => r.po === po && r.type === 'rate_partner')) continue;
+    const filteredReqs = nextReqs.filter((req: any) => {
+      const po = String(req?.po || '').trim();
+      const type = String(req?.workflowType || req?.type || '');
+      return !(type === 'rate_partner' && completedBackendOrderPos.has(po));
+    });
+    const filteredAlerts = nextAlerts.filter((alert: any) => {
+      const po = String(alert?.po || alert?.message || alert?.msg || '').match(/PO-(?:\d{4}-\d{4,}|\d{8})/i)?.[0] || '';
+      const text = String(alert?.type || alert?.message || alert?.msg || '').toLowerCase();
+      return !(completedBackendOrderPos.has(po) && (text.includes('complete_confirmed') || text.includes('customer confirmed')));
+    });
 
-      const createdAt = parseTs(order.statusChangedAt || order.updatedAt || order.createdAt) || Date.now();
-      nextReqs = [
-        ...nextReqs.filter((r: any) => !(r.po === po && ['complete_partner', 'variation_partner', 'meeting_confirm_partner'].includes(r.type))),
-        {
-          id: `rate-partner-${po}`,
-          orderId: order.id,
-          po,
-          service: order.service,
-          serviceTh: order.serviceTh,
-          serviceZh: order.serviceZh,
-          customer: order.customer,
-          date: fmtDateTime(createdAt),
-          createdAt,
-          fee: order.fee,
-          budget: order.budget,
-          tier: order.tier,
-          location: order.subdistrict || order.location || '',
-          subdistrict: order.subdistrict || '',
-          description: 'Customer confirmed completion. Please rate the customer to close this job.',
-          type: 'rate_partner',
-          workflowType: 'rate_partner',
-          step: 11,
-        },
-      ];
-      const alertId = `alert-complete-${po}`;
-      if (!nextAlerts.some((a: any) => String(a?.id || '').startsWith(alertId))) {
-        nextAlerts.unshift({
-          id: `${alertId}-${createdAt}`,
-          type: 'complete_confirmed',
-          po,
-          title: 'Job Complete Approved',
-          message: `${po}: Customer confirmed project complete. Next: rate the customer to close this job and move it to history.`,
-          msgTh: `${po}: ลูกค้ายืนยันงานเสร็จแล้ว ขั้นตอนถัดไปคือให้คะแนนลูกค้าเพื่อปิดงานและย้ายไปประวัติ`,
-          msgZh: `${po}: 客户已确认项目完工。下一步：评价客户以关闭此工作并移入历史。`,
-          timestamp: new Date(createdAt).toISOString(),
-          createdAt,
-          dot: 'bg-sky-500',
-        });
-      }
-      changed = true;
-    }
-
-    if (!changed) return;
-    try { localStorage.setItem('partner_mock_dyn_req', JSON.stringify(nextReqs)); } catch {}
-    try { localStorage.setItem('partner_alerts', JSON.stringify(nextAlerts)); } catch {}
-    setPartnerDynReqs(nextReqs);
-    setPartnerPersistedAlerts(nextAlerts);
+    if (filteredReqs.length === nextReqs.length && filteredAlerts.length === nextAlerts.length) return;
+    try { localStorage.setItem('partner_mock_dyn_req', JSON.stringify(filteredReqs)); } catch {}
+    try { localStorage.setItem('partner_alerts', JSON.stringify(filteredAlerts)); } catch {}
+    setPartnerDynReqs(filteredReqs);
+    setPartnerPersistedAlerts(filteredAlerts);
     window.dispatchEvent(new Event('cblue-workflow-updated'));
-  }, [mappedOrders, mockHistory, partner?.id]);
+  }, [completedBackendOrderPos, partner?.id]);
 
   const partnerRequestItems = Array.from([
-    ...partnerDynReqs.filter((r: any) => !['accept_sent'].includes(String(r.type || '')) && !completedHistoryPos.has(r.po) && !declinedPartnerPos.has(r.po) && !isClosedPartnerWorkflowPo(r.po)),
+    ...partnerDynReqs.filter((r: any) => {
+      const po = String(r?.po || '').trim();
+      const type = String(r?.workflowType || r?.type || '');
+      return !['accept_sent'].includes(String(r.type || '')) && !completedHistoryPos.has(po) && !declinedPartnerPos.has(po) && !isClosedPartnerWorkflowPo(po) && !(type === 'rate_partner' && completedBackendOrderPos.has(po));
+    }),
     ...incomingJobs.filter((job: any) => !(String(job.status || '').toUpperCase() === 'MEETING_REQUESTED' && partnerDynReqs.some((req: any) => req.po === job.po && req.workflowType === 'meeting_confirm_partner'))),
   ].reduce((map: Map<string, any>, item: any) => {
     const key = item.po || item.id;
@@ -4001,6 +3980,9 @@ export default function FixerProPage() {
       const createdAt = parseTs(alert?.createdAt || alert?.timestamp || alert?.date);
       const msg = alert?.message || alert?.msg || '';
       if (!msg || !createdAt) return null;
+      const alertPo = String(alert?.po || msg).match(/PO-(?:\d{4}-\d{4,}|\d{8})/i)?.[0] || '';
+      const alertType = String(alert?.type || msg).toLowerCase();
+      if (completedBackendOrderPos.has(alertPo) && (alertType.includes('complete_confirmed') || alertType.includes('customer confirmed'))) return null;
       return {
         id: `partner-alert-${alert.id || createdAt}`,
         msg,
@@ -4027,9 +4009,7 @@ export default function FixerProPage() {
     if (o.status === 'MEETING_REQUESTED') return [{ id: `order-meeting-${po}`, msg: `${po}: Customer sent a site meeting invitation for ${svc}. Open the request, confirm the schedule, and then prepare Step 9 variation if needed.`, msgTh: `${po}: ลูกค้าส่งคำเชิญนัดหมายสำหรับ ${svc} แล้ว กรุณาเปิดคำขอ ยืนยันเวลา และเตรียม Step 9 variation หากจำเป็น`, msgZh: `${po}: 客户已为 ${svc} 发送现场会议邀请。请打开请求、确认时间，并在需要时准备第9步变更。`, unread: true, time: displayTime, createdAt, dot: "bg-amber-500" }];
     if (o.status === 'IN_PROGRESS') return [{ id: `order-inprogress-${po}`, msg: `${po}: Chat room is active for ${svc}. Coordinate with the customer now, then confirm the site meeting when the invitation arrives.`, msgTh: `${po}: ห้องแชทของ ${svc} พร้อมใช้งานแล้ว กรุณาคุยกับลูกค้าและยืนยันนัดหมายหน้างานเมื่อได้รับคำเชิญ`, msgZh: `${po}: ${svc} 聊天室已开启。请先与客户协调，并在收到现场会议邀请后完成确认。`, unread: true, time: displayTime, createdAt, dot: "bg-sky-400" }];
     if (o.status === 'COMPLETED') {
-      const historyEntry = mockHistory.find((h: any) => h.po === po);
-      if (historyEntry?.partnerRating != null) return [];
-      return [{ id: `order-rate-${po}`, msg: `${po}: Customer confirmed project complete. Next: rate the customer to close this job and move it to history.`, msgTh: `${po}: ลูกค้ายืนยันงานเสร็จแล้ว ขั้นตอนถัดไปคือให้คะแนนลูกค้าเพื่อปิดงานและย้ายไปประวัติ`, msgZh: `${po}: 客户已确认项目完工。下一步：评价客户以关闭此工作并移入历史。`, unread: true, time: displayTime, createdAt, dot: "bg-sky-500" }];
+      return [];
     }
     return [];
   });
