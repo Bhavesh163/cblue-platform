@@ -38,6 +38,48 @@ const notifications: any[] = [];
 
 const chats: any[] = [];
 
+const CUSTOMER_DASHBOARD_TOKEN_KEY = "cblue_customer_dashboard_token";
+const CUSTOMER_DASHBOARD_SUBSCRIBER_KEY = "cblue_customer_dashboard_subscriber";
+
+function getCustomerDashboardSessionValue(sessionKey: string, sharedKey: string) {
+  if (typeof window === "undefined") return "";
+  const scoped = sessionStorage.getItem(sessionKey);
+  if (scoped) return scoped;
+  const shared = localStorage.getItem(sharedKey) || "";
+  if (shared) sessionStorage.setItem(sessionKey, shared);
+  return shared;
+}
+
+function getCustomerDashboardToken() {
+  return getCustomerDashboardSessionValue(CUSTOMER_DASHBOARD_TOKEN_KEY, "subscriber_token");
+}
+
+function getCustomerDashboardSubscriberRaw() {
+  return getCustomerDashboardSessionValue(CUSTOMER_DASHBOARD_SUBSCRIBER_KEY, "subscriber");
+}
+
+function readCustomerDashboardSubscriber() {
+  const raw = getCustomerDashboardSubscriberRaw();
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function writeCustomerDashboardSession(subscriber: any, token?: string) {
+  if (typeof window === "undefined") return;
+  if (token) sessionStorage.setItem(CUSTOMER_DASHBOARD_TOKEN_KEY, token);
+  if (subscriber) sessionStorage.setItem(CUSTOMER_DASHBOARD_SUBSCRIBER_KEY, JSON.stringify(subscriber));
+}
+
+function clearCustomerDashboardSession() {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(CUSTOMER_DASHBOARD_TOKEN_KEY);
+  sessionStorage.removeItem(CUSTOMER_DASHBOARD_SUBSCRIBER_KEY);
+}
+
 /** Prune localStorage when approaching the 4.5 MB soft limit.
  * Removes the oldest completed job history entry and oldest PO breakdown. */
 function pruneStorageIfNeeded() {
@@ -460,7 +502,7 @@ const downloadImageUrls = async (urls: string[], prefix = 'property-photo') => {
         continue;
       }
 
-      const token = typeof window !== 'undefined' ? localStorage.getItem('subscriber_token') || '' : '';
+      const token = getCustomerDashboardToken();
       const headers: Record<string, string> = {};
       if (token && shouldAttachAuthHeader(url)) {
         headers.Authorization = `Bearer ${token}`;
@@ -596,12 +638,13 @@ export default function DashboardPage() {
   
   useEffect(() => {
     const handleStorageChange = () => {
-      const token = localStorage.getItem("subscriber_token");
+      const token = getCustomerDashboardToken();
       if (!token) {
         setSubscriber(null);
         setOrders([]);
+        setHasFetchedOrders(false);
       } else {
-        const stored = localStorage.getItem("subscriber");
+        const stored = getCustomerDashboardSubscriberRaw();
         if (stored) {
           setSubscriber(prev => {
             try {
@@ -623,19 +666,22 @@ export default function DashboardPage() {
     let isMounted = true;
     const fetchUser = async () => {
       try {
-        const token = localStorage.getItem("subscriber_token");
+        const token = getCustomerDashboardToken();
         if (!token) {
           setOrders([]);
+          setHasFetchedOrders(false);
           setLoading(false);
           return;
         }
 
         // Eagerly set state from localStorage to prevent flash of logged-out state
         if (isMounted) {
-          const stored = localStorage.getItem("subscriber");
-          if (stored) {
-            const parsed = JSON.parse(stored);
-            setSubscriber(parsed);
+          const parsed = readCustomerDashboardSubscriber();
+          if (parsed) {
+            setSubscriber(prev => {
+              if (prev?.id && parsed.id !== prev.id) return prev;
+              return parsed;
+            });
           }
           const consent = localStorage.getItem("pdpa_consent_customer");
           if (!consent) setShowPdpa(true);
@@ -649,11 +695,6 @@ export default function DashboardPage() {
         });
 
         if (!res) {
-          if (isMounted) {
-            setSubscriber(null);
-            setOrders([]);
-            setLoading(false);
-          }
           return;
         }
 
@@ -675,6 +716,7 @@ export default function DashboardPage() {
             }
 
             setSubscriber(subInfo);
+            writeCustomerDashboardSession(subInfo, token);
             // Overwrite stored to fix any bad hydration
             localStorage.setItem("subscriber", JSON.stringify(subInfo));
           }
@@ -683,11 +725,13 @@ export default function DashboardPage() {
           if (ordersRes && ordersRes.ok && isMounted) { setHasFetchedOrders(true); setOrders(await ordersRes.json()); }
 
         } else if (res.status === 401 || res.status === 403) {
+          clearCustomerDashboardSession();
           localStorage.removeItem("subscriber_token");
           localStorage.removeItem("subscriber");
           if (isMounted) {
             setSubscriber(null);
             setOrders([]);
+            setHasFetchedOrders(false);
           }
         }
       } catch { /* ignore */ }
@@ -702,7 +746,7 @@ export default function DashboardPage() {
 
     const syncOrders = async () => {
       try {
-        const token = localStorage.getItem("subscriber_token");
+        const token = getCustomerDashboardToken();
         if (!token) return;
         const ordersRes = await fetch("/api/v1/orders/my", {
           headers: { Authorization: `Bearer ${token}` },
@@ -793,7 +837,7 @@ export default function DashboardPage() {
                   <p className="text-sky-200 text-xs">{subscriber.email}</p>
                 </div>
                 <button
-                  onClick={() => { localStorage.removeItem("subscriber"); localStorage.removeItem("subscriber_token"); localStorage.removeItem("pdpa_consent_customer"); localStorage.removeItem("ghis_mock_payments"); localStorage.removeItem("ghis_mock_active"); localStorage.removeItem("ghis_mock_dyn_req"); localStorage.removeItem("ghis_mock_history"); window.dispatchEvent(new Event("storage")); router.push(prefix); }}
+                  onClick={() => { clearCustomerDashboardSession(); localStorage.removeItem("subscriber"); localStorage.removeItem("subscriber_token"); localStorage.removeItem("pdpa_consent_customer"); localStorage.removeItem("ghis_mock_payments"); localStorage.removeItem("ghis_mock_active"); localStorage.removeItem("ghis_mock_dyn_req"); localStorage.removeItem("ghis_mock_history"); window.dispatchEvent(new Event("storage")); router.push(prefix); }}
                   className="ml-2 px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold rounded-lg transition"
                 >
                   {locale === "th" ? "ออกจากระบบ" : locale === "zh" ? "退出登录" : "Logout"}
@@ -848,6 +892,7 @@ export default function DashboardPage() {
         {/* Main Content */}
         {subscriber && !loading && (
           <CustomerDashboard locale={locale} subscriber={subscriber} prefix={prefix} orders={orders} hasFetchedOrders={hasFetchedOrders} onLogout={() => {
+            clearCustomerDashboardSession();
             localStorage.removeItem("subscriber"); 
             localStorage.removeItem("subscriber_token"); 
             localStorage.removeItem("pdpa_consent_customer"); 
@@ -1075,7 +1120,7 @@ function ProfileTab({ locale, prefix, subscriber, activeOrders, historyOrders }:
               </button>
               <button onClick={() => {
                 if (confirm(locale === "th" ? "ยืนยันการลบบัญชีและข้อมูลทั้งหมดตามกฎหมาย PDPA?" : "Accept deleting your account and all data per PDPA law?")) {
-                  fetch('/api/v1/users/me', { method: 'DELETE', headers: { Authorization: `Bearer ${localStorage.getItem('subscriber_token') || ''}` } })
+                  fetch('/api/v1/users/me', { method: 'DELETE', headers: { Authorization: `Bearer ${getCustomerDashboardToken()}` } })
                   .then(() => { localStorage.clear(); window.location.href = `/${locale}/subscription/login`; });
                 }
               }} className="px-4 py-2 border border-red-200 bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition text-sm font-semibold">
@@ -1596,7 +1641,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   const filterVisibleWorkflowItems = (items: any[]) => items.filter((item: any) => !isHiddenTestPo(item?.po));
   const postBackendWorkflowMessage = async (po: string, text: string) => {
     try {
-      const token = localStorage.getItem("subscriber_token") || "";
+      const token = getCustomerDashboardToken();
       if (!token || !po) return;
       const orderId =
         localStorage.getItem(`po_to_order_${po}`) ||
@@ -1663,7 +1708,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   useEffect(() => {
     try {
       // Only load customer mock data for customer accounts (ghis)
-      const subData = JSON.parse(localStorage.getItem("subscriber") || "{}");
+      const subData = readCustomerDashboardSubscriber() || {};
       const subEmail = String(subData?.email || "").toLowerCase();
       if (!subEmail.includes('ghis')) { setMockReady(true); return; }
       // One-time cleanup of stale chat keys with invalid PO format (e.g. UUID-like keys from old builds)
@@ -1717,7 +1762,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   useEffect(() => {
     const syncMockState = () => {
       try {
-        const subData = JSON.parse(localStorage.getItem("subscriber") || "{}");
+        const subData = readCustomerDashboardSubscriber() || {};
         const subEmail = String(subData?.email || "").toLowerCase();
         if (!subEmail.includes('ghis')) return;
         const p = localStorage.getItem("ghis_mock_payments");
@@ -1776,7 +1821,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     }
     async function loadPropInquiries() {
       try {
-        let token = localStorage.getItem("subscriber_token") || "";
+        let token = getCustomerDashboardToken();
         if (!token) { setPropInquiries([]); return; }
         const load = (authToken: string) => fetch("/api/v1/property-inquiries/customer", { headers: { Authorization: `Bearer ${authToken}` } });
         let res = await load(token);
@@ -1784,6 +1829,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
           const refreshedToken = await refreshSubscriberSession(token);
           if (refreshedToken) {
             token = refreshedToken;
+            writeCustomerDashboardSession(readCustomerDashboardSubscriber(), refreshedToken);
             res = await load(token);
           }
         }
@@ -1820,7 +1866,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     let viewerEmail = "";
     let viewerUserId = "";
     try {
-      const sub = JSON.parse(localStorage.getItem("subscriber") || "{}");
+      const sub = readCustomerDashboardSubscriber() || {};
       viewerEmail = sub?.email || "";
       viewerUserId = sub?.id || "";
     } catch {}
@@ -1913,7 +1959,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     const items: any[] = [];
     let viewerUserId = "";
     try {
-      viewerUserId = String(JSON.parse(localStorage.getItem("subscriber") || "{}")?.id || "").trim();
+      viewerUserId = String((readCustomerDashboardSubscriber() || {})?.id || "").trim();
     } catch {}
     const now = Date.now();
     const isChatOpen = (p: PropInquiry) => {
@@ -1975,7 +2021,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
 
   const buildBackendChatFeed = async () => {
     if (typeof window === "undefined") return [];
-    const token = localStorage.getItem("subscriber_token") || "";
+    const token = getCustomerDashboardToken();
     if (!token) return [];
 
     const viewerUserId = String(subscriber?.id || "");
@@ -2076,7 +2122,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
 
   const buildPropBackendChatFeed = async () => {
     if (typeof window === "undefined") return [];
-    const token = localStorage.getItem("subscriber_token") || "";
+    const token = getCustomerDashboardToken();
     if (!token) return [];
 
     const viewerUserId = String(subscriber?.id || "").trim();
@@ -2549,8 +2595,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       const createdAt = getOrderEventTs(order);
       const note = String(order?.statusHistory?.[0]?.note || order?.statusNote || '');
       const reason = note.match(/Reason:\s*([^.]*)/i)?.[1]?.trim();
+      const cancelledByCustomer = /customer cancelled/i.test(note);
       const service = String(order?.serviceCategory || order?.service || 'your project').replace(/_/g, ' ');
-      const msg = `The selected partner declined ${service} (${po})${reason ? ` (${reason})` : ''}. Please select another matched professional from Book Fixers & Pros.`;
+      const msg = cancelledByCustomer
+        ? `Customer cancelled ${service} (${po})${reason ? `. Reason: ${reason}` : ''}. This job has been moved to History.`
+        : `The selected partner declined ${service} (${po})${reason ? ` (${reason})` : ''}. Please select another matched professional from Book Fixers & Pros.`;
       appendLocalWorkflowChat(po, `[SYSTEM] ${msg}`, createdAt);
     }
 
@@ -2578,9 +2627,13 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       for (const order of cancelledOrders) {
         const po = extractPo(order);
         if (!po || !isPoCode(po)) continue;
+        const note = String(order?.statusHistory?.[0]?.note || order?.statusNote || '');
+        if (/customer cancelled/i.test(note)) {
+          changed = true;
+          continue;
+        }
         if (next.some((item: any) => String(item.id) === `partner-declined-${po}`)) continue;
         const createdAt = getOrderEventTs(order);
-        const note = String(order?.statusHistory?.[0]?.note || order?.statusNote || '');
         const reason = note.match(/Reason:\s*([^.]*)/i)?.[1]?.trim();
         const service = String(order?.serviceCategory || order?.service || 'your project').replace(/_/g, ' ');
         const msg = `The selected partner declined ${service} (${po})${reason ? ` (${reason})` : ''}. Please select another matched professional from Book Fixers & Pros.`;
@@ -2607,17 +2660,30 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       const map = new Map(prev.map((item: any) => [item.po, item]));
       for (const order of cancelledOrders) {
         const po = extractPo(order);
-        if (!po || map.has(po)) continue;
-        changed = true;
-        map.set(po, {
+        if (!po) continue;
+        const existing = map.get(po) || {};
+        const note = String(order?.statusHistory?.[0]?.note || order?.statusNote || '');
+        const reason = note.match(/Reason:\s*([^.]*)/i)?.[1]?.trim() || existing.cancelReason || '';
+        const cancelledByCustomer = /customer cancelled/i.test(note) || existing.statusName === 'Cancelled by Customer' || Boolean(existing.cancelReason);
+        const nextItem = {
+          ...existing,
           po,
-          title: String(order?.serviceCategory || order?.service || 'Project').replace(/_/g, ' '),
+          title: String(order?.serviceCategory || order?.service || existing.title || 'Project').replace(/_/g, ' '),
+          service: String(order?.serviceCategory || order?.service || existing.service || 'Project').replace(/_/g, ' '),
+          customer: existing.customer || subscriber?.name || 'Customer',
           status: 'CANCELLED',
-          statusName: 'Partner Unavailable',
+          statusName: cancelledByCustomer ? 'Cancelled by Customer' : 'Partner Unavailable',
+          cancelReason: cancelledByCustomer ? reason : existing.cancelReason,
+          statusNote: cancelledByCustomer ? `Customer cancelled${reason ? `. Reason: ${reason}` : ''}` : (existing.statusNote || note),
           completedAt: getOrderEventTs(order),
+          statusChangedAt: getOrderEventTs(order),
           step: 11,
-          stepName: 'Partner Unavailable',
-        });
+          stepName: cancelledByCustomer ? 'Cancelled by Customer' : 'Partner Unavailable',
+        };
+        const prevSerialized = JSON.stringify(existing);
+        const nextSerialized = JSON.stringify(nextItem);
+        if (prevSerialized !== nextSerialized) changed = true;
+        map.set(po, nextItem);
       }
       if (!changed) return prev;
       const next = Array.from(map.values());
@@ -3640,7 +3706,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     poNumber?: string | null,
   ) => {
     try {
-      let token = localStorage.getItem("subscriber_token") || "";
+      let token = getCustomerDashboardToken();
       const safeId = String(id || '').trim();
       const safePo = String(poNumber || '').trim();
       const usePoFallback = !safeId || safeId.startsWith('fallback-');
@@ -3662,6 +3728,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         const refreshedToken = await refreshSubscriberSession(token);
         if (refreshedToken) {
           token = refreshedToken;
+          writeCustomerDashboardSession(readCustomerDashboardSubscriber(), refreshedToken);
           res = await updateReq(token);
         }
       }
@@ -4986,7 +5053,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                   } catch {}
                   // Push backend order to IN_PROGRESS so partner sees step 7 cross-browser
                   try {
-                    const token = localStorage.getItem('subscriber_token');
+                    const token = getCustomerDashboardToken();
                     if (token && po) {
                       // Try multiple methods to find backend order: PO in description, direct orderId from F4 item, description includes PO
                       const directOrderId = waitModalOrder.request?.orderId || waitModalOrder.request?.id;
@@ -5147,7 +5214,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                   setMockDynRequests(updatedMeetReqs);
                   // Notify backend: MEETING_REQUESTED (cross-browser: partner page polls and sees MEETING_REQUESTED status)
                   try {
-                    const token = localStorage.getItem('subscriber_token');
+                    const token = getCustomerDashboardToken();
                       const backendOrder = workflowOrders.find((o: any) => extractPo(o) === meetingModal.po);
                     if (token && backendOrder?.id) {
                       fetch(`/api/v1/orders/${backendOrder.id}/status`, {
@@ -5450,7 +5517,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                       venue: meetingSnapshot.venue || completeApproveModal.venue || completeApproveModal.meetingVenue || '',
                     };
                     const backendOrder = workflowOrders.find((o: any) => extractPo(o) === po);
-                    const token = localStorage.getItem('subscriber_token') || '';
+                    const token = getCustomerDashboardToken();
                     const rateReq = {
                       id: `rate-${po}`,
                       po,
@@ -5650,7 +5717,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                       window.dispatchEvent(new Event("storage"));
                       window.dispatchEvent(new CustomEvent('cblue-chat-updated', { detail: { orderId: po } }));
                     } catch (cancelErr) { console.error("Cancel job error:", cancelErr); }
-                    const token = localStorage.getItem('subscriber_token') || '';
+                    const token = getCustomerDashboardToken();
                     if (isPropertyCancel && item.propInquiry?.id) {
                       void updatePropInquiry(item.propInquiry.id, { status: 'CANCELLED' }, po);
                     }

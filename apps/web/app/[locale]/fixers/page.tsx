@@ -43,6 +43,48 @@ const stats = {
   repeatClients: 0,
 };
 
+const PARTNER_DASHBOARD_TOKEN_KEY = "cblue_partner_dashboard_token";
+const PARTNER_DASHBOARD_SUBSCRIBER_KEY = "cblue_partner_dashboard_subscriber";
+
+function getPartnerDashboardSessionValue(sessionKey: string, sharedKey: string) {
+  if (typeof window === "undefined") return "";
+  const scoped = sessionStorage.getItem(sessionKey);
+  if (scoped) return scoped;
+  const shared = localStorage.getItem(sharedKey) || "";
+  if (shared) sessionStorage.setItem(sessionKey, shared);
+  return shared;
+}
+
+function getPartnerDashboardToken() {
+  return getPartnerDashboardSessionValue(PARTNER_DASHBOARD_TOKEN_KEY, "subscriber_token");
+}
+
+function getPartnerDashboardSubscriberRaw() {
+  return getPartnerDashboardSessionValue(PARTNER_DASHBOARD_SUBSCRIBER_KEY, "subscriber");
+}
+
+function readPartnerDashboardSubscriber() {
+  const raw = getPartnerDashboardSubscriberRaw();
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function writePartnerDashboardSession(subscriber: any, token?: string) {
+  if (typeof window === "undefined") return;
+  if (token) sessionStorage.setItem(PARTNER_DASHBOARD_TOKEN_KEY, token);
+  if (subscriber) sessionStorage.setItem(PARTNER_DASHBOARD_SUBSCRIBER_KEY, JSON.stringify(subscriber));
+}
+
+function clearPartnerDashboardSession() {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(PARTNER_DASHBOARD_TOKEN_KEY);
+  sessionStorage.removeItem(PARTNER_DASHBOARD_SUBSCRIBER_KEY);
+}
+
 
 
 
@@ -700,7 +742,7 @@ const downloadSingleAttachmentUrl = async (
 
   try {
     const headers: Record<string, string> = {};
-    const token = typeof window !== "undefined" ? localStorage.getItem("subscriber_token") || "" : "";
+    const token = getPartnerDashboardToken();
     if (token && shouldAttachAuthHeader(url)) {
       headers.Authorization = `Bearer ${token}`;
     }
@@ -859,7 +901,7 @@ const viewSingleAttachmentUrl = async (
 
   try {
     const headers: Record<string, string> = {};
-    const token = typeof window !== "undefined" ? localStorage.getItem("subscriber_token") || "" : "";
+    const token = getPartnerDashboardToken();
     if (token) {
       headers.Authorization = `Bearer ${token}`;
     }
@@ -999,7 +1041,7 @@ const fetchWithSubscriberAuthRetry = async ({
     return { token: '', response: null as Response | null };
   }
 
-  let authToken = String(token || localStorage.getItem('subscriber_token') || '').trim();
+  let authToken = String(token || getPartnerDashboardToken() || '').trim();
   if (!authToken) {
     return { token: '', response: null as Response | null };
   }
@@ -1084,7 +1126,7 @@ const resolveOrderIdByPo = async ({
     return mappedLocal;
   }
 
-  let authToken = String(token || localStorage.getItem('subscriber_token') || '').trim();
+  let authToken = String(token || getPartnerDashboardToken() || '').trim();
   if (!authToken) return '';
 
   for (const endpoint of ['/api/v1/orders/fixer', '/api/v1/orders/my']) {
@@ -1127,7 +1169,7 @@ const fetchAttachmentUrlsByPoFromOrders = async ({
     return { orderId: '', urls: [] as string[] };
   }
 
-  let authToken = String(token || localStorage.getItem('subscriber_token') || '').trim();
+  let authToken = String(token || getPartnerDashboardToken() || '').trim();
   if (!authToken) {
     return { orderId: '', urls: [] as string[] };
   }
@@ -2000,7 +2042,7 @@ export default function FixerProPage() {
 
       const poFromDesc = extractPoCode(waitModalOrder);
       const poKey = waitModalOrder?.po || poFromDesc;
-      const token = localStorage.getItem('subscriber_token') || '';
+      const token = getPartnerDashboardToken();
       const orderLookup = await fetchAttachmentUrlsByPoFromOrders({
         po: poKey,
         token,
@@ -2133,7 +2175,7 @@ export default function FixerProPage() {
     } catch {}
 
     if (freshUrls.length === 0) {
-      const token = localStorage.getItem('subscriber_token') || '';
+      const token = getPartnerDashboardToken();
       const orderLookup = await fetchAttachmentUrlsByPoFromOrders({
         po: poKey,
         token,
@@ -2207,7 +2249,7 @@ export default function FixerProPage() {
   
   useEffect(() => {
     const handleStorageChange = () => {
-      const token = localStorage.getItem("subscriber_token");
+      const token = getPartnerDashboardToken();
       if (!token) {
         // Token gone → logged out: clear everything
         setPartner(null);
@@ -2220,7 +2262,7 @@ export default function FixerProPage() {
         // Token still present → only sync partner profile, do NOT reset role flags.
         // isFixer/isLister are verified by fetchUser on mount via /api/v1/users/me.
         // Resetting them here on every workflow storage event wipes all partner data.
-        const stored = localStorage.getItem("subscriber");
+        const stored = getPartnerDashboardSubscriberRaw();
         if (stored) {
           setPartner(prev => {
             try {
@@ -2242,7 +2284,7 @@ export default function FixerProPage() {
     let isMounted = true;
     const fetchUser = async () => {
       try {
-        const token = localStorage.getItem("subscriber_token");
+        const token = getPartnerDashboardToken();
         if (!token) {
           setLoading(false);
           return;
@@ -2250,13 +2292,12 @@ export default function FixerProPage() {
 
         // Eagerly set state from localStorage to prevent flash of logged-out state
         if (isMounted) {
-          const stored = localStorage.getItem("subscriber");
-          if (stored) {
-            const parsed = JSON.parse(stored);
-            setPartner(parsed);
-            // Roles are verified from backend APIs below.
-            setIsFixer(false);
-            setIsLister(false);
+          const parsed = readPartnerDashboardSubscriber();
+          if (parsed) {
+            setPartner(prev => {
+              if (prev?.id && parsed.id !== prev.id) return prev;
+              return parsed;
+            });
           }
         }
 
@@ -2268,7 +2309,6 @@ export default function FixerProPage() {
         });
 
         if (!res) {
-          if (isMounted) setIsFixer(false);
           return;
         }
 
@@ -2307,6 +2347,7 @@ export default function FixerProPage() {
             }
             
             setPartner(pInfo);
+            writePartnerDashboardSession(pInfo, token);
             localStorage.setItem("subscriber", JSON.stringify(pInfo));
             if (Array.isArray(pInfo.priceList) && pInfo.priceList.length > 0) {
               try { localStorage.setItem('cblue_partner_pricelist_general', JSON.stringify(pInfo.priceList)); } catch {}
@@ -2331,6 +2372,7 @@ export default function FixerProPage() {
           }
 
         } else if (res.status === 401 || res.status === 403) {
+          clearPartnerDashboardSession();
           localStorage.removeItem("subscriber_token");
           localStorage.removeItem("subscriber");
           if (isMounted) {
@@ -2349,7 +2391,7 @@ export default function FixerProPage() {
 
     const syncPartnerData = async () => {
       try {
-        const token = localStorage.getItem("subscriber_token");
+        const token = getPartnerDashboardToken();
         if (!token) return;
 
         const [ordersRes, propRes] = await Promise.all([
@@ -2441,7 +2483,7 @@ export default function FixerProPage() {
     }
     async function loadProps() {
       try {
-        let token = localStorage.getItem("subscriber_token") || "";
+        let token = getPartnerDashboardToken();
         if (!token) { setPropInquiries([]); return; }
         const load = (authToken: string) => fetch("/api/v1/property-inquiries/lister", { headers: { Authorization: `Bearer ${authToken}` } });
         let res = await load(token);
@@ -2449,6 +2491,7 @@ export default function FixerProPage() {
           const refreshedToken = await refreshSubscriberSession(token);
           if (refreshedToken) {
             token = refreshedToken;
+            writePartnerDashboardSession(readPartnerDashboardSubscriber(), refreshedToken);
             res = await load(token);
           }
         }
@@ -2479,7 +2522,7 @@ export default function FixerProPage() {
     poNumber?: string | null,
   ) => {
     try {
-      let token = localStorage.getItem("subscriber_token") || "";
+      let token = getPartnerDashboardToken();
       const safeId = String(id || '').trim();
       const safePo = String(poNumber || '').trim();
       const usePoFallback = !safeId || safeId.startsWith('fallback-');
@@ -2501,6 +2544,7 @@ export default function FixerProPage() {
         const refreshedToken = await refreshSubscriberSession(token);
         if (refreshedToken) {
           token = refreshedToken;
+          writePartnerDashboardSession(readPartnerDashboardSubscriber(), refreshedToken);
           res = await updateReq(token);
         }
       }
@@ -2715,7 +2759,7 @@ export default function FixerProPage() {
     let viewerEmail = "";
     let viewerUserId = "";
     try {
-      const sub = JSON.parse(localStorage.getItem("subscriber") || "{}");
+      const sub = readPartnerDashboardSubscriber() || {};
       viewerEmail = sub?.email || "";
       viewerUserId = sub?.id || "";
     } catch {}
@@ -2812,7 +2856,7 @@ export default function FixerProPage() {
     if (typeof window === "undefined") return [];
     const items: any[] = [];
     let viewerUserId = "";
-    try { viewerUserId = String(JSON.parse(localStorage.getItem("subscriber") || "{}")?.id || "").trim(); } catch {}
+    try { viewerUserId = String((readPartnerDashboardSubscriber() || {})?.id || "").trim(); } catch {}
     // Show chat rooms while inquiry is active: after payment until step 8 completion
     // or max 14 days after meeting confirmation (whichever is earlier).
     const now = Date.now();
@@ -2879,12 +2923,12 @@ export default function FixerProPage() {
 
   const buildBackendChatFeed = async () => {
     if (typeof window === "undefined") return [];
-    const token = localStorage.getItem("subscriber_token") || "";
+    const token = getPartnerDashboardToken();
     if (!token) return [];
 
     // Use user entity ID (from subscriber) to correctly identify own messages
     let viewerUserId = "";
-    try { viewerUserId = JSON.parse(localStorage.getItem("subscriber") || "{}")?.id || ""; } catch {}
+    try { viewerUserId = (readPartnerDashboardSubscriber() || {})?.id || ""; } catch {}
     const items: any[] = [];
     const chatOpenStatuses = new Set(["IN_PROGRESS", "MEETING_REQUESTED"]);
 
@@ -2988,7 +3032,7 @@ export default function FixerProPage() {
 
   const buildPropBackendChatFeed = async () => {
     if (typeof window === 'undefined') return [];
-    const token = localStorage.getItem('subscriber_token') || '';
+    const token = getPartnerDashboardToken();
     if (!token) return [];
 
     const viewerUserId = String(partner?.id || '').trim();
@@ -4989,7 +5033,7 @@ export default function FixerProPage() {
                   const serviceTitle = waitModalOrder.serviceTh || waitModalOrder.service;
                   const budgetLabel = waitModalOrder.fee || (waitModalOrder.budget ? `฿${String(waitModalOrder.budget).replace(/^฿/, '')}` : '฿0');
                   try {
-                    const token = localStorage.getItem("subscriber_token");
+                    const token = getPartnerDashboardToken();
                     try {
                       let wf = JSON.parse(localStorage.getItem("cblue_workflow") || "{}");
                       if(wf) {
@@ -5273,7 +5317,7 @@ export default function FixerProPage() {
                     || (po ? localStorage.getItem(`po_to_order_${po}`) : '')
                     || (isOrderUuid(waitModalOrder.id) ? waitModalOrder.id : '');
                   const declineReason = declineComment.trim() || 'Currently unavailable for this project';
-                  const token = localStorage.getItem('subscriber_token') || '';
+                  const token = getPartnerDashboardToken();
 
                   // 1. Store decline comment for admin only (partner-side localStorage)
                   try {
@@ -5337,7 +5381,7 @@ export default function FixerProPage() {
                       }
                     } catch {}
                     if (backendOrderId) {
-                      const token = localStorage.getItem('subscriber_token') || '';
+                      const token = getPartnerDashboardToken();
                       if (token) {
                         fetch(`/api/v1/orders/${backendOrderId}/chat`, {
                           method: 'POST',
@@ -5492,7 +5536,7 @@ export default function FixerProPage() {
                   <p className="text-purple-200 text-xs">{partner.email}</p>
                 </div>
                 <button
-                  onClick={() => { localStorage.removeItem("subscriber"); localStorage.removeItem("subscriber_token"); localStorage.removeItem("pdpa_consent_partner"); window.dispatchEvent(new Event("storage")); router.push(prefix); }}
+                  onClick={() => { clearPartnerDashboardSession(); localStorage.removeItem("subscriber"); localStorage.removeItem("subscriber_token"); localStorage.removeItem("pdpa_consent_partner"); window.dispatchEvent(new Event("storage")); router.push(prefix); }}
                   className="ml-2 px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold rounded-lg transition"
                 >
                   {locale === "th" ? "ออกจากระบบ" : locale === "zh" ? "退出登录" : "Logout"}
@@ -6048,7 +6092,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
     if (deduped.length > 0) { if (isMounted) setVariationAttachUrls(deduped); return; }
     // Fetch from backend as cross-device fallback
     void (async () => {
-      const token = localStorage.getItem('subscriber_token') || '';
+      const token = getPartnerDashboardToken();
       const orderLookup = await fetchAttachmentUrlsByPoFromOrders({ po, token });
       if (orderLookup.urls.length > 0 && isMounted) {
         setVariationAttachUrls(orderLookup.urls);
@@ -6136,7 +6180,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
     try {
       const po = job.po || job.id;
       const createdAt = Date.now();
-      const token = localStorage.getItem("subscriber_token") || "";
+      const token = getPartnerDashboardToken();
       const orderDbId = job.orderId || localStorage.getItem(`po_to_order_${po}`) || (isOrderUuid(job.id) ? job.id : "");
       const fmtDt = (d: number) => {
         const dt = new Date(d);
@@ -6660,7 +6704,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
     const localUrls = Array.from(new Set(urls.flatMap((entry: any) => collectAttachmentUrls(entry)).filter(Boolean)));
     if (localUrls.length === 0) {
       void (async () => {
-        const token = (typeof window !== 'undefined' ? localStorage.getItem('subscriber_token') : '') || '';
+        const token = getPartnerDashboardToken();
         const orderLookup = await fetchAttachmentUrlsByPoFromOrders({ po, token });
         if (orderLookup.urls.length > 0) {
           setVariationAttachUrls(orderLookup.urls);
@@ -6751,7 +6795,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
     try {
       const po = job.po || job.id;
       const createdAt = Date.now();
-      const token = localStorage.getItem("subscriber_token") || "";
+      const token = getPartnerDashboardToken();
       const orderDbId = job.orderId || localStorage.getItem(`po_to_order_${po}`) || (isOrderUuid(job.id) ? job.id : "");
       const fmtDt = (d: number) => {
         const dt = new Date(d);
@@ -7394,7 +7438,7 @@ function PartnerProfile({ locale, prefix, partner }: { locale: string; prefix: s
                 </Link>
                 <button onClick={() => {
                   if (confirm(locale === "th" ? "ยืนยันการลบบัญชีและข้อมูลทั้งหมดตามกฎหมาย PDPA?" : "Confirm deleting your account and all data per PDPA law?")) {
-                    fetch('/api/v1/users/me', { method: 'DELETE', headers: { Authorization: `Bearer ${localStorage.getItem('subscriber_token')}` } })
+                    fetch('/api/v1/users/me', { method: 'DELETE', headers: { Authorization: `Bearer ${getPartnerDashboardToken()}` } })
                     .then(() => { localStorage.clear(); window.location.href = '/subscription/login'; });
                   }
                 }} className="px-5 py-2.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition text-sm font-semibold shadow-sm">
@@ -7862,7 +7906,7 @@ function PartnerProperties({ locale, prefix, properties, propertyInquiries }: { 
 
   const duplicateProperty = async (property: any) => {
     const normalized = normalizePropertyItem(property);
-    let token = localStorage.getItem("subscriber_token") || "";
+    let token = getPartnerDashboardToken();
     if (!token) {
       alert(locale === "th" ? "กรุณาเข้าสู่ระบบใหม่" : locale === "zh" ? "请重新登录" : "Please log in again.");
       return;
@@ -7897,6 +7941,7 @@ function PartnerProperties({ locale, prefix, properties, propertyInquiries }: { 
       const refreshedToken = await refreshSubscriberSession(token);
       if (refreshedToken) {
         token = refreshedToken;
+        writePartnerDashboardSession(readPartnerDashboardSubscriber(), refreshedToken);
         res = await createReq(token);
       }
     }
@@ -7922,7 +7967,7 @@ function PartnerProperties({ locale, prefix, properties, propertyInquiries }: { 
   const togglePropertyStatus = async (property: any) => {
     const normalized = normalizePropertyItem(property);
     const nextStatus = normalized.status === "ACTIVE" ? "DRAFT" : "ACTIVE";
-    let token = localStorage.getItem("subscriber_token") || "";
+    let token = getPartnerDashboardToken();
     if (!token || !normalized.id) {
       alert(locale === "th" ? "กรุณาเข้าสู่ระบบใหม่" : locale === "zh" ? "请重新登录" : "Please log in again.");
       return;
@@ -7943,6 +7988,7 @@ function PartnerProperties({ locale, prefix, properties, propertyInquiries }: { 
       const refreshedToken = await refreshSubscriberSession(token);
       if (refreshedToken) {
         token = refreshedToken;
+        writePartnerDashboardSession(readPartnerDashboardSubscriber(), refreshedToken);
         res = await updateReq(token);
       }
     }
@@ -8026,7 +8072,7 @@ function PartnerProperties({ locale, prefix, properties, propertyInquiries }: { 
     setSaving(true);
     setSaveError("");
     try {
-      let token = localStorage.getItem("subscriber_token") || "";
+      let token = getPartnerDashboardToken();
       if (!token) {
         setSaveError(locale === "th" ? "กรุณาเข้าสู่ระบบใหม่" : locale === "zh" ? "请重新登录" : "Please log in again.");
         return;
@@ -8066,6 +8112,7 @@ function PartnerProperties({ locale, prefix, properties, propertyInquiries }: { 
         const refreshedToken = await refreshSubscriberSession(token);
         if (refreshedToken) {
           token = refreshedToken;
+          writePartnerDashboardSession(readPartnerDashboardSubscriber(), refreshedToken);
           res = await updateReq(token);
         }
       }
@@ -8125,7 +8172,7 @@ function PartnerProperties({ locale, prefix, properties, propertyInquiries }: { 
 
     setRemovingId(id);
     try {
-      let token = localStorage.getItem("subscriber_token") || "";
+      let token = getPartnerDashboardToken();
       if (!token) {
         alert(locale === 'th' ? 'กรุณาเข้าสู่ระบบใหม่' : locale === 'zh' ? '请重新登录' : 'Please log in again.');
         return;
@@ -8141,6 +8188,7 @@ function PartnerProperties({ locale, prefix, properties, propertyInquiries }: { 
         const refreshedToken = await refreshSubscriberSession(token);
         if (refreshedToken) {
           token = refreshedToken;
+          writePartnerDashboardSession(readPartnerDashboardSubscriber(), refreshedToken);
           res = await removeReq(token);
         }
       }
