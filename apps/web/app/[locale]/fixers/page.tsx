@@ -2221,7 +2221,17 @@ export default function FixerProPage() {
         // isFixer/isLister are verified by fetchUser on mount via /api/v1/users/me.
         // Resetting them here on every workflow storage event wipes all partner data.
         const stored = localStorage.getItem("subscriber");
-        if (stored) setPartner(JSON.parse(stored));
+        if (stored) {
+          setPartner(prev => {
+            try {
+              const parsed = JSON.parse(stored);
+              // Prevent cross-user contamination: don't override this partner's data
+              // with another user's data (e.g. customer logged in on the same browser).
+              if (prev?.id && parsed.id !== prev.id) return prev;
+              return parsed;
+            } catch { return prev; }
+          });
+        }
       }
     };
     window.addEventListener("storage", handleStorageChange);

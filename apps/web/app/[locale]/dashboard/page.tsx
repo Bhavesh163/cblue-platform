@@ -589,6 +589,7 @@ export default function DashboardPage() {
   const [showPdpa, setShowPdpa] = useState(false);
 
   const [orders, setOrders] = useState<any[]>([]);
+  const [hasFetchedOrders, setHasFetchedOrders] = useState<boolean>(false);
 
 
 
@@ -601,7 +602,17 @@ export default function DashboardPage() {
         setOrders([]);
       } else {
         const stored = localStorage.getItem("subscriber");
-        if (stored) setSubscriber(JSON.parse(stored));
+        if (stored) {
+          setSubscriber(prev => {
+            try {
+              const parsed = JSON.parse(stored);
+              // Prevent cross-user contamination: don't override current user's data
+              // with another user's data (e.g. partner logged in on the same browser).
+              if (prev?.id && parsed.id !== prev.id) return prev;
+              return parsed;
+            } catch { return prev; }
+          });
+        }
       }
     };
     window.addEventListener("storage", handleStorageChange);
@@ -669,7 +680,7 @@ export default function DashboardPage() {
           }
 
           const ordersRes = await fetch("/api/v1/orders/my", { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
-          if (ordersRes && ordersRes.ok && isMounted) setOrders(await ordersRes.json());
+          if (ordersRes && ordersRes.ok && isMounted) { setHasFetchedOrders(true); setOrders(await ordersRes.json()); }
 
         } else if (res.status === 401 || res.status === 403) {
           localStorage.removeItem("subscriber_token");
@@ -697,6 +708,7 @@ export default function DashboardPage() {
           headers: { Authorization: `Bearer ${token}` },
         }).catch(() => null);
         if (!ordersRes || !ordersRes.ok || !isMounted) return;
+        setHasFetchedOrders(true);
         setOrders(await ordersRes.json());
       } catch {
         // Keep last known dashboard data if polling fails.
@@ -835,7 +847,7 @@ export default function DashboardPage() {
         
         {/* Main Content */}
         {subscriber && !loading && (
-          <CustomerDashboard locale={locale} subscriber={subscriber} prefix={prefix} orders={orders} onLogout={() => {
+          <CustomerDashboard locale={locale} subscriber={subscriber} prefix={prefix} orders={orders} hasFetchedOrders={hasFetchedOrders} onLogout={() => {
             localStorage.removeItem("subscriber"); 
             localStorage.removeItem("subscriber_token"); 
             localStorage.removeItem("pdpa_consent_customer"); 
@@ -1283,7 +1295,7 @@ function CustomerHistoryCard({ item, idx, compact = false, locale = "en" }: { it
 
 
 /* ===== DASHBOARD LOGGED IN STATE ===== */
-function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { locale: string; subscriber: any; prefix: string; onLogout: () => void, orders: any[] }) {
+function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFetchedOrders }: { locale: string; subscriber: any; prefix: string; onLogout: () => void, orders: any[], hasFetchedOrders?: boolean }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"overview"|"requests"|"profile"|"active"|"properties"|"history"|"chat"|"alerts">("overview");
   const [waitModalOrder, setWaitModalOrder] = useState<any>(null);
@@ -1413,7 +1425,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
     return () => { active = false; };
   }, [propPayModal, propMeetingModal]);
   // Tracks previous backend order statuses to detect MEETING_REQUESTED → IN_PROGRESS transitions
-  const prevOrderStatuses = useRef<Record<string, string>>({});
+  const prevOrderStatuses = useRef<Record<string, string>>({}); 
   const toDisplayDateTime = (value: any) => {
     const ts = typeof value === "number" ? value : new Date(value || 0).getTime();
     if (!Number.isFinite(ts) || ts <= 0) return "";
@@ -2627,7 +2639,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
 
   const backendOrderPos = new Set(workflowOrders.map((o: any) => extractPo(o)).filter((po: string) => isPoCode(po)));
   const allowLocalCustomerWorkflow = Boolean(subscriber?.email?.toLowerCase().includes('ghis'));
-  const useStaticDemoData = allowLocalCustomerWorkflow && backendOrderPos.size === 0;
+  const useStaticDemoData = allowLocalCustomerWorkflow && !hasFetchedOrders && backendOrderPos.size === 0;
   const visibleMockActiveItems = !allowLocalCustomerWorkflow
     ? []
     : mockActiveItems.filter((x: any) => !isHiddenTestPo(x.po));
