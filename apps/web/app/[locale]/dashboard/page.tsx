@@ -1210,6 +1210,7 @@ function CustomerHistoryCard({ item, idx, compact = false, locale = "en" }: { it
   const [collapsed, setCollapsed] = useState(true);
   const chatPreview = collapsed ? [] : (Array.isArray(item.chatHistory) ? item.chatHistory.slice(compact ? -2 : -4) : []);
   const isCancelled = String(item.status || '').toUpperCase() === 'CANCELLED';
+  const isCustomerCancelled = isCancelled && (item.statusName === 'Cancelled by Customer' || !!item.cancelReason);
   const orderText = isPropPoCode(String(item?.po || ''))
     ? locale === 'th'
       ? `ออเดอร์: ${item.po}`
@@ -1230,11 +1231,11 @@ function CustomerHistoryCard({ item, idx, compact = false, locale = "en" }: { it
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <h3 className={titleClass}>{item.service} <span className={metaClass}>· {orderText} · {item.counterpartName || item.fixerName || 'Partner'}</span></h3>
-          <p className={mutedClass}>{isCancelled ? (locale === 'th' ? 'พาร์ทเนอร์ไม่ว่าง' : locale === 'zh' ? '合作伙伴无法安排时间' : 'Partner Unavailable') : (locale === 'th' ? 'เสร็จสิ้น' : locale === 'zh' ? '已完成' : 'Completed')} {fmtDate(item.completedAt || item.statusChangedAt || item.createdAt || item.date)}</p>
+          <p className={mutedClass}>{isCustomerCancelled ? (locale === 'th' ? 'ลูกค้ายกเลิกงาน' : locale === 'zh' ? '客户已取消工作' : 'Customer Canceled Job') : isCancelled ? (locale === 'th' ? 'พาร์ทเนอร์ไม่ว่าง' : locale === 'zh' ? '合作伙伴无法安排时间' : 'Partner Unavailable') : (locale === 'th' ? 'เสร็จสิ้น' : locale === 'zh' ? '已完成' : 'Completed')} {fmtDate(item.completedAt || item.statusChangedAt || item.createdAt || item.date)}</p>
         </div>
         <div className="flex flex-col items-start sm:items-end gap-1 flex-shrink-0">
           <span className="font-bold text-gray-900">{item.fee || item.budget || '฿0'}</span>
-          <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${isCancelled ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>{isCancelled ? (locale === 'th' ? 'ปิดคำขอ · พาร์ทเนอร์ไม่ว่าง' : locale === 'zh' ? '请求已关闭 · 合作伙伴无法安排时间' : 'Request Closed · Partner Unavailable') : `Step 11 of 11 · ${item.stepName || getWorkflowStepName(item.step)}`}</span>
+          <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${isCancelled ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>{isCustomerCancelled ? (locale === 'th' ? 'ปิดคำขอ · ลูกค้ายกเลิกงาน' : locale === 'zh' ? '请求已关闭 · 客户取消工作' : 'Request Closed · Customer Cancel Job') : isCancelled ? (locale === 'th' ? 'ปิดคำขอ · พาร์ทเนอร์ไม่ว่าง' : locale === 'zh' ? '请求已关闭 · 合作伙伴无法安排时间' : 'Request Closed · Partner Unavailable') : `Step 11 of 11 · ${item.stepName || getWorkflowStepName(item.step)}`}</span>
           <span className="text-xs text-sky-600 font-semibold">{collapsed ? '▼ Show details' : '▲ Hide details'}</span>
         </div>
       </div>
@@ -1247,7 +1248,13 @@ function CustomerHistoryCard({ item, idx, compact = false, locale = "en" }: { it
           </div>
           {isCancelled && (
             <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
-              {locale === 'th'
+              {isCustomerCancelled
+                ? locale === 'th'
+                  ? `${item.customer || 'ลูกค้า'} ยกเลิกงานนี้${item.cancelReason ? ` เหตุผล: ${item.cancelReason}` : ''} ดังนั้นคำขอนี้จึงถูกปิด`
+                  : locale === 'zh'
+                  ? `${item.customer || '客户'} 取消了此工作${item.cancelReason ? `，原因：${item.cancelReason}` : ''}，因此该请求已关闭。`
+                  : `${item.customer || 'Customer'} canceled this job${item.cancelReason ? ` because ${item.cancelReason}` : ''}, so this request was closed.`
+                : locale === 'th'
                 ? `${item.counterpartName || item.fixerName || 'พาร์ทเนอร์ที่เลือก'} ไม่สามารถรับงานนี้ได้ในช่วงเวลาที่วางแผนไว้ ระบบจึงปิดคำขอและแจ้งให้คุณเลือกผู้ให้บริการรายอื่นต่อไป`
                 : locale === 'zh'
                 ? `${item.counterpartName || item.fixerName || '所选合作伙伴'} 无法在计划时间内接下此项目，因此该请求已关闭。请从匹配列表中选择其他服务提供商继续。`
@@ -5117,7 +5124,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders }: { l
                   ];
                   const updatedMeetReqs = [
                     ...mockDynRequests.filter((x: any) => x.id !== meetingModal.id && x.id !== pendingId),
-                    { id: pendingId, po: meetingModal.po, title: meetingModal.title, customer: meetingModal.customer, date: fmtDateTime(createdAt), createdAt, budget: meetingModal.budget, tier: meetingModal.tier, desc, type: 'meeting_pending_partner', step: 8, venue: meetingVenue, meetingVenue, meetingDate, meetingTime, meetingNote: meetingNote.trim(), location: meetingProjectLocation },
+                    { id: pendingId, po: meetingModal.po, title: meetingModal.title, customer: meetingModal.customer, date: fmtDateTime(createdAt), createdAt, budget: meetingModal.budget, tier: meetingModal.tier, desc, type: 'meeting_pending_partner', step: 8, venue: meetingVenue, meetingVenue, meetingDate, meetingTime, meetingNote: meetingNote.trim(), location: meetingProjectLocation, customerEmail: subscriberEmail },
                   ];
                   try {
                     localStorage.setItem('ghis_mock_active', JSON.stringify(updatedMeetActive));

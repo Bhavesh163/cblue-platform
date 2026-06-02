@@ -5058,6 +5058,26 @@ export default function FixerProPage() {
                         localStorage.setItem('partner_alerts', JSON.stringify(nextAlerts));
                         setPartnerPersistedAlerts(nextAlerts);
                       } catch {}
+                      // Write customer alert to inform customer that partner confirmed the meeting
+                      try {
+                        const origMeetingItem = mockDynReqs.find((r: any) => r.po === po && r.type === 'meeting_pending_partner');
+                        const custEmailRaw = String(origMeetingItem?.customerEmail || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
+                        const custAlertsKey = custEmailRaw ? `cblue_customer_alerts_${custEmailRaw}` : 'cblue_customer_alerts';
+                        const existingCustAlerts = JSON.parse(localStorage.getItem(custAlertsKey) || '[]');
+                        const custAlertId = `meeting-confirmed-cust-${po}`;
+                        const nextCustAlerts = [{
+                          id: custAlertId,
+                          po,
+                          type: 'notice',
+                          msg: `${po}: ${partnerName} confirmed your site meeting${meetingSummary ? ` for ${meetingSummary}` : ''}${confirmedMeetingVenue ? ` at ${confirmedMeetingVenue}` : ''}. Proceed to Step 9 after the site visit.`,
+                          msgTh: `${po}: ${partnerName} ยืนยันคำเชิญนัดหมายหน้างานของคุณแล้ว${meetingSummary ? ` วันที่ ${meetingSummary}` : ''}${confirmedMeetingVenue ? ` ที่ ${confirmedMeetingVenue}` : ''} ดำเนินการ Step 9 หลังเยี่ยมชมหน้างาน`,
+                          msgZh: `${po}: ${partnerName} 已确认您的现场会议邀请${meetingSummary ? `（${meetingSummary}）` : ''}${confirmedMeetingVenue ? `，地点：${confirmedMeetingVenue}` : ''}。现场访问后请继续进行第9步。`,
+                          time: now,
+                          createdAt: Date.now(),
+                          dot: 'bg-green-500',
+                        }, ...(Array.isArray(existingCustAlerts) ? existingCustAlerts.filter((a: any) => a?.id !== custAlertId) : [])].slice(0, 20);
+                        localStorage.setItem(custAlertsKey, JSON.stringify(nextCustAlerts));
+                      } catch {}
                       setMockDynReqs(persistedNextReqs);
                       setMockActiveState(persistedNextActive);
                       setPartnerDynReqs(persistedPartnerReqs);
