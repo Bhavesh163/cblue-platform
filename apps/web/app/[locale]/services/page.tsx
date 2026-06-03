@@ -52,7 +52,7 @@ const projectServices = [
   { id: "environmental", value: "ENVIRONMENTAL_SERVICES", image: "/images/Environmental services.png", name: "Environmental Services", nameTh: "บริการสิ่งแวดล้อม", nameZh: "环保服务" },
   { id: "security-cctv", value: "SECURITY_CCTV", image: "/images/security-system.jpg", name: "Security & CCTV", nameTh: "ระบบ CCTV", nameZh: "安防监控" },
   { id: "door-access", value: "DOOR_ACCESS_CONTROL", image: "/images/door-access-control.png", name: "Door & Access Control", nameTh: "ระบบควบคุมประตู", nameZh: "门禁系统" },
-  { id: "green-construction", value: "GREEN_CONSTRUCTION", image: "/images/green-construction.jpg", name: "Green Construction", nameTh: "ก่อสร้างสีเขียว", nameZh: "绿色建筑" },
+  { id: "green-construction", value: "GREEN_CONSTRUCTION", image: "/images/Green Construction.png", name: "Green Construction", nameTh: "ก่อสร้างสีเขียว", nameZh: "绿色建筑" },
   { id: "smart-home", value: "SMART_HOME", image: "/images/smart-home-bms.png", name: "Smart Home/Building & BMS", nameTh: "สมาร์ทโฮม & BMS", nameZh: "智能家居/楼宇管理" },
   { id: "smart-farming", value: "SMART_FARMING", image: "/images/smart-farming.jpg", name: "Smart Farming", nameTh: "สมาร์ทฟาร์มมิ่ง", nameZh: "智能农业" },
 ];

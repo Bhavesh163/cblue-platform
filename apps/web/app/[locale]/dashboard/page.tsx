@@ -329,6 +329,42 @@ const WORKFLOW_STEP_NAMES: Record<number, string> = {
   11: 'Rate',
 };
 const getWorkflowStepName = (step?: number) => WORKFLOW_STEP_NAMES[Number(step || 0)] || 'Rate';
+const WORKFLOW_STEP_NAMES_BY_LOCALE: Record<'th' | 'zh', Record<number, string>> = {
+  th: {
+    5: 'รับงาน',
+    6: 'ค่าธรรมเนียมและดำเนินการ',
+    7: 'แชท',
+    8: 'นัดพบ',
+    9: 'เปลี่ยนแปลงงาน',
+    10: 'ยืนยันงานเสร็จ',
+    11: 'ให้คะแนน',
+  },
+  zh: {
+    5: '接受',
+    6: '费用并继续',
+    7: '聊天',
+    8: '会面',
+    9: '变更',
+    10: '确认完成',
+    11: '评分',
+  },
+};
+const getWorkflowStepNameForLocale = (step?: number, locale = 'en') =>
+  WORKFLOW_STEP_NAMES_BY_LOCALE[locale as 'th' | 'zh']?.[Number(step || 0)] || getWorkflowStepName(step);
+const localizeWorkflowStepName = (stepName: any, step: any, locale = 'en') => {
+  const raw = String(stepName || '').trim();
+  const normalizedStep = Number(step || 0);
+  const matchedStep = raw
+    ? Number(Object.entries(WORKFLOW_STEP_NAMES).find(([, name]) => name.toLowerCase() === raw.toLowerCase())?.[0] || 0)
+    : 0;
+  return getWorkflowStepNameForLocale(matchedStep || normalizedStep, locale);
+};
+const getWorkflowStepBadgeLabel = (step: number, total: number, stepName: string, locale = 'en') =>
+  locale === 'th'
+    ? `ขั้นตอน ${step} จาก ${total} · ${stepName}`
+    : locale === 'zh'
+    ? `第 ${step}/${total} 步 · ${stepName}`
+    : `Step ${step} of ${total} · ${stepName}`;
 const toCurrencyLabel = (value: any, fallback = '฿0') => {
   const raw = String(value || '').trim();
   if (!raw) return fallback;
@@ -577,6 +613,7 @@ const downloadImageUrls = async (urls: string[], prefix = 'property-photo') => {
 };
 
 function CustomerWorkflowModalMeta({
+  locale = "en",
   step,
   typeOfWork,
   actionText,
@@ -586,6 +623,7 @@ function CustomerWorkflowModalMeta({
   location,
   projectDetails,
 }: {
+  locale?: string;
   step: number;
   typeOfWork: string;
   actionText: string;
@@ -595,18 +633,30 @@ function CustomerWorkflowModalMeta({
   location: string;
   projectDetails: string;
 }) {
+  const labels = {
+    stepName: locale === "th" ? "ชื่อขั้นตอน" : locale === "zh" ? "步骤名称" : "Step Name",
+    typeOfWork: locale === "th" ? "ประเภทงาน" : locale === "zh" ? "工作类型" : "Type of Work",
+    action: locale === "th" ? "สิ่งที่ต้องทำ" : locale === "zh" ? "需要操作" : "What You Need To Do",
+    po: locale === "th" ? "หมายเลข PO" : locale === "zh" ? "PO 编号" : "PO Number",
+    partner: locale === "th" ? "พาร์ทเนอร์ที่เลือก" : locale === "zh" ? "已选合作伙伴" : "Selected Partner",
+    budget: locale === "th" ? "งบประมาณ" : locale === "zh" ? "预算" : "Budget",
+    location: locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Project Location",
+    details: locale === "th" ? "รายละเอียดโครงการ" : locale === "zh" ? "项目详情" : "Project Details",
+    unknown: locale === "th" ? "ไม่ทราบ" : locale === "zh" ? "未知" : "Unknown",
+    detailsFallback: locale === "th" ? "รายละเอียดโครงการจากร่าง PO" : locale === "zh" ? "来自 PO 草稿的项目详情。" : "Project details from the draft PO.",
+  };
   return (
     <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 space-y-2 text-sm text-gray-800">
-      <div className="flex justify-between gap-3"><span className="text-gray-500">Step Name</span><span className="font-bold text-right">{getWorkflowStepName(step)}</span></div>
-      <div className="flex justify-between gap-3"><span className="text-gray-500">Type of Work</span><span className="font-bold text-right">{typeOfWork}</span></div>
-      <div className="flex justify-between gap-3"><span className="text-gray-500">What You Need To Do</span><span className="font-bold text-right max-w-[65%]">{actionText}</span></div>
-      <div className="flex justify-between gap-3"><span className="text-gray-500">PO Number</span><span className="font-mono font-bold text-right">{po}</span></div>
-      <div className="flex justify-between gap-3"><span className="text-gray-500">Selected Partner</span><span className="font-bold text-right">{partnerName}</span></div>
-      <div className="flex justify-between gap-3"><span className="text-gray-500">Budget</span><span className="font-bold text-right">{budget}</span></div>
-      <div className="flex justify-between gap-3"><span className="text-gray-500">Project Location</span><span className="font-bold text-right">{location || 'Unknown'}</span></div>
+      <div className="flex justify-between gap-3"><span className="text-gray-500">{labels.stepName}</span><span className="font-bold text-right">{getWorkflowStepNameForLocale(step, locale)}</span></div>
+      <div className="flex justify-between gap-3"><span className="text-gray-500">{labels.typeOfWork}</span><span className="font-bold text-right">{typeOfWork}</span></div>
+      <div className="flex justify-between gap-3"><span className="text-gray-500">{labels.action}</span><span className="font-bold text-right max-w-[65%]">{actionText}</span></div>
+      <div className="flex justify-between gap-3"><span className="text-gray-500">{labels.po}</span><span className="font-mono font-bold text-right">{po}</span></div>
+      <div className="flex justify-between gap-3"><span className="text-gray-500">{labels.partner}</span><span className="font-bold text-right">{partnerName}</span></div>
+      <div className="flex justify-between gap-3"><span className="text-gray-500">{labels.budget}</span><span className="font-bold text-right">{budget}</span></div>
+      <div className="flex justify-between gap-3"><span className="text-gray-500">{labels.location}</span><span className="font-bold text-right">{location || labels.unknown}</span></div>
       <div>
-        <span className="text-gray-500">Project Details</span>
-        <p className="mt-1 rounded-lg border border-gray-100 bg-white px-3 py-2 font-bold text-gray-800">{projectDetails || 'Project details from the draft PO.'}</p>
+        <span className="text-gray-500">{labels.details}</span>
+        <p className="mt-1 rounded-lg border border-gray-100 bg-white px-3 py-2 font-bold text-gray-800">{projectDetails || labels.detailsFallback}</p>
       </div>
     </div>
   );
@@ -1316,25 +1366,36 @@ function CustomerHistoryCard({ item, idx, compact = false, locale = "en" }: { it
   const titleClass = compact ? "font-bold text-gray-900 text-sm" : "font-bold text-gray-900";
   const metaClass = compact ? "text-xs font-normal text-gray-400" : "text-sm font-normal text-gray-400";
   const mutedClass = compact ? "text-xs text-gray-500 mt-1" : "text-sm text-gray-500 mt-1";
+  const labels = {
+    partner: locale === 'th' ? 'พาร์ทเนอร์' : locale === 'zh' ? '合作伙伴' : 'Partner',
+    showDetails: locale === 'th' ? 'แสดงรายละเอียด' : locale === 'zh' ? '显示详情' : 'Show details',
+    hideDetails: locale === 'th' ? 'ซ่อนรายละเอียด' : locale === 'zh' ? '隐藏详情' : 'Hide details',
+    projectLocation: locale === 'th' ? 'สถานที่โครงการ:' : locale === 'zh' ? '项目地点:' : 'Project Location:',
+    unknown: locale === 'th' ? 'ไม่ทราบ' : locale === 'zh' ? '未知' : 'Unknown',
+    projectDetails: locale === 'th' ? 'รายละเอียดโครงการ:' : locale === 'zh' ? '项目详情:' : 'Project Details:',
+    detailsFallback: locale === 'th' ? 'ไม่มีรายละเอียดโครงการ' : locale === 'zh' ? '暂无项目详情。' : 'Project details not available.',
+    chatHistory: locale === 'th' ? 'ประวัติแชท' : locale === 'zh' ? '聊天记录' : 'Chat History',
+  };
+  const completedStepLabel = getWorkflowStepBadgeLabel(11, 11, localizeWorkflowStepName(item.stepName, item.step, locale), locale);
   return (
     <div key={`${item.po || item.id || idx}`} className="p-5 hover:bg-gray-50 transition cursor-pointer" onClick={() => setCollapsed(c => !c)}>
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
-          <h3 className={titleClass}>{item.service} <span className={metaClass}>· {orderText} · {item.counterpartName || item.fixerName || 'Partner'}</span></h3>
+          <h3 className={titleClass}>{item.service} <span className={metaClass}>· {orderText} · {item.counterpartName || item.fixerName || labels.partner}</span></h3>
           <p className={mutedClass}>{isCustomerCancelled ? (locale === 'th' ? 'ลูกค้ายกเลิกงาน' : locale === 'zh' ? '客户已取消工作' : 'Customer Canceled Job') : isCancelled ? (locale === 'th' ? 'พาร์ทเนอร์ไม่ว่าง' : locale === 'zh' ? '合作伙伴无法安排时间' : 'Partner Unavailable') : (locale === 'th' ? 'เสร็จสิ้น' : locale === 'zh' ? '已完成' : 'Completed')} {fmtDate(item.completedAt || item.statusChangedAt || item.createdAt || item.date)}</p>
         </div>
         <div className="flex flex-col items-start sm:items-end gap-1 flex-shrink-0">
           <span className="font-bold text-gray-900">{item.fee || item.budget || '฿0'}</span>
-          <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${isCancelled ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>{isCustomerCancelled ? (locale === 'th' ? 'ปิดคำขอ · ลูกค้ายกเลิกงาน' : locale === 'zh' ? '请求已关闭 · 客户取消工作' : 'Request Closed · Customer Cancel Job') : isCancelled ? (locale === 'th' ? 'ปิดคำขอ · พาร์ทเนอร์ไม่ว่าง' : locale === 'zh' ? '请求已关闭 · 合作伙伴无法安排时间' : 'Request Closed · Partner Unavailable') : `Step 11 of 11 · ${item.stepName || getWorkflowStepName(item.step)}`}</span>
-          <span className="text-xs text-sky-600 font-semibold">{collapsed ? '▼ Show details' : '▲ Hide details'}</span>
+          <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${isCancelled ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>{isCustomerCancelled ? (locale === 'th' ? 'ปิดคำขอ · ลูกค้ายกเลิกงาน' : locale === 'zh' ? '请求已关闭 · 客户取消工作' : 'Request Closed · Customer Cancel Job') : isCancelled ? (locale === 'th' ? 'ปิดคำขอ · พาร์ทเนอร์ไม่ว่าง' : locale === 'zh' ? '请求已关闭 · 合作伙伴无法安排时间' : 'Request Closed · Partner Unavailable') : completedStepLabel}</span>
+          <span className="text-xs text-sky-600 font-semibold">{collapsed ? `▼ ${labels.showDetails}` : `▲ ${labels.hideDetails}`}</span>
         </div>
       </div>
       {!collapsed && (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 text-sm text-gray-700">
-            <div><span className="text-gray-500">Project Location:</span> {item.location || item.subdistrict || 'Unknown'}</div>
+            <div><span className="text-gray-500">{labels.projectLocation}</span> {item.location || item.subdistrict || labels.unknown}</div>
             <div><span className="text-gray-500">{locale === "th" ? "งบประมาณ:" : locale === "zh" ? "预算:" : "Budget:"}</span> {item.fee || item.budget || '฿0'}</div>
-            <div className="sm:col-span-2"><span className="text-gray-500">Project Details:</span> {item.projectDetails || 'Project details not available.'}</div>
+            <div className="sm:col-span-2"><span className="text-gray-500">{labels.projectDetails}</span> {item.projectDetails || labels.detailsFallback}</div>
           </div>
           {isCancelled && (
             <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
@@ -1353,7 +1414,7 @@ function CustomerHistoryCard({ item, idx, compact = false, locale = "en" }: { it
           )}
           {chatPreview.length > 0 && (
             <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Chat History</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">{labels.chatHistory}</p>
               <div className="space-y-2">
                 {chatPreview.map((message: any) => (
                   <div key={message.id} className="text-sm text-gray-700">
@@ -1527,6 +1588,118 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   const subscriberEmail = String(subscriber?.email || '').trim().toLowerCase();
   const customerStorageSuffix = subscriberEmail.replace(/[^a-z0-9]+/g, '_') || 'anonymous';
   const customerAlertsStorageKey = `cblue_customer_alerts_${customerStorageSuffix}`;
+  const ensureLegacyCancel3429Repair = () => {
+    if (typeof window === "undefined" || !subscriberEmail.includes("ghis")) return false;
+    const po = "PO-2606-3429";
+    const serviceName = "MOBILE_APP_DEVELOPMENT";
+    const reason = "I change my mind";
+    const createdAt = Date.UTC(2026, 5, 3, 12, 1);
+    const readArray = (key: string) => {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    };
+    const writeArray = (key: string, items: any[]) => {
+      try { localStorage.setItem(key, JSON.stringify(items)); } catch {}
+    };
+
+    const active = readArray("ghis_mock_active");
+    const dynReqs = readArray("ghis_mock_dyn_req");
+    const partnerReqs = readArray("partner_mock_dyn_req");
+    const history = readArray("ghis_mock_history");
+    const customerAlerts = readArray(customerAlertsStorageKey);
+    const legacyCustomerAlerts = readArray("cblue_customer_alerts");
+    const partnerAlerts = readArray("partner_alerts");
+    const chatRows = readArray(`chat_messages_${po}`);
+    const source =
+      active.find((item: any) => item?.po === po) ||
+      dynReqs.find((item: any) => item?.po === po) ||
+      partnerReqs.find((item: any) => item?.po === po) ||
+      history.find((item: any) => item?.po === po) ||
+      {};
+    const hasTrace =
+      Boolean(source?.po) ||
+      customerAlerts.some((alert: any) => String(alert?.po || alert?.msg || alert?.message || "").includes(po)) ||
+      legacyCustomerAlerts.some((alert: any) => String(alert?.po || alert?.msg || alert?.message || "").includes(po)) ||
+      partnerAlerts.some((alert: any) => String(alert?.po || alert?.msg || alert?.message || "").includes(po)) ||
+      chatRows.length > 0;
+    if (!hasTrace) return false;
+
+    const customerChatText = `[SYSTEM] Customer cancelled ${serviceName} (${po}). Reason: ${reason}. This job has been moved to History.`;
+    const nextChatRows = Array.isArray(chatRows) ? [...chatRows] : [];
+    if (!nextChatRows.some((row: any) => String(row?.text || "") === customerChatText)) {
+      nextChatRows.push({
+        id: `legacy-customer-cancel-${po}`,
+        sender: "system",
+        text: customerChatText,
+        time: fmtDateTime(createdAt),
+        createdAt,
+      });
+      writeArray(`chat_messages_${po}`, nextChatRows);
+    }
+    try { localStorage.setItem(`chat_closed_${po}`, "1"); } catch {}
+
+    const historyEntry = {
+      ...source,
+      id: source?.id || `legacy-cancel-${po}`,
+      po,
+      service: source?.service || source?.title || serviceName,
+      title: source?.title || source?.service || serviceName,
+      customer: source?.customer || "Ghis",
+      status: "CANCELLED",
+      statusName: "Cancelled by Customer",
+      stepName: "Cancelled by Customer",
+      cancelReason: reason,
+      statusNote: `Customer cancelled. Reason: ${reason}`,
+      projectDetails: pickProjectDetails(source?.projectDetails, source?.description, source?.desc, source?.service, serviceName),
+      description: pickProjectDetails(source?.projectDetails, source?.description, source?.desc, source?.service, serviceName),
+      completedAt: createdAt,
+      statusChangedAt: createdAt,
+      createdAt: source?.createdAt || createdAt,
+      date: fmtDateTime(createdAt),
+      chatHistory: nextChatRows.map((message: any) => ({
+        id: message?.id || `${po}-${message?.createdAt || message?.time || Math.random()}`,
+        sender: String(message?.sender || "system"),
+        text: String(message?.text || "").trim(),
+        time: String(message?.time || fmtDateTime(message?.createdAt || createdAt)),
+      })).filter((message: any) => message.text),
+    };
+    writeArray("ghis_mock_active", active.filter((item: any) => item?.po !== po));
+    writeArray("ghis_mock_dyn_req", dynReqs.filter((item: any) => item?.po !== po));
+    writeArray("partner_mock_dyn_req", partnerReqs.filter((item: any) => item?.po !== po));
+    writeArray("ghis_mock_history", [...history.filter((item: any) => item?.po !== po), historyEntry]);
+
+    const customerAlert = {
+      id: `legacy-customer-cancel-alert-${po}`,
+      po,
+      type: "notice",
+      msg: `${po}: You cancelled ${serviceName}. Reason: ${reason}. The job has been moved to History.`,
+      msgTh: `${po}: คุณยกเลิก ${serviceName} เหตุผล: ${reason} งานถูกย้ายไปประวัติแล้ว`,
+      msgZh: `${po}: 您已取消 ${serviceName}。原因：${reason}。该工作已移至历史记录。`,
+      time: fmtDateTime(createdAt),
+      createdAt,
+      dot: "bg-orange-500",
+    };
+    const partnerAlert = {
+      id: `legacy-partner-customer-cancel-${po}`,
+      type: "customer_cancelled",
+      po,
+      title: "Job Cancelled by Customer",
+      message: `${po}: Customer cancelled ${serviceName}. Reason: ${reason}. This job has been moved to History.`,
+      msgTh: `${po}: ลูกค้ายกเลิก ${serviceName}. เหตุผล: ${reason}. งานถูกย้ายไปประวัติแล้ว`,
+      msgZh: `${po}: 客户已取消 ${serviceName}。原因：${reason}。该工作已移至历史记录。`,
+      timestamp: new Date(createdAt).toISOString(),
+      createdAt,
+      dot: "bg-orange-500",
+    };
+    writeArray(customerAlertsStorageKey, [customerAlert, ...customerAlerts.filter((alert: any) => alert?.id !== customerAlert.id)].slice(0, 20));
+    writeArray("cblue_customer_alerts", [customerAlert, ...legacyCustomerAlerts.filter((alert: any) => alert?.id !== customerAlert.id)].slice(0, 20));
+    writeArray("partner_alerts", [partnerAlert, ...partnerAlerts.filter((alert: any) => alert?.id !== partnerAlert.id)].slice(0, 20));
+    return true;
+  };
   const formatPropMeetingLabel = (meetingDate?: string, meetingTime?: string) => {
     const rawDate = String(meetingDate || '').trim();
     if (!rawDate) return '';
@@ -1536,6 +1709,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   };
   useEffect(() => {
     try {
+      ensureLegacyCancel3429Repair();
       const saved = JSON.parse(localStorage.getItem(customerAlertsStorageKey) || '[]');
       if (Array.isArray(saved) && saved.length > 0) {
         setPersistedCustomerAlerts(saved);
@@ -1746,6 +1920,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       const subData = readCustomerDashboardSubscriber() || {};
       const subEmail = String(subData?.email || "").toLowerCase();
       if (!subEmail.includes('ghis')) { setMockReady(true); return; }
+      ensureLegacyCancel3429Repair();
       // One-time cleanup of stale chat keys with invalid PO format (e.g. UUID-like keys from old builds)
       Object.keys(localStorage)
         .filter(k => k.startsWith('chat_messages_') || k.startsWith('chat_title_') || k.startsWith('po_to_order_'))
@@ -1800,6 +1975,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         const subData = readCustomerDashboardSubscriber() || {};
         const subEmail = String(subData?.email || "").toLowerCase();
         if (!subEmail.includes('ghis')) return;
+        ensureLegacyCancel3429Repair();
         const p = localStorage.getItem("ghis_mock_payments");
         const a = localStorage.getItem("ghis_mock_active");
         const d = localStorage.getItem("ghis_mock_dyn_req");
@@ -3633,9 +3809,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center font-bold text-lg">V</div>
             <div>
-              <h3 className="font-bold text-gray-900">{item.title} <span className="text-sm font-normal text-gray-500">· {item.po} · Step 9 of 11</span></h3>
+              <h3 className="font-bold text-gray-900">{item.title} <span className="text-sm font-normal text-gray-500">· {item.po} · {getWorkflowStepBadgeLabel(9, 11, getWorkflowStepNameForLocale(9, locale), locale)}</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{item.customer} · {item.date}</p>
-              <p className="text-xs text-gray-500 mt-1">{item.desc}</p>
+              <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "พาร์ทเนอร์ส่งคำขอเปลี่ยนแปลงงาน กรุณาตรวจสอบและยืนยันเพื่อดำเนินการต่อ" : locale === "zh" ? "合作伙伴已提交变更请求，请查看并确认是否继续。" : item.desc}</p>
             </div>
           </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-end">
@@ -3646,7 +3822,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
             <div className="flex gap-2">
               <button className="bg-purple-600 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-purple-700 transition shadow-sm whitespace-nowrap" onClick={() => {
                 setVariationApproveModal(item);
-              }}>Approve Variation</button>
+              }}>{locale === "th" ? "อนุมัติการเปลี่ยนแปลง" : locale === "zh" ? "批准变更" : "Approve Variation"}</button>
             </div>
           </div>
         </div>
@@ -3658,9 +3834,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-lg bg-green-50 text-green-600 flex items-center justify-center font-bold text-lg">✓</div>
             <div>
-              <h3 className="font-bold text-gray-900">{item.title} <span className="text-sm font-normal text-gray-500">· {item.po} · Step 10 of 11</span></h3>
+              <h3 className="font-bold text-gray-900">{item.title} <span className="text-sm font-normal text-gray-500">· {item.po} · {getWorkflowStepBadgeLabel(10, 11, getWorkflowStepNameForLocale(10, locale), locale)}</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{item.customer} · {item.date}</p>
-              <p className="text-xs text-gray-500 mt-1">{item.desc}</p>
+              <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "พาร์ทเนอร์ส่งคำขอยืนยันงานเสร็จ กรุณาตรวจสอบและยืนยันเมื่องานเสร็จจริง" : locale === "zh" ? "合作伙伴已发送完成请求，请在确认工作完成后批准。" : item.desc}</p>
             </div>
           </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-end">
@@ -3671,7 +3847,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
             <div className="flex gap-2">
               <button className="bg-green-600 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-green-700 transition shadow-sm whitespace-nowrap" onClick={() => {
                 setCompleteApproveModal(item);
-              }}>Confirm Complete</button>
+              }}>{locale === "th" ? "ยืนยันงานเสร็จ" : locale === "zh" ? "确认完成" : "Confirm Complete"}</button>
             </div>
           </div>
         </div>
@@ -3683,7 +3859,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-lg bg-yellow-50 text-yellow-600 flex items-center justify-center font-bold text-lg">⭐</div>
             <div>
-              <h3 className="font-bold text-gray-900">{item.title} <span className="text-sm font-normal text-gray-500">· {item.po} · Step 11 of 11</span></h3>
+              <h3 className="font-bold text-gray-900">{item.title} <span className="text-sm font-normal text-gray-500">· {item.po} · {getWorkflowStepBadgeLabel(11, 11, getWorkflowStepNameForLocale(11, locale), locale)}</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{item.customer} · {item.date}</p>
               <p className="text-xs text-gray-500 mt-1">{item.desc}</p>
             </div>
@@ -3697,7 +3873,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
               <button className="bg-yellow-500 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-yellow-600 transition shadow-sm whitespace-nowrap" onClick={() => {
                 setRateStars(5);
                 setRateModal(item);
-              }}>Rate & Close ⭐</button>
+              }}>{locale === "th" ? "ให้คะแนนและปิดงาน" : locale === "zh" ? "评分并关闭" : "Rate & Close"} ⭐</button>
             </div>
           </div>
         </div>
@@ -4301,15 +4477,15 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       {/* Top Navigation Pills */}
       <div className="flex gap-2 bg-white rounded-xl shadow-sm border border-gray-200 p-2 mb-6 overflow-x-auto no-scrollbar">
         {[
-          { key: "overview", icon: "", label: locale === "th" ? "ภาพรวม" : "Overview", count: null },
-          { key: "requests", icon: "", label: locale === "th" ? "คำขอของคุณ" : "Requests", count: totalReqCount || null },
-          { key: "active", icon: "", label: locale === "th" ? "งานที่ใช้งานอยู่" : "Active Jobs", count: combinedActiveWithProp.length || null },
+          { key: "overview", icon: "", label: locale === "th" ? "ภาพรวม" : locale === "zh" ? "概览" : "Overview", count: null },
+          { key: "requests", icon: "", label: locale === "th" ? "คำขอของคุณ" : locale === "zh" ? "您的请求" : "Requests", count: totalReqCount || null },
+          { key: "active", icon: "", label: locale === "th" ? "งานที่ใช้งานอยู่" : locale === "zh" ? "当前工作" : "Active Jobs", count: combinedActiveWithProp.length || null },
           
-          { key: "properties", icon: "", label: locale === "th" ? "อสังหาฯ" : "Properties", count: propertiesCount || null },
-          { key: "history", icon: "", label: locale === "th" ? "ประวัติ" : "History", count: allHistory.length || null },
-          { key: "chat", icon: "", label: locale === "th" ? "แชท" : "Chat", count: null },
-          { key: "alerts", icon: "", label: locale === "th" ? "การแจ้งเตือน" : "Alerts", count: null },
-          { key: "profile", icon: "", label: locale === "th" ? "โปรไฟล์" : "Profile", count: null },
+          { key: "properties", icon: "", label: locale === "th" ? "อสังหาฯ" : locale === "zh" ? "房产" : "Properties", count: propertiesCount || null },
+          { key: "history", icon: "", label: locale === "th" ? "ประวัติ" : locale === "zh" ? "历史" : "History", count: allHistory.length || null },
+          { key: "chat", icon: "", label: locale === "th" ? "แชท" : locale === "zh" ? "聊天" : "Chat", count: null },
+          { key: "alerts", icon: "", label: locale === "th" ? "การแจ้งเตือน" : locale === "zh" ? "通知" : "Alerts", count: null },
+          { key: "profile", icon: "", label: locale === "th" ? "โปรไฟล์" : locale === "zh" ? "个人资料" : "Profile", count: null },
         ].map((tab, i) => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key as any)} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition whitespace-nowrap ${activeTab === tab.key ? 'bg-sky-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'}`}>
             <span>{tab.icon}</span> {tab.label}
@@ -4323,7 +4499,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       {activeTab === "requests" && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6 pb-6">
           <div className="px-6 py-4 border-b border-gray-100">
-            <h2 className="font-bold text-gray-900">Incoming Requests</h2>
+            <h2 className="font-bold text-gray-900">{locale === "th" ? "คำขอใหม่" : locale === "zh" ? "新请求" : "Incoming Requests"}</h2>
             <div className="text-sm text-gray-500 font-bold">{totalReqCount}</div>
           </div>
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50 mt-4 mx-6">
@@ -4335,7 +4511,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       {activeTab === "active" && (
         <div className="mt-6">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-gray-800">Active Jobs <span className="text-sm font-normal text-gray-400 ml-2">{combinedActiveWithProp.length}</span></h2>
+            <h2 className="text-xl font-bold text-gray-800">{locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "当前工作" : "Active Jobs"} <span className="text-sm font-normal text-gray-400 ml-2">{combinedActiveWithProp.length}</span></h2>
           </div>
           {/* Pill container — all jobs in one grouped container with dividers */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50">
@@ -4523,11 +4699,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       {activeTab === "history" && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
           <div className="px-6 py-4 border-b border-gray-100">
-            <h2 className="font-bold text-gray-900">History</h2>
+            <h2 className="font-bold text-gray-900">{locale === "th" ? "ประวัติ" : locale === "zh" ? "历史" : "History"}</h2>
           </div>
           <div className="divide-y divide-gray-50">
             {allHistory.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">No history found.</div>
+              <div className="p-8 text-center text-gray-500">{locale === "th" ? "ไม่พบประวัติ" : locale === "zh" ? "暂无历史记录。" : "No history found."}</div>
             ) : (
               allHistory.map((o: any, i: number) => <CustomerHistoryCard key={o.po || o.id || i} item={o} idx={i} locale={locale} />)
             )}
@@ -4685,9 +4861,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
           <div className="mb-6">
             <div className="flex justify-between items-center mb-4">
               <div className="flex flex-col">
-                <h2 className="text-xl font-bold text-gray-800">Incoming Requests</h2>
+                <h2 className="text-xl font-bold text-gray-800">{locale === "th" ? "คำขอใหม่" : locale === "zh" ? "新请求" : "Incoming Requests"}</h2>
               </div>
-              <button className="text-sm font-bold text-sky-600 hover:text-sky-700" onClick={() => setActiveTab("requests")}>View All</button>
+              <button className="text-sm font-bold text-sky-600 hover:text-sky-700" onClick={() => setActiveTab("requests")}>{locale === "th" ? "ดูทั้งหมด" : locale === "zh" ? "查看全部" : "View All"}</button>
             </div>
             <div className="flex flex-col gap-3">
               {overviewRequestItems.map((m: any) => renderRequestCard(m))}
@@ -4697,10 +4873,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
           <div>
             <div className="flex justify-between items-center mb-4 mt-6">
               <div className="flex flex-col">
-                <h2 className="text-xl font-bold text-gray-800">Active Jobs</h2>
+                <h2 className="text-xl font-bold text-gray-800">{locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "当前工作" : "Active Jobs"}</h2>
                 <span className="text-gray-500 font-bold text-sm">{combinedActiveWithProp.length}</span>
               </div>
-              <button className="text-sm font-bold text-sky-600 hover:text-sky-700" onClick={() => setActiveTab("active")}>View All</button>
+              <button className="text-sm font-bold text-sky-600 hover:text-sky-700" onClick={() => setActiveTab("active")}>{locale === "th" ? "ดูทั้งหมด" : locale === "zh" ? "查看全部" : "View All"}</button>
             </div>
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50 mt-4">
               {combinedActiveWithProp.slice(0, 5).map((m, i) => renderActiveCard(m, i))}
@@ -4710,13 +4886,13 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
           <div>
             <div className="flex justify-between items-center mb-4 mt-6">
               <div className="flex flex-col">
-                <h2 className="text-xl font-bold text-gray-800">Recent History</h2>
+                <h2 className="text-xl font-bold text-gray-800">{locale === "th" ? "ประวัติล่าสุด" : locale === "zh" ? "最近历史" : "Recent History"}</h2>
               </div>
-              <button className="text-sm font-bold text-sky-600 hover:text-sky-700" onClick={() => setActiveTab("history")}>View All</button>
+              <button className="text-sm font-bold text-sky-600 hover:text-sky-700" onClick={() => setActiveTab("history")}>{locale === "th" ? "ดูทั้งหมด" : locale === "zh" ? "查看全部" : "View All"}</button>
             </div>
             <div className="divide-y divide-gray-50 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-4">
               {allHistory.slice(0, 2).length === 0 ? (
-                <div className="p-8 text-center text-gray-500">No history found.</div>
+                <div className="p-8 text-center text-gray-500">{locale === "th" ? "ไม่พบประวัติ" : locale === "zh" ? "暂无历史记录。" : "No history found."}</div>
               ) : (
                 allHistory.slice(0, 2).map((o: any, i: number) => <CustomerHistoryCard key={o.po || o.id || i} item={o} idx={i} compact={true} locale={locale} />)
               )}
@@ -4938,25 +5114,26 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         <div className="fixed inset-0 z-[9999] flex items-start justify-center pt-6 bg-gray-950/80 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-y-auto max-h-[calc(100dvh-6rem)] mx-auto">
             <div className="bg-gradient-to-r from-yellow-500 to-amber-500 px-6 py-4">
-              <h3 className="text-white font-bold text-lg">Rate Your Partner ⭐</h3>
-              <p className="text-yellow-100 text-sm mt-1">{rateModal.po} · Step 11 of 11</p>
+              <h3 className="text-white font-bold text-lg">{locale === "th" ? "ให้คะแนนพาร์ทเนอร์" : locale === "zh" ? "评价合作伙伴" : "Rate Your Partner"} ⭐</h3>
+              <p className="text-yellow-100 text-sm mt-1">{rateModal.po} · {getWorkflowStepBadgeLabel(11, 11, getWorkflowStepNameForLocale(11, locale), locale)}</p>
             </div>
             <div className="px-6 py-5 space-y-4">
               <CustomerWorkflowModalMeta
+                locale={locale}
                 step={11}
                 typeOfWork={rateModal.title || String(rateModalOrder?.serviceCategory || rateModalOrder?.service || 'Project').replace(/_/g, ' ')}
-                actionText="Rate the selected partner to close this project and move it to history."
+                actionText={locale === "th" ? "ให้คะแนนพาร์ทเนอร์ที่เลือกเพื่อปิดงานและย้ายไปยังประวัติ" : locale === "zh" ? "评价已选合作伙伴，以关闭项目并移至历史记录。" : "Rate the selected partner to close this project and move it to history."}
                 po={rateModal.po || '-'}
-                partnerName={firstNameOnly(rateModal.customer || rateModalOrder?.customer || rateModalOrder?.fixerName, 'Partner')}
+                partnerName={firstNameOnly(rateModal.customer || rateModalOrder?.customer || rateModalOrder?.fixerName, locale === "th" ? "พาร์ทเนอร์" : locale === "zh" ? "合作伙伴" : "Partner")}
                 budget={toCurrencyLabel(rateModal.budget || rateModalOrder?.budget || rateModalOrder?.fee)}
-                location={rateModalOrder?.address?.subdistrict || rateModalOrder?.subdistrict || rateModalOrder?.location || 'Unknown'}
+                location={rateModalOrder?.address?.subdistrict || rateModalOrder?.subdistrict || rateModalOrder?.location || (locale === "th" ? "ไม่ทราบ" : locale === "zh" ? "未知" : "Unknown")}
                 projectDetails={stripWorkflowPrefix(rateModalOrder?.description || rateModal.desc || rateModal.title || '')}
               />
               {(rateModalMeeting?.when || rateModalMeeting?.venue) && (
                 <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm">
-                  <div className="font-bold text-amber-900">Confirmed Site Meeting</div>
-                  {rateModalMeeting.when && <div className="text-amber-800">Time: {rateModalMeeting.when}</div>}
-                  {rateModalMeeting.venue && <div className="text-amber-800">Venue: {rateModalMeeting.venue}</div>}
+                  <div className="font-bold text-amber-900">{locale === "th" ? "ยืนยันนัดหมายหน้างานแล้ว" : locale === "zh" ? "已确认现场会议" : "Confirmed Site Meeting"}</div>
+                  {rateModalMeeting.when && <div className="text-amber-800">{locale === "th" ? "เวลา" : locale === "zh" ? "时间" : "Time"}: {rateModalMeeting.when}</div>}
+                  {rateModalMeeting.venue && <div className="text-amber-800">{locale === "th" ? "สถานที่" : locale === "zh" ? "地点" : "Venue"}: {rateModalMeeting.venue}</div>}
                 </div>
               )}
               <div>
@@ -5067,15 +5244,15 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                   </div>
                 </div>
                 <div className="flex justify-between items-center px-4 py-2.5 bg-gray-50 border-b border-gray-100">
-                  <span className="text-xs text-gray-500 uppercase tracking-wider">Project Location</span>
+                  <span className="text-xs text-gray-500 uppercase tracking-wider">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Project Location"}</span>
                   <span className="font-bold text-gray-900">{(() => { const loc = waitModalOrder.request?.location || waitModalOrder.request?.subdistrict || ''; if (loc && loc !== 'Unknown') return loc; const m = String(waitModalOrder.request?.description || waitModalOrder.request?.desc || '').match(/\bLOC:([^|]+)/); const fromDesc = m ? (m[1] ?? '').trim() : ''; return fromDesc || 'N/A'; })()}</span>
                 </div>
                 <div className="flex flex-col gap-1 px-4 py-2.5 bg-gray-50 border-b border-gray-100">
-                  <span className="text-xs text-gray-500 uppercase tracking-wider">Project Details</span>
-                  <span className="font-bold text-gray-900">{stripWorkflowPrefix(waitModalOrder.request?.description || waitModalOrder.request?.desc || '') || 'Project details from the draft PO.'}</span>
+                  <span className="text-xs text-gray-500 uppercase tracking-wider">{locale === "th" ? "รายละเอียดโครงการ" : locale === "zh" ? "项目详情" : "Project Details"}</span>
+                  <span className="font-bold text-gray-900">{stripWorkflowPrefix(waitModalOrder.request?.description || waitModalOrder.request?.desc || '') || (locale === "th" ? "รายละเอียดโครงการจากร่าง PO" : locale === "zh" ? "来自 PO 草稿的项目详情。" : "Project details from the draft PO.")}</span>
                 </div>
                 <div className="flex justify-between items-center px-4 py-2.5 bg-sky-50">
-                  <span className="text-xs text-gray-500 uppercase tracking-wider">Processing Fee</span>
+                  <span className="text-xs text-gray-500 uppercase tracking-wider">{locale === "th" ? "ค่าธรรมเนียมดำเนินการ" : locale === "zh" ? "处理费" : "Processing Fee"}</span>
                   <span className="font-bold text-sky-800">฿100</span>
                 </div>
               </div>
@@ -5325,16 +5502,17 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         <div className="fixed inset-0 z-[9999] flex items-start justify-center bg-gray-950/80 backdrop-blur-sm p-4 overflow-y-auto pt-6">
           <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-y-auto max-h-[calc(100dvh-6rem)] mx-auto my-4">
             <div className="bg-gradient-to-r from-purple-600 to-fuchsia-600 px-6 py-4">
-              <h3 className="text-white font-bold text-lg">Approve Variation</h3>
-              <p className="text-purple-100 text-sm mt-1">{variationApproveModal.po} · Step 9 of 11</p>
+              <h3 className="text-white font-bold text-lg">{locale === "th" ? "อนุมัติการเปลี่ยนแปลงงาน" : locale === "zh" ? "批准变更" : "Approve Variation"}</h3>
+              <p className="text-purple-100 text-sm mt-1">{variationApproveModal.po} · {getWorkflowStepBadgeLabel(9, 11, getWorkflowStepNameForLocale(9, locale), locale)}</p>
             </div>
             <div className="px-6 py-5 space-y-4">
               <CustomerWorkflowModalMeta
+                locale={locale}
                 step={9}
                 typeOfWork={variationApproveModal.title || String(variationApproveOrder?.serviceCategory || variationApproveOrder?.service || 'Project').replace(/_/g, ' ')}
-                actionText="Review the partner variation request and approve it if you agree to proceed."
+                actionText={locale === "th" ? "ตรวจสอบคำขอเปลี่ยนแปลงจากพาร์ทเนอร์และอนุมัติหากคุณตกลงดำเนินการต่อ" : locale === "zh" ? "查看合作伙伴的变更请求，如同意继续则批准。" : "Review the partner variation request and approve it if you agree to proceed."}
                 po={variationApproveModal.po || '-'}
-                partnerName={firstNameOnly(variationApproveModal.customer || variationApproveOrder?.customer || variationApproveOrder?.fixerName, 'Partner')}
+                partnerName={firstNameOnly(variationApproveModal.customer || variationApproveOrder?.customer || variationApproveOrder?.fixerName, locale === "th" ? "พาร์ทเนอร์" : locale === "zh" ? "合作伙伴" : "Partner")}
                 budget={toCurrencyLabel(variationApproveModal.budget || variationApproveOrder?.budget || variationApproveOrder?.fee)}
                 location={(() => {
                   const lat = Number(variationApproveOrder?.address?.latitude);
@@ -5342,7 +5520,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                   if (Number.isFinite(lat) && Number.isFinite(lng) && !(Math.abs(lat) < 0.000001 && Math.abs(lng) < 0.000001)) {
                     return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
                   }
-                  return variationApproveOrder?.address?.subdistrict || variationApproveOrder?.subdistrict || variationApproveOrder?.location || variationApproveModal?.location || variationApproveModal?.subdistrict || 'Unknown';
+                  return variationApproveOrder?.address?.subdistrict || variationApproveOrder?.subdistrict || variationApproveOrder?.location || variationApproveModal?.location || variationApproveModal?.subdistrict || (locale === "th" ? "ไม่ทราบ" : locale === "zh" ? "未知" : "Unknown");
                 })()}
                 projectDetails={stripWorkflowPrefix(variationApproveOrder?.description || variationApproveModal.desc || variationApproveModal.title || '')}
               />
@@ -5496,8 +5674,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                     setActiveTab('requests');
                   }}
                   className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 rounded-xl transition text-sm"
-                >Approve Variation</button>
-                <button onClick={() => setVariationApproveModal(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">Cancel</button>
+                >{locale === "th" ? "อนุมัติการเปลี่ยนแปลง" : locale === "zh" ? "批准变更" : "Approve Variation"}</button>
+                <button onClick={() => setVariationApproveModal(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">{locale === "th" ? "ยกเลิก" : locale === "zh" ? "取消" : "Cancel"}</button>
               </div>
             </div>
           </div>
@@ -5508,16 +5686,17 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         <div className="fixed inset-0 z-[9999] flex items-start justify-center pt-6 bg-gray-950/80 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-y-auto max-h-[calc(100dvh-6rem)] mx-auto">
             <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4">
-              <h3 className="text-white font-bold text-lg">Confirm Job Complete</h3>
-              <p className="text-green-100 text-sm mt-1">{completeApproveModal.po} · Step 10 of 11</p>
+              <h3 className="text-white font-bold text-lg">{locale === "th" ? "ยืนยันงานเสร็จ" : locale === "zh" ? "确认工作完成" : "Confirm Job Complete"}</h3>
+              <p className="text-green-100 text-sm mt-1">{completeApproveModal.po} · {getWorkflowStepBadgeLabel(10, 11, getWorkflowStepNameForLocale(10, locale), locale)}</p>
             </div>
             <div className="px-6 py-5 space-y-4">
               <CustomerWorkflowModalMeta
+                locale={locale}
                 step={10}
                 typeOfWork={completeApproveModal.title || String(completeApproveOrder?.serviceCategory || completeApproveOrder?.service || 'Project').replace(/_/g, ' ')}
-                actionText="Review the completion request and confirm it when the project is truly complete."
+                actionText={locale === "th" ? "ตรวจสอบคำขอยืนยันงานเสร็จและยืนยันเมื่อโครงการเสร็จสมบูรณ์จริง" : locale === "zh" ? "查看完成请求，并在项目确实完成后确认。" : "Review the completion request and confirm it when the project is truly complete."}
                 po={completeApproveModal.po || '-'}
-                partnerName={firstNameOnly(completeApproveModal.customer || completeApproveOrder?.customer || completeApproveOrder?.fixerName, 'Partner')}
+                partnerName={firstNameOnly(completeApproveModal.customer || completeApproveOrder?.customer || completeApproveOrder?.fixerName, locale === "th" ? "พาร์ทเนอร์" : locale === "zh" ? "合作伙伴" : "Partner")}
                 budget={toCurrencyLabel(completeApproveModal.budget || completeApproveOrder?.budget || completeApproveOrder?.fee)}
                 location={(() => {
                   const lat = Number(completeApproveOrder?.address?.latitude);
@@ -5525,7 +5704,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                   if (Number.isFinite(lat) && Number.isFinite(lng) && !(Math.abs(lat) < 0.000001 && Math.abs(lng) < 0.000001)) {
                     return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
                   }
-                  return completeApproveOrder?.address?.subdistrict || completeApproveOrder?.subdistrict || completeApproveOrder?.location || completeApproveModal?.location || completeApproveModal?.subdistrict || 'Unknown';
+                  return completeApproveOrder?.address?.subdistrict || completeApproveOrder?.subdistrict || completeApproveOrder?.location || completeApproveModal?.location || completeApproveModal?.subdistrict || (locale === "th" ? "ไม่ทราบ" : locale === "zh" ? "未知" : "Unknown");
                 })()}
                 projectDetails={stripWorkflowPrefix(completeApproveOrder?.description || completeApproveModal.desc || completeApproveModal.title || '')}
               />

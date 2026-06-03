@@ -1270,6 +1270,100 @@ const CLOSED_PARTNER_WORKFLOW_POS = new Set([
 ]);
 const isClosedPartnerWorkflowPo = (value: any) => CLOSED_PARTNER_WORKFLOW_POS.has(String(value || '').trim().toUpperCase());
 const filterVisibleWorkflowItems = (items: any[]) => items.filter((item: any) => !isHiddenTestPo(item?.po));
+const ensureLegacyPartnerCancel3429Repair = () => {
+  if (typeof window === "undefined") return false;
+  const po = "PO-2606-3429";
+  const serviceName = "MOBILE_APP_DEVELOPMENT";
+  const reason = "I change my mind";
+  const createdAt = Date.UTC(2026, 5, 3, 12, 1);
+  const readArray = (key: string) => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+  const writeArray = (key: string, items: any[]) => {
+    try { localStorage.setItem(key, JSON.stringify(items)); } catch {}
+  };
+  const active = readArray("ghis_mock_active");
+  const dynReqs = readArray("ghis_mock_dyn_req");
+  const partnerReqs = readArray("partner_mock_dyn_req");
+  const history = readArray("ghis_mock_history");
+  const partnerAlerts = readArray("partner_alerts");
+  const chatRows = readArray(`chat_messages_${po}`);
+  const source =
+    partnerReqs.find((item: any) => item?.po === po) ||
+    active.find((item: any) => item?.po === po) ||
+    dynReqs.find((item: any) => item?.po === po) ||
+    history.find((item: any) => item?.po === po) ||
+    {};
+  const hasTrace =
+    Boolean(source?.po) ||
+    partnerAlerts.some((alert: any) => String(alert?.po || alert?.msg || alert?.message || "").includes(po)) ||
+    chatRows.length > 0;
+  if (!hasTrace) return false;
+
+  const partnerChatText = `[SYSTEM] Customer cancelled ${serviceName} (${po}). Reason: ${reason}. Please check History for the cancelled job record.`;
+  const nextChatRows = Array.isArray(chatRows) ? [...chatRows] : [];
+  if (!nextChatRows.some((row: any) => String(row?.text || "") === partnerChatText)) {
+    nextChatRows.push({
+      id: `legacy-partner-cancel-${po}`,
+      sender: "system",
+      text: partnerChatText,
+      time: fmtDateTime(createdAt),
+      createdAt,
+    });
+    writeArray(`chat_messages_${po}`, nextChatRows);
+  }
+  try { localStorage.setItem(`chat_closed_${po}`, "1"); } catch {}
+
+  const historyEntry = {
+    ...source,
+    id: source?.id || `legacy-cancel-${po}`,
+    po,
+    service: source?.service || source?.title || serviceName,
+    title: source?.title || source?.service || serviceName,
+    customer: firstNameOnly(source?.customer || source?.customerName || "Ghis", "Customer"),
+    status: "CANCELLED",
+    statusName: "Cancelled by Customer",
+    stepName: "Cancelled by Customer",
+    cancelReason: reason,
+    statusNote: `Customer cancelled. Reason: ${reason}`,
+    projectDetails: pickProjectDetails(source?.projectDetails, source?.description, source?.desc, source?.service, serviceName),
+    description: pickProjectDetails(source?.projectDetails, source?.description, source?.desc, source?.service, serviceName),
+    completedAt: createdAt,
+    statusChangedAt: createdAt,
+    createdAt: source?.createdAt || createdAt,
+    date: fmtDateTime(createdAt),
+    chatHistory: nextChatRows.map((message: any) => ({
+      id: message?.id || `${po}-${message?.createdAt || message?.time || Math.random()}`,
+      sender: String(message?.sender || "system"),
+      text: String(message?.text || "").trim(),
+      time: String(message?.time || fmtDateTime(message?.createdAt || createdAt)),
+    })).filter((message: any) => message.text),
+  };
+  writeArray("ghis_mock_active", active.filter((item: any) => item?.po !== po));
+  writeArray("ghis_mock_dyn_req", dynReqs.filter((item: any) => item?.po !== po));
+  writeArray("partner_mock_dyn_req", partnerReqs.filter((item: any) => item?.po !== po));
+  writeArray("ghis_mock_history", [...history.filter((item: any) => item?.po !== po), historyEntry]);
+
+  const partnerAlert = {
+    id: `legacy-partner-customer-cancel-${po}`,
+    type: "customer_cancelled",
+    po,
+    title: "Job Cancelled by Customer",
+    message: `${po}: Customer cancelled ${serviceName}. Reason: ${reason}. This job has been moved to History.`,
+    msgTh: `${po}: ลูกค้ายกเลิก ${serviceName}. เหตุผล: ${reason}. งานถูกย้ายไปประวัติแล้ว`,
+    msgZh: `${po}: 客户已取消 ${serviceName}。原因：${reason}。该工作已移至历史记录。`,
+    timestamp: new Date(createdAt).toISOString(),
+    createdAt,
+    dot: "bg-orange-500",
+  };
+  writeArray("partner_alerts", [partnerAlert, ...partnerAlerts.filter((alert: any) => alert?.id !== partnerAlert.id)].slice(0, 20));
+  return true;
+};
 const WORKFLOW_STEP_NAMES: Record<number, string> = {
   5: 'Accept',
   6: 'Fee & Proceed',
@@ -1280,6 +1374,42 @@ const WORKFLOW_STEP_NAMES: Record<number, string> = {
   11: 'Rate',
 };
 const getWorkflowStepName = (step?: number) => WORKFLOW_STEP_NAMES[Number(step || 0)] || 'Rate';
+const WORKFLOW_STEP_NAMES_BY_LOCALE: Record<'th' | 'zh', Record<number, string>> = {
+  th: {
+    5: 'รับงาน',
+    6: 'ค่าธรรมเนียมและดำเนินการ',
+    7: 'แชท',
+    8: 'นัดพบ',
+    9: 'เปลี่ยนแปลงงาน',
+    10: 'ยืนยันงานเสร็จ',
+    11: 'ให้คะแนน',
+  },
+  zh: {
+    5: '接受',
+    6: '费用并继续',
+    7: '聊天',
+    8: '会面',
+    9: '变更',
+    10: '确认完成',
+    11: '评分',
+  },
+};
+const getWorkflowStepNameForLocale = (step?: number, locale = 'en') =>
+  WORKFLOW_STEP_NAMES_BY_LOCALE[locale as 'th' | 'zh']?.[Number(step || 0)] || getWorkflowStepName(step);
+const localizeWorkflowStepName = (stepName: any, step: any, locale = 'en') => {
+  const raw = String(stepName || '').trim();
+  const normalizedStep = Number(step || 0);
+  const matchedStep = raw
+    ? Number(Object.entries(WORKFLOW_STEP_NAMES).find(([, name]) => name.toLowerCase() === raw.toLowerCase())?.[0] || 0)
+    : 0;
+  return getWorkflowStepNameForLocale(matchedStep || normalizedStep, locale);
+};
+const getWorkflowStepBadgeLabel = (step: number, total: number, stepName: string, locale = 'en') =>
+  locale === 'th'
+    ? `ขั้นตอน ${step} จาก ${total} - ${stepName}`
+    : locale === 'zh'
+    ? `第 ${step}/${total} 步 - ${stepName}`
+    : `Step ${step} of ${total} - ${stepName}`;
 const toCurrencyLabel = (value: any, fallback = '฿0') => {
   const raw = String(value || '').trim();
   if (!raw) return fallback;
@@ -1616,6 +1746,7 @@ const resolveVariationPartnerNote = (po?: string, description?: unknown) => {
 };
 
 function WorkflowModalMeta({
+  locale = "en",
   step,
   typeOfWork,
   actionText,
@@ -1626,6 +1757,7 @@ function WorkflowModalMeta({
   location,
   projectDetails,
 }: {
+  locale?: string;
   step: number;
   typeOfWork: string;
   actionText: string;
@@ -1636,18 +1768,29 @@ function WorkflowModalMeta({
   location: string;
   projectDetails: string;
 }) {
+  const labels = {
+    stepName: locale === "th" ? "ชื่อขั้นตอน" : locale === "zh" ? "步骤名称" : "Step Name",
+    typeOfWork: locale === "th" ? "ประเภทงาน" : locale === "zh" ? "工作类型" : "Type of Work",
+    action: locale === "th" ? "สิ่งที่ต้องทำ" : locale === "zh" ? "需要操作" : "What You Need To Do",
+    po: locale === "th" ? "หมายเลข PO" : locale === "zh" ? "PO 编号" : "PO Number",
+    budget: locale === "th" ? "งบประมาณ" : locale === "zh" ? "预算" : "Budget",
+    location: locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Project Location",
+    details: locale === "th" ? "รายละเอียดโครงการ" : locale === "zh" ? "项目详情" : "Project Details",
+    unknown: locale === "th" ? "ไม่ทราบ" : locale === "zh" ? "未知" : "Unknown",
+    detailsFallback: locale === "th" ? "รายละเอียดโครงการจากร่าง PO" : locale === "zh" ? "来自 PO 草稿的项目详情。" : "Project details from the draft PO.",
+  };
   return (
     <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 space-y-2 text-sm text-gray-800">
-      <div className="flex justify-between gap-3"><span className="text-gray-500">Step Name</span><span className="font-bold text-right">{getWorkflowStepName(step)}</span></div>
-      <div className="flex justify-between gap-3"><span className="text-gray-500">Type of Work</span><span className="font-bold text-right">{typeOfWork}</span></div>
-      <div className="flex justify-between gap-3"><span className="text-gray-500">What You Need To Do</span><span className="font-bold text-right max-w-[65%]">{actionText}</span></div>
-      <div className="flex justify-between gap-3"><span className="text-gray-500">PO Number</span><span className="font-mono font-bold text-right">{po}</span></div>
+      <div className="flex justify-between gap-3"><span className="text-gray-500">{labels.stepName}</span><span className="font-bold text-right">{getWorkflowStepNameForLocale(step, locale)}</span></div>
+      <div className="flex justify-between gap-3"><span className="text-gray-500">{labels.typeOfWork}</span><span className="font-bold text-right">{typeOfWork}</span></div>
+      <div className="flex justify-between gap-3"><span className="text-gray-500">{labels.action}</span><span className="font-bold text-right max-w-[65%]">{actionText}</span></div>
+      <div className="flex justify-between gap-3"><span className="text-gray-500">{labels.po}</span><span className="font-mono font-bold text-right">{po}</span></div>
       <div className="flex justify-between gap-3"><span className="text-gray-500">{counterpartLabel}</span><span className="font-bold text-right">{counterpartName}</span></div>
-      <div className="flex justify-between gap-3"><span className="text-gray-500">Budget</span><span className="font-bold text-right">{budget}</span></div>
-      <div className="flex justify-between gap-3"><span className="text-gray-500">Project Location</span><span className="font-bold text-right">{location || 'Unknown'}</span></div>
+      <div className="flex justify-between gap-3"><span className="text-gray-500">{labels.budget}</span><span className="font-bold text-right">{budget}</span></div>
+      <div className="flex justify-between gap-3"><span className="text-gray-500">{labels.location}</span><span className="font-bold text-right">{location || labels.unknown}</span></div>
       <div>
-        <span className="text-gray-500">Project Details</span>
-        <p className="mt-1 rounded-lg border border-gray-100 bg-white px-3 py-2 font-bold text-gray-800">{projectDetails || 'Project details from the draft PO.'}</p>
+        <span className="text-gray-500">{labels.details}</span>
+        <p className="mt-1 rounded-lg border border-gray-100 bg-white px-3 py-2 font-bold text-gray-800">{projectDetails || labels.detailsFallback}</p>
       </div>
     </div>
   );
@@ -1762,62 +1905,89 @@ function WorkflowHistoryCard({ item, compact = false, locale = "en" }: { item: a
   );
   const declineReason = extractDeclineReason(item.declineReason || item.statusNote);
   const cancelReason = extractDeclineReason(item.cancelReason || item.statusNote);
-  const completedLabel = locale === 'th' ? 'Completed' : locale === 'zh' ? 'Completed' : 'Completed';
-  const declinedLabel = locale === 'th' ? 'Declined' : locale === 'zh' ? 'Declined' : 'Declined';
-  const customerCanceledLabel = locale === 'th' ? 'Customer Canceled Job' : locale === 'zh' ? 'Customer Canceled Job' : 'Customer Canceled Job';
+  const completedLabel = locale === 'th' ? 'เสร็จสิ้น' : locale === 'zh' ? '已完成' : 'Completed';
+  const declinedLabel = locale === 'th' ? 'ปฏิเสธ' : locale === 'zh' ? '已拒绝' : 'Declined';
+  const customerCanceledLabel = locale === 'th' ? 'ลูกค้ายกเลิกงาน' : locale === 'zh' ? '客户已取消工作' : 'Customer Canceled Job';
   const statusLabel = isCancelled
     ? isCustomerCancelled ? customerCanceledLabel : declinedLabel
     : completedLabel;
   const badgeLabel = isCancelled
-    ? isCustomerCancelled ? 'Request Closed - Customer Cancel Job' : 'Request Closed - Partner Unavailable'
-    : `Step 11 of 11 - ${item.stepName || getWorkflowStepName(item.step)}`;
+    ? isCustomerCancelled
+      ? locale === 'th' ? 'ปิดคำขอ - ลูกค้ายกเลิกงาน' : locale === 'zh' ? '请求已关闭 - 客户取消工作' : 'Request Closed - Customer Cancel Job'
+      : locale === 'th' ? 'ปิดคำขอ - พาร์ทเนอร์ไม่ว่าง' : locale === 'zh' ? '请求已关闭 - 合作伙伴无法安排时间' : 'Request Closed - Partner Unavailable'
+    : getWorkflowStepBadgeLabel(11, 11, localizeWorkflowStepName(item.stepName, item.step, locale), locale);
+  const labels = {
+    customer: locale === 'th' ? 'ลูกค้า' : locale === 'zh' ? '客户' : 'Customer',
+    showDetails: locale === 'th' ? 'แสดงรายละเอียด' : locale === 'zh' ? '显示详情' : 'Show details',
+    hideDetails: locale === 'th' ? 'ซ่อนรายละเอียด' : locale === 'zh' ? '隐藏详情' : 'Hide details',
+    archivedOne: locale === 'th' ? 'ข้อความแชทถูกเก็บถาวร' : locale === 'zh' ? '条聊天已归档' : 'chat message archived',
+    archivedMany: locale === 'th' ? 'ข้อความแชทถูกเก็บถาวร' : locale === 'zh' ? '条聊天已归档' : 'chat messages archived',
+    projectLocation: locale === 'th' ? 'สถานที่โครงการ:' : locale === 'zh' ? '项目地点:' : 'Project Location:',
+    unknown: locale === 'th' ? 'ไม่ทราบ' : locale === 'zh' ? '未知' : 'Unknown',
+    tier: locale === 'th' ? 'ระดับ:' : locale === 'zh' ? '等级:' : 'Tier:',
+    standard: locale === 'th' ? 'มาตรฐาน' : locale === 'zh' ? '标准' : 'Standard',
+    projectDetails: locale === 'th' ? 'รายละเอียดโครงการ:' : locale === 'zh' ? '项目详情:' : 'Project Details:',
+    detailsFallback: locale === 'th' ? 'ไม่มีรายละเอียดโครงการ' : locale === 'zh' ? '暂无项目详情。' : 'Project details not available.',
+    cancelNote: locale === 'th' ? 'หมายเหตุการยกเลิก' : locale === 'zh' ? '取消备注' : 'Cancel Note',
+    declineNote: locale === 'th' ? 'หมายเหตุการปฏิเสธ' : locale === 'zh' ? '拒绝备注' : 'Decline Note',
+    reasonProvided: locale === 'th' ? 'เหตุผลที่ให้ไว้:' : locale === 'zh' ? '提供的原因:' : 'Reason provided:',
+    chatHistory: locale === 'th' ? 'ประวัติแชท' : locale === 'zh' ? '聊天记录' : 'Chat History',
+  };
 
   return (
     <div className="rounded-xl border border-gray-100 bg-white shadow-sm hover:bg-gray-50/60 transition cursor-pointer" onClick={() => setCollapsed(c => !c)}>
       <div className="p-5">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
-            <h3 className="font-bold text-gray-900">{item.service} <span className="text-sm font-normal text-gray-400">- {item.po} - {item.counterpartName || item.customer || 'Customer'}</span></h3>
+            <h3 className="font-bold text-gray-900">{item.service} <span className="text-sm font-normal text-gray-400">- {item.po} - {item.counterpartName || item.customer || labels.customer}</span></h3>
             <p className="text-sm text-gray-500 mt-1">
               {statusLabel} {fmtDateTime(item.completedAt || item.statusChangedAt || item.createdAt || item.date || Date.now())}
             </p>
             {chatCount > 0 ? (
               <p className="text-xs text-gray-400 mt-1">
-                {chatCount} {chatCount === 1 ? 'chat message archived' : 'chat messages archived'}
+                {chatCount} {chatCount === 1 ? labels.archivedOne : labels.archivedMany}
               </p>
             ) : null}
           </div>
           <div className="flex flex-col items-start sm:items-end gap-1 flex-shrink-0">
             <span className="font-bold text-gray-900">{item.fee || item.budget || 'THB 0'}</span>
             <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${isCancelled ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>{badgeLabel}</span>
-            <span className="text-xs text-sky-600 font-semibold">{collapsed ? 'Show details' : 'Hide details'}</span>
+            <span className="text-xs text-sky-600 font-semibold">{collapsed ? labels.showDetails : labels.hideDetails}</span>
           </div>
         </div>
         {!collapsed && (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 text-sm text-gray-700">
-              <div><span className="text-gray-500">Project Location:</span> {item.location || item.subdistrict || 'Unknown'}</div>
-              <div><span className="text-gray-500">Tier:</span> {item.tier || 'Standard'}</div>
-              <div className="sm:col-span-2"><span className="text-gray-500">Project Details:</span> {item.projectDetails || item.description || 'Project details not available.'}</div>
+              <div><span className="text-gray-500">{labels.projectLocation}</span> {item.location || item.subdistrict || labels.unknown}</div>
+              <div><span className="text-gray-500">{labels.tier}</span> {item.tier || labels.standard}</div>
+              <div className="sm:col-span-2"><span className="text-gray-500">{labels.projectDetails}</span> {item.projectDetails || item.description || labels.detailsFallback}</div>
             </div>
             {isCancelled && (
               <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-wider text-red-700 mb-1">{isCustomerCancelled ? 'Cancel Note' : 'Decline Note'}</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-red-700 mb-1">{isCustomerCancelled ? labels.cancelNote : labels.declineNote}</p>
                 <p className="text-sm text-red-900">
                   {isCustomerCancelled
-                    ? `Customer canceled this job${cancelReason ? ` because ${cancelReason}` : ''}, so this request was closed.`
+                    ? locale === 'th'
+                      ? `ลูกค้ายกเลิกงานนี้${cancelReason ? ` เหตุผล: ${cancelReason}` : ''} ดังนั้นคำขอนี้จึงถูกปิด`
+                      : locale === 'zh'
+                      ? `客户取消了此工作${cancelReason ? `，原因：${cancelReason}` : ''}，因此该请求已关闭。`
+                      : `Customer canceled this job${cancelReason ? ` because ${cancelReason}` : ''}, so this request was closed.`
+                    : locale === 'th'
+                    ? 'คำขอนี้ถูกปิดหลังจากคุณปฏิเสธงาน และระบบแจ้งลูกค้าให้เลือกผู้ให้บริการรายอื่นแล้ว'
+                    : locale === 'zh'
+                    ? '您拒绝此工作后，请求已关闭，系统已通知客户选择其他专业人员。'
                     : 'This request was closed after you declined the job, and the customer has been notified to select another professional.'}
                 </p>
                 {!isCustomerCancelled && declineReason ? (
                   <p className="text-sm text-red-800 mt-2">
-                    <span className="font-semibold">Reason provided:</span> {declineReason}
+                    <span className="font-semibold">{labels.reasonProvided}</span> {declineReason}
                   </p>
                 ) : null}
               </div>
             )}
             {chatPreview.length > 0 && (
               <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Chat History</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">{labels.chatHistory}</p>
                 <div className="space-y-2">
                   {chatPreview.map((message: any) => (
                     <div key={message.id} className="text-sm text-gray-700">
@@ -3195,6 +3365,7 @@ export default function FixerProPage() {
           setMockHistory([]);
           return;
         }
+        ensureLegacyPartnerCancel3429Repair();
         const d = localStorage.getItem("ghis_mock_dyn_req"); if (d) setMockDynReqs(filterVisibleWorkflowItems(JSON.parse(d)));
         const a = localStorage.getItem("ghis_mock_active"); if (a) setMockActiveState(filterVisibleWorkflowItems(JSON.parse(a)));
         const h = localStorage.getItem("ghis_mock_history"); if (h) setMockHistory(filterVisibleWorkflowItems(JSON.parse(h)));
@@ -5115,23 +5286,23 @@ export default function FixerProPage() {
                   return <span className="font-bold text-amber-600">{waitModalBudgetDisplay}</span>;
                 })()}
               </div>
-              <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Project Location</span><span className="font-bold text-gray-800 text-right">{waitModalProjectLocation}</span></div>
+              <div className="flex justify-between border-b pb-2"><span className="text-gray-500">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Project Location"}</span><span className="font-bold text-gray-800 text-right">{waitModalProjectLocation}</span></div>
               {isMeetingConfirmation && (
                 <>
-                  <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Proposed Date</span><span className="font-bold text-gray-800">{waitModalMeetingDetails.meetingDateLabel || '-'}</span></div>
-                  <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Proposed Time</span><span className="font-bold text-gray-800">{waitModalMeetingDetails.meetingTimeLabel || '-'}</span></div>
-                  <div className="flex justify-between border-b pb-2"><span className="text-gray-500">Venue</span><span className="font-bold text-gray-800 text-right">{waitModalMeetingDetails.meetingVenue}</span></div>
+                  <div className="flex justify-between border-b pb-2"><span className="text-gray-500">{locale === "th" ? "วันที่เสนอ" : locale === "zh" ? "建议日期" : "Proposed Date"}</span><span className="font-bold text-gray-800">{waitModalMeetingDetails.meetingDateLabel || '-'}</span></div>
+                  <div className="flex justify-between border-b pb-2"><span className="text-gray-500">{locale === "th" ? "เวลาที่เสนอ" : locale === "zh" ? "建议时间" : "Proposed Time"}</span><span className="font-bold text-gray-800">{waitModalMeetingDetails.meetingTimeLabel || '-'}</span></div>
+                  <div className="flex justify-between border-b pb-2"><span className="text-gray-500">{locale === "th" ? "สถานที่" : locale === "zh" ? "地点" : "Venue"}</span><span className="font-bold text-gray-800 text-right">{waitModalMeetingDetails.meetingVenue}</span></div>
                 </>
               )}
-              <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">Project Details</span><span className="font-bold text-gray-800 bg-white p-2 rounded border border-gray-100">{waitModalProjectDetails}</span></div>
-              {isMeetingConfirmation && waitModalMeetingDetails.meetingMessage && <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">Customer Invitation</span><span className="text-gray-800 bg-white p-2 rounded border border-gray-100">{waitModalMeetingDetails.meetingMessage}</span></div>}
-              <div className="flex justify-between items-center"><span className="text-gray-500">Uploaded Files</span><button type="button" className={`font-semibold ${waitModalAttachmentUrls.length > 0 ? 'text-sky-600 hover:underline' : 'text-gray-400 cursor-default'}`} onClick={() => {
+              <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">{locale === "th" ? "รายละเอียดโครงการ" : locale === "zh" ? "项目详情" : "Project Details"}</span><span className="font-bold text-gray-800 bg-white p-2 rounded border border-gray-100">{waitModalProjectDetails}</span></div>
+              {isMeetingConfirmation && waitModalMeetingDetails.meetingMessage && <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">{locale === "th" ? "คำเชิญจากลูกค้า" : locale === "zh" ? "客户邀请" : "Customer Invitation"}</span><span className="text-gray-800 bg-white p-2 rounded border border-gray-100">{waitModalMeetingDetails.meetingMessage}</span></div>}
+              <div className="flex justify-between items-center"><span className="text-gray-500">{locale === "th" ? "ไฟล์ที่อัปโหลด" : locale === "zh" ? "已上传文件" : "Uploaded Files"}</span><button type="button" className={`font-semibold ${waitModalAttachmentUrls.length > 0 ? 'text-sky-600 hover:underline' : 'text-gray-400 cursor-default'}`} onClick={() => {
                 if (waitModalAttachmentUrls.length === 0 && !loadingAttachments) {
-                  alert('No downloadable file found right now.');
+                  alert(locale === "th" ? "ยังไม่พบไฟล์ที่ดาวน์โหลดได้" : locale === "zh" ? "当前没有可下载文件。" : 'No downloadable file found right now.');
                   return;
                 }
                 void openWaitModalAttachmentViewer();
-              }}>{waitModalAttachmentUrls.length > 0 ? 'View & Download' : loadingAttachments ? 'Checking files…' : 'No files yet'}</button></div>
+              }}>{waitModalAttachmentUrls.length > 0 ? (locale === "th" ? "ดูและดาวน์โหลด" : locale === "zh" ? "查看并下载" : 'View & Download') : loadingAttachments ? (locale === "th" ? "กำลังตรวจสอบไฟล์..." : locale === "zh" ? "正在检查文件..." : 'Checking files...') : (locale === "th" ? "ยังไม่มีไฟล์" : locale === "zh" ? "暂无文件" : 'No files yet')}</button></div>
             </div>
 
             <div className="flex gap-4 mt-8">
@@ -5910,15 +6081,16 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
   const earnings12 = earnings;
   const maxEarning = earnings12.length > 0 ? Math.max(...earnings12.map(e => e.amount)) : 0;
   const recentIncomingChats = chats.filter((c: any) => c.hasIncoming).slice(0, 3);
+  const viewAllLabel = locale === "th" ? "ดูทั้งหมด" : locale === "zh" ? "查看全部" : "View All";
   return (
     <div className="space-y-6">
       {/* Stats Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: locale === "th" ? "งานที่ใช้งานอยู่" : "Active Jobs", value: activeJobs?.length || 0, icon: "", color: "text-amber-600" },
-          { label: locale === "th" ? "เสร็จสิ้น" : "Completed", value: completedJobs?.length || 0, icon: "", color: "text-green-600" },
-          { label: locale === "th" ? "รายได้ต่อเดือน" : "Monthly Earn", value: stats?.monthlyEarnings || "฿0", icon: "", color: "text-indigo-600" },
-          { label: locale === "th" ? "คะแนน" : "Rating", value: `${stats?.rating || 0} `, icon: "", color: "text-amber-600" },
+          { label: locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "当前工作" : "Active Jobs", value: activeJobs?.length || 0, icon: "", color: "text-amber-600" },
+          { label: locale === "th" ? "เสร็จสิ้น" : locale === "zh" ? "已完成" : "Completed", value: completedJobs?.length || 0, icon: "", color: "text-green-600" },
+          { label: locale === "th" ? "รายได้ต่อเดือน" : locale === "zh" ? "月收入" : "Monthly Earn", value: stats?.monthlyEarnings || "฿0", icon: "", color: "text-indigo-600" },
+          { label: locale === "th" ? "คะแนน" : locale === "zh" ? "评分" : "Rating", value: `${stats?.rating || 0} `, icon: "", color: "text-amber-600" },
         ].map((s) => (
           <div key={s.label} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
             <div className="flex items-center justify-between mb-3">
@@ -5977,7 +6149,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
       {/* Meetings, alerts, and chats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 md:col-span-1">
-          <h3 className="font-bold text-gray-900 mb-3 flex items-center justify-between">⏰ {locale === "th" ? "การนัดหมายที่จะมาถึง" : locale === "zh" ? "即将到来的会议" : "Upcoming Meetings"} <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("requests")}>{locale === "th" ? "ดูทั้งหมด" : locale === "zh" ? "查看全部" : "View All"}</span></h3>
+          <h3 className="font-bold text-gray-900 mb-3 flex items-center justify-between">⏰ {locale === "th" ? "การนัดหมายที่จะมาถึง" : locale === "zh" ? "即将到来的会议" : "Upcoming Meetings"} <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("requests")}>{viewAllLabel}</span></h3>
           {scheduledMeetings.length > 0 ? (
             <div className="space-y-2">
               {scheduledMeetings.slice(0, 3).map((meeting: any) => (
@@ -5995,7 +6167,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
           )}
         </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 md:col-span-2">
-          <h3 className="font-bold text-gray-900 mb-3 flex items-center justify-between">{locale === "th" ? "การแจ้งเตือนล่าสุด" : locale === "zh" ? "最近通知" : "Recent Alerts"} <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("notifications")}>View All</span></h3>
+          <h3 className="font-bold text-gray-900 mb-3 flex items-center justify-between">{locale === "th" ? "การแจ้งเตือนล่าสุด" : locale === "zh" ? "最近通知" : "Recent Alerts"} <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("notifications")}>{viewAllLabel}</span></h3>
           <div className="space-y-2">
             {notifications.slice(0, 3).map((n) => (
               <div key={n.id} className={`flex items-center gap-3 p-3 rounded-lg ${n.unread ? "bg-purple-50 border border-purple-100" : "bg-gray-50"}`}>
@@ -6009,7 +6181,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-        <h3 className="font-bold text-gray-900 mb-3 flex items-center justify-between">{locale === "th" ? "แชทที่เข้ามาล่าสุด" : locale === "zh" ? "最近收到的来信" : "Recent incoming chats"} <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("chat")}>View All</span></h3>
+        <h3 className="font-bold text-gray-900 mb-3 flex items-center justify-between">{locale === "th" ? "แชทที่เข้ามาล่าสุด" : locale === "zh" ? "最近收到的来信" : "Recent incoming chats"} <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("chat")}>{viewAllLabel}</span></h3>
         <div className="space-y-2">
           {recentIncomingChats.length > 0 ? recentIncomingChats.map((c: any) => (
             <div key={c.id} className={`flex items-center gap-3 p-3 rounded-lg ${c.unread > 0 ? "bg-purple-50 border border-purple-100" : "bg-gray-50"}`}>
@@ -6035,7 +6207,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "คำขอใหม่" : locale === "zh" ? "新订单" : "Incoming Requests"}</h2>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("requests")}>View All</span>
+            <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("requests")}>{viewAllLabel}</span>
             <span className="text-xs bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full font-bold">{incomingJobs.length}</span>
           </div>
         </div>
@@ -6052,7 +6224,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
               <div className="flex items-center gap-2">
                 <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[req.tier] || ""}`}>{req.tier}</span>
                 {req.workflowType ? (
-                  <button onClick={(e) => { e.stopPropagation(); onTabChange && onTabChange("requests"); requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: "auto" })); window.setTimeout(() => window.scrollTo({ top: 0, left: 0, behavior: "auto" }), 50); }} className="px-3 py-1 bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold rounded-lg transition">Open Request</button>
+                  <button onClick={(e) => { e.stopPropagation(); onTabChange && onTabChange("requests"); requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: "auto" })); window.setTimeout(() => window.scrollTo({ top: 0, left: 0, behavior: "auto" }), 50); }} className="px-3 py-1 bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold rounded-lg transition">{locale === "th" ? "เปิดคำขอ" : locale === "zh" ? "打开请求" : "Open Request"}</button>
                 ) : (
                   <>
                     {req.urgency === "urgent" && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-700">{locale === "th" ? "เร่งด่วน" : locale === "zh" ? "紧急" : "Urgent"}</span>}
@@ -6072,7 +6244,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="font-bold text-gray-900 flex items-center gap-2"> {locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "进行中的工作" : "Active Jobs"}</h2>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("active")}>View All</span>
+            <span className="text-xs text-sky-600 font-bold cursor-pointer" onClick={() => onTabChange && onTabChange("active")}>{viewAllLabel}</span>
             <span className="text-xs bg-sky-100 text-sky-700 px-2.5 py-1 rounded-full font-bold">{activeJobs.length}</span>
           </div>
         </div>
@@ -6138,14 +6310,14 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="font-bold text-gray-900">Recent History</h2>
-            <span className="text-xs text-purple-600 font-bold cursor-pointer hover:underline" onClick={() => onTabChange && onTabChange("history")}>View All →</span>
+            <h2 className="font-bold text-gray-900">{locale === "th" ? "ประวัติล่าสุด" : locale === "zh" ? "最近历史" : "Recent History"}</h2>
+            <span className="text-xs text-purple-600 font-bold cursor-pointer hover:underline" onClick={() => onTabChange && onTabChange("history")}>{viewAllLabel} →</span>
           </div>
           <div className="space-y-3 p-4">
             {completedJobs.slice(0, 2).length > 0 ? completedJobs.slice(0, 2).map((h) => (
               <WorkflowHistoryCard key={h.id || h.po} item={h} compact locale={locale} />
             )) : (
-              <div className="py-6 text-center text-gray-500">No completed jobs yet.</div>
+              <div className="py-6 text-center text-gray-500">{locale === "th" ? "ยังไม่มีงานที่เสร็จสิ้น" : locale === "zh" ? "暂无已完成工作。" : "No completed jobs yet."}</div>
             )}
           </div>
         </div>
@@ -6448,13 +6620,13 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                         if (bd && bd.length > 0 && job?.po) localStorage.setItem(`cblue_po_breakdown_${job.po}`, JSON.stringify(bd));
                         if (pl && pl.length > 0 && job?.po) localStorage.setItem(`cblue_partner_pricelist_${job.po}`, JSON.stringify(pl));
                       } catch {}
-                    }} className="text-xs px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-full transition">Submit Variation</button>
+                    }} className="text-xs px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-full transition">{locale === "th" ? "ส่งคำขอเปลี่ยนแปลง" : locale === "zh" ? "提交变更" : "Submit Variation"}</button>
                   )}
                   {(job.mockStep === 10 || (job.step === 10)) && (
-                    <button onClick={() => { setCompleteNote(""); setCompleteModal(job); }} className="text-xs px-3 py-1 bg-green-600 hover:bg-green-700 text-white font-bold rounded-full transition">Mark Complete</button>
+                    <button onClick={() => { setCompleteNote(""); setCompleteModal(job); }} className="text-xs px-3 py-1 bg-green-600 hover:bg-green-700 text-white font-bold rounded-full transition">{locale === "th" ? "ส่งงานเสร็จ" : locale === "zh" ? "标记完成" : "Mark Complete"}</button>
                   )}
                   {(job.mockStep === 11 || (job.step === 11)) && (
-                    <button onClick={() => { setRatingModal(job); setRatingStars(5); }} className="text-xs px-3 py-1 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-full transition">Rate Customer</button>
+                    <button onClick={() => { setRatingModal(job); setRatingStars(5); }} className="text-xs px-3 py-1 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-full transition">{locale === "th" ? "ให้คะแนนลูกค้า" : locale === "zh" ? "评价客户" : "Rate Customer"}</button>
                   )}
                 </div>
               </div>
@@ -6503,27 +6675,28 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
       <div className="fixed inset-0 z-[9999] flex items-start justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto pt-6">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto max-h-[calc(100dvh-6rem)] overflow-y-auto my-4">
           <div className="bg-amber-500 px-6 py-4">
-            <h3 className="text-white font-bold text-lg">Submit Variation</h3>
+            <h3 className="text-white font-bold text-lg">{locale === "th" ? "ส่งคำขอเปลี่ยนแปลงงาน" : locale === "zh" ? "提交变更" : "Submit Variation"}</h3>
             <p className="text-amber-100 text-sm mt-1">{variationModal.po} &middot; {variationModal.service}</p>
           </div>
           <div className="px-6 py-5 space-y-4">
             <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-800">
-              <strong>Step 9 of 11 • Variation.</strong> Review the original PO budget, describe the extra scope or revised pricing, and send it to the customer for approval.
+              <strong>{getWorkflowStepBadgeLabel(9, 11, getWorkflowStepNameForLocale(9, locale), locale)}.</strong> {locale === "th" ? "ตรวจสอบงบประมาณ PO เดิม อธิบายขอบเขตเพิ่มเติมหรือราคาที่ปรับ และส่งให้ลูกค้าอนุมัติ" : locale === "zh" ? "查看原 PO 预算，说明新增范围或调整价格，并发送给客户批准。" : "Review the original PO budget, describe the extra scope or revised pricing, and send it to the customer for approval."}
             </div>
             <WorkflowModalMeta
+              locale={locale}
               step={9}
               typeOfWork={variationModal.service || 'Project'}
-              actionText="Review the original PO and send your variation request to the customer for approval."
+              actionText={locale === "th" ? "ตรวจสอบ PO เดิมและส่งคำขอเปลี่ยนแปลงให้ลูกค้าอนุมัติ" : locale === "zh" ? "查看原 PO，并将变更请求发送给客户批准。" : "Review the original PO and send your variation request to the customer for approval."}
               po={variationModal.po || '-'}
-              counterpartLabel="Customer"
-              counterpartName={firstNameOnly(variationModal.customer, 'Customer')}
+              counterpartLabel={locale === "th" ? "ลูกค้า" : locale === "zh" ? "客户" : "Customer"}
+              counterpartName={firstNameOnly(variationModal.customer, locale === "th" ? "ลูกค้า" : locale === "zh" ? "客户" : "Customer")}
               budget={toCurrencyLabel(variationModal.budget)}
-              location={(() => { const loc = variationModal.location || variationModal.subdistrict || ''; if (loc && loc !== 'Unknown') return loc; const m = String(variationModal.description || '').match(/\bLOC:([^|]+)/); return m ? (m[1] ?? '').trim() : 'Unknown'; })()}
+              location={(() => { const loc = variationModal.location || variationModal.subdistrict || ''; if (loc && loc !== 'Unknown') return loc; const m = String(variationModal.description || '').match(/\bLOC:([^|]+)/); return m ? (m[1] ?? '').trim() : locale === "th" ? "ไม่ทราบ" : locale === "zh" ? "未知" : "Unknown"; })()}
               projectDetails={stripWorkflowPrefix(variationModal.description || variationModal.desc || variationModal.projectDetails || variationModal.service || '')}
             />
             {/* Uploaded Files — lets partner reference customer photos when writing variation */}
             <div className="flex justify-between items-center rounded-lg border border-amber-100 bg-amber-50 px-4 py-2.5 text-xs">
-              <span className="text-amber-800 font-semibold">Uploaded Files</span>
+              <span className="text-amber-800 font-semibold">{locale === "th" ? "ไฟล์ที่อัปโหลด" : locale === "zh" ? "已上传文件" : "Uploaded Files"}</span>
               <button type="button" className={`font-semibold ${variationAttachUrls.length > 0 ? 'text-sky-600 hover:underline' : 'text-gray-400'}`} onClick={() => {
                 const viewer = createAttachmentViewerState({
                   title: 'Uploaded Files',
@@ -6532,16 +6705,16 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                   urls: variationAttachUrls,
                 });
                 if (!viewer) {
-                  alert('No downloadable file found right now.');
+                  alert(locale === "th" ? "ยังไม่พบไฟล์ที่ดาวน์โหลดได้" : locale === "zh" ? "当前没有可下载文件。" : 'No downloadable file found right now.');
                   return;
                 }
                 setAttachmentViewer(viewer);
               }}>
-                {variationAttachUrls.length > 0 ? 'View & Download' : 'No files yet'}
+                {variationAttachUrls.length > 0 ? (locale === "th" ? "ดูและดาวน์โหลด" : locale === "zh" ? "查看并下载" : 'View & Download') : (locale === "th" ? "ยังไม่มีไฟล์" : locale === "zh" ? "暂无文件" : 'No files yet')}
               </button>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Original Budget</label>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "งบประมาณเดิม" : locale === "zh" ? "原预算" : "Original Budget"}</label>
               <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
                 {(() => {
                   const varDesc = String(variationModal.description || variationModal.desc || variationModal.projectDetails || '');
@@ -6562,7 +6735,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                           </div>
                         ))}
                         <div className="flex justify-between gap-2 pt-1 border-t border-amber-200 font-bold text-sm">
-                          <span className="text-amber-900">Budget</span>
+                          <span className="text-amber-900">{locale === "th" ? "งบประมาณ" : locale === "zh" ? "预算" : "Budget"}</span>
                           <span className="text-amber-900">= ฿{bd.reduce((s, it) => s + (it?.total ?? 0), 0).toLocaleString()}</span>
                         </div>
                       </div>
@@ -6571,18 +6744,18 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                   return <span className="font-bold text-amber-800">{toCurrencyLabel(variationModal.budget)}</span>;
                 })()}
               </div>
-              <p className="text-xs text-gray-500 mt-1">Original PO total. Add variation line items below.</p>
+              <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "ยอดรวม PO เดิม เพิ่มรายการเปลี่ยนแปลงด้านล่าง" : locale === "zh" ? "原 PO 总额。请在下方添加变更项目。" : "Original PO total. Add variation line items below."}</p>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-2">Variation Price List</label>
+              <label className="block text-xs font-semibold text-gray-600 mb-2">{locale === "th" ? "รายการราคาการเปลี่ยนแปลง" : locale === "zh" ? "变更价格清单" : "Variation Price List"}</label>
               <div className="overflow-x-auto rounded-xl border border-amber-100">
                 <table className="w-full text-xs">
                   <thead><tr className="bg-amber-50 text-amber-800">
-                    <th className="px-2 py-2 text-left font-semibold">Item</th>
-                    <th className="px-2 py-2 text-right font-semibold w-12">Qty</th>
-                    <th className="px-2 py-2 text-left font-semibold w-14">Unit</th>
-                    <th className="px-2 py-2 text-right font-semibold w-20">Rate (฿)</th>
-                    <th className="px-2 py-2 text-right font-semibold w-20">Amount (฿)</th>
+                    <th className="px-2 py-2 text-left font-semibold">{locale === "th" ? "รายการ" : locale === "zh" ? "项目" : "Item"}</th>
+                    <th className="px-2 py-2 text-right font-semibold w-12">{locale === "th" ? "จำนวน" : locale === "zh" ? "数量" : "Qty"}</th>
+                    <th className="px-2 py-2 text-left font-semibold w-14">{locale === "th" ? "หน่วย" : locale === "zh" ? "单位" : "Unit"}</th>
+                    <th className="px-2 py-2 text-right font-semibold w-20">{locale === "th" ? "ราคา (฿)" : locale === "zh" ? "单价 (฿)" : "Rate (฿)"}</th>
+                    <th className="px-2 py-2 text-right font-semibold w-20">{locale === "th" ? "ยอดเงิน (฿)" : locale === "zh" ? "金额 (฿)" : "Amount (฿)"}</th>
                     <th className="px-1 py-2 w-6"></th>
                   </tr></thead>
                   <tbody>
@@ -6592,9 +6765,9 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                       const amount = qty > 0 && rate > 0 ? qty * rate : (parseFloat(row.amount.replace(/,/g,'')) || 0);
                       return (
                         <tr key={idx} className="border-t border-amber-50">
-                          <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-amber-400" placeholder="Item description" value={row.item} onChange={e => { setVariationRows(variationRows.map((vr, vi) => vi !== idx ? vr : {...vr, item: e.target.value})); }} /></td>
+                          <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-amber-400" placeholder={locale === "th" ? "รายละเอียดรายการ" : locale === "zh" ? "项目描述" : "Item description"} value={row.item} onChange={e => { setVariationRows(variationRows.map((vr, vi) => vi !== idx ? vr : {...vr, item: e.target.value})); }} /></td>
                           <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-1 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-amber-400" placeholder="0" value={row.qty} onChange={e => { setVariationRows(variationRows.map((vr, vi) => vi !== idx ? vr : {...vr, qty: e.target.value, amount: String(parseFloat(e.target.value||'0') * (parseFloat(vr.rate.replace(/,/g,''))||0) || '')})); }} /></td>
-                          <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-amber-400" placeholder="unit" value={row.unit} onChange={e => { setVariationRows(variationRows.map((vr, vi) => vi !== idx ? vr : {...vr, unit: e.target.value})); }} /></td>
+                          <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-amber-400" placeholder={locale === "th" ? "หน่วย" : locale === "zh" ? "单位" : "unit"} value={row.unit} onChange={e => { setVariationRows(variationRows.map((vr, vi) => vi !== idx ? vr : {...vr, unit: e.target.value})); }} /></td>
                           <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-1 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-amber-400" placeholder="0" value={row.rate} onChange={e => { setVariationRows(variationRows.map((vr, vi) => vi !== idx ? vr : {...vr, rate: e.target.value, amount: String((parseFloat(vr.qty)||0) * (parseFloat(e.target.value.replace(/,/g,''))||0) || '')})); }} /></td>
                           <td className="px-2 py-1 text-right text-amber-700 font-bold">{amount > 0 ? amount.toLocaleString() : '-'}</td>
                           <td className="px-1 py-1"><button onClick={() => { if (variationRows.length > 1) setVariationRows(variationRows.filter((_, i) => i !== idx)); }} className="text-gray-400 hover:text-red-500 text-base leading-none">×</button></td>
@@ -6603,20 +6776,20 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                     })}
                   </tbody>
                   <tfoot><tr className="border-t border-amber-200 bg-amber-50">
-                    <td colSpan={4} className="px-2 py-2 font-semibold text-amber-800 text-right">Total Variation:</td>
+                    <td colSpan={4} className="px-2 py-2 font-semibold text-amber-800 text-right">{locale === "th" ? "ยอดรวมการเปลี่ยนแปลง:" : locale === "zh" ? "变更总额:" : "Total Variation:"}</td>
                     <td className="px-2 py-2 text-right font-bold text-amber-900">฿{variationRows.reduce((sum, row) => { const q = parseFloat(row.qty)||0; const r2 = parseFloat(row.rate.replace(/,/g,''))||0; return sum + (q > 0 && r2 > 0 ? q*r2 : parseFloat(row.amount.replace(/,/g,''))||0); }, 0).toLocaleString()}</td>
                     <td></td>
                   </tr></tfoot>
                 </table>
               </div>
-              <button onClick={() => setVariationRows([...variationRows, { item: '', qty: '', unit: '', rate: '', amount: '' }])} className="mt-2 text-xs text-amber-600 hover:text-amber-800 font-semibold">+ Add Row</button>
+              <button onClick={() => setVariationRows([...variationRows, { item: '', qty: '', unit: '', rate: '', amount: '' }])} className="mt-2 text-xs text-amber-600 hover:text-amber-800 font-semibold">+ {locale === "th" ? "เพิ่มแถว" : locale === "zh" ? "添加行" : "Add Row"}</button>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Note / Description <span className="text-red-500">*</span></label>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "หมายเหตุ / รายละเอียด" : locale === "zh" ? "备注 / 描述" : "Note / Description"} <span className="text-red-500">*</span></label>
               <textarea
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
                 rows={3}
-                placeholder="Describe the variation scope, extra work, or cost changes..."
+                placeholder={locale === "th" ? "อธิบายขอบเขตที่เปลี่ยนแปลง งานเพิ่มเติม หรือค่าใช้จ่ายที่เปลี่ยน..." : locale === "zh" ? "描述变更范围、额外工作或费用变化..." : "Describe the variation scope, extra work, or cost changes..."}
                 value={variationDesc}
                 onChange={e => setVariationDesc(e.target.value)}
               />
@@ -6636,8 +6809,8 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                 }}
                 disabled={!variationDesc.trim()}
                 className="flex-1 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition text-sm"
-              >Submit Variation</button>
-              <button onClick={() => { setVariationRows(EMPTY_VAR_ROWS()); setVariationModal(null); }} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">Cancel</button>
+              >{locale === "th" ? "ส่งคำขอเปลี่ยนแปลง" : locale === "zh" ? "提交变更" : "Submit Variation"}</button>
+              <button onClick={() => { setVariationRows(EMPTY_VAR_ROWS()); setVariationModal(null); }} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">{locale === "th" ? "ยกเลิก" : locale === "zh" ? "取消" : "Cancel"}</button>
             </div>
           </div>
         </div>
@@ -6648,29 +6821,30 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
       <div className="fixed inset-0 z-[9999] flex items-start justify-center pt-6 bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-y-auto max-h-[calc(100dvh-6rem)]">
           <div className="bg-sky-600 px-6 py-4">
-            <h3 className="text-white font-bold text-lg">Rate Customer</h3>
+            <h3 className="text-white font-bold text-lg">{locale === "th" ? "ให้คะแนนลูกค้า" : locale === "zh" ? "评价客户" : "Rate Customer"}</h3>
             <p className="text-sky-200 text-sm mt-1">{ratingModal.po} &middot; {ratingModal.service}</p>
           </div>
           <div className="px-6 py-5 space-y-4">
             <WorkflowModalMeta
+              locale={locale}
               step={11}
               typeOfWork={ratingModal.service || 'Project'}
-              actionText="Rate the customer to close this job and move it to history."
+              actionText={locale === "th" ? "ให้คะแนนลูกค้าเพื่อปิดงานและย้ายไปยังประวัติ" : locale === "zh" ? "评价客户以关闭此工作并移至历史记录。" : "Rate the customer to close this job and move it to history."}
               po={ratingModal.po || '-'}
-              counterpartLabel="Customer"
-              counterpartName={firstNameOnly(ratingModal.customer, 'Customer')}
+              counterpartLabel={locale === "th" ? "ลูกค้า" : locale === "zh" ? "客户" : "Customer"}
+              counterpartName={firstNameOnly(ratingModal.customer, locale === "th" ? "ลูกค้า" : locale === "zh" ? "客户" : "Customer")}
               budget={toCurrencyLabel(ratingModal.budget || ratingModal.fee)}
-              location={(() => { const loc = ratingModal.location || ratingModal.subdistrict || ''; if (loc && loc !== 'Unknown') return loc; const m = String(ratingModal.description || '').match(/\bLOC:([^|]+)/); return m ? (m[1] ?? '').trim() : 'Unknown'; })()}
+              location={(() => { const loc = ratingModal.location || ratingModal.subdistrict || ''; if (loc && loc !== 'Unknown') return loc; const m = String(ratingModal.description || '').match(/\bLOC:([^|]+)/); return m ? (m[1] ?? '').trim() : locale === "th" ? "ไม่ทราบ" : locale === "zh" ? "未知" : "Unknown"; })()}
               projectDetails={stripWorkflowPrefix(ratingModal.description || ratingModal.desc || ratingModal.projectDetails || ratingModal.service || '')}
             />
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-2">Your Rating</label>
+              <label className="block text-xs font-semibold text-gray-600 mb-2">{locale === "th" ? "คะแนนของคุณ" : locale === "zh" ? "您的评分" : "Your Rating"}</label>
               <div className="flex gap-2 text-3xl">
                 {[1,2,3,4,5].map(n => (
                   <button key={n} onClick={() => setRatingStars(n)} className={`transition-transform hover:scale-110 ${n <= ratingStars ? 'text-amber-400' : 'text-gray-300'}`}>★</button>
                 ))}
               </div>
-              <p className="text-xs text-gray-400 mt-1">{ratingStars} out of 5 stars</p>
+              <p className="text-xs text-gray-400 mt-1">{locale === "th" ? `${ratingStars} จาก 5 ดาว` : locale === "zh" ? `${ratingStars}/5 星` : `${ratingStars} out of 5 stars`}</p>
             </div>
             <div className="flex gap-3 pt-1">
               <button
@@ -6679,8 +6853,8 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                   setRatingModal(null);
                 }}
                 className="flex-1 bg-sky-600 hover:bg-sky-700 text-white font-bold py-2.5 rounded-xl transition text-sm"
-              >Submit Rating</button>
-              <button onClick={() => setRatingModal(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">Cancel</button>
+              >{locale === "th" ? "ส่งคะแนน" : locale === "zh" ? "提交评分" : "Submit Rating"}</button>
+              <button onClick={() => setRatingModal(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">{locale === "th" ? "ยกเลิก" : locale === "zh" ? "取消" : "Cancel"}</button>
             </div>
           </div>
         </div>
@@ -6690,19 +6864,20 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
       <div className="fixed inset-0 z-[9999] flex items-start justify-center pt-6 bg-gray-950/80 backdrop-blur-sm p-4 overflow-y-auto">
         <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-y-auto max-h-[calc(100dvh-6rem)] mx-auto">
           <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4">
-            <h3 className="text-white font-bold text-lg">Mark Job Complete</h3>
+            <h3 className="text-white font-bold text-lg">{locale === "th" ? "ส่งคำขอยืนยันงานเสร็จ" : locale === "zh" ? "标记工作完成" : "Mark Job Complete"}</h3>
             <p className="text-green-100 text-sm mt-1">{completeModal.po} · {completeModal.service}</p>
           </div>
           <div className="px-6 py-5 space-y-4">
             <WorkflowModalMeta
+              locale={locale}
               step={10}
               typeOfWork={completeModal.service || 'Project'}
-              actionText="Send the project complete request to the customer for final confirmation."
+              actionText={locale === "th" ? "ส่งคำขอยืนยันงานเสร็จให้ลูกค้ายืนยันขั้นสุดท้าย" : locale === "zh" ? "将项目完成请求发送给客户作最终确认。" : "Send the project complete request to the customer for final confirmation."}
               po={completeModal.po || '-'}
-              counterpartLabel="Customer"
-              counterpartName={firstNameOnly(completeModal.customer, 'Customer')}
+              counterpartLabel={locale === "th" ? "ลูกค้า" : locale === "zh" ? "客户" : "Customer"}
+              counterpartName={firstNameOnly(completeModal.customer, locale === "th" ? "ลูกค้า" : locale === "zh" ? "客户" : "Customer")}
               budget={toCurrencyLabel(completeModal.budget || completeModal.fee)}
-              location={(() => { const loc = completeModal.location || completeModal.subdistrict || ''; if (loc && loc !== 'Unknown') return loc; const m = String(completeModal.description || '').match(/\bLOC:([^|]+)/); return m ? (m[1] ?? '').trim() : 'Unknown'; })()}
+              location={(() => { const loc = completeModal.location || completeModal.subdistrict || ''; if (loc && loc !== 'Unknown') return loc; const m = String(completeModal.description || '').match(/\bLOC:([^|]+)/); return m ? (m[1] ?? '').trim() : locale === "th" ? "ไม่ทราบ" : locale === "zh" ? "未知" : "Unknown"; })()}
               projectDetails={stripWorkflowPrefix(completeModal.description || completeModal.desc || completeModal.projectDetails || completeModal.service || '')}
             />
             {/* Budget breakdown — priceList-first, then localStorage fallback */}
@@ -6725,7 +6900,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
               if (!bd || bd.length === 0) return null;
               return (
                 <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3">
-                  <span className="text-gray-500 text-xs block mb-1">Budget Breakdown</span>
+                  <span className="text-gray-500 text-xs block mb-1">{locale === "th" ? "รายละเอียดงบประมาณ" : locale === "zh" ? "预算明细" : "Budget Breakdown"}</span>
                   <div className="font-mono text-xs space-y-0.5">
                     {bd.map((it, i) => (
                       <div key={i} className="flex justify-between gap-2">
@@ -6734,7 +6909,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                       </div>
                     ))}
                     <div className="flex justify-between gap-2 pt-1 border-t border-green-200 font-bold text-sm">
-                      <span className="text-gray-700">Budget</span>
+                      <span className="text-gray-700">{locale === "th" ? "งบประมาณ" : locale === "zh" ? "预算" : "Budget"}</span>
                       <span className="text-green-800">= ฿{bd.reduce((s, it) => s + (it?.total ?? 0), 0).toLocaleString()}</span>
                     </div>
                   </div>
@@ -6749,7 +6924,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
               if (variationItems.length === 0) return null;
               return (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-                  <span className="text-gray-500 text-xs block mb-1">Variation Price List</span>
+                  <span className="text-gray-500 text-xs block mb-1">{locale === "th" ? "รายการราคาการเปลี่ยนแปลง" : locale === "zh" ? "变更价格清单" : "Variation Price List"}</span>
                   <div className="text-sm text-amber-900 space-y-1">
                     {variationItems.map((item, index) => (
                       <p key={`${item.item}-${index}`}>{formatVariationPriceListItem(item, index)}</p>
@@ -6763,18 +6938,18 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
               if (!partnerNote || partnerNote.trim() === '') return null;
               return (
                 <div className="bg-purple-50 border border-purple-200 rounded-xl px-4 py-3">
-                  <span className="text-gray-500 text-xs block mb-1">Partner Note</span>
+                  <span className="text-gray-500 text-xs block mb-1">{locale === "th" ? "หมายเหตุพาร์ทเนอร์" : locale === "zh" ? "合作伙伴备注" : "Partner Note"}</span>
                   <p className="text-sm text-purple-900">{partnerNote}</p>
                 </div>
               );
             })()}
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-2">Completion Note <span className="text-gray-400 font-normal">(optional)</span></label>
+              <label className="block text-xs font-semibold text-gray-600 mb-2">{locale === "th" ? "หมายเหตุงานเสร็จ" : locale === "zh" ? "完成备注" : "Completion Note"} <span className="text-gray-400 font-normal">{locale === "th" ? "(ไม่บังคับ)" : locale === "zh" ? "（可选）" : "(optional)"}</span></label>
               <textarea
                 value={completeNote}
                 onChange={e => setCompleteNote(e.target.value)}
                 rows={3}
-                placeholder="e.g. All tasks finished, site cleaned, client signed off..."
+                placeholder={locale === "th" ? "เช่น งานทั้งหมดเสร็จแล้ว ทำความสะอาดหน้างานแล้ว..." : locale === "zh" ? "例如：所有任务已完成，现场已清理..." : "e.g. All tasks finished, site cleaned, client signed off..."}
                 className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 resize-none"
               />
             </div>
@@ -6785,8 +6960,8 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                   setCompleteModal(null);
                 }}
                 className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-xl transition text-sm"
-              >Confirm Complete</button>
-              <button onClick={() => setCompleteModal(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">Cancel</button>
+              >{locale === "th" ? "ยืนยันงานเสร็จ" : locale === "zh" ? "确认完成" : "Confirm Complete"}</button>
+              <button onClick={() => setCompleteModal(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">{locale === "th" ? "ยกเลิก" : locale === "zh" ? "取消" : "Cancel"}</button>
             </div>
           </div>
         </div>
@@ -7038,7 +7213,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
                 <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center text-lg">🏠</div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-900 text-sm">{p.propertyTitle} <span className="text-xs font-normal text-gray-400">· {locale === 'th' ? `ออเดอร์: ${p.poNumber}` : locale === 'zh' ? `订单: ${p.poNumber}` : `Order: ${p.poNumber}`} · Step 4 of 8</span></p>
-                  <p className="text-xs text-emerald-700 font-semibold mt-0.5">{locale === "th" ? "ลูกค้าสนใจทรัพย์สินของคุณ — กรุณายืนยัน" : "Customer is interested in your property — please confirm"}</p>
+                  <p className="text-xs text-emerald-700 font-semibold mt-0.5">{locale === "th" ? "ลูกค้าสนใจทรัพย์สินของคุณ - กรุณายืนยัน" : locale === "zh" ? "客户对您的房产感兴趣 - 请确认" : "Customer is interested in your property - please confirm"}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{getPropSiteLocation(p)} · {p.propertyTier} · {locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getPropertyListingTypeLabel(p.listingType, locale)} · {locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "สร้างเมื่อ" : locale === "zh" ? "创建时间" : "Created"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
                   {Array.isArray(p.propertyImages) && p.propertyImages.length > 0 && (
@@ -7058,7 +7233,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
                   )}
                 </div>
                 <button onClick={() => onPropAccept?.(p)} className="px-4 py-2 bg-green-700 text-white text-xs font-bold rounded-lg hover:bg-green-800 transition">
-                  {locale === "th" ? "ดูรายละเอียด" : "Review"}
+                  {locale === "th" ? "ดูรายละเอียด" : locale === "zh" ? "查看" : "Review"}
                 </button>
               </div>
             );
@@ -7070,7 +7245,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
                 <div className="w-10 h-10 rounded-lg bg-teal-50 flex items-center justify-center text-lg">📅</div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-900 text-sm">{p.propertyTitle} <span className="text-xs font-normal text-gray-400">· {locale === 'th' ? `ออเดอร์: ${p.poNumber}` : locale === 'zh' ? `订单: ${p.poNumber}` : `Order: ${p.poNumber}`} · Step 7 of 8</span></p>
-                  <p className="text-xs text-teal-700 font-semibold mt-0.5">{locale === "th" ? "ลูกค้าส่งคำเชิญนัดหมาย — กรุณายืนยัน" : "Customer sent a meeting invitation — please confirm"}</p>
+                  <p className="text-xs text-teal-700 font-semibold mt-0.5">{locale === "th" ? "ลูกค้าส่งคำเชิญนัดหมาย - กรุณายืนยัน" : locale === "zh" ? "客户发送了会议邀请 - 请确认" : "Customer sent a meeting invitation - please confirm"}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{p.meetingDate} {p.meetingTime} · {p.meetingVenue || getPropSiteLocation(p)}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getPropertyListingTypeLabel(p.listingType, locale)} · {locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "สร้างเมื่อ" : locale === "zh" ? "创建时间" : "Created"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
@@ -7091,7 +7266,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
                   )}
                 </div>
                 <button onClick={() => onPropMeetingConfirm?.(p)} className="px-4 py-2 bg-teal-600 text-white text-xs font-bold rounded-lg hover:bg-teal-700 transition">
-                  {locale === "th" ? "ยืนยัน" : "Confirm"}
+                  {locale === "th" ? "ยืนยัน" : locale === "zh" ? "确认" : "Confirm"}
                 </button>
               </div>
             );
@@ -7103,7 +7278,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
                 <div className="w-10 h-10 rounded-lg bg-yellow-50 flex items-center justify-center text-lg">⭐</div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-900 text-sm">{p.propertyTitle} <span className="text-xs font-normal text-gray-400">· {locale === 'th' ? `ออเดอร์: ${p.poNumber}` : locale === 'zh' ? `订单: ${p.poNumber}` : `Order: ${p.poNumber}`} · Step 8 of 8</span></p>
-                  <p className="text-xs text-yellow-700 font-semibold mt-0.5">{locale === "th" ? "นัดหมายยืนยันแล้ว — ให้คะแนนลูกค้าเพื่อปิดงาน" : "Meeting confirmed — rate the customer to close this inquiry"}</p>
+                  <p className="text-xs text-yellow-700 font-semibold mt-0.5">{locale === "th" ? "นัดหมายยืนยันแล้ว - ให้คะแนนลูกค้าเพื่อปิดงาน" : locale === "zh" ? "会议已确认 - 评价客户以关闭此咨询" : "Meeting confirmed - rate the customer to close this inquiry"}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{p.meetingDate} {p.meetingTime} · {getPropSiteLocation(p)}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getPropertyListingTypeLabel(p.listingType, locale)} · {locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "สร้างเมื่อ" : locale === "zh" ? "创建时间" : "Created"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
@@ -7124,7 +7299,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
                   )}
                 </div>
                 <button onClick={() => onPropRatePartner?.(p)} className="px-4 py-2 bg-yellow-500 text-white text-xs font-bold rounded-lg hover:bg-yellow-600 transition">
-                  {locale === "th" ? "ให้คะแนน" : "Rate"}
+                  {locale === "th" ? "ให้คะแนน" : locale === "zh" ? "评分" : "Rate"}
                 </button>
               </div>
             );
@@ -7136,7 +7311,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
             <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center text-lg"></div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? req.serviceTh : locale === "zh" ? req.serviceZh : req.service}{(req.po || req.step) ? <span className="text-xs font-normal text-gray-400">{req.po ? ` · ${req.po}` : ''}{req.step ? ` · Step ${req.step} of 11` : ''}</span> : null}</p>
-              <p className="text-xs text-amber-600 font-semibold mt-0.5">{reqWorkflowType === 'variation_partner' ? 'Please decide whether to submit a variation request.' : reqWorkflowType === 'complete_partner' ? 'Please send project complete request to customer.' : reqWorkflowType === 'rate_partner' ? 'Please rate the customer to close this job.' : String(req.status || '').toUpperCase() === 'MEETING_REQUESTED' ? 'Please review and confirm the site meeting invitation.' : locale === "th" ? "โปรดพิจารณาและรับงานนี้เพื่อดำเนินการต่อ" : locale === "zh" ? "请审核并接受此工作以继续" : "Please review and accept this job to proceed"}</p>
+              <p className="text-xs text-amber-600 font-semibold mt-0.5">{reqWorkflowType === 'variation_partner' ? (locale === "th" ? "โปรดตัดสินใจว่าจะส่งคำขอเปลี่ยนแปลงงานหรือไม่" : locale === "zh" ? "请决定是否提交变更请求。" : 'Please decide whether to submit a variation request.') : reqWorkflowType === 'complete_partner' ? (locale === "th" ? "โปรดส่งคำขอยืนยันงานเสร็จให้ลูกค้า" : locale === "zh" ? "请向客户发送项目完成请求。" : 'Please send project complete request to customer.') : reqWorkflowType === 'rate_partner' ? (locale === "th" ? "โปรดให้คะแนนลูกค้าเพื่อปิดงานนี้" : locale === "zh" ? "请评价客户以关闭此工作。" : 'Please rate the customer to close this job.') : String(req.status || '').toUpperCase() === 'MEETING_REQUESTED' ? (locale === "th" ? "โปรดตรวจสอบและยืนยันคำเชิญนัดหมายหน้างาน" : locale === "zh" ? "请查看并确认现场会议邀请。" : 'Please review and confirm the site meeting invitation.') : locale === "th" ? "โปรดพิจารณาและรับงานนี้เพื่อดำเนินการต่อ" : locale === "zh" ? "请审核并接受此工作以继续" : "Please review and accept this job to proceed"}</p>
               <p className="text-xs text-gray-500 mt-0.5">{req.customer} &middot; {req.date} &middot; {getJobAmountPrefix(req, locale)}: {getJobAmountValue(req)}</p>
               {(req.meetingVenue || req.subdistrict) && <p className="text-xs text-gray-500 mt-0.5">{[req.meetingVenue || req.subdistrict].filter(Boolean).join(' · ')}</p>}
               <p className="text-xs text-gray-500 mt-1" style={{ whiteSpace: "pre-wrap" }}>{stripWorkflowPrefix(req.description || req.desc || req.statusNote)}</p>
@@ -7162,18 +7337,18 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
                         if (bd && bd.length > 0 && req?.po) localStorage.setItem(`cblue_po_breakdown_${req.po}`, JSON.stringify(bd));
                         if (pl && pl.length > 0 && req?.po) localStorage.setItem(`cblue_partner_pricelist_${req.po}`, JSON.stringify(pl));
                       } catch {}
-                    }} className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg transition">Yes</button>
-                  <button onClick={(e) => { e.stopPropagation(); try { localStorage.setItem(`partner_variation_sent_${req.po}`, '1'); } catch {} writePartnerReqs(prev => prev.filter((x: any) => !(x.po === req.po && String(x.workflowType || x.type || '') === 'variation_partner'))); }} className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">No</button>
+                    }} className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg transition">{locale === "th" ? "ใช่" : locale === "zh" ? "是" : "Yes"}</button>
+                  <button onClick={(e) => { e.stopPropagation(); try { localStorage.setItem(`partner_variation_sent_${req.po}`, '1'); } catch {} writePartnerReqs(prev => prev.filter((x: any) => !(x.po === req.po && String(x.workflowType || x.type || '') === 'variation_partner'))); }} className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">{locale === "th" ? "ไม่" : locale === "zh" ? "否" : "No"}</button>
                 </>
               ) : reqWorkflowType === 'complete_partner' ? (
                 <>
-                  <button onClick={(e) => { e.stopPropagation(); setCompleteNote(''); setCompleteModal({ ...req, service: req.service || req.title || 'Project', partnerRequest: req.partnerRequest || resolveVariationPartnerNote(req.po), partnerNote: req.partnerNote || req.partnerRequest || resolveVariationPartnerNote(req.po), variationRequest: req.variationRequest || req.partnerRequest || resolveVariationPartnerNote(req.po) }); }} className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition">Send</button>
-                  <button onClick={(e) => { e.stopPropagation(); try { localStorage.setItem(`partner_complete_sent_${req.po}`, '1'); } catch {} writePartnerReqs(prev => prev.filter((x: any) => !(x.po === req.po && String(x.workflowType || x.type || '') === 'complete_partner'))); }} className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">No</button>
+                  <button onClick={(e) => { e.stopPropagation(); setCompleteNote(''); setCompleteModal({ ...req, service: req.service || req.title || 'Project', partnerRequest: req.partnerRequest || resolveVariationPartnerNote(req.po), partnerNote: req.partnerNote || req.partnerRequest || resolveVariationPartnerNote(req.po), variationRequest: req.variationRequest || req.partnerRequest || resolveVariationPartnerNote(req.po) }); }} className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition">{locale === "th" ? "ส่ง" : locale === "zh" ? "发送" : "Send"}</button>
+                  <button onClick={(e) => { e.stopPropagation(); try { localStorage.setItem(`partner_complete_sent_${req.po}`, '1'); } catch {} writePartnerReqs(prev => prev.filter((x: any) => !(x.po === req.po && String(x.workflowType || x.type || '') === 'complete_partner'))); }} className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">{locale === "th" ? "ไม่" : locale === "zh" ? "否" : "No"}</button>
                 </>
               ) : reqWorkflowType === 'rate_partner' ? (
-                <button onClick={(e) => { e.stopPropagation(); setRatingStars(5); setRatingModal(req); }} className="px-3 py-1 bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold rounded-lg transition">Start</button>
+                <button onClick={(e) => { e.stopPropagation(); setRatingStars(5); setRatingModal(req); }} className="px-3 py-1 bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold rounded-lg transition">{locale === "th" ? "เริ่ม" : locale === "zh" ? "开始" : "Start"}</button>
               ) : String(req.status || '').toUpperCase() === 'MEETING_REQUESTED' ? (
-                <button onClick={(e) => { e.stopPropagation(); onJobClick && onJobClick(req); }} className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg transition">Confirm</button>
+                <button onClick={(e) => { e.stopPropagation(); onJobClick && onJobClick(req); }} className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg transition">{locale === "th" ? "ยืนยัน" : locale === "zh" ? "确认" : "Confirm"}</button>
               ) : (
                 <>
                   {req.urgency === "urgent" && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-700">{locale === "th" ? "เร่งด่วน" : locale === "zh" ? "紧急" : "Urgent"}</span>}
@@ -7191,27 +7366,28 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
       <div className="fixed inset-0 z-[9999] flex items-start justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto pt-6">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto max-h-[calc(100dvh-6rem)] overflow-y-auto my-4">
           <div className="bg-amber-500 px-6 py-4">
-            <h3 className="text-white font-bold text-lg">Submit Variation</h3>
+            <h3 className="text-white font-bold text-lg">{locale === "th" ? "ส่งคำขอเปลี่ยนแปลงงาน" : locale === "zh" ? "提交变更" : "Submit Variation"}</h3>
             <p className="text-amber-100 text-sm mt-1">{variationModal.po} · {variationModal.service}</p>
           </div>
           <div className="px-6 py-5 space-y-4">
             <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-800">
-              <strong>Step 9 of 11 • Variation.</strong> Review the original PO budget, describe the extra scope or revised pricing, and send it to the customer for approval.
+              <strong>{getWorkflowStepBadgeLabel(9, 11, getWorkflowStepNameForLocale(9, locale), locale)}.</strong> {locale === "th" ? "ตรวจสอบงบประมาณ PO เดิม อธิบายขอบเขตเพิ่มเติมหรือราคาที่ปรับ และส่งให้ลูกค้าอนุมัติ" : locale === "zh" ? "查看原 PO 预算，说明新增范围或调整价格，并发送给客户批准。" : "Review the original PO budget, describe the extra scope or revised pricing, and send it to the customer for approval."}
             </div>
             <WorkflowModalMeta
+              locale={locale}
               step={9}
               typeOfWork={variationModal.service || 'Project'}
-              actionText="Review the original PO and send your variation request to the customer for approval."
+              actionText={locale === "th" ? "ตรวจสอบ PO เดิมและส่งคำขอเปลี่ยนแปลงให้ลูกค้าอนุมัติ" : locale === "zh" ? "查看原 PO，并将变更请求发送给客户批准。" : "Review the original PO and send your variation request to the customer for approval."}
               po={variationModal.po || '-'}
-              counterpartLabel="Customer"
-              counterpartName={firstNameOnly(variationModal.customer, 'Customer')}
+              counterpartLabel={locale === "th" ? "ลูกค้า" : locale === "zh" ? "客户" : "Customer"}
+              counterpartName={firstNameOnly(variationModal.customer, locale === "th" ? "ลูกค้า" : locale === "zh" ? "客户" : "Customer")}
               budget={toCurrencyLabel(variationModal.budget)}
-              location={(() => { const loc = variationModal.location || variationModal.subdistrict || ''; if (loc && loc !== 'Unknown') return loc; const m = String(variationModal.description || '').match(/\bLOC:([^|]+)/); return m ? (m[1] ?? '').trim() : 'Unknown'; })()}
+              location={(() => { const loc = variationModal.location || variationModal.subdistrict || ''; if (loc && loc !== 'Unknown') return loc; const m = String(variationModal.description || '').match(/\bLOC:([^|]+)/); return m ? (m[1] ?? '').trim() : locale === "th" ? "ไม่ทราบ" : locale === "zh" ? "未知" : "Unknown"; })()}
               projectDetails={stripWorkflowPrefix(variationModal.description || variationModal.desc || variationModal.projectDetails || variationModal.service || '')}
             />
             {/* Uploaded Files — lets partner reference customer photos when writing variation */}
             <div className="flex justify-between items-center rounded-lg border border-amber-100 bg-amber-50 px-4 py-2.5 text-xs">
-              <span className="text-amber-800 font-semibold">Uploaded Files</span>
+              <span className="text-amber-800 font-semibold">{locale === "th" ? "ไฟล์ที่อัปโหลด" : locale === "zh" ? "已上传文件" : "Uploaded Files"}</span>
               <button type="button" className={`font-semibold ${variationAttachUrls.length > 0 ? 'text-sky-600 hover:underline' : 'text-gray-400'}`} onClick={() => {
                 const viewer = createAttachmentViewerState({
                   title: 'Uploaded Files',
@@ -7220,16 +7396,16 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
                   urls: variationAttachUrls,
                 });
                 if (!viewer) {
-                  alert('No downloadable file found right now.');
+                  alert(locale === "th" ? "ยังไม่พบไฟล์ที่ดาวน์โหลดได้" : locale === "zh" ? "当前没有可下载文件。" : 'No downloadable file found right now.');
                   return;
                 }
                 setAttachmentViewer(viewer);
               }}>
-                {variationAttachUrls.length > 0 ? 'View & Download' : 'No files yet'}
+                {variationAttachUrls.length > 0 ? (locale === "th" ? "ดูและดาวน์โหลด" : locale === "zh" ? "查看并下载" : 'View & Download') : (locale === "th" ? "ยังไม่มีไฟล์" : locale === "zh" ? "暂无文件" : 'No files yet')}
               </button>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Original Budget</label>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "งบประมาณเดิม" : locale === "zh" ? "原预算" : "Original Budget"}</label>
               <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
                 {(() => {
                   const varDesc = String(variationModal.description || variationModal.desc || variationModal.projectDetails || '');
@@ -7250,7 +7426,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
                           </div>
                         ))}
                         <div className="flex justify-between gap-2 pt-1 border-t border-amber-200 font-bold text-sm">
-                          <span className="text-amber-900">Budget</span>
+                          <span className="text-amber-900">{locale === "th" ? "งบประมาณ" : locale === "zh" ? "预算" : "Budget"}</span>
                           <span className="text-amber-900">= ฿{bd.reduce((s, it) => s + (it?.total ?? 0), 0).toLocaleString()}</span>
                         </div>
                       </div>
@@ -7259,18 +7435,18 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
                   return <span className="font-bold text-amber-800">{toCurrencyLabel(variationModal.budget)}</span>;
                 })()}
               </div>
-              <p className="text-xs text-gray-500 mt-1">Original PO total. Add variation line items below.</p>
+              <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "ยอดรวม PO เดิม เพิ่มรายการเปลี่ยนแปลงด้านล่าง" : locale === "zh" ? "原 PO 总额。请在下方添加变更项目。" : "Original PO total. Add variation line items below."}</p>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-2">Variation Price List</label>
+              <label className="block text-xs font-semibold text-gray-600 mb-2">{locale === "th" ? "รายการราคาการเปลี่ยนแปลง" : locale === "zh" ? "变更价格清单" : "Variation Price List"}</label>
               <div className="overflow-x-auto rounded-xl border border-amber-100">
                 <table className="w-full text-xs">
                   <thead><tr className="bg-amber-50 text-amber-800">
-                    <th className="px-2 py-2 text-left font-semibold">Item</th>
-                    <th className="px-2 py-2 text-right font-semibold w-12">Qty</th>
-                    <th className="px-2 py-2 text-left font-semibold w-14">Unit</th>
-                    <th className="px-2 py-2 text-right font-semibold w-20">Rate (฿)</th>
-                    <th className="px-2 py-2 text-right font-semibold w-20">Amount (฿)</th>
+                    <th className="px-2 py-2 text-left font-semibold">{locale === "th" ? "รายการ" : locale === "zh" ? "项目" : "Item"}</th>
+                    <th className="px-2 py-2 text-right font-semibold w-12">{locale === "th" ? "จำนวน" : locale === "zh" ? "数量" : "Qty"}</th>
+                    <th className="px-2 py-2 text-left font-semibold w-14">{locale === "th" ? "หน่วย" : locale === "zh" ? "单位" : "Unit"}</th>
+                    <th className="px-2 py-2 text-right font-semibold w-20">{locale === "th" ? "ราคา (฿)" : locale === "zh" ? "单价 (฿)" : "Rate (฿)"}</th>
+                    <th className="px-2 py-2 text-right font-semibold w-20">{locale === "th" ? "ยอดเงิน (฿)" : locale === "zh" ? "金额 (฿)" : "Amount (฿)"}</th>
                     <th className="px-1 py-2 w-6"></th>
                   </tr></thead>
                   <tbody>
@@ -7280,9 +7456,9 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
                       const amount = qty > 0 && rate > 0 ? qty * rate : (parseFloat(row.amount.replace(/,/g,'')) || 0);
                       return (
                         <tr key={idx} className="border-t border-amber-50">
-                          <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-amber-400" placeholder="Item description" value={row.item} onChange={e => { setVariationRows(variationRows.map((vr, vi) => vi !== idx ? vr : {...vr, item: e.target.value})); }} /></td>
+                          <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-amber-400" placeholder={locale === "th" ? "รายละเอียดรายการ" : locale === "zh" ? "项目描述" : "Item description"} value={row.item} onChange={e => { setVariationRows(variationRows.map((vr, vi) => vi !== idx ? vr : {...vr, item: e.target.value})); }} /></td>
                           <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-1 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-amber-400" placeholder="0" value={row.qty} onChange={e => { setVariationRows(variationRows.map((vr, vi) => vi !== idx ? vr : {...vr, qty: e.target.value, amount: String(parseFloat(e.target.value||'0') * (parseFloat(vr.rate.replace(/,/g,''))||0) || '')})); }} /></td>
-                          <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-amber-400" placeholder="unit" value={row.unit} onChange={e => { setVariationRows(variationRows.map((vr, vi) => vi !== idx ? vr : {...vr, unit: e.target.value})); }} /></td>
+                          <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-amber-400" placeholder={locale === "th" ? "หน่วย" : locale === "zh" ? "单位" : "unit"} value={row.unit} onChange={e => { setVariationRows(variationRows.map((vr, vi) => vi !== idx ? vr : {...vr, unit: e.target.value})); }} /></td>
                           <td className="px-1 py-1"><input className="w-full border border-gray-200 rounded px-1 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-amber-400" placeholder="0" value={row.rate} onChange={e => { setVariationRows(variationRows.map((vr, vi) => vi !== idx ? vr : {...vr, rate: e.target.value, amount: String((parseFloat(vr.qty)||0) * (parseFloat(e.target.value.replace(/,/g,''))||0) || '')})); }} /></td>
                           <td className="px-2 py-1 text-right text-amber-700 font-bold">{amount > 0 ? amount.toLocaleString() : '-'}</td>
                           <td className="px-1 py-1"><button onClick={() => { if (variationRows.length > 1) setVariationRows(variationRows.filter((_, i) => i !== idx)); }} className="text-gray-400 hover:text-red-500 text-base leading-none">×</button></td>
@@ -7291,21 +7467,21 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
                     })}
                   </tbody>
                   <tfoot><tr className="border-t border-amber-200 bg-amber-50">
-                    <td colSpan={4} className="px-2 py-2 font-semibold text-amber-800 text-right">Total Variation:</td>
+                    <td colSpan={4} className="px-2 py-2 font-semibold text-amber-800 text-right">{locale === "th" ? "ยอดรวมการเปลี่ยนแปลง:" : locale === "zh" ? "变更总额:" : "Total Variation:"}</td>
                     <td className="px-2 py-2 text-right font-bold text-amber-900">฿{variationRows.reduce((sum, row) => { const q = parseFloat(row.qty)||0; const r2 = parseFloat(row.rate.replace(/,/g,''))||0; return sum + (q > 0 && r2 > 0 ? q*r2 : parseFloat(row.amount.replace(/,/g,''))||0); }, 0).toLocaleString()}</td>
                     <td></td>
                   </tr></tfoot>
                 </table>
               </div>
-              <button onClick={() => setVariationRows([...variationRows, { item: '', qty: '', unit: '', rate: '', amount: '' }])} className="mt-2 text-xs text-amber-600 hover:text-amber-800 font-semibold">+ Add Row</button>
+              <button onClick={() => setVariationRows([...variationRows, { item: '', qty: '', unit: '', rate: '', amount: '' }])} className="mt-2 text-xs text-amber-600 hover:text-amber-800 font-semibold">+ {locale === "th" ? "เพิ่มแถว" : locale === "zh" ? "添加行" : "Add Row"}</button>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Note / Description <span className="text-red-500">*</span></label>
-              <textarea className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none" rows={3} placeholder="Describe the variation scope, extra work, or cost changes..." value={variationDesc} onChange={e => setVariationDesc(e.target.value)} />
+              <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "หมายเหตุ / รายละเอียด" : locale === "zh" ? "备注 / 描述" : "Note / Description"} <span className="text-red-500">*</span></label>
+              <textarea className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none" rows={3} placeholder={locale === "th" ? "อธิบายขอบเขตที่เปลี่ยนแปลง งานเพิ่มเติม หรือค่าใช้จ่ายที่เปลี่ยน..." : locale === "zh" ? "描述变更范围、额外工作或费用变化..." : "Describe the variation scope, extra work, or cost changes..."} value={variationDesc} onChange={e => setVariationDesc(e.target.value)} />
             </div>
             <div className="flex gap-3 pt-1">
-              <button onClick={() => { if (!variationDesc.trim()) return; const priceListRows = buildVariationPriceListRows(variationRows); if (variationModal?.po) { storeVariationPriceList(variationModal.po, priceListRows); } const tableText = priceListRows.length > 0 ? `\n\nPrice List:\n${formatVariationPriceListText(priceListRows)}` : ''; handlePartnerAction(variationModal, 'variation', `Partner variation request: ${variationDesc.trim()}${tableText}`); setVariationRows(EMPTY_VAR_ROWS()); setVariationModal(null); }} disabled={!variationDesc.trim()} className="flex-1 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition text-sm">Submit Variation</button>
-              <button onClick={() => { setVariationRows(EMPTY_VAR_ROWS()); setVariationModal(null); }} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">Cancel</button>
+              <button onClick={() => { if (!variationDesc.trim()) return; const priceListRows = buildVariationPriceListRows(variationRows); if (variationModal?.po) { storeVariationPriceList(variationModal.po, priceListRows); } const tableText = priceListRows.length > 0 ? `\n\nPrice List:\n${formatVariationPriceListText(priceListRows)}` : ''; handlePartnerAction(variationModal, 'variation', `Partner variation request: ${variationDesc.trim()}${tableText}`); setVariationRows(EMPTY_VAR_ROWS()); setVariationModal(null); }} disabled={!variationDesc.trim()} className="flex-1 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition text-sm">{locale === "th" ? "ส่งคำขอเปลี่ยนแปลง" : locale === "zh" ? "提交变更" : "Submit Variation"}</button>
+              <button onClick={() => { setVariationRows(EMPTY_VAR_ROWS()); setVariationModal(null); }} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">{locale === "th" ? "ยกเลิก" : locale === "zh" ? "取消" : "Cancel"}</button>
             </div>
           </div>
         </div>
@@ -7315,19 +7491,20 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
       <div className="fixed inset-0 z-[9999] flex items-start justify-center pt-6 bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
         <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-y-auto max-h-[calc(100dvh-6rem)] mx-auto">
           <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4">
-            <h3 className="text-white font-bold text-lg">Mark Job Complete</h3>
+            <h3 className="text-white font-bold text-lg">{locale === "th" ? "ส่งคำขอยืนยันงานเสร็จ" : locale === "zh" ? "标记工作完成" : "Mark Job Complete"}</h3>
             <p className="text-green-100 text-sm mt-1">{completeModal.po} · {completeModal.service}</p>
           </div>
           <div className="px-6 py-5 space-y-4">
             <WorkflowModalMeta
+              locale={locale}
               step={10}
               typeOfWork={completeModal.service || 'Project'}
-              actionText="Send the project complete request to the customer for final confirmation."
+              actionText={locale === "th" ? "ส่งคำขอยืนยันงานเสร็จให้ลูกค้ายืนยันขั้นสุดท้าย" : locale === "zh" ? "将项目完成请求发送给客户作最终确认。" : "Send the project complete request to the customer for final confirmation."}
               po={completeModal.po || '-'}
-              counterpartLabel="Customer"
-              counterpartName={firstNameOnly(completeModal.customer, 'Customer')}
+              counterpartLabel={locale === "th" ? "ลูกค้า" : locale === "zh" ? "客户" : "Customer"}
+              counterpartName={firstNameOnly(completeModal.customer, locale === "th" ? "ลูกค้า" : locale === "zh" ? "客户" : "Customer")}
               budget={toCurrencyLabel(completeModal.budget || completeModal.fee)}
-              location={(() => { const loc = completeModal.location || completeModal.subdistrict || ''; if (loc && loc !== 'Unknown') return loc; const m = String(completeModal.description || '').match(/\bLOC:([^|]+)/); return m ? (m[1] ?? '').trim() : 'Unknown'; })()}
+              location={(() => { const loc = completeModal.location || completeModal.subdistrict || ''; if (loc && loc !== 'Unknown') return loc; const m = String(completeModal.description || '').match(/\bLOC:([^|]+)/); return m ? (m[1] ?? '').trim() : locale === "th" ? "ไม่ทราบ" : locale === "zh" ? "未知" : "Unknown"; })()}
               projectDetails={stripWorkflowPrefix(completeModal.description || completeModal.desc || completeModal.projectDetails || completeModal.service || '')}
             />
             {(() => {
@@ -7349,7 +7526,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
               if (!bd || bd.length === 0) return null;
               return (
                 <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3">
-                  <span className="text-gray-500 text-xs block mb-1">Budget Breakdown</span>
+                  <span className="text-gray-500 text-xs block mb-1">{locale === "th" ? "รายละเอียดงบประมาณ" : locale === "zh" ? "预算明细" : "Budget Breakdown"}</span>
                   <div className="font-mono text-xs space-y-0.5">
                     {bd.map((it, i) => (
                       <div key={i} className="flex justify-between gap-2">
@@ -7358,7 +7535,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
                       </div>
                     ))}
                     <div className="flex justify-between gap-2 pt-1 border-t border-green-200 font-bold text-sm">
-                      <span className="text-gray-700">Budget</span>
+                      <span className="text-gray-700">{locale === "th" ? "งบประมาณ" : locale === "zh" ? "预算" : "Budget"}</span>
                       <span className="text-green-800">= ฿{bd.reduce((s, it) => s + (it?.total ?? 0), 0).toLocaleString()}</span>
                     </div>
                   </div>
@@ -7373,7 +7550,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
               if (variationItems.length === 0) return null;
               return (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-                  <span className="text-gray-500 text-xs block mb-1">Price List</span>
+                  <span className="text-gray-500 text-xs block mb-1">{locale === "th" ? "รายการราคา" : locale === "zh" ? "价格清单" : "Price List"}</span>
                   <div className="text-sm text-amber-900 space-y-1">
                     {variationItems.map((item, index) => (
                       <p key={`${item.item}-${index}`}>{formatVariationPriceListItem(item, index)}</p>
@@ -7387,18 +7564,18 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
               if (!partnerNote || partnerNote.trim() === '') return null;
               return (
                 <div className="bg-purple-50 border border-purple-200 rounded-xl px-4 py-3">
-                  <span className="text-gray-500 text-xs block mb-1">Partner Note</span>
+                  <span className="text-gray-500 text-xs block mb-1">{locale === "th" ? "หมายเหตุพาร์ทเนอร์" : locale === "zh" ? "合作伙伴备注" : "Partner Note"}</span>
                   <p className="text-sm text-purple-900 whitespace-pre-wrap">{partnerNote}</p>
                 </div>
               );
             })()}
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-2">Completion Note <span className="text-gray-400 font-normal">(optional)</span></label>
+              <label className="block text-xs font-semibold text-gray-600 mb-2">{locale === "th" ? "หมายเหตุงานเสร็จ" : locale === "zh" ? "完成备注" : "Completion Note"} <span className="text-gray-400 font-normal">{locale === "th" ? "(ไม่บังคับ)" : locale === "zh" ? "（可选）" : "(optional)"}</span></label>
               <textarea
                 value={completeNote}
                 onChange={e => setCompleteNote(e.target.value)}
                 rows={3}
-                placeholder="e.g. All tasks finished, site cleaned, client signed off..."
+                placeholder={locale === "th" ? "เช่น งานทั้งหมดเสร็จแล้ว ทำความสะอาดหน้างานแล้ว..." : locale === "zh" ? "例如：所有任务已完成，现场已清理..." : "e.g. All tasks finished, site cleaned, client signed off..."}
                 className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 resize-none"
               />
             </div>
@@ -7409,8 +7586,8 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
                   setCompleteModal(null);
                 }}
                 className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-xl transition text-sm"
-              >Confirm Complete</button>
-              <button onClick={() => setCompleteModal(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">Cancel</button>
+              >{locale === "th" ? "ยืนยันงานเสร็จ" : locale === "zh" ? "确认完成" : "Confirm Complete"}</button>
+              <button onClick={() => setCompleteModal(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">{locale === "th" ? "ยกเลิก" : locale === "zh" ? "取消" : "Cancel"}</button>
             </div>
           </div>
         </div>
@@ -7420,23 +7597,24 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
       <div className="fixed inset-0 z-[9999] flex items-start justify-center pt-6 bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-y-auto max-h-[calc(100dvh-6rem)]">
           <div className="bg-sky-600 px-6 py-4">
-            <h3 className="text-white font-bold text-lg">Rate Customer</h3>
+            <h3 className="text-white font-bold text-lg">{locale === "th" ? "ให้คะแนนลูกค้า" : locale === "zh" ? "评价客户" : "Rate Customer"}</h3>
             <p className="text-sky-200 text-sm mt-1">{ratingModal.po} · {ratingModal.service}</p>
           </div>
           <div className="px-6 py-5 space-y-4">
             <WorkflowModalMeta
+              locale={locale}
               step={11}
               typeOfWork={ratingModal.service || 'Project'}
-              actionText="Rate the customer to close this job and move it to history."
+              actionText={locale === "th" ? "ให้คะแนนลูกค้าเพื่อปิดงานและย้ายไปยังประวัติ" : locale === "zh" ? "评价客户以关闭此工作并移至历史记录。" : "Rate the customer to close this job and move it to history."}
               po={ratingModal.po || '-'}
-              counterpartLabel="Customer"
-              counterpartName={firstNameOnly(ratingModal.customer, 'Customer')}
+              counterpartLabel={locale === "th" ? "ลูกค้า" : locale === "zh" ? "客户" : "Customer"}
+              counterpartName={firstNameOnly(ratingModal.customer, locale === "th" ? "ลูกค้า" : locale === "zh" ? "客户" : "Customer")}
               budget={toCurrencyLabel(ratingModal.budget || ratingModal.fee)}
-              location={(() => { const loc = ratingModal.location || ratingModal.subdistrict || ''; if (loc && loc !== 'Unknown') return loc; try { const active = JSON.parse(localStorage.getItem('ghis_mock_active') || '[]'); const job = (active as any[]).find((x: any) => x.po === ratingModal.po); const m = String(job?.description || '').match(/\bLOC:([^|]+)/); if (m) return (m[1] ?? '').trim(); } catch {} return 'Unknown'; })()}
+              location={(() => { const loc = ratingModal.location || ratingModal.subdistrict || ''; if (loc && loc !== 'Unknown') return loc; try { const active = JSON.parse(localStorage.getItem('ghis_mock_active') || '[]'); const job = (active as any[]).find((x: any) => x.po === ratingModal.po); const m = String(job?.description || '').match(/\bLOC:([^|]+)/); if (m) return (m[1] ?? '').trim(); } catch {} return locale === "th" ? "ไม่ทราบ" : locale === "zh" ? "未知" : "Unknown"; })()}
               projectDetails={stripWorkflowPrefix(ratingModal.description || ratingModal.desc || ratingModal.projectDetails || ratingModal.service || '')}
             />
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-2">Your Rating</label>
+              <label className="block text-xs font-semibold text-gray-600 mb-2">{locale === "th" ? "คะแนนของคุณ" : locale === "zh" ? "您的评分" : "Your Rating"}</label>
               <div className="flex gap-2 text-3xl">
                 {[1,2,3,4,5].map(n => (
                   <button key={n} onClick={() => setRatingStars(n)} className={`transition-transform hover:scale-110 ${n <= ratingStars ? 'text-amber-400' : 'text-gray-300'}`}>★</button>
@@ -7444,8 +7622,8 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
               </div>
             </div>
             <div className="flex gap-3 pt-1">
-              <button onClick={() => { handlePartnerAction(ratingModal, 'rate', String(ratingStars)); setRatingModal(null); }} className="flex-1 bg-sky-600 hover:bg-sky-700 text-white font-bold py-2.5 rounded-xl transition text-sm">Submit Rating</button>
-              <button onClick={() => setRatingModal(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">Cancel</button>
+              <button onClick={() => { handlePartnerAction(ratingModal, 'rate', String(ratingStars)); setRatingModal(null); }} className="flex-1 bg-sky-600 hover:bg-sky-700 text-white font-bold py-2.5 rounded-xl transition text-sm">{locale === "th" ? "ส่งคะแนน" : locale === "zh" ? "提交评分" : "Submit Rating"}</button>
+              <button onClick={() => setRatingModal(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">{locale === "th" ? "ยกเลิก" : locale === "zh" ? "取消" : "Cancel"}</button>
             </div>
           </div>
         </div>
@@ -9018,15 +9196,15 @@ function PartnerDashboard({ locale, partner, prefix, onLogout, orders }: { local
       
       <div className="flex gap-2 bg-white rounded-xl shadow-sm border border-gray-200 p-2 mb-6 overflow-x-auto no-scrollbar">
         {[
-          { key: "overview", icon: "", label: "Overview", count: null },
+          { key: "overview", icon: "", label: locale === "th" ? "ภาพรวม" : locale === "zh" ? "概览" : "Overview", count: null },
           { key: "requests", label: locale === "th" ? "คำขอใหม่" : locale === "zh" ? "新请求" : "Requests", icon: "📋", badge: 4 },
-        { key: "active", icon: "", label: "Active Jobs", count: 3 },
+        { key: "active", icon: "", label: locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "当前工作" : "Active Jobs", count: 3 },
           
-          { key: "properties", icon: "", label: "Properties", count: null },
-          { key: "history", icon: "", label: "History", count: null },
-          { key: "chat", icon: "", label: "Chat", count: 3 },
-          { key: "alerts", icon: "", label: "Alerts", count: 3 },
-          { key: "profile", icon: "", label: "Profile", count: null },
+          { key: "properties", icon: "", label: locale === "th" ? "อสังหาฯ" : locale === "zh" ? "房产" : "Properties", count: null },
+          { key: "history", icon: "", label: locale === "th" ? "ประวัติ" : locale === "zh" ? "历史" : "History", count: null },
+          { key: "chat", icon: "", label: locale === "th" ? "แชท" : locale === "zh" ? "聊天" : "Chat", count: 3 },
+          { key: "alerts", icon: "", label: locale === "th" ? "แจ้งเตือน" : locale === "zh" ? "通知" : "Alerts", count: 3 },
+          { key: "profile", icon: "", label: locale === "th" ? "โปรไฟล์" : locale === "zh" ? "个人资料" : "Profile", count: null },
         ].map((tab, i) => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key as any)} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition whitespace-nowrap ${activeTab === tab.key ? 'bg-purple-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'}`}>
             <span>{tab.icon}</span> {tab.label}
@@ -9068,27 +9246,27 @@ function PartnerDashboard({ locale, partner, prefix, onLogout, orders }: { local
             
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
-                <p className="text-xs text-gray-500 font-medium mb-1">Active Jobs</p>
+                <p className="text-xs text-gray-500 font-medium mb-1">{locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "当前工作" : "Active Jobs"}</p>
                 <p className="text-lg font-bold text-gray-900">3</p>
               </div>
               <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
-                <p className="text-xs text-gray-500 font-medium mb-1">Completed</p>
+                <p className="text-xs text-gray-500 font-medium mb-1">{locale === "th" ? "เสร็จสิ้น" : locale === "zh" ? "已完成" : "Completed"}</p>
                 <p className="text-lg font-bold text-gray-900">47</p>
               </div>
               <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
-                <p className="text-xs text-gray-500 font-medium mb-1">Rating</p>
+                <p className="text-xs text-gray-500 font-medium mb-1">{locale === "th" ? "คะแนน" : locale === "zh" ? "评分" : "Rating"}</p>
                 <p className="text-lg font-bold text-gray-900 text-amber-500">4.8 </p>
               </div>
               <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
-                <p className="text-xs text-gray-500 font-medium mb-1">Response</p>
+                <p className="text-xs text-gray-500 font-medium mb-1">{locale === "th" ? "การตอบกลับ" : locale === "zh" ? "响应" : "Response"}</p>
                 <p className="text-lg font-bold text-green-600">96%</p>
               </div>
               <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
-                <p className="text-xs text-gray-500 font-medium mb-1">Repeat Clients</p>
+                <p className="text-xs text-gray-500 font-medium mb-1">{locale === "th" ? "ลูกค้าซ้ำ" : locale === "zh" ? "回头客户" : "Repeat Clients"}</p>
                 <p className="text-lg font-bold text-gray-900">12</p>
               </div>
               <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
-                <p className="text-xs text-gray-500 font-medium mb-1">Monthly Earn</p>
+                <p className="text-xs text-gray-500 font-medium mb-1">{locale === "th" ? "รายได้ต่อเดือน" : locale === "zh" ? "月收入" : "Monthly Earn"}</p>
                 <p className="text-lg font-bold text-sky-600">฿26,500</p>
               </div>
             </div>
@@ -9100,7 +9278,7 @@ function PartnerDashboard({ locale, partner, prefix, onLogout, orders }: { local
           {/* Monthly Earnings Chart (Simplified UI) */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center">
-              <h3 className="font-bold text-gray-900 flex items-center gap-2">Monthly Earnings</h3>
+              <h3 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "รายได้รายเดือน" : locale === "zh" ? "月收入" : "Monthly Earnings"}</h3>
               <span className="text-sky-600 font-bold text-sm">฿26,500 (May 26)</span>
             </div>
             <div className="p-5 flex items-end justify-between h-32">
@@ -9132,7 +9310,7 @@ function PartnerDashboard({ locale, partner, prefix, onLogout, orders }: { local
                     {/* Active Jobs */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-              <h2 className="font-bold text-gray-900 flex items-center gap-2"> Active Jobs</h2>
+              <h2 className="font-bold text-gray-900 flex items-center gap-2"> {locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "当前工作" : "Active Jobs"}</h2>
               <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full">{activeOrders.length}</span>
             </div>
             <div className="divide-y divide-gray-50">
@@ -9209,7 +9387,7 @@ function PartnerActiveJobs({ locale, prefix, orders }: { locale: string; prefix:
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8">
       <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-        <h2 className="font-bold text-gray-900 flex items-center gap-2"> Active Jobs</h2>
+        <h2 className="font-bold text-gray-900 flex items-center gap-2"> {locale === "th" ? "งานปัจจุบัน" : locale === "zh" ? "当前工作" : "Active Jobs"}</h2>
         <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full">{orders.length}</span>
       </div>
       <div className="divide-y divide-gray-50">
@@ -9251,7 +9429,7 @@ function PartnerIncomingRequests({ locale, prefix, orders }: { locale: string; p
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-        <h2 className="font-bold text-gray-900 flex items-center gap-2">Incoming Requests</h2>
+        <h2 className="font-bold text-gray-900 flex items-center gap-2">{locale === "th" ? "คำขอใหม่" : locale === "zh" ? "新请求" : "Incoming Requests"}</h2>
         <span className="bg-amber-100 text-amber-700 text-xs font-bold px-2.5 py-1 rounded-full">{orders.length}</span>
       </div>
       <div className="divide-y divide-gray-50">
