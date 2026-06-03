@@ -3395,14 +3395,14 @@ export default function FixerProPage() {
         // Auto-sync: meeting_pending_partner in ghis_mock_dyn_req → meeting_confirm_partner in partner reqs
         if (d) {
           const ghisReqs: any[] = filterVisibleWorkflowItems(JSON.parse(d));
-          const pendingMeetings = ghisReqs.filter((r: any) => r.type === 'meeting_pending_partner');
+          const pendingMeetings = ghisReqs.filter((r: any) => String(r?.workflowType || r?.type || '') === 'meeting_pending_partner');
           let partnerChanged = false;
           for (const pending of pendingMeetings) {
-            const alreadyHasMeetingConfirm = partnerReqs.some((r: any) => r.po === pending.po && r.type === 'meeting_confirm_partner');
-            const alreadyAdvanced = partnerReqs.some((r: any) => r.po === pending.po && (r.type === 'variation_partner' || r.type === 'complete_partner' || r.type === 'rate_partner'));
+            const alreadyHasMeetingConfirm = partnerReqs.some((r: any) => r.po === pending.po && String(r?.workflowType || r?.type || '') === 'meeting_confirm_partner');
+            const alreadyAdvanced = partnerReqs.some((r: any) => r.po === pending.po && ['variation_partner', 'complete_partner', 'rate_partner'].includes(String(r?.workflowType || r?.type || '')));
             if (!alreadyHasMeetingConfirm && !alreadyAdvanced) {
               partnerReqs = [
-                ...partnerReqs.filter((r: any) => !(r.po === pending.po && r.type === 'meeting_confirm_partner')),
+                ...partnerReqs.filter((r: any) => !(r.po === pending.po && String(r?.workflowType || r?.type || '') === 'meeting_confirm_partner')),
                 {
                   id: `meeting-confirm-${pending.po}`,
                   po: pending.po,

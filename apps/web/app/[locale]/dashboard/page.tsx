@@ -5457,6 +5457,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                       meetingVenue: finalMeetingVenue,
                       venue: finalMeetingVenue,
                       step: 8,
+                      mockStep: 8,
+                      status: 'MEETING_REQUESTED',
+                      statusName: 'Waiting for Meeting Confirmation',
+                      statusNote: `Waiting for partner confirmation for ${dateLabel} ${meetingTime}`,
                       actionNeeded: false,
                     },
                   ];
@@ -5464,10 +5468,81 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                     ...mockDynRequests.filter((x: any) => x.id !== meetingModal.id && x.id !== pendingId),
                     { id: pendingId, po: meetingModal.po, title: meetingModal.title, customer: meetingModal.customer, date: fmtDateTime(createdAt), createdAt, budget: meetingModal.budget, tier: meetingModal.tier, desc, type: 'meeting_pending_partner', step: 8, venue: finalMeetingVenue, meetingVenue: finalMeetingVenue, meetingDate, meetingTime, meetingNote: meetingNote.trim(), location: meetingProjectLocation, customerEmail: subscriberEmail },
                   ];
+                  const partnerMeetingCustomer = subscriber?.name || meetingModal.customerName || "Ghis";
+                  const partnerMeetingRequest = {
+                    id: `meeting-confirm-${meetingModal.po}`,
+                    po: meetingModal.po,
+                    service: meetingModal.title,
+                    serviceTh: meetingModal.titleTh || meetingModal.title,
+                    serviceZh: meetingModal.titleZh || meetingModal.title,
+                    customer: partnerMeetingCustomer,
+                    customerName: partnerMeetingCustomer,
+                    customerEmail: subscriberEmail,
+                    date: fmtDateTime(createdAt),
+                    createdAt,
+                    fee: meetingModal.budget,
+                    budget: String(meetingModal.budget || '').replace(/[^0-9]/g, ''),
+                    tier: meetingModal.tier,
+                    desc,
+                    description: meetingModal.description || meetingModal.desc || desc,
+                    hasAttachment: Boolean(meetingModal.hasAttachment),
+                    images: Array.isArray(meetingModal.images) ? meetingModal.images : [],
+                    attachments: Array.isArray(meetingModal.attachments) ? meetingModal.attachments : [],
+                    imageUrls: Array.isArray(meetingModal.imageUrls) ? meetingModal.imageUrls : [],
+                    issueImage: meetingModal.issueImage || '',
+                    meetingDate,
+                    meetingTime,
+                    meetingDateLabel: dateLabel,
+                    meetingTimeLabel: meetingTime,
+                    meetingVenue: finalMeetingVenue,
+                    meetingMessage: meetingNote.trim() || desc,
+                    venue: finalMeetingVenue,
+                    location: meetingProjectLocation,
+                    subdistrict: meetingProjectLocation,
+                    type: 'meeting_confirm_partner',
+                    workflowType: 'meeting_confirm_partner',
+                    status: 'MEETING_REQUESTED',
+                    step: 8,
+                    mockStep: 8,
+                  };
                   try {
                     localStorage.setItem('ghis_mock_active', JSON.stringify(updatedMeetActive));
                     localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(updatedMeetReqs));
+                    const rawPartnerReqs = JSON.parse(localStorage.getItem('partner_mock_dyn_req') || '[]');
+                    const partnerReqs = Array.isArray(rawPartnerReqs) ? rawPartnerReqs : [];
+                    const isAdvancedPartnerStep = (item: any) => ['variation_partner', 'complete_partner', 'rate_partner'].includes(String(item?.workflowType || item?.type || ''));
+                    const alreadyAdvanced = partnerReqs.some((item: any) => item?.po === meetingModal.po && isAdvancedPartnerStep(item));
+                    if (!alreadyAdvanced) {
+                      const nextPartnerReqs = [
+                        partnerMeetingRequest,
+                        ...partnerReqs.filter((item: any) => {
+                          const workflowType = String(item?.workflowType || item?.type || '');
+                          return !(item?.po === meetingModal.po && ['meeting_confirm_partner', 'meeting_pending_partner'].includes(workflowType));
+                        }),
+                      ];
+                      localStorage.setItem('partner_mock_dyn_req', JSON.stringify(nextPartnerReqs));
+                      const rawPartnerAlerts = JSON.parse(localStorage.getItem('partner_alerts') || '[]');
+                      const partnerAlerts = Array.isArray(rawPartnerAlerts) ? rawPartnerAlerts : [];
+                      const partnerAlert = {
+                        id: `partner-meeting-invite-${meetingModal.po}`,
+                        type: 'meeting_invite',
+                        po: meetingModal.po,
+                        title: 'Site Meeting Invitation',
+                        message: `${meetingModal.po}: Customer proposed a site meeting on ${dateLabel}${meetingTime ? ` at ${meetingTime}` : ''}${finalMeetingVenue ? ` in ${finalMeetingVenue}` : ''}. Confirm it to unlock Step 9.`,
+                        msgTh: `${meetingModal.po}: ลูกค้าเสนอเวลานัดหมายหน้างาน วันที่ ${dateLabel}${meetingTime ? ` เวลา ${meetingTime}` : ''}${finalMeetingVenue ? ` ที่ ${finalMeetingVenue}` : ''} กรุณายืนยันเพื่อไปขั้นตอนที่ 9`,
+                        msgZh: `${meetingModal.po}: 客户提议现场会议，日期 ${dateLabel}${meetingTime ? ` 时间 ${meetingTime}` : ''}${finalMeetingVenue ? ` 地点 ${finalMeetingVenue}` : ''}。请确认以进入第9步。`,
+                        timestamp: new Date(createdAt).toISOString(),
+                        createdAt,
+                        unread: true,
+                        dot: 'bg-amber-500',
+                      };
+                      localStorage.setItem('partner_alerts', JSON.stringify([
+                        partnerAlert,
+                        ...partnerAlerts.filter((alert: any) => alert?.id !== partnerAlert.id),
+                      ].slice(0, 20)));
+                    }
                     window.dispatchEvent(new Event('storage'));
+                    window.dispatchEvent(new Event('cblue-workflow-updated'));
                   } catch {}
                   setMockActiveItems(updatedMeetActive);
                   setMockDynRequests(updatedMeetReqs);
