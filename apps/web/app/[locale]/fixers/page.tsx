@@ -1034,6 +1034,17 @@ const TIER_STYLE: Record<string, string> = {
   Expert: "bg-red-50 text-red-700",
 };
 const stripWorkflowPrefix = (value: any) => String(value || '').replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?(LOC:[^|]+\|\s*)?/i, '').trim();
+const WORKFLOW_INSTRUCTION_PATTERN =
+  /customer approved the variation|please submit project complete|partner may now submit project complete|customer confirmed completion|please rate the customer|please rate your partner|work is completed|project complete confirmed|job-complete request sent|variation request sent|proceed to submit variation|please review and confirm|waiting for customer/i;
+const isWorkflowInstructionText = (value: any) =>
+  WORKFLOW_INSTRUCTION_PATTERN.test(String(value || ''));
+const pickProjectDetails = (...values: any[]) => {
+  for (const value of values) {
+    const cleaned = stripWorkflowPrefix(value);
+    if (cleaned && !isWorkflowInstructionText(cleaned)) return cleaned;
+  }
+  return stripWorkflowPrefix(values.find((value) => String(value || '').trim()) || '');
+};
 const ORDER_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const isOrderUuid = (value: any) => ORDER_UUID_PATTERN.test(String(value || '').trim());
 const PO_TO_ORDER_KEY_PREFIX = 'po_to_order_';
@@ -1452,13 +1463,13 @@ const finalizePartnerRatedWorkflow = ({
 
   const activeSnapshot = active.find((item: any) => item?.po === po) || {};
   const updatedActive = active.filter((item: any) => item?.po !== po);
-  const normalizedDescription = stripWorkflowPrefix(
+  const normalizedDescription = pickProjectDetails(
+    job?.projectDetails,
+    job?.description,
+    job?.desc,
     activeSnapshot?.projectDetails ||
       activeSnapshot?.description ||
-      activeSnapshot?.desc ||
-      job?.projectDetails ||
-      job?.description ||
-      job?.desc ||
+      activeSnapshot?.desc,
       activeSnapshot?.service ||
       job?.service ||
       job?.title ||
@@ -2511,7 +2522,7 @@ export default function FixerProPage() {
       }
     }
     loadProps();
-    const id = setInterval(loadProps, 10000);
+    const id = setInterval(loadProps, 30000);
     return () => clearInterval(id);
   }, []);
 
@@ -2632,6 +2643,11 @@ export default function FixerProPage() {
             ""
           );
     })();
+    const workflowStatusNote = (() => {
+      const rows = Array.isArray(o.statusHistory) ? o.statusHistory : [];
+      const meaningful = rows.find((row: any) => /customer\s+cancel|declin|reason:/i.test(String(row?.note || '')));
+      return String(meaningful?.note || rows[0]?.note || o.statusNote || '');
+    })();
     
     return {
       id: o.id,
@@ -2651,7 +2667,7 @@ export default function FixerProPage() {
       serviceZh: (o.serviceCategory || "").replace(/_/g, " "),
       date: fmtDateTime(o.createdAt),
       description: desc,
-      statusNote: o.statusHistory?.[0]?.note || "",
+      statusNote: workflowStatusNote,
       statusChangedAt: o.statusHistory?.[0]?.createdAt || o.updatedAt || o.createdAt,
       tier: desc.includes('TIER:') ? desc.split('TIER:')[1].split(' |')[0] : "Standard",
       status: o.status,
@@ -2945,6 +2961,7 @@ export default function FixerProPage() {
         const res = await fetch(`/api/v1/orders/${orderId}/chat`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+        if (res.status === 429) break;
         if (!res.ok) continue;
 
         const messages = await res.json();
@@ -3059,6 +3076,7 @@ export default function FixerProPage() {
         const res = await fetch(`/api/v1/property-inquiries/by-po/${encodeURIComponent(po)}/chat`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+        if (res.status === 429) break;
         if (!res.ok) continue;
 
         const rows = await res.json();
@@ -3150,7 +3168,7 @@ export default function FixerProPage() {
     window.addEventListener("cblue-chat-updated", syncEvent as EventListener);
     const timer = setInterval(() => {
       void syncChats();
-    }, 5000);
+    }, 15000);
     return () => {
       isMounted = false;
       window.removeEventListener("storage", syncEvent);
@@ -3626,7 +3644,13 @@ export default function FixerProPage() {
       const service = entry.service || entry.title || existing.service || po;
       const customer = firstNameOnly(entry.customer || entry.customerName || entry.fixerAlias || existing.customer, 'Customer');
       const completedAt = entry.completedAt || entry.statusChangedAt || entry.updatedAt || entry.createdAt || entry.date || existing.completedAt || existing.statusChangedAt || existing.createdAt || Date.now();
-      const description = stripWorkflowPrefix(entry.description || entry.desc || existing.description || existing.projectDetails || '');
+      const description = pickProjectDetails(
+        entry.projectDetails,
+        entry.description,
+        entry.desc,
+        existing.projectDetails,
+        existing.description,
+      );
       const statusNote = entry.statusNote || entry.statusHistory?.[0]?.note || existing.statusNote || '';
       const customerCancelled = String(entry.status || existing.status || '').toUpperCase() === 'CANCELLED' && (
         isCustomerCancellationText(statusNote) ||
@@ -5207,8 +5231,9 @@ export default function FixerProPage() {
                         const custEmailRaw = String(origMeetingItem?.customerEmail || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
                         const custAlertsKey = custEmailRaw ? `cblue_customer_alerts_${custEmailRaw}` : 'cblue_customer_alerts';
                         const existingCustAlerts = JSON.parse(localStorage.getItem(custAlertsKey) || '[]');
+                        const legacyCustAlerts = JSON.parse(localStorage.getItem('cblue_customer_alerts') || '[]');
                         const custAlertId = `meeting-confirmed-cust-${po}`;
-                        const nextCustAlerts = [{
+                        const confirmedCustAlert = {
                           id: custAlertId,
                           po,
                           type: 'notice',
@@ -5218,8 +5243,11 @@ export default function FixerProPage() {
                           time: now,
                           createdAt: Date.now(),
                           dot: 'bg-green-500',
-                        }, ...(Array.isArray(existingCustAlerts) ? existingCustAlerts.filter((a: any) => a?.id !== custAlertId) : [])].slice(0, 20);
+                        };
+                        const nextCustAlerts = [confirmedCustAlert, ...(Array.isArray(existingCustAlerts) ? existingCustAlerts.filter((a: any) => a?.id !== custAlertId) : [])].slice(0, 20);
+                        const nextLegacyCustAlerts = [confirmedCustAlert, ...(Array.isArray(legacyCustAlerts) ? legacyCustAlerts.filter((a: any) => a?.id !== custAlertId) : [])].slice(0, 20);
                         localStorage.setItem(custAlertsKey, JSON.stringify(nextCustAlerts));
+                        localStorage.setItem('cblue_customer_alerts', JSON.stringify(nextLegacyCustAlerts));
                       } catch {}
                       setMockDynReqs(persistedNextReqs);
                       setMockActiveState(persistedNextActive);
@@ -6300,6 +6328,30 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
         upsertMockActiveStep(job, 9, false, createdAt);
         try { localStorage.setItem(`partner_variation_sent_${po}`, '1'); } catch {}
         appendLocalWorkflowSystemChat(po, chatText, createdAt);
+        try {
+          const custAlertId = `variation-cust-${po}`;
+          const customerVariationAlert = {
+            id: custAlertId,
+            po,
+            type: 'notice',
+            msg: `${po}: Partner submitted a variation request. Next: review and approve it in Requests.`,
+            msgTh: `${po}: พาร์ทเนอร์ส่งคำขอ variation แล้ว กรุณาตรวจสอบและอนุมัติในหน้า Requests`,
+            msgZh: `${po}: 合作伙伴已提交变更申请。下一步：请在 Requests 中查看并批准。`,
+            time: fmtDt(createdAt),
+            createdAt,
+            dot: 'bg-purple-500',
+          };
+          const writeCustomerAlerts = (key: string) => {
+            const existing = JSON.parse(localStorage.getItem(key) || '[]');
+            localStorage.setItem(
+              key,
+              JSON.stringify([customerVariationAlert, ...(Array.isArray(existing) ? existing.filter((a: any) => a?.id !== custAlertId) : [])].slice(0, 20)),
+            );
+          };
+          writeCustomerAlerts('cblue_customer_alerts');
+          const customerEmailKey = String(job.customerEmail || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
+          if (customerEmailKey) writeCustomerAlerts(`cblue_customer_alerts_${customerEmailKey}`);
+        } catch {}
         upsertPartnerPersistedAlert({
           id: `variation-wait-${po}`,
           po,

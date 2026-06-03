@@ -180,7 +180,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
     void syncFromApi();
     const apiTimer = setInterval(() => {
       void syncFromApi();
-    }, 2500);
+    }, 10000);
 
     // BroadcastChannel for real-time cross-tab sync
     const bc = new BroadcastChannel(`chat_${orderId}`);

@@ -180,6 +180,11 @@ const getWorkflowDisplayLocation = (...values: any[]) => {
 };
 const isCustomerCancellationText = (value: any) =>
   /\bcustomer\s+(?:cancelled|canceled|cancel)\b|\bcancelled\s+by\s+customer\b|\bcanceled\s+by\s+customer\b/i.test(String(value || ''));
+const getWorkflowStatusNote = (value: any) => {
+  const rows = Array.isArray(value?.statusHistory) ? value.statusHistory : [];
+  const meaningful = rows.find((row: any) => /customer\s+cancel|declin|reason:/i.test(String(row?.note || '')));
+  return String(meaningful?.note || rows[0]?.note || value?.statusNote || '');
+};
 const WORKFLOW_MEETING_VISIBLE_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 const parseWorkflowMeetingDateTimeMs = (meetingDate?: string, meetingTime?: string, fallback?: any) => {
   const rawDate = String(meetingDate || '').trim();
@@ -265,6 +270,17 @@ const readMeetingInviteSnapshot = (po: string, fallback?: any) => {
   };
 };
 const stripWorkflowPrefix = (value: any) => String(value || '').replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?(LOC:[^|]+\|\s*)?/i, '').trim();
+const WORKFLOW_INSTRUCTION_PATTERN =
+  /customer approved the variation|please submit project complete|partner may now submit project complete|customer confirmed completion|please rate the customer|please rate your partner|work is completed|project complete confirmed|job-complete request sent|variation request sent|proceed to submit variation|please review and confirm|waiting for customer/i;
+const isWorkflowInstructionText = (value: any) =>
+  WORKFLOW_INSTRUCTION_PATTERN.test(String(value || ''));
+const pickProjectDetails = (...values: any[]) => {
+  for (const value of values) {
+    const cleaned = stripWorkflowPrefix(value);
+    if (cleaned && !isWorkflowInstructionText(cleaned)) return cleaned;
+  }
+  return stripWorkflowPrefix(values.find((value) => String(value || '').trim()) || '');
+};
 const firstNameOnly = (value: any, fallback = 'User') => {
   const cleaned = String(value || '').trim();
   return cleaned ? cleaned.split(/\s+/)[0] || fallback : fallback;
@@ -1852,7 +1868,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
             res = await load(token);
           }
         }
-        if (!res.ok) { setPropInquiries([]); return; }
+        if (!res.ok) return;
         const data = await res.json();
         const mapped = Array.isArray(data) ? data.map(mapApiInquiry) : [];
         setPropInquiries(
@@ -1864,10 +1880,12 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
               ),
           ),
         );
-      } catch { setPropInquiries([]); }
+      } catch {
+        // Keep the last visible inquiry state during transient failures or rate limits.
+      }
     }
     loadPropInquiries();
-    const timer = setInterval(loadPropInquiries, 10000);
+    const timer = setInterval(loadPropInquiries, 30000);
     return () => clearInterval(timer);
   }, [subscriber]);
 
@@ -2064,6 +2082,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         const res = await fetch(`/api/v1/orders/${orderId}/chat`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+        if (res.status === 429) break;
         if (!res.ok) continue;
 
         const messages = await res.json();
@@ -2172,6 +2191,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         const res = await fetch(`/api/v1/property-inquiries/by-po/${encodeURIComponent(po)}/chat`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+        if (res.status === 429) break;
         if (!res.ok) continue;
 
         const rows = await res.json();
@@ -2263,7 +2283,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     window.addEventListener("cblue-chat-updated", syncEvent as EventListener);
     const timer = setInterval(() => {
       void syncChats();
-    }, 5000);
+    }, 15000);
     return () => {
       isMounted = false;
       window.removeEventListener("storage", syncEvent);
@@ -2612,7 +2632,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       const po = extractPo(order);
       if (!po || !isPoCode(po)) continue;
       const createdAt = getOrderEventTs(order);
-      const note = String(order?.statusHistory?.[0]?.note || order?.statusNote || '');
+      const note = getWorkflowStatusNote(order);
       const reason = note.match(/Reason:\s*([^.]*)/i)?.[1]?.trim();
       const cancelledByCustomer = isCustomerCancellationNote(note);
       const service = String(order?.serviceCategory || order?.service || 'your project').replace(/_/g, ' ');
@@ -2646,7 +2666,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       for (const order of cancelledOrders) {
         const po = extractPo(order);
         if (!po || !isPoCode(po)) continue;
-        const note = String(order?.statusHistory?.[0]?.note || order?.statusNote || '');
+        const note = getWorkflowStatusNote(order);
         if (isCustomerCancellationNote(note)) {
           changed = true;
           continue;
@@ -2681,7 +2701,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         const po = extractPo(order);
         if (!po) continue;
         const existing = map.get(po) || {};
-        const note = String(order?.statusHistory?.[0]?.note || order?.statusNote || '');
+        const note = getWorkflowStatusNote(order);
         const reason = note.match(/Reason:\s*([^.]*)/i)?.[1]?.trim() || existing.cancelReason || '';
         const cancelledByCustomer = isCustomerCancellationNote(note) || existing.statusName === 'Cancelled by Customer' || Boolean(existing.cancelReason);
         const nextItem = {
@@ -3283,7 +3303,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       }];
     }
     if (status === 'CANCELLED') {
-      const note = String(order?.statusHistory?.[0]?.note || order?.statusNote || "");
+      const note = getWorkflowStatusNote(order);
       const reason = note.match(/Reason:\s*([^.]*)/i)?.[1]?.trim();
       const cancelledByCustomer = isCustomerCancellationNote(note);
       if (cancelledByCustomer) {
@@ -4025,9 +4045,15 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       const counterpartName = firstNameOnly(entry.fixer?.user?.name || entry.fixerName || entry.partnerName || entry.customer || existing.counterpartName, 'Partner');
       const completedAt = entry.completedAt || entry.updatedAt || entry.statusChangedAt || entry.createdAt || entry.date || existing.completedAt || Date.now();
       const fee = entry.fee || entry.budget || (entry.estimatedPrice ? `฿${Number(entry.estimatedPrice).toLocaleString()}` : existing.fee || '฿0');
-      const projectDetails = stripWorkflowPrefix(entry.description || entry.desc || existing.projectDetails || '');
+      const projectDetails = pickProjectDetails(
+        entry.projectDetails,
+        entry.description,
+        entry.desc,
+        existing.projectDetails,
+        existing.description,
+      );
       const originalStatus = entry.status || existing.status;
-      const statusNote = entry.statusNote || entry.statusHistory?.[0]?.note || existing.statusNote || '';
+      const statusNote = entry.statusNote || getWorkflowStatusNote(entry) || existing.statusNote || '';
       const cancelReason = entry.cancelReason || existing.cancelReason || String(statusNote).match(/Reason:\s*([^.]*)/i)?.[1]?.trim() || '';
       const customerCancelled = String(originalStatus || '').toUpperCase() === 'CANCELLED' && (
         entry.statusName === 'Cancelled by Customer' ||
@@ -5702,6 +5728,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                       stepName: "Cancelled by Customer",
                       cancelReason: reason,
                       statusNote: `Customer cancelled. Reason: ${reason}`,
+                      projectDetails: pickProjectDetails(item.projectDetails, item.description, item.desc, backendOrder?.description),
+                      description: pickProjectDetails(item.projectDetails, item.description, item.desc, backendOrder?.description),
                       completedAt: createdAt,
                       statusChangedAt: createdAt,
                       date: fmtDateTime(createdAt),

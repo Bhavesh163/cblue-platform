@@ -44,12 +44,12 @@ const projectServices = [
   { id: "consulting", value: "CONSULTING", image: "/images/consulting.png", name: "Consulting", nameTh: "ที่ปรึกษา", nameZh: "咨询" },
   { id: "solar-panels", value: "SOLAR_PANELS", image: "/images/solar-panel.jpg", name: "Solar Panels", nameTh: "แผงโซลาร์", nameZh: "太阳能板" },
   { id: "ev-charging", value: "EV_CHARGING", image: "/images/ev-charger.jpg", name: "EV Charging", nameTh: "สถานีชาร์จ EV", nameZh: "电动车充电" },
-  { id: "green-building", value: "GREEN_BUILDING_DESIGN", image: "/images/green-construction.jpg", name: "Green Building Design", nameTh: "ออกแบบอาคารสีเขียว", nameZh: "绿色建筑设计" },
+  { id: "green-building", value: "GREEN_BUILDING_DESIGN", image: "/images/Green building design.png", name: "Green Building Design", nameTh: "ออกแบบอาคารสีเขียว", nameZh: "绿色建筑设计" },
   { id: "kitchen", value: "KITCHEN", image: "/images/kitchen.png", name: "Kitchen", nameTh: "ครัว", nameZh: "厨房" },
   { id: "hvac-mep", value: "MEP_RETROFIT", image: "/images/hvac.png", name: "HVAC MEP & Retrofit", nameTh: "HVAC MEP", nameZh: "暖通机电翻新" },
   { id: "reinstatement", value: "REINSTATEMENT", image: "/images/reinstatement-fitout.png", name: "Reinstatement & Fit-out", nameTh: "คืนสภาพและตกแต่ง", nameZh: "恢复和装修" },
   { id: "automation", value: "SMART_BUILDING_AUTOMATION", image: "/images/automation.png", name: "Automation", nameTh: "ระบบอัตโนมัติ", nameZh: "自动化" },
-  { id: "environmental", value: "ENVIRONMENTAL_SERVICES", image: "/images/green-theme.jpg", name: "Environmental Services", nameTh: "บริการสิ่งแวดล้อม", nameZh: "环保服务" },
+  { id: "environmental", value: "ENVIRONMENTAL_SERVICES", image: "/images/Environmental services.png", name: "Environmental Services", nameTh: "บริการสิ่งแวดล้อม", nameZh: "环保服务" },
   { id: "security-cctv", value: "SECURITY_CCTV", image: "/images/security-system.jpg", name: "Security & CCTV", nameTh: "ระบบ CCTV", nameZh: "安防监控" },
   { id: "door-access", value: "DOOR_ACCESS_CONTROL", image: "/images/door-access-control.png", name: "Door & Access Control", nameTh: "ระบบควบคุมประตู", nameZh: "门禁系统" },
   { id: "green-construction", value: "GREEN_CONSTRUCTION", image: "/images/green-construction.jpg", name: "Green Construction", nameTh: "ก่อสร้างสีเขียว", nameZh: "绿色建筑" },
@@ -71,12 +71,12 @@ const professionalServices = [
 ];
 
 const realEstateServices = [
-  { id: "condo", value: "CONDO", image: "/images/scenic-building.jpg", name: "Condominium", nameTh: "คอนโดมิเนียม", nameZh: "公寓", desc: "Buy, sell, or rent condos", descTh: "ซื้อ ขาย หรือเช่าคอนโด", descZh: "买卖或租赁公寓" },
-  { id: "house", value: "HOUSE", image: "/images/scenic-house.jpg", name: "House & Villa", nameTh: "บ้านและวิลล่า", nameZh: "别墅", desc: "Single houses, townhouses & villas", descTh: "บ้านเดี่ยว ทาวน์เฮาส์ และวิลล่า", descZh: "独栋别墅、联排别墅" },
-  { id: "apartment", value: "APARTMENT", image: "/images/loft-interior.jpg", name: "Apartment", nameTh: "อพาร์ทเมนท์", nameZh: "公寓楼", desc: "Apartment units for rent or sale", descTh: "อพาร์ทเมนท์เช่าหรือขาย", descZh: "出租或出售的公寓" },
-  { id: "land", value: "LAND", image: "/images/smart-farming.jpg", name: "Land", nameTh: "ที่ดิน", nameZh: "土地", desc: "Land plots for development or investment", descTh: "ที่ดินเพื่อพัฒนาหรือลงทุน", descZh: "开发或投资用地" },
-  { id: "commercial", value: "COMMERCIAL", image: "/images/green-construction.jpg", name: "Commercial", nameTh: "อาคารพาณิชย์", nameZh: "商业地产", desc: "Office, retail & commercial spaces", descTh: "ออฟฟิศ ร้านค้า พื้นที่พาณิชย์", descZh: "办公室、零售和商业空间" },
-  { id: "warehouse", value: "WAREHOUSE", image: "/images/hvac.png", name: "Warehouse & Factory", nameTh: "โกดังและโรงงาน", nameZh: "仓库工厂", desc: "Warehouses, factories & industrial space", descTh: "โกดัง โรงงาน พื้นที่อุตสาหกรรม", descZh: "仓库、工厂和工业空间" },
+  { id: "condo", value: "CONDO", image: "/images/Condominium.png", name: "Condominium", nameTh: "คอนโดมิเนียม", nameZh: "公寓", desc: "Buy, sell, or rent condos", descTh: "ซื้อ ขาย หรือเช่าคอนโด", descZh: "买卖或租赁公寓" },
+  { id: "house", value: "HOUSE", image: "/images/House & Villa.jpg", name: "House & Villa", nameTh: "บ้านและวิลล่า", nameZh: "别墅", desc: "Single houses, townhouses & villas", descTh: "บ้านเดี่ยว ทาวน์เฮาส์ และวิลล่า", descZh: "独栋别墅、联排别墅" },
+  { id: "apartment", value: "APARTMENT", image: "/images/Apartment.jpg", name: "Apartment", nameTh: "อพาร์ทเมนท์", nameZh: "公寓楼", desc: "Apartment units for rent or sale", descTh: "อพาร์ทเมนท์เช่าหรือขาย", descZh: "出租或出售的公寓" },
+  { id: "land", value: "LAND", image: "/images/Land.png", name: "Land", nameTh: "ที่ดิน", nameZh: "土地", desc: "Land plots for development or investment", descTh: "ที่ดินเพื่อพัฒนาหรือลงทุน", descZh: "开发或投资用地" },
+  { id: "commercial", value: "COMMERCIAL", image: "/images/Commercial.jpg", name: "Commercial", nameTh: "อาคารพาณิชย์", nameZh: "商业地产", desc: "Office, retail & commercial spaces", descTh: "ออฟฟิศ ร้านค้า พื้นที่พาณิชย์", descZh: "办公室、零售和商业空间" },
+  { id: "warehouse", value: "WAREHOUSE", image: "/images/Warehouse & Factory.jpg", name: "Warehouse & Factory", nameTh: "โกดังและโรงงาน", nameZh: "仓库工厂", desc: "Warehouses, factories & industrial space", descTh: "โกดัง โรงงาน พื้นที่อุตสาหกรรม", descZh: "仓库、工厂和工业空间" },
 ];
 
 export default function ServicesPage() {

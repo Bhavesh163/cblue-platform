@@ -7,9 +7,9 @@ import { ScrollReveal } from "./components/ScrollReveal";
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
   const titles: Record<string, string> = {
-    th: "CBLUE - แพลตฟอร์มช่างซ่อมบำรุง ทีมโครงการ มืออาชีพ และอสังหาริมทรัพย์อันดับ 1 ของไทย",
-    en: "CBLUE - Thailand's #1 AI Home Services & Real Estate Platform",
-    zh: "CBLUE - 泰国第一AI家居服务与房地产平台",
+    th: "CBLUE - แพลตฟอร์มช่างซ่อมบำรุง ทีมโครงการ มืออาชีพ และอสังหาริมทรัพย์ทั่วไทย",
+    en: "CBLUE - AI Home Services & Real Estate Platform Thailand",
+    zh: "CBLUE - 泰国AI家居服务与房地产平台",
   };
   const descriptions: Record<string, string> = {
     th: "จองช่างซ่อมบ้าน ทีมโครงการ มืออาชีพ และค้นหาอสังหาริมทรัพย์ทั่วไทย ด้วยระบบ AI จับคู่อัตโนมัติ",
@@ -62,10 +62,10 @@ export default function Home() {
                 acceptedAnswer: {
                   "@type": "Answer",
                   text: locale === "th"
-                    ? "CBLUE คือแพลตฟอร์มอันดับ 1 ของไทยสำหรับจองช่างซ่อมบ้าน ทีมโครงการ มืออาชีพ และอสังหาริมทรัพย์ ด้วยระบบ AI จับคู่อัตโนมัติ ครอบคลุม 77 จังหวัดทั่วไทย"
+                    ? "CBLUE คือแพลตฟอร์ม AI สำหรับจองช่างซ่อมบ้าน ทีมโครงการ มืออาชีพ และอสังหาริมทรัพย์ ด้วยระบบจับคู่อัตโนมัติ ครอบคลุม 77 จังหวัดทั่วไทย"
                     : locale === "zh"
-                    ? "CBLUE是泰国第一的AI智能家居服务平台，提供维修技工、项目团队、专业人士预约及房地产服务，覆盖泰国77个府。"
-                    : "CBLUE is Thailand's #1 AI-powered platform for booking verified home fixers, project teams, professionals, and browsing real estate listings across all 77 provinces.",
+                    ? "CBLUE是泰国AI智能家居服务平台，提供维修技工、项目团队、专业人士预约及房地产服务，覆盖泰国77个府。"
+                    : "CBLUE is an AI-powered Thailand platform for booking verified home fixers, project teams, professionals, and browsing real estate listings across all 77 provinces.",
                 },
               },
               {
@@ -283,10 +283,10 @@ export default function Home() {
                 </h3>
                 <p className="mt-1 text-sm text-gray-500 truncate sm:whitespace-normal">
                   {locale === "th"
-                    ? "เรียนรู้เกี่ยวกับ CBLUE แพลตฟอร์มบริการครบวงจร AI อันดับ 1 ของไทย"
+                    ? "เรียนรู้เกี่ยวกับ CBLUE แพลตฟอร์มบริการครบวงจรที่ขับเคลื่อนด้วย AI ทั่วไทย"
                     : locale === "zh"
-                    ? "了解 CBLUE — 泰国第一AI全方位服务平台"
-                    : "Learn about CBLUE — Thailand's #1 AI-powered all-in-one service platform"}
+                    ? "了解 CBLUE — 泰国AI全方位服务平台"
+                    : "Learn about CBLUE — an AI-powered all-in-one service platform in Thailand"}
                 </p>
               </div>
               <span className="flex-shrink-0 text-sm font-bold text-sky-600 group-hover:text-sky-700 whitespace-nowrap">

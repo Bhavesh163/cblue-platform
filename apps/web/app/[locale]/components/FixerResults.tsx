@@ -2481,8 +2481,68 @@ export default function FixerResults({
     return labels[idx] || "";
   };
 
+  type CandidateBreakdownLine = { service: string; total: number };
+
+  const normalizeCandidateBreakdown = (value: unknown): CandidateBreakdownLine[] => {
+    if (!Array.isArray(value)) return [];
+    return value
+      .map((line: any) => {
+        const service = String(line?.service ?? line?.item ?? line?.name ?? "").trim();
+        const total = Number(line?.total ?? line?.amount ?? line?.estimatedTotal ?? 0);
+        return { service, total: Number.isFinite(total) ? total : 0 };
+      })
+      .filter((line) => line.service && line.total > 0);
+  };
+
+  const getCandidateBreakdown = (fixer: Fixer): CandidateBreakdownLine[] => {
+    const explicit = normalizeCandidateBreakdown((fixer as any)?.estimatedBreakdown);
+    if (explicit.length > 0) return explicit;
+
+    const computed = computeBudgetBreakdown(
+      description || "",
+      Array.isArray(fixer.priceList) ? fixer.priceList : [],
+    );
+    return (computed || [])
+      .map((line) => ({ service: line.service, total: line.total }))
+      .filter((line) => line.service && line.total > 0);
+  };
+
+  const rankMatchedFixers = (items: Fixer[]): Fixer[] => {
+    const enriched = items.map((fixer, idx) => {
+      const breakdown = getCandidateBreakdown(fixer);
+      const breakdownTotal = breakdown.reduce((sum, line) => sum + line.total, 0);
+      const declaredTotal = Number((fixer as any)?.estimatedTotal ?? fixer.price ?? 0);
+      return {
+        fixer,
+        idx,
+        topLineTotal: breakdown.reduce((max, line) => Math.max(max, line.total), 0),
+        estimatedTotal: Number.isFinite(declaredTotal) && declaredTotal > 0 ? declaredTotal : breakdownTotal,
+      };
+    });
+
+    const dominantLineTotal = Math.max(0, ...enriched.map((item) => item.topLineTotal));
+    if (dominantLineTotal <= 0) return items;
+
+    const importantServiceFloor = dominantLineTotal * 0.5;
+    return enriched
+      .sort((a, b) => {
+        const aImportant = a.topLineTotal >= importantServiceFloor;
+        const bImportant = b.topLineTotal >= importantServiceFloor;
+        if (aImportant !== bImportant) return aImportant ? -1 : 1;
+        if (aImportant && bImportant) {
+          const byTotal = a.estimatedTotal - b.estimatedTotal;
+          if (byTotal !== 0) return byTotal;
+          const byMajorLine = b.topLineTotal - a.topLineTotal;
+          if (byMajorLine !== 0) return byMajorLine;
+        }
+        return a.idx - b.idx;
+      })
+      .map((item) => item.fixer);
+  };
+
   // Combine fixers list + nominated
-  const allDisplayFixers = nominatedFixer ? [...fixers, nominatedFixer] : fixers;
+  const rankedFixers = rankMatchedFixers(fixers);
+  const allDisplayFixers = nominatedFixer ? [...rankedFixers, nominatedFixer] : rankedFixers;
 
   return (
     <><StepProgressBar />
