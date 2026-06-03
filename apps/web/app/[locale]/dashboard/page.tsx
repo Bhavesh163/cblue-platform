@@ -165,6 +165,21 @@ const formatWorkflowMeetingLabel = (meetingDate?: string, meetingTime?: string, 
   const ts = new Date(fallback || (iso ? `${iso}T${meetingTime || '00:00'}` : 0)).getTime();
   return Number.isFinite(ts) && ts > 0 ? fmtDateTime(ts) : '';
 };
+const GPS_COORDINATE_PAIR_PATTERN = /^-?\d{1,2}(?:\.\d+)?\s*,\s*-?\d{1,3}(?:\.\d+)?$/;
+const PARTIAL_GPS_COORDINATE_PATTERN = /^-?\d{1,2}(?:\.\d+)?$/;
+const normalizeWorkflowLocationText = (value: any) => {
+  const text = String(value || '').trim();
+  if (!text || /^(?:unknown|n\/a|tbd|-|--\s*select)/i.test(text)) return '';
+  return text;
+};
+const getWorkflowDisplayLocation = (...values: any[]) => {
+  const normalized = values.map(normalizeWorkflowLocationText).filter(Boolean);
+  const fullGps = normalized.find((value) => GPS_COORDINATE_PAIR_PATTERN.test(value));
+  if (fullGps) return fullGps;
+  return normalized.find((value) => !PARTIAL_GPS_COORDINATE_PATTERN.test(value)) || normalized[0] || '';
+};
+const isCustomerCancellationText = (value: any) =>
+  /\bcustomer\s+(?:cancelled|canceled|cancel)\b|\bcancelled\s+by\s+customer\b|\bcanceled\s+by\s+customer\b/i.test(String(value || ''));
 const WORKFLOW_MEETING_VISIBLE_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 const parseWorkflowMeetingDateTimeMs = (meetingDate?: string, meetingTime?: string, fallback?: any) => {
   const rawDate = String(meetingDate || '').trim();
@@ -254,7 +269,7 @@ const firstNameOnly = (value: any, fallback = 'User') => {
   const cleaned = String(value || '').trim();
   return cleaned ? cleaned.split(/\s+/)[0] || fallback : fallback;
 };
-const HIDDEN_TEST_POS = new Set(["PO-2605-2747", "PO-2605-6716", "PO-2605-9605", "PO-2605-8699", "PO-2605-9701", "PO-2605-6146", "PO-2605-8471", "PO-2605-9593"]);
+const HIDDEN_TEST_POS = new Set(["PO-2605-2747", "PO-2605-6716", "PO-2605-9605", "PO-2605-8699", "PO-2605-9701", "PO-2605-6146", "PO-2605-8471", "PO-2605-9593", "PO-2605-4465"]);
 const isHiddenTestPo = (value: any) => HIDDEN_TEST_POS.has(String(value || '').trim().toUpperCase());
 const CLOSED_CUSTOMER_WORKFLOW_POS = new Set([
   "PO-2605-8591",
@@ -1268,7 +1283,8 @@ function CustomerHistoryCard({ item, idx, compact = false, locale = "en" }: { it
   const [collapsed, setCollapsed] = useState(true);
   const chatPreview = collapsed ? [] : (Array.isArray(item.chatHistory) ? item.chatHistory.slice(compact ? -2 : -4) : []);
   const isCancelled = String(item.status || '').toUpperCase() === 'CANCELLED';
-  const isCustomerCancelled = isCancelled && (item.statusName === 'Cancelled by Customer' || !!item.cancelReason);
+  const customerCancelReason = item.cancelReason || String(item.statusNote || '').match(/Reason:\s*([^.]*)/i)?.[1]?.trim() || "";
+  const isCustomerCancelled = isCancelled && (item.statusName === 'Cancelled by Customer' || !!customerCancelReason || isCustomerCancellationText(item.statusNote));
   const orderText = isPropPoCode(String(item?.po || ''))
     ? locale === 'th'
       ? `ออเดอร์: ${item.po}`
@@ -1308,10 +1324,10 @@ function CustomerHistoryCard({ item, idx, compact = false, locale = "en" }: { it
             <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
               {isCustomerCancelled
                 ? locale === 'th'
-                  ? `${item.customer || 'ลูกค้า'} ยกเลิกงานนี้${item.cancelReason ? ` เหตุผล: ${item.cancelReason}` : ''} ดังนั้นคำขอนี้จึงถูกปิด`
+                  ? `คุณยกเลิกงานนี้${customerCancelReason ? ` เหตุผล: ${customerCancelReason}` : ''} ดังนั้นคำขอนี้จึงถูกปิด`
                   : locale === 'zh'
-                  ? `${item.customer || '客户'} 取消了此工作${item.cancelReason ? `，原因：${item.cancelReason}` : ''}，因此该请求已关闭。`
-                  : `${item.customer || 'Customer'} canceled this job${item.cancelReason ? ` because ${item.cancelReason}` : ''}, so this request was closed.`
+                  ? `您取消了此工作${customerCancelReason ? `，原因：${customerCancelReason}` : ''}，因此该请求已关闭。`
+                  : `You canceled this job${customerCancelReason ? ` because ${customerCancelReason}` : ''}, so this request was closed.`
                 : locale === 'th'
                 ? `${item.counterpartName || item.fixerName || 'พาร์ทเนอร์ที่เลือก'} ไม่สามารถรับงานนี้ได้ในช่วงเวลาที่วางแผนไว้ ระบบจึงปิดคำขอและแจ้งให้คุณเลือกผู้ให้บริการรายอื่นต่อไป`
                 : locale === 'zh'
@@ -3511,7 +3527,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
             <div className="flex gap-2">
               <button className="bg-amber-600 outline-none text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-amber-700 transition shadow-sm whitespace-nowrap" onClick={() => {
                 setMeetingModal(item);
-                setMeetingVenue(item.location || item.subdistrict || 'Saphansong');
+                setMeetingVenue(getWorkflowDisplayLocation(item.location, item.subdistrict, item.meetingVenue, item.venue) || 'Saphansong');
                 setMeetingDate("");
                 setMeetingTime("");
               }}>Send Meeting Invitation</button>
@@ -4011,6 +4027,14 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       const fee = entry.fee || entry.budget || (entry.estimatedPrice ? `฿${Number(entry.estimatedPrice).toLocaleString()}` : existing.fee || '฿0');
       const projectDetails = stripWorkflowPrefix(entry.description || entry.desc || existing.projectDetails || '');
       const originalStatus = entry.status || existing.status;
+      const statusNote = entry.statusNote || entry.statusHistory?.[0]?.note || existing.statusNote || '';
+      const cancelReason = entry.cancelReason || existing.cancelReason || String(statusNote).match(/Reason:\s*([^.]*)/i)?.[1]?.trim() || '';
+      const customerCancelled = String(originalStatus || '').toUpperCase() === 'CANCELLED' && (
+        entry.statusName === 'Cancelled by Customer' ||
+        existing.statusName === 'Cancelled by Customer' ||
+        Boolean(cancelReason) ||
+        isCustomerCancellationText(statusNote)
+      );
       map.set(po, {
         ...existing,
         ...entry,
@@ -4025,9 +4049,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         fee,
         budget: entry.budget || existing.budget || fee,
         status: originalStatus || 'COMPLETED',
-        statusNote: entry.statusNote || entry.statusHistory?.[0]?.note || existing.statusNote || '',
+        statusName: customerCancelled ? 'Cancelled by Customer' : entry.statusName || existing.statusName,
+        statusNote,
+        cancelReason: customerCancelled ? cancelReason : entry.cancelReason || existing.cancelReason || '',
         step: 11,
-        stepName: getWorkflowStepName(11),
+        stepName: customerCancelled ? 'Cancelled by Customer' : entry.stepName || existing.stepName || getWorkflowStepName(11),
         location: (() => {
           const lat = Number(entry?.address?.latitude);
           const lng = Number(entry?.address?.longitude);
@@ -4217,7 +4243,20 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     const fromRequest = allRequestItemsWithProp.find((item: any) => item.po === po) || {};
     const meetingDateValue = source?.meetingDate || fromRequest?.meetingDate || fromActive?.meetingDate || "";
     const meetingTimeValue = source?.meetingTime || fromRequest?.meetingTime || fromActive?.meetingTime || "";
-    const venueValue = source?.meetingVenue || source?.venue || fromRequest?.meetingVenue || fromRequest?.venue || fromActive?.meetingVenue || fromActive?.venue || "";
+    const venueValue = getWorkflowDisplayLocation(
+      source?.location,
+      source?.subdistrict,
+      fromRequest?.location,
+      fromRequest?.subdistrict,
+      fromActive?.location,
+      fromActive?.subdistrict,
+      source?.meetingVenue,
+      source?.venue,
+      fromRequest?.meetingVenue,
+      fromRequest?.venue,
+      fromActive?.meetingVenue,
+      fromActive?.venue,
+    );
     return {
       when: formatWorkflowMeetingLabel(meetingDateValue, meetingTimeValue, source?.createdAt || fromRequest?.createdAt || fromActive?.createdAt),
       venue: venueValue,
@@ -4567,7 +4606,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                               <span className="text-xs text-gray-900 font-bold">{m.title} ({m.po})</span>
                               <span className="bg-amber-100 text-amber-800 text-[10px] px-2 py-1 rounded-full font-bold">{formatWorkflowMeetingLabel(m.meetingDate, m.meetingTime, m.createdAt || m.date)}</span>
                             </div>
-                            <p className="text-[11px] text-gray-600">{locale === "th" ? "สถานที่:" : locale === "zh" ? "地点:" : "Location:"} {m.venue || m.meetingVenue || m.subdistrict || 'TBD'} | {locale === "th" ? "ผู้ให้บริการ:" : locale === "zh" ? "服务提供商:" : "Provider:"} {m.customer}</p>
+                            <p className="text-[11px] text-gray-600">{locale === "th" ? "สถานที่:" : locale === "zh" ? "地点:" : "Location:"} {getWorkflowDisplayLocation(m.location, m.subdistrict, m.meetingVenue, m.venue) || 'TBD'} | {locale === "th" ? "ผู้ให้บริการ:" : locale === "zh" ? "服务提供商:" : "Provider:"} {m.customer}</p>
                           </div>
                         ),
                       }));
@@ -5132,7 +5171,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 font-semibold uppercase tracking-wider block mb-1">Project Location</label>
-                  <div className="bg-gray-50 rounded-xl px-4 py-2 text-sm font-bold text-gray-800">{(() => { const loc = meetingModal.location || meetingModal.subdistrict || ''; if (loc && loc !== 'Unknown') return loc; const m = String(meetingModal.description || meetingModal.desc || '').match(/\bLOC:([^|]+)/); const fromDesc = m ? (m[1] ?? '').trim() : ''; return fromDesc || 'Unknown'; })()}</div>
+                  <div className="bg-gray-50 rounded-xl px-4 py-2 text-sm font-bold text-gray-800">{(() => { const m = String(meetingModal.description || meetingModal.desc || '').match(/\bLOC:([^|]+)/); const fromDesc = m ? (m[1] ?? '').trim() : ''; return getWorkflowDisplayLocation(meetingModal.location, meetingModal.subdistrict, fromDesc, meetingModal.meetingVenue, meetingModal.venue) || 'Unknown'; })()}</div>
                 </div>
               </div>
               <div>
@@ -5188,10 +5227,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                 onClick={() => {
                   const createdAt = Date.now();
                   const dateLabel = meetingDate ? fmtDate(meetingDate + 'T' + (meetingTime || '09:00')) : '';
-                  const desc = `Meeting invitation sent. Proposed: ${dateLabel} ${meetingTime} at ${meetingVenue}.${meetingNote.trim() ? ` Note: ${meetingNote.trim()}.` : ''} Waiting for partner confirmation.`;
-                  const chatText = `[SYSTEM] Customer sent meeting invitation for ${meetingModal.po}: ${dateLabel} ${meetingTime} at ${meetingVenue}.${meetingNote.trim() ? ` Note: ${meetingNote.trim()}.` : ''} Next: waiting for partner confirmation before variation.`;
                   const pendingId = `meet-pending-${meetingModal.po}`;
-                  const meetingProjectLocation = (() => { const loc = meetingModal.location || meetingModal.subdistrict || ''; if (loc && loc !== 'Unknown' && loc !== 'N/A') return loc; const m = String(meetingModal.description || meetingModal.desc || '').match(/\bLOC:([^|]+)/); return m ? (m[1] ?? '').trim() : ''; })();
+                  const meetingProjectLocation = (() => { const m = String(meetingModal.description || meetingModal.desc || '').match(/\bLOC:([^|]+)/); const fromDesc = m ? (m[1] ?? '').trim() : ''; return getWorkflowDisplayLocation(meetingModal.location, meetingModal.subdistrict, fromDesc, meetingModal.meetingVenue, meetingModal.venue); })();
+                  const finalMeetingVenue = getWorkflowDisplayLocation(meetingProjectLocation, meetingVenue) || meetingVenue;
+                  const desc = `Meeting invitation sent. Proposed: ${dateLabel} ${meetingTime} at ${finalMeetingVenue}.${meetingNote.trim() ? ` Note: ${meetingNote.trim()}.` : ''} Waiting for partner confirmation.`;
+                  const chatText = `[SYSTEM] Customer sent meeting invitation for ${meetingModal.po}: ${dateLabel} ${meetingTime} at ${finalMeetingVenue}.${meetingNote.trim() ? ` Note: ${meetingNote.trim()}.` : ''} Next: waiting for partner confirmation before variation.`;
                   // Compute new arrays eagerly and write to localStorage BEFORE setState
                   // (same pattern as payment pill — prevents syncMockState interval from overwriting)
                   const existingMeetActive = mockActiveItems.find((x: any) => x.po === meetingModal.po);
@@ -5211,15 +5251,15 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                       description: existingMeetActive?.description || meetingModal.description || meetingModal.desc || '',
                       meetingDate,
                       meetingTime,
-                      meetingVenue,
-                      venue: meetingVenue,
+                      meetingVenue: finalMeetingVenue,
+                      venue: finalMeetingVenue,
                       step: 8,
                       actionNeeded: false,
                     },
                   ];
                   const updatedMeetReqs = [
                     ...mockDynRequests.filter((x: any) => x.id !== meetingModal.id && x.id !== pendingId),
-                    { id: pendingId, po: meetingModal.po, title: meetingModal.title, customer: meetingModal.customer, date: fmtDateTime(createdAt), createdAt, budget: meetingModal.budget, tier: meetingModal.tier, desc, type: 'meeting_pending_partner', step: 8, venue: meetingVenue, meetingVenue, meetingDate, meetingTime, meetingNote: meetingNote.trim(), location: meetingProjectLocation, customerEmail: subscriberEmail },
+                    { id: pendingId, po: meetingModal.po, title: meetingModal.title, customer: meetingModal.customer, date: fmtDateTime(createdAt), createdAt, budget: meetingModal.budget, tier: meetingModal.tier, desc, type: 'meeting_pending_partner', step: 8, venue: finalMeetingVenue, meetingVenue: finalMeetingVenue, meetingDate, meetingTime, meetingNote: meetingNote.trim(), location: meetingProjectLocation, customerEmail: subscriberEmail },
                   ];
                   try {
                     localStorage.setItem('ghis_mock_active', JSON.stringify(updatedMeetActive));
@@ -5236,7 +5276,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                       fetch(`/api/v1/orders/${backendOrder.id}/status`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                        body: JSON.stringify({ status: 'MEETING_REQUESTED', note: `Customer sent meeting invitation: ${dateLabel} ${meetingTime} at ${meetingVenue}` }),
+                          body: JSON.stringify({ status: 'MEETING_REQUESTED', note: `Customer sent meeting invitation: ${dateLabel} ${meetingTime} at ${finalMeetingVenue}` }),
                       }).catch(() => {});
                       fetch(`/api/v1/orders/${backendOrder.id}/chat`, {
                         method: 'POST',

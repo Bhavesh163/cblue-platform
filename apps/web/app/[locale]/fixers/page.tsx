@@ -316,6 +316,19 @@ const formatMeetingDateTimeLabel = (dateValue?: string, timeValue?: string) => {
   if (ts > 0) return `${fmtDate(ts)}${timeValue ? ` · ${timeValue}` : ''}`;
   return [dateValue, timeValue].filter(Boolean).join(' · ');
 };
+const GPS_COORDINATE_PAIR_PATTERN = /^-?\d{1,2}(?:\.\d+)?\s*,\s*-?\d{1,3}(?:\.\d+)?$/;
+const PARTIAL_GPS_COORDINATE_PATTERN = /^-?\d{1,2}(?:\.\d+)?$/;
+const normalizeWorkflowLocationText = (value: any) => {
+  const text = String(value || '').trim();
+  if (!text || /^(?:unknown|n\/a|tbd|-|--\s*select)/i.test(text)) return '';
+  return text;
+};
+const getWorkflowDisplayLocation = (...values: any[]) => {
+  const normalized = values.map(normalizeWorkflowLocationText).filter(Boolean);
+  const fullGps = normalized.find((value) => GPS_COORDINATE_PAIR_PATTERN.test(value));
+  if (fullGps) return fullGps;
+  return normalized.find((value) => !PARTIAL_GPS_COORDINATE_PATTERN.test(value)) || normalized[0] || '';
+};
 const WORKFLOW_MEETING_VISIBLE_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 const isWorkflowMeetingVisible = (dateValue?: string, timeValue?: string, fallback?: any) => {
   const ts = parseMeetingDateTimeMs(dateValue, timeValue) || parseWorkflowSortTs(fallback);
@@ -1235,7 +1248,7 @@ const firstNameOnly = (value: any, fallback = 'User') => {
   const cleaned = String(value || '').trim();
   return cleaned ? cleaned.split(/\s+/)[0] || fallback : fallback;
 };
-const HIDDEN_TEST_POS = new Set(["PO-2605-2747", "PO-2605-6716", "PO-2605-9605", "PO-2605-8699", "PO-2605-9701", "PO-2605-9593", "PO-2605-8471", "PO-2605-6146"]);
+const HIDDEN_TEST_POS = new Set(["PO-2605-2747", "PO-2605-6716", "PO-2605-9605", "PO-2605-8699", "PO-2605-9701", "PO-2605-9593", "PO-2605-8471", "PO-2605-6146", "PO-2605-4465"]);
 const isHiddenTestPo = (value: any) => HIDDEN_TEST_POS.has(String(value || '').trim().toUpperCase());
 const CLOSED_PARTNER_WORKFLOW_POS = new Set([
   "PO-2605-8591",
@@ -3224,9 +3237,10 @@ export default function FixerProPage() {
                   meetingTime: pending.meetingTime,
                   meetingDateLabel: pending.meetingDate || '',
                   meetingTimeLabel: pending.meetingTime || '',
-                  meetingVenue: pending.venue || pending.meetingVenue || '',
+                  meetingVenue: getWorkflowDisplayLocation(pending.location, pending.subdistrict, pending.meetingVenue, pending.venue),
                   meetingMessage: pending.meetingNote || pending.desc || '',
-                  location: pending.location || '',
+                  location: getWorkflowDisplayLocation(pending.location, pending.subdistrict, pending.meetingVenue, pending.venue),
+                  subdistrict: getWorkflowDisplayLocation(pending.subdistrict, pending.location, pending.meetingVenue, pending.venue),
                   type: 'meeting_confirm_partner',
                   workflowType: 'meeting_confirm_partner',
                   step: 8,
@@ -3391,6 +3405,26 @@ export default function FixerProPage() {
         backendStep === 5;
       return { ...job, step, mockStep: step, actionNeeded: partnerActionNeeded };
   });
+  const backendCompletedAwaitingRatingJobs = mappedOrders
+    .filter((job: any) => {
+      const po = String(job?.po || '').trim();
+      return (
+        po &&
+        String(job?.status || '').toUpperCase() === 'COMPLETED' &&
+        !completedHistoryPos.has(po) &&
+        !declinedPartnerPos.has(po) &&
+        !isClosedPartnerWorkflowPo(po)
+      );
+    })
+    .map((job: any) => ({
+      ...job,
+      id: `backend-rate-active-${job.po}`,
+      step: 11,
+      mockStep: 11,
+      actionNeeded: true,
+      status: 'RATING_PENDING',
+      description: job.description || 'Customer confirmed completion. Please rate the customer to close this job.',
+    }));
   const localWorkflowActiveJobs = isFixer
     ? mockActiveState
         .filter((job: any) => {
@@ -3529,7 +3563,7 @@ export default function FixerProPage() {
     return 0;
   };
   const mergedActiveJobs = new Map<string, any>();
-  [...activeJobs, ...localWorkflowActiveJobs, ...propActiveJobs].forEach((job: any) => {
+  [...activeJobs, ...backendCompletedAwaitingRatingJobs, ...localWorkflowActiveJobs, ...propActiveJobs].forEach((job: any) => {
     const key = String(job?.po || job?.id || '').trim();
     if (!key || isHiddenTestPo(key)) return;
     const existing = mergedActiveJobs.get(key);
@@ -3562,7 +3596,22 @@ export default function FixerProPage() {
     const bTs = toJobSortTs(b.createdAt || b.date);
     return bTs - aTs;
   });
-  const backendCompletedJobs = mappedOrders.filter((o: any) => ['COMPLETED', 'CANCELLED'].includes(String(o.status || '').toUpperCase()));
+  const partnerRatedHistoryPos = new Set(
+    mockHistory
+      .filter((entry: any) => {
+        const status = String(entry?.status || '').toUpperCase();
+        return status === 'COMPLETED' && (entry?.partnerRating != null || /partner rated/i.test(String(entry?.statusNote || '')));
+      })
+      .map((entry: any) => String(entry?.po || '').trim())
+      .filter(Boolean),
+  );
+  const backendCompletedJobs = mappedOrders.filter((o: any) => {
+    const status = String(o.status || '').toUpperCase();
+    if (status === 'CANCELLED') return true;
+    if (status !== 'COMPLETED') return false;
+    const po = String(o?.po || '').trim();
+    return partnerRatedHistoryPos.has(po) || /partner rated/i.test(String(o?.statusNote || ''));
+  });
   const declineReasonByPo = new Map(
     partnerDeclineLogs
       .filter((entry: any) => String(entry?.po || '').trim())
@@ -3579,7 +3628,12 @@ export default function FixerProPage() {
       const completedAt = entry.completedAt || entry.statusChangedAt || entry.updatedAt || entry.createdAt || entry.date || existing.completedAt || existing.statusChangedAt || existing.createdAt || Date.now();
       const description = stripWorkflowPrefix(entry.description || entry.desc || existing.description || existing.projectDetails || '');
       const statusNote = entry.statusNote || entry.statusHistory?.[0]?.note || existing.statusNote || '';
-      const customerCancelled = String(entry.status || existing.status || '').toUpperCase() === 'CANCELLED' && isCustomerCancellationText(statusNote);
+      const customerCancelled = String(entry.status || existing.status || '').toUpperCase() === 'CANCELLED' && (
+        isCustomerCancellationText(statusNote) ||
+        entry.statusName === 'Cancelled by Customer' ||
+        existing.statusName === 'Cancelled by Customer' ||
+        Boolean(entry.cancelReason || existing.cancelReason)
+      );
       const customerCancelReason = customerCancelled ? extractDeclineReason(entry.cancelReason || existing.cancelReason || statusNote) : '';
       map.set(po, {
         ...existing,
@@ -4045,12 +4099,36 @@ export default function FixerProPage() {
     window.dispatchEvent(new Event('cblue-workflow-updated'));
   }, [mockHistory, partner?.id]);
 
+  const backendCompletedAwaitingRatingRequests = backendCompletedAwaitingRatingJobs
+    .filter((job: any) => !partnerDynReqs.some((req: any) => req.po === job.po && String(req.workflowType || req.type || '') === 'rate_partner'))
+    .map((job: any) => ({
+      id: `backend-rate-${job.po}`,
+      orderId: job.orderId || job.id,
+      po: job.po,
+      service: job.service || job.title || 'Project',
+      serviceTh: job.serviceTh || job.service || job.title || 'Project',
+      serviceZh: job.serviceZh || job.service || job.title || 'Project',
+      customer: job.customer || 'Customer',
+      date: fmtDateTime(parseWorkflowSortTs(job.statusChangedAt || job.createdAt || job.date) || Date.now()),
+      createdAt: parseWorkflowSortTs(job.statusChangedAt || job.createdAt || job.date) || Date.now(),
+      fee: job.fee || job.budget || '฿0',
+      budget: job.budget || job.fee || '0',
+      tier: job.tier || 'Standard',
+      location: job.location || job.subdistrict || '',
+      subdistrict: job.subdistrict || job.location || '',
+      description: 'Customer confirmed completion. Please rate the customer to close this job.',
+      type: 'rate_partner',
+      workflowType: 'rate_partner',
+      step: 11,
+    }));
+
   const partnerRequestItems = Array.from([
     ...partnerDynReqs.filter((r: any) => {
       const po = String(r?.po || '').trim();
       const type = String(r?.workflowType || r?.type || '');
       return !['accept_sent'].includes(String(r.type || '')) && !completedHistoryPos.has(po) && !declinedPartnerPos.has(po) && !isClosedPartnerWorkflowPo(po);
     }),
+    ...backendCompletedAwaitingRatingRequests,
     ...incomingJobs.filter((job: any) => !(String(job.status || '').toUpperCase() === 'MEETING_REQUESTED' && partnerDynReqs.some((req: any) => req.po === job.po && req.workflowType === 'meeting_confirm_partner'))),
   ].reduce((map: Map<string, any>, item: any) => {
     const key = item.po || item.id;
@@ -4549,7 +4627,17 @@ export default function FixerProPage() {
       return [{ id: `order-cancelled-${po}`, msg, msgTh: msg, msgZh: msg, unread: true, time: displayTime, createdAt, dot: "bg-red-500" }];
     }
     if (o.status === 'COMPLETED') {
-      return [];
+      if (completedHistoryPos.has(po)) return [];
+      return [{
+        id: `order-rate-${po}`,
+        msg: `${po}: Project complete confirmed. Next: rate your customer to close this job and move it to history.`,
+        msgTh: `${po}: ยืนยันงานเสร็จแล้ว ขั้นตอนถัดไปคือให้คะแนนลูกค้าเพื่อปิดงานและย้ายไปประวัติ`,
+        msgZh: `${po}: 项目完工已确认。下一步：评价客户以关闭此工作并移入历史。`,
+        unread: true,
+        time: displayTime,
+        createdAt,
+        dot: "bg-yellow-500",
+      }];
     }
     return [];
   });
@@ -4577,7 +4665,7 @@ export default function FixerProPage() {
   const waitModalMeetingDetails = {
     meetingDateLabel: waitModalOrder?.meetingDateLabel || waitModalOrder?.meetingDate || parsedWaitModalMeeting.meetingDateLabel,
     meetingTimeLabel: waitModalOrder?.meetingTimeLabel || waitModalOrder?.meetingTime || parsedWaitModalMeeting.meetingTimeLabel,
-    meetingVenue: waitModalOrder?.meetingVenue || parsedWaitModalMeeting.meetingVenue || waitModalOrder?.subdistrict || 'Unknown',
+    meetingVenue: getWorkflowDisplayLocation(waitModalOrder?.location, waitModalOrder?.subdistrict, waitModalOrder?.meetingVenue, parsedWaitModalMeeting.meetingVenue, waitModalOrder?.venue) || 'Unknown',
     meetingMessage: waitModalOrder?.meetingMessage || waitModalOrder?.meetingNote || '',
   };
   const waitModalServiceName = waitModalOrder?.serviceTh || waitModalOrder?.service || 'Project';
@@ -4589,11 +4677,11 @@ export default function FixerProPage() {
     : 'Review the draft PO, project details, budget basis, and uploaded files before accepting.';
   const waitModalProjectDetails = stripWorkflowPrefix(waitModalOrder?.projectDetails || waitModalOrder?.description || waitModalOrder?.service || '');
   const waitModalProjectLocation = (() => {
-    const direct = String(waitModalOrder?.location || waitModalOrder?.subdistrict || '').trim();
-    if (direct && direct !== 'Unknown' && direct !== 'N/A') return direct;
+    const direct = getWorkflowDisplayLocation(waitModalOrder?.location, waitModalOrder?.subdistrict, waitModalOrder?.meetingVenue, waitModalOrder?.venue);
+    if (direct) return direct;
     const match = String(waitModalOrder?.description || waitModalOrder?.desc || '').match(/\bLOC:([^|]+)/);
     const fromDescription = match ? String(match[1] || '').trim() : '';
-    return fromDescription || waitModalOrder?.meetingVenue || 'Unknown';
+    return getWorkflowDisplayLocation(fromDescription, waitModalOrder?.meetingVenue) || 'Unknown';
   })();
 
   return (
@@ -5047,13 +5135,13 @@ export default function FixerProPage() {
                       const meetingSummary = [waitModalMeetingDetails.meetingDateLabel, waitModalMeetingDetails.meetingTimeLabel].filter(Boolean).join(' ');
                       const confirmedMeetingDate = waitModalOrder.meetingDate || waitModalMeetingDetails.meetingDateLabel || '';
                       const confirmedMeetingTime = waitModalOrder.meetingTime || waitModalMeetingDetails.meetingTimeLabel || '';
-                      const confirmedMeetingVenue = waitModalMeetingDetails.meetingVenue || waitModalOrder.meetingVenue || '';
+                      const confirmedMeetingVenue = getWorkflowDisplayLocation(waitModalProjectLocation, waitModalMeetingDetails.meetingVenue, waitModalOrder.meetingVenue);
                       // Use PO-based matching (not waitModalOrder.id) because mockDynReqs IDs are
                       // 'meet-pending-{po}', not the backend UUID stored in waitModalOrder.id
                       const meetingCustNoticeId = `meeting-confirmed-notice-${po}`;
                       const nextReqs = [
                         ...mockDynReqs.filter((r: any) => !(r.po === po && r.type === 'meeting_pending_partner') && r.id !== schedId && r.id !== meetingCustNoticeId),
-                        { id: schedId, po, title: waitModalOrder.service || serviceTitle, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), budget: budgetLabel, tier: waitModalOrder.tier, type: 'meeting_scheduled', step: 8, venue: confirmedMeetingVenue, meetingVenue: confirmedMeetingVenue, meetingDate: confirmedMeetingDate, meetingTime: confirmedMeetingTime, desc: `Meeting confirmed by partner${meetingSummary ? ` for ${meetingSummary}` : ''}${confirmedMeetingVenue ? ` at ${confirmedMeetingVenue}` : ''}. Proceed after the site meeting then mark variation.` },
+                        { id: schedId, po, title: waitModalOrder.service || serviceTitle, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), budget: budgetLabel, tier: waitModalOrder.tier, type: 'meeting_scheduled', step: 8, venue: confirmedMeetingVenue, meetingVenue: confirmedMeetingVenue, location: waitModalProjectLocation, subdistrict: waitModalProjectLocation, meetingDate: confirmedMeetingDate, meetingTime: confirmedMeetingTime, desc: `Meeting confirmed by partner${meetingSummary ? ` for ${meetingSummary}` : ''}${confirmedMeetingVenue ? ` at ${confirmedMeetingVenue}` : ''}. Proceed after the site meeting then mark variation.` },
                         { id: meetingCustNoticeId, po, title: `Meeting Confirmed — ${po}`, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), type: 'notice', step: 8, desc: `Your fixer confirmed the site meeting${confirmedMeetingVenue ? ` at ${confirmedMeetingVenue}` : ''}${meetingSummary ? ` (${meetingSummary})` : ''}. Proceed to Step 9 after the site visit.`, dot: 'bg-green-500' },
                       ];
                       const existingActive = mockActiveState.find((x: any) => x.po === po);
@@ -5868,7 +5956,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
                 <div key={meeting.id} className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
                   <p className="text-sm font-bold text-gray-800">{meeting.title} ({meeting.po})</p>
                   <p className="text-xs text-gray-500 mt-1">{formatMeetingDateTimeLabel(meeting.meetingDate || meeting.date, meeting.meetingTime)}</p>
-                  <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "สถานที่:" : locale === "zh" ? "地点:" : "Location:"} {meeting.meetingVenue || meeting.venue || meeting.subdistrict || '-'} | {locale === "th" ? "ลูกค้า:" : locale === "zh" ? "客户:" : "Customer:"} {meeting.customer}</p>
+                  <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "สถานที่:" : locale === "zh" ? "地点:" : "Location:"} {getWorkflowDisplayLocation(meeting.location, meeting.subdistrict, meeting.meetingVenue, meeting.venue) || '-'} | {locale === "th" ? "ลูกค้า:" : locale === "zh" ? "客户:" : "Customer:"} {meeting.customer}</p>
                 </div>
               ))}
             </div>
