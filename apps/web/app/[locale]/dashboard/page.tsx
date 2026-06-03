@@ -739,7 +739,8 @@ export default function DashboardPage() {
     };
         fetchUser();
       return () => { isMounted = false; };
-  }, [router, prefix]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -1525,6 +1526,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       order?.updatedAt ||
       fallback,
     ) || parseDateMs(fallback) || Date.now();
+  const isCustomerCancellationNote = (value: any) =>
+    /\bcustomer\s+(?:cancelled|canceled|cancel)\b|\bcancelled\s+by\s+customer\b|\bcanceled\s+by\s+customer\b/i.test(String(value || ''));
   const normalizePropLocationPart = (value: any) => {
     const text = String(value || '').trim();
     if (!text || /^--\s*select/i.test(text)) return '';
@@ -2595,7 +2598,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       const createdAt = getOrderEventTs(order);
       const note = String(order?.statusHistory?.[0]?.note || order?.statusNote || '');
       const reason = note.match(/Reason:\s*([^.]*)/i)?.[1]?.trim();
-      const cancelledByCustomer = /customer cancelled/i.test(note);
+      const cancelledByCustomer = isCustomerCancellationNote(note);
       const service = String(order?.serviceCategory || order?.service || 'your project').replace(/_/g, ' ');
       const msg = cancelledByCustomer
         ? `Customer cancelled ${service} (${po})${reason ? `. Reason: ${reason}` : ''}. This job has been moved to History.`
@@ -2628,7 +2631,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         const po = extractPo(order);
         if (!po || !isPoCode(po)) continue;
         const note = String(order?.statusHistory?.[0]?.note || order?.statusNote || '');
-        if (/customer cancelled/i.test(note)) {
+        if (isCustomerCancellationNote(note)) {
           changed = true;
           continue;
         }
@@ -2664,7 +2667,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         const existing = map.get(po) || {};
         const note = String(order?.statusHistory?.[0]?.note || order?.statusNote || '');
         const reason = note.match(/Reason:\s*([^.]*)/i)?.[1]?.trim() || existing.cancelReason || '';
-        const cancelledByCustomer = /customer cancelled/i.test(note) || existing.statusName === 'Cancelled by Customer' || Boolean(existing.cancelReason);
+        const cancelledByCustomer = isCustomerCancellationNote(note) || existing.statusName === 'Cancelled by Customer' || Boolean(existing.cancelReason);
         const nextItem = {
           ...existing,
           po,
@@ -3266,6 +3269,19 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     if (status === 'CANCELLED') {
       const note = String(order?.statusHistory?.[0]?.note || order?.statusNote || "");
       const reason = note.match(/Reason:\s*([^.]*)/i)?.[1]?.trim();
+      const cancelledByCustomer = isCustomerCancellationNote(note);
+      if (cancelledByCustomer) {
+        const msg = `${po}: You cancelled ${service}${reason ? ` (${reason})` : ""}. This job has been moved to History.`;
+        return [{
+          id: `a-customer-cancelled-${po}`,
+          msg,
+          msgTh: msg,
+          msgZh: msg,
+          time,
+          createdAt,
+          dot: "bg-red-500",
+        }];
+      }
       return [{
         id: `a-declined-${po}`,
         msg: `${po}: The selected partner declined ${service}${reason ? ` (${reason})` : ""}. Next: choose another matched professional or create a new enquiry.`,
@@ -5406,6 +5422,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                     localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(newReqs));
                     localStorage.setItem('partner_mock_dyn_req', JSON.stringify(updatedPartnerReqs));
                     window.dispatchEvent(new Event('storage'));
+                    window.dispatchEvent(new Event('cblue-workflow-updated'));
                     setMockActiveItems(newActive);
                     setMockDynRequests(newReqs);
                     void postBackendWorkflowMessage(po, `[SYSTEM] Customer approved variation for ${po}. Partner may now submit project complete.`);

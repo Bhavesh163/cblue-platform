@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useLocale } from "next-intl";
@@ -1723,32 +1723,39 @@ const extractDeclineReason = (value: any) => {
   const match = text.match(/reason:\s*(.+?)(?:\.\s*please select another professional\.?|$)/i);
   return String(match?.[1] || text).trim();
 };
+const isCustomerCancellationText = (value: any) =>
+  /\bcustomer\s+(?:cancelled|canceled|cancel)\b|\bcancelled\s+by\s+customer\b|\bcanceled\s+by\s+customer\b/i.test(String(value || ''));
 
 function WorkflowHistoryCard({ item, compact = false, locale = "en" }: { item: any; compact?: boolean; locale?: string }) {
   const [collapsed, setCollapsed] = React.useState(true);
   const chatPreview = collapsed ? [] : (Array.isArray(item.chatHistory) ? item.chatHistory.slice(compact ? -2 : -4) : []);
   const chatCount = Array.isArray(item.chatHistory) ? item.chatHistory.length : 0;
   const isCancelled = String(item.status || '').toUpperCase() === 'CANCELLED';
+  const isCustomerCancelled = isCancelled && (
+    item.statusName === 'Cancelled by Customer' ||
+    Boolean(item.cancelReason) ||
+    isCustomerCancellationText(item.statusNote)
+  );
   const declineReason = extractDeclineReason(item.declineReason || item.statusNote);
+  const cancelReason = extractDeclineReason(item.cancelReason || item.statusNote);
+  const completedLabel = locale === 'th' ? 'Completed' : locale === 'zh' ? 'Completed' : 'Completed';
+  const declinedLabel = locale === 'th' ? 'Declined' : locale === 'zh' ? 'Declined' : 'Declined';
+  const customerCanceledLabel = locale === 'th' ? 'Customer Canceled Job' : locale === 'zh' ? 'Customer Canceled Job' : 'Customer Canceled Job';
+  const statusLabel = isCancelled
+    ? isCustomerCancelled ? customerCanceledLabel : declinedLabel
+    : completedLabel;
+  const badgeLabel = isCancelled
+    ? isCustomerCancelled ? 'Request Closed - Customer Cancel Job' : 'Request Closed - Partner Unavailable'
+    : `Step 11 of 11 - ${item.stepName || getWorkflowStepName(item.step)}`;
+
   return (
     <div className="rounded-xl border border-gray-100 bg-white shadow-sm hover:bg-gray-50/60 transition cursor-pointer" onClick={() => setCollapsed(c => !c)}>
       <div className="p-5">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
-            <h3 className="font-bold text-gray-900">{item.service} <span className="text-sm font-normal text-gray-400">· {item.po} · {item.counterpartName || item.customer || 'Customer'}</span></h3>
+            <h3 className="font-bold text-gray-900">{item.service} <span className="text-sm font-normal text-gray-400">- {item.po} - {item.counterpartName || item.customer || 'Customer'}</span></h3>
             <p className="text-sm text-gray-500 mt-1">
-              {isCancelled
-                ? locale === 'th'
-                  ? 'ปฏิเสธงาน'
-                  : locale === 'zh'
-                  ? '已拒绝'
-                  : 'Declined'
-                : locale === 'th'
-                ? 'เสร็จสิ้น'
-                : locale === 'zh'
-                ? '已完成'
-                : 'Completed'}{' '}
-              {fmtDateTime(item.completedAt || item.statusChangedAt || item.createdAt || item.date || Date.now())}
+              {statusLabel} {fmtDateTime(item.completedAt || item.statusChangedAt || item.createdAt || item.date || Date.now())}
             </p>
             {chatCount > 0 ? (
               <p className="text-xs text-gray-400 mt-1">
@@ -1757,17 +1764,9 @@ function WorkflowHistoryCard({ item, compact = false, locale = "en" }: { item: a
             ) : null}
           </div>
           <div className="flex flex-col items-start sm:items-end gap-1 flex-shrink-0">
-            <span className="font-bold text-gray-900">{item.fee || item.budget || '฿0'}</span>
-            <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${isCancelled ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>
-              {isCancelled
-                ? locale === 'th'
-                  ? 'ปิดคำขอ · พาร์ทเนอร์ไม่ว่าง'
-                  : locale === 'zh'
-                  ? '请求已关闭 · 合作伙伴无法安排时间'
-                  : 'Request Closed · Partner Unavailable'
-                : `Step 11 of 11 · ${item.stepName || getWorkflowStepName(item.step)}`}
-            </span>
-            <span className="text-xs text-sky-600 font-semibold">{collapsed ? '▼ Show details' : '▲ Hide details'}</span>
+            <span className="font-bold text-gray-900">{item.fee || item.budget || 'THB 0'}</span>
+            <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${isCancelled ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>{badgeLabel}</span>
+            <span className="text-xs text-sky-600 font-semibold">{collapsed ? 'Show details' : 'Hide details'}</span>
           </div>
         </div>
         {!collapsed && (
@@ -1779,19 +1778,15 @@ function WorkflowHistoryCard({ item, compact = false, locale = "en" }: { item: a
             </div>
             {isCancelled && (
               <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-wider text-red-700 mb-1">
-                  {locale === 'th' ? 'บันทึกการปฏิเสธ' : locale === 'zh' ? '拒绝说明' : 'Decline Note'}
-                </p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-red-700 mb-1">{isCustomerCancelled ? 'Cancel Note' : 'Decline Note'}</p>
                 <p className="text-sm text-red-900">
-                  {locale === 'th'
-                    ? 'คำขอนี้ถูกปิดหลังจากคุณปฏิเสธงาน และระบบได้แจ้งลูกค้าให้เลือกผู้ให้บริการรายอื่นแล้ว'
-                    : locale === 'zh'
-                    ? '此请求因您拒绝接单而关闭，系统已通知客户选择其他服务提供商。'
+                  {isCustomerCancelled
+                    ? `Customer canceled this job${cancelReason ? ` because ${cancelReason}` : ''}, so this request was closed.`
                     : 'This request was closed after you declined the job, and the customer has been notified to select another professional.'}
                 </p>
-                {declineReason ? (
+                {!isCustomerCancelled && declineReason ? (
                   <p className="text-sm text-red-800 mt-2">
-                    <span className="font-semibold">{locale === 'th' ? 'เหตุผลที่บันทึก:' : locale === 'zh' ? '记录原因：' : 'Reason provided:'}</span> {declineReason}
+                    <span className="font-semibold">Reason provided:</span> {declineReason}
                   </p>
                 ) : null}
               </div>
@@ -1803,7 +1798,7 @@ function WorkflowHistoryCard({ item, compact = false, locale = "en" }: { item: a
                   {chatPreview.map((message: any) => (
                     <div key={message.id} className="text-sm text-gray-700">
                       <span className="font-semibold capitalize text-gray-900">{message.sender}</span>
-                      {message.time ? <span className="text-xs text-gray-400"> · {message.time}</span> : null}
+                      {message.time ? <span className="text-xs text-gray-400"> - {message.time}</span> : null}
                       <p className="mt-0.5">{message.text}</p>
                     </div>
                   ))}
@@ -1816,7 +1811,6 @@ function WorkflowHistoryCard({ item, compact = false, locale = "en" }: { item: a
     </div>
   );
 }
-
 const STATUS_LABEL: Record<string, Record<string, string>> = {
   IN_PROGRESS: { en: "In Progress", th: "กำลังดำเนินการ", zh: "进行中" },
   CONFIRMED: { en: "Confirmed", th: "ยืนยันแล้ว", zh: "已确认" },
@@ -1846,6 +1840,7 @@ export default function FixerProPage() {
   const [waitModalAttachmentUrls, setWaitModalAttachmentUrls] = useState<string[]>([]);
   const [attachmentViewer, setAttachmentViewer] = useState<AttachmentViewerState>(null);
   const [loadingAttachments, setLoadingAttachments] = useState(false);
+  const [acceptProcessing, setAcceptProcessing] = useState(false);
   const [declineModalOpen, setDeclineModalOpen] = useState(false);
   const [meetingDeclineInfoOpen, setMeetingDeclineInfoOpen] = useState(false);
   const [declineComment, setDeclineComment] = useState('');
@@ -2654,18 +2649,6 @@ export default function FixerProPage() {
     };
   }).filter(Boolean) as any[];
 
-  const completedBackendOrderPos = useMemo(
-    () =>
-      new Set(
-        (orders || [])
-          .filter((order: any) => ['COMPLETED', 'CANCELLED', 'DONE'].includes(String(order?.status || '').toUpperCase()))
-          .map((order: any) => String(extractPoCode(order) || '').trim())
-          .filter(Boolean),
-      ),
-    [orders],
-  );
-
-  
   const properties = myProperties.map(p => ({
     id: p.id,
     type: 'property',
@@ -3197,10 +3180,15 @@ export default function FixerProPage() {
                 (['variation_partner', 'complete_partner', 'rate_partner'].includes(item?.type) ? item.type : undefined),
             }))
           : [];
+        const historyPos = new Set(
+          filterVisibleWorkflowItems(JSON.parse(localStorage.getItem('ghis_mock_history') || '[]'))
+            .map((item: any) => String(item?.po || '').trim())
+            .filter(Boolean),
+        );
         partnerReqs = partnerReqs.filter((item: any) => {
           const po = String(item?.po || '').trim();
           const type = String(item?.workflowType || item?.type || '');
-          return !(type === 'rate_partner' && completedBackendOrderPos.has(po));
+          return !(type === 'rate_partner' && historyPos.has(po));
         });
         // Auto-sync: meeting_pending_partner in ghis_mock_dyn_req → meeting_confirm_partner in partner reqs
         if (d) {
@@ -3323,7 +3311,7 @@ export default function FixerProPage() {
           if (isClosedPartnerWorkflowPo(req?.po)) return false;
           const po = String(req?.po || '').trim();
           const type = String(req?.workflowType || req?.type || '');
-          if (type === 'rate_partner' && completedBackendOrderPos.has(po)) return false;
+          if (type === 'rate_partner' && historyPos.has(po)) return false;
           if (type !== 'meeting_confirm_partner') return true;
           const meetingTs = parseMeetingDateTimeMs(req.meetingDate || req.meetingDateLabel, req.meetingTime || req.meetingTimeLabel);
           return !(meetingTs > 0 && meetingTs < Date.now() - 3 * 24 * 60 * 60 * 1000);
@@ -3345,7 +3333,7 @@ export default function FixerProPage() {
       window.removeEventListener('storage', checkMock);
       window.removeEventListener('cblue-workflow-updated', onWorkflowUpdated as EventListener);
     };
-  }, [isFixer, completedBackendOrderPos]);
+  }, [isFixer]);
 
   const completedHistoryPos = new Set(mockHistory.map((h: any) => h.po));
   const declinedPartnerPos = new Set<string>();
@@ -3414,7 +3402,6 @@ export default function FixerProPage() {
             !isClosedPartnerWorkflowPo(po) &&
             !completedHistoryPos.has(po) &&
             !declinedPartnerPos.has(po) &&
-            !completedBackendOrderPos.has(po) &&
             step >= 6
           );
         })
@@ -3591,6 +3578,9 @@ export default function FixerProPage() {
       const customer = firstNameOnly(entry.customer || entry.customerName || entry.fixerAlias || existing.customer, 'Customer');
       const completedAt = entry.completedAt || entry.statusChangedAt || entry.updatedAt || entry.createdAt || entry.date || existing.completedAt || existing.statusChangedAt || existing.createdAt || Date.now();
       const description = stripWorkflowPrefix(entry.description || entry.desc || existing.description || existing.projectDetails || '');
+      const statusNote = entry.statusNote || entry.statusHistory?.[0]?.note || existing.statusNote || '';
+      const customerCancelled = String(entry.status || existing.status || '').toUpperCase() === 'CANCELLED' && isCustomerCancellationText(statusNote);
+      const customerCancelReason = customerCancelled ? extractDeclineReason(entry.cancelReason || existing.cancelReason || statusNote) : '';
       map.set(po, {
         ...existing,
         ...entry,
@@ -3610,8 +3600,10 @@ export default function FixerProPage() {
         fee: toCurrencyLabel(entry.fee || entry.budget || existing.fee || existing.budget),
         tier: entry.tier || existing.tier || 'Standard',
         status: entry.status || existing.status || 'COMPLETED',
-        statusNote: entry.statusNote || entry.statusHistory?.[0]?.note || existing.statusNote || '',
-        declineReason: declineReasonByPo.get(String(po).trim()) || existing.declineReason || '',
+        statusName: customerCancelled ? 'Cancelled by Customer' : entry.statusName || existing.statusName,
+        statusNote,
+        cancelReason: customerCancelReason || entry.cancelReason || existing.cancelReason || '',
+        declineReason: customerCancelled ? '' : declineReasonByPo.get(String(po).trim()) || existing.declineReason || '',
         step: 11,
         stepName: getWorkflowStepName(11),
         location: entry.location || entry.subdistrict || existing.location || existing.subdistrict || '',
@@ -3800,10 +3792,6 @@ export default function FixerProPage() {
 
       for (const chat of chatFeed) {
         const po = chat.po;
-        if (completedBackendOrderPos.has(String(po || '').trim())) {
-          next = next.filter((x: any) => !(x.po === po && x.type === 'rate_partner'));
-          continue;
-        }
         const lower = String(chat.lastMsg || "").toLowerCase();
         const order = mappedOrders.find((x: any) => x.po === po);
         const localActive = mockActiveState.find((x: any) => x.po === po);
@@ -3816,7 +3804,7 @@ export default function FixerProPage() {
         };
         const historyEntry = mockHistory.find((x: any) => x.po === po) || histFromStorage.find((x: any) => x.po === po);
         const variationAlreadySubmitted = (Number(localActive?.step || 0) >= 9 && localActive?.actionNeeded === false) || Boolean(localStorage.getItem(`partner_variation_sent_${po}`)) || variationWaitingCustomerPos.has(po);
-        const completeAlreadySubmitted = (Number(localActive?.step || 0) >= 10 && localActive?.actionNeeded === false) || Boolean(localStorage.getItem(`partner_complete_sent_${po}`)) || completeWaitingCustomerPos.has(po);
+        const completeAlreadySubmitted = Boolean(localStorage.getItem(`partner_complete_sent_${po}`)) || completeWaitingCustomerPos.has(po);
         if (variationAlreadySubmitted) {
           try {
             const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
@@ -4030,42 +4018,38 @@ export default function FixerProPage() {
       try { next = persistWorkflowCacheItems("partner_mock_dyn_req", next); } catch {}
       return next;
     });
-  }, [chatFeed, mappedOrders, mockActiveState, mockHistory, mockDynReqs, completedBackendOrderPos]);
+  }, [chatFeed, mappedOrders, mockActiveState, mockHistory, mockDynReqs]);
 
-  // Completed backend orders are terminal for dashboards; do not rebuild old step-11 request cards.
+  // Partner-side history is terminal. Backend COMPLETED only means customer approved Step 10,
+  // so keep Step 11 rating cards visible until the partner actually rates.
   useEffect(() => {
-    if (!partner?.id || completedBackendOrderPos.size === 0) return;
+    const terminalHistoryPos = new Set(
+      mockHistory
+        .map((item: any) => String(item?.po || '').trim())
+        .filter(Boolean),
+    );
+    if (!partner?.id || terminalHistoryPos.size === 0) return;
     let nextReqs: any[] = [];
-    let nextAlerts: any[] = [];
     try { nextReqs = filterVisibleWorkflowItems(JSON.parse(localStorage.getItem('partner_mock_dyn_req') || '[]')); } catch {}
-    try { nextAlerts = JSON.parse(localStorage.getItem('partner_alerts') || '[]'); } catch {}
     if (!Array.isArray(nextReqs)) nextReqs = [];
-    if (!Array.isArray(nextAlerts)) nextAlerts = [];
 
     const filteredReqs = nextReqs.filter((req: any) => {
       const po = String(req?.po || '').trim();
       const type = String(req?.workflowType || req?.type || '');
-      return !(type === 'rate_partner' && completedBackendOrderPos.has(po));
-    });
-    const filteredAlerts = nextAlerts.filter((alert: any) => {
-      const po = String(alert?.po || alert?.message || alert?.msg || '').match(/PO-(?:\d{4}-\d{4,}|\d{8})/i)?.[0] || '';
-      const text = String(alert?.type || alert?.message || alert?.msg || '').toLowerCase();
-      return !(completedBackendOrderPos.has(po) && (text.includes('complete_confirmed') || text.includes('customer confirmed')));
+      return !(type === 'rate_partner' && terminalHistoryPos.has(po));
     });
 
-    if (filteredReqs.length === nextReqs.length && filteredAlerts.length === nextAlerts.length) return;
+    if (filteredReqs.length === nextReqs.length) return;
     try { nextReqs = persistWorkflowCacheItems('partner_mock_dyn_req', filteredReqs); } catch { nextReqs = filteredReqs; }
-    try { localStorage.setItem('partner_alerts', JSON.stringify(filteredAlerts)); } catch {}
     setPartnerDynReqs(nextReqs);
-    setPartnerPersistedAlerts(filteredAlerts);
     window.dispatchEvent(new Event('cblue-workflow-updated'));
-  }, [completedBackendOrderPos, partner?.id]);
+  }, [mockHistory, partner?.id]);
 
   const partnerRequestItems = Array.from([
     ...partnerDynReqs.filter((r: any) => {
       const po = String(r?.po || '').trim();
       const type = String(r?.workflowType || r?.type || '');
-      return !['accept_sent'].includes(String(r.type || '')) && !completedHistoryPos.has(po) && !declinedPartnerPos.has(po) && !isClosedPartnerWorkflowPo(po) && !(type === 'rate_partner' && completedBackendOrderPos.has(po));
+      return !['accept_sent'].includes(String(r.type || '')) && !completedHistoryPos.has(po) && !declinedPartnerPos.has(po) && !isClosedPartnerWorkflowPo(po);
     }),
     ...incomingJobs.filter((job: any) => !(String(job.status || '').toUpperCase() === 'MEETING_REQUESTED' && partnerDynReqs.some((req: any) => req.po === job.po && req.workflowType === 'meeting_confirm_partner'))),
   ].reduce((map: Map<string, any>, item: any) => {
@@ -4530,9 +4514,6 @@ export default function FixerProPage() {
       const createdAt = parseTs(alert?.createdAt || alert?.timestamp || alert?.date);
       const msg = alert?.message || alert?.msg || '';
       if (!msg || !createdAt) return null;
-      const alertPo = String(alert?.po || msg).match(/PO-(?:\d{4}-\d{4,}|\d{8})/i)?.[0] || '';
-      const alertType = String(alert?.type || msg).toLowerCase();
-      if (completedBackendOrderPos.has(alertPo) && (alertType.includes('complete_confirmed') || alertType.includes('customer confirmed'))) return null;
       return {
         id: `partner-alert-${alert.id || createdAt}`,
         msg,
@@ -4558,6 +4539,15 @@ export default function FixerProPage() {
     if (['CREATED','PENDING','MATCHING'].includes(o.status)) return [{ id: `order-pending-${po}`, msg: `${po}: New ${svc} request from ${o.customer || 'customer'}. Review the PO and accept or decline it.`, msgTh: `${po}: มีคำขอ ${svc} ใหม่จาก ${o.customer || 'ลูกค้า'} กรุณาตรวจสอบ PO และรับหรือปฏิเสธ`, msgZh: `${po}: 来自 ${o.customer || '客户'} 的新 ${svc} 请求。请查看PO并接受或拒绝。`, unread: true, time: displayTime, createdAt, dot: "bg-purple-500" }];
     if (o.status === 'MEETING_REQUESTED') return [{ id: `order-meeting-${po}`, msg: `${po}: Customer sent a site meeting invitation for ${svc}. Open the request, confirm the schedule, and then prepare Step 9 variation if needed.`, msgTh: `${po}: ลูกค้าส่งคำเชิญนัดหมายสำหรับ ${svc} แล้ว กรุณาเปิดคำขอ ยืนยันเวลา และเตรียม Step 9 variation หากจำเป็น`, msgZh: `${po}: 客户已为 ${svc} 发送现场会议邀请。请打开请求、确认时间，并在需要时准备第9步变更。`, unread: true, time: displayTime, createdAt, dot: "bg-amber-500" }];
     if (o.status === 'IN_PROGRESS') return [{ id: `order-inprogress-${po}`, msg: `${po}: Chat room is active for ${svc}. Coordinate with the customer now, then confirm the site meeting when the invitation arrives.`, msgTh: `${po}: ห้องแชทของ ${svc} พร้อมใช้งานแล้ว กรุณาคุยกับลูกค้าและยืนยันนัดหมายหน้างานเมื่อได้รับคำเชิญ`, msgZh: `${po}: ${svc} 聊天室已开启。请先与客户协调，并在收到现场会议邀请后完成确认。`, unread: true, time: displayTime, createdAt, dot: "bg-sky-400" }];
+    if (o.status === 'CANCELLED') {
+      const note = String(o.statusNote || '');
+      const reason = extractDeclineReason(note);
+      const customerCancelled = isCustomerCancellationText(note);
+      const msg = customerCancelled
+        ? `${po}: Customer canceled ${svc}${reason ? ` (${reason})` : ''}. This job has been moved to History.`
+        : `${po}: ${svc} was closed because the service provider is unavailable. Check History for the archived request.`;
+      return [{ id: `order-cancelled-${po}`, msg, msgTh: msg, msgZh: msg, unread: true, time: displayTime, createdAt, dot: "bg-red-500" }];
+    }
     if (o.status === 'COMPLETED') {
       return [];
     }
@@ -4960,10 +4950,19 @@ export default function FixerProPage() {
       {/* PO Accept/Decline Modal */}
       {waitModalOrder && (
         <div className="fixed inset-0 z-[9999] flex items-start justify-center bg-gray-950/80 backdrop-blur-sm p-4 overflow-y-auto pt-6">
-          <div className="bg-white rounded-3xl p-8 max-w-lg w-full max-h-[calc(100dvh-6rem)] overflow-y-auto shadow-2xl animate-in zoom-in-95 duration-200 my-4">
+          <div className="relative bg-white rounded-3xl p-8 max-w-lg w-full max-h-[calc(100dvh-6rem)] overflow-y-auto shadow-2xl animate-in zoom-in-95 duration-200 my-4">
+            {acceptProcessing && (
+              <div className="absolute inset-0 z-20 bg-white/85 backdrop-blur-sm rounded-3xl flex items-center justify-center px-6">
+                <div className="w-full rounded-2xl border border-purple-100 bg-purple-50 px-5 py-4 text-center shadow-sm">
+                  <div className="mx-auto mb-3 h-10 w-10 rounded-full border-4 border-purple-200 border-t-purple-700 animate-spin" aria-hidden="true" />
+                  <p className="text-sm font-bold text-purple-900">Processing PO acceptance</p>
+                  <p className="text-xs text-purple-700 mt-1">Please wait while CBLUE updates the workflow and notifies the customer.</p>
+                </div>
+              </div>
+            )}
             <div className="flex justify-between items-start mb-4">
               <div className="mb-2 text-sm font-semibold text-purple-600 bg-purple-50 inline-block px-3 py-1 rounded-full">{isMeetingConfirmation ? 'Step 8 of 11' : 'Step 5 of 11'}</div>
-              <button onClick={() => setWaitModalOrder(null)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
+              <button onClick={() => !acceptProcessing && setWaitModalOrder(null)} disabled={acceptProcessing} className="text-gray-400 hover:text-gray-600 text-xl font-bold disabled:cursor-not-allowed disabled:opacity-40">&times;</button>
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mt-2">{isMeetingConfirmation ? 'Confirm Site Meeting' : 'Review PO Details'}</h2>
             <p className="text-gray-500 mt-2">{isMeetingConfirmation ? `Customer sent a site meeting invitation for ${waitModalOrder.serviceTh || waitModalOrder.service}. Please review the proposed venue, date, and time before confirming.` : `Customer has placed a request for ${waitModalOrder.serviceTh || waitModalOrder.service}. Please review the PO details below and accept or decline.`}</p>
@@ -5026,6 +5025,8 @@ export default function FixerProPage() {
             <div className="flex gap-4 mt-8">
               <button 
                 onClick={async () => {
+                  if (acceptProcessing) return;
+                  setAcceptProcessing(true);
                   const po = waitModalOrder.po || `PO-2605-${waitModalOrder.id?.slice(0, 4)}`;
                   const backendOrderId = waitModalOrder.orderId || localStorage.getItem(`po_to_order_${po}`) || (isOrderUuid(waitModalOrder.id) ? waitModalOrder.id : '');
                   const now = fmtDateTime(new Date());
@@ -5247,11 +5248,14 @@ export default function FixerProPage() {
                     setWaitModalOrder(null);
                   } catch (e) {
                     console.error(e);
+                  } finally {
+                    setAcceptProcessing(false);
                   }
                 }} 
-                className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl transition shadow-md"
+                disabled={acceptProcessing}
+                className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl transition shadow-md disabled:opacity-70 disabled:cursor-wait"
               >
-                {isMeetingConfirmation ? 'Confirm Meeting Time' : 'Accept PO'}
+                {acceptProcessing ? 'Processing...' : isMeetingConfirmation ? 'Confirm Meeting Time' : 'Accept PO'}
               </button>
               <button 
                 onClick={() => {
@@ -9132,4 +9136,3 @@ function PartnerIncomingRequests({ locale, prefix, orders }: { locale: string; p
     </div>
   );
 }
-
