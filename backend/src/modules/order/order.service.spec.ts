@@ -12,6 +12,7 @@ describe('OrderService', () => {
     address: Record<string, jest.Mock>;
     fixer: Record<string, jest.Mock>;
     user: Record<string, jest.Mock>;
+    image: Record<string, jest.Mock>;
   };
   let eventEmitter: { emit: jest.Mock };
 
@@ -32,6 +33,10 @@ describe('OrderService', () => {
       user: {
         findUnique: jest.fn(),
         findMany: jest.fn(),
+      },
+      image: {
+        findMany: jest.fn(),
+        create: jest.fn(),
       },
     };
     eventEmitter = { emit: jest.fn() };
@@ -167,6 +172,21 @@ describe('OrderService', () => {
           user: null,
         }),
       ]);
+    });
+  });
+
+  describe('getOrderAttachments', () => {
+    it('should return an empty list when attachment lookup hits schema drift', async () => {
+      prisma.order.findUnique.mockResolvedValue({
+        id: 'order-1',
+        userId: 'user-1',
+        fixerId: null,
+      });
+      prisma.image.findMany.mockRejectedValue(
+        new Error('The table `public.images` does not exist in the current database.'),
+      );
+
+      await expect(service.getOrderAttachments('order-1', 'user-1')).resolves.toEqual([]);
     });
   });
 });

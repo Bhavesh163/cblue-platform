@@ -2491,6 +2491,21 @@ export default function FixerResults({
       .replace(/[^a-z0-9\u0E00-\u0E7F]+/g, " ")
       .trim();
 
+  const inferBreakdownGroupKey = (serviceName: string) => {
+    const normalized = normalizeBreakdownServiceKey(serviceName);
+    if (!normalized) return "other";
+    if (/\b(?:website|webpage|web|chatbot|faq|software|app|mobile|platform|digital|automation|ai|page|pages)\b/i.test(normalized)) {
+      return "digital";
+    }
+    if (/\b(?:fitout|reinstatement|construction|building|renovation|interior|office|civil|site|mep|electrical|plumbing|hvac)\b/i.test(normalized)) {
+      return "build";
+    }
+    if (/\b(?:legal|law|contract|compliance|permit|license)\b/i.test(normalized)) {
+      return "legal";
+    }
+    return normalized.split(/\s+/).slice(0, 3).join("-") || "other";
+  };
+
   const normalizeCandidateBreakdown = (value: unknown): CandidateBreakdownLine[] => {
     if (!Array.isArray(value)) return [];
     return value
@@ -2529,21 +2544,27 @@ export default function FixerResults({
     });
 
     const serviceMaxTotals = new Map<string, number>();
+    const serviceGroupByKey = new Map<string, string>();
     for (const item of enriched) {
       for (const line of item.breakdown) {
         const key = normalizeBreakdownServiceKey(line.service);
         if (!key) continue;
         serviceMaxTotals.set(key, Math.max(serviceMaxTotals.get(key) || 0, line.total));
+        serviceGroupByKey.set(key, inferBreakdownGroupKey(line.service));
       }
     }
 
-    const dominantLineTotal = Math.max(0, ...serviceMaxTotals.values());
-    if (dominantLineTotal <= 0) return items;
+    const groupTotals = new Map<string, number>();
+    for (const [serviceKey, total] of serviceMaxTotals.entries()) {
+      const groupKey = serviceGroupByKey.get(serviceKey) || "other";
+      groupTotals.set(groupKey, (groupTotals.get(groupKey) || 0) + total);
+    }
 
-    const importantServiceFloor = dominantLineTotal * 0.1;
+    const importantGroupKey = [...groupTotals.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "";
+    if (!importantGroupKey) return items;
     const importantServiceKeys = new Set(
       [...serviceMaxTotals.entries()]
-        .filter(([, total]) => total >= importantServiceFloor)
+        .filter(([serviceKey]) => (serviceGroupByKey.get(serviceKey) || "other") === importantGroupKey)
         .map(([key]) => key),
     );
 

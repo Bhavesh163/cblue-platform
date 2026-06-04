@@ -2587,9 +2587,12 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       const currentStatus = String(order.status || '').toUpperCase();
       const prevStatus = prevOrderStatuses.current[order.id];
       const pendingMeeting = pendingMeetingByPo.get(po);
+      const hasStatusTransitionConfirmation =
+        prevStatus === 'MEETING_REQUESTED' && currentStatus === 'IN_PROGRESS';
+      const hasChatConfirmation = confirmedMeetingByChatPos.has(po);
       const hasConfirmedMeetingSignal =
-        (prevStatus === 'MEETING_REQUESTED' && currentStatus === 'IN_PROGRESS') ||
-        (currentStatus === 'IN_PROGRESS' && !scheduledMeetingPos.has(po) && (Boolean(pendingMeeting) || confirmedMeetingByChatPos.has(po)));
+        !scheduledMeetingPos.has(po) &&
+        (hasStatusTransitionConfirmation || hasChatConfirmation);
       if (hasConfirmedMeetingSignal) {
         const existingActive = mockActiveItems.find((item: any) => item?.po === po);
         const inviteDetails = readMeetingInviteSnapshot(po, pendingMeeting || existingActive || order);
@@ -2653,6 +2656,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
             (order?.estimatedPrice ? `฿${Number(order.estimatedPrice).toLocaleString()}` : '฿0'),
           tier,
           type: 'meeting_scheduled',
+          confirmedByPartner: true,
           step: 8,
           venue: meetingVenue,
           meetingVenue,
@@ -3371,9 +3375,27 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       .map((x: any) => String(x.po || "").trim())
       .filter(Boolean),
   );
+  const confirmedMeetingAlertPos = new Set(
+    [
+      ...chatFeed
+        .filter((chatItem: any) => /partner confirmed site meeting|meeting confirmed by partner/i.test(String(chatItem?.lastMsg || '')))
+        .map((chatItem: any) => String(chatItem?.po || '').trim()),
+      ...persistedCustomerAlerts
+        .filter((alert: any) => /meeting confirmed|confirmed.*site meeting|ยืนยัน|确认/i.test(String(alert?.msg || alert?.message || '')))
+        .map((alert: any) => String(alert?.po || alert?.msg || alert?.message || '').match(/PO-(?:\d{8}|\d{4}-\d{4,})/i)?.[0] || ''),
+      ...visibleMockDynRequests
+        .filter((requestItem: any) => Boolean(requestItem?.confirmedByPartner) || /meeting-confirmed/i.test(String(requestItem?.id || '')))
+        .map((requestItem: any) => String(requestItem?.po || '').trim()),
+    ].filter((po: string) => isValidPoCode(po)),
+  );
+  const isConfirmedMeetingScheduled = (item: any) => {
+    const po = String(item?.po || '').trim();
+    return Boolean(item?.confirmedByPartner) || confirmedMeetingAlertPos.has(po);
+  };
   const upcomingMeetings = visibleMockDynRequests
     .filter((x: any) => x.type === "meeting_scheduled")
     .filter((x: any) => !pendingMeetingPos.has(String(x.po || "").trim()))
+    .filter((x: any) => isConfirmedMeetingScheduled(x))
     .filter((x: any) => isWorkflowMeetingVisible(x.meetingDate, x.meetingTime, x.createdAt || x.date))
     .sort((a: any, b: any) => {
       const aTs = parseWorkflowMeetingDateTimeMs(a.meetingDate, a.meetingTime, a.createdAt || a.date);
@@ -3395,7 +3417,12 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     );
   };
   const workflowAlerts = visibleMockDynRequests
-    .filter((x: any) => !(x.type === "meeting_scheduled" && pendingMeetingPos.has(String(x.po || "").trim())))
+    .filter((x: any) => {
+      const po = String(x.po || "").trim();
+      if (x.type !== "meeting_scheduled") return true;
+      if (pendingMeetingPos.has(po)) return false;
+      return isConfirmedMeetingScheduled(x);
+    })
     .map((x: any) => {
       const po = String(x.po || "").trim();
       const rawCreatedAt = x.createdAt || parseDateMs(x.date);

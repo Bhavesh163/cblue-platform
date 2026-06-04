@@ -397,5 +397,94 @@ describe('FixerService', () => {
         'bhavesh',
       ]);
     });
+
+    it('should rank by the highest-value matched service group before cheaper lower-value groups', async () => {
+      prisma.fixer.findMany.mockResolvedValue([
+        {
+          id: 'bhavesh',
+          tier: 'ECONOMY',
+          rating: 5,
+          completedJobs: 0,
+          yearsExperience: 2,
+          description: 'Office build and digital delivery team',
+          pastProjectType: 'fitout website chatbot',
+          bio: 'Fitout, construction, website, and chatbot',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          priceList: [
+            { service: 'Fit-out', quantity: '1', unit: 'sqm', finalPrice: '30000' },
+            { service: 'Reinstatement', quantity: '1', unit: 'sqm', finalPrice: '10000' },
+            { service: 'Construction', quantity: '1', unit: 'sqm', finalPrice: '20000' },
+            { service: 'Website development', quantity: '1', unit: 'page', finalPrice: '1000' },
+            { service: 'Chatbot', quantity: '1', unit: 'FAQ', finalPrice: '100' },
+          ],
+          user: {
+            name: 'Bhavesh Fungprasertsuk',
+            company: 'Bhavesh Fungprasertsuk',
+          },
+          skills: [
+            { category: 'project', name: 'fitout' },
+            { category: 'project', name: 'website development' },
+            { category: 'project', name: 'chatbot' },
+          ],
+        },
+        {
+          id: 'suppadesh',
+          tier: 'ECONOMY',
+          rating: 5,
+          completedJobs: 0,
+          yearsExperience: 20,
+          description: 'Office fitout reinstatement construction',
+          pastProjectType: 'fitout construction',
+          bio: 'Commercial site team',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          priceList: [
+            { service: 'Fit out', quantity: '1', unit: 'sqm', finalPrice: '25000' },
+            { service: 'Reinstatement', quantity: '1', unit: 'sqm', finalPrice: '5000' },
+            { service: 'Construction', quantity: '1', unit: 'sqm', finalPrice: '15000' },
+          ],
+          user: {
+            name: 'Suppadesh Funpgrsertsuk',
+            company: 'Suppadesh Funpgrsertsuk',
+          },
+          skills: [{ category: 'project', name: 'office fitout' }],
+        },
+        {
+          id: 'gatoru',
+          tier: 'ECONOMY',
+          rating: 5,
+          completedJobs: 0,
+          yearsExperience: 2,
+          description: 'Website development and chatbot delivery',
+          pastProjectType: 'digital',
+          bio: 'Digital team',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          priceList: [
+            { service: 'Website Development', quantity: '1', unit: 'page', finalPrice: '1200' },
+            { service: 'Chatbot', quantity: '1', unit: 'FAQ', finalPrice: '20' },
+          ],
+          user: { name: 'Gatoru Sojo', company: 'Gatoru Sojo' },
+          skills: [
+            { category: 'project', name: 'website development' },
+            { category: 'project', name: 'chatbot' },
+          ],
+        },
+      ]);
+
+      const result = await service.matchFixers(
+        'project',
+        'Pathum Wan',
+        'Bangkok',
+        'I want a team to carry out a 10 sq.m. office fit out, a 10 sq.m. reinstatement work, a 10 sq.m. office building construction and a 1000 page website development and a 1000 FAQ chatbot.',
+      );
+
+      expect(result.slice(0, 2).map((candidate: { id: string }) => candidate.id)).toEqual([
+        'bhavesh',
+        'gatoru',
+      ]);
+      expect(result.find((candidate: { id: string }) => candidate.id === 'suppadesh')?.selectedReason).not.toMatch(/Cheapest/);
+    });
   });
 });

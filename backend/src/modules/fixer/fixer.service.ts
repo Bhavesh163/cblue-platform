@@ -43,6 +43,7 @@ type EstimatedBreakdownItem = {
 type MatchedBreakdownItem = EstimatedBreakdownItem & {
   pairIndex: number;
   matchScore: number;
+  serviceGroupKey: string;
 };
 
 interface RankedFixer extends SelectedFixer {
@@ -448,6 +449,35 @@ export class FixerService {
       );
   }
 
+  private inferServiceGroupKey(value: unknown): string {
+    const normalized = this.normalizeSearchText(
+      Array.isArray(value) ? value.join(' ') : String(value || ''),
+    );
+    if (!normalized) return 'other';
+
+    if (
+      /\b(?:website|webpage|web|chatbot|faq|software|app|mobile|platform|digital|automation|ai|page|pages)\b/i.test(
+        normalized,
+      )
+    ) {
+      return 'digital';
+    }
+
+    if (
+      /\b(?:fitout|reinstatement|construction|building|renovation|interior|office|civil|site|mep|electrical|plumbing|hvac)\b/i.test(
+        normalized,
+      )
+    ) {
+      return 'build';
+    }
+
+    if (/\b(?:legal|law|contract|compliance|permit|license)\b/i.test(normalized)) {
+      return 'legal';
+    }
+
+    return this.tokenize(normalized).slice(0, 3).join('-') || 'other';
+  }
+
   private normalizeSearchText(value?: string): string {
     return (value || '')
       .toLowerCase()
@@ -659,6 +689,10 @@ export class FixerService {
                     total: lineTotal,
                     pairIndex,
                     matchScore: match.score,
+                    serviceGroupKey: this.inferServiceGroupKey([
+                      matchedItem.service,
+                      matchedItem.unit,
+                    ]),
                   });
                   continue;
                 }
@@ -706,6 +740,11 @@ export class FixerService {
                     total: lineTotal,
                     pairIndex,
                     matchScore: bestForContext.score,
+                    serviceGroupKey: this.inferServiceGroupKey([
+                      ...contextTerms,
+                      bestForContext.item.service,
+                      bestForContext.item.unit,
+                    ]),
                   });
                 } else {
                   // Context terms present but no service in price list matches them —
@@ -729,6 +768,11 @@ export class FixerService {
                 total: basePrice,
                 pairIndex: 0,
                 matchScore: match.score,
+                serviceGroupKey: this.inferServiceGroupKey([
+                  matchedItem.service,
+                  matchedItem.unit,
+                  description,
+                ]),
               });
             }
 
@@ -763,7 +807,14 @@ export class FixerService {
           priceList: list,
           estimatedBreakdown:
             estimatedBreakdownMeta.length > 0
-              ? estimatedBreakdownMeta.map(({ pairIndex: _pairIndex, matchScore: _matchScore, ...line }) => line)
+              ? estimatedBreakdownMeta.map(
+                  ({
+                    pairIndex: _pairIndex,
+                    matchScore: _matchScore,
+                    serviceGroupKey: _serviceGroupKey,
+                    ...line
+                  }) => line,
+                )
               : null,
           estimatedBreakdownMeta,
           matchScore: overallScore,
@@ -778,9 +829,14 @@ export class FixerService {
         };
       });
 
-      const pairMaxTotals = new Map<number, number>();
+      const groupPairMaxTotals = new Map<string, Map<number, number>>();
       for (const partner of formattedPool) {
         for (const line of partner.estimatedBreakdownMeta) {
+          const groupKey = line.serviceGroupKey || this.inferServiceGroupKey(line.service);
+          if (!groupPairMaxTotals.has(groupKey)) {
+            groupPairMaxTotals.set(groupKey, new Map<number, number>());
+          }
+          const pairMaxTotals = groupPairMaxTotals.get(groupKey)!;
           const currentMax = pairMaxTotals.get(line.pairIndex) || 0;
           if (line.total > currentMax) {
             pairMaxTotals.set(line.pairIndex, line.total);
@@ -788,20 +844,21 @@ export class FixerService {
         }
       }
 
-      const significantPairIndices = new Set<number>();
-      const pairTotalsDescending = [...pairMaxTotals.entries()]
+      const groupTotalsDescending = [...groupPairMaxTotals.entries()]
+        .map(([groupKey, pairTotals]) => [
+          groupKey,
+          [...pairTotals.values()].reduce((sum, total) => sum + total, 0),
+        ] as [string, number])
         .filter(([, total]) => total > 0)
         .sort((a, b) => b[1] - a[1]);
-      const topPairTotal = pairTotalsDescending[0]?.[1] || 0;
-      for (const [pairIndex, total] of pairTotalsDescending) {
-        if (total >= topPairTotal * 0.1) {
-          significantPairIndices.add(pairIndex);
-        }
-      }
+      const importantGroupKey = groupTotalsDescending[0]?.[0] || '';
 
       for (const partner of formattedPool) {
         const importantLines = partner.estimatedBreakdownMeta.filter((line) =>
-          significantPairIndices.has(line.pairIndex),
+          importantGroupKey
+            ? (line.serviceGroupKey || this.inferServiceGroupKey(line.service)) ===
+              importantGroupKey
+            : false,
         );
         partner.importantMatchedCount = new Set(
           importantLines.map((line) => line.pairIndex),

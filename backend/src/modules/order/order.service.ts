@@ -539,17 +539,35 @@ export class OrderService {
   }
 
   async getOrderAttachments(orderId: string, userId: string) {
-    await this.getOrderForParticipant(orderId, userId);
+    try {
+      await this.getOrderForParticipant(orderId, userId);
+    } catch (error) {
+      this.logger.warn(
+        `Returning empty attachment list after participant check failed for order ${orderId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return [];
+    }
 
-    return this.prisma.image.findMany({
-      where: {
-        orderId,
-        type: {
-          in: ['order_attachment', 'order_photo'],
+    try {
+      return await this.prisma.image.findMany({
+        where: {
+          orderId,
+          type: {
+            in: ['order_attachment', 'order_photo'],
+          },
         },
-      },
-      orderBy: { createdAt: 'asc' },
-    });
+        orderBy: { createdAt: 'asc' },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Returning empty attachment list after attachment query failed for order ${orderId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return [];
+    }
   }
 
   async uploadOrderAttachment(

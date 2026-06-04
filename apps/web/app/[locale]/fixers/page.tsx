@@ -199,6 +199,7 @@ const WORKFLOW_CACHE_RECORD_KEYS = [
   'meetingTime',
   'meetingVenue',
   'venue',
+  'confirmedByPartner',
   'actionNeeded',
   'step',
   'mockStep',
@@ -4172,6 +4173,10 @@ export default function FixerProPage() {
         const lower = String(chat.lastMsg || "").toLowerCase();
         const order = mappedOrders.find((x: any) => x.po === po);
         const localActive = mockActiveState.find((x: any) => x.po === po);
+        const chatEventAt =
+          parseTs(chat.sort || chat.createdAt || chat.time) ||
+          parseTs(order?.statusChangedAt || order?.createdAt || order?.date) ||
+          Date.now();
         const pendingMeetingReq = next.find((x: any) => x.po === po && (x.type === 'meeting_confirm_partner' || x.workflowType === 'meeting_confirm_partner'));
         const meetingFields = {
           meetingDate: localActive?.meetingDate || pendingMeetingReq?.meetingDate || pendingMeetingReq?.meetingDateLabel || '',
@@ -4200,7 +4205,7 @@ export default function FixerProPage() {
             next = next.filter((x: any) => !(x.po === po && (x.type === 'meeting_confirm_partner' || x.workflowType === 'meeting_confirm_partner')));
           } else {
           const inviteDetails = parseMeetingInviteDetails(String(chat.lastMsg || order.statusNote || ''));
-          const createdAt = Number(chat.sort || 0) || Date.now();
+          const createdAt = chatEventAt;
           upsert({
             id: `meeting-confirm-${po}`,
             orderId: order.id,
@@ -4250,8 +4255,8 @@ export default function FixerProPage() {
                 serviceZh: existingActive?.serviceZh || order.serviceZh || order.service,
                 title: existingActive?.title || order.service,
                 customer: existingActive?.customer || order.customer,
-                date: existingActive?.date || order.date || fmtDateTime(Date.now()),
-                createdAt: existingActive?.createdAt || order.createdAt || Date.now(),
+                date: existingActive?.date || order.date || fmtDateTime(chatEventAt),
+                createdAt: existingActive?.createdAt || order.createdAt || chatEventAt,
                 budget: existingActive?.budget || order.budget || order.fee,
                 fee: existingActive?.fee || order.fee || order.budget,
                 tier: existingActive?.tier || order.tier,
@@ -4275,8 +4280,8 @@ export default function FixerProPage() {
               serviceTh: order.serviceTh,
               serviceZh: order.serviceZh,
               customer: order.customer,
-              date: fmtDateTime(Date.now()),
-              createdAt: Date.now(),
+              date: fmtDateTime(chatEventAt),
+              createdAt: chatEventAt,
               fee: order.fee,
               budget: order.budget,
               tier: order.tier,
@@ -4322,8 +4327,8 @@ export default function FixerProPage() {
               serviceTh: order.serviceTh,
               serviceZh: order.serviceZh,
               customer: order.customer,
-              date: fmtDateTime(Date.now()),
-              createdAt: Date.now(),
+              date: fmtDateTime(chatEventAt),
+              createdAt: chatEventAt,
               fee: order.fee,
               budget: order.budget,
               tier: order.tier,
@@ -4371,8 +4376,8 @@ export default function FixerProPage() {
               serviceTh: order.serviceTh,
               serviceZh: order.serviceZh,
               customer: order.customer,
-              date: fmtDateTime(Date.now()),
-              createdAt: Date.now(),
+              date: fmtDateTime(chatEventAt),
+              createdAt: chatEventAt,
               fee: order.fee,
               budget: order.budget,
               tier: order.tier,
@@ -4808,7 +4813,7 @@ export default function FixerProPage() {
       dot: "bg-green-500",
     };
     return null;
-  }).filter(Boolean).map((n: any) => ({ createdAt: parseTs(n.time) || Date.now(), ...n })) as any[];
+  }).filter(Boolean).map((n: any) => ({ createdAt: parseTs(n.createdAt || n.time), ...n })) as any[];
 
   const partnerWorkflowNotifications = partnerDynReqs.map((r: any) => {
     const workflowType = String(r.workflowType || r.type || '');
@@ -5554,7 +5559,7 @@ export default function FixerProPage() {
                       const meetingCustNoticeId = `meeting-confirmed-notice-${po}`;
                       const nextReqs = [
                         ...mockDynReqs.filter((r: any) => !(r.po === po && r.type === 'meeting_pending_partner') && r.id !== schedId && r.id !== meetingCustNoticeId),
-                        { id: schedId, po, title: waitModalOrder.service || serviceTitle, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), budget: budgetLabel, tier: waitModalOrder.tier, type: 'meeting_scheduled', step: 8, venue: confirmedMeetingVenue, meetingVenue: confirmedMeetingVenue, location: waitModalProjectLocation, subdistrict: waitModalProjectLocation, meetingDate: confirmedMeetingDate, meetingTime: confirmedMeetingTime, desc: `Meeting confirmed by partner${meetingSummary ? ` for ${meetingSummary}` : ''}${confirmedMeetingVenue ? ` at ${confirmedMeetingVenue}` : ''}. Proceed after the site meeting then mark variation.` },
+                        { id: schedId, po, title: waitModalOrder.service || serviceTitle, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), budget: budgetLabel, tier: waitModalOrder.tier, type: 'meeting_scheduled', confirmedByPartner: true, step: 8, venue: confirmedMeetingVenue, meetingVenue: confirmedMeetingVenue, location: waitModalProjectLocation, subdistrict: waitModalProjectLocation, meetingDate: confirmedMeetingDate, meetingTime: confirmedMeetingTime, desc: `Meeting confirmed by partner${meetingSummary ? ` for ${meetingSummary}` : ''}${confirmedMeetingVenue ? ` at ${confirmedMeetingVenue}` : ''}. Proceed after the site meeting then mark variation.` },
                         { id: meetingCustNoticeId, po, title: `Meeting Confirmed — ${po}`, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), type: 'notice', step: 8, desc: `Your fixer confirmed the site meeting${confirmedMeetingVenue ? ` at ${confirmedMeetingVenue}` : ''}${meetingSummary ? ` (${meetingSummary})` : ''}. Proceed to Step 9 after the site visit.`, dot: 'bg-green-500' },
                       ];
                       const existingActive = mockActiveState.find((x: any) => x.po === po);
@@ -5645,12 +5650,14 @@ export default function FixerProPage() {
                       setPartnerDynReqs(persistedPartnerReqs);
                       window.dispatchEvent(new Event("storage"));
                       // Update backend: MEETING_REQUESTED → IN_PROGRESS (meeting confirmed; customer page polls and auto-detects)
-                      if (backendOrderId && !waitModalOrder.mock && token && String(waitModalOrder.status || '').toUpperCase() !== 'IN_PROGRESS') {
-                        fetch(`/api/v1/orders/${backendOrderId}/status`, {
-                          method: 'PUT',
-                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                          body: JSON.stringify({ status: 'IN_PROGRESS', note: 'Partner confirmed meeting time' }),
-                        }).catch(() => {});
+                      if (backendOrderId && !waitModalOrder.mock && token) {
+                        if (String(waitModalOrder.status || '').toUpperCase() !== 'IN_PROGRESS') {
+                          fetch(`/api/v1/orders/${backendOrderId}/status`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                            body: JSON.stringify({ status: 'IN_PROGRESS', note: 'Partner confirmed meeting time' }),
+                          }).catch(() => {});
+                        }
                         fetch(`/api/v1/orders/${backendOrderId}/chat`, {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
