@@ -5754,9 +5754,27 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                       ...partnerReqs.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner', 'complete_partner'].includes(x.type))),
                       { id: complId, po, title: variationApproveModal.title, customer: variationApproveModal.customer, date: fmtDateTime(createdAt), createdAt, budget: variationApproveModal.budget, tier: variationApproveModal.tier, desc: 'Customer approved the variation. Please submit project complete for confirmation.', location: variationApproveModal.location || variationApproveModal.subdistrict || '', partnerRequest: variationRequest, partnerNote: variationRequest, variationRequest, type: 'complete_partner', step: 10, ...meetingFields },
                     ];
+                    const partnerAlerts = JSON.parse(localStorage.getItem('partner_alerts') || '[]') as any[];
+                    const partnerCompleteAlert = {
+                      id: `partner-complete-request-${po}`,
+                      type: 'complete_request',
+                      po,
+                      title: 'Project Complete Request',
+                      message: `${po}: Customer approved the variation. Please submit project complete for confirmation.`,
+                      msgTh: `${po}: ลูกค้าอนุมัติ variation แล้ว กรุณาส่งคำของานเสร็จเพื่อให้ลูกค้ายืนยัน`,
+                      msgZh: `${po}: 客户已批准变更。请提交完工确认请求。`,
+                      timestamp: new Date(createdAt).toISOString(),
+                      createdAt,
+                      unread: true,
+                      dot: 'bg-green-500',
+                    };
                     localStorage.setItem('ghis_mock_active', JSON.stringify(newActive));
                     localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(newReqs));
                     localStorage.setItem('partner_mock_dyn_req', JSON.stringify(updatedPartnerReqs));
+                    localStorage.setItem('partner_alerts', JSON.stringify([
+                      partnerCompleteAlert,
+                      ...(Array.isArray(partnerAlerts) ? partnerAlerts.filter((alert: any) => alert?.id !== partnerCompleteAlert.id) : []),
+                    ].slice(0, 20)));
                     window.dispatchEvent(new Event('storage'));
                     window.dispatchEvent(new Event('cblue-workflow-updated'));
                     setMockActiveItems(newActive);

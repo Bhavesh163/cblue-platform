@@ -110,7 +110,7 @@ describe('UserService', () => {
       });
     });
 
-    it('should fall back to an ultra-safe profile read when nested legacy columns are also missing', async () => {
+    it('should preserve fixer access in ultra-safe profile fallback when the user role is FIXER', async () => {
       const companyDrift = new Error(
         'P2022: The column `users.company` does not exist in the current database.',
       );
@@ -136,7 +136,13 @@ describe('UserService', () => {
         id: 'user-1',
         company: null,
         addresses: [],
-        fixer: null,
+        fixer: {
+          status: 'APPROVED',
+          tier: 'STANDARD',
+          contactName: 'Suppadesh',
+          contactPhone: '+66812345678',
+          companyName: null,
+        },
       });
     });
 

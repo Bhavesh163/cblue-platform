@@ -99,6 +99,64 @@ describe('PropertyService', () => {
       expect(result.total).toBe(1);
     });
 
+    it('should keep returning legacy-safe properties when fallback count also hits schema drift', async () => {
+      prisma.property.findMany
+        .mockRejectedValueOnce(
+          new Error(
+            'P2022: The column `properties.tier` does not exist in the current database.',
+          ),
+        )
+        .mockResolvedValueOnce([
+          {
+            id: 'property-1',
+            userId: 'user-1',
+            propertyType: 'CONDO',
+            listingType: 'RENT',
+            status: 'ACTIVE',
+            title: 'Sukhumvit condo',
+            description: 'Near BTS',
+            price: 25000,
+            area: 48,
+            bedrooms: 1,
+            bathrooms: 1,
+            floors: null,
+            province: 'Bangkok',
+            district: 'Watthana',
+            subdistrict: 'Khlong Toei Nuea',
+            postalCode: '10110',
+            addressLine: 'Sukhumvit',
+            latitude: null,
+            longitude: null,
+            contactName: 'Ghis',
+            contactPhone: '+66812345678',
+            contactEmail: 'ghis@example.com',
+            features: [],
+            yearBuilt: null,
+            createdAt: new Date('2026-06-01T00:00:00.000Z'),
+            updatedAt: new Date('2026-06-01T00:00:00.000Z'),
+          },
+        ]);
+      prisma.property.count
+        .mockResolvedValueOnce(1)
+        .mockRejectedValueOnce(
+          new Error(
+            'P2022: The column `properties.status` does not exist in the current database.',
+          ),
+        );
+
+      const result = await service.search({ limit: '20' } as any);
+
+      expect(result.properties).toEqual([
+        expect.objectContaining({
+          id: 'property-1',
+          tier: 'STANDARD',
+          images: [],
+        }),
+      ]);
+      expect(result.total).toBe(1);
+      expect(result.totalPages).toBe(1);
+    });
+
     it('should rethrow non-schema search errors', async () => {
       prisma.property.findMany.mockRejectedValue(new Error('connection refused'));
       prisma.property.count.mockResolvedValue(0);

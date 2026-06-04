@@ -15,6 +15,7 @@ interface Fixer {
   estimatedTotal?: number;
   estimatedUnit?: string;
   estimatedQty?: number;
+  estimatedBreakdown?: unknown;
   priceList?: unknown[];
   satisfaction: number;
   specialties: string[];
@@ -2483,6 +2484,13 @@ export default function FixerResults({
 
   type CandidateBreakdownLine = { service: string; total: number };
 
+  const normalizeBreakdownServiceKey = (serviceName: string) =>
+    serviceName
+      .toLowerCase()
+      .replace(/fit\s*[- ]?out/g, "fitout")
+      .replace(/[^a-z0-9\u0E00-\u0E7F]+/g, " ")
+      .trim();
+
   const normalizeCandidateBreakdown = (value: unknown): CandidateBreakdownLine[] => {
     if (!Array.isArray(value)) return [];
     return value
@@ -2515,26 +2523,53 @@ export default function FixerResults({
       return {
         fixer,
         idx,
-        topLineTotal: breakdown.reduce((max, line) => Math.max(max, line.total), 0),
+        breakdown,
         estimatedTotal: Number.isFinite(declaredTotal) && declaredTotal > 0 ? declaredTotal : breakdownTotal,
       };
     });
 
-    const dominantLineTotal = Math.max(0, ...enriched.map((item) => item.topLineTotal));
+    const serviceMaxTotals = new Map<string, number>();
+    for (const item of enriched) {
+      for (const line of item.breakdown) {
+        const key = normalizeBreakdownServiceKey(line.service);
+        if (!key) continue;
+        serviceMaxTotals.set(key, Math.max(serviceMaxTotals.get(key) || 0, line.total));
+      }
+    }
+
+    const dominantLineTotal = Math.max(0, ...serviceMaxTotals.values());
     if (dominantLineTotal <= 0) return items;
 
-    const importantServiceFloor = dominantLineTotal * 0.5;
+    const importantServiceFloor = dominantLineTotal * 0.1;
+    const importantServiceKeys = new Set(
+      [...serviceMaxTotals.entries()]
+        .filter(([, total]) => total >= importantServiceFloor)
+        .map(([key]) => key),
+    );
+
     return enriched
+      .map((item) => {
+        const importantLines = item.breakdown.filter((line) =>
+          importantServiceKeys.has(normalizeBreakdownServiceKey(line.service)),
+        );
+        const importantMatchedCount = new Set(
+          importantLines.map((line) => normalizeBreakdownServiceKey(line.service)).filter(Boolean),
+        ).size;
+        const comparisonTotal = importantLines.reduce((sum, line) => sum + line.total, 0) || item.estimatedTotal;
+        const topLineTotal = item.breakdown.reduce((max, line) => Math.max(max, line.total), 0);
+        return { ...item, importantMatchedCount, comparisonTotal, topLineTotal };
+      })
       .sort((a, b) => {
-        const aImportant = a.topLineTotal >= importantServiceFloor;
-        const bImportant = b.topLineTotal >= importantServiceFloor;
-        if (aImportant !== bImportant) return aImportant ? -1 : 1;
-        if (aImportant && bImportant) {
-          const byTotal = a.estimatedTotal - b.estimatedTotal;
-          if (byTotal !== 0) return byTotal;
+        const byMatchedImportantServices = b.importantMatchedCount - a.importantMatchedCount;
+        if (byMatchedImportantServices !== 0) return byMatchedImportantServices;
+        if (a.importantMatchedCount > 0 && b.importantMatchedCount > 0) {
+          const byComparisonTotal = a.comparisonTotal - b.comparisonTotal;
+          if (byComparisonTotal !== 0) return byComparisonTotal;
           const byMajorLine = b.topLineTotal - a.topLineTotal;
           if (byMajorLine !== 0) return byMajorLine;
         }
+        const byTotal = a.estimatedTotal - b.estimatedTotal;
+        if (byTotal !== 0) return byTotal;
         return a.idx - b.idx;
       })
       .map((item) => item.fixer);

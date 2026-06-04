@@ -859,51 +859,59 @@ export class PropertyService {
           error instanceof Error ? error.message : String(error)
         }`,
       );
-      [properties, total] = await Promise.all([
-        this.prisma.property
-          .findMany({
-            where,
-            skip,
-            take: limit,
-            orderBy: { createdAt: 'desc' },
-            select: {
-              id: true,
-              userId: true,
-              propertyType: true,
-              listingType: true,
-              status: true,
-              title: true,
-              description: true,
-              price: true,
-              area: true,
-              bedrooms: true,
-              bathrooms: true,
-              floors: true,
-              province: true,
-              district: true,
-              subdistrict: true,
-              postalCode: true,
-              addressLine: true,
-              latitude: true,
-              longitude: true,
-              contactName: true,
-              contactPhone: true,
-              contactEmail: true,
-              features: true,
-              yearBuilt: true,
-              createdAt: true,
-              updatedAt: true,
-            },
-          })
-          .then((rows) =>
-            rows.map((property) => ({
-              ...property,
-              tier: 'STANDARD',
-              images: [],
-            })),
-          ),
-        this.prisma.property.count({ where }),
-      ]);
+      properties = await this.prisma.property
+        .findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            userId: true,
+            propertyType: true,
+            listingType: true,
+            status: true,
+            title: true,
+            description: true,
+            price: true,
+            area: true,
+            bedrooms: true,
+            bathrooms: true,
+            floors: true,
+            province: true,
+            district: true,
+            subdistrict: true,
+            postalCode: true,
+            addressLine: true,
+            latitude: true,
+            longitude: true,
+            contactName: true,
+            contactPhone: true,
+            contactEmail: true,
+            features: true,
+            yearBuilt: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        })
+        .then((rows) =>
+          rows.map((property) => ({
+            ...property,
+            tier: 'STANDARD',
+            images: [],
+          })),
+        );
+      try {
+        total = await this.prisma.property.count({ where });
+      } catch (countError) {
+        if (!this.isSchemaDriftError(countError)) throw countError;
+        this.logger.warn(
+          `Property search fallback count hit live schema drift; using returned row count: ${
+            countError instanceof Error ? countError.message : String(countError)
+          }`,
+        );
+        total = skip + properties.length;
+      }
     }
 
     return {

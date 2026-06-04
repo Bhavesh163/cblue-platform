@@ -249,10 +249,21 @@ export class UserService {
   }
 
   private decorateProfile(user: any) {
+    const fallbackFixer =
+      !user.fixer && String(user.role || '').toUpperCase() === 'FIXER'
+        ? {
+            id: null,
+            userId: user.id,
+            status: 'APPROVED',
+            tier: 'STANDARD',
+          }
+        : null;
+    const fixer = user.fixer ?? fallbackFixer;
+
     return {
       ...user,
       company: user.company ?? null,
-      fixer: user.fixer
+      fixer: fixer
         ? {
             aiTier: null,
             aiScore: null,
@@ -268,10 +279,10 @@ export class UserService {
             servicePostalCode: null,
             companyAddress: null,
             priceList: null,
-            ...user.fixer,
-            skills: user.fixer.skills ?? [],
-            availability: user.fixer.availability ?? null,
-            images: user.fixer.images ?? [],
+            ...fixer,
+            skills: fixer.skills ?? [],
+            availability: fixer.availability ?? null,
+            images: fixer.images ?? [],
             contactName: user.name,
             contactPhone: user.phone,
             companyName: user.company ?? null,

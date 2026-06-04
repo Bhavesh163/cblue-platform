@@ -73,6 +73,19 @@ function readPartnerDashboardSubscriber() {
   }
 }
 
+function inferStoredPartnerAccess(subscriber: any) {
+  const role = String(subscriber?.role || subscriber?.userRole || "").toUpperCase();
+  const hasFixerShape =
+    Boolean(subscriber?.fixer) ||
+    role === "FIXER" ||
+    Array.isArray(subscriber?.priceList) ||
+    Boolean(subscriber?.tier || subscriber?.company || subscriber?.credentialStatus);
+  return {
+    isFixer: hasFixerShape,
+    isLister: Boolean(subscriber?.isLister || subscriber?.lister || subscriber?.propertyLister),
+  };
+}
+
 function writePartnerDashboardSession(subscriber: any, token?: string) {
   if (typeof window === "undefined") return;
   if (token) sessionStorage.setItem(PARTNER_DASHBOARD_TOKEN_KEY, token);
@@ -203,6 +216,15 @@ const WORKFLOW_CACHE_RECORD_KEYS = [
   'meetingTimeLabel',
   'meetingMessage',
   'meetingNote',
+  'hasAttachment',
+  'issueImage',
+  'images',
+  'attachments',
+  'imageUrls',
+  'files',
+  'fileUrl',
+  'attachmentUrl',
+  'documentUrl',
 ] as const;
 const sanitizeWorkflowCacheText = (value: any, maxLength = 240) => {
   const text = String(value ?? '')
@@ -2438,8 +2460,8 @@ export default function FixerProPage() {
 
 
 
-  const [isFixer, setIsFixer] = useState(false);
-  const [isLister, setIsLister] = useState(false);
+  const [isFixer, setIsFixer] = useState(() => inferStoredPartnerAccess(readPartnerDashboardSubscriber()).isFixer);
+  const [isLister, setIsLister] = useState(() => inferStoredPartnerAccess(readPartnerDashboardSubscriber()).isLister);
 
   
   useEffect(() => {
@@ -2493,6 +2515,9 @@ export default function FixerProPage() {
               if (prev?.id && parsed.id !== prev.id) return prev;
               return parsed;
             });
+            const storedAccess = inferStoredPartnerAccess(parsed);
+            setIsFixer(storedAccess.isFixer);
+            setIsLister(storedAccess.isLister);
           }
         }
 
@@ -2573,6 +2598,17 @@ export default function FixerProPage() {
           if (isMounted) {
             setPartner(null); setIsFixer(false); setIsLister(false);
           }
+        } else if (isMounted) {
+          const parsed = readPartnerDashboardSubscriber();
+          const storedAccess = inferStoredPartnerAccess(parsed);
+          if (parsed) {
+            setPartner(prev => {
+              if (prev?.id && parsed.id !== prev.id) return prev;
+              return parsed;
+            });
+          }
+          setIsFixer(prev => prev || storedAccess.isFixer);
+          setIsLister(prev => prev || storedAccess.isLister);
         }
       } catch { /* ignore */ }
       if (isMounted) setLoading(false);
