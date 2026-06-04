@@ -64,6 +64,7 @@ export const metadata: Metadata = {
     "Find an Architect",
     "Find an Accountant",
     "Find an Auditor",
+    "Find Certified Auditor",
     "Find a Marketer",
     "Website Development",
     "Chatbot Development",

@@ -2830,6 +2830,7 @@ export default function FixerProPage() {
       location: siteLocation,
       createdAt: o.createdAt,
       customer: o.user?.name || "Customer",
+      customerEmail: o.user?.email || "",
       orderType: o.orderType?.toLowerCase() || "household",
       phone: o.user?.phone || "",
       service: (o.serviceCategory || "").replace(/_/g, " "),
@@ -5423,7 +5424,9 @@ export default function FixerProPage() {
                       // Write customer alert to inform customer that partner confirmed the meeting
                       try {
                         const origMeetingItem = mockDynReqs.find((r: any) => r.po === po && r.type === 'meeting_pending_partner');
-                        const custEmailRaw = String(origMeetingItem?.customerEmail || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
+                        const backendMeetingItem = mappedOrders.find((r: any) => r.po === po);
+                        const customerEmailForAlert = origMeetingItem?.customerEmail || waitModalOrder.customerEmail || backendMeetingItem?.customerEmail || '';
+                        const custEmailRaw = String(customerEmailForAlert).trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
                         const custAlertsKey = custEmailRaw ? `cblue_customer_alerts_${custEmailRaw}` : 'cblue_customer_alerts';
                         const existingCustAlerts = JSON.parse(localStorage.getItem(custAlertsKey) || '[]');
                         const legacyCustAlerts = JSON.parse(localStorage.getItem('cblue_customer_alerts') || '[]');
