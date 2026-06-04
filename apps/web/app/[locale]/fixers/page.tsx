@@ -3594,12 +3594,20 @@ export default function FixerProPage() {
         completeWaitingCustomerPos.has(job.po) ? 10 :
         variationWaitingCustomerPos.has(job.po) ? 9 : 0;
       const step = Math.max(parseWorkflowStep(stepLookup?.step), backendStep, partnerWorkflowStep, localSubmittedStep, waitingCustomerStep);
+      const meetingConfirmPendingFromStep =
+        step === 8 &&
+        !mockDynReqs.some((req: any) => req?.po === job.po && String(req?.type || req?.workflowType || '').toLowerCase() === 'meeting_scheduled') &&
+        !partnerDynReqs.some((req: any) => req?.po === job.po && ['variation_partner', 'complete_partner', 'rate_partner'].includes(String(req?.workflowType || req?.type || '').toLowerCase())) &&
+        !variationWaitingCustomerPos.has(job.po) &&
+        !completeWaitingCustomerPos.has(job.po) &&
+        !chatFeed.some((chat: any) => chat?.po === job.po && /partner confirmed site meeting|meeting confirmed by partner/i.test(String(chat?.lastMsg || '')));
       // For partner view: actionNeeded = partner has a pending workflow request OR backend requires partner action
       // Exclude accept_sent which is a permanent marker, not an action item
       const hasPartnerDynAction = partnerDynReqs.some((r: any) => r.po === job.po && r.type !== 'accept_sent');
       const partnerActionNeeded = hasPartnerDynAction ||
         String(job.status || '').toUpperCase() === 'MEETING_REQUESTED' ||
-        backendStep === 5;
+        backendStep === 5 ||
+        meetingConfirmPendingFromStep;
       return { ...job, step, mockStep: step, actionNeeded: partnerActionNeeded };
   });
   const backendCompletedAwaitingRatingJobs = mappedOrders
@@ -3640,6 +3648,13 @@ export default function FixerProPage() {
           const po = String(job?.po || '').trim();
           const step = parseWorkflowStep(job?.step || job?.mockStep) || 6;
           const hasPartnerDynAction = partnerDynReqs.some((req: any) => req.po === po && req.type !== 'accept_sent');
+          const meetingConfirmPendingFromStep =
+            step === 8 &&
+            !mockDynReqs.some((req: any) => req?.po === po && String(req?.type || req?.workflowType || '').toLowerCase() === 'meeting_scheduled') &&
+            !partnerDynReqs.some((req: any) => req?.po === po && ['variation_partner', 'complete_partner', 'rate_partner'].includes(String(req?.workflowType || req?.type || '').toLowerCase())) &&
+            !variationWaitingCustomerPos.has(po) &&
+            !completeWaitingCustomerPos.has(po) &&
+            !chatFeed.some((chat: any) => chat?.po === po && /partner confirmed site meeting|meeting confirmed by partner/i.test(String(chat?.lastMsg || '')));
           return {
             id: job.id || `local-${po}`,
             orderId: job.orderId || job.id,
@@ -3659,7 +3674,7 @@ export default function FixerProPage() {
             status: job.status || 'CONFIRMED',
             step,
             mockStep: step,
-            actionNeeded: hasPartnerDynAction,
+            actionNeeded: hasPartnerDynAction || meetingConfirmPendingFromStep,
           };
         })
     : [];
@@ -4353,16 +4368,16 @@ export default function FixerProPage() {
       const po = String(job?.po || '').trim();
       if (!po || completedHistoryPos.has(po) || declinedPartnerPos.has(po) || isClosedPartnerWorkflowPo(po)) return false;
       const step = parseWorkflowStep(job?.step || job?.mockStep);
-      const status = String(job?.status || '').toUpperCase();
-      const workflowType = String(job?.workflowType || job?.type || '').toLowerCase();
       const existingMeetingRequest =
         partnerDynReqs.some((req: any) => req?.po === po && String(req?.workflowType || req?.type || '').toLowerCase() === 'meeting_confirm_partner') ||
         incomingJobs.some((req: any) => req?.po === po && (String(req?.workflowType || req?.type || '').toLowerCase() === 'meeting_confirm_partner' || String(req?.status || '').toUpperCase() === 'MEETING_REQUESTED'));
-      return (
-        step === 8 &&
-        !existingMeetingRequest &&
-        (status === 'MEETING_REQUESTED' || workflowType === 'meeting_confirm_partner' || /waiting for meeting confirmation|meeting_requested/i.test(String(job?.statusName || job?.statusNote || '')))
-      );
+      const alreadyConfirmedOrAdvanced =
+        mockDynReqs.some((req: any) => req?.po === po && String(req?.type || req?.workflowType || '').toLowerCase() === 'meeting_scheduled') ||
+        partnerDynReqs.some((req: any) => req?.po === po && ['variation_partner', 'complete_partner', 'rate_partner'].includes(String(req?.workflowType || req?.type || '').toLowerCase())) ||
+        variationWaitingCustomerPos.has(po) ||
+        completeWaitingCustomerPos.has(po) ||
+        chatFeed.some((chat: any) => chat?.po === po && /partner confirmed site meeting|meeting confirmed by partner/i.test(String(chat?.lastMsg || '')));
+      return step === 8 && !existingMeetingRequest && !alreadyConfirmedOrAdvanced;
     })
     .map((job: any) => {
       const inviteDetails = parseMeetingInviteDetails(`${job.statusNote || ''} ${job.meetingMessage || ''} ${job.description || ''}`);
