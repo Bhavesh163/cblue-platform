@@ -1717,16 +1717,32 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     try {
       ensureLegacyCancel3429Repair();
       const saved = JSON.parse(localStorage.getItem(customerAlertsStorageKey) || '[]');
-      if (Array.isArray(saved) && saved.length > 0) {
-        setPersistedCustomerAlerts(saved);
-        return;
-      }
-      if (subscriberEmail.includes('ghis')) {
-        const legacy = JSON.parse(localStorage.getItem('cblue_customer_alerts') || '[]');
-        setPersistedCustomerAlerts(Array.isArray(legacy) ? legacy : []);
-        return;
-      }
-      setPersistedCustomerAlerts([]);
+      const accountAlerts = Array.isArray(saved) ? saved : [];
+      const legacy = subscriberEmail.includes('ghis')
+        ? JSON.parse(localStorage.getItem('cblue_customer_alerts') || '[]')
+        : [];
+      const merged = Array.from(
+        [...accountAlerts, ...(Array.isArray(legacy) ? legacy : [])]
+          .reduce((map: Map<string, any>, alert: any) => {
+            const createdAt = parseDateMs(alert?.createdAt || alert?.time);
+            const key = String(alert?.id || `${alert?.po || ''}:${alert?.msg || alert?.message || ''}`).trim();
+            if (!key) return map;
+            const normalized = {
+              ...alert,
+              createdAt: Number.isFinite(createdAt) && createdAt > 0 ? createdAt : Date.now(),
+            };
+            const existing = map.get(key);
+            if (!existing || parseDateMs(normalized.createdAt || normalized.time) >= parseDateMs(existing.createdAt || existing.time)) {
+              map.set(key, normalized);
+            }
+            return map;
+          }, new Map<string, any>())
+          .values(),
+      )
+        .sort((a: any, b: any) => parseDateMs(b.createdAt || b.time) - parseDateMs(a.createdAt || a.time))
+        .slice(0, 20);
+      setPersistedCustomerAlerts(merged);
+      try { localStorage.setItem(customerAlertsStorageKey, JSON.stringify(merged)); } catch {}
     } catch {
       setPersistedCustomerAlerts([]);
     }
@@ -5750,9 +5766,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                     const newReqs = [...mockDynRequests.filter((x: any) => !(x.po === po && ['variation_pending', 'meeting_pending_partner', 'meeting_scheduled'].includes(x.type))), notice];
                     const partnerReqs = JSON.parse(localStorage.getItem('partner_mock_dyn_req') || '[]') as any[];
                     const complId = `complete-${po}`;
+                    const workflowOrderForPo = workflowOrders.find((order: any) => extractPo(order) === po);
                     const updatedPartnerReqs = [
                       ...partnerReqs.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner', 'complete_partner'].includes(x.type))),
-                      { id: complId, po, title: variationApproveModal.title, customer: variationApproveModal.customer, date: fmtDateTime(createdAt), createdAt, budget: variationApproveModal.budget, tier: variationApproveModal.tier, desc: 'Customer approved the variation. Please submit project complete for confirmation.', location: variationApproveModal.location || variationApproveModal.subdistrict || '', partnerRequest: variationRequest, partnerNote: variationRequest, variationRequest, type: 'complete_partner', step: 10, ...meetingFields },
+                      { id: complId, orderId: workflowOrderForPo?.id || variationApproveModal.orderId, po, title: variationApproveModal.title, customer: variationApproveModal.customer, date: fmtDateTime(createdAt), createdAt, budget: variationApproveModal.budget, tier: variationApproveModal.tier, desc: 'Customer approved the variation. Please submit project complete for confirmation.', location: variationApproveModal.location || variationApproveModal.subdistrict || '', partnerRequest: variationRequest, partnerNote: variationRequest, variationRequest, type: 'complete_partner', step: 10, ...meetingFields },
                     ];
                     const partnerAlerts = JSON.parse(localStorage.getItem('partner_alerts') || '[]') as any[];
                     const partnerCompleteAlert = {

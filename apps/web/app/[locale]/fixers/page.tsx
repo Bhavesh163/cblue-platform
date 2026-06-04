@@ -1585,6 +1585,51 @@ const upsertPartnerPersistedAlert = ({
     // Best-effort local alert continuity only.
   }
 };
+const upsertCustomerPersistedAlert = ({
+  id,
+  po,
+  type,
+  msg,
+  dot,
+  createdAt,
+  customerEmail,
+}: {
+  id: string;
+  po: string;
+  type: string;
+  msg: string;
+  dot: string;
+  createdAt: number;
+  customerEmail?: string;
+}) => {
+  if (typeof window === 'undefined') return;
+  const alert = {
+    id,
+    po,
+    type,
+    msg,
+    message: msg,
+    time: fmtDateTime(createdAt),
+    createdAt,
+    dot,
+  };
+  const writeAlerts = (key: string) => {
+    try {
+      const existing = JSON.parse(localStorage.getItem(key) || '[]');
+      const next = [
+        alert,
+        ...(Array.isArray(existing) ? existing.filter((item: any) => String(item?.id) !== id) : []),
+      ].slice(0, 20);
+      localStorage.setItem(key, JSON.stringify(next));
+    } catch {
+      // Best-effort local alert continuity only.
+    }
+  };
+
+  writeAlerts('cblue_customer_alerts');
+  const customerEmailKey = String(customerEmail || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
+  if (customerEmailKey) writeAlerts(`cblue_customer_alerts_${customerEmailKey}`);
+};
 const finalizePartnerRatedWorkflow = ({
   po,
   job,
@@ -4979,8 +5024,39 @@ export default function FixerProPage() {
     };
   });
 
-  const displayNotifications = [...persistedAlertNotifications, ...orderAlerts, ...activeMeetingConfirmAlerts, ...dynamicNotifications, ...partnerWorkflowNotifications, ...propWorkflowNotifications]
-    .filter((n: any) => n && parseTs(n.createdAt || n.time) > 0 && !String(n.time || '').includes('NaN'))
+  const getPartnerNotificationKey = (notification: any) => {
+    const msg = String(notification?.msg || notification?.message || '').toLowerCase();
+    const po = String(notification?.po || msg.match(/po-(?:\d{8}|\d{4}-\d{4,})/i)?.[0] || '').trim().toUpperCase();
+    const phase =
+      /job-complete request sent|project-complete request|complete request/.test(msg) ? 'complete-wait' :
+      /customer confirmed completion|customer confirmed project complete|rate the customer/.test(msg) ? 'rate-customer' :
+      /variation request sent|approved the variation|submit project complete/.test(msg) ? 'variation' :
+      /site meeting invitation|proposed a site meeting|confirm.*meeting|meeting confirmed/.test(msg) ? 'meeting' :
+      /accepted|fee|free pass|payment|chat room is active/.test(msg) ? 'proceed' :
+      /cancelled|canceled|declined|unavailable/.test(msg) ? 'closed' :
+      '';
+    return po && phase ? `${po}:${phase}` : String(notification?.id || `${po}:${msg}`).trim();
+  };
+  const displayNotifications = Array.from(
+    [...persistedAlertNotifications, ...orderAlerts, ...activeMeetingConfirmAlerts, ...dynamicNotifications, ...partnerWorkflowNotifications, ...propWorkflowNotifications]
+      .filter((n: any) => n && parseTs(n.createdAt || n.time) > 0 && !String(n.time || '').includes('NaN'))
+      .reduce((map: Map<string, any>, notification: any) => {
+        const createdAt = parseTs(notification.createdAt || notification.time);
+        const key = getPartnerNotificationKey(notification);
+        if (!key) return map;
+        const normalized = {
+          ...notification,
+          createdAt,
+          time: notification.time || fmtDateTime(createdAt),
+        };
+        const existing = map.get(key);
+        if (!existing || createdAt >= parseTs(existing.createdAt || existing.time)) {
+          map.set(key, normalized);
+        }
+        return map;
+      }, new Map<string, any>())
+      .values(),
+  )
     .sort((a: any, b: any) => parseTs(b.createdAt || b.time) - parseTs(a.createdAt || a.time))
     .slice(0, 20);
 
@@ -6617,13 +6693,15 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
       const po = job.po || job.id;
       const createdAt = Date.now();
       const token = getPartnerDashboardToken();
-      const orderDbId = job.orderId || localStorage.getItem(`po_to_order_${po}`) || (isOrderUuid(job.id) ? job.id : "");
+      const fallbackOrderId = job.orderId || (isOrderUuid(job.id) ? job.id : "");
       const fmtDt = (d: number) => {
         const dt = new Date(d);
         return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
       };
-      const postSystemMsg = (text: string) => {
-        if (token && orderDbId) {
+      const postSystemMsg = async (text: string) => {
+        if (!token || !po) return;
+        const orderDbId = await resolveOrderIdByPo({ po, fallbackOrderId, token });
+        if (orderDbId) {
           fetch(`/api/v1/orders/${orderDbId}/chat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -6681,7 +6759,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
         window.dispatchEvent(new Event("cblue-workflow-updated"));
-        postSystemMsg(chatText);
+        void postSystemMsg(chatText);
       } else if (action === 'complete') {
         const complId = `compl-${po}`;
         const previousPartnerRequest = resolveVariationPartnerNote(po);
@@ -6692,6 +6770,15 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
         upsertMockActiveStep(job, 10, false, createdAt);
         try { localStorage.setItem(`partner_complete_sent_${po}`, '1'); } catch {}
         appendLocalWorkflowSystemChat(po, chatText, createdAt);
+        upsertCustomerPersistedAlert({
+          id: `complete-cust-${po}`,
+          po,
+          type: 'complete_pending',
+          msg: `${po}: Partner submitted the project-complete request. Next: review and confirm completion in Requests.`,
+          dot: 'bg-green-500',
+          createdAt,
+          customerEmail: job.customerEmail,
+        });
         upsertPartnerPersistedAlert({
           id: `complete-wait-${po}`,
           po,
@@ -6705,7 +6792,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['complete_partner', 'variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
         window.dispatchEvent(new Event("cblue-workflow-updated"));
-        postSystemMsg(chatText);
+        void postSystemMsg(chatText);
       } else if (action === 'rate') {
         const rating = extraData || '5';
         const { completionChatText } = finalizePartnerRatedWorkflow({
@@ -6717,7 +6804,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && x.type === 'rate_partner')));
         window.dispatchEvent(new Event("storage"));
         window.dispatchEvent(new Event("cblue-workflow-updated"));
-        postSystemMsg(completionChatText);
+        void postSystemMsg(completionChatText);
       }
     } catch (e) { console.error(e); }
   };
@@ -7259,13 +7346,15 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
       const po = job.po || job.id;
       const createdAt = Date.now();
       const token = getPartnerDashboardToken();
-      const orderDbId = job.orderId || localStorage.getItem(`po_to_order_${po}`) || (isOrderUuid(job.id) ? job.id : "");
+      const fallbackOrderId = job.orderId || (isOrderUuid(job.id) ? job.id : "");
       const fmtDt = (d: number) => {
         const dt = new Date(d);
         return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
       };
-      const postSystemMsg = (text: string) => {
-        if (token && orderDbId) {
+      const postSystemMsg = async (text: string) => {
+        if (!token || !po) return;
+        const orderDbId = await resolveOrderIdByPo({ po, fallbackOrderId, token });
+        if (orderDbId) {
           fetch(`/api/v1/orders/${orderDbId}/chat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -7299,7 +7388,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
         window.dispatchEvent(new Event("cblue-workflow-updated"));
-        postSystemMsg(chatText);
+        void postSystemMsg(chatText);
       } else if (action === 'complete') {
         const complId = `compl-${po}`;
         const completeDesc = extraData?.trim() ? `Partner completion request: ${extraData.trim()}` : 'Work is completed. Please review and mark as complete to close this project.';
@@ -7310,6 +7399,15 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
         upsertMockActiveStep(job, 10, false, createdAt);
         try { localStorage.setItem(`partner_complete_sent_${po}`, '1'); } catch {}
         appendLocalWorkflowSystemChat(po, chatText, createdAt);
+        upsertCustomerPersistedAlert({
+          id: `complete-cust-${po}`,
+          po,
+          type: 'complete_pending',
+          msg: `${po}: Partner submitted the project-complete request. Next: review and confirm completion in Requests.`,
+          dot: 'bg-green-500',
+          createdAt,
+          customerEmail: job.customerEmail,
+        });
         upsertPartnerPersistedAlert({
           id: `complete-wait-${po}`,
           po,
@@ -7323,7 +7421,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['complete_partner', 'variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
         window.dispatchEvent(new Event("cblue-workflow-updated"));
-        postSystemMsg(chatText);
+        void postSystemMsg(chatText);
       } else if (action === 'rate') {
         const rating = extraData || '5';
         const { completionChatText } = finalizePartnerRatedWorkflow({
@@ -7335,7 +7433,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && x.type === 'rate_partner')));
         window.dispatchEvent(new Event("storage"));
         window.dispatchEvent(new Event("cblue-workflow-updated"));
-        postSystemMsg(completionChatText);
+        void postSystemMsg(completionChatText);
       }
     } catch (e) { console.error(e); }
   };
