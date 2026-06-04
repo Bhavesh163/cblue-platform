@@ -2818,6 +2818,7 @@ export default function FixerProPage() {
       const meaningful = rows.find((row: any) => /customer\s+cancel|declin|reason:/i.test(String(row?.note || '')));
       return String(meaningful?.note || rows[0]?.note || o.statusNote || '');
     })();
+    const normalizedStatus = String(o.status || '').toUpperCase();
     
     return {
       id: o.id,
@@ -2841,8 +2842,8 @@ export default function FixerProPage() {
       statusNote: workflowStatusNote,
       statusChangedAt: o.statusHistory?.[0]?.createdAt || o.updatedAt || o.createdAt,
       tier: desc.includes('TIER:') ? desc.split('TIER:')[1].split(' |')[0] : "Standard",
-      status: o.status,
-      progress: o.status === 'COMPLETED' ? 100 : (['IN_PROGRESS', 'CONFIRMED', 'ACCEPTED'].includes(o.status) ? 40 : 15),
+      status: normalizedStatus,
+      progress: normalizedStatus === 'COMPLETED' ? 100 : (['IN_PROGRESS', 'CONFIRMED', 'ACCEPTED'].includes(normalizedStatus) ? 40 : 15),
       fee: o.estimatedPrice ? `฿${o.estimatedPrice.toLocaleString()}` : "0", 
       budget: o.estimatedPrice ? o.estimatedPrice.toLocaleString() : "0",
       step: 5,
