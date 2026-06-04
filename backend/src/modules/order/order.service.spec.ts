@@ -10,6 +10,8 @@ describe('OrderService', () => {
   let prisma: {
     order: Record<string, jest.Mock>;
     address: Record<string, jest.Mock>;
+    fixer: Record<string, jest.Mock>;
+    user: Record<string, jest.Mock>;
   };
   let eventEmitter: { emit: jest.Mock };
 
@@ -23,6 +25,13 @@ describe('OrderService', () => {
       },
       address: {
         findFirst: jest.fn(),
+      },
+      fixer: {
+        findUnique: jest.fn(),
+      },
+      user: {
+        findUnique: jest.fn(),
+        findMany: jest.fn(),
       },
     };
     eventEmitter = { emit: jest.fn() };
@@ -123,6 +132,41 @@ describe('OrderService', () => {
         'user-1',
       );
       expect(result.status).toBe(OrderStatus.MATCHING);
+    });
+  });
+
+  describe('findMyFixerOrders', () => {
+    it('should keep fixer orders visible when user-fixer relation lookup drifts', async () => {
+      prisma.user.findUnique.mockRejectedValue(
+        new Error('The table `public.fixers` does not exist in the current database.'),
+      );
+      prisma.fixer.findUnique.mockResolvedValue({ id: 'fixer-1' });
+      prisma.order.findMany.mockResolvedValue([
+        {
+          id: 'order-1',
+          userId: 'customer-1',
+          fixerId: 'fixer-1',
+          status: OrderStatus.MEETING_REQUESTED,
+          description: 'PO-2606-6214 | Fit out',
+        },
+      ]);
+      prisma.user.findMany.mockRejectedValue(
+        new Error('The column `users.company` does not exist in the current database.'),
+      );
+
+      const result = await service.findMyFixerOrders('partner-user-1');
+
+      expect(prisma.fixer.findUnique).toHaveBeenCalledWith({
+        where: { userId: 'partner-user-1' },
+        select: { id: true },
+      });
+      expect(result).toEqual([
+        expect.objectContaining({
+          id: 'order-1',
+          status: OrderStatus.MEETING_REQUESTED,
+          user: null,
+        }),
+      ]);
     });
   });
 });

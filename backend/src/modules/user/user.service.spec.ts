@@ -140,6 +140,77 @@ describe('UserService', () => {
       });
     });
 
+    it('should keep fixer access when only nested fixer relations are missing', async () => {
+      const nestedRelationDrift = new Error(
+        'The table `public.fixer_availability` does not exist in the current database.',
+      );
+      prisma.user.findUnique
+        .mockRejectedValueOnce(nestedRelationDrift)
+        .mockRejectedValueOnce(nestedRelationDrift)
+        .mockResolvedValueOnce({
+          id: 'user-1',
+          name: 'Suppadesh',
+          email: 'suppadesh@example.com',
+          phone: '+66812345678',
+          role: 'FIXER',
+          createdAt: new Date('2026-06-01T00:00:00.000Z'),
+          fixer: {
+            id: 'fixer-1',
+            userId: 'user-1',
+            status: 'APPROVED',
+            tier: 'STANDARD',
+            rating: 4.8,
+            completedJobs: 3,
+            responseTime: 60,
+            verified: true,
+            bio: 'Fit out partner',
+            yearsExperience: 5,
+            travelRadius: 20,
+            createdAt: new Date('2026-06-01T00:00:00.000Z'),
+          },
+        });
+
+      const result = await service.getProfile('user-1');
+
+      expect(prisma.user.findUnique).toHaveBeenCalledTimes(3);
+      expect(result).toMatchObject({
+        id: 'user-1',
+        company: null,
+        addresses: [],
+        fixer: {
+          id: 'fixer-1',
+          contactName: 'Suppadesh',
+          contactPhone: '+66812345678',
+          companyName: null,
+          availability: [],
+          images: [],
+        },
+      });
+    });
+
+    it('should treat Prisma code-only missing-column errors as schema drift', async () => {
+      const codeOnlyDrift = Object.assign(new Error('Invalid Prisma invocation'), {
+        code: 'P2022',
+      });
+      prisma.user.findUnique
+        .mockRejectedValueOnce(codeOnlyDrift)
+        .mockResolvedValueOnce({
+          id: 'user-1',
+          name: 'Suppadesh',
+          email: 'suppadesh@example.com',
+          phone: '+66812345678',
+          role: 'FIXER',
+          createdAt: new Date('2026-06-01T00:00:00.000Z'),
+          addresses: [],
+          fixer: null,
+        });
+
+      const result = await service.getProfile('user-1');
+
+      expect(prisma.user.findUnique).toHaveBeenCalledTimes(2);
+      expect(result.id).toBe('user-1');
+    });
+
     it('should rethrow non-schema errors', async () => {
       prisma.user.findUnique.mockRejectedValue(new Error('connection refused'));
 

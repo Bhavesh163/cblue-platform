@@ -95,11 +95,23 @@ export class UserService {
       } catch (legacyError) {
         if (!this.isSchemaDriftError(legacyError)) throw legacyError;
         this.logger.warn(
-          `Legacy profile read still hit schema drift for user ${userId}; retrying with ultra-safe select: ${
+          `Legacy profile read still hit schema drift for user ${userId}; retrying with minimal fixer-safe select: ${
             legacyError instanceof Error ? legacyError.message : String(legacyError)
           }`,
         );
-        user = await this.getProfileUltraSafe(userId);
+        try {
+          user = await this.getProfileFixerMinimalSafe(userId);
+        } catch (minimalError) {
+          if (!this.isSchemaDriftError(minimalError)) throw minimalError;
+          this.logger.warn(
+            `Minimal fixer-safe profile read still hit schema drift for user ${userId}; retrying with ultra-safe select: ${
+              minimalError instanceof Error
+                ? minimalError.message
+                : String(minimalError)
+            }`,
+          );
+          user = await this.getProfileUltraSafe(userId);
+        }
       }
     }
     if (!user) throw new NotFoundException('User not found');
@@ -167,6 +179,52 @@ export class UserService {
     return user ? { ...user, company: null } : null;
   }
 
+  private async getProfileFixerMinimalSafe(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        role: true,
+        createdAt: true,
+        fixer: {
+          select: {
+            id: true,
+            userId: true,
+            status: true,
+            tier: true,
+            rating: true,
+            completedJobs: true,
+            responseTime: true,
+            verified: true,
+            bio: true,
+            yearsExperience: true,
+            travelRadius: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+    return user
+      ? {
+          ...user,
+          company: null,
+          addresses: [],
+          fixer: user.fixer
+            ? {
+                ...user.fixer,
+                skills: [],
+                availability: [],
+                images: [],
+              }
+            : null,
+        }
+      : null;
+  }
+
   private async getProfileUltraSafe(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -223,8 +281,14 @@ export class UserService {
   }
 
   private isSchemaDriftError(error: unknown) {
+    const code =
+      error && typeof error === 'object' && 'code' in error
+        ? String((error as { code?: unknown }).code || '')
+        : '';
+    if (/^P(?:1014|2021|2022)$/.test(code)) return true;
+
     const message = error instanceof Error ? error.message : String(error);
-    return /\bP202[12]\b|column .*does not exist|relation .*does not exist|does not exist in the current database|Unknown field/i.test(
+    return /\bP(?:1014|202[12])\b|column .*does not exist|table .*does not exist|relation .*does not exist|does not exist in the current database|no such (?:table|column)|Unknown field/i.test(
       message,
     );
   }

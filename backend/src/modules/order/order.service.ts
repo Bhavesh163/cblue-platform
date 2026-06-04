@@ -229,6 +229,7 @@ export class OrderService {
   }
 
   async findMyFixerOrders(userId: string) {
+    let fixerId = '';
     try {
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
@@ -241,14 +242,40 @@ export class OrderService {
         },
       });
 
-      if (!user?.fixer) {
-        return [];
-      }
-
-      return await this.findByFixer(user.fixer.id);
+      fixerId = user?.fixer?.id || '';
     } catch (error) {
       this.logger.warn(
-        `Returning empty fixer order list after query failed for user ${userId}: ${
+        `User-fixer relation lookup failed for ${userId}; retrying direct fixer lookup: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      try {
+        const fixer = await this.prisma.fixer.findUnique({
+          where: { userId },
+          select: { id: true },
+        });
+        fixerId = fixer?.id || '';
+      } catch (fallbackError) {
+        this.logger.warn(
+          `Returning empty fixer order list after direct fixer lookup failed for user ${userId}: ${
+            fallbackError instanceof Error
+              ? fallbackError.message
+              : String(fallbackError)
+          }`,
+        );
+        return [];
+      }
+    }
+
+    if (!fixerId) {
+      return [];
+    }
+
+    try {
+      return await this.findByFixer(fixerId);
+    } catch (error) {
+      this.logger.warn(
+        `Returning empty fixer order list after order query failed for user ${userId}: ${
           error instanceof Error ? error.message : String(error)
         }`,
       );
@@ -285,17 +312,26 @@ export class OrderService {
     }
 
     const customerIds = Array.from(new Set(orders.map((order) => order.userId)));
-    const customers = customerIds.length
-      ? await this.prisma.user.findMany({
-          where: { id: { in: customerIds } },
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            role: true,
-          },
-        })
-      : [];
+    let customers: any[] = [];
+    try {
+      customers = customerIds.length
+        ? await this.prisma.user.findMany({
+            where: { id: { in: customerIds } },
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+            },
+          })
+        : [];
+    } catch (error) {
+      this.logger.warn(
+        `Skipping customer hydration for fixer orders after query failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
     const customerMap = new Map(customers.map((user) => [user.id, user]));
 
     return orders

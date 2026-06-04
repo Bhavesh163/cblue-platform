@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { webcrypto } from 'crypto';
 import ms from 'ms';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SendOtpDto } from './dto/send-otp.dto';
@@ -175,7 +176,8 @@ export class AuthService {
     const digits = '0123456789';
     let otp = '';
     const array = new Uint32Array(length);
-    crypto.getRandomValues(array);
+    const cryptoApi = globalThis.crypto ?? webcrypto;
+    cryptoApi.getRandomValues(array);
     for (let i = 0; i < length; i++) {
       otp += digits[array[i] % 10];
     }
