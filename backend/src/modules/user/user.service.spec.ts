@@ -48,6 +48,8 @@ describe('UserService', () => {
     it('should return user with addresses and fixer', async () => {
       const user = {
         id: 'user-1',
+        name: 'Ghis',
+        company: 'Ghis Cafe',
         phone: '+66812345678',
         addresses: [],
         fixer: null,
@@ -56,6 +58,64 @@ describe('UserService', () => {
 
       const result = await service.getProfile('user-1');
       expect(result.id).toBe('user-1');
+    });
+
+    it('should fall back to a legacy-safe profile read when live schema columns are missing', async () => {
+      const driftError = new Error(
+        'P2022: The column `users.company` does not exist in the current database.',
+      );
+      prisma.user.findUnique
+        .mockRejectedValueOnce(driftError)
+        .mockResolvedValueOnce({
+          id: 'user-1',
+          name: 'Suppadesh',
+          email: 'suppadesh@example.com',
+          phone: '+66812345678',
+          role: 'FIXER',
+          createdAt: new Date('2026-06-01T00:00:00.000Z'),
+          addresses: [],
+          fixer: {
+            id: 'fixer-1',
+            userId: 'user-1',
+            status: 'APPROVED',
+            tier: 'STANDARD',
+            rating: 4.8,
+            completedJobs: 3,
+            responseTime: '1 hour',
+            verified: true,
+            bio: 'Fit out partner',
+            yearsExperience: 5,
+            travelRadius: 20,
+            createdAt: new Date('2026-06-01T00:00:00.000Z'),
+            skills: [],
+            availability: null,
+            images: [],
+          },
+        });
+
+      const result = await service.getProfile('user-1');
+
+      expect(prisma.user.findUnique).toHaveBeenCalledTimes(2);
+      expect(result).toMatchObject({
+        id: 'user-1',
+        company: null,
+        fixer: {
+          id: 'fixer-1',
+          contactName: 'Suppadesh',
+          contactPhone: '+66812345678',
+          companyName: null,
+          aiTier: null,
+          priceList: null,
+        },
+      });
+    });
+
+    it('should rethrow non-schema errors', async () => {
+      prisma.user.findUnique.mockRejectedValue(new Error('connection refused'));
+
+      await expect(service.getProfile('user-1')).rejects.toThrow(
+        'connection refused',
+      );
     });
   });
 

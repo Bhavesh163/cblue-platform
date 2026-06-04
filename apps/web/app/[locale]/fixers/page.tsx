@@ -3981,7 +3981,31 @@ export default function FixerProPage() {
         (['CREATED', 'PENDING', 'MATCHING'].includes(o.status) && !acceptedPos.has(o.po)) ||
         o.status === 'MEETING_REQUESTED'
       )
-    );
+    ).map((job: any) => {
+      if (String(job.status || '').toUpperCase() !== 'MEETING_REQUESTED') return job;
+      const inviteDetails = parseMeetingInviteDetails(`${job.statusNote || ''} ${job.description || ''}`);
+      const meetingVenue = inviteDetails.meetingVenue || job.location || job.subdistrict || '';
+      return {
+        ...job,
+        id: `meeting-confirm-${job.po || job.id}`,
+        type: 'meeting_confirm_partner',
+        workflowType: 'meeting_confirm_partner',
+        status: 'MEETING_REQUESTED',
+        step: 8,
+        mockStep: 8,
+        actionNeeded: true,
+        description: 'Customer sent a site meeting invitation. Please review and confirm the meeting time.',
+        projectDetails: stripWorkflowPrefix(job.description || ''),
+        meetingDate: inviteDetails.meetingDateLabel || job.meetingDate || '',
+        meetingTime: inviteDetails.meetingTimeLabel || job.meetingTime || '',
+        meetingDateLabel: inviteDetails.meetingDateLabel || job.meetingDateLabel || '',
+        meetingTimeLabel: inviteDetails.meetingTimeLabel || job.meetingTimeLabel || '',
+        meetingVenue,
+        venue: meetingVenue,
+        location: job.location || meetingVenue,
+        subdistrict: job.subdistrict || job.location || meetingVenue,
+      };
+    });
 
   const parseTs = (v: any) => {
     if (typeof v === "number") return v;

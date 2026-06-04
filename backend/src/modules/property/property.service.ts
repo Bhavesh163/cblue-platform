@@ -29,6 +29,26 @@ export class PropertyService {
       .replace(/\D+/g, '');
   }
 
+  private normalizePositiveInt(value: unknown, fallback: number) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < 1) return fallback;
+    return Math.floor(parsed);
+  }
+
+  private normalizeNonNegativeNumber(value: unknown) {
+    if (value === undefined || value === null || value === '') return undefined;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < 0) return undefined;
+    return parsed;
+  }
+
+  private isSchemaDriftError(error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return /\bP202[12]\b|column .*does not exist|relation .*does not exist|does not exist in the current database|Unknown field/i.test(
+      message,
+    );
+  }
+
   private async resolveLinkedUserIds(userRef: string) {
     const fallbackId = String(userRef || '').trim();
     if (!fallbackId) return [] as string[];
@@ -776,8 +796,8 @@ export class PropertyService {
   }
 
   async search(dto: SearchPropertyDto) {
-    const page = dto.page || 1;
-    const limit = dto.limit || 20;
+    const page = this.normalizePositiveInt(dto.page, 1);
+    const limit = this.normalizePositiveInt(dto.limit, 20);
     const skip = (page - 1) * limit;
 
     const where: Prisma.PropertyWhereInput = {
@@ -788,40 +808,103 @@ export class PropertyService {
     if (dto.listingType) where.listingType = dto.listingType;
     if (dto.province) where.province = dto.province;
     if (dto.district) where.district = dto.district;
-    if (dto.bedrooms) where.bedrooms = { gte: dto.bedrooms };
-    if (dto.bathrooms) where.bathrooms = { gte: dto.bathrooms };
+    const bedrooms = this.normalizeNonNegativeNumber(dto.bedrooms);
+    const bathrooms = this.normalizeNonNegativeNumber(dto.bathrooms);
+    if (bedrooms !== undefined) where.bedrooms = { gte: bedrooms };
+    if (bathrooms !== undefined) where.bathrooms = { gte: bathrooms };
 
-    if (dto.minPrice || dto.maxPrice) {
+    const minPrice = this.normalizeNonNegativeNumber(dto.minPrice);
+    const maxPrice = this.normalizeNonNegativeNumber(dto.maxPrice);
+    if (minPrice !== undefined || maxPrice !== undefined) {
       where.price = {};
-      if (dto.minPrice) where.price.gte = dto.minPrice;
-      if (dto.maxPrice) where.price.lte = dto.maxPrice;
+      if (minPrice !== undefined) where.price.gte = minPrice;
+      if (maxPrice !== undefined) where.price.lte = maxPrice;
     }
 
-    if (dto.minArea || dto.maxArea) {
+    const minArea = this.normalizeNonNegativeNumber(dto.minArea);
+    const maxArea = this.normalizeNonNegativeNumber(dto.maxArea);
+    if (minArea !== undefined || maxArea !== undefined) {
       where.area = {};
-      if (dto.minArea) where.area.gte = dto.minArea;
-      if (dto.maxArea) where.area.lte = dto.maxArea;
+      if (minArea !== undefined) where.area.gte = minArea;
+      if (maxArea !== undefined) where.area.lte = maxArea;
     }
 
-    if (dto.keyword) {
+    const keyword = String(dto.keyword || '').trim();
+    if (keyword) {
       where.OR = [
-        { title: { contains: dto.keyword, mode: 'insensitive' } },
-        { description: { contains: dto.keyword, mode: 'insensitive' } },
+        { title: { contains: keyword, mode: 'insensitive' } },
+        { description: { contains: keyword, mode: 'insensitive' } },
       ];
     }
 
-    const [properties, total] = await Promise.all([
-      this.prisma.property.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          images: { orderBy: { sortOrder: 'asc' } },
-        },
-      }),
-      this.prisma.property.count({ where }),
-    ]);
+    let properties: any[];
+    let total: number;
+    try {
+      [properties, total] = await Promise.all([
+        this.prisma.property.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: { createdAt: 'desc' },
+          include: {
+            images: { orderBy: { sortOrder: 'asc' } },
+          },
+        }),
+        this.prisma.property.count({ where }),
+      ]);
+    } catch (error) {
+      if (!this.isSchemaDriftError(error)) throw error;
+      this.logger.warn(
+        `Property search hit live schema drift; retrying with legacy-safe select: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      [properties, total] = await Promise.all([
+        this.prisma.property
+          .findMany({
+            where,
+            skip,
+            take: limit,
+            orderBy: { createdAt: 'desc' },
+            select: {
+              id: true,
+              userId: true,
+              propertyType: true,
+              listingType: true,
+              status: true,
+              title: true,
+              description: true,
+              price: true,
+              area: true,
+              bedrooms: true,
+              bathrooms: true,
+              floors: true,
+              province: true,
+              district: true,
+              subdistrict: true,
+              postalCode: true,
+              addressLine: true,
+              latitude: true,
+              longitude: true,
+              contactName: true,
+              contactPhone: true,
+              contactEmail: true,
+              features: true,
+              yearBuilt: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          })
+          .then((rows) =>
+            rows.map((property) => ({
+              ...property,
+              tier: 'STANDARD',
+              images: [],
+            })),
+          ),
+        this.prisma.property.count({ where }),
+      ]);
+    }
 
     return {
       properties,

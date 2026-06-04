@@ -5549,18 +5549,29 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                   // Notify backend: MEETING_REQUESTED (cross-browser: partner page polls and sees MEETING_REQUESTED status)
                   try {
                     const token = getCustomerDashboardToken();
-                      const backendOrder = workflowOrders.find((o: any) => extractPo(o) === meetingModal.po);
+                    const backendOrder = workflowOrders.find((o: any) => extractPo(o) === meetingModal.po);
                     if (token && backendOrder?.id) {
-                      fetch(`/api/v1/orders/${backendOrder.id}/status`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                      const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+                      void (async () => {
+                        const currentStatus = String(backendOrder.status || '').toUpperCase();
+                        if (!['IN_PROGRESS', 'MEETING_REQUESTED'].includes(currentStatus)) {
+                          await fetch(`/api/v1/orders/${backendOrder.id}/status`, {
+                            method: 'PUT',
+                            headers,
+                            body: JSON.stringify({ status: 'IN_PROGRESS', note: 'Customer paid processing fee before sending meeting invitation' }),
+                          }).catch(() => null);
+                        }
+                        await fetch(`/api/v1/orders/${backendOrder.id}/status`, {
+                          method: 'PUT',
+                          headers,
                           body: JSON.stringify({ status: 'MEETING_REQUESTED', note: `Customer sent meeting invitation: ${dateLabel} ${meetingTime} at ${finalMeetingVenue}` }),
-                      }).catch(() => {});
-                      fetch(`/api/v1/orders/${backendOrder.id}/chat`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                        body: JSON.stringify({ text: chatText }),
-                      }).catch(() => {});
+                        }).catch(() => null);
+                        await fetch(`/api/v1/orders/${backendOrder.id}/chat`, {
+                          method: 'POST',
+                          headers,
+                          body: JSON.stringify({ text: chatText }),
+                        }).catch(() => null);
+                      })();
                     }
                   } catch {}
                   appendLocalWorkflowChat(meetingModal.po, chatText, createdAt);
