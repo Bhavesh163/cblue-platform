@@ -90,7 +90,17 @@ export class UserService {
           error instanceof Error ? error.message : String(error)
         }`,
       );
-      user = await this.getProfileLegacySafe(userId);
+      try {
+        user = await this.getProfileLegacySafe(userId);
+      } catch (legacyError) {
+        if (!this.isSchemaDriftError(legacyError)) throw legacyError;
+        this.logger.warn(
+          `Legacy profile read still hit schema drift for user ${userId}; retrying with ultra-safe select: ${
+            legacyError instanceof Error ? legacyError.message : String(legacyError)
+          }`,
+        );
+        user = await this.getProfileUltraSafe(userId);
+      }
     }
     if (!user) throw new NotFoundException('User not found');
     return this.decorateProfile(user);
@@ -155,6 +165,29 @@ export class UserService {
     });
 
     return user ? { ...user, company: null } : null;
+  }
+
+  private async getProfileUltraSafe(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        role: true,
+        createdAt: true,
+      },
+    });
+
+    return user
+      ? {
+          ...user,
+          company: null,
+          addresses: [],
+          fixer: null,
+        }
+      : null;
   }
 
   private decorateProfile(user: any) {

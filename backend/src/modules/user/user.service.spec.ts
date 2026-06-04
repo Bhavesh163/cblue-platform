@@ -110,6 +110,36 @@ describe('UserService', () => {
       });
     });
 
+    it('should fall back to an ultra-safe profile read when nested legacy columns are also missing', async () => {
+      const companyDrift = new Error(
+        'P2022: The column `users.company` does not exist in the current database.',
+      );
+      const nestedDrift = new Error(
+        'P2022: The column `addresses.unit` does not exist in the current database.',
+      );
+      prisma.user.findUnique
+        .mockRejectedValueOnce(companyDrift)
+        .mockRejectedValueOnce(nestedDrift)
+        .mockResolvedValueOnce({
+          id: 'user-1',
+          name: 'Suppadesh',
+          email: 'suppadesh@example.com',
+          phone: '+66812345678',
+          role: 'FIXER',
+          createdAt: new Date('2026-06-01T00:00:00.000Z'),
+        });
+
+      const result = await service.getProfile('user-1');
+
+      expect(prisma.user.findUnique).toHaveBeenCalledTimes(3);
+      expect(result).toMatchObject({
+        id: 'user-1',
+        company: null,
+        addresses: [],
+        fixer: null,
+      });
+    });
+
     it('should rethrow non-schema errors', async () => {
       prisma.user.findUnique.mockRejectedValue(new Error('connection refused'));
 

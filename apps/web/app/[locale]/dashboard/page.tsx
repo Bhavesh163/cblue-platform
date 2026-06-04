@@ -274,12 +274,17 @@ const WORKFLOW_INSTRUCTION_PATTERN =
   /customer approved the variation|please submit project complete|partner may now submit project complete|customer confirmed completion|please rate the customer|please rate your partner|work is completed|project complete confirmed|job-complete request sent|variation request sent|proceed to submit variation|please review and confirm|waiting for customer/i;
 const isWorkflowInstructionText = (value: any) =>
   WORKFLOW_INSTRUCTION_PATTERN.test(String(value || ''));
+const SERVICE_ONLY_DETAIL_PATTERN = /^[A-Z0-9][A-Z0-9 &/_+-]{2,}$/;
+const isServiceOnlyProjectDetail = (value: any) => {
+  const cleaned = stripWorkflowPrefix(value);
+  return cleaned.length <= 64 && SERVICE_ONLY_DETAIL_PATTERN.test(cleaned);
+};
 const pickProjectDetails = (...values: any[]) => {
   for (const value of values) {
     const cleaned = stripWorkflowPrefix(value);
-    if (cleaned && !isWorkflowInstructionText(cleaned)) return cleaned;
+    if (cleaned && !isWorkflowInstructionText(cleaned) && !isServiceOnlyProjectDetail(cleaned)) return cleaned;
   }
-  return stripWorkflowPrefix(values.find((value) => String(value || '').trim()) || '');
+  return '';
 };
 const firstNameOnly = (value: any, fallback = 'User') => {
   const cleaned = String(value || '').trim();
@@ -1366,6 +1371,7 @@ function CustomerHistoryCard({ item, idx, compact = false, locale = "en" }: { it
   const titleClass = compact ? "font-bold text-gray-900 text-sm" : "font-bold text-gray-900";
   const metaClass = compact ? "text-xs font-normal text-gray-400" : "text-sm font-normal text-gray-400";
   const mutedClass = compact ? "text-xs text-gray-500 mt-1" : "text-sm text-gray-500 mt-1";
+  const displayProjectDetails = pickProjectDetails(item.projectDetails, item.description, item.desc);
   const labels = {
     partner: locale === 'th' ? 'พาร์ทเนอร์' : locale === 'zh' ? '合作伙伴' : 'Partner',
     showDetails: locale === 'th' ? 'แสดงรายละเอียด' : locale === 'zh' ? '显示详情' : 'Show details',
@@ -1395,7 +1401,7 @@ function CustomerHistoryCard({ item, idx, compact = false, locale = "en" }: { it
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 text-sm text-gray-700">
             <div><span className="text-gray-500">{labels.projectLocation}</span> {item.location || item.subdistrict || labels.unknown}</div>
             <div><span className="text-gray-500">{locale === "th" ? "งบประมาณ:" : locale === "zh" ? "预算:" : "Budget:"}</span> {item.fee || item.budget || '฿0'}</div>
-            <div className="sm:col-span-2"><span className="text-gray-500">{labels.projectDetails}</span> {item.projectDetails || labels.detailsFallback}</div>
+            <div className="sm:col-span-2"><span className="text-gray-500">{labels.projectDetails}</span> {displayProjectDetails || labels.detailsFallback}</div>
           </div>
           {isCancelled && (
             <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
@@ -1404,12 +1410,12 @@ function CustomerHistoryCard({ item, idx, compact = false, locale = "en" }: { it
                   ? `คุณยกเลิกงานนี้${customerCancelReason ? ` เหตุผล: ${customerCancelReason}` : ''} ดังนั้นคำขอนี้จึงถูกปิด`
                   : locale === 'zh'
                   ? `您取消了此工作${customerCancelReason ? `，原因：${customerCancelReason}` : ''}，因此该请求已关闭。`
-                  : `You canceled this job${customerCancelReason ? ` because ${customerCancelReason}` : ''}, so this request was closed.`
+                  : `Customer canceled this job${customerCancelReason ? ` per customer note "${customerCancelReason}"` : ''}, so this request was closed.`
                 : locale === 'th'
-                ? `${item.counterpartName || item.fixerName || 'พาร์ทเนอร์ที่เลือก'} ไม่สามารถรับงานนี้ได้ในช่วงเวลาที่วางแผนไว้ ระบบจึงปิดคำขอและแจ้งให้คุณเลือกผู้ให้บริการรายอื่นต่อไป`
+                ? 'พาร์ทเนอร์ไม่สามารถรับงานนี้ได้ในช่วงเวลาที่วางแผนไว้ ระบบจึงปิดคำขอและแจ้งให้คุณเลือกผู้ให้บริการรายอื่นต่อไป'
                 : locale === 'zh'
-                ? `${item.counterpartName || item.fixerName || '所选合作伙伴'} 无法在计划时间内接下此项目，因此该请求已关闭。请从匹配列表中选择其他服务提供商继续。`
-                : `${item.counterpartName || item.fixerName || 'The selected partner'} could not take this project at the planned time, so this request was closed. Please choose another professional to continue.`}
+                ? '合作伙伴无法在计划时间内接下此项目，因此该请求已关闭。请从匹配列表中选择其他服务提供商继续。'
+                : 'The partner could not take this project at the planned time, so this request was closed. Please choose another professional to continue.'}
             </div>
           )}
           {chatPreview.length > 0 && (

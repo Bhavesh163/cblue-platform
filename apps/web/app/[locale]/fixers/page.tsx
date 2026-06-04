@@ -1038,12 +1038,17 @@ const WORKFLOW_INSTRUCTION_PATTERN =
   /customer approved the variation|please submit project complete|partner may now submit project complete|customer confirmed completion|please rate the customer|please rate your partner|work is completed|project complete confirmed|job-complete request sent|variation request sent|proceed to submit variation|please review and confirm|waiting for customer/i;
 const isWorkflowInstructionText = (value: any) =>
   WORKFLOW_INSTRUCTION_PATTERN.test(String(value || ''));
+const SERVICE_ONLY_DETAIL_PATTERN = /^[A-Z0-9][A-Z0-9 &/_+-]{2,}$/;
+const isServiceOnlyProjectDetail = (value: any) => {
+  const cleaned = stripWorkflowPrefix(value);
+  return cleaned.length <= 64 && SERVICE_ONLY_DETAIL_PATTERN.test(cleaned);
+};
 const pickProjectDetails = (...values: any[]) => {
   for (const value of values) {
     const cleaned = stripWorkflowPrefix(value);
-    if (cleaned && !isWorkflowInstructionText(cleaned)) return cleaned;
+    if (cleaned && !isWorkflowInstructionText(cleaned) && !isServiceOnlyProjectDetail(cleaned)) return cleaned;
   }
-  return stripWorkflowPrefix(values.find((value) => String(value || '').trim()) || '');
+  return '';
 };
 const ORDER_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const isOrderUuid = (value: any) => ORDER_UUID_PATTERN.test(String(value || '').trim());
@@ -1908,6 +1913,7 @@ function WorkflowHistoryCard({ item, compact = false, locale = "en" }: { item: a
   const completedLabel = locale === 'th' ? 'เสร็จสิ้น' : locale === 'zh' ? '已完成' : 'Completed';
   const declinedLabel = locale === 'th' ? 'ปฏิเสธ' : locale === 'zh' ? '已拒绝' : 'Declined';
   const customerCanceledLabel = locale === 'th' ? 'ลูกค้ายกเลิกงาน' : locale === 'zh' ? '客户已取消工作' : 'Customer Canceled Job';
+  const displayProjectDetails = pickProjectDetails(item.projectDetails, item.description, item.desc);
   const statusLabel = isCancelled
     ? isCustomerCancelled ? customerCanceledLabel : declinedLabel
     : completedLabel;
@@ -1960,7 +1966,7 @@ function WorkflowHistoryCard({ item, compact = false, locale = "en" }: { item: a
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 text-sm text-gray-700">
               <div><span className="text-gray-500">{labels.projectLocation}</span> {item.location || item.subdistrict || labels.unknown}</div>
               <div><span className="text-gray-500">{labels.tier}</span> {item.tier || labels.standard}</div>
-              <div className="sm:col-span-2"><span className="text-gray-500">{labels.projectDetails}</span> {item.projectDetails || item.description || labels.detailsFallback}</div>
+              <div className="sm:col-span-2"><span className="text-gray-500">{labels.projectDetails}</span> {displayProjectDetails || labels.detailsFallback}</div>
             </div>
             {isCancelled && (
               <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
@@ -1971,7 +1977,7 @@ function WorkflowHistoryCard({ item, compact = false, locale = "en" }: { item: a
                       ? `ลูกค้ายกเลิกงานนี้${cancelReason ? ` เหตุผล: ${cancelReason}` : ''} ดังนั้นคำขอนี้จึงถูกปิด`
                       : locale === 'zh'
                       ? `客户取消了此工作${cancelReason ? `，原因：${cancelReason}` : ''}，因此该请求已关闭。`
-                      : `Customer canceled this job${cancelReason ? ` because ${cancelReason}` : ''}, so this request was closed.`
+                      : `Customer canceled this job${cancelReason ? ` per customer note "${cancelReason}"` : ''}, so this request was closed.`
                     : locale === 'th'
                     ? 'คำขอนี้ถูกปิดหลังจากคุณปฏิเสธงาน และระบบแจ้งลูกค้าให้เลือกผู้ให้บริการรายอื่นแล้ว'
                     : locale === 'zh'
@@ -4342,6 +4348,49 @@ export default function FixerProPage() {
       workflowType: 'rate_partner',
       step: 11,
     }));
+  const activeMeetingConfirmRequests = activeJobs
+    .filter((job: any) => {
+      const po = String(job?.po || '').trim();
+      if (!po || completedHistoryPos.has(po) || declinedPartnerPos.has(po) || isClosedPartnerWorkflowPo(po)) return false;
+      const step = parseWorkflowStep(job?.step || job?.mockStep);
+      const status = String(job?.status || '').toUpperCase();
+      const workflowType = String(job?.workflowType || job?.type || '').toLowerCase();
+      const existingMeetingRequest =
+        partnerDynReqs.some((req: any) => req?.po === po && String(req?.workflowType || req?.type || '').toLowerCase() === 'meeting_confirm_partner') ||
+        incomingJobs.some((req: any) => req?.po === po && (String(req?.workflowType || req?.type || '').toLowerCase() === 'meeting_confirm_partner' || String(req?.status || '').toUpperCase() === 'MEETING_REQUESTED'));
+      return (
+        step === 8 &&
+        !existingMeetingRequest &&
+        (status === 'MEETING_REQUESTED' || workflowType === 'meeting_confirm_partner' || /waiting for meeting confirmation|meeting_requested/i.test(String(job?.statusName || job?.statusNote || '')))
+      );
+    })
+    .map((job: any) => {
+      const inviteDetails = parseMeetingInviteDetails(`${job.statusNote || ''} ${job.meetingMessage || ''} ${job.description || ''}`);
+      const meetingVenue = inviteDetails.meetingVenue || job.meetingVenue || job.venue || job.location || job.subdistrict || '';
+      const createdAt = parseWorkflowSortTs(job.statusChangedAt || job.createdAt || job.date) || Date.now();
+      return {
+        ...job,
+        id: `active-meeting-confirm-${job.po || job.id}`,
+        type: 'meeting_confirm_partner',
+        workflowType: 'meeting_confirm_partner',
+        status: 'MEETING_REQUESTED',
+        step: 8,
+        mockStep: 8,
+        actionNeeded: true,
+        date: fmtDateTime(createdAt),
+        createdAt,
+        description: 'Customer sent a site meeting invitation. Please review and confirm the meeting time.',
+        projectDetails: pickProjectDetails(job.projectDetails, job.description, job.desc),
+        meetingDate: inviteDetails.meetingDateLabel || job.meetingDate || '',
+        meetingTime: inviteDetails.meetingTimeLabel || job.meetingTime || '',
+        meetingDateLabel: inviteDetails.meetingDateLabel || job.meetingDateLabel || job.meetingDate || '',
+        meetingTimeLabel: inviteDetails.meetingTimeLabel || job.meetingTimeLabel || job.meetingTime || '',
+        meetingVenue,
+        venue: meetingVenue,
+        location: job.location || meetingVenue,
+        subdistrict: job.subdistrict || job.location || meetingVenue,
+      };
+    });
 
   const partnerRequestItems = Array.from([
     ...partnerDynReqs.filter((r: any) => {
@@ -4350,6 +4399,7 @@ export default function FixerProPage() {
       return !['accept_sent'].includes(String(r.type || '')) && !completedHistoryPos.has(po) && !declinedPartnerPos.has(po) && !isClosedPartnerWorkflowPo(po);
     }),
     ...backendCompletedAwaitingRatingRequests,
+    ...activeMeetingConfirmRequests,
     ...incomingJobs.filter((job: any) => !(String(job.status || '').toUpperCase() === 'MEETING_REQUESTED' && partnerDynReqs.some((req: any) => req.po === job.po && req.workflowType === 'meeting_confirm_partner'))),
   ].reduce((map: Map<string, any>, item: any) => {
     const key = item.po || item.id;
@@ -4862,8 +4912,23 @@ export default function FixerProPage() {
     }
     return [];
   });
+  const activeMeetingConfirmAlerts = activeMeetingConfirmRequests.map((request: any) => {
+    const po = request.po || '';
+    const svc = request.service || request.title || 'Project';
+    const createdAt = parseTs(request.createdAt || request.date) || Date.now();
+    return {
+      id: `active-meeting-alert-${po}`,
+      msg: `${po}: Customer sent a site meeting invitation for ${svc}. Open the request and confirm the proposed schedule.`,
+      msgTh: `${po}: ลูกค้าส่งคำเชิญนัดหมายหน้างานสำหรับ ${svc} แล้ว กรุณาเปิดคำขอและยืนยันเวลาที่เสนอ`,
+      msgZh: `${po}: 客户已为 ${svc} 发送现场会议邀请。请打开请求并确认建议的时间。`,
+      unread: true,
+      time: fmtDateTime(createdAt),
+      createdAt,
+      dot: 'bg-amber-500',
+    };
+  });
 
-  const displayNotifications = [...persistedAlertNotifications, ...orderAlerts, ...dynamicNotifications, ...partnerWorkflowNotifications, ...propWorkflowNotifications]
+  const displayNotifications = [...persistedAlertNotifications, ...orderAlerts, ...activeMeetingConfirmAlerts, ...dynamicNotifications, ...partnerWorkflowNotifications, ...propWorkflowNotifications]
     .filter((n: any) => n && parseTs(n.createdAt || n.time) > 0 && !String(n.time || '').includes('NaN'))
     .sort((a: any, b: any) => parseTs(b.createdAt || b.time) - parseTs(a.createdAt || a.time))
     .slice(0, 20);
@@ -7672,7 +7737,7 @@ function PartnerHistory({ locale, completedJobs }: { locale: string; completedJo
         {completedJobs.length > 0 ? completedJobs.map((h) => (
           <WorkflowHistoryCard key={h.id || h.po} item={h} locale={locale} />
         )) : (
-          <div className="py-8 text-center text-gray-500">No completed or declined jobs yet.</div>
+          <div className="py-8 text-center text-gray-500">{locale === "th" ? "ยังไม่มีงานที่เสร็จสิ้นหรือถูกปฏิเสธ" : locale === "zh" ? "暂无已完成或已拒绝的工作。" : "No completed or declined jobs yet."}</div>
         )}
       </div>
     </div>
