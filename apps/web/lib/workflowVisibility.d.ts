@@ -11,6 +11,7 @@ type StorageLike = {
   length: number;
   key(index: number): string | null;
   getItem(key: string): string | null;
+  setItem?(key: string, value: string): void;
 };
 
 export function normalizeWorkflowPo(value: any): string;
@@ -23,3 +24,9 @@ export function pruneWorkflowStorage(
   storage?: StorageLike & { removeItem(key: string): void },
   softLimitBytes?: number,
 ): string[];
+export function setWorkflowStorageItem(
+  storage: StorageLike & { setItem(key: string, value: string): void; removeItem?(key: string): void },
+  key: string,
+  value: any,
+  options?: { softLimitBytes?: number },
+): { ok: boolean; compacted: boolean; value: any };

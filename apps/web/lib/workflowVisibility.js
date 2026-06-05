@@ -155,12 +155,16 @@ export function pruneWorkflowStorage(storage, softLimitBytes = 4.5 * 1024 * 1024
     "cblue_po_breakdown_",
     "cblue_variation_price_list_",
   ];
+  const removableExactKeys = new Set([
+    "cblue_po_attachments",
+    "cblue_order_attachments",
+  ]);
   const removed = [];
   const removableKeys = [];
   for (let index = 0; index < storage.length; index += 1) {
     const key = storage.key(index);
     if (!key) continue;
-    if (removablePrefixes.some((prefix) => key.startsWith(prefix))) {
+    if (removableExactKeys.has(key) || removablePrefixes.some((prefix) => key.startsWith(prefix))) {
       removableKeys.push(key);
     }
   }
@@ -171,4 +175,219 @@ export function pruneWorkflowStorage(storage, softLimitBytes = 4.5 * 1024 * 1024
   }
 
   return removed;
+}
+
+function isQuotaError(error) {
+  const name = String(error?.name || "");
+  const message = String(error?.message || "");
+  return /QuotaExceeded|NS_ERROR_DOM_QUOTA_REACHED/i.test(name) || /quota/i.test(message);
+}
+
+function trimText(value, limit = 1200) {
+  const text = String(value || "");
+  return text.length > limit ? `${text.slice(0, limit)}...` : text;
+}
+
+function compactChatHistory(messages) {
+  if (!Array.isArray(messages)) return undefined;
+  return messages.slice(-4).map((message) => {
+    if (message == null || typeof message !== "object") return { text: trimText(message, 180) };
+    return {
+      id: message.id,
+      sender: message.sender,
+      senderName: message.senderName,
+      text: trimText(message.text || message.message || message.msg || "", 180),
+      time: message.time,
+      createdAt: message.createdAt,
+    };
+  });
+}
+
+function compactHistoryEntry(entry) {
+  if (!entry || typeof entry !== "object") return entry;
+  const compacted = { ...entry };
+  for (const key of [
+    "attachments",
+    "files",
+    "imageUrls",
+    "images",
+    "issueImage",
+    "metadata",
+    "projectImages",
+    "rawAttachments",
+  ]) {
+    delete compacted[key];
+  }
+  if (compacted.description) compacted.description = trimText(compacted.description, 300);
+  if (compacted.desc) compacted.desc = trimText(compacted.desc, 300);
+  if (compacted.projectDetails) compacted.projectDetails = trimText(compacted.projectDetails, 300);
+  if (Array.isArray(compacted.chatHistory)) {
+    compacted.chatHistory = compactChatHistory(compacted.chatHistory);
+  }
+  return compacted;
+}
+
+function summarizeHistoryEntry(entry) {
+  if (!entry || typeof entry !== "object") return entry;
+  const chatHistory = compactChatHistory(entry.chatHistory);
+  return {
+    id: entry.id,
+    po: entry.po,
+    title: entry.title || entry.service,
+    service: entry.service || entry.title,
+    customer: entry.customer,
+    counterpartName: entry.counterpartName,
+    completedAt: entry.completedAt,
+    createdAt: entry.createdAt,
+    statusChangedAt: entry.statusChangedAt,
+    status: entry.status,
+    statusName: entry.statusName,
+    statusNote: trimText(entry.statusNote, 220),
+    step: entry.step,
+    stepName: entry.stepName,
+    budget: entry.budget,
+    fee: entry.fee,
+    tier: entry.tier,
+    rating: entry.rating,
+    partnerRating: entry.partnerRating,
+    customerRating: entry.customerRating,
+    location: entry.location,
+    subdistrict: entry.subdistrict,
+    projectDetails: trimText(entry.projectDetails || entry.description || entry.desc || "", 220),
+    description: trimText(entry.description || entry.projectDetails || entry.desc || "", 220),
+    ...(chatHistory && chatHistory.length > 0 ? { chatHistory: chatHistory.slice(-2) } : {}),
+  };
+}
+
+function tinyHistoryEntry(entry) {
+  if (!entry || typeof entry !== "object") return entry;
+  const chatHistory = compactChatHistory(entry.chatHistory);
+  return {
+    po: entry.po,
+    title: entry.title || entry.service,
+    service: entry.service || entry.title,
+    completedAt: entry.completedAt,
+    statusChangedAt: entry.statusChangedAt,
+    status: entry.status,
+    statusName: entry.statusName,
+    statusNote: trimText(entry.statusNote, 140),
+    step: entry.step,
+    stepName: entry.stepName,
+    budget: entry.budget,
+    fee: entry.fee,
+    partnerRating: entry.partnerRating,
+    customerRating: entry.customerRating,
+    ...(chatHistory && chatHistory.length > 0 ? { chatHistory: chatHistory.slice(-1) } : {}),
+  };
+}
+
+function compactWorkflowStorageValue(key, value) {
+  if (key !== "ghis_mock_history" || !Array.isArray(value)) return value;
+  const byPo = new Map();
+  for (const entry of value) {
+    const po = normalizeWorkflowPo(entry?.po || entry?.id || entry?.description || entry);
+    const mapKey = po || String(entry?.id || byPo.size);
+    byPo.set(mapKey, compactHistoryEntry(entry));
+  }
+  return [...byPo.values()]
+    .sort((a, b) => {
+      const bDate = new Date(b?.completedAt || b?.statusChangedAt || b?.createdAt || b?.date || 0).getTime();
+      const aDate = new Date(a?.completedAt || a?.statusChangedAt || a?.createdAt || a?.date || 0).getTime();
+      return (Number.isFinite(bDate) ? bDate : 0) - (Number.isFinite(aDate) ? aDate : 0);
+    })
+    .slice(0, 40);
+}
+
+function summarizeWorkflowStorageValue(key, value) {
+  if (key !== "ghis_mock_history" || !Array.isArray(value)) return value;
+  return value.map(summarizeHistoryEntry).slice(0, 20);
+}
+
+function tinyWorkflowStorageValue(key, value) {
+  if (key !== "ghis_mock_history" || !Array.isArray(value)) return value;
+  return value.map(tinyHistoryEntry).slice(0, 10);
+}
+
+function serializeStorageValue(value) {
+  return typeof value === "string" ? value : JSON.stringify(value);
+}
+
+function compactExistingWorkflowHistory(storage) {
+  if (!storage || typeof storage.getItem !== "function" || typeof storage.setItem !== "function") return false;
+  let parsed;
+  try {
+    parsed = JSON.parse(storage.getItem("ghis_mock_history") || "[]");
+  } catch {
+    return false;
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0) return false;
+
+  const compacted = compactWorkflowStorageValue("ghis_mock_history", parsed);
+  const summarized = summarizeWorkflowStorageValue("ghis_mock_history", compacted);
+  const tiny = tinyWorkflowStorageValue("ghis_mock_history", summarized);
+  const candidates = [
+    ...(Array.isArray(tiny) ? [tiny.slice(0, 1), tiny.slice(0, 5)] : []),
+    tiny,
+    ...(Array.isArray(summarized) ? [summarized.slice(0, 1), summarized.slice(0, 5), summarized.slice(0, 10), summarized.slice(0, 20)] : []),
+    summarized,
+    compacted,
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      storage.setItem("ghis_mock_history", serializeStorageValue(candidate));
+      return true;
+    } catch (error) {
+      if (!isQuotaError(error)) return false;
+    }
+  }
+
+  return false;
+}
+
+export function setWorkflowStorageItem(storage, key, value, { softLimitBytes = 4.5 * 1024 * 1024 } = {}) {
+  if (!storage || typeof storage.setItem !== "function") {
+    return { ok: false, compacted: false, value };
+  }
+
+  const candidates = [value];
+  const compacted = compactWorkflowStorageValue(key, value);
+  if (compacted !== value) candidates.push(compacted);
+  const summarized = summarizeWorkflowStorageValue(key, compacted);
+  if (summarized !== compacted) candidates.push(summarized);
+  const tiny = tinyWorkflowStorageValue(key, summarized);
+  if (tiny !== summarized) candidates.push(tiny);
+  if (Array.isArray(tiny) && tiny.length > 5) candidates.push(tiny.slice(0, 5));
+  if (Array.isArray(tiny) && tiny.length > 1) candidates.push(tiny.slice(0, 1));
+  if (Array.isArray(summarized) && summarized.length > 10) candidates.push(summarized.slice(0, 10));
+  if (Array.isArray(summarized) && summarized.length > 5) candidates.push(summarized.slice(0, 5));
+  if (Array.isArray(summarized) && summarized.length > 1) candidates.push(summarized.slice(0, 1));
+  if (Array.isArray(compacted) && compacted.length > 20) candidates.push(compacted.slice(0, 20));
+  if (Array.isArray(compacted) && compacted.length > 10) candidates.push(compacted.slice(0, 10));
+  if (Array.isArray(compacted) && compacted.length > 5) candidates.push(compacted.slice(0, 5));
+  if (Array.isArray(compacted) && compacted.length > 1) candidates.push(compacted.slice(0, 1));
+
+  let sawQuotaError = false;
+  for (const candidate of candidates) {
+    try {
+      pruneWorkflowStorage(storage, softLimitBytes);
+      storage.setItem(key, serializeStorageValue(candidate));
+      return { ok: true, compacted: candidate !== value, value: candidate };
+    } catch (error) {
+      sawQuotaError = sawQuotaError || isQuotaError(error);
+      if (!isQuotaError(error)) return { ok: false, compacted: candidate !== value, value: candidate };
+    }
+
+    try {
+      if (key !== "ghis_mock_history") compactExistingWorkflowHistory(storage);
+      pruneWorkflowStorage(storage, 0);
+      storage.setItem(key, serializeStorageValue(candidate));
+      return { ok: true, compacted: candidate !== value, value: candidate };
+    } catch (error) {
+      sawQuotaError = sawQuotaError || isQuotaError(error);
+      if (!isQuotaError(error)) return { ok: false, compacted: candidate !== value, value: candidate };
+    }
+  }
+
+  return { ok: false, compacted: sawQuotaError, value: candidates[candidates.length - 1] ?? value };
 }

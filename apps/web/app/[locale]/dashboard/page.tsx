@@ -11,6 +11,7 @@ import {
   isTerminalWorkflowStatus,
   pruneWorkflowStorage,
   readBrowserTerminalWorkflowPos,
+  setWorkflowStorageItem,
 } from "../../../lib/workflowVisibility";
 import { useRouter } from "next/navigation";
 import PdpaConsent from "../components/PdpaConsent";
@@ -93,6 +94,11 @@ function pruneStorageIfNeeded() {
   try {
     pruneWorkflowStorage(localStorage);
   } catch {}
+}
+
+function writeWorkflowStorage(key: string, value: any) {
+  if (typeof window === "undefined") return value;
+  return setWorkflowStorageItem(localStorage, key, value).value;
 }
 
 const fmtDate = (d: Date | number | string) => {
@@ -1608,7 +1614,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       }
     };
     const writeArray = (key: string, items: any[]) => {
-      try { localStorage.setItem(key, JSON.stringify(items)); } catch {}
+      try { writeWorkflowStorage(key, items); } catch {}
     };
 
     const active = readArray("ghis_mock_active");
@@ -1741,7 +1747,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         .sort((a: any, b: any) => parseDateMs(b.createdAt || b.time) - parseDateMs(a.createdAt || a.time))
         .slice(0, 20);
       setPersistedCustomerAlerts(merged);
-      try { localStorage.setItem(customerAlertsStorageKey, JSON.stringify(merged)); } catch {}
+      try { writeWorkflowStorage(customerAlertsStorageKey, merged); } catch {}
     } catch {
       setPersistedCustomerAlerts([]);
     }
@@ -1976,10 +1982,17 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     setMockReady(true);
   }, []);
   // Persist (mockReady guard prevents overwriting storage on first empty render)
-  useEffect(() => { if (mockReady) try { localStorage.setItem("ghis_mock_payments", JSON.stringify(mockPayments)); } catch {} }, [mockPayments, mockReady]);
-  useEffect(() => { if (mockReady) try { localStorage.setItem("ghis_mock_active", JSON.stringify(mockActiveItems)); } catch {} }, [mockActiveItems, mockReady]);
-  useEffect(() => { if (mockReady) try { localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(mockDynRequests)); } catch {} }, [mockDynRequests, mockReady]);
-  useEffect(() => { if (mockReady) try { pruneStorageIfNeeded(); localStorage.setItem("ghis_mock_history", JSON.stringify(mockHistory)); } catch {} }, [mockHistory, mockReady]);
+  useEffect(() => { if (mockReady) try { writeWorkflowStorage("ghis_mock_payments", mockPayments); } catch {} }, [mockPayments, mockReady]);
+  useEffect(() => { if (mockReady) try { writeWorkflowStorage("ghis_mock_active", mockActiveItems); } catch {} }, [mockActiveItems, mockReady]);
+  useEffect(() => { if (mockReady) try { writeWorkflowStorage("ghis_mock_dyn_req", mockDynRequests); } catch {} }, [mockDynRequests, mockReady]);
+  useEffect(() => {
+    if (mockReady) {
+      try {
+        const result = setWorkflowStorageItem(localStorage, "ghis_mock_history", mockHistory);
+        if (result.compacted && result.ok && Array.isArray(result.value)) setMockHistory(result.value);
+      } catch {}
+    }
+  }, [mockHistory, mockReady]);
 
   useEffect(() => {
     try {
@@ -2572,7 +2585,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         const newItems = toCreate.filter((x: any) => !existingIds.has(x.id));
         if (newItems.length === 0) return prev;
         const merged = [...prev, ...newItems];
-        try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(merged)); } catch {}
+        try { writeWorkflowStorage('ghis_mock_dyn_req', merged); } catch {}
         return merged;
       });
     }
@@ -2723,7 +2736,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
           changed = true;
         }
         if (!changed) return prev;
-        try { localStorage.setItem('ghis_mock_active', JSON.stringify(next)); } catch {}
+        try { writeWorkflowStorage('ghis_mock_active', next); } catch {}
         return next;
       });
       setMockDynRequests(prev => {
@@ -2737,7 +2750,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
           changed = true;
         }
         if (!changed) return prev;
-        try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(next)); } catch {}
+        try { writeWorkflowStorage('ghis_mock_dyn_req', next); } catch {}
         return next;
       });
     }
@@ -2791,7 +2804,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
             actionNeeded: true,
           };
           const next = [...prev.filter((x: any) => x.po !== po), activeSnapshot];
-          try { localStorage.setItem('ghis_mock_active', JSON.stringify(next)); } catch {}
+          try { writeWorkflowStorage('ghis_mock_active', next); } catch {}
           return next;
         });
         setMockDynRequests(prev => {
@@ -2801,7 +2814,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
           const desc = noteMatch?.[1]?.trim() || 'Partner has submitted a variation for your approval. Please review and confirm to proceed.';
           const item = { id: `var-${po}`, po, title, customer: 'Suppadesh', date: fmtDateTime(eventTs), createdAt: eventTs, budget, tier, desc, type: 'variation_pending', step: 9, ...meetingSnapshot };
           const merged = [...prev.filter((x: any) => !(x.po === po && ['variation_pending', 'meeting_invite', 'meeting_pending_partner', 'meeting_scheduled', 'chat_ready'].includes(x.type))), item];
-          try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(merged)); } catch {}
+          try { writeWorkflowStorage('ghis_mock_dyn_req', merged); } catch {}
           return merged;
         });
       }
@@ -2821,7 +2834,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
             actionNeeded: true,
           };
           const next = [...prev.filter((x: any) => x.po !== po), activeSnapshot];
-          try { localStorage.setItem('ghis_mock_active', JSON.stringify(next)); } catch {}
+          try { writeWorkflowStorage('ghis_mock_active', next); } catch {}
           return next;
         });
         setMockDynRequests(prev => {
@@ -2831,7 +2844,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
           const desc = noteMatch?.[1]?.trim() || 'Work is completed. Please review and mark as complete to close this project.';
           const item = { id: `compl-${po}`, po, title, customer: 'Suppadesh', date: fmtDateTime(eventTs), createdAt: eventTs, budget, tier, desc, type: 'complete_pending', step: 10, ...meetingSnapshot };
           const merged = [...prev.filter((x: any) => !(x.po === po && ['complete_pending', 'variation_pending', 'meeting_invite', 'meeting_pending_partner', 'meeting_scheduled', 'chat_ready'].includes(x.type))), item];
-          try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(merged)); } catch {}
+          try { writeWorkflowStorage('ghis_mock_dyn_req', merged); } catch {}
           return merged;
         });
       }
@@ -2868,7 +2881,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     setMockActiveItems((prev) => {
       const next = prev.filter((item: any) => !cancelledPos.has(item.po));
       if (next.length === prev.length) return prev;
-      try { localStorage.setItem('ghis_mock_active', JSON.stringify(next)); } catch {}
+      try { writeWorkflowStorage('ghis_mock_active', next); } catch {}
       return next;
     });
 
@@ -2913,7 +2926,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         changed = true;
       }
       if (!changed) return prev;
-      try { localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(next)); } catch {}
+      try { writeWorkflowStorage('ghis_mock_dyn_req', next); } catch {}
       return next;
     });
 
@@ -2970,7 +2983,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       }
       if (!changed) return prev;
       const next = Array.from(map.values());
-      try { localStorage.setItem('ghis_mock_history', JSON.stringify(next)); } catch {}
+      try { writeWorkflowStorage('ghis_mock_history', next); } catch {}
       return next;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3656,7 +3669,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       )
         .sort((a: any, b: any) => parseDateMs(b.createdAt || b.time) - parseDateMs(a.createdAt || a.time))
         .slice(0, 20);
-      try { localStorage.setItem(customerAlertsStorageKey, JSON.stringify(merged)); } catch {}
+      try { writeWorkflowStorage(customerAlertsStorageKey, merged); } catch {}
       return JSON.stringify(prev) === JSON.stringify(merged) ? prev : merged;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3741,7 +3754,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       }
       if (toCreate.length > 0) {
         const updated = [...dynReqs, ...toCreate];
-        localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(updated));
+        writeWorkflowStorage('ghis_mock_dyn_req', updated);
         setMockDynRequests(updated);
       }
     } catch {}
@@ -3897,7 +3910,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                     venue: item.venue || item.meetingVenue || '',
                   };
                   const next = [...prev.filter((x: any) => x.po !== item.po), activeSnapshot];
-                  try { localStorage.setItem('ghis_mock_active', JSON.stringify(next)); } catch {}
+                  try { writeWorkflowStorage('ghis_mock_active', next); } catch {}
                   return next;
                 });
                 const varId = `variation-${item.po}`;
@@ -5269,13 +5282,13 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                     const prevHist = JSON.parse(localStorage.getItem('ghis_mock_history') || '[]');
                     const newHist = [...(prevHist as any[]).filter((x: any) => x.po !== po), completed]
                       .sort((a: any, b: any) => parseDateMs(b.completedAt || b.statusChangedAt || b.createdAt || b.date) - parseDateMs(a.completedAt || a.statusChangedAt || a.createdAt || a.date));
-                    localStorage.setItem('ghis_mock_active', JSON.stringify(newActive));
-                    localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(newReqs));
-                    localStorage.setItem('ghis_mock_history', JSON.stringify(newHist));
+                    writeWorkflowStorage('ghis_mock_active', newActive);
+                    writeWorkflowStorage('ghis_mock_dyn_req', newReqs);
+                    const persistedHistory = setWorkflowStorageItem(localStorage, 'ghis_mock_history', newHist);
                     window.dispatchEvent(new Event('storage'));
                     setMockActiveItems(newActive);
                     setMockDynRequests(newReqs);
-                    setMockHistory(newHist);
+                    setMockHistory(Array.isArray(persistedHistory.value) ? persistedHistory.value : newHist);
                     void postBackendWorkflowMessage(po, `[SYSTEM] Customer rated this project ${rateStars}/5 stars. Workflow completed.`);
                     setRateModal(null);
                     setActiveTab("history");
@@ -5402,9 +5415,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                   const newPayments = { ...mockPayments, [waitModalOrder.id]: true };
                   // Write to localStorage synchronously BEFORE setState so interval reads fresh data
                   try {
-                    localStorage.setItem('ghis_mock_active', JSON.stringify(newActiveItems));
-                    localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(newDynReqs));
-                    localStorage.setItem('ghis_mock_payments', JSON.stringify(newPayments));
+                    writeWorkflowStorage('ghis_mock_active', newActiveItems);
+                    writeWorkflowStorage('ghis_mock_dyn_req', newDynReqs);
+                    writeWorkflowStorage('ghis_mock_payments', newPayments);
                   } catch {}
                   setMockPayments(newPayments);
                   setMockActiveItems(newActiveItems);
@@ -5620,8 +5633,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                     mockStep: 8,
                   };
                   try {
-                    localStorage.setItem('ghis_mock_active', JSON.stringify(updatedMeetActive));
-                    localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(updatedMeetReqs));
+                    writeWorkflowStorage('ghis_mock_active', updatedMeetActive);
+                    writeWorkflowStorage('ghis_mock_dyn_req', updatedMeetReqs);
                     const rawPartnerReqs = JSON.parse(localStorage.getItem('partner_mock_dyn_req') || '[]');
                     const partnerReqs = Array.isArray(rawPartnerReqs) ? rawPartnerReqs : [];
                     const isAdvancedPartnerStep = (item: any) => ['variation_partner', 'complete_partner', 'rate_partner'].includes(String(item?.workflowType || item?.type || ''));
@@ -5634,7 +5647,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                           return !(item?.po === meetingModal.po && ['meeting_confirm_partner', 'meeting_pending_partner'].includes(workflowType));
                         }),
                       ];
-                      localStorage.setItem('partner_mock_dyn_req', JSON.stringify(nextPartnerReqs));
+                      writeWorkflowStorage('partner_mock_dyn_req', nextPartnerReqs);
                       const rawPartnerAlerts = JSON.parse(localStorage.getItem('partner_alerts') || '[]');
                       const partnerAlerts = Array.isArray(rawPartnerAlerts) ? rawPartnerAlerts : [];
                       const partnerAlert = {
@@ -5650,10 +5663,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                         unread: true,
                         dot: 'bg-amber-500',
                       };
-                      localStorage.setItem('partner_alerts', JSON.stringify([
+                      writeWorkflowStorage('partner_alerts', [
                         partnerAlert,
                         ...partnerAlerts.filter((alert: any) => alert?.id !== partnerAlert.id),
-                      ].slice(0, 20)));
+                      ].slice(0, 20));
                     }
                     window.dispatchEvent(new Event('storage'));
                     window.dispatchEvent(new Event('cblue-workflow-updated'));
@@ -5882,13 +5895,13 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                       unread: true,
                       dot: 'bg-green-500',
                     };
-                    localStorage.setItem('ghis_mock_active', JSON.stringify(newActive));
-                    localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(newReqs));
-                    localStorage.setItem('partner_mock_dyn_req', JSON.stringify(updatedPartnerReqs));
-                    localStorage.setItem('partner_alerts', JSON.stringify([
+                    writeWorkflowStorage('ghis_mock_active', newActive);
+                    writeWorkflowStorage('ghis_mock_dyn_req', newReqs);
+                    writeWorkflowStorage('partner_mock_dyn_req', updatedPartnerReqs);
+                    writeWorkflowStorage('partner_alerts', [
                       partnerCompleteAlert,
                       ...(Array.isArray(partnerAlerts) ? partnerAlerts.filter((alert: any) => alert?.id !== partnerCompleteAlert.id) : []),
-                    ].slice(0, 20)));
+                    ].slice(0, 20));
                     window.dispatchEvent(new Event('storage'));
                     window.dispatchEvent(new Event('cblue-workflow-updated'));
                     setMockActiveItems(newActive);
@@ -6036,9 +6049,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                       { id: ratePartnerId, po, title: completeApproveModal.title, customer: completeApproveModal.customer, date: fmtDateTime(createdAt), createdAt, budget: completeApproveModal.budget, tier: completeApproveModal.tier, desc: 'Customer confirmed completion. Please rate the customer to close this job.', type: 'rate_partner', step: 11, ...meetingFields },
                     ];
                     try { localStorage.setItem(`chat_closed_${po}`, '1'); } catch {}
-                    localStorage.setItem('ghis_mock_active', JSON.stringify(newActive));
-                    localStorage.setItem('ghis_mock_dyn_req', JSON.stringify(newReqs));
-                    localStorage.setItem('partner_mock_dyn_req', JSON.stringify(updatedPartnerReqs));
+                    writeWorkflowStorage('ghis_mock_active', newActive);
+                    writeWorkflowStorage('ghis_mock_dyn_req', newReqs);
+                    writeWorkflowStorage('partner_mock_dyn_req', updatedPartnerReqs);
                     try {
                       const partnerAlerts = JSON.parse(localStorage.getItem('partner_alerts') || '[]');
                       const completeAlert = {
@@ -6053,10 +6066,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                         createdAt,
                         dot: 'bg-sky-500',
                       };
-                      localStorage.setItem('partner_alerts', JSON.stringify([
+                      writeWorkflowStorage('partner_alerts', [
                         completeAlert,
                         ...(Array.isArray(partnerAlerts) ? partnerAlerts.filter((a: any) => String(a?.id) !== completeAlert.id) : []),
-                      ]));
+                      ]);
                     } catch {}
                     window.dispatchEvent(new Event('storage'));
                     window.dispatchEvent(new Event('cblue-workflow-updated'));
@@ -6163,11 +6176,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                     };
                     try {
                       const active = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
-                      localStorage.setItem("ghis_mock_active", JSON.stringify(active.filter((x: any) => x.po !== po)));
+                      writeWorkflowStorage("ghis_mock_active", active.filter((x: any) => x.po !== po));
                       const reqs = JSON.parse(localStorage.getItem("ghis_mock_dyn_req") || "[]");
-                      localStorage.setItem("ghis_mock_dyn_req", JSON.stringify(reqs.filter((x: any) => x.po !== po)));
+                      writeWorkflowStorage("ghis_mock_dyn_req", reqs.filter((x: any) => x.po !== po));
                       const partnerReqs = JSON.parse(localStorage.getItem("partner_mock_dyn_req") || "[]");
-                      localStorage.setItem("partner_mock_dyn_req", JSON.stringify(partnerReqs.filter((x: any) => x.po !== po)));
+                      writeWorkflowStorage("partner_mock_dyn_req", partnerReqs.filter((x: any) => x.po !== po));
                       try {
                         const chatKey = `chat_messages_${po}`;
                         const existingChat = JSON.parse(localStorage.getItem(chatKey) || '[]');
@@ -6187,17 +6200,17 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                       const hist = JSON.parse(localStorage.getItem("ghis_mock_history") || "[]");
                       const nextHistory = [...(Array.isArray(hist) ? hist.filter((x: any) => x.po !== po) : []), historyEntry];
                       pruneStorageIfNeeded();
-                      localStorage.setItem("ghis_mock_history", JSON.stringify(nextHistory));
+                      writeWorkflowStorage("ghis_mock_history", nextHistory);
                       const existingAlerts = JSON.parse(localStorage.getItem(customerAlertsStorageKey) || '[]');
                       const nextAlerts = [cancelAlert, ...(Array.isArray(existingAlerts) ? existingAlerts.filter((a: any) => a.id !== cancelAlert.id) : [])]
                         .sort((a: any, b: any) => parseDateMs(b.createdAt || b.time) - parseDateMs(a.createdAt || a.time))
                         .slice(0, 20);
-                      localStorage.setItem(customerAlertsStorageKey, JSON.stringify(nextAlerts));
+                      writeWorkflowStorage(customerAlertsStorageKey, nextAlerts);
                       const partnerAlerts = JSON.parse(localStorage.getItem('partner_alerts') || '[]');
                       const nextPartnerAlerts = [partnerCancelAlert, ...(Array.isArray(partnerAlerts) ? partnerAlerts.filter((a: any) => a.id !== partnerCancelAlert.id) : [])]
                         .sort((a: any, b: any) => parseDateMs(b.createdAt || b.timestamp || b.time) - parseDateMs(a.createdAt || a.timestamp || a.time))
                         .slice(0, 20);
-                      localStorage.setItem('partner_alerts', JSON.stringify(nextPartnerAlerts));
+                      writeWorkflowStorage('partner_alerts', nextPartnerAlerts);
                       setPersistedCustomerAlerts(nextAlerts);
                       setMockActiveItems((prev) => prev.filter((x: any) => x.po !== po));
                       setMockDynRequests((prev) => prev.filter((x: any) => x.po !== po));

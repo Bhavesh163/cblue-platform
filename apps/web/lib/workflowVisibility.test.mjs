@@ -8,12 +8,18 @@ import {
   isTerminalWorkflowStatus,
   pruneWorkflowStorage,
   readBrowserTerminalWorkflowPos,
+  setWorkflowStorageItem,
 } from "./workflowVisibility.js";
 
-function fakeStorage(entries) {
+function fakeStorage(entries, options = {}) {
   const current = { ...entries };
+  const quotaBytes = options.quotaBytes ?? Infinity;
   const keys = () => Object.keys(current);
-  const rows = Object.entries(entries);
+  const sizeOf = (rows) =>
+    Object.entries(rows).reduce(
+      (total, [key, value]) => total + (key.length + String(value ?? "").length) * 2,
+      0,
+    );
   return {
     get length() {
       return keys().length;
@@ -25,6 +31,15 @@ function fakeStorage(entries) {
       return Object.prototype.hasOwnProperty.call(current, key)
         ? String(current[key])
         : null;
+    },
+    setItem(key, value) {
+      const next = { ...current, [key]: String(value) };
+      if (sizeOf(next) > quotaBytes) {
+        const error = new Error("The quota has been exceeded.");
+        error.name = "QuotaExceededError";
+        throw error;
+      }
+      current[key] = String(value);
     },
     removeItem(key) {
       delete current[key];
@@ -112,6 +127,78 @@ test("keeps backend completed orders visible until rating/history closes the wor
     [...terminalPos].sort(),
     ["PO-2606-3333", "PO-2606-4444", "PO-2606-6666", "PO-2606-7777"],
   );
+});
+
+test("compacts workflow history instead of throwing when localStorage quota is full", () => {
+  const storage = fakeStorage(
+    {
+      "cblue_po_breakdown_PO-2606-1111": "x".repeat(200),
+      ghis_mock_history: JSON.stringify([{ po: "PO-2606-0001", title: "Old" }]),
+    },
+    { quotaBytes: 2400 },
+  );
+  const largeHistory = [
+    {
+      po: "PO-2606-5653",
+      title: "MEP RETROFIT",
+      service: "MEP RETROFIT",
+      description: "detail ".repeat(400),
+      projectDetails: "project ".repeat(400),
+      images: ["data:image/png;base64," + "a".repeat(1600)],
+      attachments: ["data:application/pdf;base64," + "b".repeat(1600)],
+      chatHistory: Array.from({ length: 30 }, (_, index) => ({
+        text: `message ${index} ${"x".repeat(200)}`,
+        createdAt: 1000 + index,
+      })),
+      completedAt: 2000,
+      status: "COMPLETED",
+    },
+  ];
+
+  const result = setWorkflowStorageItem(storage, "ghis_mock_history", largeHistory, {
+    softLimitBytes: 10,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.compacted, true);
+  const stored = JSON.parse(storage.getItem("ghis_mock_history") || "[]");
+  assert.equal(stored[0].po, "PO-2606-5653");
+  assert.ok(stored[0].chatHistory.length <= 8);
+  assert.equal(stored[0].images, undefined);
+  assert.equal(storage.getItem("cblue_po_breakdown_PO-2606-1111"), null);
+});
+
+test("compacts existing history so active request writes can still persist", () => {
+  const bulkyHistory = [{
+    po: "PO-2606-1111",
+    title: "OLD JOB",
+    description: "detail ".repeat(500),
+    chatHistory: Array.from({ length: 30 }, (_, index) => ({
+      text: `archived message ${index} ${"x".repeat(180)}`,
+      createdAt: index,
+    })),
+    completedAt: 1000,
+    status: "COMPLETED",
+  }];
+  const storage = fakeStorage(
+    {
+      ghis_mock_history: JSON.stringify(bulkyHistory),
+    },
+    { quotaBytes: 2600 },
+  );
+
+  const result = setWorkflowStorageItem(
+    storage,
+    "partner_mock_dyn_req",
+    [{ po: "PO-2606-5653", type: "rate_partner", step: 11 }],
+    { softLimitBytes: 10 },
+  );
+
+  assert.equal(result.ok, true);
+  const storedReqs = JSON.parse(storage.getItem("partner_mock_dyn_req") || "[]");
+  const storedHistory = JSON.parse(storage.getItem("ghis_mock_history") || "[]");
+  assert.equal(storedReqs[0].po, "PO-2606-5653");
+  assert.ok(storedHistory[0].chatHistory.length <= 2);
 });
 
 test("prunes budget caches without deleting workflow history", () => {

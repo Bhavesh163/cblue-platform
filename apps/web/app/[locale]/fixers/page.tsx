@@ -24,6 +24,7 @@ import {
   isCompletedAwaitingWorkflowRating,
   pruneWorkflowStorage,
   readBrowserTerminalWorkflowPos,
+  setWorkflowStorageItem,
 } from "../../../lib/workflowVisibility";
 
 interface PartnerInfo {
@@ -132,6 +133,11 @@ function pruneStorageIfNeeded() {
   try {
     pruneWorkflowStorage(localStorage);
   } catch {}
+}
+
+function writeWorkflowStorage(key: string, value: any) {
+  if (typeof window === "undefined") return value;
+  return setWorkflowStorageItem(localStorage, key, value).value;
 }
 
 const fmtDate = (d: Date | number | string) => {
@@ -277,17 +283,13 @@ const normalizeWorkflowCacheItems = (items: any[]) =>
 const persistWorkflowCacheItems = (key: string, items: any[]) => {
   const normalized = normalizeWorkflowCacheItems(items);
   try {
-    pruneStorageIfNeeded();
-    localStorage.setItem(key, JSON.stringify(normalized));
+    return setWorkflowStorageItem(localStorage, key, normalized).value;
   } catch (error) {
     try {
-      pruneStorageIfNeeded();
-      localStorage.setItem(key, JSON.stringify(normalized));
-    } catch (retryError) {
-      console.error(`Failed to persist workflow cache ${key}`, retryError || error);
-    }
+      return setWorkflowStorageItem(localStorage, key, normalized, { softLimitBytes: 0 }).value;
+    } catch {}
   }
-  return items;
+  return normalized;
 };
 const toggleWorkflowModalChromeLock = (isOpen: boolean) => {
   if (typeof document === 'undefined') return;
@@ -1306,7 +1308,7 @@ const ensureLegacyPartnerCancel3429Repair = () => {
     }
   };
   const writeArray = (key: string, items: any[]) => {
-    try { localStorage.setItem(key, JSON.stringify(items)); } catch {}
+    try { writeWorkflowStorage(key, items); } catch {}
   };
   const active = readArray("ghis_mock_active");
   const dynReqs = readArray("ghis_mock_dyn_req");
@@ -1533,7 +1535,7 @@ const appendLocalWorkflowSystemChat = (po: any, text: string, createdAt = Date.n
         createdAt,
       });
       next.sort((a: any, b: any) => parseWorkflowSortTs(a?.createdAt || a?.time) - parseWorkflowSortTs(b?.createdAt || b?.time));
-      localStorage.setItem(key, JSON.stringify(next));
+      writeWorkflowStorage(key, next);
     }
   } catch {
     // Best-effort local chat continuity only.
@@ -1574,7 +1576,7 @@ const upsertPartnerPersistedAlert = ({
         dot,
       },
     ].slice(-20);
-    localStorage.setItem('partner_alerts', JSON.stringify(next));
+    writeWorkflowStorage('partner_alerts', next);
   } catch {
     // Best-effort local alert continuity only.
   }
@@ -1705,15 +1707,13 @@ const finalizePartnerRatedWorkflow = ({
   };
 
   persistWorkflowCacheItems('ghis_mock_active', updatedActive);
-  pruneStorageIfNeeded();
-  localStorage.setItem(
+  const persistedHistory = setWorkflowStorageItem(
+    localStorage,
     'ghis_mock_history',
-    JSON.stringify(
-      [...history.filter((item: any) => item?.po !== po), completed].sort(
-        (a: any, b: any) =>
-          parseWorkflowSortTs(b?.completedAt || b?.statusChangedAt || b?.createdAt || b?.date) -
-          parseWorkflowSortTs(a?.completedAt || a?.statusChangedAt || a?.createdAt || a?.date),
-      ),
+    [...history.filter((item: any) => item?.po !== po), completed].sort(
+      (a: any, b: any) =>
+        parseWorkflowSortTs(b?.completedAt || b?.statusChangedAt || b?.createdAt || b?.date) -
+        parseWorkflowSortTs(a?.completedAt || a?.statusChangedAt || a?.createdAt || a?.date),
     ),
   );
   try {
@@ -1745,12 +1745,15 @@ const finalizePartnerRatedWorkflow = ({
           parseWorkflowSortTs(a?.createdAt || a?.timestamp || a?.time),
       )
       .slice(0, 20);
-    localStorage.setItem('partner_alerts', JSON.stringify(nextAlerts));
+    writeWorkflowStorage('partner_alerts', nextAlerts);
   } catch {
     // Best-effort alert continuity only.
   }
 
-  return { completionChatText };
+  return {
+    completionChatText,
+    persistedHistory: Array.isArray(persistedHistory.value) ? persistedHistory.value : undefined,
+  };
 };
 const buildVariationPriceListRows = (
   rows: { item: string; qty: string; unit: string; rate: string; amount: string }[],
@@ -3843,7 +3846,7 @@ export default function FixerProPage() {
 
       if (changed) {
         try { partnerReqs = persistWorkflowCacheItems("partner_mock_dyn_req", partnerReqs); } catch {}
-        try { localStorage.setItem("partner_alerts", JSON.stringify(partnerAlerts)); } catch {}
+        try { writeWorkflowStorage("partner_alerts", partnerAlerts); } catch {}
         window.dispatchEvent(new Event("cblue-workflow-updated"));
       }
     } catch {
@@ -5435,8 +5438,8 @@ export default function FixerProPage() {
                       chatHistory: getLocalChatHistory(po),
                     };
                     const nextHistory = [...(Array.isArray(history) ? history.filter((x: any) => x.po !== po) : []), historyEntry];
-                    localStorage.setItem('ghis_mock_history', JSON.stringify(nextHistory));
-                    setMockHistory(nextHistory);
+                    const persistedHistory = setWorkflowStorageItem(localStorage, 'ghis_mock_history', nextHistory);
+                    setMockHistory(Array.isArray(persistedHistory.value) ? persistedHistory.value : nextHistory);
                   } catch {}
                   try {
                     const partnerAlerts = JSON.parse(localStorage.getItem('partner_alerts') || '[]');
@@ -5450,8 +5453,8 @@ export default function FixerProPage() {
                       createdAt: declineAt,
                       dot: 'bg-red-500',
                     });
-                    localStorage.setItem('partner_alerts', JSON.stringify(partnerAlerts.slice(0, 20)));
-                    setPartnerPersistedAlerts(partnerAlerts.slice(0, 20));
+                    const nextAlerts = writeWorkflowStorage('partner_alerts', partnerAlerts.slice(0, 20));
+                    setPartnerPersistedAlerts(Array.isArray(nextAlerts) ? nextAlerts : partnerAlerts.slice(0, 20));
                   } catch {}
                   try {
                     const customerEmailKey = String(inquiry.customerEmail || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
@@ -5466,7 +5469,7 @@ export default function FixerProPage() {
                       createdAt: declineAt,
                       dot: 'bg-red-400',
                     }, ...(Array.isArray(existingAlerts) ? existingAlerts : [])].slice(0, 20);
-                    localStorage.setItem(customerAlertsKey, JSON.stringify(nextAlerts));
+                    writeWorkflowStorage(customerAlertsKey, nextAlerts);
                   } catch {}
                   await updatePropInquiry(inquiry.id, { status: "DECLINED", step: 8 }, po);
                   setPropInquiries((prev) => prev.map((p) => p.id === inquiry.id ? { ...p, status: 'DECLINED', step: 8, updatedAt: declineAt } : p));
@@ -5786,7 +5789,7 @@ export default function FixerProPage() {
                             dot: 'bg-purple-500',
                           },
                         ].slice(-20);
-                        localStorage.setItem('partner_alerts', JSON.stringify(nextAlerts));
+                        writeWorkflowStorage('partner_alerts', nextAlerts);
                         setPartnerPersistedAlerts(nextAlerts);
                       } catch {}
                       // Write customer alert to inform customer that partner confirmed the meeting
@@ -5812,8 +5815,8 @@ export default function FixerProPage() {
                         };
                         const nextCustAlerts = [confirmedCustAlert, ...(Array.isArray(existingCustAlerts) ? existingCustAlerts.filter((a: any) => a?.id !== custAlertId) : [])].slice(0, 20);
                         const nextLegacyCustAlerts = [confirmedCustAlert, ...(Array.isArray(legacyCustAlerts) ? legacyCustAlerts.filter((a: any) => a?.id !== custAlertId) : [])].slice(0, 20);
-                        localStorage.setItem(custAlertsKey, JSON.stringify(nextCustAlerts));
-                        localStorage.setItem('cblue_customer_alerts', JSON.stringify(nextLegacyCustAlerts));
+                        writeWorkflowStorage(custAlertsKey, nextCustAlerts);
+                        writeWorkflowStorage('cblue_customer_alerts', nextLegacyCustAlerts);
                       } catch {}
                       setMockDynReqs(persistedNextReqs);
                       setMockActiveState(persistedNextActive);
@@ -6102,9 +6105,8 @@ export default function FixerProPage() {
                       ...(Array.isArray(history) ? history.filter((x: any) => x.po !== po) : []),
                       declinedEntry,
                     ];
-                    pruneStorageIfNeeded();
-                    localStorage.setItem('ghis_mock_history', JSON.stringify(nextHistory));
-                    setMockHistory(nextHistory);
+                    const persistedHistory = setWorkflowStorageItem(localStorage, 'ghis_mock_history', nextHistory);
+                    setMockHistory(Array.isArray(persistedHistory.value) ? persistedHistory.value : nextHistory);
                   } catch {}
 
                   // 3. Partner alert
@@ -6122,8 +6124,8 @@ export default function FixerProPage() {
                       createdAt: Date.now(),
                       dot: 'bg-red-500',
                     });
-                    localStorage.setItem('partner_alerts', JSON.stringify(partnerAlerts));
-                    setPartnerPersistedAlerts(partnerAlerts);
+                    const persistedAlerts = writeWorkflowStorage('partner_alerts', partnerAlerts);
+                    setPartnerPersistedAlerts(Array.isArray(persistedAlerts) ? persistedAlerts : partnerAlerts);
                   } catch {}
 
                   setDeclineModalOpen(false);
@@ -6914,9 +6916,9 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
           };
           const writeCustomerAlerts = (key: string) => {
             const existing = JSON.parse(localStorage.getItem(key) || '[]');
-            localStorage.setItem(
+            writeWorkflowStorage(
               key,
-              JSON.stringify([customerVariationAlert, ...(Array.isArray(existing) ? existing.filter((a: any) => a?.id !== custAlertId) : [])].slice(0, 20)),
+              [customerVariationAlert, ...(Array.isArray(existing) ? existing.filter((a: any) => a?.id !== custAlertId) : [])].slice(0, 20),
             );
           };
           writeCustomerAlerts('cblue_customer_alerts');
