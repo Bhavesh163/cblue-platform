@@ -73,7 +73,7 @@ export class SubscriptionService {
     });
     if (exact) return exact;
 
-    return this.prisma.subscriber.findFirst({
+    const insensitiveMatch = await this.prisma.subscriber.findFirst({
       where: {
         email: {
           equals: normalizedEmail,
@@ -81,6 +81,19 @@ export class SubscriptionService {
         },
       },
     });
+    if (insensitiveMatch) return insensitiveMatch;
+
+    const containsMatch = await this.prisma.subscriber.findFirst({
+      where: {
+        email: {
+          contains: normalizedEmail,
+          mode: 'insensitive',
+        },
+      },
+    });
+    return this.normalizeEmail(containsMatch?.email) === normalizedEmail
+      ? containsMatch
+      : null;
   }
 
   private async findUserByEmail(email?: string | null) {
@@ -182,7 +195,15 @@ export class SubscriptionService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    const isValid = await bcrypt.compare(dto.password, subscriber.passwordHash);
+    const password = String(dto.password || '');
+    const passwordCandidates = Array.from(new Set([password, password.trim()]))
+      .filter(Boolean);
+    const isValid = await passwordCandidates.reduce(
+      async (matchedPromise, candidate) =>
+        (await matchedPromise) ||
+        bcrypt.compare(candidate, subscriber.passwordHash),
+      Promise.resolve(false),
+    );
     if (!isValid) {
       throw new UnauthorizedException('Invalid email or password');
     }

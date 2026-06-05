@@ -2011,11 +2011,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         if (p) setMockPayments(JSON.parse(p));
         if (a) {
           const parsedActive = filterVisibleWorkflowItems(JSON.parse(a));
-          setMockActiveItems((prev) => (parsedActive.length === 0 && prev.length > 0 ? prev : parsedActive));
+          setMockActiveItems(parsedActive);
         }
         if (d) {
           const parsedDyn = filterVisibleWorkflowItems(JSON.parse(d));
-          setMockDynRequests((prev) => (parsedDyn.length === 0 && prev.length > 0 ? prev : parsedDyn));
+          setMockDynRequests(parsedDyn);
         }
         if (h) setMockHistory(filterVisibleWorkflowItems(JSON.parse(h)));
       } catch {}
@@ -2925,6 +2925,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         const reason = note.match(/Reason:\s*([^.]*)/i)?.[1]?.trim() || existing.cancelReason || '';
         const cancelledByCustomer = isCustomerCancellationNote(note) || existing.statusName === 'Cancelled by Customer' || Boolean(existing.cancelReason);
         const projectDetails = pickProjectDetails(
+          po,
           order?.projectDetails,
           order?.description,
           existing.projectDetails,
@@ -4315,6 +4316,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       const completedAt = entry.completedAt || entry.updatedAt || entry.statusChangedAt || entry.createdAt || entry.date || existing.completedAt || Date.now();
       const fee = entry.fee || entry.budget || (entry.estimatedPrice ? `฿${Number(entry.estimatedPrice).toLocaleString()}` : existing.fee || '฿0');
       const projectDetails = pickProjectDetails(
+        po,
         entry.projectDetails,
         entry.description,
         entry.desc,
@@ -6111,8 +6113,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                       stepName: "Cancelled by Customer",
                       cancelReason: reason,
                       statusNote: `Customer cancelled. Reason: ${reason}`,
-                      projectDetails: pickProjectDetails(item.projectDetails, item.description, item.desc, backendOrder?.description),
-                      description: pickProjectDetails(item.projectDetails, item.description, item.desc, backendOrder?.description),
+                      projectDetails: pickProjectDetails(po, item.projectDetails, item.description, item.desc, backendOrder?.description),
+                      description: pickProjectDetails(po, item.projectDetails, item.description, item.desc, backendOrder?.description),
                       completedAt: createdAt,
                       statusChangedAt: createdAt,
                       date: fmtDateTime(createdAt),

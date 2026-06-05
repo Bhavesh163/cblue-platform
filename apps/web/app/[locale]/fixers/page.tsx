@@ -1365,8 +1365,8 @@ const ensureLegacyPartnerCancel3429Repair = () => {
     stepName: "Cancelled by Customer",
     cancelReason: reason,
     statusNote: `Customer cancelled. Reason: ${reason}`,
-    projectDetails: pickProjectDetails(source?.projectDetails, source?.description, source?.desc, source?.service, serviceName),
-    description: pickProjectDetails(source?.projectDetails, source?.description, source?.desc, source?.service, serviceName),
+    projectDetails: pickProjectDetails(po, source?.projectDetails, source?.description, source?.desc, source?.service, serviceName),
+    description: pickProjectDetails(po, source?.projectDetails, source?.description, source?.desc, source?.service, serviceName),
     completedAt: createdAt,
     statusChangedAt: createdAt,
     createdAt: source?.createdAt || createdAt,
@@ -1673,6 +1673,7 @@ const finalizePartnerRatedWorkflow = ({
   const activeSnapshot = active.find((item: any) => item?.po === po) || {};
   const updatedActive = active.filter((item: any) => item?.po !== po);
   const normalizedDescription = pickProjectDetails(
+    po,
     job?.projectDetails,
     job?.description,
     job?.desc,
@@ -4059,6 +4060,7 @@ export default function FixerProPage() {
       const customer = firstNameOnly(entry.customer || entry.customerName || entry.fixerAlias || existing.customer, 'Customer');
       const completedAt = entry.completedAt || entry.statusChangedAt || entry.updatedAt || entry.createdAt || entry.date || existing.completedAt || existing.statusChangedAt || existing.createdAt || Date.now();
       const description = pickProjectDetails(
+        po,
         entry.projectDetails,
         entry.description,
         entry.desc,
@@ -4624,7 +4626,7 @@ export default function FixerProPage() {
         date: fmtDateTime(createdAt),
         createdAt,
         description: 'Customer sent a site meeting invitation. Please review and confirm the meeting time.',
-        projectDetails: pickProjectDetails(job.projectDetails, job.description, job.desc),
+        projectDetails: pickProjectDetails(job.po, job.projectDetails, job.description, job.desc),
         meetingDate: inviteDetails.meetingDateLabel || job.meetingDate || '',
         meetingTime: inviteDetails.meetingTimeLabel || job.meetingTime || '',
         meetingDateLabel: inviteDetails.meetingDateLabel || job.meetingDateLabel || job.meetingDate || '',

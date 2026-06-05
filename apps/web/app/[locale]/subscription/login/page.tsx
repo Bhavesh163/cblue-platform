@@ -21,15 +21,17 @@ function SubscriptionLoginPageContent() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!email.trim()) {
+    const normalizedEmail = email.trim();
+    const normalizedPassword = password.trim();
+    if (!normalizedEmail) {
       setError(locale === "th" ? "กรุณากรอกอีเมล" : locale === "zh" ? "请输入邮箱" : "Please enter your email");
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
       setError(locale === "th" ? "รูปแบบอีเมลไม่ถูกต้อง" : locale === "zh" ? "邮箱格式不正确" : "Invalid email format");
       return;
     }
-    if (password.length < 8) {
+    if (normalizedPassword.length < 8) {
       setError(t("passwordMin8"));
       return;
     }
@@ -40,7 +42,7 @@ function SubscriptionLoginPageContent() {
       const res = await fetch("/api/v1/subscription/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: normalizedEmail, password: normalizedPassword }),
       });
 
       if (!res.ok) {

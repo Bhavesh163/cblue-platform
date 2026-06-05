@@ -217,6 +217,36 @@ describe('UserService', () => {
       expect(result.id).toBe('user-1');
     });
 
+    it('should fall back when Prisma relation hydration returns an inconsistent query error', async () => {
+      const hydrationError = new Error(
+        'Inconsistent query result: Field fixer is required to return data, got null instead.',
+      );
+      prisma.user.findUnique
+        .mockRejectedValueOnce(hydrationError)
+        .mockResolvedValueOnce({
+          id: 'user-1',
+          name: 'Suppadesh',
+          email: 'suppadesh@example.com',
+          phone: '+66812345678',
+          role: 'FIXER',
+          createdAt: new Date('2026-06-01T00:00:00.000Z'),
+          addresses: [],
+          fixer: null,
+        });
+
+      const result = await service.getProfile('user-1');
+
+      expect(prisma.user.findUnique).toHaveBeenCalledTimes(2);
+      expect(result).toMatchObject({
+        id: 'user-1',
+        fixer: {
+          userId: 'user-1',
+          status: 'APPROVED',
+          tier: 'STANDARD',
+        },
+      });
+    });
+
     it('should rethrow non-schema errors', async () => {
       prisma.user.findUnique.mockRejectedValue(new Error('connection refused'));
 

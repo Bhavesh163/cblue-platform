@@ -196,6 +196,47 @@ describe('SubscriptionService', () => {
         },
       });
     });
+
+    it('should recover login when subscriber email has stored whitespace and password input has surrounding whitespace', async () => {
+      (bcrypt.compare as jest.Mock).mockImplementation(async (password) => password === 'correct-password');
+      prismaService.subscriber.findUnique.mockResolvedValue(null);
+      prismaService.subscriber.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          id: 'sub-1',
+          email: ' ghiscafe@gmail.com ',
+          phone: '',
+          name: 'Ghis Cafe',
+          company: null,
+          status: 'ACTIVE',
+          passwordHash: 'hash',
+        });
+      prismaService.user.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null);
+      prismaService.user.create.mockResolvedValue({
+        id: 'user-1',
+        email: 'ghiscafe@gmail.com',
+        subscriberId: 'sub-1',
+        isActive: true,
+      });
+
+      const result = await service.login({
+        email: 'ghiscafe@gmail.com',
+        password: ' correct-password ',
+      });
+
+      expect(result).toHaveProperty('accessToken', 'test_token');
+      expect(bcrypt.compare).toHaveBeenCalledWith('correct-password', 'hash');
+      expect(prismaService.subscriber.findFirst).toHaveBeenNthCalledWith(2, {
+        where: {
+          email: {
+            contains: 'ghiscafe@gmail.com',
+            mode: 'insensitive',
+          },
+        },
+      });
+    });
   });
 
   describe('refreshSession', () => {

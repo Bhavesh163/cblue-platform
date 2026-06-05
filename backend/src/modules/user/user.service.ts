@@ -299,7 +299,7 @@ export class UserService {
     if (/^P(?:1014|2021|2022)$/.test(code)) return true;
 
     const message = error instanceof Error ? error.message : String(error);
-    return /\bP(?:1014|202[12])\b|column .*does not exist|table .*does not exist|relation .*does not exist|does not exist in the current database|no such (?:table|column)|Unknown field/i.test(
+    return /\bP(?:1014|202[12])\b|column .*does not exist|table .*does not exist|relation .*does not exist|does not exist in the current database|no such (?:table|column)|Unknown field|Inconsistent query result|required to return data|Error converting field|Failed to convert/i.test(
       message,
     );
   }
