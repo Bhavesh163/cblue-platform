@@ -2557,18 +2557,48 @@ export default function FixerProPage() {
         }
 
         // Eagerly set state from localStorage to prevent flash of logged-out state
+        const storedPartner = readPartnerDashboardSubscriber();
+        const storedAccess = inferStoredPartnerAccess(storedPartner);
         if (isMounted) {
-          const parsed = readPartnerDashboardSubscriber();
-          if (parsed) {
+          if (storedPartner) {
             setPartner(prev => {
-              if (prev?.id && parsed.id !== prev.id) return prev;
-              return parsed;
+              if (prev?.id && storedPartner.id !== prev.id) return prev;
+              return storedPartner;
             });
-            const storedAccess = inferStoredPartnerAccess(parsed);
             setIsFixer(storedAccess.isFixer);
             setIsLister(storedAccess.isLister);
           }
         }
+
+        const refreshPartnerData = async (access = storedAccess) => {
+          try {
+            const [ordersRes, propRes] = await Promise.all([
+              access.isFixer
+                ? fetch("/api/v1/orders/fixer", { headers: { Authorization: `Bearer ${token}` } }).catch(() => null)
+                : Promise.resolve(null),
+              fetch("/api/v1/properties/my", { headers: { Authorization: `Bearer ${token}` } }).catch(() => null),
+            ]);
+
+            if (ordersRes && ordersRes.ok && isMounted) {
+              setOrders(await ordersRes.json());
+              window.dispatchEvent(new Event("cblue-workflow-updated"));
+              window.dispatchEvent(new Event("cblue-chat-updated"));
+            } else if (!access.isFixer && isMounted) {
+              setOrders([]);
+            }
+
+            if (propRes && propRes.ok && isMounted) {
+              const listedProperties = await propRes.json();
+              setMyProperties(Array.isArray(listedProperties) ? listedProperties : []);
+              setIsLister(Array.isArray(listedProperties) && listedProperties.length > 0);
+            } else if (!access.isLister && isMounted) {
+              setMyProperties([]);
+              setIsLister(false);
+            }
+          } catch {
+            // Preserve last visible partner data during transient profile fallback refreshes.
+          }
+        };
 
         const res = await fetch("/api/v1/users/me", {
           headers: { Authorization: `Bearer ${token}` }
@@ -2578,67 +2608,66 @@ export default function FixerProPage() {
         });
 
         if (!res) {
-          return;
-        }
-
-        if (res.ok) {
+          if (isMounted) {
+            if (storedPartner) {
+              setPartner(prev => {
+                if (prev?.id && storedPartner.id !== prev.id) return prev;
+                return storedPartner;
+              });
+            }
+            setIsFixer(prev => prev || storedAccess.isFixer);
+            setIsLister(prev => prev || storedAccess.isLister);
+          }
+          await refreshPartnerData(storedAccess);
+        } else if (res.ok) {
           const user = await res.json();
-          const hasFixer = !!user.fixer;
+          const profileFallback = !!user.profileFallback;
+          const profileRole = String(user.role || "").toUpperCase();
+          const hasFixer = !!user.fixer || profileRole === "FIXER" || (profileFallback && storedAccess.isFixer);
           if (isMounted) {
             setIsFixer(hasFixer);
             
             // Generate base info
             let pInfo: any = {
-              id: user.id,
-              name: user.name,
-              email: user.email,
-              phone: user.phone,
+              ...(profileFallback && storedPartner ? storedPartner : {}),
+              id: user.id || storedPartner?.id,
+              name: user.name || storedPartner?.name || user.email || storedPartner?.email || "Cblue partner",
+              email: user.email || storedPartner?.email || "",
+              phone: user.phone || storedPartner?.phone || "",
               status: "ACTIVE"
             };
 
             // If they are actually a fixer, poplate fixer schema
             if (hasFixer) {
               pInfo = {
-                id: user.id,
-                name: user.fixer?.contactName || user.name,
-                email: user.email,
-                phone: user.fixer?.contactPhone || user.phone,
-                company: user.fixer?.companyName || "-",
-                status: user.fixer?.status || "ACTIVE",
-                tier: user.fixer?.aiTier || user.fixer?.tier || "Standard",
-                tierScore: user.fixer?.aiScore || 69,
-                breakdown: user.fixer?.aiBreakdown || [],
-                flags: user.fixer?.aiFlags || [],
-                credentialStatus: user.fixer?.aiCredentialStatus || "unverified",
-                createdAt: user.fixer?.createdAt || user.createdAt,
-                priceList: user.fixer?.priceList ?? [],
+                ...pInfo,
+                id: user.id || storedPartner?.id,
+                name: user.fixer?.contactName || user.name || storedPartner?.name || "Cblue partner",
+                email: user.email || storedPartner?.email || "",
+                phone: user.fixer?.contactPhone || user.phone || storedPartner?.phone || "",
+                company: user.fixer?.companyName || storedPartner?.company || "-",
+                status: user.fixer?.status || storedPartner?.status || "ACTIVE",
+                tier: user.fixer?.aiTier || user.fixer?.tier || storedPartner?.tier || "Standard",
+                tierScore: user.fixer?.aiScore || storedPartner?.tierScore || 69,
+                breakdown: user.fixer?.aiBreakdown || storedPartner?.breakdown || [],
+                flags: user.fixer?.aiFlags || storedPartner?.flags || [],
+                credentialStatus: user.fixer?.aiCredentialStatus || storedPartner?.credentialStatus || "unverified",
+                createdAt: user.fixer?.createdAt || user.createdAt || storedPartner?.createdAt,
+                priceList: user.fixer?.priceList ?? storedPartner?.priceList ?? [],
               };
             }
             
             setPartner(pInfo);
-            writePartnerDashboardSession(pInfo, token);
-            localStorage.setItem("subscriber", JSON.stringify(pInfo));
+            if (!profileFallback) {
+              writePartnerDashboardSession(pInfo, token);
+              localStorage.setItem("subscriber", JSON.stringify(pInfo));
+            }
             if (Array.isArray(pInfo.priceList) && pInfo.priceList.length > 0) {
               try { localStorage.setItem('cblue_partner_pricelist_general', JSON.stringify(pInfo.priceList)); } catch {}
             }
           }
 
-          if (hasFixer) {
-            const ordersRes = await fetch("/api/v1/orders/fixer", { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
-            if (ordersRes && ordersRes.ok && isMounted) setOrders(await ordersRes.json());
-          } else if (isMounted) {
-            setOrders([]);
-          }
-
-          const propRes = await fetch("/api/v1/properties/my", { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
-          if (propRes && propRes.ok && isMounted) {
-            const listedProperties = await propRes.json();
-            setMyProperties(Array.isArray(listedProperties) ? listedProperties : []);
-            setIsLister(Array.isArray(listedProperties) && listedProperties.length > 0);
-          } else if (isMounted) {
-            setMyProperties([]);
-            setIsLister(false);
-          }
+          await refreshPartnerData({ isFixer: hasFixer, isLister: storedAccess.isLister });
 
         } else if (res.status === 401 || res.status === 403) {
           clearPartnerDashboardSession();
@@ -2658,6 +2687,7 @@ export default function FixerProPage() {
           }
           setIsFixer(prev => prev || storedAccess.isFixer);
           setIsLister(prev => prev || storedAccess.isLister);
+          await refreshPartnerData(storedAccess);
         }
       } catch { /* ignore */ }
       if (isMounted) setLoading(false);
@@ -4342,9 +4372,10 @@ export default function FixerProPage() {
       let changed = false;
 
       const upsert = (item: any) => {
-        const exists = next.some((x: any) => x.po === item.po && x.type === item.type);
+        const itemType = String(item.workflowType || item.type || '');
+        const exists = next.some((x: any) => x.po === item.po && String(x.workflowType || x.type || '') === itemType);
         if (exists) return;
-        next = [...next.filter((x: any) => !(x.po === item.po && x.type === item.type)), item];
+        next = [...next.filter((x: any) => !(x.po === item.po && String(x.workflowType || x.type || '') === itemType)), item];
         changed = true;
       };
 
@@ -9616,7 +9647,9 @@ function PartnerProperties({ locale, prefix, properties, propertyInquiries }: { 
 
 /* ===== DASHBOARD LOGGED IN STATE ===== */
 function PartnerDashboard({ locale, partner, prefix, onLogout, orders }: { locale: string; partner: any; prefix: string; onLogout: () => void, orders?: any[] }) {
-  const activeOrders = orders ? orders.filter((o: any) => o.status === 'IN_PROGRESS' || o.status === 'CONFIRMED') : [];
+  const activeOrders = orders
+    ? orders.filter((o: any) => !['COMPLETED', 'CANCELLED', 'DECLINED'].includes(String(o.status || '').toUpperCase()))
+    : [];
   const requestOrders = orders ? orders.filter((o: any) => o.status === 'PENDING' || o.status === 'CREATED') : [];
 
   const [activeTab, setActiveTab] = useState<"overview"|"profile"|"active"|"properties"|"history"|"chat"|"notifications">("active");
@@ -9645,7 +9678,7 @@ function PartnerDashboard({ locale, partner, prefix, onLogout, orders }: { local
       </div>
 
       {activeTab === "profile" && <PartnerProfile locale={locale} prefix={prefix} partner={partner} />}
-   {activeTab === "active" && <PartnerJobs locale={locale} activeJobs={[...activeOrders, ...(orders || [])]} priceList={(partner as any)?.priceList} />}
+   {activeTab === "active" && <PartnerJobs locale={locale} activeJobs={activeOrders} priceList={(partner as any)?.priceList} />}
    
   
       

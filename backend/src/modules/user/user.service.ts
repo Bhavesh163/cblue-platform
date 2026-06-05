@@ -84,9 +84,8 @@ export class UserService {
         },
       });
     } catch (error) {
-      if (!this.isSchemaDriftError(error)) throw error;
       this.logger.warn(
-        `Profile read hit live schema drift for user ${userId}; retrying with legacy-safe select: ${
+        `Profile read failed for user ${userId}; retrying with legacy-safe select: ${
           error instanceof Error ? error.message : String(error)
         }`,
       );

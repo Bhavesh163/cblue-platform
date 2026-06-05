@@ -778,6 +778,16 @@ export default function DashboardPage() {
           if (!consent) setShowPdpa(true);
         }
 
+        const refreshCustomerOrders = async () => {
+          const ordersRes = await fetch("/api/v1/orders/my", { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
+          if (ordersRes && ordersRes.ok && isMounted) {
+            setHasFetchedOrders(true);
+            setOrders(await ordersRes.json());
+            window.dispatchEvent(new Event("cblue-workflow-updated"));
+            window.dispatchEvent(new Event("cblue-chat-updated"));
+          }
+        };
+
         const res = await fetch("/api/v1/users/me", {
           headers: { Authorization: `Bearer ${token}` }
         }).catch(err => {
@@ -786,18 +796,21 @@ export default function DashboardPage() {
         });
 
         if (!res) {
+          await refreshCustomerOrders();
           return;
         }
 
         if (res.ok) {
           const user = await res.json();
           if (isMounted) {
+            const storedSubscriber = readCustomerDashboardSubscriber();
             const hasFixer = !!user.fixer;
             let subInfo: any = { 
-              id: user.id, 
-              name: user.name, 
-              email: user.email, 
-              phone: user.phone, 
+              ...(user.profileFallback && storedSubscriber ? storedSubscriber : {}),
+              id: user.id || storedSubscriber?.id, 
+              name: user.name || storedSubscriber?.name || user.email || storedSubscriber?.email || "Cblue member", 
+              email: user.email || storedSubscriber?.email || "", 
+              phone: user.phone || storedSubscriber?.phone || "", 
               status: "ACTIVE" 
             };
 
@@ -807,13 +820,14 @@ export default function DashboardPage() {
             }
 
             setSubscriber(subInfo);
-            writeCustomerDashboardSession(subInfo, token);
-            // Overwrite stored to fix any bad hydration
-            localStorage.setItem("subscriber", JSON.stringify(subInfo));
+            if (!user.profileFallback) {
+              writeCustomerDashboardSession(subInfo, token);
+              // Overwrite stored to fix any bad hydration
+              localStorage.setItem("subscriber", JSON.stringify(subInfo));
+            }
           }
 
-          const ordersRes = await fetch("/api/v1/orders/my", { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
-          if (ordersRes && ordersRes.ok && isMounted) { setHasFetchedOrders(true); setOrders(await ordersRes.json()); }
+          await refreshCustomerOrders();
 
         } else if (res.status === 401 || res.status === 403) {
           clearCustomerDashboardSession();
@@ -824,6 +838,8 @@ export default function DashboardPage() {
             setOrders([]);
             setHasFetchedOrders(false);
           }
+        } else {
+          await refreshCustomerOrders();
         }
       } catch { /* ignore */ }
       if (isMounted) setLoading(false);
@@ -4633,7 +4649,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         ))}
       </div>
       
-      {activeTab === "profile" && <ProfileTab locale={locale} prefix={prefix} subscriber={subscriber} activeOrders={activeOrders} onOrderClick={handleOrderClick} historyOrders={historyOrders} />}
+      {activeTab === "profile" && <ProfileTab locale={locale} prefix={prefix} subscriber={subscriber} activeOrders={combinedActiveWithProp} onOrderClick={handleOrderClick} historyOrders={historyOrders} />}
       
       {activeTab === "requests" && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6 pb-6">
@@ -5289,7 +5305,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                   onClick={() => {
                     const po = rateModal.po;
                     const job = mockActiveItems.find((x: any) => x.po === po);
-                    const completed = { ...(job || rateModal), step: 11, completedAt: new Date().toISOString(), status: 'COMPLETED', rating: rateStars };
+                    const completed = { ...(job || rateModal), step: 11, completedAt: new Date().toISOString(), status: 'COMPLETED', rating: rateStars, customerRating: rateStars, chatHistory: readStoredChatHistory(po) };
                     const newActive = mockActiveItems.filter((x: any) => x.po !== po);
                     const newReqs = mockDynRequests.filter((x: any) => x.po !== po);
                     const prevHist = JSON.parse(localStorage.getItem('ghis_mock_history') || '[]');
@@ -5302,6 +5318,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                     setMockActiveItems(newActive);
                     setMockDynRequests(newReqs);
                     setMockHistory(Array.isArray(persistedHistory.value) ? persistedHistory.value : newHist);
+                    try { localStorage.setItem(`chat_closed_${po}`, '1'); } catch {}
                     void postBackendWorkflowMessage(po, `[SYSTEM] Customer rated this project ${rateStars}/5 stars. Workflow completed.`);
                     setRateModal(null);
                     setActiveTab("history");
@@ -5661,6 +5678,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                         }),
                       ];
                       writeWorkflowStorage('partner_mock_dyn_req', nextPartnerReqs);
+                      window.dispatchEvent(new Event("storage"));
+                      window.dispatchEvent(new CustomEvent("cblue-workflow-updated", { detail: { source: "customer-meeting-invite", po: meetingModal.po } }));
+                      window.dispatchEvent(new CustomEvent("cblue-chat-updated", { detail: { source: "customer-meeting-invite", po: meetingModal.po } }));
                       const rawPartnerAlerts = JSON.parse(localStorage.getItem('partner_alerts') || '[]');
                       const partnerAlerts = Array.isArray(rawPartnerAlerts) ? rawPartnerAlerts : [];
                       const partnerAlert = {

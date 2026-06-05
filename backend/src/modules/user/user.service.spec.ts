@@ -285,7 +285,36 @@ describe('UserService', () => {
       });
     });
 
-    it('should rethrow non-schema errors', async () => {
+    it('should retry safe profile reads when the primary select throws an unexpected error', async () => {
+      const primarySelectError = new Error(
+        'Cannot read properties of undefined while hydrating company profile.',
+      );
+      prisma.user.findUnique
+        .mockRejectedValueOnce(primarySelectError)
+        .mockResolvedValueOnce({
+          id: 'user-1',
+          name: 'Ghis',
+          email: 'ghiscafe@gmail.com',
+          phone: '+66812345678',
+          role: 'USER',
+          createdAt: new Date('2026-06-01T00:00:00.000Z'),
+          addresses: [],
+          fixer: null,
+        });
+
+      const result = await service.getProfile('user-1');
+
+      expect(prisma.user.findUnique).toHaveBeenCalledTimes(2);
+      expect(result).toMatchObject({
+        id: 'user-1',
+        email: 'ghiscafe@gmail.com',
+        company: null,
+        addresses: [],
+        fixer: null,
+      });
+    });
+
+    it('should rethrow when every profile read fails with a non-schema error', async () => {
       prisma.user.findUnique.mockRejectedValue(new Error('connection refused'));
 
       await expect(service.getProfile('user-1')).rejects.toThrow(

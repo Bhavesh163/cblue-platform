@@ -62,6 +62,79 @@ const shouldReturnStatusFallback = (method: string, routePath: string) =>
   method === "PUT" && /^orders\/[^/]+\/status$/.test(routePath);
 const shouldReturnChatPostFallback = (method: string, routePath: string) =>
   method === "POST" && /^orders\/[^/]+\/chat$/.test(routePath);
+const shouldReturnUserProfileFallback = (method: string, routePath: string) =>
+  method === "GET" && routePath === "users/me";
+
+function getRequestAuthToken(request: NextRequest) {
+  const auth = request.headers.get("authorization") || "";
+  const match = auth.match(/^Bearer\s+(.+)$/i);
+  if (match?.[1]) return match[1].trim();
+  return (
+    request.cookies.get("subscriber_token")?.value ||
+    request.cookies.get("token")?.value ||
+    request.cookies.get("accessToken")?.value ||
+    request.cookies.get("auth_token")?.value ||
+    ""
+  );
+}
+
+function decodeJwtPayload(token: string) {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(
+      normalized.length + ((4 - (normalized.length % 4)) % 4),
+      "=",
+    );
+    const raw = atob(padded);
+    const bytes = Uint8Array.from(raw, (char) => char.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    return null;
+  }
+}
+
+function buildUserProfileFallback(request: NextRequest) {
+  const payload = decodeJwtPayload(getRequestAuthToken(request));
+  if (!payload || typeof payload !== "object") return null;
+
+  const source = payload as Record<string, unknown>;
+  const id = String(source.sub || source.userId || source.id || "").trim();
+  if (!id) return null;
+
+  const email = String(source.email || "").trim();
+  const phone = String(source.phone || "").trim();
+  const role = String(source.role || "").trim().toUpperCase();
+  const name = String(source.name || source.email || source.phone || "Cblue member").trim();
+  const isFixer = role === "FIXER";
+
+  return {
+    id,
+    name,
+    email,
+    phone,
+    role: role || undefined,
+    company: null,
+    createdAt: null,
+    addresses: [],
+    fixer: isFixer
+      ? {
+          id: null,
+          userId: id,
+          status: "APPROVED",
+          tier: "STANDARD",
+          skills: [],
+          availability: null,
+          images: [],
+          contactName: name,
+          contactPhone: phone,
+          companyName: null,
+        }
+      : null,
+    profileFallback: true,
+  };
+}
 
 async function handler(
   request: NextRequest,
@@ -83,11 +156,7 @@ async function handler(
     });
     
     // Explicitly add Authorization header from known auth cookies if missing.
-    const token =
-      request.cookies.get("subscriber_token")?.value ||
-      request.cookies.get("token")?.value ||
-      request.cookies.get("accessToken")?.value ||
-      request.cookies.get("auth_token")?.value;
+    const token = getRequestAuthToken(request);
     if (token && !headers.has('authorization')) {
       headers.set('Authorization', `Bearer ${token}`);
     }
@@ -166,6 +235,15 @@ async function handler(
         { status: 201, headers: { "cache-control": "no-store" } },
       );
     }
+    if (upstream.status >= 500 && shouldReturnUserProfileFallback(method, routePath)) {
+      const fallbackProfile = buildUserProfileFallback(request);
+      if (fallbackProfile) {
+        return Response.json(fallbackProfile, {
+          status: 200,
+          headers: { "cache-control": "no-store" },
+        });
+      }
+    }
 
     // Build response (strip hop-by-hop)
     const resHeaders = new Headers();
@@ -206,6 +284,15 @@ async function handler(
         },
         { status: 201, headers: { "cache-control": "no-store" } },
       );
+    }
+    if (shouldReturnUserProfileFallback(method, routePath)) {
+      const fallbackProfile = buildUserProfileFallback(request);
+      if (fallbackProfile) {
+        return Response.json(fallbackProfile, {
+          status: 200,
+          headers: { "cache-control": "no-store" },
+        });
+      }
     }
     return Response.json(
       { error: "proxy_error", message: msg, backends: backendUrls },
