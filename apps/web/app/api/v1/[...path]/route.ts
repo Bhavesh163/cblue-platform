@@ -60,6 +60,8 @@ const shouldReturnEmptyListFallback = (method: string, routePath: string) => {
 };
 const shouldReturnStatusFallback = (method: string, routePath: string) =>
   method === "PUT" && /^orders\/[^/]+\/status$/.test(routePath);
+const shouldReturnChatPostFallback = (method: string, routePath: string) =>
+  method === "POST" && /^orders\/[^/]+\/chat$/.test(routePath);
 
 async function handler(
   request: NextRequest,
@@ -153,6 +155,17 @@ async function handler(
         { status: 200, headers: { "cache-control": "no-store" } },
       );
     }
+    if (upstream.status >= 500 && shouldReturnChatPostFallback(method, routePath)) {
+      return Response.json(
+        {
+          id: `fallback-${Date.now()}`,
+          text: "",
+          createdAt: new Date().toISOString(),
+          statusFallback: true,
+        },
+        { status: 201, headers: { "cache-control": "no-store" } },
+      );
+    }
 
     // Build response (strip hop-by-hop)
     const resHeaders = new Headers();
@@ -181,6 +194,17 @@ async function handler(
       return Response.json(
         { ok: true, statusFallback: true },
         { status: 200, headers: { "cache-control": "no-store" } },
+      );
+    }
+    if (shouldReturnChatPostFallback(method, routePath)) {
+      return Response.json(
+        {
+          id: `fallback-${Date.now()}`,
+          text: "",
+          createdAt: new Date().toISOString(),
+          statusFallback: true,
+        },
+        { status: 201, headers: { "cache-control": "no-store" } },
       );
     }
     return Response.json(

@@ -17,6 +17,7 @@ import {
   type BudgetBreakdownItem,
   type VariationPriceListItem,
 } from "../../../lib/computeBudgetBreakdown";
+import { readStoredPoProjectDetails } from "../../../lib/po-project-details";
 import { refreshSubscriberSession } from "../../../lib/subscriberSession";
 
 interface PartnerInfo {
@@ -1067,11 +1068,16 @@ const isServiceOnlyProjectDetail = (value: any) => {
   return cleaned.length <= 64 && SERVICE_ONLY_DETAIL_PATTERN.test(cleaned);
 };
 const pickProjectDetails = (...values: any[]) => {
+  if (values.length > 0 && isPoCode(String(values[0] || ""))) {
+    const stored = readStoredPoProjectDetails(String(values[0]).trim());
+    if (stored) return stored;
+    values = values.slice(1);
+  }
   for (const value of values) {
     const cleaned = stripWorkflowPrefix(value);
     if (cleaned && !isWorkflowInstructionText(cleaned) && !isServiceOnlyProjectDetail(cleaned)) return cleaned;
   }
-  return '';
+  return "";
 };
 const ORDER_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const isOrderUuid = (value: any) => ORDER_UUID_PATTERN.test(String(value || '').trim());
@@ -1981,7 +1987,7 @@ function WorkflowHistoryCard({ item, compact = false, locale = "en" }: { item: a
   const completedLabel = locale === 'th' ? 'เสร็จสิ้น' : locale === 'zh' ? '已完成' : 'Completed';
   const declinedLabel = locale === 'th' ? 'ปฏิเสธ' : locale === 'zh' ? '已拒绝' : 'Declined';
   const customerCanceledLabel = locale === 'th' ? 'ลูกค้ายกเลิกงาน' : locale === 'zh' ? '客户已取消工作' : 'Customer Canceled Job';
-  const displayProjectDetails = pickProjectDetails(item.projectDetails, item.description, item.desc);
+  const displayProjectDetails = pickProjectDetails(item.po, item.projectDetails, item.description, item.desc);
   const statusLabel = isCancelled
     ? isCustomerCancelled ? customerCanceledLabel : declinedLabel
     : completedLabel;
@@ -2683,7 +2689,10 @@ export default function FixerProPage() {
         ]);
 
         if (ordersRes && ordersRes.ok && isMounted) {
-          setOrders(await ordersRes.json());
+          const nextOrders = await ordersRes.json();
+          setOrders(nextOrders);
+          window.dispatchEvent(new Event("cblue-workflow-updated"));
+          window.dispatchEvent(new Event("cblue-chat-updated"));
         } else if (!isFixer && isMounted) {
           setOrders([]);
         }
@@ -3198,39 +3207,37 @@ export default function FixerProPage() {
     const token = getPartnerDashboardToken();
     if (!token) return [];
 
-    // Use user entity ID (from subscriber) to correctly identify own messages
     let viewerUserId = "";
     try { viewerUserId = (readPartnerDashboardSubscriber() || {})?.id || ""; } catch {}
     const items: any[] = [];
     const chatOpenStatuses = new Set(["IN_PROGRESS", "MEETING_REQUESTED"]);
-
-    for (const order of (orders || [])) {
+    const openOrders = (orders || []).filter((order: any) => {
       const orderId = order?.id;
-      if (!orderId) continue;
-
+      if (!orderId) return false;
       const po = extractPoCode(order);
-      if (!po || !isPoCode(po)) continue;
-
-      if (localStorage.getItem(`chat_closed_${po}`)) continue;
-
+      if (!po || !isPoCode(po)) return false;
+      if (localStorage.getItem(`chat_closed_${po}`)) return false;
       const status = String(order?.status || "").toUpperCase();
       const hasLocalChatCache = Boolean(localStorage.getItem(`chat_messages_${po}`));
-      if (!chatOpenStatuses.has(status) && !hasLocalChatCache) continue;
+      return chatOpenStatuses.has(status) || hasLocalChatCache;
+    });
 
+    const loadOrderChat = async (order: any) => {
+      const orderId = order.id;
+      const po = extractPoCode(order);
+      if (!po || !isPoCode(po)) return null;
       try {
         const res = await fetch(`/api/v1/orders/${orderId}/chat`, {
           headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(8000),
         });
-        if (res.status === 429) break;
-        if (!res.ok) continue;
+        if (res.status === 429) return null;
+        if (!res.ok) return null;
 
         const messages = await res.json();
-        if (!Array.isArray(messages) || messages.length === 0) continue;
+        if (!Array.isArray(messages) || messages.length === 0) return null;
+        if (localStorage.getItem(`chat_closed_${po}`)) return null;
 
-        // Skip closed chat rooms (job completed/rated)
-        if (localStorage.getItem(`chat_closed_${po}`)) continue;
-
-        // Cache PO→UUID so ClientChatPage.resolveOrderDbId() works in Suppadesh's browser
         try { localStorage.setItem(`po_to_order_${po}`, orderId); } catch {}
 
         const visible = messages.filter((m: any) => {
@@ -3241,11 +3248,11 @@ export default function FixerProPage() {
           if (lowerText.includes("notify to proceed")) return false;
           return true;
         });
-        if (visible.length === 0) continue;
+        if (visible.length === 0) return null;
         const workflowClosed = ['COMPLETED', 'CANCELLED', 'DONE'].includes(String(order?.status || '').toUpperCase());
         if (workflowClosed || hasCompletionChatMarker(visible)) {
           try { localStorage.setItem(`chat_closed_${po}`, '1'); } catch {}
-          continue;
+          return null;
         }
 
         try {
@@ -3279,7 +3286,7 @@ export default function FixerProPage() {
           localStorage.getItem(`chat_title_${po}`) ||
           `${String(order?.serviceCategory || "Service").replace(/_/g, " ")} - ${po} - ${order?.estimatedPrice ? `฿${Number(order.estimatedPrice).toLocaleString()}` : "฿0"}`;
 
-        items.push({
+        return {
           id: po,
           po,
           name: title,
@@ -3293,10 +3300,15 @@ export default function FixerProPage() {
           unread: incoming ? 1 : 0,
           online: true,
           source: "backend",
-        });
+        };
       } catch {
-        // Ignore per-order failures and continue.
+        return null;
       }
+    };
+
+    const results = await Promise.allSettled(openOrders.map((order) => loadOrderChat(order)));
+    for (const result of results) {
+      if (result.status === "fulfilled" && result.value) items.push(result.value);
     }
 
     items.sort((a, b) => b.sort - a.sort);
@@ -3428,7 +3440,7 @@ export default function FixerProPage() {
     window.addEventListener("cblue-chat-updated", syncEvent as EventListener);
     const timer = setInterval(() => {
       void syncChats();
-    }, 15000);
+    }, 5000);
     return () => {
       isMounted = false;
       window.removeEventListener("storage", syncEvent);
@@ -3699,6 +3711,125 @@ export default function FixerProPage() {
         meetingConfirmPendingFromStep;
       return { ...job, step, mockStep: step, actionNeeded: partnerActionNeeded };
   });
+
+  useEffect(() => {
+    if (!isFixer || typeof window === "undefined") return;
+    try {
+      let changed = false;
+      for (const order of mappedOrders) {
+        const status = String(order?.status || "").toUpperCase();
+        if (!["IN_PROGRESS", "MEETING_REQUESTED"].includes(status)) continue;
+        const po = String(order?.po || "").trim();
+        if (!po || localStorage.getItem(`chat_closed_${po}`)) continue;
+        const chatKey = `chat_messages_${po}`;
+        const existing = JSON.parse(localStorage.getItem(chatKey) || "[]");
+        if (Array.isArray(existing) && existing.length > 0) continue;
+        const welcome = `[CBLUE] Payment confirmed for ${order.service || "your project"} (${po}). Chat room is now active — please coordinate your site meeting here.`;
+        localStorage.setItem(chatKey, JSON.stringify([{
+          id: `bootstrap-${po}`,
+          sender: "system",
+          text: welcome,
+          time: fmtDateTime(Date.now()),
+          createdAt: Date.now(),
+        }]));
+        if (order.id) localStorage.setItem(`po_to_order_${po}`, order.id);
+        changed = true;
+      }
+      if (changed) window.dispatchEvent(new CustomEvent("cblue-chat-updated", { detail: { source: "partner-bootstrap" } }));
+    } catch {
+      // Non-blocking partner chat bootstrap.
+    }
+  }, [orders, isFixer, mappedOrders]);
+
+  useEffect(() => {
+    if (!isFixer || typeof window === "undefined") return;
+    try {
+      const meetingOrders = mappedOrders.filter((job: any) => {
+        const status = String(job?.status || "").toUpperCase();
+        const note = `${job?.statusNote || ""} ${job?.description || ""}`;
+        return status === "MEETING_REQUESTED" || (status === "IN_PROGRESS" && /customer sent meeting invitation/i.test(note));
+      });
+      if (!meetingOrders.length) return;
+
+      let partnerReqs = filterVisibleWorkflowItems(JSON.parse(localStorage.getItem("partner_mock_dyn_req") || "[]"));
+      let partnerAlerts = JSON.parse(localStorage.getItem("partner_alerts") || "[]");
+      if (!Array.isArray(partnerAlerts)) partnerAlerts = [];
+      let changed = false;
+
+      for (const job of meetingOrders) {
+        const po = String(job?.po || "").trim();
+        if (!po || completedHistoryPos.has(po) || declinedPartnerPos.has(po) || isClosedPartnerWorkflowPo(po)) continue;
+        const alreadyHas = partnerReqs.some((req: any) =>
+          req?.po === po && String(req?.workflowType || req?.type || "") === "meeting_confirm_partner",
+        );
+        if (alreadyHas) continue;
+
+        const inviteDetails = parseMeetingInviteDetails(`${job.statusNote || ""} ${job.description || ""}`);
+        const createdAt = parseTs(job.statusChangedAt || job.createdAt || job.date) || Date.now();
+        const meetingVenue = inviteDetails.meetingVenue || job.location || job.subdistrict || "";
+        partnerReqs = [
+          ...partnerReqs.filter((req: any) => !(req?.po === po && ["meeting_confirm_partner", "meeting_pending_partner"].includes(String(req?.workflowType || req?.type || "")))),
+          {
+            id: `meeting-confirm-${po}`,
+            orderId: job.id || job.orderId,
+            po,
+            service: job.service,
+            serviceTh: job.serviceTh,
+            serviceZh: job.serviceZh,
+            customer: job.customer,
+            date: fmtDateTime(createdAt),
+            createdAt,
+            fee: job.fee,
+            budget: job.budget,
+            tier: job.tier,
+            description: "Customer sent a site meeting invitation. Please review and confirm the meeting time.",
+            projectDetails: pickProjectDetails(po, job.projectDetails, job.description, job.desc),
+            meetingDate: inviteDetails.meetingDateLabel || job.meetingDate || "",
+            meetingTime: inviteDetails.meetingTimeLabel || job.meetingTime || "",
+            meetingDateLabel: inviteDetails.meetingDateLabel || job.meetingDateLabel || "",
+            meetingTimeLabel: inviteDetails.meetingTimeLabel || job.meetingTimeLabel || "",
+            meetingVenue,
+            venue: meetingVenue,
+            location: job.location || meetingVenue,
+            subdistrict: job.subdistrict || job.location || meetingVenue,
+            type: "meeting_confirm_partner",
+            workflowType: "meeting_confirm_partner",
+            status: "MEETING_REQUESTED",
+            step: 8,
+            mockStep: 8,
+            actionNeeded: true,
+          },
+        ];
+        changed = true;
+
+        const alertId = `partner-meeting-invite-${po}`;
+        if (!partnerAlerts.some((alert: any) => alert?.id === alertId)) {
+          partnerAlerts = [{
+            id: alertId,
+            type: "meeting_invite",
+            po,
+            title: "Site Meeting Invitation",
+            message: `${po}: Customer sent a site meeting invitation for ${job.service || "Project"}. Open Requests and confirm the schedule.`,
+            msgTh: `${po}: ลูกค้าส่งคำเชิญนัดหมายหน้างานสำหรับ ${job.service || "Project"} แล้ว กรุณาเปิดคำขอและยืนยันเวลา`,
+            msgZh: `${po}: 客户已发送 ${job.service || "Project"} 的现场会议邀请。请打开请求并确认时间。`,
+            timestamp: new Date(createdAt).toISOString(),
+            createdAt,
+            unread: true,
+            dot: "bg-amber-500",
+          }, ...partnerAlerts.filter((alert: any) => alert?.id !== alertId)].slice(0, 20);
+        }
+      }
+
+      if (changed) {
+        try { partnerReqs = persistWorkflowCacheItems("partner_mock_dyn_req", partnerReqs); } catch {}
+        try { localStorage.setItem("partner_alerts", JSON.stringify(partnerAlerts)); } catch {}
+        window.dispatchEvent(new Event("cblue-workflow-updated"));
+      }
+    } catch {
+      // Non-blocking cross-browser meeting bridge.
+    }
+  }, [orders, isFixer, mappedOrders, completedHistoryPos, declinedPartnerPos]);
+
   const backendCompletedAwaitingRatingJobs = mappedOrders
     .filter((job: any) => {
       const po = String(job?.po || '').trim();
@@ -4085,16 +4216,21 @@ export default function FixerProPage() {
       ...partnerDynReqs.filter((r: any) => r.type === 'accept_sent').map((r: any) => r.po),
     ]);
     // MEETING_REQUESTED always shows for partner to confirm, regardless of mock step state
+    const hasMeetingInviteSignal = (job: any) => {
+      const status = String(job?.status || '').toUpperCase();
+      const note = `${job?.statusNote || ''} ${job?.description || ''}`;
+      return status === 'MEETING_REQUESTED' || (status === 'IN_PROGRESS' && /customer sent meeting invitation/i.test(note));
+    };
     let incomingJobs = mappedOrders.filter(o =>
       !completedHistoryPos.has(o.po) &&
       !declinedPartnerPos.has(o.po) &&
       !isClosedPartnerWorkflowPo(o.po) &&
       (
         (['CREATED', 'PENDING', 'MATCHING'].includes(o.status) && !acceptedPos.has(o.po)) ||
-        o.status === 'MEETING_REQUESTED'
+        hasMeetingInviteSignal(o)
       )
     ).map((job: any) => {
-      if (String(job.status || '').toUpperCase() !== 'MEETING_REQUESTED') return job;
+      if (!hasMeetingInviteSignal(job)) return job;
       const inviteDetails = parseMeetingInviteDetails(`${job.statusNote || ''} ${job.description || ''}`);
       const meetingVenue = inviteDetails.meetingVenue || job.location || job.subdistrict || '';
       return {
@@ -4107,7 +4243,7 @@ export default function FixerProPage() {
         mockStep: 8,
         actionNeeded: true,
         description: 'Customer sent a site meeting invitation. Please review and confirm the meeting time.',
-        projectDetails: stripWorkflowPrefix(job.description || ''),
+        projectDetails: pickProjectDetails(job.po, job.projectDetails, job.description, job.desc),
         meetingDate: inviteDetails.meetingDateLabel || job.meetingDate || '',
         meetingTime: inviteDetails.meetingTimeLabel || job.meetingTime || '',
         meetingDateLabel: inviteDetails.meetingDateLabel || job.meetingDateLabel || '',
@@ -4994,7 +5130,7 @@ export default function FixerProPage() {
     const createdAt = parseTs(o.statusChangedAt || o.updatedAt || o.createdAt || o.date);
     const displayTime = createdAt > 0 ? fmtDateTime(createdAt) : (o.date || "");
     if (['CREATED','PENDING','MATCHING'].includes(o.status)) return [{ id: `order-pending-${po}`, msg: `${po}: New ${svc} request from ${o.customer || 'customer'}. Review the PO and accept or decline it.`, msgTh: `${po}: มีคำขอ ${svc} ใหม่จาก ${o.customer || 'ลูกค้า'} กรุณาตรวจสอบ PO และรับหรือปฏิเสธ`, msgZh: `${po}: 来自 ${o.customer || '客户'} 的新 ${svc} 请求。请查看PO并接受或拒绝。`, unread: true, time: displayTime, createdAt, dot: "bg-purple-500" }];
-    if (o.status === 'MEETING_REQUESTED') return [{ id: `order-meeting-${po}`, msg: `${po}: Customer sent a site meeting invitation for ${svc}. Open the request, confirm the schedule, and then prepare Step 9 variation if needed.`, msgTh: `${po}: ลูกค้าส่งคำเชิญนัดหมายสำหรับ ${svc} แล้ว กรุณาเปิดคำขอ ยืนยันเวลา และเตรียม Step 9 variation หากจำเป็น`, msgZh: `${po}: 客户已为 ${svc} 发送现场会议邀请。请打开请求、确认时间，并在需要时准备第9步变更。`, unread: true, time: displayTime, createdAt, dot: "bg-amber-500" }];
+    if (o.status === 'MEETING_REQUESTED' || (o.status === 'IN_PROGRESS' && /customer sent meeting invitation/i.test(String(o.statusNote || '')))) return [{ id: `order-meeting-${po}`, msg: `${po}: Customer sent a site meeting invitation for ${svc}. Open the request, confirm the schedule, and then prepare Step 9 variation if needed.`, msgTh: `${po}: ลูกค้าส่งคำเชิญนัดหมายสำหรับ ${svc} แล้ว กรุณาเปิดคำขอ ยืนยันเวลา และเตรียม Step 9 variation หากจำเป็น`, msgZh: `${po}: 客户已为 ${svc} 发送现场会议邀请。请打开请求、确认时间，并在需要时准备第9步变更。`, unread: true, time: displayTime, createdAt, dot: "bg-amber-500" }];
     if (o.status === 'IN_PROGRESS') return [{ id: `order-inprogress-${po}`, msg: `${po}: Chat room is active for ${svc}. Coordinate with the customer now, then confirm the site meeting when the invitation arrives.`, msgTh: `${po}: ห้องแชทของ ${svc} พร้อมใช้งานแล้ว กรุณาคุยกับลูกค้าและยืนยันนัดหมายหน้างานเมื่อได้รับคำเชิญ`, msgZh: `${po}: ${svc} 聊天室已开启。请先与客户协调，并在收到现场会议邀请后完成确认。`, unread: true, time: displayTime, createdAt, dot: "bg-sky-400" }];
     if (o.status === 'CANCELLED') {
       const note = String(o.statusNote || '');

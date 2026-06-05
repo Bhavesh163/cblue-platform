@@ -14,7 +14,7 @@ export function Header() {
 
   const prefix = `/${locale}`;
   const lblueLabel =
-    locale === "th" ? "AI กฎหมาย" : locale === "zh" ? "法律 AI" : "Legal AI";
+    locale === "th" ? "เอไอ กฎหมาย" : locale === "zh" ? "法律 AI" : "Legal AI";
 
   const navLinks = [
     { href: `${prefix}`, label: t("home") },

@@ -694,9 +694,20 @@ export class OrderService {
       callerRole === UserRole.USER &&
       isCustomer &&
       dto.status === OrderStatus.IN_PROGRESS &&
-      [OrderStatus.ASSIGNED, OrderStatus.DEPOSIT_PENDING].includes(order.status);
+      (order.status === OrderStatus.ASSIGNED ||
+        order.status === OrderStatus.DEPOSIT_PENDING);
+    const isCustomerMeetingInviteActivation =
+      callerRole === UserRole.USER &&
+      isCustomer &&
+      dto.status === OrderStatus.MEETING_REQUESTED &&
+      (order.status === OrderStatus.CONFIRMED ||
+        order.status === OrderStatus.IN_PROGRESS);
     const allowed = VALID_TRANSITIONS[order.status];
-    if (!isCustomerFreePassActivation && !allowed.includes(dto.status)) {
+    if (
+      !isCustomerFreePassActivation &&
+      !isCustomerMeetingInviteActivation &&
+      !allowed.includes(dto.status)
+    ) {
       throw new BadRequestException(
         `Cannot transition from ${order.status} to ${dto.status}`,
       );

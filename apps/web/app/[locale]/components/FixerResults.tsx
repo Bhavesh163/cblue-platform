@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { computeBudgetBreakdown, resolvePartnerPriceList } from "../../../lib/computeBudgetBreakdown";
+import { storePoProjectDetails } from "../../../lib/po-project-details";
 import { refreshSubscriberSession } from "../../../lib/subscriberSession";
 
 interface Fixer {
@@ -1207,6 +1208,7 @@ export default function FixerResults({
 
     if (selectedFixer && bookingType && poNumber) {
       try {
+        storePoProjectDetails(poNumber, description || "");
         const subscriber = readSubscriber();
         const customerEmail = subscriber?.email || "";
         if (customerEmail.includes("ghis")) {

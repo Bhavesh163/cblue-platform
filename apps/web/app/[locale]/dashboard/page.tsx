@@ -18,6 +18,7 @@ import {
   stripVariationPriceList,
   type BudgetBreakdownItem,
 } from "../../../lib/computeBudgetBreakdown";
+import { readStoredPoProjectDetails } from "../../../lib/po-project-details";
 
 interface SubscriberInfo {
   id: string;
@@ -280,11 +281,16 @@ const isServiceOnlyProjectDetail = (value: any) => {
   return cleaned.length <= 64 && SERVICE_ONLY_DETAIL_PATTERN.test(cleaned);
 };
 const pickProjectDetails = (...values: any[]) => {
+  if (values.length > 0 && isValidPoCode(String(values[0] || ""))) {
+    const stored = readStoredPoProjectDetails(String(values[0]).trim());
+    if (stored) return stored;
+    values = values.slice(1);
+  }
   for (const value of values) {
     const cleaned = stripWorkflowPrefix(value);
     if (cleaned && !isWorkflowInstructionText(cleaned) && !isServiceOnlyProjectDetail(cleaned)) return cleaned;
   }
-  return '';
+  return "";
 };
 const firstNameOnly = (value: any, fallback = 'User') => {
   const cleaned = String(value || '').trim();
@@ -1371,7 +1377,7 @@ function CustomerHistoryCard({ item, idx, compact = false, locale = "en" }: { it
   const titleClass = compact ? "font-bold text-gray-900 text-sm" : "font-bold text-gray-900";
   const metaClass = compact ? "text-xs font-normal text-gray-400" : "text-sm font-normal text-gray-400";
   const mutedClass = compact ? "text-xs text-gray-500 mt-1" : "text-sm text-gray-500 mt-1";
-  const displayProjectDetails = pickProjectDetails(item.projectDetails, item.description, item.desc);
+  const displayProjectDetails = pickProjectDetails(item.po, item.projectDetails, item.description, item.desc);
   const labels = {
     partner: locale === 'th' ? 'พาร์ทเนอร์' : locale === 'zh' ? '合作伙伴' : 'Partner',
     showDetails: locale === 'th' ? 'แสดงรายละเอียด' : locale === 'zh' ? '显示详情' : 'Show details',
@@ -1660,8 +1666,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       stepName: "Cancelled by Customer",
       cancelReason: reason,
       statusNote: `Customer cancelled. Reason: ${reason}`,
-      projectDetails: pickProjectDetails(source?.projectDetails, source?.description, source?.desc, source?.service, serviceName),
-      description: pickProjectDetails(source?.projectDetails, source?.description, source?.desc, source?.service, serviceName),
+      projectDetails: pickProjectDetails(po, source?.projectDetails, source?.description, source?.desc, source?.service, serviceName),
+      description: pickProjectDetails(po, source?.projectDetails, source?.description, source?.desc, source?.service, serviceName),
       completedAt: createdAt,
       statusChangedAt: createdAt,
       createdAt: source?.createdAt || createdAt,
@@ -2003,8 +2009,14 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         const d = localStorage.getItem("ghis_mock_dyn_req");
         const h = localStorage.getItem("ghis_mock_history");
         if (p) setMockPayments(JSON.parse(p));
-        if (a) setMockActiveItems(filterVisibleWorkflowItems(JSON.parse(a)));
-        if (d) setMockDynRequests(filterVisibleWorkflowItems(JSON.parse(d)));
+        if (a) {
+          const parsedActive = filterVisibleWorkflowItems(JSON.parse(a));
+          setMockActiveItems((prev) => (parsedActive.length === 0 && prev.length > 0 ? prev : parsedActive));
+        }
+        if (d) {
+          const parsedDyn = filterVisibleWorkflowItems(JSON.parse(d));
+          setMockDynRequests((prev) => (parsedDyn.length === 0 && prev.length > 0 ? prev : parsedDyn));
+        }
         if (h) setMockHistory(filterVisibleWorkflowItems(JSON.parse(h)));
       } catch {}
     };
@@ -2262,31 +2274,32 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     const viewerUserId = String(subscriber?.id || "");
     const items: any[] = [];
     const chatOpenStatuses = new Set(["IN_PROGRESS", "MEETING_REQUESTED"]);
-
-    for (const order of (orders || [])) {
+    const openOrders = (orders || []).filter((order: any) => {
       const orderId = order?.id;
-      if (!orderId) continue;
-
+      if (!orderId) return false;
       const po = extractPo(order);
-      if (!po || !isPoCode(po)) continue;
-
-      if (localStorage.getItem(`chat_closed_${po}`)) continue;
-
+      if (!po || !isPoCode(po)) return false;
+      if (localStorage.getItem(`chat_closed_${po}`)) return false;
       const status = String(order?.status || "").toUpperCase();
       const hasLocalChatCache = Boolean(localStorage.getItem(`chat_messages_${po}`));
-      if (!chatOpenStatuses.has(status) && !hasLocalChatCache) continue;
+      return chatOpenStatuses.has(status) || hasLocalChatCache;
+    });
 
+    const loadOrderChat = async (order: any) => {
+      const orderId = order.id;
+      const po = extractPo(order);
+      if (!po || !isPoCode(po)) return null;
       try {
         const res = await fetch(`/api/v1/orders/${orderId}/chat`, {
           headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(8000),
         });
-        if (res.status === 429) break;
-        if (!res.ok) continue;
+        if (res.status === 429) return null;
+        if (!res.ok) return null;
 
         const messages = await res.json();
-        if (!Array.isArray(messages) || messages.length === 0) continue;
+        if (!Array.isArray(messages) || messages.length === 0) return null;
 
-        // Cache PO→UUID so ClientChatPage.resolveOrderDbId() works cross-browser
         try { localStorage.setItem(`po_to_order_${po}`, orderId); } catch {}
 
         const visible = messages.filter((m: any) => {
@@ -2297,11 +2310,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
           if (lowerText.includes("notify to proceed")) return false;
           return true;
         });
-        if (visible.length === 0) continue;
+        if (visible.length === 0) return null;
         const workflowClosed = ['COMPLETED', 'CANCELLED', 'DONE'].includes(String(order?.status || '').toUpperCase());
         if (workflowClosed || hasCompletionChatMarker(visible)) {
           try { localStorage.setItem(`chat_closed_${po}`, '1'); } catch {}
-          continue;
+          return null;
         }
 
         try {
@@ -2335,7 +2348,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
           localStorage.getItem(`chat_title_${po}`) ||
           `${String(order?.serviceCategory || "Service").replace(/_/g, " ")} - ${po} - ${order?.estimatedPrice ? `฿${Number(order.estimatedPrice).toLocaleString()}` : "฿0"}`;
 
-        items.push({
+        return {
           id: po,
           po,
           name: title,
@@ -2346,10 +2359,15 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
           hasIncoming: Boolean(incoming),
           sort: parseDateMs(latestVisible?.createdAt),
           source: "backend",
-        });
+        };
       } catch {
-        // Ignore per-order failures and continue with available data.
+        return null;
       }
+    };
+
+    const results = await Promise.allSettled(openOrders.map((order) => loadOrderChat(order)));
+    for (const result of results) {
+      if (result.status === "fulfilled" && result.value) items.push(result.value);
     }
 
     items.sort((a, b) => b.sort - a.sort);
@@ -2481,7 +2499,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     window.addEventListener("cblue-chat-updated", syncEvent as EventListener);
     const timer = setInterval(() => {
       void syncChats();
-    }, 15000);
+    }, 5000);
     return () => {
       isMounted = false;
       window.removeEventListener("storage", syncEvent);
@@ -5382,6 +5400,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                       localStorage.setItem(`chat_from_${po}`, "dashboard");
                       window.dispatchEvent(new Event("storage"));
                       window.dispatchEvent(new CustomEvent("cblue-chat-updated", { detail: { orderId: po } }));
+                      window.dispatchEvent(new Event("cblue-workflow-updated"));
                     }
                   } catch {}
                   // Push backend order to IN_PROGRESS so partner sees step 7 cross-browser
@@ -5624,7 +5643,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                   // Notify backend: MEETING_REQUESTED (cross-browser: partner page polls and sees MEETING_REQUESTED status)
                   try {
                     const token = getCustomerDashboardToken();
-                    const backendOrder = workflowOrders.find((o: any) => extractPo(o) === meetingModal.po);
+                    const storedOrderId = localStorage.getItem(`po_to_order_${meetingModal.po}`) || "";
+                    const backendOrder =
+                      workflowOrders.find((o: any) => extractPo(o) === meetingModal.po) ||
+                      (storedOrderId ? { id: storedOrderId, status: "" } : null);
                     if (token && backendOrder?.id) {
                       const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
                       void (async () => {
@@ -5650,6 +5672,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                     }
                   } catch {}
                   appendLocalWorkflowChat(meetingModal.po, chatText, createdAt);
+                  window.dispatchEvent(new CustomEvent('cblue-chat-updated', { detail: { orderId: meetingModal.po } }));
+                  window.dispatchEvent(new Event('cblue-workflow-updated'));
                   setMeetingNote("");
                   setMeetingModal(null);
                 }}
