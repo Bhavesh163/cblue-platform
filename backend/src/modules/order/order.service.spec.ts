@@ -3,7 +3,7 @@ import { OrderService } from './order.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { OrderStatus } from '@prisma/client';
+import { OrderStatus, UserRole } from '@prisma/client';
 
 describe('OrderService', () => {
   let service: OrderService;
@@ -137,6 +137,30 @@ describe('OrderService', () => {
         'user-1',
       );
       expect(result.status).toBe(OrderStatus.MATCHING);
+    });
+
+    it('should allow customer free pass to start active work from assigned payment states', async () => {
+      for (const status of [OrderStatus.ASSIGNED, OrderStatus.DEPOSIT_PENDING]) {
+        prisma.order.findUnique.mockResolvedValueOnce({
+          id: 'order-1',
+          userId: 'user-1',
+          fixerId: null,
+          status,
+        });
+        prisma.order.update.mockResolvedValueOnce({
+          id: 'order-1',
+          status: OrderStatus.IN_PROGRESS,
+        });
+
+        const result = await service.updateStatus(
+          'order-1',
+          { status: OrderStatus.IN_PROGRESS, note: 'Customer paid processing fee' },
+          'user-1',
+          UserRole.USER,
+        );
+
+        expect(result.status).toBe(OrderStatus.IN_PROGRESS);
+      }
     });
   });
 

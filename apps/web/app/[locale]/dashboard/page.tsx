@@ -2906,12 +2906,32 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         const note = getWorkflowStatusNote(order);
         const reason = note.match(/Reason:\s*([^.]*)/i)?.[1]?.trim() || existing.cancelReason || '';
         const cancelledByCustomer = isCustomerCancellationNote(note) || existing.statusName === 'Cancelled by Customer' || Boolean(existing.cancelReason);
+        const projectDetails = pickProjectDetails(
+          order?.projectDetails,
+          order?.description,
+          existing.projectDetails,
+          existing.description,
+          existing.desc,
+        );
+        const location = (() => {
+          const fromExisting = getWorkflowDisplayLocation(existing.location, existing.subdistrict);
+          if (fromExisting) return fromExisting;
+          const fromDesc = String(order?.description || '').match(/\bLOC:([^|]+)/)?.[1]?.trim() || '';
+          return getWorkflowDisplayLocation(fromDesc, order?.address?.subdistrict, order?.subdistrict);
+        })();
+        const budget = existing.budget || existing.fee || (order?.estimatedPrice ? `฿${Number(order.estimatedPrice).toLocaleString()}` : '฿0');
         const nextItem = {
           ...existing,
           po,
           title: String(order?.serviceCategory || order?.service || existing.title || 'Project').replace(/_/g, ' '),
           service: String(order?.serviceCategory || order?.service || existing.service || 'Project').replace(/_/g, ' '),
           customer: existing.customer || subscriber?.name || 'Customer',
+          budget,
+          fee: existing.fee || budget,
+          projectDetails,
+          description: projectDetails || order?.description || existing.description || existing.desc || '',
+          location,
+          subdistrict: location,
           status: 'CANCELLED',
           statusName: cancelledByCustomer ? 'Cancelled by Customer' : 'Partner Unavailable',
           cancelReason: cancelledByCustomer ? reason : existing.cancelReason,
@@ -2967,7 +2987,13 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         persistedCustomerAlerts.some((alert: any) => String(alert?.po || alert?.msg || alert?.message || '').includes(po) && /cancelled|declined|unavailable|ยกเลิก|ปฏิเสธ/i.test(String(alert?.msg || alert?.message || '')))
       )),
   );
-  const completedPOs = new Set([...visibleMockHistory.map((x: any) => x.po), ...alertClosedPOs]);
+  const backendTerminalPOs = new Set(
+    workflowOrders
+      .filter((order: any) => ['COMPLETED', 'CANCELLED', 'DONE'].includes(String(order?.status || '').toUpperCase()))
+      .map((order: any) => extractPo(order))
+      .filter((po: string) => isPoCode(po)),
+  );
+  const completedPOs = new Set([...visibleMockHistory.map((x: any) => x.po), ...alertClosedPOs, ...backendTerminalPOs]);
   const customerSideCompletedPropPos = new Set(
     propInquiries
       .filter((p: PropInquiry) => isCustomerSidePropCompleted(p))

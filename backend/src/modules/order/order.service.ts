@@ -690,8 +690,13 @@ export class OrderService {
     }
 
     // Validate state transition
+    const isCustomerFreePassActivation =
+      callerRole === UserRole.USER &&
+      isCustomer &&
+      dto.status === OrderStatus.IN_PROGRESS &&
+      [OrderStatus.ASSIGNED, OrderStatus.DEPOSIT_PENDING].includes(order.status);
     const allowed = VALID_TRANSITIONS[order.status];
-    if (!allowed.includes(dto.status)) {
+    if (!isCustomerFreePassActivation && !allowed.includes(dto.status)) {
       throw new BadRequestException(
         `Cannot transition from ${order.status} to ${dto.status}`,
       );

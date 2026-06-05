@@ -3629,7 +3629,14 @@ export default function FixerProPage() {
   }, [isFixer]);
 
   const completedHistoryPos = new Set(mockHistory.map((h: any) => h.po));
+  const backendCancelledPos = new Set(
+    mappedOrders
+      .filter((order: any) => String(order?.status || '').toUpperCase() === 'CANCELLED')
+      .map((order: any) => String(order?.po || '').trim())
+      .filter(Boolean),
+  );
   const declinedPartnerPos = new Set<string>();
+  backendCancelledPos.forEach((po) => declinedPartnerPos.add(po));
   mockHistory.forEach((entry: any) => {
     const po = String(entry?.po || '').trim();
     const status = String(entry?.status || '').toUpperCase();

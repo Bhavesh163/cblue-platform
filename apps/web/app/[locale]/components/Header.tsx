@@ -13,6 +13,8 @@ export function Header() {
   const locale = useLocale();
 
   const prefix = `/${locale}`;
+  const lblueLabel =
+    locale === "th" ? "AI กฎหมาย" : locale === "zh" ? "法律 AI" : "Legal AI";
 
   const navLinks = [
     { href: `${prefix}`, label: t("home") },
@@ -107,6 +109,22 @@ export function Header() {
 
           {/* Language Toggle + CTA + Mobile toggle */}
           <div className="flex items-center gap-2">
+            <a
+              href="https://www.lblue.tech"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Lblue ${lblueLabel}`}
+              className="hidden sm:flex h-14 min-w-[74px] flex-col items-center justify-center rounded-lg px-2 text-[10px] font-semibold leading-none text-gray-700 hover:bg-sky-50 hover:text-sky-700 transition-colors"
+            >
+              <Image
+                src="/images/lblue-og-image.png"
+                alt="Lblue"
+                width={78}
+                height={42}
+                className="h-7 w-auto max-w-[66px] object-contain"
+              />
+              <span className="mt-0.5 whitespace-nowrap">{lblueLabel}</span>
+            </a>
             <div className="hidden sm:block">
               <LanguageToggle />
             </div>
@@ -178,6 +196,22 @@ export function Header() {
               </Link>
             ),
           )}
+          <a
+            href="https://www.lblue.tech"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setMobileOpen(false)}
+            className="mt-2 flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50"
+          >
+            <Image
+              src="/images/lblue-og-image.png"
+              alt="Lblue"
+              width={78}
+              height={42}
+              className="h-8 w-auto object-contain"
+            />
+            <span>{lblueLabel}</span>
+          </a>
           <div className="mt-2 px-3 py-2">
             <LanguageToggle />
           </div>
