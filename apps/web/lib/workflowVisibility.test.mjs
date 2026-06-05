@@ -129,6 +129,28 @@ test("keeps backend completed orders visible until rating/history closes the wor
   );
 });
 
+test("does not treat already-rated completed jobs as active rating work", () => {
+  assert.equal(
+    isCompletedAwaitingWorkflowRating({
+      status: "COMPLETED",
+      statusHistory: [
+        { note: "Customer confirmed project complete. Rating is now open for both parties." },
+        { note: "Customer rated this project 5/5 stars. Workflow completed." },
+      ],
+    }),
+    false,
+  );
+
+  assert.equal(
+    isCompletedAwaitingWorkflowRating({
+      status: "COMPLETED",
+      statusHistory: [{ note: "Customer confirmed project complete. Please rate your partner." }],
+      rating: 5,
+    }),
+    false,
+  );
+});
+
 test("compacts workflow history instead of throwing when localStorage quota is full", () => {
   const storage = fakeStorage(
     {

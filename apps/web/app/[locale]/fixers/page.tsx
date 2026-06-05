@@ -22,6 +22,7 @@ import { refreshSubscriberSession } from "../../../lib/subscriberSession";
 import {
   collectTerminalWorkflowPos,
   isCompletedAwaitingWorkflowRating,
+  isTerminalWorkflowStatus,
   pruneWorkflowStorage,
   readBrowserTerminalWorkflowPos,
   setWorkflowStorageItem,
@@ -139,6 +140,11 @@ function writeWorkflowStorage(key: string, value: any) {
   if (typeof window === "undefined") return value;
   return setWorkflowStorageItem(localStorage, key, value).value;
 }
+
+const isLocalWorkflowHistoryStatus = (item: any) => {
+  const status = String(item?.status || "").toUpperCase();
+  return isTerminalWorkflowStatus(status) || (status === "COMPLETED" && !isCompletedAwaitingWorkflowRating(item));
+};
 
 const fmtDate = (d: Date | number | string) => {
   const dt = new Date(d);
@@ -3471,9 +3477,12 @@ export default function FixerProPage() {
         const a = localStorage.getItem("ghis_mock_active"); if (a) {
           const terminalPos = readBrowserTerminalWorkflowPos(localStorage);
           const parsedActive = filterVisibleWorkflowItems(JSON.parse(a))
+            .filter((item: any) => !isLocalWorkflowHistoryStatus(item))
             .filter((item: any) => !terminalPos.has(String(item?.po || '').trim().toUpperCase()));
           setMockActiveState((prev) => {
-            const previousVisible = prev.filter((item: any) => !terminalPos.has(String(item?.po || '').trim().toUpperCase()));
+            const previousVisible = prev
+              .filter((item: any) => !isLocalWorkflowHistoryStatus(item))
+              .filter((item: any) => !terminalPos.has(String(item?.po || '').trim().toUpperCase()));
             return parsedActive.length === 0 && previousVisible.length > 0 ? previousVisible : parsedActive;
           });
         }
@@ -3886,7 +3895,8 @@ export default function FixerProPage() {
             !isClosedPartnerWorkflowPo(po) &&
             !completedHistoryPos.has(po) &&
             !declinedPartnerPos.has(po) &&
-            step >= 6
+            step >= 6 &&
+            !isLocalWorkflowHistoryStatus(job)
           );
         })
         .map((job: any) => {

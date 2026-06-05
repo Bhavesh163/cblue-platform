@@ -1875,6 +1875,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   const isPoCode = (value: string) => isValidPoCode(value);
   const workflowOrders = (orders || []).filter((order: any) => !isHiddenTestPo(extractPo(order)));
   const filterVisibleWorkflowItems = (items: any[]) => items.filter((item: any) => !isHiddenTestPo(item?.po));
+  const filterVisibleActiveWorkflowItems = (items: any[]) =>
+    filterVisibleWorkflowItems(items).filter((item: any) => !isBackendWorkflowHistoryStatus(item));
   const postBackendWorkflowMessage = async (po: string, text: string) => {
     try {
       const token = getCustomerDashboardToken();
@@ -1975,7 +1977,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       const d = localStorage.getItem("ghis_mock_dyn_req");
       const h = localStorage.getItem("ghis_mock_history");
       if (p) setMockPayments(JSON.parse(p));
-      if (a) setMockActiveItems(filterVisibleWorkflowItems(JSON.parse(a)));
+      if (a) setMockActiveItems(filterVisibleActiveWorkflowItems(JSON.parse(a)));
       if (d) setMockDynRequests(filterVisibleWorkflowItems(JSON.parse(d)));
       if (h) setMockHistory(filterVisibleWorkflowItems(JSON.parse(h)));
     } catch {}
@@ -2017,10 +2019,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         if (p) setMockPayments(JSON.parse(p));
         if (a) {
           const terminalPos = readBrowserTerminalWorkflowPos(localStorage);
-          const parsedActive = filterVisibleWorkflowItems(JSON.parse(a))
+          const parsedActive = filterVisibleActiveWorkflowItems(JSON.parse(a))
             .filter((item: any) => !terminalPos.has(String(item?.po || '').trim().toUpperCase()));
           setMockActiveItems((prev) => {
-            const previousVisible = prev.filter((item: any) => !terminalPos.has(String(item?.po || '').trim().toUpperCase()));
+            const previousVisible = filterVisibleActiveWorkflowItems(prev)
+              .filter((item: any) => !terminalPos.has(String(item?.po || '').trim().toUpperCase()));
             return parsedActive.length === 0 && previousVisible.length > 0 ? previousVisible : parsedActive;
           });
         }
@@ -3002,9 +3005,18 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   const backendOrderPos = new Set(workflowOrders.map((o: any) => extractPo(o)).filter((po: string) => isPoCode(po)));
   const allowLocalCustomerWorkflow = Boolean(subscriber?.email?.toLowerCase().includes('ghis'));
   const useStaticDemoData = allowLocalCustomerWorkflow && !hasFetchedOrders && backendOrderPos.size === 0;
-  const visibleMockActiveItems = !allowLocalCustomerWorkflow
+  const rawVisibleMockActiveItems = !allowLocalCustomerWorkflow
     ? []
-    : mockActiveItems.filter((x: any) => !isHiddenTestPo(x.po));
+    : filterVisibleWorkflowItems(mockActiveItems);
+  const localTerminalWorkflowPOs = new Set(
+    rawVisibleMockActiveItems
+      .filter((item: any) => isBackendWorkflowHistoryStatus(item))
+      .map((item: any) => String(item?.po || '').trim())
+      .filter((po: string) => isPoCode(po)),
+  );
+  const visibleMockActiveItems = rawVisibleMockActiveItems.filter(
+    (item: any) => !isBackendWorkflowHistoryStatus(item),
+  );
   const visibleMockDynRequests = !allowLocalCustomerWorkflow
     ? []
     : mockDynRequests.filter((x: any) => !isHiddenTestPo(x.po));
@@ -3042,6 +3054,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     ...alertClosedPOs,
     ...backendTerminalPOs,
     ...terminalWorkflowPOs,
+    ...localTerminalWorkflowPOs,
   ]);
   const customerSideCompletedPropPos = new Set(
     propInquiries

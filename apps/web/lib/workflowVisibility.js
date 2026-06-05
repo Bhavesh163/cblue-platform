@@ -40,9 +40,21 @@ export function isTerminalWorkflowStatus(status) {
   return TERMINAL_STATUS_VALUES.has(String(status || "").toUpperCase());
 }
 
+function hasSubmittedWorkflowRating(value) {
+  if (!value || typeof value !== "object") return false;
+  for (const key of ["rating", "partnerRating", "customerRating", "fixerRating", "listerRating"]) {
+    const rating = value[key];
+    if (rating == null || rating === "") continue;
+    const numeric = Number(rating);
+    if (Number.isFinite(numeric) ? numeric > 0 : true) return true;
+  }
+  return false;
+}
+
 export function isCompletedAwaitingWorkflowRating(value) {
   if (!value || typeof value !== "object") return false;
   if (String(value.status || "").toUpperCase() !== "COMPLETED") return false;
+  if (hasWorkflowCompletionMarker(value) || hasSubmittedWorkflowRating(value)) return false;
   return getTextFields(value).some((text) => COMPLETED_AWAITING_RATING_PATTERN.test(text));
 }
 
