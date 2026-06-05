@@ -5,6 +5,10 @@ import Link from "next/link";
 import Image from "next/image";
 import { useTranslations, useLocale } from "next-intl";
 import { refreshSubscriberSession } from "../../../lib/subscriberSession";
+import {
+  collectTerminalWorkflowPos,
+  readBrowserTerminalWorkflowPos,
+} from "../../../lib/workflowVisibility";
 import { useRouter } from "next/navigation";
 import PdpaConsent from "../components/PdpaConsent";
 import {
@@ -3012,7 +3016,21 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       .map((order: any) => extractPo(order))
       .filter((po: string) => isPoCode(po)),
   );
-  const completedPOs = new Set([...visibleMockHistory.map((x: any) => x.po), ...alertClosedPOs, ...backendTerminalPOs]);
+  const browserTerminalPOs = readBrowserTerminalWorkflowPos(
+    typeof window !== 'undefined' ? window.localStorage : undefined,
+  );
+  const terminalWorkflowPOs = collectTerminalWorkflowPos({
+    backendOrders: workflowOrders,
+    historyItems: visibleMockHistory,
+    alerts: persistedCustomerAlerts,
+    terminalPoValues: [...browserTerminalPOs],
+  });
+  const completedPOs = new Set([
+    ...visibleMockHistory.map((x: any) => x.po),
+    ...alertClosedPOs,
+    ...backendTerminalPOs,
+    ...terminalWorkflowPOs,
+  ]);
   const customerSideCompletedPropPos = new Set(
     propInquiries
       .filter((p: PropInquiry) => isCustomerSidePropCompleted(p))

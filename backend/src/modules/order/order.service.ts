@@ -681,6 +681,24 @@ export class OrderService {
     }
 
     if (order.status === dto.status) {
+      const note = String(dto.note || '').trim();
+      if (note) {
+        return this.prisma.order.update({
+          where: { id: orderId },
+          data: {
+            statusHistory: {
+              create: {
+                status: dto.status,
+                note,
+                changedBy,
+              },
+            },
+          },
+          include: {
+            statusHistory: { orderBy: { createdAt: 'desc' }, take: 1 },
+          },
+        });
+      }
       return this.prisma.order.findUnique({
         where: { id: orderId },
         include: {

@@ -19,6 +19,10 @@ import {
 } from "../../../lib/computeBudgetBreakdown";
 import { readStoredPoProjectDetails } from "../../../lib/po-project-details";
 import { refreshSubscriberSession } from "../../../lib/subscriberSession";
+import {
+  collectTerminalWorkflowPos,
+  readBrowserTerminalWorkflowPos,
+} from "../../../lib/workflowVisibility";
 
 interface PartnerInfo {
   id?: string;
@@ -3641,7 +3645,19 @@ export default function FixerProPage() {
     };
   }, [isFixer]);
 
-  const completedHistoryPos = new Set(mockHistory.map((h: any) => h.po));
+  const browserTerminalPOs = readBrowserTerminalWorkflowPos(
+    typeof window !== 'undefined' ? window.localStorage : undefined,
+  );
+  const terminalWorkflowPOs = collectTerminalWorkflowPos({
+    backendOrders: mappedOrders,
+    historyItems: mockHistory,
+    alerts: partnerPersistedAlerts,
+    terminalPoValues: [...browserTerminalPOs],
+  });
+  const completedHistoryPos = new Set([
+    ...mockHistory.map((h: any) => h.po),
+    ...terminalWorkflowPOs,
+  ]);
   const backendCancelledPos = new Set(
     mappedOrders
       .filter((order: any) => String(order?.status || '').toUpperCase() === 'CANCELLED')

@@ -162,6 +162,44 @@ describe('OrderService', () => {
         expect(result.status).toBe(OrderStatus.IN_PROGRESS);
       }
     });
+
+    it('should record a workflow note when customer resends meeting invitation for an already meeting-requested order', async () => {
+      prisma.order.findUnique.mockResolvedValue({
+        id: 'order-1',
+        userId: 'user-1',
+        fixerId: null,
+        status: OrderStatus.MEETING_REQUESTED,
+      });
+      prisma.order.update.mockResolvedValue({
+        id: 'order-1',
+        status: OrderStatus.MEETING_REQUESTED,
+      });
+
+      const note = 'Customer sent meeting invitation: 05/06/2026 10:00 at 13.794068, 100.609587';
+      const result = await service.updateStatus(
+        'order-1',
+        { status: OrderStatus.MEETING_REQUESTED, note },
+        'user-1',
+        UserRole.USER,
+      );
+
+      expect(prisma.order.update).toHaveBeenCalledWith({
+        where: { id: 'order-1' },
+        data: {
+          statusHistory: {
+            create: {
+              status: OrderStatus.MEETING_REQUESTED,
+              note,
+              changedBy: 'user-1',
+            },
+          },
+        },
+        include: {
+          statusHistory: { orderBy: { createdAt: 'desc' }, take: 1 },
+        },
+      });
+      expect(result.status).toBe(OrderStatus.MEETING_REQUESTED);
+    });
   });
 
   describe('findMyFixerOrders', () => {
