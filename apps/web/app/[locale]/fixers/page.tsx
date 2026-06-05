@@ -21,6 +21,7 @@ import { readStoredPoProjectDetails } from "../../../lib/po-project-details";
 import { refreshSubscriberSession } from "../../../lib/subscriberSession";
 import {
   collectTerminalWorkflowPos,
+  pruneWorkflowStorage,
   readBrowserTerminalWorkflowPos,
 } from "../../../lib/workflowVisibility";
 
@@ -128,26 +129,7 @@ const chats: any[] = [];
 /** Prune localStorage when approaching the 4.5 MB soft limit. */
 function pruneStorageIfNeeded() {
   try {
-    let total = 0;
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k) total += (k.length + (localStorage.getItem(k) || '').length) * 2;
-    }
-    if (total < 4.5 * 1024 * 1024) return;
-    try {
-      const hist = JSON.parse(localStorage.getItem('ghis_mock_history') || '[]');
-      if (hist.length > 0) {
-        hist.shift();
-        localStorage.setItem('ghis_mock_history', JSON.stringify(hist));
-      }
-    } catch {}
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k && k.startsWith('cblue_po_breakdown_')) {
-        localStorage.removeItem(k);
-        break;
-      }
-    }
+    pruneWorkflowStorage(localStorage);
   } catch {}
 }
 
@@ -3473,8 +3455,24 @@ export default function FixerProPage() {
           return;
         }
         ensureLegacyPartnerCancel3429Repair();
-        const d = localStorage.getItem("ghis_mock_dyn_req"); if (d) setMockDynReqs(filterVisibleWorkflowItems(JSON.parse(d)));
-        const a = localStorage.getItem("ghis_mock_active"); if (a) setMockActiveState(filterVisibleWorkflowItems(JSON.parse(a)));
+        const d = localStorage.getItem("ghis_mock_dyn_req"); if (d) {
+          const terminalPos = readBrowserTerminalWorkflowPos(localStorage);
+          const parsedDyn = filterVisibleWorkflowItems(JSON.parse(d))
+            .filter((item: any) => !terminalPos.has(String(item?.po || '').trim().toUpperCase()));
+          setMockDynReqs((prev) => {
+            const previousVisible = prev.filter((item: any) => !terminalPos.has(String(item?.po || '').trim().toUpperCase()));
+            return parsedDyn.length === 0 && previousVisible.length > 0 ? previousVisible : parsedDyn;
+          });
+        }
+        const a = localStorage.getItem("ghis_mock_active"); if (a) {
+          const terminalPos = readBrowserTerminalWorkflowPos(localStorage);
+          const parsedActive = filterVisibleWorkflowItems(JSON.parse(a))
+            .filter((item: any) => !terminalPos.has(String(item?.po || '').trim().toUpperCase()));
+          setMockActiveState((prev) => {
+            const previousVisible = prev.filter((item: any) => !terminalPos.has(String(item?.po || '').trim().toUpperCase()));
+            return parsedActive.length === 0 && previousVisible.length > 0 ? previousVisible : parsedActive;
+          });
+        }
         const h = localStorage.getItem("ghis_mock_history"); if (h) setMockHistory(filterVisibleWorkflowItems(JSON.parse(h)));
         const persistedAlerts = localStorage.getItem('partner_alerts');
         setPartnerPersistedAlerts(persistedAlerts ? JSON.parse(persistedAlerts) : []);
@@ -3506,7 +3504,12 @@ export default function FixerProPage() {
           let partnerChanged = false;
           for (const pending of pendingMeetings) {
             const alreadyHasMeetingConfirm = partnerReqs.some((r: any) => r.po === pending.po && String(r?.workflowType || r?.type || '') === 'meeting_confirm_partner');
-            const alreadyAdvanced = partnerReqs.some((r: any) => r.po === pending.po && ['variation_partner', 'complete_partner', 'rate_partner'].includes(String(r?.workflowType || r?.type || '')));
+            const pendingCreatedAt = parseWorkflowSortTs(pending.createdAt || pending.date) || 0;
+            const alreadyAdvanced = partnerReqs.some((r: any) =>
+              r.po === pending.po &&
+              ['variation_partner', 'complete_partner', 'rate_partner'].includes(String(r?.workflowType || r?.type || '')) &&
+              (parseWorkflowSortTs(r.createdAt || r.date) || 0) > pendingCreatedAt,
+            );
             if (!alreadyHasMeetingConfirm && !alreadyAdvanced) {
               partnerReqs = [
                 ...partnerReqs.filter((r: any) => !(r.po === pending.po && String(r?.workflowType || r?.type || '') === 'meeting_confirm_partner')),

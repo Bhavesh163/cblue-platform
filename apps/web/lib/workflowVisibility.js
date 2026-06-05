@@ -1,9 +1,9 @@
 const WORKFLOW_PO_PATTERN = /\b(?:PO|PRE)-(?:(?:\d{8})|(?:\d{4}-\d{4,}))\b/i;
 const TERMINAL_STATUS_VALUES = new Set(["COMPLETED", "CANCELLED", "CANCELED", "DONE", "DECLINED"]);
 const TERMINAL_ALERT_PATTERN =
-  /workflow completed|job is now complete|rated this project|this inquiry is now closed|moved to history|cancelled|canceled|declined|unavailable/i;
+  /workflow completed|job is now complete|job is complete|stored in history|rated this project|this inquiry is now closed|moved to history|cancelled|canceled|declined|unavailable/i;
 const COMPLETION_CHAT_PATTERN =
-  /workflow completed|job is now complete|rated this project|this inquiry is now closed|moved to history/i;
+  /workflow completed|job is now complete|job is complete|stored in history|rated this project|this inquiry is now closed|moved to history/i;
 
 export function normalizeWorkflowPo(value) {
   const match = String(value ?? "").match(WORKFLOW_PO_PATTERN);
@@ -85,22 +85,77 @@ export function collectTerminalWorkflowPos({
 
 export function readBrowserTerminalWorkflowPos(storage) {
   const chatMessagesByPo = {};
+  const alerts = [];
+  const historyItems = [];
   if (!storage || typeof storage.length !== "number" || typeof storage.key !== "function") {
     return new Set();
   }
 
   for (let index = 0; index < storage.length; index += 1) {
     const key = storage.key(index);
-    if (!key || !key.startsWith("chat_messages_")) continue;
-    const po = normalizeWorkflowPo(key.replace(/^chat_messages_/, ""));
-    if (!po) continue;
-    try {
-      const parsed = JSON.parse(storage.getItem(key) || "[]");
-      chatMessagesByPo[po] = Array.isArray(parsed) ? parsed : [];
-    } catch {
-      chatMessagesByPo[po] = [];
+    if (!key) continue;
+    if (key.startsWith("chat_messages_")) {
+      const po = normalizeWorkflowPo(key.replace(/^chat_messages_/, ""));
+      if (!po) continue;
+      try {
+        const parsed = JSON.parse(storage.getItem(key) || "[]");
+        chatMessagesByPo[po] = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        chatMessagesByPo[po] = [];
+      }
+      continue;
+    }
+
+    if (key === "partner_alerts" || key.startsWith("cblue_customer_alerts")) {
+      try {
+        const parsed = JSON.parse(storage.getItem(key) || "[]");
+        if (Array.isArray(parsed)) alerts.push(...parsed);
+      } catch {}
+      continue;
+    }
+
+    if (key === "ghis_mock_history") {
+      try {
+        const parsed = JSON.parse(storage.getItem(key) || "[]");
+        if (Array.isArray(parsed)) historyItems.push(...parsed);
+      } catch {}
     }
   }
 
-  return collectTerminalWorkflowPos({ chatMessagesByPo });
+  return collectTerminalWorkflowPos({ chatMessagesByPo, alerts, historyItems });
+}
+
+export function pruneWorkflowStorage(storage, softLimitBytes = 4.5 * 1024 * 1024) {
+  if (!storage || typeof storage.length !== "number" || typeof storage.key !== "function") {
+    return [];
+  }
+
+  let total = 0;
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (!key) continue;
+    total += (key.length + String(storage.getItem(key) || "").length) * 2;
+  }
+  if (total < softLimitBytes) return [];
+
+  const removablePrefixes = [
+    "cblue_po_breakdown_",
+    "cblue_variation_price_list_",
+  ];
+  const removed = [];
+  const removableKeys = [];
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (!key) continue;
+    if (removablePrefixes.some((prefix) => key.startsWith(prefix))) {
+      removableKeys.push(key);
+    }
+  }
+
+  for (const key of removableKeys) {
+    storage.removeItem(key);
+    removed.push(key);
+  }
+
+  return removed;
 }

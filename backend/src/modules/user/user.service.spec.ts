@@ -146,6 +146,44 @@ describe('UserService', () => {
       });
     });
 
+    it('should still return a minimal profile when ultra-safe profile columns drift', async () => {
+      const companyDrift = new Error(
+        'P2022: The column `users.company` does not exist in the current database.',
+      );
+      const nestedDrift = new Error(
+        'P2022: The column `addresses.unit` does not exist in the current database.',
+      );
+      const ultraDrift = new Error(
+        'P2022: The column `users.phone` does not exist in the current database.',
+      );
+      const bareDrift = new Error(
+        'P2022: The column `users.createdAt` does not exist in the current database.',
+      );
+      prisma.user.findUnique
+        .mockRejectedValueOnce(companyDrift)
+        .mockRejectedValueOnce(nestedDrift)
+        .mockRejectedValueOnce(ultraDrift)
+        .mockRejectedValueOnce(bareDrift)
+        .mockResolvedValueOnce({
+          id: 'user-1',
+          name: 'Ghis',
+          email: 'ghiscafe@gmail.com',
+          role: 'USER',
+        });
+
+      const result = await service.getProfile('user-1');
+
+      expect(prisma.user.findUnique).toHaveBeenCalledTimes(5);
+      expect(result).toMatchObject({
+        id: 'user-1',
+        name: 'Ghis',
+        email: 'ghiscafe@gmail.com',
+        company: null,
+        addresses: [],
+        fixer: null,
+      });
+    });
+
     it('should keep fixer access when only nested fixer relations are missing', async () => {
       const nestedRelationDrift = new Error(
         'The table `public.fixer_availability` does not exist in the current database.',

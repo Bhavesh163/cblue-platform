@@ -7,6 +7,7 @@ import { useTranslations, useLocale } from "next-intl";
 import { refreshSubscriberSession } from "../../../lib/subscriberSession";
 import {
   collectTerminalWorkflowPos,
+  pruneWorkflowStorage,
   readBrowserTerminalWorkflowPos,
 } from "../../../lib/workflowVisibility";
 import { useRouter } from "next/navigation";
@@ -85,32 +86,10 @@ function clearCustomerDashboardSession() {
   sessionStorage.removeItem(CUSTOMER_DASHBOARD_SUBSCRIBER_KEY);
 }
 
-/** Prune localStorage when approaching the 4.5 MB soft limit.
- * Removes the oldest completed job history entry and oldest PO breakdown. */
+/** Prune non-critical workflow caches near the localStorage soft limit. */
 function pruneStorageIfNeeded() {
   try {
-    let total = 0;
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k) total += (k.length + (localStorage.getItem(k) || '').length) * 2;
-    }
-    if (total < 4.5 * 1024 * 1024) return;
-    // Remove oldest history entry
-    try {
-      const hist = JSON.parse(localStorage.getItem('ghis_mock_history') || '[]');
-      if (hist.length > 0) {
-        hist.shift();
-        localStorage.setItem('ghis_mock_history', JSON.stringify(hist));
-      }
-    } catch {}
-    // Remove oldest PO breakdown entry
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k && k.startsWith('cblue_po_breakdown_')) {
-        localStorage.removeItem(k);
-        break;
-      }
-    }
+    pruneWorkflowStorage(localStorage);
   } catch {}
 }
 
@@ -2014,12 +1993,22 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         const h = localStorage.getItem("ghis_mock_history");
         if (p) setMockPayments(JSON.parse(p));
         if (a) {
-          const parsedActive = filterVisibleWorkflowItems(JSON.parse(a));
-          setMockActiveItems(parsedActive);
+          const terminalPos = readBrowserTerminalWorkflowPos(localStorage);
+          const parsedActive = filterVisibleWorkflowItems(JSON.parse(a))
+            .filter((item: any) => !terminalPos.has(String(item?.po || '').trim().toUpperCase()));
+          setMockActiveItems((prev) => {
+            const previousVisible = prev.filter((item: any) => !terminalPos.has(String(item?.po || '').trim().toUpperCase()));
+            return parsedActive.length === 0 && previousVisible.length > 0 ? previousVisible : parsedActive;
+          });
         }
         if (d) {
-          const parsedDyn = filterVisibleWorkflowItems(JSON.parse(d));
-          setMockDynRequests(parsedDyn);
+          const terminalPos = readBrowserTerminalWorkflowPos(localStorage);
+          const parsedDyn = filterVisibleWorkflowItems(JSON.parse(d))
+            .filter((item: any) => !terminalPos.has(String(item?.po || '').trim().toUpperCase()));
+          setMockDynRequests((prev) => {
+            const previousVisible = prev.filter((item: any) => !terminalPos.has(String(item?.po || '').trim().toUpperCase()));
+            return parsedDyn.length === 0 && previousVisible.length > 0 ? previousVisible : parsedDyn;
+          });
         }
         if (h) setMockHistory(filterVisibleWorkflowItems(JSON.parse(h)));
       } catch {}
@@ -5625,7 +5614,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                     const rawPartnerReqs = JSON.parse(localStorage.getItem('partner_mock_dyn_req') || '[]');
                     const partnerReqs = Array.isArray(rawPartnerReqs) ? rawPartnerReqs : [];
                     const isAdvancedPartnerStep = (item: any) => ['variation_partner', 'complete_partner', 'rate_partner'].includes(String(item?.workflowType || item?.type || ''));
-                    const alreadyAdvanced = partnerReqs.some((item: any) => item?.po === meetingModal.po && isAdvancedPartnerStep(item));
+                    const alreadyAdvanced = partnerReqs.some((item: any) => item?.po === meetingModal.po && isAdvancedPartnerStep(item) && parseDateMs(item?.createdAt || item?.date) > createdAt);
                     if (!alreadyAdvanced) {
                       const nextPartnerReqs = [
                         partnerMeetingRequest,

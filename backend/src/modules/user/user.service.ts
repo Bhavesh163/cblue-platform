@@ -110,7 +110,19 @@ export class UserService {
                 : String(minimalError)
             }`,
           );
-          user = await this.getProfileUltraSafe(userId);
+          try {
+            user = await this.getProfileUltraSafe(userId);
+          } catch (ultraError) {
+            if (!this.isSchemaDriftError(ultraError)) throw ultraError;
+            this.logger.warn(
+              `Ultra-safe profile read still hit schema drift for user ${userId}; retrying with bare select: ${
+                ultraError instanceof Error
+                  ? ultraError.message
+                  : String(ultraError)
+              }`,
+            );
+            user = await this.getProfileBareSafe(userId);
+          }
         }
       }
     }
@@ -242,6 +254,29 @@ export class UserService {
       ? {
           ...user,
           company: null,
+          addresses: [],
+          fixer: null,
+        }
+      : null;
+  }
+
+  private async getProfileBareSafe(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+      },
+    });
+
+    return user
+      ? {
+          ...user,
+          phone: null,
+          company: null,
+          createdAt: null,
           addresses: [],
           fixer: null,
         }
