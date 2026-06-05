@@ -21,6 +21,7 @@ import { readStoredPoProjectDetails } from "../../../lib/po-project-details";
 import { refreshSubscriberSession } from "../../../lib/subscriberSession";
 import {
   collectTerminalWorkflowPos,
+  isCompletedAwaitingWorkflowRating,
   pruneWorkflowStorage,
   readBrowserTerminalWorkflowPos,
 } from "../../../lib/workflowVisibility";
@@ -3856,6 +3857,7 @@ export default function FixerProPage() {
       return (
         po &&
         String(job?.status || '').toUpperCase() === 'COMPLETED' &&
+        isCompletedAwaitingWorkflowRating(job) &&
         !completedHistoryPos.has(po) &&
         !declinedPartnerPos.has(po) &&
         !isClosedPartnerWorkflowPo(po)
@@ -4062,7 +4064,11 @@ export default function FixerProPage() {
     if (status === 'CANCELLED') return true;
     if (status !== 'COMPLETED') return false;
     const po = String(o?.po || '').trim();
-    return partnerRatedHistoryPos.has(po) || /partner rated/i.test(String(o?.statusNote || ''));
+    return (
+      partnerRatedHistoryPos.has(po) ||
+      /partner rated/i.test(String(o?.statusNote || '')) ||
+      !isCompletedAwaitingWorkflowRating(o)
+    );
   });
   const declineReasonByPo = new Map(
     partnerDeclineLogs

@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   collectTerminalWorkflowPos,
   hasWorkflowCompletionMarker,
+  isCompletedAwaitingWorkflowRating,
+  isTerminalWorkflowStatus,
   pruneWorkflowStorage,
   readBrowserTerminalWorkflowPos,
 } from "./workflowVisibility.js";
@@ -68,10 +70,28 @@ test("detects terminal workflow markers from chat and closed storage keys", () =
   ]);
 });
 
-test("collects terminal POs from backend status, history, and alert text", () => {
+test("keeps backend completed orders visible until rating/history closes the workflow", () => {
+  assert.equal(isTerminalWorkflowStatus("COMPLETED"), false);
+  assert.equal(isTerminalWorkflowStatus("DONE"), true);
+  assert.equal(
+    isCompletedAwaitingWorkflowRating({
+      status: "COMPLETED",
+      statusHistory: [{ note: "Customer confirmed project complete." }],
+    }),
+    true,
+  );
+  assert.equal(
+    isCompletedAwaitingWorkflowRating({
+      status: "COMPLETED",
+      statusNote: "Partner rated the customer. This job is complete and now stored in History.",
+    }),
+    false,
+  );
+
   const terminalPos = collectTerminalWorkflowPos({
     backendOrders: [
       { status: "COMPLETED", description: "PO-2606-1111 | Kitchen" },
+      { status: "DONE", description: "PO-2606-7777 | Closed legacy order" },
       { status: "IN_PROGRESS", description: "PO-2606-2222 | Smart Home" },
     ],
     historyItems: [{ po: "PO-2606-3333" }],
@@ -90,7 +110,7 @@ test("collects terminal POs from backend status, history, and alert text", () =>
 
   assert.deepEqual(
     [...terminalPos].sort(),
-    ["PO-2606-1111", "PO-2606-3333", "PO-2606-4444", "PO-2606-6666"],
+    ["PO-2606-3333", "PO-2606-4444", "PO-2606-6666", "PO-2606-7777"],
   );
 });
 

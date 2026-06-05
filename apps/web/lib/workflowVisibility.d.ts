@@ -15,6 +15,8 @@ type StorageLike = {
 
 export function normalizeWorkflowPo(value: any): string;
 export function hasWorkflowCompletionMarker(value: any): boolean;
+export function isTerminalWorkflowStatus(status: any): boolean;
+export function isCompletedAwaitingWorkflowRating(value: any): boolean;
 export function collectTerminalWorkflowPos(input?: WorkflowVisibilityInput): Set<string>;
 export function readBrowserTerminalWorkflowPos(storage?: StorageLike): Set<string>;
 export function pruneWorkflowStorage(

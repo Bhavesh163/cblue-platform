@@ -1,5 +1,7 @@
 const WORKFLOW_PO_PATTERN = /\b(?:PO|PRE)-(?:(?:\d{8})|(?:\d{4}-\d{4,}))\b/i;
-const TERMINAL_STATUS_VALUES = new Set(["COMPLETED", "CANCELLED", "CANCELED", "DONE", "DECLINED"]);
+const TERMINAL_STATUS_VALUES = new Set(["CANCELLED", "CANCELED", "DONE", "DECLINED"]);
+const COMPLETED_AWAITING_RATING_PATTERN =
+  /customer\s+confirmed\s+(?:project\s+)?complete|customer\s+confirmed\s+completion|rating\s+is\s+now\s+open|please\s+rate|rate\s+(?:the\s+customer|your\s+partner)/i;
 const TERMINAL_ALERT_PATTERN =
   /workflow completed|job is now complete|job is complete|stored in history|rated this project|this inquiry is now closed|moved to history|cancelled|canceled|declined|unavailable/i;
 const COMPLETION_CHAT_PATTERN =
@@ -19,17 +21,29 @@ function getTextFields(value) {
     value.text,
     value.msg,
     value.message,
+    value.note,
     value.statusNote,
     value.description,
     value.desc,
     value.title,
+    value.statusHistory,
   ]
     .filter((entry) => entry != null)
-    .map(String);
+    .flatMap(getTextFields);
 }
 
 export function hasWorkflowCompletionMarker(value) {
   return getTextFields(value).some((text) => COMPLETION_CHAT_PATTERN.test(text));
+}
+
+export function isTerminalWorkflowStatus(status) {
+  return TERMINAL_STATUS_VALUES.has(String(status || "").toUpperCase());
+}
+
+export function isCompletedAwaitingWorkflowRating(value) {
+  if (!value || typeof value !== "object") return false;
+  if (String(value.status || "").toUpperCase() !== "COMPLETED") return false;
+  return getTextFields(value).some((text) => COMPLETED_AWAITING_RATING_PATTERN.test(text));
 }
 
 function hasTerminalAlertMarker(value) {
@@ -58,8 +72,7 @@ export function collectTerminalWorkflowPos({
   }
 
   for (const order of backendOrders || []) {
-    const status = String(order?.status || "").toUpperCase();
-    if (TERMINAL_STATUS_VALUES.has(status)) {
+    if (isTerminalWorkflowStatus(order?.status)) {
       addPo(terminal, order?.po || order?.poNumber || order?.description || order?.desc || order?.id);
     }
   }

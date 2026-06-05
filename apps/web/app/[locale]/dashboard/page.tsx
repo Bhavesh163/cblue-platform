@@ -7,6 +7,8 @@ import { useTranslations, useLocale } from "next-intl";
 import { refreshSubscriberSession } from "../../../lib/subscriberSession";
 import {
   collectTerminalWorkflowPos,
+  isCompletedAwaitingWorkflowRating,
+  isTerminalWorkflowStatus,
   pruneWorkflowStorage,
   readBrowserTerminalWorkflowPos,
 } from "../../../lib/workflowVisibility";
@@ -168,6 +170,14 @@ const getWorkflowStatusNote = (value: any) => {
   const rows = Array.isArray(value?.statusHistory) ? value.statusHistory : [];
   const meaningful = rows.find((row: any) => /customer\s+cancel|declin|reason:/i.test(String(row?.note || '')));
   return String(meaningful?.note || rows[0]?.note || value?.statusNote || '');
+};
+const isBackendWorkflowActiveStatus = (orderLike: any) => {
+  const status = String(orderLike?.status || '').toUpperCase();
+  return !isTerminalWorkflowStatus(status) && (status !== 'COMPLETED' || isCompletedAwaitingWorkflowRating(orderLike));
+};
+const isBackendWorkflowHistoryStatus = (orderLike: any) => {
+  const status = String(orderLike?.status || '').toUpperCase();
+  return isTerminalWorkflowStatus(status) || (status === 'COMPLETED' && !isCompletedAwaitingWorkflowRating(orderLike));
 };
 const WORKFLOW_MEETING_VISIBLE_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 const parseWorkflowMeetingDateTimeMs = (meetingDate?: string, meetingTime?: string, fallback?: any) => {
@@ -863,8 +873,8 @@ export default function DashboardPage() {
     fee: o.estimatedPrice ? `฿${o.estimatedPrice}` : "TBD"
   }));
 
-  const activeOrders = mappedOrders.filter(o => !['COMPLETED', 'CANCELLED'].includes(o.status));
-  const historyOrders = mappedOrders.filter(o => ['COMPLETED', 'CANCELLED'].includes(o.status));
+  const activeOrders = mappedOrders.filter(o => isBackendWorkflowActiveStatus(o));
+  const historyOrders = mappedOrders.filter(o => isBackendWorkflowHistoryStatus(o));
   const requests = activeOrders.filter(o => ['CREATED', 'MATCHING', 'PENDING'].includes(o.status));
   const properties = mappedOrders.filter(o => o.type === 'property');
 
@@ -3001,7 +3011,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   );
   const backendTerminalPOs = new Set(
     workflowOrders
-      .filter((order: any) => ['COMPLETED', 'CANCELLED', 'DONE'].includes(String(order?.status || '').toUpperCase()))
+      .filter((order: any) => isBackendWorkflowHistoryStatus(order))
       .map((order: any) => extractPo(order))
       .filter((po: string) => isPoCode(po)),
   );
@@ -3029,7 +3039,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   const backendActiveItems = workflowOrders
     .filter((o: any) => {
       const po = extractPo(o);
-      return !['COMPLETED', 'CANCELLED', 'DONE'].includes(String(o?.status || '').toUpperCase()) && !completedPOs.has(po) && !isClosedCustomerWorkflowPo(po);
+      return isBackendWorkflowActiveStatus(o) && !completedPOs.has(po) && !isClosedCustomerWorkflowPo(po);
     })
     .map((o: any) => {
       const status = String(o?.status || '').toUpperCase();
@@ -3048,6 +3058,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         VARIATION_PENDING: 9,
         COMPLETE_PENDING: 10,
         WORKING: 10,
+        COMPLETED: 11,
         RATING_PENDING: 11,
       };
       const step = stepByStatus[status] || 5;
@@ -4275,8 +4286,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     </div>
   );
   };
-  const activeOrders = workflowOrders.filter((o: any) => !['COMPLETED', 'CANCELLED', 'DONE'].includes(String(o.status || '').toUpperCase()));
-  const historyOrders = workflowOrders.filter((o: any) => ['COMPLETED', 'CANCELLED', 'DONE'].includes(String(o.status || '').toUpperCase()));
+  const activeOrders = workflowOrders.filter((o: any) => isBackendWorkflowActiveStatus(o));
+  const historyOrders = workflowOrders.filter((o: any) => isBackendWorkflowHistoryStatus(o));
   const propCompletedHistoryEntries = propInquiries
     .filter((p: PropInquiry) => isCustomerSidePropCompleted(p))
     .map((p: PropInquiry) => {
