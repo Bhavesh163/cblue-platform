@@ -98,6 +98,21 @@ export function filterLiveWorkflowItems(items = [], terminalPoValues = []) {
   });
 }
 
+export function normalizeWorkflowHistoryItems(items = []) {
+  if (!Array.isArray(items)) return [];
+  const byKey = new Map();
+  for (const item of items) {
+    if (!item || typeof item !== "object") continue;
+    const po = normalizeWorkflowPo(
+      item.po || item.poNumber || item.id || item.description || item.desc,
+    );
+    const key = po || String(item.id || "").trim();
+    if (!key) continue;
+    byKey.set(key, item);
+  }
+  return [...byKey.values()];
+}
+
 export function collectTerminalWorkflowPos({
   backendOrders = [],
   historyItems = [],

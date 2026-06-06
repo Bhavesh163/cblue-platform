@@ -41,6 +41,12 @@ const DEFAULT_COMPLETE_REQUEST =
 
 const WORKFLOW_STATUS_NOTE_PATTERN =
   /customer\s+cancel|declin|reason:|\[complete_data\]|project-complete|job-complete|partner\s+has\s+marked\s+the\s+job\s+as\s+complete|customer\s+confirmed\s+(?:project\s+)?complete|customer\s+sent\s+meeting\s+invitation|partner\s+confirmed\s+site\s+meeting|variation/i;
+const POST_VARIATION_TYPES = new Set([
+  "complete_partner",
+  "complete_pending",
+  "rate_partner",
+  "rate_pending",
+]);
 
 function normalizePo(value) {
   const match = String(value || "").match(PO_PATTERN);
@@ -131,6 +137,56 @@ export function isVisibleWorkflowSystemText(value) {
   return /^\s*\[(?:system|cblue)\]/i.test(String(value || "").trim());
 }
 
+function variationApprovalStorageKey(po) {
+  const normalizedPo = normalizePo(po);
+  return normalizedPo
+    ? `customer_variation_approved_${normalizedPo.replace(/[^A-Z0-9]+/g, "_")}`
+    : "";
+}
+
+export function markWorkflowVariationApproved(storage, po) {
+  const key = variationApprovalStorageKey(po);
+  if (!key || typeof storage?.setItem !== "function") return false;
+  try {
+    storage.setItem(key, "1");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function isWorkflowPastVariation({ activeItem, backendOrder, po, storage }) {
+  const normalizedPo = normalizePo(po);
+  if (!normalizedPo) return false;
+
+  if (Number(activeItem?.step || activeItem?.mockStep || 0) >= 10) {
+    return true;
+  }
+
+  const backendNote = getWorkflowStatusNote(backendOrder);
+  if (
+    /customer\s+approved\s+(?:the\s+)?variation|partner\s+may\s+now\s+submit\s+project\s+complete/i.test(
+      backendNote,
+    )
+  ) {
+    return true;
+  }
+
+  const approvalKey = variationApprovalStorageKey(normalizedPo);
+  if (approvalKey && storage?.getItem?.(approvalKey) === "1") {
+    return true;
+  }
+
+  return storageHasPo(
+    storage,
+    ["ghis_mock_dyn_req", "partner_mock_dyn_req"],
+    normalizedPo,
+    (item) =>
+      Number(item?.step || item?.mockStep || 0) >= 10 ||
+      POST_VARIATION_TYPES.has(String(item?.type || "").toLowerCase()),
+  );
+}
+
 export async function persistPartnerCompletionStatusNote({
   chatText,
   fetchFn = globalThis.fetch,
@@ -158,6 +214,51 @@ export async function persistPartnerCompletionStatusNote({
       body: JSON.stringify({
         status: "IN_PROGRESS",
         note: `Partner submitted project-complete request for ${normalizedPo}. [COMPLETE_DATA]${desc}[/COMPLETE_DATA]`,
+      }),
+    });
+    return Boolean(response?.ok);
+  } catch {
+    return false;
+  }
+}
+
+export async function persistCustomerRatingStatusNote({
+  fetchFn = globalThis.fetch,
+  po,
+  rating,
+  resolveOrderIdByPo,
+  storage,
+  token,
+}) {
+  const normalizedPo = normalizePo(po);
+  const numericRating = Number(rating);
+  if (
+    !normalizedPo ||
+    !Number.isFinite(numericRating) ||
+    numericRating <= 0 ||
+    typeof resolveOrderIdByPo !== "function" ||
+    typeof fetchFn !== "function"
+  ) {
+    return false;
+  }
+
+  try {
+    const mappedOrderId = storage?.getItem?.(`po_to_order_${normalizedPo}`) || "";
+    const orderId = await resolveOrderIdByPo({
+      po: normalizedPo,
+      fallbackOrderId: mappedOrderId,
+      token,
+    });
+    if (!orderId) return false;
+    const headers = token
+      ? { "Content-Type": "application/json", Authorization: `Bearer ${token}` }
+      : { "Content-Type": "application/json" };
+    const response = await fetchFn(`/api/v1/orders/${orderId}/status`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({
+        status: "COMPLETED",
+        note: `Customer rated this project ${numericRating}/5 stars. Workflow completed.`,
       }),
     });
     return Boolean(response?.ok);

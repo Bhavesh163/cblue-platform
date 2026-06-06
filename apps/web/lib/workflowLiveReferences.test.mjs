@@ -5,6 +5,9 @@ import {
   getWorkflowStatusNote,
   isVisibleWorkflowSystemText,
   isWorkflowPoReferencedInStorage,
+  isWorkflowPastVariation,
+  markWorkflowVariationApproved,
+  persistCustomerRatingStatusNote,
   persistPartnerCompletionStatusNote,
 } from "./workflowLiveReferences.js";
 
@@ -15,6 +18,10 @@ class MemoryStorage {
 
   getItem(key) {
     return this.values.has(key) ? this.values.get(key) : null;
+  }
+
+  setItem(key, value) {
+    this.values.set(key, String(value));
   }
 }
 
@@ -84,6 +91,71 @@ assert.equal(
   assert.equal(calls.length, 1);
   assert.equal(calls[0][0], "/api/v1/orders/order-123/status");
   assert.match(calls[0][1].body, /project-complete request/);
+}
+
+{
+  const storage = new MemoryStorage();
+  assert.equal(markWorkflowVariationApproved(storage, "PO-2606-6049"), true);
+  assert.equal(storage.getItem("customer_variation_approved_PO_2606_6049"), "1");
+  assert.equal(
+    isWorkflowPastVariation({
+      activeItem: { po: "PO-2606-6049", step: 9 },
+      po: "PO-2606-6049",
+      storage,
+    }),
+    true,
+  );
+  assert.equal(
+    isWorkflowPastVariation({
+      activeItem: { po: "PO-2606-6049", step: 10 },
+      po: "PO-2606-6049",
+      storage: new MemoryStorage(),
+    }),
+    true,
+  );
+  assert.equal(
+    isWorkflowPastVariation({
+      activeItem: { po: "PO-2606-6049", step: 9 },
+      po: "PO-2606-6049",
+      storage: new MemoryStorage({
+        partner_mock_dyn_req: JSON.stringify([
+          { po: "PO-2606-6049", type: "complete_partner", step: 10 },
+        ]),
+      }),
+    }),
+    true,
+  );
+  assert.equal(
+    isWorkflowPastVariation({
+      activeItem: { po: "PO-2606-6049", step: 9 },
+      po: "PO-2606-6049",
+      storage: new MemoryStorage(),
+    }),
+    false,
+  );
+}
+
+{
+  const calls = [];
+  const ok = await persistCustomerRatingStatusNote({
+    fetchFn: async (...args) => {
+      calls.push(args);
+      return { ok: true };
+    },
+    po: "PO-2606-6049",
+    rating: 5,
+    resolveOrderIdByPo: async () => "order-6049",
+    storage: new MemoryStorage({ "po_to_order_PO-2606-6049": "order-6049" }),
+    token: "customer-token",
+  });
+
+  assert.equal(ok, true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][0], "/api/v1/orders/order-6049/status");
+  assert.deepEqual(JSON.parse(calls[0][1].body), {
+    status: "COMPLETED",
+    note: "Customer rated this project 5/5 stars. Workflow completed.",
+  });
 }
 
 {

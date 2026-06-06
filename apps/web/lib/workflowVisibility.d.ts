@@ -20,6 +20,7 @@ export function hasWorkflowCompletionMarker(value: any): boolean;
 export function isTerminalWorkflowStatus(status: any): boolean;
 export function isCompletedAwaitingWorkflowRating(value: any): boolean;
 export function filterLiveWorkflowItems(items?: any[], terminalPoValues?: Set<string> | any[]): any[];
+export function normalizeWorkflowHistoryItems(items?: any[]): any[];
 export function collectTerminalWorkflowPos(input?: WorkflowVisibilityInput): Set<string>;
 export function readBrowserTerminalWorkflowPos(storage?: StorageLike): Set<string>;
 export function pruneWorkflowStorage(

@@ -7,6 +7,7 @@ import {
   hasWorkflowCompletionMarker,
   isCompletedAwaitingWorkflowRating,
   isTerminalWorkflowStatus,
+  normalizeWorkflowHistoryItems,
   pickWorkflowMeetingVenue,
   pruneWorkflowStorage,
   readBrowserTerminalWorkflowPos,
@@ -273,4 +274,21 @@ test("filters terminal workflow requests without hiding completed jobs awaiting 
   ).map((item) => item.po);
 
   assert.deepEqual(visible, ["PO-2606-1111", "PO-2606-2222"]);
+});
+
+test("preserves terminal customer history entries during storage synchronization", () => {
+  const history = normalizeWorkflowHistoryItems([
+    {
+      po: "PO-2606-6049",
+      status: "COMPLETED",
+      customerRating: 5,
+      statusNote: "Customer rated this project 5/5 stars. Workflow completed.",
+    },
+    { po: "PO-2606-7001", status: "CANCELLED" },
+  ]);
+
+  assert.deepEqual(history.map((item) => item.po), [
+    "PO-2606-6049",
+    "PO-2606-7001",
+  ]);
 });

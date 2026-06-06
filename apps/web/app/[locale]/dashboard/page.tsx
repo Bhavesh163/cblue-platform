@@ -10,6 +10,7 @@ import {
   filterLiveWorkflowItems,
   isCompletedAwaitingWorkflowRating,
   isTerminalWorkflowStatus,
+  normalizeWorkflowHistoryItems,
   pickWorkflowMeetingVenue,
   pruneWorkflowStorage,
   readBrowserTerminalWorkflowPos,
@@ -20,6 +21,9 @@ import {
   getWorkflowStatusNote,
   isVisibleWorkflowSystemText,
   isWorkflowPoReferencedInStorage,
+  isWorkflowPastVariation,
+  markWorkflowVariationApproved,
+  persistCustomerRatingStatusNote,
 } from "../../../lib/workflowLiveReferences";
 import { useRouter } from "next/navigation";
 import PdpaConsent from "../components/PdpaConsent";
@@ -1897,6 +1901,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     filterLiveWorkflowItems(items, terminalPoValues).filter((item: any) => !isHiddenTestPo(item?.po));
   const filterVisibleActiveWorkflowItems = (items: any[], terminalPoValues: Set<string> | string[] = []) =>
     filterVisibleWorkflowItems(items, terminalPoValues).filter((item: any) => !isBackendWorkflowHistoryStatus(item));
+  const filterVisibleWorkflowHistoryItems = (items: any[]) =>
+    normalizeWorkflowHistoryItems(items).filter((item: any) => !isHiddenTestPo(item?.po));
   const postBackendWorkflowMessage = async (po: string, text: string) => {
     try {
       const token = getCustomerDashboardToken();
@@ -2000,7 +2006,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       if (p) setMockPayments(JSON.parse(p));
       if (a) setMockActiveItems(filterVisibleActiveWorkflowItems(JSON.parse(a), terminalPos));
       if (d) setMockDynRequests(filterVisibleWorkflowItems(JSON.parse(d), terminalPos));
-      if (h) setMockHistory(filterVisibleWorkflowItems(JSON.parse(h)));
+      if (h) setMockHistory(filterVisibleWorkflowHistoryItems(JSON.parse(h)));
     } catch {}
     setMockReady(true);
   }, []);
@@ -2054,7 +2060,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
             return parsedDyn.length === 0 && previousVisible.length > 0 ? previousVisible : parsedDyn;
           });
         }
-        if (h) setMockHistory(filterVisibleWorkflowItems(JSON.parse(h)));
+        if (h) setMockHistory(filterVisibleWorkflowHistoryItems(JSON.parse(h)));
       } catch {}
     };
     window.addEventListener("storage", syncMockState);
@@ -2809,7 +2815,16 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         }
       })();
       // Variation detection
-      if (lastMsg.includes('[system] partner has submitted a variation')) {
+      const activeItem = mockActiveItems.find((item: any) => item?.po === po);
+      if (
+        lastMsg.includes('[system] partner has submitted a variation') &&
+        !isWorkflowPastVariation({
+          activeItem,
+          backendOrder,
+          po,
+          storage: localStorage,
+        })
+      ) {
         setMockActiveItems(prev => {
           const activeSnapshot = {
             ...(prev.find((x: any) => x.po === po) || backendOrder || {}),
@@ -5356,8 +5371,21 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                 <button
                   onClick={() => {
                     const po = rateModal.po;
+                    const createdAt = Date.now();
                     const job = mockActiveItems.find((x: any) => x.po === po);
-                    const completed = { ...(job || rateModal), step: 11, completedAt: new Date().toISOString(), status: 'COMPLETED', rating: rateStars, customerRating: rateStars, chatHistory: readStoredChatHistory(po) };
+                    const completed = {
+                      ...(job || rateModal),
+                      step: 11,
+                      stepName: 'Rate',
+                      completedAt: createdAt,
+                      statusChangedAt: createdAt,
+                      status: 'COMPLETED',
+                      statusName: 'Completed',
+                      statusNote: `Customer rated this project ${rateStars}/5 stars. Workflow completed.`,
+                      rating: rateStars,
+                      customerRating: rateStars,
+                      chatHistory: readStoredChatHistory(po),
+                    };
                     const newActive = mockActiveItems.filter((x: any) => x.po !== po);
                     const newReqs = mockDynRequests.filter((x: any) => x.po !== po);
                     const prevHist = JSON.parse(localStorage.getItem('ghis_mock_history') || '[]');
@@ -5371,7 +5399,20 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                     setMockDynRequests(newReqs);
                     setMockHistory(Array.isArray(persistedHistory.value) ? persistedHistory.value : newHist);
                     try { localStorage.setItem(`chat_closed_${po}`, '1'); } catch {}
-                    void postBackendWorkflowMessage(po, `[SYSTEM] Customer rated this project ${rateStars}/5 stars. Workflow completed.`);
+                    const ratingText = `[SYSTEM] Customer rated this project ${rateStars}/5 stars. Workflow completed.`;
+                    appendLocalWorkflowChat(po, ratingText, createdAt);
+                    const backendOrder = workflowOrders.find((order: any) => extractPo(order) === po);
+                    const token = getCustomerDashboardToken();
+                    void persistCustomerRatingStatusNote({
+                      fetchFn: fetch,
+                      po,
+                      rating: rateStars,
+                      resolveOrderIdByPo: async ({ fallbackOrderId }) =>
+                        fallbackOrderId || backendOrder?.id || '',
+                      storage: localStorage,
+                      token,
+                    });
+                    void postBackendWorkflowMessage(po, ratingText);
                     setRateModal(null);
                     setActiveTab("history");
                   }}
@@ -5980,6 +6021,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                       unread: true,
                       dot: 'bg-green-500',
                     };
+                    markWorkflowVariationApproved(localStorage, po);
                     writeWorkflowStorage('ghis_mock_active', newActive);
                     writeWorkflowStorage('ghis_mock_dyn_req', newReqs);
                     writeWorkflowStorage('partner_mock_dyn_req', updatedPartnerReqs);
@@ -5991,6 +6033,17 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                     window.dispatchEvent(new Event('cblue-workflow-updated'));
                     setMockActiveItems(newActive);
                     setMockDynRequests(newReqs);
+                    const token = getCustomerDashboardToken();
+                    if (token && workflowOrderForPo?.id) {
+                      fetch(`/api/v1/orders/${workflowOrderForPo.id}/status`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                        body: JSON.stringify({
+                          status: 'IN_PROGRESS',
+                          note: 'Customer approved the variation. Partner may now submit project complete.',
+                        }),
+                      }).catch(() => {});
+                    }
                     void postBackendWorkflowMessage(po, `[SYSTEM] Customer approved variation for ${po}. Partner may now submit project complete.`);
                     setVariationApproveModal(null);
                     setActiveTab('requests');
