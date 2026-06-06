@@ -23,6 +23,7 @@ import {
   collectTerminalWorkflowPos,
   isCompletedAwaitingWorkflowRating,
   isTerminalWorkflowStatus,
+  pickWorkflowMeetingVenue,
   pruneWorkflowStorage,
   readBrowserTerminalWorkflowPos,
   setWorkflowStorageItem,
@@ -3570,7 +3571,12 @@ export default function FixerProPage() {
                   tier: pending.tier,
                   desc: pending.desc,
                   description: pending.description || pending.desc || '',
-                  hasAttachment: Boolean(pending.hasAttachment),
+                  hasAttachment: Boolean(
+                    pending.hasAttachment ||
+                    (Array.isArray(pending.images) && pending.images.length > 0) ||
+                    (Array.isArray(pending.attachments) && pending.attachments.length > 0) ||
+                    (Array.isArray(pending.imageUrls) && pending.imageUrls.length > 0)
+                  ),
                   images: Array.isArray(pending.images) ? pending.images : [],
                   attachments: Array.isArray(pending.attachments) ? pending.attachments : [],
                   imageUrls: Array.isArray(pending.imageUrls) ? pending.imageUrls : [],
@@ -3579,7 +3585,7 @@ export default function FixerProPage() {
                   meetingTime: pending.meetingTime,
                   meetingDateLabel: pending.meetingDate || '',
                   meetingTimeLabel: pending.meetingTime || '',
-                  meetingVenue: getWorkflowDisplayLocation(pending.location, pending.subdistrict, pending.meetingVenue, pending.venue),
+                  meetingVenue: pickWorkflowMeetingVenue(pending.meetingVenue, pending.venue, pending.location, pending.subdistrict),
                   meetingMessage: pending.meetingNote || pending.desc || '',
                   location: getWorkflowDisplayLocation(pending.location, pending.subdistrict, pending.meetingVenue, pending.venue),
                   subdistrict: getWorkflowDisplayLocation(pending.subdistrict, pending.location, pending.meetingVenue, pending.venue),
@@ -5297,7 +5303,7 @@ export default function FixerProPage() {
   const waitModalMeetingDetails = {
     meetingDateLabel: waitModalOrder?.meetingDateLabel || waitModalOrder?.meetingDate || parsedWaitModalMeeting.meetingDateLabel,
     meetingTimeLabel: waitModalOrder?.meetingTimeLabel || waitModalOrder?.meetingTime || parsedWaitModalMeeting.meetingTimeLabel,
-    meetingVenue: getWorkflowDisplayLocation(waitModalOrder?.location, waitModalOrder?.subdistrict, waitModalOrder?.meetingVenue, parsedWaitModalMeeting.meetingVenue, waitModalOrder?.venue) || 'Unknown',
+    meetingVenue: pickWorkflowMeetingVenue(parsedWaitModalMeeting.meetingVenue, waitModalOrder?.meetingVenue, waitModalOrder?.venue, waitModalOrder?.location, waitModalOrder?.subdistrict) || 'Unknown',
     meetingMessage: waitModalOrder?.meetingMessage || waitModalOrder?.meetingNote || '',
   };
   const waitModalServiceName = waitModalOrder?.serviceTh || waitModalOrder?.service || 'Project';
@@ -5767,7 +5773,27 @@ export default function FixerProPage() {
                       const meetingSummary = [waitModalMeetingDetails.meetingDateLabel, waitModalMeetingDetails.meetingTimeLabel].filter(Boolean).join(' ');
                       const confirmedMeetingDate = waitModalOrder.meetingDate || waitModalMeetingDetails.meetingDateLabel || '';
                       const confirmedMeetingTime = waitModalOrder.meetingTime || waitModalMeetingDetails.meetingTimeLabel || '';
-                      const confirmedMeetingVenue = getWorkflowDisplayLocation(waitModalProjectLocation, waitModalMeetingDetails.meetingVenue, waitModalOrder.meetingVenue);
+                      const confirmedMeetingVenue = pickWorkflowMeetingVenue(
+                        waitModalMeetingDetails.meetingVenue,
+                        waitModalOrder.meetingVenue,
+                        waitModalOrder.venue,
+                        waitModalProjectLocation,
+                      );
+                      const workflowAttachmentFields = {
+                        hasAttachment: Boolean(
+                          waitModalOrder.hasAttachment ||
+                          waitModalOrder.attachmentUrl ||
+                          (Array.isArray(waitModalOrder.images) && waitModalOrder.images.length > 0) ||
+                          (Array.isArray(waitModalOrder.attachments) && waitModalOrder.attachments.length > 0) ||
+                          (Array.isArray(waitModalOrder.imageUrls) && waitModalOrder.imageUrls.length > 0)
+                        ),
+                        images: Array.isArray(waitModalOrder.images) ? waitModalOrder.images : [],
+                        attachments: Array.isArray(waitModalOrder.attachments) ? waitModalOrder.attachments : [],
+                        imageUrls: Array.isArray(waitModalOrder.imageUrls) ? waitModalOrder.imageUrls : [],
+                        issueImage: waitModalOrder.issueImage || '',
+                        attachmentUrl: waitModalOrder.attachmentUrl || '',
+                        metadata: waitModalOrder.metadata,
+                      };
                       // Use PO-based matching (not waitModalOrder.id) because mockDynReqs IDs are
                       // 'meet-pending-{po}', not the backend UUID stored in waitModalOrder.id
                       const meetingCustNoticeId = `meeting-confirmed-notice-${po}`;
@@ -5793,6 +5819,7 @@ export default function FixerProPage() {
                         fee: existingActive?.fee || budgetLabel,
                         tier: existingActive?.tier || waitModalOrder.tier,
                         description: existingActive?.description || waitModalOrder.description || '',
+                        ...workflowAttachmentFields,
                         location: existingActive?.location || waitModalProjectLocation,
                         subdistrict: existingActive?.subdistrict || waitModalProjectLocation,
                         meetingDate: existingActive?.meetingDate || confirmedMeetingDate,
@@ -5811,7 +5838,7 @@ export default function FixerProPage() {
                       const persistedNextActive = persistWorkflowCacheItems("ghis_mock_active", nextActive);
                       const nextPartnerReqs = [
                         ...partnerDynReqs.filter((r: any) => !(r.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(r.type))),
-                        { id: `variation-${po}`, orderId: backendOrderId || waitModalOrder.orderId || undefined, po, service: waitModalOrder.service || serviceTitle, serviceTh: waitModalOrder.service || serviceTitle, serviceZh: waitModalOrder.service || serviceTitle, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), fee: budgetLabel, budget: String(budgetLabel).replace(/[^0-9]/g, ''), tier: waitModalOrder.tier, description: (mappedOrders as any[]).find((o: any) => o?.po === po)?.description || waitModalOrder?.description || 'Proceed to submit variation request if extra work or price adjustment is required.', location: waitModalOrder?.location || waitModalOrder?.subdistrict || '', type: 'variation_partner', step: 9, meetingDate: confirmedMeetingDate, meetingTime: confirmedMeetingTime, meetingVenue: confirmedMeetingVenue, venue: confirmedMeetingVenue },
+                        { id: `variation-${po}`, orderId: backendOrderId || waitModalOrder.orderId || undefined, po, service: waitModalOrder.service || serviceTitle, serviceTh: waitModalOrder.service || serviceTitle, serviceZh: waitModalOrder.service || serviceTitle, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), fee: budgetLabel, budget: String(budgetLabel).replace(/[^0-9]/g, ''), tier: waitModalOrder.tier, description: (mappedOrders as any[]).find((o: any) => o?.po === po)?.description || waitModalOrder?.description || 'Proceed to submit variation request if extra work or price adjustment is required.', ...workflowAttachmentFields, location: waitModalOrder?.location || waitModalOrder?.subdistrict || '', type: 'variation_partner', step: 9, meetingDate: confirmedMeetingDate, meetingTime: confirmedMeetingTime, meetingVenue: confirmedMeetingVenue, venue: confirmedMeetingVenue },
                       ];
                       const persistedPartnerReqs = persistWorkflowCacheItems("partner_mock_dyn_req", nextPartnerReqs);
                       try {

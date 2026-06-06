@@ -6,10 +6,24 @@ const TERMINAL_ALERT_PATTERN =
   /workflow completed|job is now complete|job is complete|stored in history|rated this project|this inquiry is now closed|moved to history|cancelled|canceled|declined|unavailable/i;
 const COMPLETION_CHAT_PATTERN =
   /workflow completed|job is now complete|job is complete|stored in history|rated this project|this inquiry is now closed|moved to history/i;
+const UNKNOWN_PLACE_PATTERN = /^(?:unknown|n\/a|tbd|-|--\s*select)/i;
 
 export function normalizeWorkflowPo(value) {
   const match = String(value ?? "").match(WORKFLOW_PO_PATTERN);
   return match ? match[0].toUpperCase() : "";
+}
+
+function normalizeWorkflowPlace(value) {
+  const text = String(value ?? "").trim();
+  return text && !UNKNOWN_PLACE_PATTERN.test(text) ? text : "";
+}
+
+export function pickWorkflowMeetingVenue(...values) {
+  for (const value of values) {
+    const text = normalizeWorkflowPlace(value);
+    if (text) return text;
+  }
+  return "";
 }
 
 function getTextFields(value) {
@@ -65,6 +79,23 @@ function hasTerminalAlertMarker(value) {
 function addPo(set, value) {
   const po = normalizeWorkflowPo(value);
   if (po) set.add(po);
+}
+
+export function filterLiveWorkflowItems(items = [], terminalPoValues = []) {
+  const terminalPos =
+    terminalPoValues instanceof Set
+      ? terminalPoValues
+      : new Set(Array.from(terminalPoValues || []).map(normalizeWorkflowPo).filter(Boolean));
+
+  return (Array.isArray(items) ? items : []).filter((item) => {
+    const po = normalizeWorkflowPo(item?.po || item?.poNumber || item?.id || item?.description || item);
+    if (po && terminalPos.has(po)) return false;
+    const status = String(item?.status || "").toUpperCase();
+    if (isTerminalWorkflowStatus(status)) return false;
+    if (status === "COMPLETED" && !isCompletedAwaitingWorkflowRating(item)) return false;
+    if (hasTerminalAlertMarker(item)) return false;
+    return true;
+  });
 }
 
 export function collectTerminalWorkflowPos({

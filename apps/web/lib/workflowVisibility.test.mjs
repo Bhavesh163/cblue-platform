@@ -3,9 +3,11 @@ import test from "node:test";
 
 import {
   collectTerminalWorkflowPos,
+  filterLiveWorkflowItems,
   hasWorkflowCompletionMarker,
   isCompletedAwaitingWorkflowRating,
   isTerminalWorkflowStatus,
+  pickWorkflowMeetingVenue,
   pruneWorkflowStorage,
   readBrowserTerminalWorkflowPos,
   setWorkflowStorageItem,
@@ -240,4 +242,35 @@ test("prunes budget caches without deleting workflow history", () => {
     storage.snapshot().ghis_mock_history,
     JSON.stringify([{ po: "PO-2606-6500" }]),
   );
+});
+
+test("meeting venue prefers the customer-entered venue over project GPS coordinates", () => {
+  assert.equal(
+    pickWorkflowMeetingVenue("Siam paragon", "13.794068, 100.609587"),
+    "Siam paragon",
+  );
+  assert.equal(
+    pickWorkflowMeetingVenue("", "13.794068, 100.609587"),
+    "13.794068, 100.609587",
+  );
+});
+
+test("filters terminal workflow requests without hiding completed jobs awaiting rating", () => {
+  const visible = filterLiveWorkflowItems(
+    [
+      { po: "PO-2606-1111", type: "complete_pending", desc: "Partner completion request" },
+      {
+        po: "PO-2606-2222",
+        type: "rate_pending",
+        status: "COMPLETED",
+        statusHistory: [{ note: "Customer confirmed project complete. Please rate your partner." }],
+      },
+      { po: "PO-2606-3333", type: "rate_pending", status: "COMPLETED", rating: 5 },
+      { po: "PO-2606-4444", type: "payment_pending" },
+      { po: "PO-2606-5555", status: "CANCELLED" },
+    ],
+    new Set(["PO-2606-4444"]),
+  ).map((item) => item.po);
+
+  assert.deepEqual(visible, ["PO-2606-1111", "PO-2606-2222"]);
 });

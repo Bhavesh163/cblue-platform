@@ -7,8 +7,10 @@ import { useTranslations, useLocale } from "next-intl";
 import { refreshSubscriberSession } from "../../../lib/subscriberSession";
 import {
   collectTerminalWorkflowPos,
+  filterLiveWorkflowItems,
   isCompletedAwaitingWorkflowRating,
   isTerminalWorkflowStatus,
+  pickWorkflowMeetingVenue,
   pruneWorkflowStorage,
   readBrowserTerminalWorkflowPos,
   setWorkflowStorageItem,
@@ -1890,9 +1892,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   };
   const isPoCode = (value: string) => isValidPoCode(value);
   const workflowOrders = (orders || []).filter((order: any) => !isHiddenTestPo(extractPo(order)));
-  const filterVisibleWorkflowItems = (items: any[]) => items.filter((item: any) => !isHiddenTestPo(item?.po));
-  const filterVisibleActiveWorkflowItems = (items: any[]) =>
-    filterVisibleWorkflowItems(items).filter((item: any) => !isBackendWorkflowHistoryStatus(item));
+  const filterVisibleWorkflowItems = (items: any[], terminalPoValues: Set<string> | string[] = []) =>
+    filterLiveWorkflowItems(items, terminalPoValues).filter((item: any) => !isHiddenTestPo(item?.po));
+  const filterVisibleActiveWorkflowItems = (items: any[], terminalPoValues: Set<string> | string[] = []) =>
+    filterVisibleWorkflowItems(items, terminalPoValues).filter((item: any) => !isBackendWorkflowHistoryStatus(item));
   const postBackendWorkflowMessage = async (po: string, text: string) => {
     try {
       const token = getCustomerDashboardToken();
@@ -1992,9 +1995,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       const a = localStorage.getItem("ghis_mock_active");
       const d = localStorage.getItem("ghis_mock_dyn_req");
       const h = localStorage.getItem("ghis_mock_history");
+      const terminalPos = readBrowserTerminalWorkflowPos(localStorage);
       if (p) setMockPayments(JSON.parse(p));
-      if (a) setMockActiveItems(filterVisibleActiveWorkflowItems(JSON.parse(a)));
-      if (d) setMockDynRequests(filterVisibleWorkflowItems(JSON.parse(d)));
+      if (a) setMockActiveItems(filterVisibleActiveWorkflowItems(JSON.parse(a), terminalPos));
+      if (d) setMockDynRequests(filterVisibleWorkflowItems(JSON.parse(d), terminalPos));
       if (h) setMockHistory(filterVisibleWorkflowItems(JSON.parse(h)));
     } catch {}
     setMockReady(true);
@@ -2035,20 +2039,17 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         if (p) setMockPayments(JSON.parse(p));
         if (a) {
           const terminalPos = readBrowserTerminalWorkflowPos(localStorage);
-          const parsedActive = filterVisibleActiveWorkflowItems(JSON.parse(a))
-            .filter((item: any) => !terminalPos.has(String(item?.po || '').trim().toUpperCase()));
+          const parsedActive = filterVisibleActiveWorkflowItems(JSON.parse(a), terminalPos);
           setMockActiveItems((prev) => {
-            const previousVisible = filterVisibleActiveWorkflowItems(prev)
-              .filter((item: any) => !terminalPos.has(String(item?.po || '').trim().toUpperCase()));
+            const previousVisible = filterVisibleActiveWorkflowItems(prev, terminalPos);
             return parsedActive.length === 0 && previousVisible.length > 0 ? previousVisible : parsedActive;
           });
         }
         if (d) {
           const terminalPos = readBrowserTerminalWorkflowPos(localStorage);
-          const parsedDyn = filterVisibleWorkflowItems(JSON.parse(d))
-            .filter((item: any) => !terminalPos.has(String(item?.po || '').trim().toUpperCase()));
+          const parsedDyn = filterVisibleWorkflowItems(JSON.parse(d), terminalPos);
           setMockDynRequests((prev) => {
-            const previousVisible = prev.filter((item: any) => !terminalPos.has(String(item?.po || '').trim().toUpperCase()));
+            const previousVisible = filterVisibleWorkflowItems(prev, terminalPos);
             return parsedDyn.length === 0 && previousVisible.length > 0 ? previousVisible : parsedDyn;
           });
         }
@@ -3021,9 +3022,12 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   const backendOrderPos = new Set(workflowOrders.map((o: any) => extractPo(o)).filter((po: string) => isPoCode(po)));
   const allowLocalCustomerWorkflow = Boolean(subscriber?.email?.toLowerCase().includes('ghis'));
   const useStaticDemoData = allowLocalCustomerWorkflow && !hasFetchedOrders && backendOrderPos.size === 0;
+  const browserTerminalPOs = readBrowserTerminalWorkflowPos(
+    typeof window !== 'undefined' ? window.localStorage : undefined,
+  );
   const rawVisibleMockActiveItems = !allowLocalCustomerWorkflow
     ? []
-    : filterVisibleWorkflowItems(mockActiveItems);
+    : filterVisibleWorkflowItems(mockActiveItems, browserTerminalPOs);
   const localTerminalWorkflowPOs = new Set(
     rawVisibleMockActiveItems
       .filter((item: any) => isBackendWorkflowHistoryStatus(item))
@@ -3035,7 +3039,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   );
   const visibleMockDynRequests = !allowLocalCustomerWorkflow
     ? []
-    : mockDynRequests.filter((x: any) => !isHiddenTestPo(x.po));
+    : filterVisibleWorkflowItems(mockDynRequests, browserTerminalPOs);
   const visibleMockHistory = !allowLocalCustomerWorkflow
     ? []
     : mockHistory.filter((x: any) => !isHiddenTestPo(x.po));
@@ -3055,9 +3059,6 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       .filter((order: any) => isBackendWorkflowHistoryStatus(order))
       .map((order: any) => extractPo(order))
       .filter((po: string) => isPoCode(po)),
-  );
-  const browserTerminalPOs = readBrowserTerminalWorkflowPos(
-    typeof window !== 'undefined' ? window.localStorage : undefined,
   );
   const terminalWorkflowPOs = collectTerminalWorkflowPos({
     backendOrders: workflowOrders,
@@ -4600,19 +4601,19 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     const fromRequest = allRequestItemsWithProp.find((item: any) => item.po === po) || {};
     const meetingDateValue = source?.meetingDate || fromRequest?.meetingDate || fromActive?.meetingDate || "";
     const meetingTimeValue = source?.meetingTime || fromRequest?.meetingTime || fromActive?.meetingTime || "";
-    const venueValue = getWorkflowDisplayLocation(
-      source?.location,
-      source?.subdistrict,
-      fromRequest?.location,
-      fromRequest?.subdistrict,
-      fromActive?.location,
-      fromActive?.subdistrict,
+    const venueValue = pickWorkflowMeetingVenue(
       source?.meetingVenue,
       source?.venue,
       fromRequest?.meetingVenue,
       fromRequest?.venue,
       fromActive?.meetingVenue,
       fromActive?.venue,
+      source?.location,
+      source?.subdistrict,
+      fromRequest?.location,
+      fromRequest?.subdistrict,
+      fromActive?.location,
+      fromActive?.subdistrict,
     );
     return {
       when: formatWorkflowMeetingLabel(meetingDateValue, meetingTimeValue, source?.createdAt || fromRequest?.createdAt || fromActive?.createdAt),
@@ -5589,7 +5590,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                   const dateLabel = meetingDate ? fmtDate(meetingDate + 'T' + (meetingTime || '09:00')) : '';
                   const pendingId = `meet-pending-${meetingModal.po}`;
                   const meetingProjectLocation = (() => { const m = String(meetingModal.description || meetingModal.desc || '').match(/\bLOC:([^|]+)/); const fromDesc = m ? (m[1] ?? '').trim() : ''; return getWorkflowDisplayLocation(meetingModal.location, meetingModal.subdistrict, fromDesc, meetingModal.meetingVenue, meetingModal.venue); })();
-                  const finalMeetingVenue = getWorkflowDisplayLocation(meetingProjectLocation, meetingVenue) || meetingVenue;
+                  const finalMeetingVenue = pickWorkflowMeetingVenue(meetingVenue, meetingProjectLocation);
                   const desc = `Meeting invitation sent. Proposed: ${dateLabel} ${meetingTime} at ${finalMeetingVenue}.${meetingNote.trim() ? ` Note: ${meetingNote.trim()}.` : ''} Waiting for partner confirmation.`;
                   const chatText = `[SYSTEM] Customer sent meeting invitation for ${meetingModal.po}: ${dateLabel} ${meetingTime} at ${finalMeetingVenue}.${meetingNote.trim() ? ` Note: ${meetingNote.trim()}.` : ''} Next: waiting for partner confirmation before variation.`;
                   // Compute new arrays eagerly and write to localStorage BEFORE setState
