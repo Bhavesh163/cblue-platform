@@ -15,6 +15,12 @@ import {
   readBrowserTerminalWorkflowPos,
   setWorkflowStorageItem,
 } from "../../../lib/workflowVisibility";
+import {
+  extractWorkflowCompleteRequest,
+  getWorkflowStatusNote,
+  isVisibleWorkflowSystemText,
+  isWorkflowPoReferencedInStorage,
+} from "../../../lib/workflowLiveReferences";
 import { useRouter } from "next/navigation";
 import PdpaConsent from "../components/PdpaConsent";
 import {
@@ -174,11 +180,6 @@ const getWorkflowDisplayLocation = (...values: any[]) => {
 };
 const isCustomerCancellationText = (value: any) =>
   /\bcustomer\s+(?:cancelled|canceled|cancel)\b|\bcancelled\s+by\s+customer\b|\bcanceled\s+by\s+customer\b/i.test(String(value || ''));
-const getWorkflowStatusNote = (value: any) => {
-  const rows = Array.isArray(value?.statusHistory) ? value.statusHistory : [];
-  const meaningful = rows.find((row: any) => /customer\s+cancel|declin|reason:/i.test(String(row?.note || '')));
-  return String(meaningful?.note || rows[0]?.note || value?.statusNote || '');
-};
 const isBackendWorkflowActiveStatus = (orderLike: any) => {
   const status = String(orderLike?.status || '').toUpperCase();
   return !isTerminalWorkflowStatus(status) && (status !== 'COMPLETED' || isCompletedAwaitingWorkflowRating(orderLike));
@@ -2170,10 +2171,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       if (normalizedViewerUserId && normalizedSender === normalizedViewerUserId) return true;
       return ["customer", "me", "guest", "system"].includes(normalizedSender);
     };
-    const isWorkflowSystemMessage = (m: any) => {
-      const text = String(m?.text || '').trim().toLowerCase();
-      return String(m?.sender || '').trim().toLowerCase() === 'system' && text.startsWith('[system]');
-    };
+    const isWorkflowSystemMessage = (m: any) =>
+      String(m?.sender || '').trim().toLowerCase() === 'system' &&
+      isVisibleWorkflowSystemText(m?.text);
     const isVisibleMessage = (m: any) => {
       if (!m || typeof m.text !== "string") return false;
       if (!m.text.trim()) return false;
@@ -2198,7 +2198,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
           localStorage.removeItem(`chat_from_${po}`);
           continue;
         }
-        if (knownPoSet.size > 0 && !knownPoSet.has(po)) {
+        if (knownPoSet.size > 0 && !knownPoSet.has(po) && !isWorkflowPoReferencedInStorage(localStorage, po)) {
           localStorage.removeItem(key);
           localStorage.removeItem(`chat_title_${po}`);
           localStorage.removeItem(`chat_from_${po}`);
@@ -2839,7 +2839,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         });
       }
       // Complete detection
-      if (lastMsg.includes('[system] partner has marked the job as complete')) {
+      const completeDescFromChat = extractWorkflowCompleteRequest(chatItem.lastMsg);
+      if (completeDescFromChat) {
         setMockActiveItems(prev => {
           const activeSnapshot = {
             ...(prev.find((x: any) => x.po === po) || backendOrder || {}),
@@ -2859,9 +2860,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         });
         setMockDynRequests(prev => {
           if (prev.some((x: any) => x.po === po && x.type === 'complete_pending')) return prev;
-          const fullMsg = String(chatItem.lastMsg || '');
-          const noteMatch = fullMsg.match(/\[COMPLETE_DATA\]([\s\S]*?)\[\/COMPLETE_DATA\]/i);
-          const desc = noteMatch?.[1]?.trim() || 'Work is completed. Please review and mark as complete to close this project.';
+          const desc = completeDescFromChat;
           const item = { id: `compl-${po}`, po, title, customer: 'Suppadesh', date: fmtDateTime(eventTs), createdAt: eventTs, budget, tier, desc, type: 'complete_pending', step: 10, ...meetingSnapshot };
           const merged = [...prev.filter((x: any) => !(x.po === po && ['complete_pending', 'variation_pending', 'meeting_invite', 'meeting_pending_partner', 'meeting_scheduled', 'chat_ready'].includes(x.type))), item];
           try { writeWorkflowStorage('ghis_mock_dyn_req', merged); } catch {}
@@ -2871,6 +2870,58 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatFeed, mockReady]);
+
+  // F10 fallback: if the partner completion note lands in order history before chat polling,
+  // create the customer's Step 10 approval request from the backend order itself.
+  useEffect(() => {
+    if (!mockReady || !subscriber?.email?.includes('ghis')) return;
+    const completionOrders = workflowOrders
+      .map((backendOrder: any) => {
+        const po = extractPo(backendOrder);
+        const status = String(backendOrder?.status || '').toUpperCase();
+        const note = getWorkflowStatusNote(backendOrder);
+        const desc = extractWorkflowCompleteRequest(note);
+        return { backendOrder, po, status, desc };
+      })
+      .filter(({ po, status, desc }: any) => po && isPoCode(po) && desc && !isTerminalWorkflowStatus(status));
+    if (completionOrders.length === 0) return;
+
+    for (const { backendOrder, po, desc } of completionOrders) {
+      const title = String(backendOrder?.serviceCategory || '').replace(/_/g, ' ') || po;
+      const budget = backendOrder?.estimatedPrice ? `฿${Number(backendOrder.estimatedPrice).toLocaleString()}` : '฿0';
+      const tier = String(backendOrder?.description || '').match(/TIER:([A-Za-z]+)/)?.[1] || 'Standard';
+      const eventTs = parseDateMs(
+        backendOrder?.statusHistory?.[0]?.createdAt ||
+        backendOrder?.statusChangedAt ||
+        backendOrder?.updatedAt,
+      ) || Date.now();
+
+      setMockActiveItems(prev => {
+        const activeSnapshot = {
+          ...(prev.find((x: any) => x.po === po) || backendOrder || {}),
+          po,
+          title,
+          customer: 'Suppadesh',
+          budget,
+          tier,
+          step: 10,
+          mockStep: 10,
+          actionNeeded: true,
+        };
+        const next = [...prev.filter((x: any) => x.po !== po), activeSnapshot];
+        try { writeWorkflowStorage('ghis_mock_active', next); } catch {}
+        return next;
+      });
+      setMockDynRequests(prev => {
+        if (prev.some((x: any) => x.po === po && x.type === 'complete_pending')) return prev;
+        const item = { id: `compl-${po}`, po, title, customer: 'Suppadesh', date: fmtDateTime(eventTs), createdAt: eventTs, budget, tier, desc, type: 'complete_pending', step: 10 };
+        const merged = [...prev.filter((x: any) => !(x.po === po && ['complete_pending', 'variation_pending', 'meeting_invite', 'meeting_pending_partner', 'meeting_scheduled', 'chat_ready'].includes(x.type))), item];
+        try { writeWorkflowStorage('ghis_mock_dyn_req', merged); } catch {}
+        return merged;
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workflowOrders, mockReady, subscriber?.email]);
 
   // F7: When partner declines on another browser, backend order becomes CANCELLED — sync customer UI.
   useEffect(() => {
@@ -5456,7 +5507,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                   try {
                     const chatKey = `chat_messages_${po}`;
                     const existing = JSON.parse(localStorage.getItem(chatKey) || '[]');
-                    if (existing.length === 0) localStorage.setItem(chatKey, JSON.stringify([{ id: Date.now(), sender: 'system', text: 'Payment confirmed. Your project chat is now active. Please coordinate with your partner here.', time: now, createdAt }]));
+                    if (existing.length === 0) localStorage.setItem(chatKey, JSON.stringify([{ id: Date.now(), sender: 'system', text: '[CBLUE] Payment confirmed. Your project chat is now active. Please coordinate with your partner here.', time: now, createdAt }]));
                     const title = waitModalOrder.request?.title || '';
                     const budget = waitModalOrder.request?.budget || '';
                     if (po) {

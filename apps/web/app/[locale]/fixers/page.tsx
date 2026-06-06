@@ -28,6 +28,12 @@ import {
   readBrowserTerminalWorkflowPos,
   setWorkflowStorageItem,
 } from "../../../lib/workflowVisibility";
+import {
+  getWorkflowStatusNote,
+  isVisibleWorkflowSystemText,
+  isWorkflowPoReferencedInStorage,
+  persistPartnerCompletionStatusNote,
+} from "../../../lib/workflowLiveReferences";
 
 interface PartnerInfo {
   id?: string;
@@ -2938,11 +2944,7 @@ export default function FixerProPage() {
             ""
           );
     })();
-    const workflowStatusNote = (() => {
-      const rows = Array.isArray(o.statusHistory) ? o.statusHistory : [];
-      const meaningful = rows.find((row: any) => /customer\s+cancel|declin|reason:/i.test(String(row?.note || '')));
-      return String(meaningful?.note || rows[0]?.note || o.statusNote || '');
-    })();
+    const workflowStatusNote = getWorkflowStatusNote(o);
     const normalizedStatus = String(o.status || '').toUpperCase();
     
     return {
@@ -3088,10 +3090,9 @@ export default function FixerProPage() {
       if (normalizedViewerUserId && normalizedSender === normalizedViewerUserId) return true;
       return ["fixer", "partner", "me", "guest", "system"].includes(normalizedSender);
     };
-    const isWorkflowSystemMessage = (m: any) => {
-      const text = String(m?.text || '').trim().toLowerCase();
-      return String(m?.sender || '').trim().toLowerCase() === 'system' && text.startsWith('[system]');
-    };
+    const isWorkflowSystemMessage = (m: any) =>
+      String(m?.sender || '').trim().toLowerCase() === 'system' &&
+      isVisibleWorkflowSystemText(m?.text);
     const isVisibleMessage = (m: any) => {
       if (!m || typeof m.text !== "string") return false;
       if (!m.text.trim()) return false;
@@ -3117,7 +3118,7 @@ export default function FixerProPage() {
           localStorage.removeItem(`chat_from_${po}`);
           continue;
         }
-        if (knownPoSet.size > 0 && !knownPoSet.has(po) && !isPropPoCode(po)) {
+        if (knownPoSet.size > 0 && !knownPoSet.has(po) && !isPropPoCode(po) && !isWorkflowPoReferencedInStorage(localStorage, po)) {
           localStorage.removeItem(key);
           localStorage.removeItem(`chat_title_${po}`);
           localStorage.removeItem(`chat_from_${po}`);
@@ -7006,7 +7007,15 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
         window.dispatchEvent(new Event("cblue-workflow-updated"));
-        void postSystemMsg(chatText);
+      void persistPartnerCompletionStatusNote({
+        chatText,
+        fetchFn: fetch,
+        po,
+        resolveOrderIdByPo,
+        storage: localStorage,
+        token: getPartnerDashboardToken(),
+      });
+      void postSystemMsg(chatText);
       } else if (action === 'complete') {
         const complId = `compl-${po}`;
         const previousPartnerRequest = resolveVariationPartnerNote(po);
@@ -7037,9 +7046,17 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
           createdAt,
         });
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['complete_partner', 'variation_partner', 'meeting_confirm_partner'].includes(x.type))));
-        window.dispatchEvent(new Event("storage"));
-        window.dispatchEvent(new Event("cblue-workflow-updated"));
-        void postSystemMsg(chatText);
+      window.dispatchEvent(new Event("storage"));
+      window.dispatchEvent(new Event("cblue-workflow-updated"));
+      void persistPartnerCompletionStatusNote({
+        chatText,
+        fetchFn: fetch,
+        po,
+        resolveOrderIdByPo,
+        storage: localStorage,
+        token: getPartnerDashboardToken(),
+      });
+      void postSystemMsg(chatText);
       } else if (action === 'rate') {
         const rating = extraData || '5';
         const { completionChatText } = finalizePartnerRatedWorkflow({
