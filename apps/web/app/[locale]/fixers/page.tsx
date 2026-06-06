@@ -7007,15 +7007,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
         window.dispatchEvent(new Event("cblue-workflow-updated"));
-      void persistPartnerCompletionStatusNote({
-        chatText,
-        fetchFn: fetch,
-        po,
-        resolveOrderIdByPo,
-        storage: localStorage,
-        token: getPartnerDashboardToken(),
-      });
-      void postSystemMsg(chatText);
+        void postSystemMsg(chatText);
       } else if (action === 'complete') {
         const complId = `compl-${po}`;
         const previousPartnerRequest = resolveVariationPartnerNote(po);
@@ -7685,6 +7677,14 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['complete_partner', 'variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
         window.dispatchEvent(new Event("cblue-workflow-updated"));
+        void persistPartnerCompletionStatusNote({
+          chatText,
+          fetchFn: fetch,
+          po,
+          resolveOrderIdByPo,
+          storage: localStorage,
+          token: getPartnerDashboardToken(),
+        });
         void postSystemMsg(chatText);
       } else if (action === 'rate') {
         const rating = extraData || '5';

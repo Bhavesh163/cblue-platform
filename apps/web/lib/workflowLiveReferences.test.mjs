@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import {
   extractWorkflowCompleteRequest,
   getWorkflowStatusNote,
@@ -83,4 +84,27 @@ assert.equal(
   assert.equal(calls.length, 1);
   assert.equal(calls[0][0], "/api/v1/orders/order-123/status");
   assert.match(calls[0][1].body, /project-complete request/);
+}
+
+{
+  const fixerPageSource = await readFile(
+    new URL("../app/[locale]/fixers/page.tsx", import.meta.url),
+    "utf8",
+  );
+  const completeBranches = fixerPageSource
+    .split("} else if (action === 'complete') {")
+    .slice(1)
+    .map((branch) => branch.split("} else if (action === 'rate') {")[0]);
+  const variationBranches = fixerPageSource
+    .split("if (action === 'variation') {")
+    .slice(1)
+    .map((branch) => branch.split("} else if (action === 'complete') {")[0]);
+
+  assert.equal(completeBranches.length, 2);
+  for (const branch of completeBranches) {
+    assert.match(branch, /persistPartnerCompletionStatusNote\(\{/);
+  }
+  for (const branch of variationBranches) {
+    assert.doesNotMatch(branch, /persistPartnerCompletionStatusNote\(\{/);
+  }
 }
