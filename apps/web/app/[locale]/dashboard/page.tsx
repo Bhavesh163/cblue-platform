@@ -233,12 +233,15 @@ const extractPoCode = (orderLike: any) => {
 };
 const parseMeetingInviteDetails = (value: string) => {
   const text = String(value || '');
-  const match = text.match(/customer sent meeting invitation(?: for (PO-(?:\d{8}|\d{4}-\d{4,})))?:\s*(\d{2}\/\d{2}\/\d{4})\s+(\d{2}:\d{2})\s+at\s+(.+?)(?:\.|$)/i);
+  // Venue can be a GPS coordinate (e.g. "13.794068, 100.609587"), so we must NOT stop at the
+  // first period. Capture up to the ". Note:" / ". Next:" suffix appended by the message builder,
+  // or end of string.
+  const match = text.match(/customer sent meeting invitation(?: for (PO-(?:\d{8}|\d{4}-\d{4,})))?:\s*(\d{2}\/\d{2}\/\d{4})\s+(\d{2}:\d{2})\s+at\s+(.+?)(?:\s*\.\s*(?:Note|Next)\s*:|\s*\.?\s*$)/i);
   return {
     po: match?.[1] || '',
     meetingDate: match?.[2] || '',
     meetingTime: match?.[3] || '',
-    meetingVenue: String(match?.[4] || '').trim(),
+    meetingVenue: String(match?.[4] || '').trim().replace(/\.\s*$/, '').trim(),
   };
 };
 const readMeetingInviteSnapshot = (po: string, fallback?: any) => {
@@ -4759,9 +4762,13 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   const getWorkflowMeetingSnapshot = (po: any, source: any = {}) => {
     const fromActive = combinedActiveWithProp.find((item: any) => item.po === po) || {};
     const fromRequest = allRequestItemsWithProp.find((item: any) => item.po === po) || {};
-    const meetingDateValue = source?.meetingDate || fromRequest?.meetingDate || fromActive?.meetingDate || "";
-    const meetingTimeValue = source?.meetingTime || fromRequest?.meetingTime || fromActive?.meetingTime || "";
+    // Re-parse the original meeting-invite chat message so venues stored before the parser fix
+    // (e.g. a GPS coordinate truncated to "13") are recovered to their full value.
+    const invite = readMeetingInviteSnapshot(String(po || ''), source);
+    const meetingDateValue = source?.meetingDate || fromRequest?.meetingDate || fromActive?.meetingDate || invite.meetingDate || "";
+    const meetingTimeValue = source?.meetingTime || fromRequest?.meetingTime || fromActive?.meetingTime || invite.meetingTime || "";
     const venueValue = pickWorkflowMeetingVenue(
+      invite.meetingVenue,
       source?.meetingVenue,
       source?.venue,
       fromRequest?.meetingVenue,
@@ -4971,7 +4978,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                       {media.length > 0 ? (
                         <div className="flex gap-2 overflow-x-auto pb-1">
                           {media.slice(0, 6).map((url, index) => (
-                            <img key={`${p.id}-media-${index}`} src={url} alt="property media" className="w-14 h-14 rounded-md object-cover border border-gray-200 shrink-0" />
+                            <img key={`${p.id}-media-${index}`} src={url} alt="property media" className="w-14 h-14 rounded-md object-cover border border-gray-200 shrink-0" loading="lazy" decoding="async" />
                           ))}
                         </div>
                       ) : (

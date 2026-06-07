@@ -676,6 +676,22 @@ function PropertiesPageContent() {
     setPoNumber(po);
     setShowContactFlow(prop);
     setContactStep("po");
+    // Listing payloads now carry only the primary thumbnail (for fast page loads). Fetch the full
+    // image set in the background so the "Download Photos" step still offers every photo.
+    if (!Array.isArray(prop.images) || prop.images.length <= 1) {
+      void (async () => {
+        try {
+          const res = await fetch(`/api/v1/properties/${prop.id}`, { signal: AbortSignal.timeout(15000) });
+          if (!res.ok) return;
+          const full = sanitizeProperty(await res.json());
+          if (Array.isArray(full.images) && full.images.length > (prop.images?.length || 0)) {
+            setShowContactFlow((cur) => (cur && cur.id === prop.id ? { ...cur, images: full.images } : cur));
+          }
+        } catch {
+          // Best-effort enrichment; the primary thumbnail remains available regardless.
+        }
+      })();
+    }
   }
 
   function generatePO() {
@@ -1317,6 +1333,8 @@ function PropertiesPageContent() {
                         src={getPrimaryImageUrl(prop.images)}
                         alt={prop.title}
                         className="w-full h-full object-cover"
+                        loading="lazy"
+                        decoding="async"
                       />
                     </div>
                   </Link>
@@ -1417,6 +1435,8 @@ function PropertiesPageContent() {
                             src={getPrimaryImageUrl(prop.images)}
                             alt={prop.title}
                             className="w-full h-full object-cover"
+                            loading="lazy"
+                            decoding="async"
                           />
                         </div>
                         <div className="p-3">
