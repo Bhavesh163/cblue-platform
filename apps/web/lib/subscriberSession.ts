@@ -1,7 +1,34 @@
+// Per-page scoped session caches (sessionStorage). getXDashboardToken() reads
+// these before the shared localStorage token, so they MUST be kept in sync with
+// the shared token — otherwise a stale scoped token keeps 401ing after refresh.
+const SCOPED_TOKEN_KEYS = [
+  'cblue_customer_dashboard_token',
+  'cblue_partner_dashboard_token',
+];
+const SCOPED_SUBSCRIBER_KEYS = [
+  'cblue_customer_dashboard_subscriber',
+  'cblue_partner_dashboard_subscriber',
+];
+
+function clearScopedSessionTokens() {
+  if (typeof window === 'undefined') return;
+  try {
+    for (const key of SCOPED_TOKEN_KEYS) sessionStorage.removeItem(key);
+  } catch {
+    // sessionStorage may be unavailable; shared token still drives auth.
+  }
+}
+
 export function clearSubscriberSession() {
   if (typeof window === 'undefined') return;
   localStorage.removeItem('subscriber_token');
   localStorage.removeItem('subscriber');
+  try {
+    for (const key of SCOPED_TOKEN_KEYS) sessionStorage.removeItem(key);
+    for (const key of SCOPED_SUBSCRIBER_KEYS) sessionStorage.removeItem(key);
+  } catch {
+    // Best-effort scoped cleanup; localStorage removal already logs the user out.
+  }
   window.dispatchEvent(new Event('storage'));
 }
 
@@ -32,6 +59,9 @@ export async function refreshSubscriberSession(
     if (data?.subscriber) {
       localStorage.setItem('subscriber', JSON.stringify(data.subscriber));
     }
+    // Invalidate stale scoped caches so the next getXDashboardToken() read picks
+    // up the freshly-minted token instead of looping on the expired one.
+    clearScopedSessionTokens();
     window.dispatchEvent(new Event('storage'));
     return nextToken;
   } catch {

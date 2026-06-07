@@ -20,6 +20,7 @@ type SessionJwtPayload = {
   sub?: string;
   email?: string;
   phone?: string;
+  exp?: number;
 };
 
 type BridgeSubscriber = {
@@ -49,6 +50,11 @@ type ForgotPasswordServiceResponse = {
 
 @Injectable()
 export class SubscriptionService {
+  // How long after a 24h access token expires it may still be exchanged for a
+  // fresh one via refresh-session (sliding session). 30 days keeps returning
+  // users logged in without forcing a re-login on every visit.
+  private static readonly REFRESH_GRACE_SECONDS = 30 * 24 * 60 * 60;
+
   private readonly logger = new Logger(SubscriptionService.name);
   private readonly SALT_ROUNDS = 12;
 
@@ -249,14 +255,29 @@ export class SubscriptionService {
 
     let payload: SessionJwtPayload;
     try {
+      // Sliding session: accept a still-valid token, OR one whose 24h window
+      // has lapsed, so a returning user is not silently logged out. The token
+      // signature must still be valid (forgery is rejected) and the account is
+      // re-validated against the DB below, so security is preserved.
       payload = await this.jwtService.verifyAsync<SessionJwtPayload>(token, {
         secret: this.configService.getOrThrow<string>('jwt.secret'),
+        ignoreExpiration: true,
       });
     } catch (error) {
       this.logger.warn(
         `Rejected refresh-session token: ${error instanceof Error ? error.message : 'invalid token'}`,
       );
       throw new UnauthorizedException('Session expired. Please log in again.');
+    }
+
+    // Bound the sliding window: a token expired more than 30 days ago cannot be
+    // refreshed and must re-authenticate. Tokens within the grace window slide.
+    if (typeof payload.exp === 'number') {
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      const expiredForSeconds = nowSeconds - payload.exp;
+      if (expiredForSeconds > SubscriptionService.REFRESH_GRACE_SECONDS) {
+        throw new UnauthorizedException('Session expired. Please log in again.');
+      }
     }
 
     const user = await this.resolveBridgedUserFromPayload(payload);

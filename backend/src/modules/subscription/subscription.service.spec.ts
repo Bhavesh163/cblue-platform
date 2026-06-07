@@ -267,5 +267,49 @@ describe('SubscriptionService', () => {
         service.refreshSession('Bearer stale-token'),
       ).rejects.toThrow('Session expired. Please log in again.');
     });
+
+    it('rejects a token expired beyond the 30-day sliding window', async () => {
+      const longExpiredSeconds =
+        Math.floor(Date.now() / 1000) - 31 * 24 * 60 * 60;
+      jwtService.verifyAsync.mockResolvedValue({
+        sub: 'user-1',
+        email: 'ghis@example.com',
+        exp: longExpiredSeconds,
+      });
+
+      await expect(
+        service.refreshSession('Bearer long-expired-token'),
+      ).rejects.toThrow('Session expired. Please log in again.');
+    });
+
+    it('refreshes a recently-expired token within the sliding window', async () => {
+      const recentlyExpiredSeconds = Math.floor(Date.now() / 1000) - 60 * 60;
+      jwtService.verifyAsync.mockResolvedValue({
+        sub: 'user-1',
+        email: 'ghis@example.com',
+        exp: recentlyExpiredSeconds,
+      });
+      prismaService.user.findUnique.mockResolvedValue({
+        id: 'user-1',
+        email: 'ghis@example.com',
+        phone: null,
+        isActive: true,
+        subscriberId: 'sub-1',
+      });
+      prismaService.subscriber.findUnique.mockResolvedValue({
+        id: 'sub-1',
+        email: 'ghis@example.com',
+        phone: null,
+        name: 'Ghis',
+        company: null,
+        status: 'ACTIVE',
+        serviceCategory: null,
+      });
+
+      const result = await service.refreshSession('Bearer recent-token');
+
+      expect(result.accessToken).toBe('test_token');
+      expect(result.subscriber.id).toBe('sub-1');
+    });
   });
 });

@@ -780,18 +780,41 @@ export default function DashboardPage() {
               if (prev?.id && parsed.id !== prev.id) return prev;
               return parsed;
             });
+            // Paint cached session immediately; refresh in background. Prevents a
+            // multi-minute blank/loading screen when /users/me is slow or returns 500.
+            setLoading(false);
           }
           const consent = localStorage.getItem("pdpa_consent_customer");
           if (!consent) setShowPdpa(true);
         }
 
-        const refreshCustomerOrders = async () => {
-          const ordersRes = await fetch("/api/v1/orders/my", { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
+        const refreshCustomerOrders = async (authToken: string = token) => {
+          const ordersRes = await fetch("/api/v1/orders/my", { headers: { Authorization: `Bearer ${authToken}` } }).catch(() => null);
           if (ordersRes && ordersRes.ok && isMounted) {
             setHasFetchedOrders(true);
             setOrders(await ordersRes.json());
             window.dispatchEvent(new Event("cblue-workflow-updated"));
             window.dispatchEvent(new Event("cblue-chat-updated"));
+          }
+        };
+
+        const applyCustomerUser = (user: any, authToken: string) => {
+          if (!isMounted) return;
+          const storedSubscriber = readCustomerDashboardSubscriber();
+          const hasFixer = !!user.fixer;
+          const subInfo: any = {
+            ...(user.profileFallback && storedSubscriber ? storedSubscriber : {}),
+            id: user.id || storedSubscriber?.id,
+            name: user.name || storedSubscriber?.name || user.email || storedSubscriber?.email || "Cblue member",
+            email: user.email || storedSubscriber?.email || "",
+            phone: user.phone || storedSubscriber?.phone || "",
+            status: "ACTIVE",
+          };
+          if (hasFixer) subInfo.tier = user.fixer?.aiTier || user.fixer?.tier || "Standard";
+          setSubscriber(subInfo);
+          if (!user.profileFallback) {
+            writeCustomerDashboardSession(subInfo, authToken);
+            localStorage.setItem("subscriber", JSON.stringify(subInfo));
           }
         };
 
@@ -809,34 +832,26 @@ export default function DashboardPage() {
 
         if (res.ok) {
           const user = await res.json();
-          if (isMounted) {
-            const storedSubscriber = readCustomerDashboardSubscriber();
-            const hasFixer = !!user.fixer;
-            let subInfo: any = { 
-              ...(user.profileFallback && storedSubscriber ? storedSubscriber : {}),
-              id: user.id || storedSubscriber?.id, 
-              name: user.name || storedSubscriber?.name || user.email || storedSubscriber?.email || "Cblue member", 
-              email: user.email || storedSubscriber?.email || "", 
-              phone: user.phone || storedSubscriber?.phone || "", 
-              status: "ACTIVE" 
-            };
-
-            // If they are a fixer, inject fixer info
-            if (hasFixer) {
-              subInfo.tier = user.fixer?.aiTier || user.fixer?.tier || "Standard";
-            }
-
-            setSubscriber(subInfo);
-            if (!user.profileFallback) {
-              writeCustomerDashboardSession(subInfo, token);
-              // Overwrite stored to fix any bad hydration
-              localStorage.setItem("subscriber", JSON.stringify(subInfo));
-            }
-          }
-
+          applyCustomerUser(user, token);
           await refreshCustomerOrders();
 
         } else if (res.status === 401 || res.status === 403) {
+          // The 24h access token may simply be past its window. Attempt a
+          // sliding refresh and retry before logging the member out, so a
+          // returning user keeps their session instead of seeing a blank page.
+          const refreshedToken = await refreshSubscriberSession(token);
+          if (refreshedToken) {
+            const retryRes = await fetch("/api/v1/users/me", {
+              headers: { Authorization: `Bearer ${refreshedToken}` },
+            }).catch(() => null);
+            if (retryRes && retryRes.ok) {
+              applyCustomerUser(await retryRes.json(), refreshedToken);
+              await refreshCustomerOrders(refreshedToken);
+              if (isMounted) setLoading(false);
+              return;
+            }
+          }
+          // Refresh failed (token too old / account inactive) → genuine logout.
           clearCustomerDashboardSession();
           localStorage.removeItem("subscriber_token");
           localStorage.removeItem("subscriber");
