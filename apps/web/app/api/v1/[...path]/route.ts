@@ -64,6 +64,8 @@ const shouldReturnChatPostFallback = (method: string, routePath: string) =>
   method === "POST" && /^orders\/[^/]+\/chat$/.test(routePath);
 const shouldReturnUserProfileFallback = (method: string, routePath: string) =>
   method === "GET" && routePath === "users/me";
+const shouldReturnPropertiesSearchFallback = (method: string, routePath: string) =>
+  method === "GET" && routePath === "properties";
 
 function getRequestAuthToken(request: NextRequest) {
   const auth = request.headers.get("authorization") || "";
@@ -217,6 +219,14 @@ async function handler(
         status: 200,
         headers: { "cache-control": "no-store" },
       });
+    }
+    if (upstream.status >= 500 && shouldReturnPropertiesSearchFallback(method, routePath)) {
+      const limit = Number(request.nextUrl.searchParams.get("limit") || "20") || 20;
+      const page = Number(request.nextUrl.searchParams.get("page") || "1") || 1;
+      return Response.json(
+        { properties: [], total: 0, page, limit, totalPages: 0, statusFallback: true },
+        { status: 200, headers: { "cache-control": "no-store" } },
+      );
     }
     if (upstream.status >= 500 && shouldReturnStatusFallback(method, routePath)) {
       return Response.json(

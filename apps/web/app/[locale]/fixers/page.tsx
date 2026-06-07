@@ -17,7 +17,7 @@ import {
   type BudgetBreakdownItem,
   type VariationPriceListItem,
 } from "../../../lib/computeBudgetBreakdown";
-import { readStoredPoProjectDetails } from "../../../lib/po-project-details";
+import { readStoredPoProjectDetails, storePoProjectDetails } from "../../../lib/po-project-details";
 import { refreshSubscriberSession } from "../../../lib/subscriberSession";
 import {
   collectTerminalWorkflowPos,
@@ -33,6 +33,7 @@ import {
   isVisibleWorkflowSystemText,
   isWorkflowPoReferencedInStorage,
   persistPartnerCompletionStatusNote,
+  persistPartnerVariationStatusNote,
 } from "../../../lib/workflowLiveReferences";
 
 interface PartnerInfo {
@@ -2769,6 +2770,23 @@ export default function FixerProPage() {
       clearInterval(timer);
     };
   }, [partner?.id, isFixer]);
+
+  // Persist the customer's project details (carried on the backend order.description
+  // as "PO | TIER | LOC | <details>") into this partner browser's local PO store, so
+  // History shows the real details cross-browser even after the order leaves the
+  // active list. Without this the partner only had the customer's localStorage copy.
+  useEffect(() => {
+    if (typeof window === "undefined" || !Array.isArray(orders)) return;
+    for (const order of orders) {
+      const po = String(extractPoCode(order) || "").trim();
+      if (!po) continue;
+      if (readStoredPoProjectDetails(po)) continue;
+      const details = stripWorkflowPrefix(order?.description || "");
+      if (details && !isWorkflowInstructionText(details) && !isServiceOnlyProjectDetail(details)) {
+        storePoProjectDetails(po, details);
+      }
+    }
+  }, [orders]);
 
   // Poll property inquiries addressed to this lister (NOTIFY_SENT = step 4 accept, PAID = step 5-6 chat, MEETING_SENT = step 7 confirm, MEETING_CONFIRMED = step 8 rate)
   useEffect(() => {
@@ -7028,6 +7046,14 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
         window.dispatchEvent(new Event("cblue-workflow-updated"));
+        void persistPartnerVariationStatusNote({
+          chatText,
+          fetchFn: fetch,
+          po,
+          resolveOrderIdByPo,
+          storage: localStorage,
+          token,
+        });
         void postSystemMsg(chatText);
       } else if (action === 'complete') {
         const complId = `compl-${po}`;
@@ -7665,6 +7691,14 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
         window.dispatchEvent(new Event("cblue-workflow-updated"));
+        void persistPartnerVariationStatusNote({
+          chatText,
+          fetchFn: fetch,
+          po,
+          resolveOrderIdByPo,
+          storage: localStorage,
+          token,
+        });
         void postSystemMsg(chatText);
       } else if (action === 'complete') {
         const complId = `compl-${po}`;

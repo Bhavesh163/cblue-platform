@@ -123,6 +123,25 @@ export function extractWorkflowCompleteRequest(value) {
   return "";
 }
 
+const DEFAULT_VARIATION_REQUEST =
+  "Partner has submitted a variation for your approval. Please review and confirm to proceed.";
+
+export function extractWorkflowVariationRequest(value) {
+  const text = String(value || "");
+  const tagged = text.match(/\[VARIATION_DATA\]([\s\S]*?)\[\/VARIATION_DATA\]/i);
+  if (tagged?.[1]?.trim()) return tagged[1].trim();
+
+  if (
+    /partner\s+has\s+submitted\s+a\s+variation/i.test(text) ||
+    /variation\s+request\s+sent/i.test(text) ||
+    /submitted\s+(?:a\s+)?variation\s+request/i.test(text)
+  ) {
+    return DEFAULT_VARIATION_REQUEST;
+  }
+
+  return "";
+}
+
 export function getWorkflowStatusNote(value) {
   const rows = Array.isArray(value?.statusHistory) ? value.statusHistory : [];
   const rowNotes = rows.map((row) => String(row?.note || "").trim()).filter(Boolean);
@@ -185,6 +204,41 @@ export function isWorkflowPastVariation({ activeItem, backendOrder, po, storage 
       Number(item?.step || item?.mockStep || 0) >= 10 ||
       POST_VARIATION_TYPES.has(String(item?.type || "").toLowerCase()),
   );
+}
+
+export async function persistPartnerVariationStatusNote({
+  chatText,
+  fetchFn = globalThis.fetch,
+  po,
+  resolveOrderIdByPo,
+  storage,
+  token,
+}) {
+  const normalizedPo = normalizePo(po);
+  const desc = extractWorkflowVariationRequest(chatText);
+  if (!normalizedPo || !desc || typeof resolveOrderIdByPo !== "function" || typeof fetchFn !== "function") {
+    return false;
+  }
+
+  try {
+    const mappedOrderId = storage?.getItem?.(`po_to_order_${normalizedPo}`) || "";
+    const orderId = await resolveOrderIdByPo({ po: normalizedPo, fallbackOrderId: mappedOrderId, token });
+    if (!orderId) return false;
+    const headers = token
+      ? { "Content-Type": "application/json", Authorization: `Bearer ${token}` }
+      : { "Content-Type": "application/json" };
+    const response = await fetchFn(`/api/v1/orders/${orderId}/status`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({
+        status: "IN_PROGRESS",
+        note: `Partner submitted variation request for ${normalizedPo}. [VARIATION_DATA]${desc}[/VARIATION_DATA]`,
+      }),
+    });
+    return Boolean(response?.ok);
+  } catch {
+    return false;
+  }
 }
 
 export async function persistPartnerCompletionStatusNote({

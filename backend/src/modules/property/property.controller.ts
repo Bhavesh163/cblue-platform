@@ -9,6 +9,7 @@ import {
   Query,
   UseGuards,
   NotFoundException,
+  Logger,
 } from '@nestjs/common';
 import { PropertyService } from './property.service';
 import { CreatePropertyDto } from './dto/create-property.dto';
@@ -18,6 +19,8 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @Controller('properties')
 export class PropertyController {
+  private readonly logger = new Logger(PropertyController.name);
+
   constructor(private readonly propertyService: PropertyService) {}
 
   @Post()
@@ -31,8 +34,19 @@ export class PropertyController {
   }
 
   @Get()
-  search(@Query() dto: SearchPropertyDto) {
-    return this.propertyService.search(dto);
+  async search(@Query() dto: SearchPropertyDto) {
+    try {
+      return await this.propertyService.search(dto);
+    } catch (error) {
+      this.logger.error(
+        `Property search failed; returning empty result: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      const page = Number(dto.page) > 0 ? Number(dto.page) : 1;
+      const limit = Number(dto.limit) > 0 ? Number(dto.limit) : 20;
+      return { properties: [], total: 0, page, limit, totalPages: 0 };
+    }
   }
 
   @Get('my')

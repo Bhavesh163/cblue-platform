@@ -18,6 +18,7 @@ import {
 } from "../../../lib/workflowVisibility";
 import {
   extractWorkflowCompleteRequest,
+  extractWorkflowVariationRequest,
   getWorkflowStatusNote,
   isVisibleWorkflowSystemText,
   isWorkflowPoReferencedInStorage,
@@ -2900,6 +2901,61 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatFeed, mockReady]);
+
+  // F9 fallback: if the partner variation note lands in order status history before chat polling,
+  // create the customer's Step 9 approval request from the backend order itself.
+  useEffect(() => {
+    if (!mockReady || !subscriber?.email?.includes('ghis')) return;
+    const variationOrders = workflowOrders
+      .map((backendOrder: any) => {
+        const po = extractPo(backendOrder);
+        const status = String(backendOrder?.status || '').toUpperCase();
+        const note = getWorkflowStatusNote(backendOrder);
+        const desc = extractWorkflowVariationRequest(note);
+        return { backendOrder, po, status, desc };
+      })
+      .filter(({ po, status, desc, backendOrder }: any) => {
+        if (!po || !isPoCode(po) || !desc || isTerminalWorkflowStatus(status)) return false;
+        return !isWorkflowPastVariation({ backendOrder, po, storage: localStorage });
+      });
+    if (variationOrders.length === 0) return;
+
+    for (const { backendOrder, po, desc } of variationOrders) {
+      const title = String(backendOrder?.serviceCategory || '').replace(/_/g, ' ') || po;
+      const budget = backendOrder?.estimatedPrice ? `฿${Number(backendOrder.estimatedPrice).toLocaleString()}` : '฿0';
+      const tier = String(backendOrder?.description || '').match(/TIER:([A-Za-z]+)/)?.[1] || 'Standard';
+      const eventTs = parseDateMs(
+        backendOrder?.statusHistory?.[0]?.createdAt ||
+        backendOrder?.statusChangedAt ||
+        backendOrder?.updatedAt,
+      ) || Date.now();
+
+      setMockActiveItems(prev => {
+        const activeSnapshot = {
+          ...(prev.find((x: any) => x.po === po) || backendOrder || {}),
+          po,
+          title,
+          customer: 'Suppadesh',
+          budget,
+          tier,
+          step: 9,
+          mockStep: 9,
+          actionNeeded: true,
+        };
+        const next = [...prev.filter((x: any) => x.po !== po), activeSnapshot];
+        try { writeWorkflowStorage('ghis_mock_active', next); } catch {}
+        return next;
+      });
+      setMockDynRequests(prev => {
+        if (prev.some((x: any) => x.po === po && x.type === 'variation_pending')) return prev;
+        const item = { id: `var-${po}`, po, title, customer: 'Suppadesh', date: fmtDateTime(eventTs), createdAt: eventTs, budget, tier, desc, type: 'variation_pending', step: 9 };
+        const merged = [...prev.filter((x: any) => !(x.po === po && ['variation_pending', 'meeting_invite', 'meeting_pending_partner', 'meeting_scheduled', 'chat_ready'].includes(x.type))), item];
+        try { writeWorkflowStorage('ghis_mock_dyn_req', merged); } catch {}
+        return merged;
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workflowOrders, mockReady, subscriber?.email]);
 
   // F10 fallback: if the partner completion note lands in order history before chat polling,
   // create the customer's Step 10 approval request from the backend order itself.
@@ -6284,7 +6340,13 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                     const createdAt = Date.now();
                     const serviceName = item.title || item.service || item.propertyTitle || 'this job';
                     const backendOrder = workflowOrders.find((order: any) => extractPo(order) === po);
-                    const backendOrderId = backendOrder?.id || item.orderId || (isOrderUuid(item.id) ? item.id : '');
+                    let backendOrderId = backendOrder?.id || item.orderId || (isOrderUuid(item.id) ? item.id : '');
+                    if (!backendOrderId && po) {
+                      // Cross-browser cancel requires the backend order id so the partner
+                      // (a different browser) receives CANCELLED via polling. Fall back to
+                      // the po->order map used by the rest of the workflow.
+                      try { backendOrderId = String(localStorage.getItem(`po_to_order_${po}`) || '').trim(); } catch {}
+                    }
                     const isPropertyCancel = isPropPoCode(po) || item.isPropertyJob || item.propInquiry;
                     const customerChatText = `[SYSTEM] Customer cancelled ${serviceName} (${po}). Reason: ${reason}. This job has been moved to History.`;
                     const partnerChatText = `[SYSTEM] Customer cancelled ${serviceName} (${po}). Reason: ${reason}. Please check History for the cancelled job record.`;
@@ -6369,6 +6431,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                       setMockDynRequests((prev) => prev.filter((x: any) => x.po !== po));
                       setMockHistory(nextHistory);
                       window.dispatchEvent(new Event("storage"));
+                      window.dispatchEvent(new Event("cblue-workflow-updated"));
                       window.dispatchEvent(new CustomEvent('cblue-chat-updated', { detail: { orderId: po } }));
                     } catch (cancelErr) { console.error("Cancel job error:", cancelErr); }
                     const token = getCustomerDashboardToken();
@@ -6376,6 +6439,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                       void updatePropInquiry(item.propInquiry.id, { status: 'CANCELLED' }, po);
                     }
                     if (backendOrderId && token) {
+                      try { localStorage.setItem(`po_to_order_${po}`, backendOrderId); } catch {}
                       fetch(`/api/v1/orders/${backendOrderId}/status`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },

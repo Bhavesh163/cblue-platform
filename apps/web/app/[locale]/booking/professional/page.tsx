@@ -934,55 +934,6 @@ function ProfessionalBookingContent() {
               </label>
             </div>
 
-            {/* Subscription consent */}
-            <div className="flex items-start gap-3 bg-sky-50 border border-sky-200 rounded-lg p-4">
-              <input
-                id="subscriptionConsent"
-                name="subscriptionConsent"
-                type="checkbox"
-                checked={form.subscriptionConsent}
-                onChange={handleChange}
-                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              />
-              <label htmlFor="subscriptionConsent" className="text-sm text-gray-700">
-                {t("subscriptionConsent")}
-              </label>
-            </div>
-
-            {/* Password fields (shown when subscription consent is checked) */}
-            {form.subscriptionConsent && (
-              <div className="bg-sky-50 border border-sky-200 rounded-lg p-4 space-y-4">
-                <div>
-                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                    {locale === "th" ? "ตั้งรหัสผ่านสมาชิก" : locale === "zh" ? "设置会员密码" : "Set Member Password"} <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    id="password"
-                    name="password"
-                    type="password"
-                    value={form.password}
-                    onChange={handleChange}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                    placeholder="••••••••"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                    {locale === "th" ? "ยืนยันรหัสผ่าน" : locale === "zh" ? "确认密码" : "Confirm Password"} <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    id="confirmPassword"
-                    name="confirmPassword"
-                    type="password"
-                    value={form.confirmPassword}
-                    onChange={handleChange}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                    placeholder="••••••••"
-                  />
-                </div>
-              </div>
-            )}
-
             <ReCaptcha onVerify={handleRecaptcha} onExpire={handleRecaptchaExpire} />
 
             <button
