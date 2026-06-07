@@ -67,6 +67,26 @@ const shouldReturnUserProfileFallback = (method: string, routePath: string) =>
 const shouldReturnPropertiesSearchFallback = (method: string, routePath: string) =>
   method === "GET" && routePath === "properties";
 
+function parseChatPostBodyText(rawBody: ArrayBuffer | null) {
+  if (!rawBody || rawBody.byteLength === 0) return "";
+  try {
+    const parsed = JSON.parse(new TextDecoder().decode(rawBody)) as { text?: unknown };
+    return String(parsed?.text || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+function buildChatPostFallbackResponse(rawBody: ArrayBuffer | null) {
+  const text = parseChatPostBodyText(rawBody);
+  return {
+    id: `fallback-${Date.now()}`,
+    text,
+    createdAt: new Date().toISOString(),
+    statusFallback: true,
+  };
+}
+
 function getRequestAuthToken(request: NextRequest) {
   const auth = request.headers.get("authorization") || "";
   const match = auth.match(/^Bearer\s+(.+)$/i);
@@ -146,6 +166,7 @@ async function handler(
   let target = "";
   let routePath = "";
   let method = request.method.toUpperCase();
+  let rawBody: ArrayBuffer | null = null;
   try {
     const { path } = await context.params;
     routePath = path.join("/");
@@ -174,7 +195,7 @@ async function handler(
 
     // Buffer request body once, then reuse it for upstream fetch attempts.
     // This avoids edge streaming incompatibilities that can corrupt larger JSON payloads.
-    const rawBody = hasRequestBody ? await request.arrayBuffer() : null;
+    rawBody = hasRequestBody ? await request.arrayBuffer() : null;
 
     const canRetry = !hasRequestBody;
     let upstream: Response | null = null;
@@ -235,15 +256,10 @@ async function handler(
       );
     }
     if (upstream.status >= 500 && shouldReturnChatPostFallback(method, routePath)) {
-      return Response.json(
-        {
-          id: `fallback-${Date.now()}`,
-          text: "",
-          createdAt: new Date().toISOString(),
-          statusFallback: true,
-        },
-        { status: 201, headers: { "cache-control": "no-store" } },
-      );
+      return Response.json(buildChatPostFallbackResponse(rawBody), {
+        status: 201,
+        headers: { "cache-control": "no-store" },
+      });
     }
     if (upstream.status >= 500 && shouldReturnUserProfileFallback(method, routePath)) {
       const fallbackProfile = buildUserProfileFallback(request);
@@ -285,15 +301,10 @@ async function handler(
       );
     }
     if (shouldReturnChatPostFallback(method, routePath)) {
-      return Response.json(
-        {
-          id: `fallback-${Date.now()}`,
-          text: "",
-          createdAt: new Date().toISOString(),
-          statusFallback: true,
-        },
-        { status: 201, headers: { "cache-control": "no-store" } },
-      );
+      return Response.json(buildChatPostFallbackResponse(rawBody), {
+        status: 201,
+        headers: { "cache-control": "no-store" },
+      });
     }
     if (shouldReturnUserProfileFallback(method, routePath)) {
       const fallbackProfile = buildUserProfileFallback(request);

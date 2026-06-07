@@ -2570,7 +2570,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   // When Suppadesh accepts a PO on their browser, the backend order goes CONFIRMED. Ghis's page
   // polls orders and detects this, auto-creating a payment_pending card in requests.
   useEffect(() => {
-    if (!mockReady || !subscriber?.email?.includes('ghis')) return;
+    if (!mockReady || !subscriber) return;
     // Only block if there is already an ACTIONABLE (step 6+) entry for the PO — NOT notice items
     const existingDynPos = new Set(
       mockDynRequests.filter((x: any) => !['notice'].includes(String(x.type || ''))).map((x: any) => x.po),
@@ -2803,7 +2803,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   // When partner posts [SYSTEM] messages, customer's chatFeed picks them up (5s poll) and this
   // effect auto-creates the appropriate UI items in mockDynRequests.
   useEffect(() => {
-    if (!chatFeed || !mockReady || !subscriber?.email?.includes('ghis')) return;
+    if (!chatFeed || !mockReady || !subscriber) return;
     for (const chatItem of chatFeed) {
       if (chatItem.source !== 'backend') continue;
       const po = chatItem.po;
@@ -2905,7 +2905,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   // F9 fallback: if the partner variation note lands in order status history before chat polling,
   // create the customer's Step 9 approval request from the backend order itself.
   useEffect(() => {
-    if (!mockReady || !subscriber?.email?.includes('ghis')) return;
+    if (!mockReady || !subscriber) return;
     const variationOrders = workflowOrders
       .map((backendOrder: any) => {
         const po = extractPo(backendOrder);
@@ -2960,7 +2960,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   // F10 fallback: if the partner completion note lands in order history before chat polling,
   // create the customer's Step 10 approval request from the backend order itself.
   useEffect(() => {
-    if (!mockReady || !subscriber?.email?.includes('ghis')) return;
+    if (!mockReady || !subscriber) return;
     const completionOrders = workflowOrders
       .map((backendOrder: any) => {
         const po = extractPo(backendOrder);
@@ -3162,9 +3162,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   const browserTerminalPOs = readBrowserTerminalWorkflowPos(
     typeof window !== 'undefined' ? window.localStorage : undefined,
   );
-  const rawVisibleMockActiveItems = !allowLocalCustomerWorkflow
-    ? []
-    : filterVisibleWorkflowItems(mockActiveItems, browserTerminalPOs);
+  const rawVisibleMockActiveItems = filterVisibleWorkflowItems(mockActiveItems, browserTerminalPOs);
   const localTerminalWorkflowPOs = new Set(
     rawVisibleMockActiveItems
       .filter((item: any) => isBackendWorkflowHistoryStatus(item))
@@ -3174,12 +3172,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   const visibleMockActiveItems = rawVisibleMockActiveItems.filter(
     (item: any) => !isBackendWorkflowHistoryStatus(item),
   );
-  const visibleMockDynRequests = !allowLocalCustomerWorkflow
-    ? []
-    : filterVisibleWorkflowItems(mockDynRequests, browserTerminalPOs);
-  const visibleMockHistory = !allowLocalCustomerWorkflow
-    ? []
-    : mockHistory.filter((x: any) => !isHiddenTestPo(x.po));
+  // Backend bridge effects (F4/F6/F7/F9/F10) write into mockDynRequests/mockHistory for all
+  // logged-in customers. Only gate the static demo seed data, not bridge-built workflow rows.
+  const visibleMockDynRequests = filterVisibleWorkflowItems(mockDynRequests, browserTerminalPOs);
+  const visibleMockHistory = mockHistory.filter((x: any) => !isHiddenTestPo(x.po));
 
   // Merge: mockActiveItems overrides ACTIVE_MOCK items with same po (for step progression)
   const paidPOs = new Set(visibleMockActiveItems.map((x: any) => x.po));
@@ -3769,6 +3765,33 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         createdAt,
         dot: "bg-blue-500",
       }];
+    }
+    if (status === 'IN_PROGRESS' || status === 'MEETING_REQUESTED') {
+      const note = getWorkflowStatusNote(order);
+      const variationDesc = extractWorkflowVariationRequest(note);
+      if (variationDesc && !isWorkflowPastVariation({ backendOrder: order, po, storage: typeof window !== 'undefined' ? localStorage : undefined })) {
+        return [{
+          id: `a-var-${po}`,
+          msg: `${po}: Partner submitted a variation request. Next: review the revised scope and approve it in Requests.`,
+          msgTh: `${po}: พาร์ทเนอร์ส่งคำขอ variation แล้ว ขั้นตอนถัดไปคือพิจารณาขอบเขตงาน/ราคาใหม่และอนุมัติใน Requests`,
+          msgZh: `${po}: 合作伙伴已提交变更申请。下一步：在 Requests 中查看调整后的范围并批准。`,
+          time,
+          createdAt,
+          dot: "bg-purple-500",
+        }];
+      }
+      const completeDesc = extractWorkflowCompleteRequest(note);
+      if (completeDesc && !isTerminalWorkflowStatus(status)) {
+        return [{
+          id: `a-compl-${po}`,
+          msg: `${po}: Partner submitted the project-complete request. Next: review and confirm completion in Requests.`,
+          msgTh: `${po}: พาร์ทเนอร์ส่งคำของานเสร็จแล้ว ขั้นตอนถัดไปคืออ่านบันทึกสรุปและยืนยันใน Requests`,
+          msgZh: `${po}: 合作伙伴已提交完工申请。下一步：在 Requests 中查看并确认完工。`,
+          time,
+          createdAt,
+          dot: "bg-green-500",
+        }];
+      }
     }
     if (status === 'CANCELLED') {
       const note = getWorkflowStatusNote(order);
