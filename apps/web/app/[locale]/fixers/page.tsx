@@ -21,6 +21,7 @@ import { readStoredPoProjectDetails, storePoProjectDetails } from "../../../lib/
 import { refreshSubscriberSession } from "../../../lib/subscriberSession";
 import {
   collectTerminalWorkflowPos,
+  hasWorkflowCancellationMarker,
   isCompletedAwaitingWorkflowRating,
   isTerminalWorkflowStatus,
   pickWorkflowMeetingVenue,
@@ -3747,9 +3748,16 @@ export default function FixerProPage() {
     alerts: partnerPersistedAlerts,
     terminalPoValues: [...browserTerminalPOs],
   });
+  const chatCancelledPos = new Set(
+    chatFeed
+      .filter((chat: any) => hasWorkflowCancellationMarker(chat?.lastMsg || chat))
+      .map((chat: any) => String(chat?.po || '').trim())
+      .filter(Boolean),
+  );
   const completedHistoryPos = new Set([
     ...mockHistory.map((h: any) => h.po),
     ...terminalWorkflowPOs,
+    ...chatCancelledPos,
   ]);
   const backendCancelledPos = new Set(
     mappedOrders
@@ -3759,6 +3767,7 @@ export default function FixerProPage() {
   );
   const declinedPartnerPos = new Set<string>();
   backendCancelledPos.forEach((po) => declinedPartnerPos.add(po));
+  chatCancelledPos.forEach((po) => declinedPartnerPos.add(po));
   mockHistory.forEach((entry: any) => {
     const po = String(entry?.po || '').trim();
     const status = String(entry?.status || '').toUpperCase();

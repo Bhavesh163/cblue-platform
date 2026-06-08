@@ -17,6 +17,10 @@ import {
   setWorkflowStorageItem,
 } from "../../../lib/workflowVisibility";
 import {
+  flushQueuedWorkflowBackendWrites,
+  persistWorkflowBackendWrites,
+} from "../../../lib/workflowBackendWrites";
+import {
   extractWorkflowCompleteRequest,
   extractWorkflowVariationRequest,
   getWorkflowStatusNote,
@@ -736,6 +740,36 @@ export default function DashboardPage() {
   const [hasFetchedOrders, setHasFetchedOrders] = useState<boolean>(false);
 
 
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let stopped = false;
+    const flushPendingWorkflowWrites = () => {
+      if (!getCustomerDashboardToken()) return;
+      void flushQueuedWorkflowBackendWrites(fetch, window.localStorage, {
+        retryAttempts: 1,
+        retryDelayMs: 800,
+      })
+        .then((result) => {
+          if (!stopped && result.ok && result.attemptedWrites > 0) {
+            window.dispatchEvent(new Event("cblue-workflow-updated"));
+            window.dispatchEvent(new Event("cblue-chat-updated"));
+          }
+        })
+        .catch(() => {});
+    };
+
+    flushPendingWorkflowWrites();
+    const intervalId = window.setInterval(flushPendingWorkflowWrites, 15000);
+    window.addEventListener("online", flushPendingWorkflowWrites);
+    window.addEventListener("cblue-workflow-updated", flushPendingWorkflowWrites);
+    return () => {
+      stopped = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener("online", flushPendingWorkflowWrites);
+      window.removeEventListener("cblue-workflow-updated", flushPendingWorkflowWrites);
+    };
+  }, []);
 
   
   useEffect(() => {
@@ -5911,24 +5945,44 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                       const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
                       void (async () => {
                         const currentStatus = String(backendOrder.status || '').toUpperCase();
+                        const workflowWrites: any[] = [];
                         if (!['IN_PROGRESS', 'MEETING_REQUESTED'].includes(currentStatus)) {
-                          await fetch(`/api/v1/orders/${backendOrder.id}/status`, {
-                            method: 'PUT',
-                            headers,
-                            body: JSON.stringify({ status: 'IN_PROGRESS', note: 'Customer paid processing fee before sending meeting invitation' }),
-                          }).catch(() => null);
+                          workflowWrites.push({
+                            id: `status-in-progress-${meetingModal.po}`,
+                            url: `/api/v1/orders/${backendOrder.id}/status`,
+                            options: {
+                              method: 'PUT',
+                              headers,
+                              body: JSON.stringify({ status: 'IN_PROGRESS', note: 'Customer paid processing fee before sending meeting invitation' }),
+                            },
+                          });
                         }
-                        await fetch(`/api/v1/orders/${backendOrder.id}/status`, {
-                          method: 'PUT',
-                          headers,
-                          body: JSON.stringify({ status: 'MEETING_REQUESTED', note: `Customer sent meeting invitation: ${dateLabel} ${meetingTime} at ${finalMeetingVenue}` }),
-                        }).catch(() => null);
-                        await fetch(`/api/v1/orders/${backendOrder.id}/chat`, {
-                          method: 'POST',
-                          headers,
-                          body: JSON.stringify({ text: chatText }),
-                        }).catch(() => null);
-                      })();
+                        workflowWrites.push(
+                          {
+                            id: `status-meeting-requested-${meetingModal.po}`,
+                            url: `/api/v1/orders/${backendOrder.id}/status`,
+                            options: {
+                              method: 'PUT',
+                              headers,
+                              body: JSON.stringify({ status: 'MEETING_REQUESTED', note: `Customer sent meeting invitation: ${dateLabel} ${meetingTime} at ${finalMeetingVenue}` }),
+                            },
+                          },
+                          {
+                            id: `chat-meeting-invitation-${meetingModal.po}`,
+                            url: `/api/v1/orders/${backendOrder.id}/chat`,
+                            options: {
+                              method: 'POST',
+                              headers,
+                              body: JSON.stringify({ text: chatText }),
+                            },
+                          },
+                        );
+                        await persistWorkflowBackendWrites(fetch, workflowWrites, {
+                          retryAttempts: 3,
+                          retryDelayMs: 750,
+                          storage: window.localStorage,
+                        });
+                      })().catch(() => {});
                     }
                   } catch {}
                   appendLocalWorkflowChat(meetingModal.po, chatText, createdAt);

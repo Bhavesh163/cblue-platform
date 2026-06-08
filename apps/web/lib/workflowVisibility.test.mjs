@@ -5,6 +5,7 @@ import {
   collectTerminalWorkflowPos,
   filterLiveWorkflowItems,
   hasWorkflowCompletionMarker,
+  hasWorkflowCancellationMarker,
   isCompletedAwaitingWorkflowRating,
   isTerminalWorkflowStatus,
   normalizeWorkflowHistoryItems,
@@ -108,6 +109,12 @@ test("terminalizes customer-cancelled jobs from the partner-facing cancel chat m
 
   assert.ok(terminalPos.has("PO-2606-9036"), "cancelled job should be terminal");
   assert.ok(!terminalPos.has("PO-2606-6822"), "active meeting job must NOT be terminal");
+  assert.equal(
+    hasWorkflowCancellationMarker({
+      text: "[SYSTEM] Customer cancelled AC (PO-2606-9036). Reason: changed mind. Please check History for the cancelled job record.",
+    }),
+    true,
+  );
 });
 
 test("keeps backend completed orders visible until rating/history closes the workflow", () => {
