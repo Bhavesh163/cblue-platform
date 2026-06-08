@@ -3154,10 +3154,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     { id: "req2", title: "FITOUT", customer: "Suppadesh", date: "5/11/2026, 2:35:00 PM", budget: "฿25,000,000", po: "PO-2605-6812", tier: "STANDARD", desc: "I want to have a project team to carry out a 1000 sq.m. office fitout in Bangkok" },
   ];
 
-  const ACTIVE_MOCK = [
-    { title: "REINSTATEMENT", customer: "Suppadesh", date: "5/11/2026, 2:30:00 PM", budget: "฿5,000,000", po: "PO-2605-1200", location: "Saphansong", tier: "ECONOMY", actionNeeded: true, step: 6 },
-    { title: "FITOUT", customer: "Suppadesh", date: "5/11/2026, 2:35:00 PM", budget: "฿25,000,000", po: "PO-2605-6812", location: "Saphansong", tier: "Standard", actionNeeded: true, step: 6 },
-  ];
+  // Static demo seed retired: it briefly flickered onto the customer dashboard (e.g. PO-2605-6812,
+  // PO-2605-1200) on every landing before the real backend orders finished loading. The live
+  // backend orders now drive the customer view entirely, so no placeholder rows are injected.
+  const ACTIVE_MOCK: any[] = [];
 
   const backendOrderPos = new Set(workflowOrders.map((o: any) => extractPo(o)).filter((po: string) => isPoCode(po)));
   const allowLocalCustomerWorkflow = Boolean(subscriber?.email?.toLowerCase().includes('ghis'));

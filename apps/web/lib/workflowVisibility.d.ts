@@ -17,6 +17,7 @@ type StorageLike = {
 export function normalizeWorkflowPo(value: any): string;
 export function pickWorkflowMeetingVenue(...values: any[]): string;
 export function hasWorkflowCompletionMarker(value: any): boolean;
+export function hasWorkflowCancellationMarker(value: any): boolean;
 export function isTerminalWorkflowStatus(status: any): boolean;
 export function isCompletedAwaitingWorkflowRating(value: any): boolean;
 export function filterLiveWorkflowItems(items?: any[], terminalPoValues?: Set<string> | any[]): any[];
