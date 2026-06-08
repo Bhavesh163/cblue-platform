@@ -847,11 +847,7 @@ export class PropertyService {
           take: limit,
           orderBy: { createdAt: 'desc' },
           include: {
-            // List/grid views only render the primary thumbnail (images[0]). Returning every image
-            // here ballooned the payload (base64 uploads up to ~0.3MB each × 5 × page size), which
-            // was the main cause of the multi-second blank on the listings pages. The detail page
-            // fetches the full image set separately via findById.
-            images: { orderBy: { sortOrder: 'asc' }, take: 1 },
+            images: { orderBy: { sortOrder: 'asc' } },
           },
         }),
         this.prisma.property.count({ where }),

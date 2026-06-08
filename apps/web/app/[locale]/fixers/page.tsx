@@ -21,7 +21,6 @@ import { readStoredPoProjectDetails, storePoProjectDetails } from "../../../lib/
 import { refreshSubscriberSession } from "../../../lib/subscriberSession";
 import {
   collectTerminalWorkflowPos,
-  hasWorkflowCancellationMarker,
   isCompletedAwaitingWorkflowRating,
   isTerminalWorkflowStatus,
   pickWorkflowMeetingVenue,
@@ -376,15 +375,12 @@ const extractPoCode = (value: any) => {
 };
 const parseMeetingInviteDetails = (value: string) => {
   const text = String(value || "");
-  // Venue can be a GPS coordinate (e.g. "13.794068, 100.609587"), so we must NOT stop at the
-  // first period. Capture up to the ". Note:" / ". Next:" suffix appended by the customer message
-  // builder, or end of string.
-  const match = text.match(/customer sent meeting invitation(?: for (PO-(?:\d{8}|\d{4}-\d{4,})))?:\s*(\d{2}\/\d{2}\/\d{4})\s+(\d{2}:\d{2})\s+at\s+(.+?)(?:\s*\.\s*(?:Note|Next)\s*:|\s*\.?\s*$)/i);
+  const match = text.match(/customer sent meeting invitation(?: for (PO-(?:\d{8}|\d{4}-\d{4,})))?:\s*(\d{2}\/\d{2}\/\d{4})\s+(\d{2}:\d{2})\s+at\s+(.+?)(?:\.|$)/i);
   return {
     po: match?.[1] || "",
     meetingDateLabel: match?.[2] || "",
     meetingTimeLabel: match?.[3] || "",
-    meetingVenue: String(match?.[4] || "").trim().replace(/\.\s*$/, "").trim(),
+    meetingVenue: String(match?.[4] || "").trim(),
   };
 };
 const PLACEHOLDER_LOCATION_PATTERN = /^--\s*select/i;
@@ -3748,16 +3744,9 @@ export default function FixerProPage() {
     alerts: partnerPersistedAlerts,
     terminalPoValues: [...browserTerminalPOs],
   });
-  const chatCancelledPos = new Set(
-    chatFeed
-      .filter((chat: any) => hasWorkflowCancellationMarker(chat?.lastMsg || chat))
-      .map((chat: any) => String(chat?.po || '').trim())
-      .filter(Boolean),
-  );
   const completedHistoryPos = new Set([
     ...mockHistory.map((h: any) => h.po),
     ...terminalWorkflowPOs,
-    ...chatCancelledPos,
   ]);
   const backendCancelledPos = new Set(
     mappedOrders
@@ -3767,7 +3756,6 @@ export default function FixerProPage() {
   );
   const declinedPartnerPos = new Set<string>();
   backendCancelledPos.forEach((po) => declinedPartnerPos.add(po));
-  chatCancelledPos.forEach((po) => declinedPartnerPos.add(po));
   mockHistory.forEach((entry: any) => {
     const po = String(entry?.po || '').trim();
     const status = String(entry?.status || '').toUpperCase();
@@ -4673,88 +4661,6 @@ export default function FixerProPage() {
       return next;
     });
   }, [chatFeed, mappedOrders, mockActiveState, mockHistory, mockDynReqs]);
-
-  // Cross-browser customer-cancel fallback. A customer cancelling on their own browser cannot write
-  // to the partner's localStorage; the only signals that reach the partner are (a) the backend order
-  // status flipping to CANCELLED (already handled by backendCancelledPos) and (b) the system cancel
-  // chat message the customer posts to the shared order chat. When the status PUT did not persist
-  // (e.g. proxy fallback) but the chat did, the job otherwise stays stuck in the partner's Active
-  // Jobs. Here we detect the unambiguous system cancel message and move the job to History, which the
-  // existing machinery (declinedPartnerPos + completedJobs) then uses to drop it from Active Jobs /
-  // Requests and close the chat. Persisted + idempotent, so it cannot flicker back.
-  useEffect(() => {
-    if (!isFixer || typeof window === "undefined") return;
-    if (!chatFeed || chatFeed.length === 0) return;
-    try {
-      const cancelRe = /customer cancelled\b[\s\S]*?\((PO-(?:\d{8}|\d{4}-\d{4,}))\)[\s\S]*?(?:reason:|moved to history|check history)/i;
-      let history: any[] = [];
-      try {
-        const parsed = JSON.parse(localStorage.getItem("ghis_mock_history") || "[]");
-        history = Array.isArray(parsed) ? parsed : [];
-      } catch {
-        history = [];
-      }
-      const alreadyCancelled = new Set(
-        history
-          .filter((h: any) => String(h?.status || "").toUpperCase() === "CANCELLED")
-          .map((h: any) => String(h?.po || "").trim()),
-      );
-      const cancelledPos = new Set<string>();
-      for (const chat of chatFeed) {
-        const match = String(chat?.lastMsg || "").match(cancelRe);
-        const po = String(match?.[1] || "").trim();
-        if (!po || cancelledPos.has(po) || alreadyCancelled.has(po)) continue;
-        if (isClosedPartnerWorkflowPo(po) || isHiddenTestPo(po)) continue;
-        const order = mappedOrders.find((x: any) => x.po === po) || {};
-        const reason = String(chat?.lastMsg || "").match(/Reason:\s*([^.]*)/i)?.[1]?.trim() || "";
-        const createdAt = parseTs(chat?.sort || chat?.createdAt || chat?.time) || Date.now();
-        const service = order.service || order.serviceTh || chat?.title || po;
-        history = [
-          ...history.filter((h: any) => String(h?.po || "").trim() !== po),
-          {
-            id: `customer-cancel-${po}`,
-            po,
-            service,
-            serviceTh: order.serviceTh || service,
-            serviceZh: order.serviceZh || service,
-            title: service,
-            customer: firstNameOnly(order.customer || order.customerName || chat?.customer || "Customer", "Customer"),
-            status: "CANCELLED",
-            statusName: "Cancelled by Customer",
-            stepName: "Cancelled by Customer",
-            cancelReason: reason,
-            statusNote: `Customer cancelled.${reason ? ` Reason: ${reason}` : ""}`,
-            budget: order.budget || order.fee || "",
-            fee: order.fee || order.budget || "",
-            tier: order.tier || "Standard",
-            location: order.location || order.subdistrict || "",
-            subdistrict: order.subdistrict || order.location || "",
-            projectDetails: pickProjectDetails(po, order.projectDetails, order.description, order.desc, service),
-            description: pickProjectDetails(po, order.projectDetails, order.description, order.desc, service),
-            completedAt: createdAt,
-            statusChangedAt: createdAt,
-            createdAt: order.createdAt || createdAt,
-            date: fmtDateTime(createdAt),
-            chatHistory: getLocalChatHistory(po),
-          },
-        ];
-        cancelledPos.add(po);
-        try { localStorage.setItem(`chat_closed_${po}`, "1"); } catch {}
-      }
-      if (cancelledPos.size === 0) return;
-      writeWorkflowStorage("ghis_mock_history", history);
-      setMockHistory(filterVisibleWorkflowItems(history));
-      setPartnerDynReqs((prev) => {
-        const filtered = prev.filter((x: any) => !cancelledPos.has(String(x?.po || "").trim()));
-        if (filtered.length === prev.length) return prev;
-        try { return persistWorkflowCacheItems("partner_mock_dyn_req", filtered); } catch { return filtered; }
-      });
-      window.dispatchEvent(new Event("cblue-workflow-updated"));
-    } catch {
-      // Non-blocking cross-browser cancel reconciliation.
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatFeed, mappedOrders, isFixer]);
 
   // Partner-side history is terminal. Backend COMPLETED only means customer approved Step 10,
   // so keep Step 11 rating cards visible until the partner actually rates.
@@ -9258,8 +9164,6 @@ function PartnerProperties({ locale, prefix, properties, propertyInquiries }: { 
                       src={p.primaryImage || "/images/scenic-house.jpg"}
                       alt={p.title || "Property"}
                       className="w-full h-full object-cover"
-                      loading="lazy"
-                      decoding="async"
                     />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -9351,7 +9255,7 @@ function PartnerProperties({ locale, prefix, properties, propertyInquiries }: { 
                       {p.fileUrls.slice(0, 6).map((fileUrl: string, index: number) => {
                         const kind = getFileKind(fileUrl);
                         return kind === "image" ? (
-                          <img key={`${fileUrl}-${index}`} src={fileUrl} alt="property media" className="w-14 h-14 rounded-md object-cover border border-gray-200 shrink-0" loading="lazy" decoding="async" />
+                          <img key={`${fileUrl}-${index}`} src={fileUrl} alt="property media" className="w-14 h-14 rounded-md object-cover border border-gray-200 shrink-0" />
                         ) : (
                           <div key={`${fileUrl}-${index}`} className="w-14 h-14 rounded-md border border-gray-200 bg-gray-50 shrink-0 flex items-center justify-center text-[10px] font-bold text-gray-600">
                             {kind === "pdf" ? "PDF" : "FILE"}
@@ -9552,7 +9456,7 @@ function PartnerProperties({ locale, prefix, properties, propertyInquiries }: { 
                       return (
                         <div key={`${fileName}-${index}`} className="rounded-lg border border-gray-200 bg-gray-50 overflow-hidden">
                           {kind === "image" ? (
-                            <img src={fileUrl} alt={fileName} className="w-full h-32 object-cover" loading="lazy" decoding="async" />
+                            <img src={fileUrl} alt={fileName} className="w-full h-32 object-cover" />
                           ) : (
                             <div className="h-32 flex items-center justify-center text-3xl">{kind === "pdf" ? "📄" : "📎"}</div>
                           )}

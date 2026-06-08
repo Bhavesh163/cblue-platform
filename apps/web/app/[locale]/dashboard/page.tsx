@@ -17,10 +17,6 @@ import {
   setWorkflowStorageItem,
 } from "../../../lib/workflowVisibility";
 import {
-  flushQueuedWorkflowBackendWrites,
-  persistWorkflowBackendWrites,
-} from "../../../lib/workflowBackendWrites";
-import {
   extractWorkflowCompleteRequest,
   extractWorkflowVariationRequest,
   getWorkflowStatusNote,
@@ -237,15 +233,12 @@ const extractPoCode = (orderLike: any) => {
 };
 const parseMeetingInviteDetails = (value: string) => {
   const text = String(value || '');
-  // Venue can be a GPS coordinate (e.g. "13.794068, 100.609587"), so we must NOT stop at the
-  // first period. Capture up to the ". Note:" / ". Next:" suffix appended by the message builder,
-  // or end of string.
-  const match = text.match(/customer sent meeting invitation(?: for (PO-(?:\d{8}|\d{4}-\d{4,})))?:\s*(\d{2}\/\d{2}\/\d{4})\s+(\d{2}:\d{2})\s+at\s+(.+?)(?:\s*\.\s*(?:Note|Next)\s*:|\s*\.?\s*$)/i);
+  const match = text.match(/customer sent meeting invitation(?: for (PO-(?:\d{8}|\d{4}-\d{4,})))?:\s*(\d{2}\/\d{2}\/\d{4})\s+(\d{2}:\d{2})\s+at\s+(.+?)(?:\.|$)/i);
   return {
     po: match?.[1] || '',
     meetingDate: match?.[2] || '',
     meetingTime: match?.[3] || '',
-    meetingVenue: String(match?.[4] || '').trim().replace(/\.\s*$/, '').trim(),
+    meetingVenue: String(match?.[4] || '').trim(),
   };
 };
 const readMeetingInviteSnapshot = (po: string, fallback?: any) => {
@@ -740,36 +733,6 @@ export default function DashboardPage() {
   const [hasFetchedOrders, setHasFetchedOrders] = useState<boolean>(false);
 
 
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    let stopped = false;
-    const flushPendingWorkflowWrites = () => {
-      if (!getCustomerDashboardToken()) return;
-      void flushQueuedWorkflowBackendWrites(fetch, window.localStorage, {
-        retryAttempts: 1,
-        retryDelayMs: 800,
-      })
-        .then((result) => {
-          if (!stopped && result.ok && result.attemptedWrites > 0) {
-            window.dispatchEvent(new Event("cblue-workflow-updated"));
-            window.dispatchEvent(new Event("cblue-chat-updated"));
-          }
-        })
-        .catch(() => {});
-    };
-
-    flushPendingWorkflowWrites();
-    const intervalId = window.setInterval(flushPendingWorkflowWrites, 15000);
-    window.addEventListener("online", flushPendingWorkflowWrites);
-    window.addEventListener("cblue-workflow-updated", flushPendingWorkflowWrites);
-    return () => {
-      stopped = true;
-      window.clearInterval(intervalId);
-      window.removeEventListener("online", flushPendingWorkflowWrites);
-      window.removeEventListener("cblue-workflow-updated", flushPendingWorkflowWrites);
-    };
-  }, []);
 
   
   useEffect(() => {
@@ -3188,10 +3151,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     { id: "req2", title: "FITOUT", customer: "Suppadesh", date: "5/11/2026, 2:35:00 PM", budget: "฿25,000,000", po: "PO-2605-6812", tier: "STANDARD", desc: "I want to have a project team to carry out a 1000 sq.m. office fitout in Bangkok" },
   ];
 
-  // Static demo seed retired: it briefly flickered onto the customer dashboard (e.g. PO-2605-6812,
-  // PO-2605-1200) on every landing before the real backend orders finished loading. The live
-  // backend orders now drive the customer view entirely, so no placeholder rows are injected.
-  const ACTIVE_MOCK: any[] = [];
+  const ACTIVE_MOCK = [
+    { title: "REINSTATEMENT", customer: "Suppadesh", date: "5/11/2026, 2:30:00 PM", budget: "฿5,000,000", po: "PO-2605-1200", location: "Saphansong", tier: "ECONOMY", actionNeeded: true, step: 6 },
+    { title: "FITOUT", customer: "Suppadesh", date: "5/11/2026, 2:35:00 PM", budget: "฿25,000,000", po: "PO-2605-6812", location: "Saphansong", tier: "Standard", actionNeeded: true, step: 6 },
+  ];
 
   const backendOrderPos = new Set(workflowOrders.map((o: any) => extractPo(o)).filter((po: string) => isPoCode(po)));
   const allowLocalCustomerWorkflow = Boolean(subscriber?.email?.toLowerCase().includes('ghis'));
@@ -4796,13 +4759,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   const getWorkflowMeetingSnapshot = (po: any, source: any = {}) => {
     const fromActive = combinedActiveWithProp.find((item: any) => item.po === po) || {};
     const fromRequest = allRequestItemsWithProp.find((item: any) => item.po === po) || {};
-    // Re-parse the original meeting-invite chat message so venues stored before the parser fix
-    // (e.g. a GPS coordinate truncated to "13") are recovered to their full value.
-    const invite = readMeetingInviteSnapshot(String(po || ''), source);
-    const meetingDateValue = source?.meetingDate || fromRequest?.meetingDate || fromActive?.meetingDate || invite.meetingDate || "";
-    const meetingTimeValue = source?.meetingTime || fromRequest?.meetingTime || fromActive?.meetingTime || invite.meetingTime || "";
+    const meetingDateValue = source?.meetingDate || fromRequest?.meetingDate || fromActive?.meetingDate || "";
+    const meetingTimeValue = source?.meetingTime || fromRequest?.meetingTime || fromActive?.meetingTime || "";
     const venueValue = pickWorkflowMeetingVenue(
-      invite.meetingVenue,
       source?.meetingVenue,
       source?.venue,
       fromRequest?.meetingVenue,
@@ -5012,7 +4971,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                       {media.length > 0 ? (
                         <div className="flex gap-2 overflow-x-auto pb-1">
                           {media.slice(0, 6).map((url, index) => (
-                            <img key={`${p.id}-media-${index}`} src={url} alt="property media" className="w-14 h-14 rounded-md object-cover border border-gray-200 shrink-0" loading="lazy" decoding="async" />
+                            <img key={`${p.id}-media-${index}`} src={url} alt="property media" className="w-14 h-14 rounded-md object-cover border border-gray-200 shrink-0" />
                           ))}
                         </div>
                       ) : (
@@ -5945,44 +5904,24 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                       const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
                       void (async () => {
                         const currentStatus = String(backendOrder.status || '').toUpperCase();
-                        const workflowWrites: any[] = [];
                         if (!['IN_PROGRESS', 'MEETING_REQUESTED'].includes(currentStatus)) {
-                          workflowWrites.push({
-                            id: `status-in-progress-${meetingModal.po}`,
-                            url: `/api/v1/orders/${backendOrder.id}/status`,
-                            options: {
-                              method: 'PUT',
-                              headers,
-                              body: JSON.stringify({ status: 'IN_PROGRESS', note: 'Customer paid processing fee before sending meeting invitation' }),
-                            },
-                          });
+                          await fetch(`/api/v1/orders/${backendOrder.id}/status`, {
+                            method: 'PUT',
+                            headers,
+                            body: JSON.stringify({ status: 'IN_PROGRESS', note: 'Customer paid processing fee before sending meeting invitation' }),
+                          }).catch(() => null);
                         }
-                        workflowWrites.push(
-                          {
-                            id: `status-meeting-requested-${meetingModal.po}`,
-                            url: `/api/v1/orders/${backendOrder.id}/status`,
-                            options: {
-                              method: 'PUT',
-                              headers,
-                              body: JSON.stringify({ status: 'MEETING_REQUESTED', note: `Customer sent meeting invitation: ${dateLabel} ${meetingTime} at ${finalMeetingVenue}` }),
-                            },
-                          },
-                          {
-                            id: `chat-meeting-invitation-${meetingModal.po}`,
-                            url: `/api/v1/orders/${backendOrder.id}/chat`,
-                            options: {
-                              method: 'POST',
-                              headers,
-                              body: JSON.stringify({ text: chatText }),
-                            },
-                          },
-                        );
-                        await persistWorkflowBackendWrites(fetch, workflowWrites, {
-                          retryAttempts: 3,
-                          retryDelayMs: 750,
-                          storage: window.localStorage,
-                        });
-                      })().catch(() => {});
+                        await fetch(`/api/v1/orders/${backendOrder.id}/status`, {
+                          method: 'PUT',
+                          headers,
+                          body: JSON.stringify({ status: 'MEETING_REQUESTED', note: `Customer sent meeting invitation: ${dateLabel} ${meetingTime} at ${finalMeetingVenue}` }),
+                        }).catch(() => null);
+                        await fetch(`/api/v1/orders/${backendOrder.id}/chat`, {
+                          method: 'POST',
+                          headers,
+                          body: JSON.stringify({ text: chatText }),
+                        }).catch(() => null);
+                      })();
                     }
                   } catch {}
                   appendLocalWorkflowChat(meetingModal.po, chatText, createdAt);

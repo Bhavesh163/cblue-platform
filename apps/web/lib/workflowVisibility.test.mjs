@@ -5,7 +5,6 @@ import {
   collectTerminalWorkflowPos,
   filterLiveWorkflowItems,
   hasWorkflowCompletionMarker,
-  hasWorkflowCancellationMarker,
   isCompletedAwaitingWorkflowRating,
   isTerminalWorkflowStatus,
   normalizeWorkflowHistoryItems,
@@ -87,34 +86,6 @@ test("detects terminal workflow markers from chat and closed storage keys", () =
     "PO-2606-8888",
     "PO-2606-9999",
   ]);
-});
-
-test("terminalizes customer-cancelled jobs from the partner-facing cancel chat message", () => {
-  // The partner browser receives this exact system message in the shared order chat when the
-  // customer cancels. It must be recognised as terminal so the cancelled job does not linger in
-  // the partner's Active Jobs after a hard refresh.
-  const terminalPos = readBrowserTerminalWorkflowPos(
-    fakeStorage({
-      "chat_messages_PO-2606-9036": JSON.stringify([
-        { text: "[CBLUE] Payment confirmed for AC (PO-2606-9036). Chat room is now active." },
-        {
-          text: "[SYSTEM] Customer cancelled AC (PO-2606-9036). Reason: changed mind. Please check History for the cancelled job record.",
-        },
-      ]),
-      "chat_messages_PO-2606-6822": JSON.stringify([
-        { text: "[SYSTEM] Customer sent meeting invitation for PO-2606-6822: 08/06/2026 18:47 at 13.794068, 100.609587." },
-      ]),
-    }),
-  );
-
-  assert.ok(terminalPos.has("PO-2606-9036"), "cancelled job should be terminal");
-  assert.ok(!terminalPos.has("PO-2606-6822"), "active meeting job must NOT be terminal");
-  assert.equal(
-    hasWorkflowCancellationMarker({
-      text: "[SYSTEM] Customer cancelled AC (PO-2606-9036). Reason: changed mind. Please check History for the cancelled job record.",
-    }),
-    true,
-  );
 });
 
 test("keeps backend completed orders visible until rating/history closes the workflow", () => {

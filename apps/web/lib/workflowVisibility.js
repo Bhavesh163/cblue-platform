@@ -6,10 +6,6 @@ const TERMINAL_ALERT_PATTERN =
   /workflow completed|job is now complete|job is complete|stored in history|rated this project|this inquiry is now closed|moved to history|cancelled|canceled|declined|unavailable/i;
 const COMPLETION_CHAT_PATTERN =
   /workflow completed|job is now complete|job is complete|stored in history|rated this project|this inquiry is now closed|moved to history/i;
-// Tight pattern for the system cancel/decline chat messages so a cancelled job is recognised as
-// terminal from the shared chat cache (cross-browser) without false-positives on active chat.
-const CANCELLATION_CHAT_PATTERN =
-  /customer cancelled|customer canceled|cancelled job record|canceled job record|this job has been moved to history/i;
 const UNKNOWN_PLACE_PATTERN = /^(?:unknown|n\/a|tbd|-|--\s*select)/i;
 
 export function normalizeWorkflowPo(value) {
@@ -52,10 +48,6 @@ function getTextFields(value) {
 
 export function hasWorkflowCompletionMarker(value) {
   return getTextFields(value).some((text) => COMPLETION_CHAT_PATTERN.test(text));
-}
-
-export function hasWorkflowCancellationMarker(value) {
-  return getTextFields(value).some((text) => CANCELLATION_CHAT_PATTERN.test(text));
 }
 
 export function isTerminalWorkflowStatus(status) {
@@ -149,7 +141,7 @@ export function collectTerminalWorkflowPos({
   }
 
   for (const [poLike, messages] of Object.entries(chatMessagesByPo || {})) {
-    if (!hasWorkflowCompletionMarker(messages) && !hasWorkflowCancellationMarker(messages)) continue;
+    if (!hasWorkflowCompletionMarker(messages)) continue;
     addPo(terminal, poLike);
   }
 
