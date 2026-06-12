@@ -216,25 +216,25 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {[
               {
-                href: `${prefix}/booking/household`, icon: "", image: "/images/hvac.png",
+                href: `${prefix}/booking/household`, icon: "", image: "/images/Book%20Household%20Fixer.jpg",
                 title: locale === "th" ? "จองช่างซ่อมบ้าน" : locale === "zh" ? "预约家庭维修" : "Book Household Fixer",
                 desc: locale === "th" ? "ประปา ไฟฟ้า แอร์ ตกแต่งภายใน จัดสวน และอื่นๆ" : locale === "zh" ? "水电、空调、室内装修、園艺等" : "Plumbing, electrical, AC, interior, landscaping, and more",
                 color: "from-sky-500 to-blue-600", items: locale === "th" ? ["ช่างประปา", "ช่างไฟฟ้า", "ช่างแอร์", "ตกแต่งภายใน", "จัดสวน", "Cladding"] : locale === "zh" ? ["水管", "电气", "空调", "室内", "園艺", "幕墙"] : ["Plumbing", "Electrical", "AC & HVAC", "Interior", "Landscaping", "Cladding"],
               },
               {
-                href: `${prefix}/booking/project`, icon: "", image: "/images/smart-home.jpg",
+                href: `${prefix}/booking/project`, icon: "", image: "/images/Book%20Project%20Team.jpg",
                 title: locale === "th" ? "จองทีมโครงการ" : locale === "zh" ? "预约项目团队" : "Book Project Team",
                 desc: locale === "th" ? "เว็บไซต์ AI สมาร์ทโฮม พลังงานแสงอาทิตย์ และ 20+ บริการ" : locale === "zh" ? "网站、AI、智能家居、太阳能等20+服务" : "Website, AI, smart home, solar, and 20+ project services",
                 color: "from-indigo-500 to-purple-600", items: locale === "th" ? ["เว็บไซต์", "AI/ML", "สมาร์ทโฮม", "โซลาร์", "EV Charger", "20+ บริการ"] : locale === "zh" ? ["网站", "AI/ML", "智能家居", "太阳能", "EV充电", "20+服务"] : ["Website", "AI/ML", "Smart Home", "Solar", "EV Charger", "20+ Services"],
               },
               {
-                href: `${prefix}/booking/professional`, icon: "", image: "/images/scenic-building.jpg",
+                href: `${prefix}/booking/professional`, icon: "", image: "/images/Book%20Professional.jpg",
                 title: locale === "th" ? "จองมืออาชีพ" : locale === "zh" ? "预约专业人士" : "Book Professional",
                 desc: locale === "th" ? "ทนายความ สถาปนิก วิศวกร นักบัญชี โปรแกรมเมอร์" : locale === "zh" ? "律师、建筑师、工程师、会计、程序员" : "Lawyer, architect, engineer, accountant, programmer",
                 color: "from-emerald-500 to-teal-600", items: locale === "th" ? ["ทนายความ", "สถาปนิก", "วิศวกร", "นักบัญชี", "IT/Dev", "การตลาด"] : locale === "zh" ? ["律师", "建筑师", "工程师", "会计", "IT/Dev", "营销"] : ["Lawyer", "Architect", "Engineer", "CPA", "IT/Dev", "Marketing"],
               },
               {
-                href: `${prefix}/properties`, icon: "", image: "/images/scenic-house.jpg",
+                href: `${prefix}/properties`, icon: "", image: "/images/Book%20Property.jpg",
                 title: locale === "th" ? "อสังหาริมทรัพย์" : locale === "zh" ? "房地产" : "Book Property",
                 desc: locale === "th" ? "ซื้อ ขาย เช่า คอนโด บ้าน ทาวน์เฮาส์ ที่ดิน" : locale === "zh" ? "买卖租 — 公寓、别墅、联排别墅、土地" : "Buy, sell, rent — condos, houses, townhouses, land",
                 color: "from-amber-500 to-orange-600", items: locale === "th" ? ["คอนโด", "บ้านเดี่ยว", "ทาวน์เฮาส์", "ที่ดิน", "ออฟฟิศ", "พาณิชย์"] : locale === "zh" ? ["公寓", "别墅", "联排", "土地", "办公", "商业"] : ["Condo", "House", "Townhouse", "Land", "Office", "Commercial"],

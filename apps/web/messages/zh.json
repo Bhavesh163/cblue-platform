@@ -299,7 +299,7 @@
       "q14": "如何订阅？",
       "a14": "在提交专业人才搜索请求时，勾选订阅同意框。您将收到电子邮件，用于设置订阅账户密码。",
       "q15": "如何联系 CBLUE？",
-      "a15": "电话：+66 (0)81 854 4291，邮箱：cblue.thailand@gmail.com，网站：cblue.co.th",
+      "a15": "电话：+66 (0)81 854 4291，邮箱：cblue.thailand@gmail.com，网站：cblue",
       "q16": "什么是智慧农业？",
       "a16": "智慧农业使用 IoT 传感器、自动灌溉和数据分析来优化作物产量并减少资源浪费。CBLUE 提供智慧农业解决方案。",
       "q17": "AI 匹配是如何工作的？",
@@ -415,6 +415,6 @@
     "contactTitle": "联系信息",
     "contactPhone": "+66 (0)81 854 4291",
     "contactEmail": "cblue.thailand@gmail.com",
-    "contactWebsite": "cblue.co.th"
+    "contactWebsite": "cblue"
   }
 }

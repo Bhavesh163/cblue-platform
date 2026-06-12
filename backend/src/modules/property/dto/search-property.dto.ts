@@ -19,6 +19,10 @@ export class SearchPropertyDto {
   district?: string;
 
   @IsOptional()
+  @IsString()
+  subdistrict?: string;
+
+  @IsOptional()
   @IsNumber()
   @Min(0)
   minPrice?: number;

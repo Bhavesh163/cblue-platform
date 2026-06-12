@@ -47,6 +47,55 @@ describe('PropertyService', () => {
       });
     });
 
+    it('should search by province, district, subdistrict, postal code, and address keywords', async () => {
+      prisma.property.findMany.mockResolvedValue([]);
+      prisma.property.count.mockResolvedValue(0);
+
+      await service.search({
+        province: 'กรุงเทพมหานคร',
+        district: 'เขตวัฒนา',
+        subdistrict: 'คลองเตยเหนือ',
+        keyword: '10110 Sukhumvit',
+      } as any);
+
+      const where = prisma.property.findMany.mock.calls[0][0].where;
+      expect(where.AND).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            OR: expect.arrayContaining([
+              expect.objectContaining({
+                province: expect.objectContaining({ contains: 'กรุงเทพมหานคร' }),
+              }),
+            ]),
+          }),
+          expect.objectContaining({
+            OR: expect.arrayContaining([
+              expect.objectContaining({
+                district: expect.objectContaining({ contains: 'วัฒนา' }),
+              }),
+            ]),
+          }),
+          expect.objectContaining({
+            OR: expect.arrayContaining([
+              expect.objectContaining({
+                subdistrict: expect.objectContaining({ contains: 'คลองเตยเหนือ' }),
+              }),
+            ]),
+          }),
+        ]),
+      );
+      expect(where.OR).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            postalCode: expect.objectContaining({ contains: '10110' }),
+          }),
+          expect.objectContaining({
+            addressLine: expect.objectContaining({ contains: 'Sukhumvit' }),
+          }),
+        ]),
+      );
+    });
+
     it('should fall back to a legacy-safe property select when newer schema fields are missing', async () => {
       prisma.property.findMany
         .mockRejectedValueOnce(

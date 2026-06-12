@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { computeBudgetBreakdown, resolvePartnerPriceList } from "../../../lib/computeBudgetBreakdown";
 import { storePoProjectDetails } from "../../../lib/po-project-details";
@@ -646,6 +646,17 @@ export default function FixerResults({
   const bookingLocation = (bookingAddress?.locationType === 'gps' && gpsLocationStr)
     ? gpsLocationStr
     : (bookingAddress?.subdistrict || bookingAddress?.district || bookingAddress?.province || bookingAddress?.addressText || gpsLocationStr || "");
+  const buildMatchQuery = useCallback((nominateId?: string) => {
+    const params = new URLSearchParams({
+      service,
+      district: bookingAddress?.district || "auto",
+      province: bookingAddress?.province || "auto",
+    });
+    if (bookingAddress?.postalCode) params.set("postalCode", bookingAddress.postalCode);
+    if (description) params.set("description", description);
+    if (nominateId) params.set("nominateId", nominateId);
+    return params.toString();
+  }, [bookingAddress?.district, bookingAddress?.postalCode, bookingAddress?.province, description, service]);
   const ensureOrderAddressId = async (token: string) => {
     // Allow creation if at least one geographic field is provided OR GPS coordinates
     const hasGeo = bookingAddress?.province || bookingAddress?.district || bookingAddress?.subdistrict;
@@ -743,8 +754,7 @@ export default function FixerResults({
     const allowDemoFallback = process.env.NODE_ENV === "development";
 
     // Try fetching real candidates from the backend AI Top-8 algorithm
-    const descParam = description ? `&description=${encodeURIComponent(description)}` : '';
-    fetch(`/api/v1/fixers/match?service=${encodeURIComponent(service)}&district=auto&province=auto${descParam}`)
+    fetch(`/api/v1/fixers/match?${buildMatchQuery()}`)
       .then(res => res.ok ? res.json() : null)
       .then(data => {
         if (data && Array.isArray(data) && data.length > 0) {
@@ -803,7 +813,7 @@ export default function FixerResults({
     };
     const pool = comments[locale] ?? comments["en"]!;
     setFixerCommentOfCustomer(pool[Math.floor(Math.random() * pool.length)]!);
-  }, [description, locale, service]);
+  }, [buildMatchQuery, description, locale, service]);
 
   // Persist workflow state to localStorage
   useEffect(() => {
@@ -2433,8 +2443,7 @@ export default function FixerResults({
     if (!nominateId.trim()) return;
     
     try {
-      const descParam = description ? `&description=${encodeURIComponent(description)}` : '';
-      const url = `/api/v1/fixers/match?service=${encodeURIComponent(service)}&district=auto&province=auto${descParam}&nominateId=${encodeURIComponent(nominateId)}`;
+      const url = `/api/v1/fixers/match?${buildMatchQuery(nominateId)}`;
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();

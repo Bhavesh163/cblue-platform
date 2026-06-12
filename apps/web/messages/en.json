@@ -299,7 +299,7 @@
       "q14": "How do I subscribe?",
       "a14": "When submitting a Professional Search request, check the subscription consent box. You'll receive an email to set up your subscription account with a password.",
       "q15": "How to contact CBLUE?",
-      "a15": "Phone: +66 (0)81 854 4291, Email: cblue.thailand@gmail.com, Website: cblue.co.th",
+      "a15": "Phone: +66 (0)81 854 4291, Email: cblue.thailand@gmail.com, Website: cblue",
       "q16": "What is smart farming?",
       "a16": "Smart farming uses IoT sensors, automated irrigation, and data analytics to optimize crop yields and reduce resource waste. CBLUE provides smart farming solutions.",
       "q17": "How does AI matching work?",
@@ -415,6 +415,6 @@
     "contactTitle": "Contact Information",
     "contactPhone": "+66 (0)81 854 4291",
     "contactEmail": "cblue.thailand@gmail.com",
-    "contactWebsite": "cblue.co.th"
+    "contactWebsite": "cblue"
   }
 }

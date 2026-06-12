@@ -478,6 +478,8 @@ function PropertiesPageContent() {
     propertyType: "",
     listingType: "",
     province: "",
+    district: "",
+    subdistrict: "",
     minPrice: "",
     maxPrice: "",
     bedrooms: "",
@@ -582,6 +584,8 @@ function PropertiesPageContent() {
       }
       if (f.listingType) params.set("listingType", f.listingType);
       if (f.province) params.set("province", f.province);
+      if (f.district) params.set("district", f.district);
+      if (f.subdistrict) params.set("subdistrict", f.subdistrict);
       if (f.minPrice) params.set("minPrice", f.minPrice);
       if (f.maxPrice) params.set("maxPrice", f.maxPrice);
       if (f.bedrooms) params.set("bedrooms", f.bedrooms);
@@ -1203,7 +1207,7 @@ function PropertiesPageContent() {
                 </label>
                 <select
                   value={filters.province}
-                  onChange={(e) => setFilters({ ...filters, province: e.target.value })}
+                  onChange={(e) => setFilters({ ...filters, province: e.target.value, district: "", subdistrict: "" })}
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-green-500 outline-none bg-white"
                 >
                   <option value="">--</option>
@@ -1211,6 +1215,34 @@ function PropertiesPageContent() {
                     <option key={p} value={p}>{p}</option>
                   ))}
                 </select>
+              </div>
+
+              {/* District */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {locale === "th" ? "อำเภอ/เขต" : locale === "zh" ? "县/区" : "District"}
+                </label>
+                <input
+                  type="text"
+                  value={filters.district}
+                  onChange={(e) => setFilters({ ...filters, district: e.target.value })}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none"
+                  placeholder={locale === "th" ? "เช่น วัฒนา" : locale === "zh" ? "例如 Watthana" : "e.g. Watthana"}
+                />
+              </div>
+
+              {/* Subdistrict */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {locale === "th" ? "ตำบล/แขวง" : locale === "zh" ? "乡/镇" : "Sub-district"}
+                </label>
+                <input
+                  type="text"
+                  value={filters.subdistrict}
+                  onChange={(e) => setFilters({ ...filters, subdistrict: e.target.value })}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none"
+                  placeholder={locale === "th" ? "เช่น คลองเตยเหนือ" : locale === "zh" ? "例如 Khlong Toei Nuea" : "e.g. Khlong Toei Nuea"}
+                />
               </div>
 
               {/* Price Range */}
@@ -1279,7 +1311,7 @@ function PropertiesPageContent() {
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 <button
-                  onClick={() => { setSearched(false); setProperties([]); setFilters({ propertyType: "", listingType: "", province: "", minPrice: "", maxPrice: "", bedrooms: "", keyword: "" }); }}
+                  onClick={() => { setSearched(false); setProperties([]); setFilters({ propertyType: "", listingType: "", province: "", district: "", subdistrict: "", minPrice: "", maxPrice: "", bedrooms: "", keyword: "" }); }}
                   className="px-6 py-2.5 text-green-700 border border-green-700 rounded-lg hover:bg-green-50 transition text-sm font-semibold"
                 >
                   {locale === "th" ? "← กลับหน้าหลัก" : locale === "zh" ? "← 返回" : "← Back to browse"}
@@ -1296,7 +1328,7 @@ function PropertiesPageContent() {
             <>
               <div className="flex items-center justify-between mb-6">
                 <button
-                  onClick={() => { setSearched(false); setProperties([]); setFilters({ propertyType: "", listingType: "", province: "", minPrice: "", maxPrice: "", bedrooms: "", keyword: "" }); }}
+                  onClick={() => { setSearched(false); setProperties([]); setFilters({ propertyType: "", listingType: "", province: "", district: "", subdistrict: "", minPrice: "", maxPrice: "", bedrooms: "", keyword: "" }); }}
                   className="text-sm text-green-700 hover:text-green-800 font-semibold flex items-center gap-1"
                 >
                   ← {locale === "th" ? "กลับ" : locale === "zh" ? "返回" : "Back"}

@@ -8,6 +8,7 @@ import Link from "next/link";
 import { PROJECT_SERVICES, THAI_PROVINCES } from "../../lib/constants";
 import { getDistrictsForProvince } from "../../lib/thai-address-data";
 import { getSubdistrictsForDistrict, lookupByPostalCode } from "../../lib/thai-subdistrict-data";
+import { reverseGeocodeThaiAddress } from "../../lib/thai-reverse-geocode";
 import ReCaptcha from "../../components/ReCaptcha";
 import GpsDetectButton from "../../components/GpsDetectButton";
 import FixerResults from "../../components/FixerResults";
@@ -189,6 +190,20 @@ function ProjectBookingContent() {
 
   const handleRecaptcha = useCallback((token: string) => setRecaptchaToken(token), []);
   const handleRecaptchaExpire = useCallback(() => setRecaptchaToken(""), []);
+
+  async function handleGpsDetected(coords: { lat: number; lng: number }) {
+    setGpsCoords(coords);
+    setForm((prev) => ({ ...prev, province: "", district: "", subdistrict: "", postalCode: "" }));
+    const resolved = await reverseGeocodeThaiAddress(coords);
+    if (!resolved) return;
+    setForm((prev) => ({
+      ...prev,
+      province: resolved.province || prev.province,
+      district: resolved.district || prev.district,
+      subdistrict: resolved.subdistrict || prev.subdistrict,
+      postalCode: resolved.postalCode || prev.postalCode,
+    }));
+  }
 
   function handleChange(
     e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -710,7 +725,7 @@ function ProjectBookingContent() {
               {/* GPS mode */}
               {form.locationType === "gps" && (
                 <div className="space-y-2">
-                  <GpsDetectButton onDetected={(coords) => setGpsCoords(coords)} />
+                  <GpsDetectButton onDetected={handleGpsDetected} />
                   {gpsCoords ? (
                     <p className="text-sm text-green-600 font-medium">
                        📍 {locale === "th" ? "ตำแหน่ง" : locale === "zh" ? "位置" : "Location"}: {gpsCoords.lat.toFixed(6)}, {gpsCoords.lng.toFixed(6)}

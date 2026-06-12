@@ -42,6 +42,51 @@ export class PropertyService {
     return parsed;
   }
 
+  private normalizeLocationTerm(value: unknown) {
+    return String(value || '')
+      .trim()
+      .replace(/^(จังหวัด|จ\.|อำเภอ|อ\.|เขต|แขวง|ตำบล|ต\.)\s*/i, '')
+      .trim();
+  }
+
+  private locationSearchTerms(value: unknown) {
+    const raw = String(value || '').trim();
+    const cleaned = this.normalizeLocationTerm(raw);
+    const terms = new Set<string>();
+    [raw, cleaned].forEach((term) => {
+      if (term) terms.add(term);
+    });
+
+    const lower = cleaned.toLowerCase();
+    if (['bangkok', 'bkk', 'กรุงเทพ', 'กรุงเทพมหานคร', 'กทม'].includes(lower)) {
+      ['Bangkok', 'กรุงเทพมหานคร', 'กรุงเทพ', 'กทม'].forEach((term) =>
+        terms.add(term),
+      );
+    }
+
+    return [...terms];
+  }
+
+  private appendLocationFilter(
+    where: Prisma.PropertyWhereInput,
+    field: 'province' | 'district' | 'subdistrict',
+    value: unknown,
+  ) {
+    const terms = this.locationSearchTerms(value);
+    if (terms.length === 0) return;
+    const condition = {
+      OR: terms.map((term) => ({
+        [field]: { contains: term, mode: 'insensitive' as const },
+      })),
+    } as Prisma.PropertyWhereInput;
+    const currentAnd = Array.isArray(where.AND)
+      ? where.AND
+      : where.AND
+        ? [where.AND]
+        : [];
+    where.AND = [...currentAnd, condition];
+  }
+
   private isSchemaDriftError(error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     return /\bP(?:1014|202[12])\b|column .*does not exist|table .*does not exist|relation .*does not exist|does not exist in the current database|no such (?:table|column)|Unknown field|Inconsistent query result|required to return data|Error converting field|Failed to convert/i.test(
@@ -806,8 +851,9 @@ export class PropertyService {
 
     if (dto.propertyType) where.propertyType = dto.propertyType;
     if (dto.listingType) where.listingType = dto.listingType;
-    if (dto.province) where.province = dto.province;
-    if (dto.district) where.district = dto.district;
+    this.appendLocationFilter(where, 'province', dto.province);
+    this.appendLocationFilter(where, 'district', dto.district);
+    this.appendLocationFilter(where, 'subdistrict', dto.subdistrict);
     const bedrooms = this.normalizeNonNegativeNumber(dto.bedrooms);
     const bathrooms = this.normalizeNonNegativeNumber(dto.bathrooms);
     if (bedrooms !== undefined) where.bedrooms = { gte: bedrooms };
@@ -831,10 +877,22 @@ export class PropertyService {
 
     const keyword = String(dto.keyword || '').trim();
     if (keyword) {
-      where.OR = [
-        { title: { contains: keyword, mode: 'insensitive' } },
-        { description: { contains: keyword, mode: 'insensitive' } },
-      ];
+      const keywordTerms = [
+        keyword,
+        ...keyword.split(/[\s,]+/).map((term) => this.normalizeLocationTerm(term)),
+      ].filter(Boolean);
+      const uniqueKeywordTerms = [
+        ...new Set(keywordTerms.flatMap((term) => this.locationSearchTerms(term))),
+      ].slice(0, 8);
+      where.OR = uniqueKeywordTerms.flatMap((term) => [
+        { title: { contains: term, mode: 'insensitive' as const } },
+        { description: { contains: term, mode: 'insensitive' as const } },
+        { province: { contains: term, mode: 'insensitive' as const } },
+        { district: { contains: term, mode: 'insensitive' as const } },
+        { subdistrict: { contains: term, mode: 'insensitive' as const } },
+        { postalCode: { contains: term, mode: 'insensitive' as const } },
+        { addressLine: { contains: term, mode: 'insensitive' as const } },
+      ]);
     }
 
     let properties: any[];

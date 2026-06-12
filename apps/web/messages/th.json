@@ -299,7 +299,7 @@
       "q14": "สมัครสมาชิกอย่างไร?",
       "a14": "เมื่อส่งคำขอค้นหาผู้เชี่ยวชาญ ติ๊กยินยอมสมัครสมาชิก ท่านจะได้รับอีเมลเพื่อตั้งรหัสผ่านบัญชีสมาชิก",
       "q15": "ติดต่อ CBLUE อย่างไร?",
-      "a15": "โทร: +66 (0)81 854 4291, อีเมล: cblue.thailand@gmail.com, เว็บไซต์: cblue.co.th",
+      "a15": "โทร: +66 (0)81 854 4291, อีเมล: cblue.thailand@gmail.com, เว็บไซต์: cblue",
       "q16": "Smart Farming คืออะไร?",
       "a16": "Smart Farming ใช้เซ็นเซอร์ IoT ระบบรดน้ำอัตโนมัติ และการวิเคราะห์ข้อมูลเพื่อเพิ่มผลผลิตและลดการสูญเสียทรัพยากร CBLUE ให้บริการ Smart Farming",
       "q17": "AI จับคู่ทำงานอย่างไร?",
@@ -415,6 +415,6 @@
     "contactTitle": "ข้อมูลติดต่อ",
     "contactPhone": "+66 (0)81 854 4291",
     "contactEmail": "cblue.thailand@gmail.com",
-    "contactWebsite": "cblue.co.th"
+    "contactWebsite": "cblue"
   }
 }

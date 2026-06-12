@@ -297,6 +297,70 @@ describe('FixerService', () => {
       expect(fitoutCandidate?.estimatedQty).toBe(1000);
     });
 
+    it('should match service area by GPS-derived postal code', async () => {
+      prisma.fixer.findMany.mockResolvedValue([
+        {
+          id: 'fixer-postal',
+          tier: 'STANDARD',
+          rating: 4.8,
+          completedJobs: 12,
+          yearsExperience: 6,
+          description: 'Plumbing repair specialist',
+          pastProjectType: 'household',
+          bio: 'Home plumbing team',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Phra Khanong',
+          servicePostalCode: '10110',
+          priceList: [
+            {
+              service: 'plumbing',
+              quantity: '1',
+              unit: 'job',
+              finalPrice: '2500',
+            },
+          ],
+          user: { name: 'Postal Pro', company: 'Postal Pro Co' },
+          skills: [{ category: 'household', name: 'plumbing' }],
+        },
+        {
+          id: 'fixer-other-area',
+          tier: 'STANDARD',
+          rating: 4.7,
+          completedJobs: 9,
+          yearsExperience: 4,
+          description: 'Plumbing repair specialist',
+          pastProjectType: 'household',
+          bio: 'Home plumbing team',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          servicePostalCode: '10330',
+          priceList: [
+            {
+              service: 'plumbing',
+              quantity: '1',
+              unit: 'job',
+              finalPrice: '2500',
+            },
+          ],
+          user: { name: 'Other Area Pro', company: 'Other Area Co' },
+          skills: [{ category: 'household', name: 'plumbing' }],
+        },
+      ]);
+
+      const result = await service.matchFixers(
+        'plumbing',
+        'Watthana',
+        'Bangkok',
+        'Need plumbing repair',
+        undefined,
+        '10110',
+      );
+
+      const ids = result.map((candidate: { id: string }) => candidate.id);
+      expect(ids).toContain('fixer-postal');
+      expect(ids).not.toContain('fixer-other-area');
+    });
+
     it('should rank cheapest candidates by important high-value scope instead of tiny partial offers', async () => {
       prisma.fixer.findMany.mockResolvedValue([
         {

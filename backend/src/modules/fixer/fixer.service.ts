@@ -545,19 +545,28 @@ export class FixerService {
     fixer: {
       serviceProvince?: string | null;
       serviceDistrict?: string | null;
+      servicePostalCode?: string | null;
     },
     district: string,
     province: string,
+    postalCode?: string,
   ): boolean {
     const normalizedProvince = this.normalizeSearchText(province);
     const normalizedDistrict = this.normalizeSearchText(district);
+    const normalizedPostalCode = String(postalCode || '').trim();
     const autoProvince = !normalizedProvince || normalizedProvince === 'auto';
     const autoDistrict = !normalizedDistrict || normalizedDistrict === 'auto';
+    const autoPostalCode = !normalizedPostalCode || normalizedPostalCode === 'auto';
 
-    if (autoProvince && autoDistrict) return true;
+    if (autoProvince && autoDistrict && autoPostalCode) return true;
 
     const fixerProvince = this.normalizeSearchText(fixer.serviceProvince || '');
     const fixerDistrict = this.normalizeSearchText(fixer.serviceDistrict || '');
+    const fixerPostalCode = String(fixer.servicePostalCode || '').trim();
+
+    if (!autoPostalCode && fixerPostalCode === normalizedPostalCode) {
+      return true;
+    }
 
     if (
       !autoProvince &&
@@ -584,6 +593,7 @@ export class FixerService {
     province: string,
     description?: string,
     nominateId?: string,
+    postalCode?: string,
   ): Promise<SelectedFixer[]> {
     try {
       const allFixers = await this.prisma.fixer.findMany({
@@ -594,7 +604,7 @@ export class FixerService {
         `[matchFixers] Input district: ${district}, province: ${province}, allFixers length = ${allFixers.length}`,
       );
       const pool = allFixers.filter((fixer) =>
-        this.matchServiceArea(fixer, district, province),
+        this.matchServiceArea(fixer, district, province, postalCode),
       );
       console.log(
         `[matchFixers] After matchServiceArea, pool length = ${pool.length}`,
