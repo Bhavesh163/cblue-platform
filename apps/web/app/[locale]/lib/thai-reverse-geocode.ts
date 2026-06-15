@@ -47,6 +47,14 @@ function extractPostalCode(value?: string | null) {
   return String(value || "").match(/\d{5}/)?.[0] || "";
 }
 
+function hasThaiAdministrativePrefix(
+  value: string | undefined,
+  prefixes: string[],
+) {
+  const text = String(value || "").trim();
+  return prefixes.some((prefix) => text.startsWith(prefix));
+}
+
 export async function reverseGeocodeThaiAddress(coords: {
   lat: number;
   lng: number;
@@ -75,15 +83,34 @@ export async function reverseGeocodeThaiAddress(coords: {
     const postalCode = extractPostalCode(address.postcode);
     const postalLookup = postalCode ? lookupByPostalCode(postalCode) : null;
     const province = pickFirst(address.province, address.state, postalLookup?.province, address.city);
+    const districtFromSuburb = hasThaiAdministrativePrefix(
+      address.suburb,
+      ["เขต", "อำเภอ", "อ."],
+    )
+      ? address.suburb
+      : undefined;
+    const subdistrictFromSuburb = hasThaiAdministrativePrefix(
+      address.suburb,
+      ["แขวง", "ตำบล", "ต."],
+    )
+      ? address.suburb
+      : undefined;
     const district = pickFirst(
       address.city_district,
       address.district,
       address.county,
       address.municipality,
       address.borough,
+      districtFromSuburb,
       postalLookup?.district,
     );
-    const subdistrict = pickFirst(address.suburb, address.quarter, address.neighbourhood, address.village, address.hamlet);
+    const subdistrict = pickFirst(
+      address.quarter,
+      address.neighbourhood,
+      address.village,
+      address.hamlet,
+      subdistrictFromSuburb,
+    );
 
     if (!province && !district && !subdistrict && !postalCode) return null;
 
