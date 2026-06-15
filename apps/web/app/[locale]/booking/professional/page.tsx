@@ -192,7 +192,20 @@ function ProfessionalBookingContent() {
       const savedGps = JSON.parse(localStorage.getItem("cblue_last_gps_coords") || "null");
       const lat = Number(savedGps?.lat);
       const lng = Number(savedGps?.lng);
-      if (Number.isFinite(lat) && Number.isFinite(lng)) setGpsCoords({ lat, lng });
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        const coords = { lat, lng };
+        setGpsCoords(coords);
+        void reverseGeocodeThaiAddress(coords).then((resolved) => {
+          if (!resolved) return;
+          setForm((prev) => ({
+            ...prev,
+            province: resolved.province || prev.province,
+            district: resolved.district || prev.district,
+            subdistrict: resolved.subdistrict || prev.subdistrict,
+            postalCode: resolved.postalCode || prev.postalCode,
+          }));
+        });
+      }
     } catch {}
   }, []);
 
