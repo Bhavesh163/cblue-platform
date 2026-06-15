@@ -441,6 +441,7 @@ function dedupeProperties(items: Property[]) {
 function PropertiesPageContent() {
   const t = useTranslations("realEstate");
   const tc = useTranslations("common");
+  const ts = useTranslations("subscription");
   const locale = useLocale();
   const searchParams = useSearchParams();
   const prefix = `/${locale}`;
@@ -473,6 +474,9 @@ function PropertiesPageContent() {
   const [authMode, setAuthMode] = useState<"login" | "register">("register");
   const [authError, setAuthError] = useState("");
   const [authEmail, setAuthEmail] = useState("");
+  const [authName, setAuthName] = useState("");
+  const [authPhone, setAuthPhone] = useState("");
+  const [authPdpaConsent, setAuthPdpaConsent] = useState(false);
   const [autoContactHandled, setAutoContactHandled] = useState(false);
   const [filters, setFilters] = useState({
     propertyType: "",
@@ -809,6 +813,25 @@ function PropertiesPageContent() {
               </button>
             </div>
             <div className="space-y-3">
+              {authMode === "register" && (
+                <>
+                  <input
+                    type="text"
+                    placeholder={ts("name")}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
+                    value={authName}
+                    onChange={(e) => { setAuthName(e.target.value); setAuthError(""); }}
+                  />
+                  <input
+                    type="text"
+                    inputMode="tel"
+                    placeholder={ts("phone")}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
+                    value={authPhone}
+                    onChange={(e) => { setAuthPhone(e.target.value); setAuthError(""); }}
+                  />
+                </>
+              )}
               <input type="text" inputMode="email" placeholder={locale === "th" ? "อีเมล" : locale === "zh" ? "电子邮件" : "Email"} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
                 value={authEmail}
                 onChange={(e) => { setAuthEmail(e.target.value); setAuthError(""); }}
@@ -823,16 +846,30 @@ function PropertiesPageContent() {
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
                 />
               )}
+              {authMode === "register" && (
+                <label className="flex items-start gap-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">
+                  <input
+                    type="checkbox"
+                    checked={authPdpaConsent}
+                    onChange={(e) => { setAuthPdpaConsent(e.target.checked); setAuthError(""); }}
+                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-green-700 focus:ring-green-500"
+                  />
+                  <span>{ts("pdpaConsentLabel")}</span>
+                </label>
+              )}
               {authError && <p className="text-xs text-red-600">{authError}</p>}
               <button onClick={async () => {
                 if (!authEmail) { setAuthError(locale === "th" ? "กรุณากรอกอีเมล" : locale === "zh" ? "请输入电子邮件" : "Please enter email"); return; }
                 if (authPassword.length < 8) { setAuthError(locale === "th" ? "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร" : locale === "zh" ? "密码至少8个字符" : "Password must be at least 8 characters"); return; }
                 if (authMode === "register" && authPassword !== authConfirmPassword) { setAuthError(locale === "th" ? "รหัสผ่านไม่ตรงกัน" : locale === "zh" ? "密码不匹配" : "Passwords do not match"); return; }
+                if (authMode === "register" && !authName.trim()) { setAuthError(locale === "th" ? "กรุณากรอกชื่อ-นามสกุล" : locale === "zh" ? "请输入姓名" : "Please enter full name"); return; }
+                if (authMode === "register" && !/^[0-9\s+()\-]{9,15}$/.test(authPhone.trim())) { setAuthError(ts("invalidPhone")); return; }
+                if (authMode === "register" && !authPdpaConsent) { setAuthError(ts("pdpaRequired")); return; }
                 try {
                   const endpoint = authMode === "login" ? "/api/v1/subscription/login" : "/api/v1/subscription/register";
                   const body = authMode === "login"
                     ? { email: authEmail.toLowerCase(), password: authPassword }
-                    : { name: authEmail.split("@")[0] || authEmail, email: authEmail.toLowerCase(), password: authPassword };
+                    : { name: authName.trim(), email: authEmail.toLowerCase(), phone: authPhone.trim(), password: authPassword, pdpaConsent: true };
                   const authRes = await fetch(`${endpoint}`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },

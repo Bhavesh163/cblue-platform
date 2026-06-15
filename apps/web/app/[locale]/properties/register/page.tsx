@@ -8,6 +8,8 @@ import { THAI_PROVINCES } from "../../lib/constants";
 import { getDistrictsForProvince } from "../../lib/thai-address-data";
 import { getSubdistrictsForDistrict, lookupByPostalCode } from "../../lib/thai-subdistrict-data";
 import GpsDetectButton from "../../components/GpsDetectButton";
+import GpsResolvedLocation from "../../components/GpsResolvedLocation";
+import { reverseGeocodeThaiAddress } from "../../lib/thai-reverse-geocode";
 import { clearSubscriberSession, refreshSubscriberSession } from "../../../../lib/subscriberSession";
 const PROPERTY_TYPES = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "APARTMENT", "OFFICE", "WAREHOUSE", "SHOPHOUSE"] as const;
 
@@ -251,6 +253,20 @@ export default function PropertyRegisterPage() {
     } else {
       setForm({ ...form, [name]: value });
     }
+  }
+
+  async function handleGpsDetected(coords: { lat: number; lng: number }) {
+    setGpsCoords(coords);
+    setForm((prev) => ({ ...prev, province: "", district: "", subdistrict: "", postalCode: "" }));
+    const resolved = await reverseGeocodeThaiAddress(coords);
+    if (!resolved) return;
+    setForm((prev) => ({
+      ...prev,
+      province: resolved.province || prev.province,
+      district: resolved.district || prev.district,
+      subdistrict: resolved.subdistrict || prev.subdistrict,
+      postalCode: resolved.postalCode || prev.postalCode,
+    }));
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -742,16 +758,15 @@ export default function PropertyRegisterPage() {
                 {/* GPS mode */}
                 {locationType === "gps" && (
                   <div className="space-y-2">
-                    <GpsDetectButton onDetected={(coords) => setGpsCoords(coords)} />
-                    {gpsCoords ? (
-                      <p className="text-sm text-green-600 font-medium">
-                        ✅ 📍 {locale === "th" ? "ตำแหน่ง" : locale === "zh" ? "位置" : "Location"}: {gpsCoords.lat.toFixed(6)}, {gpsCoords.lng.toFixed(6)}
-                      </p>
-                    ) : (
-                      <p className="text-xs text-gray-500">
-                        {locale === "th" ? "กดปุ่มด้านบนเพื่อตรวจจับตำแหน่งอัตโนมัติ" : locale === "zh" ? "点击上方按钮自动检测位置" : "Click the button above to auto-detect your location"}
-                      </p>
-                    )}
+                    <GpsDetectButton onDetected={handleGpsDetected} />
+                    <GpsResolvedLocation
+                      locale={locale}
+                      gpsCoords={gpsCoords}
+                      postalCode={form.postalCode}
+                      province={form.province}
+                      district={form.district}
+                      subdistrict={form.subdistrict}
+                    />
                   </div>
                 )}
 

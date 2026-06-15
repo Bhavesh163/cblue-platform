@@ -22,8 +22,10 @@ import {
   getSubdistrictsForDistrict,
   lookupByPostalCode,
 } from "../../lib/thai-subdistrict-data";
+import { reverseGeocodeThaiAddress } from "../../lib/thai-reverse-geocode";
 import ReCaptcha from "../../components/ReCaptcha";
 import GpsDetectButton from "../../components/GpsDetectButton";
+import GpsResolvedLocation from "../../components/GpsResolvedLocation";
 import Link from "next/link";
 import DatePickerInput from "../../components/DatePickerInput";
 
@@ -946,6 +948,20 @@ function FixerRegisterContent() {
     }
   }
 
+  async function handleGpsDetected(coords: { lat: number; lng: number }) {
+    setGpsCoords(coords);
+    setForm((prev) => ({ ...prev, province: "", district: "", postalCode: "" }));
+    const resolved = await reverseGeocodeThaiAddress(coords);
+    if (!resolved) return;
+    setForm((prev) => ({
+      ...prev,
+      province: resolved.province || prev.province,
+      district: resolved.district || prev.district,
+      postalCode: resolved.postalCode || prev.postalCode,
+      addressText: resolved.subdistrict || prev.addressText,
+    }));
+  }
+
   function handleSkillToggle(skillValue: string) {
     setForm((prev) => ({
       ...prev,
@@ -1220,6 +1236,7 @@ function FixerRegisterContent() {
         address: {
           province: form.province,
           district: form.district,
+          subdistrict: form.addressText || undefined,
           postalCode: form.postalCode,
         },
         companyAddress: {
@@ -2993,28 +3010,15 @@ function FixerRegisterContent() {
               {/* GPS mode */}
               {form.locationType === "gps" && (
                 <div className="space-y-2">
-                  <GpsDetectButton
-                    onDetected={(coords) => setGpsCoords(coords)}
+                  <GpsDetectButton onDetected={handleGpsDetected} />
+                  <GpsResolvedLocation
+                    locale={locale}
+                    gpsCoords={gpsCoords}
+                    postalCode={form.postalCode}
+                    province={form.province}
+                    district={form.district}
+                    subdistrict={form.addressText}
                   />
-                  {gpsCoords ? (
-                    <p className="text-sm text-green-600 font-medium">
-                      📍{" "}
-                      {locale === "th"
-                        ? "ตำแหน่ง"
-                        : locale === "zh"
-                          ? "位置"
-                          : "Location"}
-                      : {gpsCoords.lat.toFixed(6)}, {gpsCoords.lng.toFixed(6)}
-                    </p>
-                  ) : (
-                    <p className="text-xs text-gray-500">
-                      {locale === "th"
-                        ? "กดปุ่มด้านบนเพื่อตรวจจับตำแหน่งอัตโนมัติ"
-                        : locale === "zh"
-                          ? "点击上方按钮自动检测位置"
-                          : "Click the button above to auto-detect your location"}
-                    </p>
-                  )}
                 </div>
               )}
 

@@ -130,6 +130,33 @@ describe('SubscriptionService', () => {
       expect(result).toHaveProperty('subscriber');
     });
 
+    it('should persist phone and PDPA consent timestamp during registration', async () => {
+      prismaService.subscriber.findUnique.mockResolvedValue(null);
+      prismaService.subscriber.findFirst.mockResolvedValue(null);
+      prismaService.subscriber.create.mockResolvedValue({
+        id: 'sub-2',
+        email: 'person@example.com',
+        phone: '0812345678',
+      });
+      prismaService.user.findFirst.mockResolvedValue(null);
+      prismaService.user.create.mockResolvedValue({ id: 'user-2' });
+
+      await service.register({
+        email: 'person@example.com',
+        password: 'pass',
+        name: 'Person Name',
+        phone: '0812345678',
+        pdpaConsent: true,
+      });
+
+      expect(prismaService.subscriber.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          phone: '0812345678',
+          pdpaConsentAt: expect.any(Date),
+        }),
+      });
+    });
+
     it('should throw conflict error if subscriber exists', async () => {
       prismaService.subscriber.findUnique.mockResolvedValue({ id: 'sub-1' });
       prismaService.subscriber.findFirst.mockResolvedValue({ id: 'sub-1' });
