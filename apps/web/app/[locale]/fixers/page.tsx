@@ -95,12 +95,55 @@ function inferStoredPartnerAccess(subscriber: any) {
   const hasFixerShape =
     Boolean(subscriber?.fixer) ||
     role === "FIXER" ||
-    Array.isArray(subscriber?.priceList) ||
-    Boolean(subscriber?.tier || subscriber?.company || subscriber?.credentialStatus);
+    Boolean(subscriber?.isFixer || subscriber?.fixerId) ||
+    (Array.isArray(subscriber?.priceList) && subscriber.priceList.length > 0);
   return {
     isFixer: hasFixerShape,
     isLister: Boolean(subscriber?.isLister || subscriber?.lister || subscriber?.propertyLister),
   };
+}
+
+const HIDDEN_PARTNER_PROPERTY_STATUSES = new Set(["REMOVED", "CANCELLED", "CANCELED", "DECLINED"]);
+
+function normalizePartnerEmail(value: unknown) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function normalizePartnerPhone(value: unknown) {
+  return String(value || "").replace(/\D+/g, "");
+}
+
+function filterVerifiedPartnerProperties(properties: any[], owner: any) {
+  const ownerIds = new Set(
+    [owner?.id, owner?.userId, owner?.fixer?.userId]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean),
+  );
+  const ownerEmails = new Set(
+    [owner?.email, owner?.contactEmail, owner?.fixer?.contactEmail]
+      .map(normalizePartnerEmail)
+      .filter(Boolean),
+  );
+  const ownerPhones = new Set(
+    [owner?.phone, owner?.contactPhone, owner?.fixer?.contactPhone]
+      .map(normalizePartnerPhone)
+      .filter(Boolean),
+  );
+
+  return (Array.isArray(properties) ? properties : []).filter((property) => {
+    const status = String(property?.status || "").toUpperCase();
+    if (HIDDEN_PARTNER_PROPERTY_STATUSES.has(status)) return false;
+
+    const propertyUserId = String(property?.userId || property?.user?.id || "").trim();
+    const propertyEmail = normalizePartnerEmail(property?.contactEmail || property?.user?.email);
+    const propertyPhone = normalizePartnerPhone(property?.contactPhone || property?.user?.phone);
+
+    return (
+      (!!propertyUserId && ownerIds.has(propertyUserId)) ||
+      (!!propertyEmail && ownerEmails.has(propertyEmail)) ||
+      (!!propertyPhone && ownerPhones.has(propertyPhone))
+    );
+  });
 }
 
 function writePartnerDashboardSession(subscriber: any, token?: string) {
@@ -114,26 +157,6 @@ function clearPartnerDashboardSession() {
   sessionStorage.removeItem(PARTNER_DASHBOARD_TOKEN_KEY);
   sessionStorage.removeItem(PARTNER_DASHBOARD_SUBSCRIBER_KEY);
 }
-
-
-
-
-
-  const EARNINGS_MOCK = [
-    { month: "May 25", monthTh: "พ.ค. 25", monthZh: "5月 25", amount: 18500 },
-    { month: "Jun 25", monthTh: "มิ.ย. 25", monthZh: "6月 25", amount: 16000 },
-    { month: "Jul 25", monthTh: "ก.ค. 25", monthZh: "7月 25", amount: 20000 },
-    { month: "Aug 25", monthTh: "ส.ค. 25", monthZh: "8月 25", amount: 22000 },
-    { month: "Sep 25", monthTh: "ก.ย. 25", monthZh: "9月 25", amount: 19500 },
-    { month: "Oct 25", monthTh: "ต.ค. 25", monthZh: "10月 25", amount: 23000 },
-    { month: "Nov 25", monthTh: "พ.ย. 25", monthZh: "11月 25", amount: 21000 },
-    { month: "Dec 25", monthTh: "ธ.ค. 25", monthZh: "12月 25", amount: 18000 },
-    { month: "Jan 26", monthTh: "ม.ค. 26", monthZh: "1月 26", amount: 25000 },
-    { month: "Feb 26", monthTh: "ก.พ. 26", monthZh: "2月 26", amount: 24000 },
-    { month: "Mar 26", monthTh: "มี.ค. 26", monthZh: "3月 26", amount: 26500 },
-    { month: "Apr 26", monthTh: "เม.ย. 26", monthZh: "4月 26", amount: 22000 },
-    { month: "May 26", monthTh: "พ.ค. 26", monthZh: "5月 26", amount: 26500 },
-  ];
 
 const chats: any[] = [];
 
@@ -2517,8 +2540,9 @@ export default function FixerProPage() {
 
 
 
-  const [isFixer, setIsFixer] = useState(() => inferStoredPartnerAccess(readPartnerDashboardSubscriber()).isFixer);
-  const [isLister, setIsLister] = useState(() => inferStoredPartnerAccess(readPartnerDashboardSubscriber()).isLister);
+  const [isFixer, setIsFixer] = useState(false);
+  const [isLister, setIsLister] = useState(false);
+  const [partnerAccessChecked, setPartnerAccessChecked] = useState(false);
 
   
   useEffect(() => {
@@ -2532,6 +2556,7 @@ export default function FixerProPage() {
         setOrders([]);
         setMyProperties([]);
         setChatFeed([]);
+        setPartnerAccessChecked(true);
       } else {
         // Token still present → only sync partner profile, do NOT reset role flags.
         // isFixer/isLister are verified by fetchUser on mount via /api/v1/users/me.
@@ -2560,6 +2585,7 @@ export default function FixerProPage() {
       try {
         const token = getPartnerDashboardToken();
         if (!token) {
+          setPartnerAccessChecked(true);
           setLoading(false);
           return;
         }
@@ -2573,15 +2599,15 @@ export default function FixerProPage() {
               if (prev?.id && storedPartner.id !== prev.id) return prev;
               return storedPartner;
             });
-            setIsFixer(storedAccess.isFixer);
-            setIsLister(storedAccess.isLister);
-            // Paint cached partner session immediately; refresh in background. Prevents a
+            // Paint cached profile details immediately; access is verified by /users/me.
+            // Prevents a
             // multi-minute blank/loading screen when /users/me is slow or returns 500.
             setLoading(false);
           }
         }
 
-        const refreshPartnerData = async (access = storedAccess, authToken: string = token) => {
+        const refreshPartnerData = async (access = storedAccess, authToken: string = token, owner: any = storedPartner) => {
+          let hasLister = false;
           try {
             const [ordersRes, propRes] = await Promise.all([
               access.isFixer
@@ -2600,21 +2626,27 @@ export default function FixerProPage() {
 
             if (propRes && propRes.ok && isMounted) {
               const listedProperties = await propRes.json();
-              setMyProperties(Array.isArray(listedProperties) ? listedProperties : []);
-              setIsLister(Array.isArray(listedProperties) && listedProperties.length > 0);
-            } else if (!access.isLister && isMounted) {
+              const verifiedProperties = filterVerifiedPartnerProperties(listedProperties, owner);
+              hasLister = verifiedProperties.length > 0;
+              setMyProperties(verifiedProperties);
+              setIsLister(hasLister);
+            } else if (isMounted) {
               setMyProperties([]);
               setIsLister(false);
             }
           } catch {
-            // Preserve last visible partner data during transient profile fallback refreshes.
+            if (isMounted) {
+              setMyProperties([]);
+              setIsLister(false);
+            }
           }
+          return { hasLister };
         };
 
         const applyPartnerUser = (user: any, authToken: string): boolean => {
           const profileFallback = !!user.profileFallback;
           const profileRole = String(user.role || "").toUpperCase();
-          const hasFixer = !!user.fixer || profileRole === "FIXER" || (profileFallback && storedAccess.isFixer);
+          const hasFixer = !!user.fixer || profileRole === "FIXER";
           if (!isMounted) return hasFixer;
           setIsFixer(hasFixer);
 
@@ -2672,13 +2704,17 @@ export default function FixerProPage() {
                 return storedPartner;
               });
             }
-            setIsFixer(prev => prev || storedAccess.isFixer);
-            setIsLister(prev => prev || storedAccess.isLister);
+            setOrders([]);
+            setMyProperties([]);
+            setIsFixer(false);
+            setIsLister(false);
+            setPartnerAccessChecked(true);
           }
-          await refreshPartnerData(storedAccess);
         } else if (res.ok) {
-          const hasFixer = applyPartnerUser(await res.json(), token);
-          await refreshPartnerData({ isFixer: hasFixer, isLister: storedAccess.isLister }, token);
+          const user = await res.json();
+          const hasFixer = applyPartnerUser(user, token);
+          await refreshPartnerData({ isFixer: hasFixer, isLister: false }, token, user);
+          if (isMounted) setPartnerAccessChecked(true);
 
         } else if (res.status === 401 || res.status === 403) {
           // The 24h access token may simply be past its window. Attempt a
@@ -2690,9 +2726,13 @@ export default function FixerProPage() {
               headers: { Authorization: `Bearer ${refreshedToken}` },
             }).catch(() => null);
             if (retryRes && retryRes.ok) {
-              const hasFixer = applyPartnerUser(await retryRes.json(), refreshedToken);
-              await refreshPartnerData({ isFixer: hasFixer, isLister: storedAccess.isLister }, refreshedToken);
-              if (isMounted) setLoading(false);
+              const retryUser = await retryRes.json();
+              const hasFixer = applyPartnerUser(retryUser, refreshedToken);
+              await refreshPartnerData({ isFixer: hasFixer, isLister: false }, refreshedToken, retryUser);
+              if (isMounted) {
+                setPartnerAccessChecked(true);
+                setLoading(false);
+              }
               return;
             }
           }
@@ -2701,20 +2741,19 @@ export default function FixerProPage() {
           localStorage.removeItem("subscriber_token");
           localStorage.removeItem("subscriber");
           if (isMounted) {
-            setPartner(null); setIsFixer(false); setIsLister(false);
+            setPartner(null);
+            setOrders([]);
+            setMyProperties([]);
+            setIsFixer(false);
+            setIsLister(false);
+            setPartnerAccessChecked(true);
           }
         } else if (isMounted) {
-          const parsed = readPartnerDashboardSubscriber();
-          const storedAccess = inferStoredPartnerAccess(parsed);
-          if (parsed) {
-            setPartner(prev => {
-              if (prev?.id && parsed.id !== prev.id) return prev;
-              return parsed;
-            });
-          }
-          setIsFixer(prev => prev || storedAccess.isFixer);
-          setIsLister(prev => prev || storedAccess.isLister);
-          await refreshPartnerData(storedAccess);
+          setOrders([]);
+          setMyProperties([]);
+          setIsFixer(false);
+          setIsLister(false);
+          setPartnerAccessChecked(true);
         }
       } catch { /* ignore */ }
       if (isMounted) setLoading(false);
@@ -2729,7 +2768,7 @@ export default function FixerProPage() {
     const syncPartnerData = async () => {
       try {
         const token = getPartnerDashboardToken();
-        if (!token) return;
+        if (!token || !partnerAccessChecked || (!isFixer && !isLister)) return;
 
         const [ordersRes, propRes] = await Promise.all([
           isFixer
@@ -2752,8 +2791,9 @@ export default function FixerProPage() {
         }
         if (propRes && propRes.ok && isMounted) {
           const listedProperties = await propRes.json();
-          setMyProperties(Array.isArray(listedProperties) ? listedProperties : []);
-          setIsLister(Array.isArray(listedProperties) && listedProperties.length > 0);
+          const verifiedProperties = filterVerifiedPartnerProperties(listedProperties, partner);
+          setMyProperties(verifiedProperties);
+          setIsLister(verifiedProperties.length > 0);
         }
       } catch {
         // Preserve last visible partner data during transient polling failures.
@@ -2769,7 +2809,7 @@ export default function FixerProPage() {
       isMounted = false;
       clearInterval(timer);
     };
-  }, [partner?.id, isFixer]);
+  }, [partner?.id, partner?.email, partner?.phone, isFixer, isLister, partnerAccessChecked]);
 
   // Persist the customer's project details (carried on the backend order.description
   // as "PO | TIER | LOC | <details>") into this partner browser's local PO store, so
@@ -2926,7 +2966,7 @@ export default function FixerProPage() {
   };
 
   const isSubscribed = !!partner;
-  const hasPartnerAccess = isFixer || isLister;
+  const hasPartnerAccess = partnerAccessChecked && (isFixer || isLister);
 
 
   
@@ -3036,21 +3076,6 @@ export default function FixerProPage() {
       : [],
     createdAt: p.createdAt,
   }));
-  const EARNINGS_MOCK = [
-    { month: "May 25", monthTh: "พ.ค. 25", monthZh: "5月 25", amount: 18500 },
-    { month: "Jun 25", monthTh: "มิ.ย. 25", monthZh: "6月 25", amount: 16000 },
-    { month: "Jul 25", monthTh: "ก.ค. 25", monthZh: "7月 25", amount: 20000 },
-    { month: "Aug 25", monthTh: "ส.ค. 25", monthZh: "8月 25", amount: 22000 },
-    { month: "Sep 25", monthTh: "ก.ย. 25", monthZh: "9月 25", amount: 19500 },
-    { month: "Oct 25", monthTh: "ต.ค. 25", monthZh: "10月 25", amount: 23000 },
-    { month: "Nov 25", monthTh: "พ.ย. 25", monthZh: "11月 25", amount: 21000 },
-    { month: "Dec 25", monthTh: "ธ.ค. 25", monthZh: "12月 25", amount: 18000 },
-    { month: "Jan 26", monthTh: "ม.ค. 26", monthZh: "1月 26", amount: 25000 },
-    { month: "Feb 26", monthTh: "ก.พ. 26", monthZh: "2月 26", amount: 24000 },
-    { month: "Mar 26", monthTh: "มี.ค. 26", monthZh: "3月 26", amount: 26500 },
-    { month: "Apr 26", monthTh: "เม.ย. 26", monthZh: "4月 26", amount: 22000 },
-    { month: "May 26", monthTh: "พ.ค. 26", monthZh: "5月 26", amount: 26500 },
-  ];
 
   const chats: any[] = [];
   // Use module-level frozen array — avoids re-computing timestamps on remount.
@@ -4284,14 +4309,7 @@ export default function FixerProPage() {
   const earningsSeries = (() => {
     const enMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const thMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
-    const seedByMonth = Object.fromEntries(EARNINGS_MOCK.map((item) => {
-      const [monthLabel = 'Jan', yearLabel = '26'] = item.month.split(' ');
-      const monthNumber = enMonths.indexOf(monthLabel) + 1;
-      return [
-        `20${yearLabel}-${String(monthNumber > 0 ? monthNumber : 1).padStart(2, '0')}`,
-        item.amount,
-      ];
-    }));
+
     const completedByMonth = new Map<string, number>();
 
     for (const job of (allCompletedJobs as any[])) {
@@ -4314,7 +4332,7 @@ export default function FixerProPage() {
         month: `${enMonths[monthIdx]} ${yy}`,
         monthTh: `${thMonths[monthIdx]} ${yy}`,
         monthZh: `${monthIdx + 1}月 ${yy}`,
-        amount: completedByMonth.size > 0 ? (completedByMonth.get(key) || 0) : (seedByMonth[key] || 0),
+        amount: completedByMonth.get(key) || 0,
       });
     }
     return items;
@@ -6367,7 +6385,7 @@ export default function FixerProPage() {
         )}
 
         {/* Main Content Area */}
-        {isSubscribed && !hasPartnerAccess && !loading && (
+        {isSubscribed && partnerAccessChecked && !hasPartnerAccess && !loading && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 mb-8 text-center max-w-2xl mx-auto">
             <div className="text-5xl mb-4">👷‍♂️</div>
             <h2 className="text-xl font-bold text-gray-900 mb-2">
@@ -6382,7 +6400,7 @@ export default function FixerProPage() {
           </div>
         )}
 
-        {isSubscribed && hasPartnerAccess && (
+        {isSubscribed && partnerAccessChecked && hasPartnerAccess && (
           <>
             <div className="flex gap-1 bg-white rounded-xl shadow-sm border border-gray-200 p-1.5 mb-6 overflow-x-auto">
           {tabs.map((tab) => (
@@ -6419,7 +6437,7 @@ export default function FixerProPage() {
         <div className="my-10 border-t border-gray-200" />
 
         {/* Registration Cards */}
-        {(!isSubscribed || !hasPartnerAccess) && !loading && (
+        {(!isSubscribed || (partnerAccessChecked && !hasPartnerAccess)) && !loading && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           {/* Register as Fixer & Pro */}
           <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition">

@@ -1987,11 +1987,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   // Load from localStorage AFTER mount (useEffect never runs on server)
   useEffect(() => {
     try {
-      // Only load customer mock data for customer accounts (ghis)
+      // Load persisted workflow bridge rows for all customers; demo repairs stay Ghis-only.
       const subData = readCustomerDashboardSubscriber() || {};
       const subEmail = String(subData?.email || "").toLowerCase();
-      if (!subEmail.includes('ghis')) { setMockReady(true); return; }
-      ensureLegacyCancel3429Repair();
+      if (subEmail.includes('ghis')) ensureLegacyCancel3429Repair();
       // One-time cleanup of stale chat keys with invalid PO format (e.g. UUID-like keys from old builds)
       Object.keys(localStorage)
         .filter(k => k.startsWith('chat_messages_') || k.startsWith('chat_title_') || k.startsWith('po_to_order_'))
@@ -2053,8 +2052,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       try {
         const subData = readCustomerDashboardSubscriber() || {};
         const subEmail = String(subData?.email || "").toLowerCase();
-        if (!subEmail.includes('ghis')) return;
-        ensureLegacyCancel3429Repair();
+        if (subEmail.includes('ghis')) ensureLegacyCancel3429Repair();
         const p = localStorage.getItem("ghis_mock_payments");
         const a = localStorage.getItem("ghis_mock_active");
         const d = localStorage.getItem("ghis_mock_dyn_req");
@@ -3158,11 +3156,20 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
 
   const backendOrderPos = new Set(workflowOrders.map((o: any) => extractPo(o)).filter((po: string) => isPoCode(po)));
   const allowLocalCustomerWorkflow = Boolean(subscriber?.email?.toLowerCase().includes('ghis'));
+  const filterCustomerScopedWorkflowItems = (items: any[]) =>
+    (Array.isArray(items) ? items : []).filter((item: any) => {
+      const po = String(item?.po || '').trim();
+      if (!po) return allowLocalCustomerWorkflow;
+      if (isPropPoCode(po)) return true;
+      if (!isPoCode(po)) return allowLocalCustomerWorkflow;
+      if (backendOrderPos.size === 0) return allowLocalCustomerWorkflow;
+      return backendOrderPos.has(po);
+    });
   const useStaticDemoData = allowLocalCustomerWorkflow && !hasFetchedOrders && backendOrderPos.size === 0;
   const browserTerminalPOs = readBrowserTerminalWorkflowPos(
     typeof window !== 'undefined' ? window.localStorage : undefined,
   );
-  const rawVisibleMockActiveItems = filterVisibleWorkflowItems(mockActiveItems, browserTerminalPOs);
+  const rawVisibleMockActiveItems = filterCustomerScopedWorkflowItems(filterVisibleWorkflowItems(mockActiveItems, browserTerminalPOs));
   const localTerminalWorkflowPOs = new Set(
     rawVisibleMockActiveItems
       .filter((item: any) => isBackendWorkflowHistoryStatus(item))
@@ -3174,8 +3181,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   );
   // Backend bridge effects (F4/F6/F7/F9/F10) write into mockDynRequests/mockHistory for all
   // logged-in customers. Only gate the static demo seed data, not bridge-built workflow rows.
-  const visibleMockDynRequests = filterVisibleWorkflowItems(mockDynRequests, browserTerminalPOs);
-  const visibleMockHistory = mockHistory.filter((x: any) => !isHiddenTestPo(x.po));
+  const visibleMockDynRequests = filterCustomerScopedWorkflowItems(filterVisibleWorkflowItems(mockDynRequests, browserTerminalPOs));
+  const visibleMockHistory = filterCustomerScopedWorkflowItems(mockHistory.filter((x: any) => !isHiddenTestPo(x.po)));
 
   // Merge: mockActiveItems overrides ACTIVE_MOCK items with same po (for step progression)
   const paidPOs = new Set(visibleMockActiveItems.map((x: any) => x.po));
@@ -3888,7 +3895,6 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   // This repairs the dashboard for users whose payment completed but the dynamic request wasn't written.
   useEffect(() => {
     if (!mockReady) return;
-    if (!subscriber?.email?.includes('ghis')) return;
     try {
       const dynReqs = JSON.parse(localStorage.getItem('ghis_mock_dyn_req') || '[]');
       const active = JSON.parse(localStorage.getItem('ghis_mock_active') || '[]');
