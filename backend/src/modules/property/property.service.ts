@@ -394,50 +394,17 @@ export class PropertyService {
     property:
       | {
           userId: string;
-          contactEmail?: string | null;
-          contactPhone?: string | null;
-          contactName?: string | null;
-          title?: string | null;
-          description?: string | null;
-          listingType?: string | null;
-          price?: number | null;
         }
       | null
       | undefined,
     linkedUserIds: string[],
-    linkedEmails: string[],
-    linkedPhones: string[],
-    linkedNameTokens: string[],
+    _linkedEmails: string[],
+    _linkedPhones: string[],
+    _linkedNameTokens: string[],
   ) {
     if (!property) return false;
-
-    const linkedUserIdSet = new Set(linkedUserIds);
-    const linkedEmailSet = new Set(linkedEmails);
-    const linkedPhoneSet = new Set(linkedPhones);
-    const propertyEmail = this.normalizeEmail(property.contactEmail);
-    const propertyPhone = this.normalizePhone(property.contactPhone);
-    const propertyNameTokens = this.normalizeNameTokens(property.contactName);
-
-    const hasDirectAccess =
-      linkedUserIdSet.has(property.userId) ||
-      (propertyEmail && linkedEmailSet.has(propertyEmail)) ||
-      (propertyPhone && linkedPhoneSet.has(propertyPhone));
-
-    const hasPhoneAndNameBridge =
-      !!propertyPhone &&
-      linkedPhoneSet.has(propertyPhone) &&
-      linkedNameTokens.length > 0 &&
-      propertyNameTokens.length > 0 &&
-      linkedNameTokens.some((token) =>
-        propertyNameTokens.some(
-          (candidate) => candidate.includes(token) || token.includes(candidate),
-        ),
-      ) &&
-      !this.isLikelySyntheticPropertyCandidate(property);
-
-    return hasDirectAccess || hasPhoneAndNameBridge;
+    return new Set(linkedUserIds).has(property.userId);
   }
-
   private async canAccessPropertyViaVisibleList(userId: string, propertyId: string) {
     if (!propertyId) return false;
     const visibleProperties = await this.findByUser(userId);
@@ -1017,25 +984,15 @@ export class PropertyService {
 
   private async findByUserDirectFallback(userId: string) {
     try {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { id: true, email: true, phone: true },
-      });
-      const ownershipScopes: Prisma.PropertyWhereInput[] = [{ userId }];
-      const email = this.normalizeEmail(user?.email);
-      const phone = this.normalizePhone(user?.phone);
-      if (email) ownershipScopes.push({ contactEmail: { equals: email, mode: 'insensitive' } });
-      if (phone) ownershipScopes.push({ contactPhone: { equals: phone } });
-
       try {
         const properties = await this.prisma.property.findMany({
-          where: { OR: ownershipScopes },
+          where: { userId, status: { not: 'REMOVED' } },
           orderBy: { createdAt: 'desc' },
           include: {
             images: { orderBy: { sortOrder: 'asc' } },
           },
         });
-        return properties.filter((property) => String(property.status) !== 'REMOVED');
+        return properties;
       } catch (error) {
         this.logger.warn(
           `Direct property lookup with images failed for ${userId}: ${
@@ -1043,12 +1000,10 @@ export class PropertyService {
           }`,
         );
         const properties = await this.prisma.property.findMany({
-          where: { OR: ownershipScopes },
+          where: { userId, status: { not: 'REMOVED' } },
           orderBy: { createdAt: 'desc' },
         });
-        return properties
-          .filter((property) => String(property.status) !== 'REMOVED')
-          .map((property) => ({ ...property, images: [] }));
+        return properties.map((property) => ({ ...property, images: [] }));
       }
     } catch (error) {
       this.logger.warn(
@@ -1059,81 +1014,21 @@ export class PropertyService {
       return [];
     }
   }
-
   private async findByUserWithLinkedIdentity(userId: string) {
     const linkedUserIds = await this.resolveLinkedUserIds(userId);
-    const linkedEmails = await this.resolveLinkedEmails(userId, linkedUserIds);
-    const linkedPhones = await this.resolveLinkedPhones(userId, linkedUserIds);
-    const linkedNameTokens = await this.resolveLinkedNameTokens(
-      userId,
-      linkedUserIds,
-    );
+    if (linkedUserIds.length === 0) return [];
 
-    const ownershipScopes: Prisma.PropertyWhereInput[] = [];
-    if (linkedUserIds.length > 0) {
-      ownershipScopes.push({ userId: { in: linkedUserIds } });
-    }
-    ownershipScopes.push(
-      ...linkedEmails.map((email) => ({
-        contactEmail: { equals: email, mode: 'insensitive' as const },
-      })),
-    );
-    ownershipScopes.push(
-      ...linkedPhones.map((phone) => ({
-        contactPhone: { equals: phone },
-      })),
-    );
-
-    if (ownershipScopes.length === 0) return [];
-
-    const ownedProperties = await this.prisma.property.findMany({
+    return this.prisma.property.findMany({
       where: {
         status: { not: 'REMOVED' },
-        OR: ownershipScopes,
+        userId: { in: linkedUserIds },
       },
       orderBy: { createdAt: 'desc' },
       include: {
         images: { orderBy: { sortOrder: 'asc' } },
       },
     });
-
-    const mergedById = new Map(ownedProperties.map((property) => [property.id, property]));
-    const bridgePhones = new Set<string>([
-      ...linkedPhones,
-      ...ownedProperties
-        .map((property) => this.normalizePhone(property.contactPhone))
-        .filter(Boolean),
-    ]);
-
-    if (bridgePhones.size > 0 && linkedNameTokens.length > 0) {
-      const bridgedCandidates = await this.prisma.property.findMany({
-        where: {
-          status: { not: 'REMOVED' },
-          contactPhone: { in: Array.from(bridgePhones) },
-          OR: linkedNameTokens.map((token) => ({
-            contactName: {
-              contains: token,
-              mode: 'insensitive' as const,
-            },
-          })),
-        },
-        orderBy: { createdAt: 'desc' },
-        include: {
-          images: { orderBy: { sortOrder: 'asc' } },
-        },
-      });
-
-      for (const property of bridgedCandidates) {
-        if (this.isLikelySyntheticPropertyCandidate(property)) continue;
-        mergedById.set(property.id, property);
-      }
-    }
-
-    return Array.from(mergedById.values()).sort(
-      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
-    );
   }
-
   async update(id: string, userId: string, data: Partial<CreatePropertyDto>) {
     const property = await this.prisma.property.findUnique({
       where: { id },
