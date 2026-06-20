@@ -1,5 +1,5 @@
 const WORKFLOW_PO_PATTERN = /\b(?:PO|PRE)-(?:(?:\d{8})|(?:\d{4}-\d{4,}))\b/i;
-const TERMINAL_STATUS_VALUES = new Set(["CANCELLED", "CANCELED", "DONE", "DECLINED"]);
+const TERMINAL_STATUS_VALUES = new Set(["CANCELLED", "CANCELED", "DONE", "DECLINED", "FINISHED", "RATED"]);
 const COMPLETED_AWAITING_RATING_PATTERN =
   /customer\s+confirmed\s+(?:project\s+)?complete|customer\s+confirmed\s+completion|rating\s+is\s+now\s+open|please\s+rate|rate\s+(?:the\s+customer|your\s+partner)/i;
 const TERMINAL_ALERT_PATTERN =

@@ -21,8 +21,10 @@ import { readStoredPoProjectDetails, storePoProjectDetails } from "../../../lib/
 import { refreshSubscriberSession } from "../../../lib/subscriberSession";
 import {
   collectTerminalWorkflowPos,
+  filterLiveWorkflowItems,
   isCompletedAwaitingWorkflowRating,
   isTerminalWorkflowStatus,
+  normalizeWorkflowHistoryItems,
   pickWorkflowMeetingVenue,
   pruneWorkflowStorage,
   readBrowserTerminalWorkflowPos,
@@ -1329,7 +1331,12 @@ const CLOSED_PARTNER_WORKFLOW_POS = new Set([
   "PO-2605-2863",
 ]);
 const isClosedPartnerWorkflowPo = (value: any) => CLOSED_PARTNER_WORKFLOW_POS.has(String(value || '').trim().toUpperCase());
-const filterVisibleWorkflowItems = (items: any[]) => items.filter((item: any) => !isHiddenTestPo(item?.po));
+const filterVisibleWorkflowItems = (items: any[], terminalPoValues: Set<string> | string[] = []) =>
+  filterLiveWorkflowItems(items, terminalPoValues).filter((item: any) => !isHiddenTestPo(item?.po));
+const filterVisibleActiveWorkflowItems = (items: any[], terminalPoValues: Set<string> | string[] = []) =>
+  filterVisibleWorkflowItems(items, terminalPoValues).filter((item: any) => !isLocalWorkflowHistoryStatus(item));
+const filterVisibleWorkflowHistoryItems = (items: any[]) =>
+  normalizeWorkflowHistoryItems(items).filter((item: any) => !isHiddenTestPo(item?.po));
 const ensureLegacyPartnerCancel3429Repair = () => {
   if (typeof window === "undefined") return false;
   const po = "PO-2606-3429";
@@ -3561,33 +3568,28 @@ export default function FixerProPage() {
         ensureLegacyPartnerCancel3429Repair();
         const d = localStorage.getItem("ghis_mock_dyn_req"); if (d) {
           const terminalPos = readBrowserTerminalWorkflowPos(localStorage);
-          const parsedDyn = filterVisibleWorkflowItems(JSON.parse(d))
-            .filter((item: any) => !terminalPos.has(String(item?.po || '').trim().toUpperCase()));
+          const parsedDyn = filterVisibleWorkflowItems(JSON.parse(d), terminalPos);
           setMockDynReqs((prev) => {
-            const previousVisible = prev.filter((item: any) => !terminalPos.has(String(item?.po || '').trim().toUpperCase()));
+            const previousVisible = filterVisibleWorkflowItems(prev, terminalPos);
             return parsedDyn.length === 0 && previousVisible.length > 0 ? previousVisible : parsedDyn;
           });
         }
         const a = localStorage.getItem("ghis_mock_active"); if (a) {
           const terminalPos = readBrowserTerminalWorkflowPos(localStorage);
-          const parsedActive = filterVisibleWorkflowItems(JSON.parse(a))
-            .filter((item: any) => !isLocalWorkflowHistoryStatus(item))
-            .filter((item: any) => !terminalPos.has(String(item?.po || '').trim().toUpperCase()));
+          const parsedActive = filterVisibleActiveWorkflowItems(JSON.parse(a), terminalPos);
           setMockActiveState((prev) => {
-            const previousVisible = prev
-              .filter((item: any) => !isLocalWorkflowHistoryStatus(item))
-              .filter((item: any) => !terminalPos.has(String(item?.po || '').trim().toUpperCase()));
+            const previousVisible = filterVisibleActiveWorkflowItems(prev, terminalPos);
             return parsedActive.length === 0 && previousVisible.length > 0 ? previousVisible : parsedActive;
           });
         }
-        const h = localStorage.getItem("ghis_mock_history"); if (h) setMockHistory(filterVisibleWorkflowItems(JSON.parse(h)));
+        const h = localStorage.getItem("ghis_mock_history"); if (h) setMockHistory(filterVisibleWorkflowHistoryItems(JSON.parse(h)));
         const persistedAlerts = localStorage.getItem('partner_alerts');
         setPartnerPersistedAlerts(persistedAlerts ? JSON.parse(persistedAlerts) : []);
         const declineLogs = localStorage.getItem('admin_decline_logs');
         setPartnerDeclineLogs(declineLogs ? JSON.parse(declineLogs) : []);
         const p = localStorage.getItem("partner_mock_dyn_req");
         let partnerReqs: any[] = p
-          ? filterVisibleWorkflowItems(JSON.parse(p)).map((item: any) => ({
+          ? filterVisibleWorkflowItems(JSON.parse(p), readBrowserTerminalWorkflowPos(localStorage)).map((item: any) => ({
               ...item,
               workflowType:
                 item?.workflowType ||
@@ -3595,7 +3597,7 @@ export default function FixerProPage() {
             }))
           : [];
         const historyPos = new Set(
-          filterVisibleWorkflowItems(JSON.parse(localStorage.getItem('ghis_mock_history') || '[]'))
+          filterVisibleWorkflowHistoryItems(JSON.parse(localStorage.getItem('ghis_mock_history') || '[]'))
             .map((item: any) => String(item?.po || '').trim())
             .filter(Boolean),
         );
@@ -3606,7 +3608,7 @@ export default function FixerProPage() {
         });
         // Auto-sync: meeting_pending_partner in ghis_mock_dyn_req → meeting_confirm_partner in partner reqs
         if (d) {
-          const ghisReqs: any[] = filterVisibleWorkflowItems(JSON.parse(d));
+          const ghisReqs: any[] = filterVisibleWorkflowItems(JSON.parse(d), readBrowserTerminalWorkflowPos(localStorage));
           const pendingMeetings = ghisReqs.filter((r: any) => String(r?.workflowType || r?.type || '') === 'meeting_pending_partner');
           let partnerChanged = false;
           for (const pending of pendingMeetings) {
@@ -3817,7 +3819,16 @@ export default function FixerProPage() {
       .map((p: PropInquiry) => String(p.poNumber || '').trim())
       .filter((po: string) => isPropPoCode(po)),
   );
-  let activeJobs = mappedOrders.filter(o => !['COMPLETED', 'CANCELLED'].includes(o.status) && !completedHistoryPos.has(o.po) && !declinedPartnerPos.has(o.po) && !isClosedPartnerWorkflowPo(o.po) && !partnerSideCompletedPropPos.has(String(o.po || '').trim()));
+  const isClosedPartnerLiveItem = (item: any) => {
+    const po = String(item?.po || item?.poNumber || item?.id || '').trim();
+    const status = String(item?.status || '').toUpperCase();
+    return (
+      (po && (completedHistoryPos.has(po) || declinedPartnerPos.has(po) || isClosedPartnerWorkflowPo(po) || partnerSideCompletedPropPos.has(po))) ||
+      isTerminalWorkflowStatus(status) ||
+      (status === 'COMPLETED' && !isCompletedAwaitingWorkflowRating(item))
+    );
+  };
+  let activeJobs = mappedOrders.filter(o => !isClosedPartnerLiveItem(o));
   activeJobs = activeJobs.map(job => {
       const stepLookup = mockActiveState.find((x: any) => x.po === job.po);
       const backendStep = getWorkflowStepFromStatus(job.status);
@@ -4133,7 +4144,7 @@ export default function FixerProPage() {
   const mergedActiveJobs = new Map<string, any>();
   [...activeJobs, ...backendCompletedAwaitingRatingJobs, ...localWorkflowActiveJobs, ...propActiveJobs].forEach((job: any) => {
     const key = String(job?.po || job?.id || '').trim();
-    if (!key || isHiddenTestPo(key)) return;
+    if (!key || isHiddenTestPo(key) || isClosedPartnerLiveItem(job)) return;
     const existing = mergedActiveJobs.get(key);
     if (!existing) {
       mergedActiveJobs.set(key, job);
@@ -4159,7 +4170,7 @@ export default function FixerProPage() {
       mergedActiveJobs.set(key, { ...existing, ...job, isPropertyJob: existingIsProperty || nextIsProperty });
     }
   });
-  activeJobs = Array.from(mergedActiveJobs.values()).sort((a: any, b: any) => {
+  activeJobs = Array.from(mergedActiveJobs.values()).filter((job: any) => !isClosedPartnerLiveItem(job)).sort((a: any, b: any) => {
     const aTs = toJobSortTs(a.createdAt || a.date);
     const bTs = toJobSortTs(b.createdAt || b.date);
     return bTs - aTs;
@@ -4775,7 +4786,7 @@ export default function FixerProPage() {
     ...partnerDynReqs.filter((r: any) => {
       const po = String(r?.po || '').trim();
       const type = String(r?.workflowType || r?.type || '');
-      return !['accept_sent'].includes(String(r.type || '')) && !completedHistoryPos.has(po) && !declinedPartnerPos.has(po) && !isClosedPartnerWorkflowPo(po);
+      return !['accept_sent'].includes(String(r.type || '')) && !isClosedPartnerLiveItem(r);
     }),
     ...backendCompletedAwaitingRatingRequests,
     ...activeMeetingConfirmRequests,
@@ -4904,7 +4915,7 @@ export default function FixerProPage() {
       if (!po || !isPropPoCode(po)) return false;
       if (existingPropRateRequestPos.has(po)) return false;
       const status = String(job?.status || '').toUpperCase();
-      if (['COMPLETED', 'CANCELLED'].includes(status)) return false;
+      if (['COMPLETED', 'CANCELLED', 'DECLINED', 'FINISHED', 'RATED'].includes(status)) return false;
       const inferredStep = Math.max(
         parseWorkflowStep(job?.step),
         parseWorkflowStep(job?.mockStep),
@@ -4926,7 +4937,7 @@ export default function FixerProPage() {
         /\brate\b/i.test(`${job?.type || ''} ${job?.service || ''} ${job?.description || ''}`) ? 8 : 0,
       );
       const status = normalizePropInquiryStatus(source.status || job?.status, inferredStep || 8);
-      if (['COMPLETED', 'CANCELLED'].includes(status)) return null;
+      if (['COMPLETED', 'CANCELLED', 'DECLINED', 'FINISHED', 'RATED'].includes(status)) return null;
       const step = mapPropStatusToStep(status, inferredStep || 8);
       if (step < 8) return null;
 
@@ -5015,7 +5026,7 @@ export default function FixerProPage() {
   const partnerRequestItemsWithProp = Array.from(
     [...partnerRequestItems, ...propRequestCards, ...propFallbackRateCards].reduce((map: Map<string, any>, item: any) => {
       const key = String(item?.po || item?.id || '').trim();
-      if (!key || isHiddenTestPo(key) || isClosedPartnerWorkflowPo(key)) return map;
+      if (!key || isHiddenTestPo(key) || isClosedPartnerLiveItem(item)) return map;
       const existing = map.get(key);
       if (!existing) {
         map.set(key, item);

@@ -351,10 +351,10 @@ export default function Home() {
               <div className="p-8">
                 <p className="text-center text-gray-600 mb-6 max-w-3xl mx-auto leading-relaxed">
                   {locale === "th"
-                    ? "CBLUE ใช้ AI จับคู่อัจฉริยะเพื่อเสนอช่างซ่อมบ้าน ทีมโครงการ มืออาชีพ และอสังหาริมทรัพย์ที่ดีที่สุดในพื้นที่ของคุณ ราคาโปร่งใส 5 ระดับ จ่ายผ่าน PromptPay QR เริ่มต้นเพียง ฿100 พร้อมรับประกันคุณภาพและระบบรีวิวจริง"
+                    ? "CBLUE ใช้ AI จับคู่อัจฉริยะเพื่อเสนอช่างซ่อมบ้าน ทีมโครงการ มืออาชีพ และอสังหาริมทรัพย์ที่ดีที่สุดในพื้นที่ของคุณ ราคาโปร่งใส 5 ระดับ จ่ายผ่าน PromptPay QR เริ่มต้นเพียง ฿100 พร้อมมาตรฐานบริการที่ชัดเจนและระบบรีวิวจริง"
                     : locale === "zh"
-                    ? "CBLUE 使用 AI 智能匹配，为您推荐最优质的维修技工、项目团队、专业人士和房产。5级透明定价，PromptPay扫码支付，起价仅฿100，品质保障与真实评价"
-                    : "CBLUE uses AI smart matching to recommend the best household fixers, project teams, professionals, and properties in your area. Transparent 5-tier pricing, PromptPay QR payment starting from just ฿100, quality guarantee, and verified reviews."}
+                    ? "CBLUE 使用 AI 智能匹配，为您推荐最优质的维修技工、项目团队、专业人士和房产。5级透明定价，PromptPay扫码支付，起价仅฿100，清晰服务标准与真实评价"
+                    : "CBLUE uses AI smart matching to recommend the best household fixers, project teams, professionals, and properties in your area. Transparent 5-tier pricing, PromptPay QR payment starting from just ฿100, clear service standards, and verified reviews."}
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
                   <Link href={`${prefix}/booking/household`} className="bg-white rounded-xl p-5 text-center shadow-md hover:shadow-xl transition-all transform hover:-translate-y-1 border border-sky-100 group">

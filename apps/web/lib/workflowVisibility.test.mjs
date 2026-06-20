@@ -269,6 +269,8 @@ test("filters terminal workflow requests without hiding completed jobs awaiting 
       { po: "PO-2606-3333", type: "rate_pending", status: "COMPLETED", rating: 5 },
       { po: "PO-2606-4444", type: "payment_pending" },
       { po: "PO-2606-5555", status: "CANCELLED" },
+      { po: "PO-2606-6666", status: "FINISHED" },
+      { po: "PO-2606-7777", status: "RATED" },
     ],
     new Set(["PO-2606-4444"]),
   ).map((item) => item.po);
