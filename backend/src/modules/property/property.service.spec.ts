@@ -188,7 +188,7 @@ describe('PropertyService', () => {
       );
     });
 
-    it('keeps real active test-named listings while hiding diagnostic probe listings', async () => {
+    it('keeps real active listings while hiding test and diagnostic listings', async () => {
       const baseProperty = {
         userId: 'user-1',
         propertyType: 'HOUSE',
@@ -219,11 +219,14 @@ describe('PropertyService', () => {
       };
 
       prisma.property.findMany.mockResolvedValue([
-        { ...baseProperty, id: 'real-house-test', title: 'House test' },
+        { ...baseProperty, id: 'real-house', title: 'House for rent' },
         { ...baseProperty, id: 'probe-townhouse', title: 'Probe townhouse' },
         { ...baseProperty, id: 'test-fixer', title: 'Test Fixer Account Prop' },
         { ...baseProperty, id: 'diag-test', title: 'Diag Test' },
         { ...baseProperty, id: 'test-property', title: 'Test Property' },
+        { ...baseProperty, id: 'test-with-image', title: 'Test With Image' },
+        { ...baseProperty, id: 'test-500-debug', title: 'Test 500 Debug' },
+        { ...baseProperty, id: 'test-home', title: 'test home' },
         { ...baseProperty, id: 'large-body-test', title: 'Large Body Test' },
         { ...baseProperty, id: 'cf-proxy-test', title: 'CF Proxy Test' },
       ]);
@@ -232,10 +235,16 @@ describe('PropertyService', () => {
       const result = await service.search({ limit: '20' } as any);
 
       expect(result.properties.map((property) => property.id)).toEqual([
-        'real-house-test',
+        'real-house',
       ]);
       expect(prisma.property.findMany.mock.calls[0][0].where.NOT).toEqual(
         expect.arrayContaining([
+          expect.objectContaining({
+            title: expect.objectContaining({ contains: 'Test' }),
+          }),
+          expect.objectContaining({
+            title: expect.objectContaining({ contains: 'Debug' }),
+          }),
           expect.objectContaining({
             title: expect.objectContaining({ contains: 'Probe' }),
           }),

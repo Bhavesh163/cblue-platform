@@ -398,7 +398,8 @@ function isFakeListing(property: Property) {
   const description = String(property.description || "").trim().toLowerCase();
   const combined = `${title} ${description}`;
 
-  if (title === "test property") return true;
+  if (title.includes("test")) return true;
+  if (title.includes("debug")) return true;
 
   return [
     "probe",

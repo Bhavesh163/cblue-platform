@@ -76,6 +76,8 @@ export class PropertyService {
 
   private publicPropertyVisibilityExclusions(): Prisma.PropertyWhereInput[] {
     const diagnosticTitleFilters = [
+      { title: { contains: 'Test', mode: 'insensitive' as const } },
+      { title: { contains: 'Debug', mode: 'insensitive' as const } },
       { title: { contains: 'Probe', mode: 'insensitive' as const } },
       { title: { contains: 'CF Proxy', mode: 'insensitive' as const } },
       { title: { contains: 'Diag Test', mode: 'insensitive' as const } },
@@ -121,7 +123,8 @@ export class PropertyService {
       .toLowerCase();
     const combined = `${title} ${description}`;
 
-    if (title === 'test property') return false;
+    if (title.includes('test')) return false;
+    if (title.includes('debug')) return false;
 
     return ![
       'probe',
