@@ -467,9 +467,18 @@ export class FixerService {
   }
 
   private inferServiceGroupKey(value: unknown): string {
-    const normalized = this.normalizeSearchText(
-      Array.isArray(value) ? value.join(' ') : String(value || ''),
-    );
+    const sourceText = Array.isArray(value)
+      ? value
+          .map((item) =>
+            ['string', 'number', 'boolean'].includes(typeof item)
+              ? String(item)
+              : '',
+          )
+          .join(' ')
+      : ['string', 'number', 'boolean'].includes(typeof value)
+        ? String(value)
+        : '';
+    const normalized = this.normalizeSearchText(sourceText);
     if (!normalized) return 'other';
 
     if (
@@ -607,6 +616,66 @@ export class FixerService {
     return true;
   }
 
+  private toFiniteCoordinate(value: unknown): number | null {
+    const coordinate = Number(value);
+    return Number.isFinite(coordinate) ? coordinate : null;
+  }
+
+  private calculateDistanceKm(
+    startLat: number,
+    startLng: number,
+    endLat: number,
+    endLng: number,
+  ): number {
+    const earthRadiusKm = 6371;
+    const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
+    const latDelta = toRadians(endLat - startLat);
+    const lngDelta = toRadians(endLng - startLng);
+    const startLatRad = toRadians(startLat);
+    const endLatRad = toRadians(endLat);
+
+    const a =
+      Math.sin(latDelta / 2) ** 2 +
+      Math.cos(startLatRad) * Math.cos(endLatRad) * Math.sin(lngDelta / 2) ** 2;
+
+    return 2 * earthRadiusKm * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  private resolveMatchRadiusKm(service: string, bookingType?: string): number {
+    const context = this.normalizeSearchText(
+      `${bookingType || ''} ${service || ''}`,
+    );
+
+    if (context.includes('project')) {
+      return 300;
+    }
+
+    if (context.includes('professional')) {
+      return 200;
+    }
+
+    return 40;
+  }
+
+  private matchDistanceArea(
+    fixer: { gpsLat?: number | string | null; gpsLng?: number | string | null },
+    customerLat: number,
+    customerLng: number,
+    radiusKm: number,
+  ): boolean {
+    const fixerLat = this.toFiniteCoordinate(fixer.gpsLat);
+    const fixerLng = this.toFiniteCoordinate(fixer.gpsLng);
+
+    if (fixerLat === null || fixerLng === null) {
+      return false;
+    }
+
+    return (
+      this.calculateDistanceKm(customerLat, customerLng, fixerLat, fixerLng) <=
+      radiusKm
+    );
+  }
+
   async matchFixers(
     service: string,
     district: string,
@@ -614,20 +683,37 @@ export class FixerService {
     description?: string,
     nominateId?: string,
     postalCode?: string,
+    latitude?: number | string,
+    longitude?: number | string,
+    bookingType?: string,
   ): Promise<SelectedFixer[]> {
     try {
       const allFixers = await this.prisma.fixer.findMany({
         include: { user: true, skills: true },
       });
 
+      const customerLat = this.toFiniteCoordinate(latitude);
+      const customerLng = this.toFiniteCoordinate(longitude);
+      const hasCustomerGps = customerLat !== null && customerLng !== null;
+      const matchRadiusKm = this.resolveMatchRadiusKm(service, bookingType);
+
       console.log(
-        `[matchFixers] Input district: ${district}, province: ${province}, allFixers length = ${allFixers.length}`,
+        `[matchFixers] Input district: ${district}, province: ${province}, gps: ${hasCustomerGps ? `${customerLat},${customerLng}` : 'none'}, allFixers length = ${allFixers.length}`,
       );
-      const pool = allFixers.filter((fixer) =>
-        this.matchServiceArea(fixer, district, province, postalCode),
-      );
+      const pool = hasCustomerGps
+        ? allFixers.filter((fixer) =>
+            this.matchDistanceArea(
+              fixer,
+              customerLat,
+              customerLng,
+              matchRadiusKm,
+            ),
+          )
+        : allFixers.filter((fixer) =>
+            this.matchServiceArea(fixer, district, province, postalCode),
+          );
       console.log(
-        `[matchFixers] After matchServiceArea, pool length = ${pool.length}`,
+        `[matchFixers] After ${hasCustomerGps ? `${matchRadiusKm}km radius` : 'matchServiceArea'}, pool length = ${pool.length}`,
       );
 
       if (pool.length === 0) return [];
@@ -840,14 +926,14 @@ export class FixerService {
           priceList: list,
           estimatedBreakdown:
             estimatedBreakdownMeta.length > 0
-              ? estimatedBreakdownMeta.map(
-                  ({
-                    pairIndex: _pairIndex,
-                    matchScore: _matchScore,
-                    serviceGroupKey: _serviceGroupKey,
-                    ...line
-                  }) => line,
-                )
+              ? estimatedBreakdownMeta.map((item) => {
+                  const { pairIndex, matchScore, serviceGroupKey, ...line } =
+                    item;
+                  void pairIndex;
+                  void matchScore;
+                  void serviceGroupKey;
+                  return line;
+                })
               : null,
           estimatedBreakdownMeta,
           matchScore: overallScore,
@@ -1009,16 +1095,18 @@ export class FixerService {
         pick(r, '💡 Suggested Candidate');
       }
 
-      return results
-        .slice(0, 8)
-        .map(
-          ({
-            estimatedBreakdownMeta,
-            comparisonTotal,
-            importantMatchedCount,
-            ...partner
-          }) => partner,
-        );
+      return results.slice(0, 8).map((candidate) => {
+        const {
+          estimatedBreakdownMeta,
+          comparisonTotal,
+          importantMatchedCount,
+          ...partner
+        } = candidate;
+        void estimatedBreakdownMeta;
+        void comparisonTotal;
+        void importantMatchedCount;
+        return partner;
+      });
     } catch (error) {
       console.error('[matchFixers] error', error);
       return [];

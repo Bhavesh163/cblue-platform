@@ -689,12 +689,17 @@ export default function FixerResults({
       service,
       district: effectiveBookingAddress?.district || "auto",
       province: effectiveBookingAddress?.province || "auto",
+      bookingType,
     });
     if (effectiveBookingAddress?.postalCode) params.set("postalCode", effectiveBookingAddress.postalCode);
+    if (hasUsableGps) {
+      params.set("latitude", String(latitude));
+      params.set("longitude", String(longitude));
+    }
     if (description) params.set("description", description);
     if (nominateId) params.set("nominateId", nominateId);
     return params.toString();
-  }, [effectiveBookingAddress?.district, effectiveBookingAddress?.postalCode, effectiveBookingAddress?.province, description, service]);
+  }, [effectiveBookingAddress?.district, effectiveBookingAddress?.postalCode, effectiveBookingAddress?.province, description, service, bookingType, hasUsableGps, latitude, longitude]);
   const ensureOrderAddressId = async (token: string) => {
     // Allow creation if at least one geographic field is provided OR GPS coordinates
     const hasGeo = effectiveBookingAddress?.province || effectiveBookingAddress?.district || effectiveBookingAddress?.subdistrict;

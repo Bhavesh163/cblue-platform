@@ -336,6 +336,213 @@ describe('FixerService', () => {
       expect(fitoutCandidate?.estimatedQty).toBe(1000);
     });
 
+    it('filters household fixers to 40 km from the customer GPS site before ranking', async () => {
+      prisma.fixer.findMany.mockResolvedValue([
+        {
+          id: 'near-household',
+          tier: 'STANDARD',
+          rating: 4.8,
+          completedJobs: 12,
+          yearsExperience: 6,
+          description: 'Plumbing repair specialist',
+          pastProjectType: 'household',
+          bio: 'Home plumbing team',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          gpsLat: 13.8063,
+          gpsLng: 100.5018,
+          priceList: [
+            {
+              service: 'plumbing',
+              quantity: '1',
+              unit: 'job',
+              finalPrice: '2500',
+            },
+          ],
+          user: { name: 'Near Household', company: 'Near Household Co' },
+          skills: [{ category: 'household', name: 'plumbing' }],
+        },
+        {
+          id: 'far-household',
+          tier: 'STANDARD',
+          rating: 4.9,
+          completedJobs: 20,
+          yearsExperience: 7,
+          description: 'Plumbing repair specialist',
+          pastProjectType: 'household',
+          bio: 'Home plumbing team',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          gpsLat: 14.2063,
+          gpsLng: 100.5018,
+          priceList: [
+            {
+              service: 'plumbing',
+              quantity: '1',
+              unit: 'job',
+              finalPrice: '2000',
+            },
+          ],
+          user: { name: 'Far Household', company: 'Far Household Co' },
+          skills: [{ category: 'household', name: 'plumbing' }],
+        },
+      ]);
+
+      const result = await service.matchFixers(
+        'plumbing',
+        'Pathum Wan',
+        'Bangkok',
+        'Need plumbing repair',
+        undefined,
+        undefined,
+        13.7563,
+        100.5018,
+        'household',
+      );
+
+      const ids = result.map((candidate: { id: string }) => candidate.id);
+      expect(ids).toContain('near-household');
+      expect(ids).not.toContain('far-household');
+    });
+
+    it('uses a 200 km radius for professional service matching', async () => {
+      prisma.fixer.findMany.mockResolvedValue([
+        {
+          id: 'near-professional',
+          tier: 'STANDARD',
+          rating: 4.8,
+          completedJobs: 12,
+          yearsExperience: 6,
+          description: 'Legal contract specialist',
+          pastProjectType: 'professional',
+          bio: 'Legal team',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          gpsLat: 15.1063,
+          gpsLng: 100.5018,
+          priceList: [
+            {
+              service: 'legal contract',
+              quantity: '1',
+              unit: 'job',
+              finalPrice: '2500',
+            },
+          ],
+          user: { name: 'Near Professional', company: 'Near Professional Co' },
+          skills: [{ category: 'professional', name: 'legal contract' }],
+        },
+        {
+          id: 'far-professional',
+          tier: 'STANDARD',
+          rating: 4.9,
+          completedJobs: 20,
+          yearsExperience: 7,
+          description: 'Legal contract specialist',
+          pastProjectType: 'professional',
+          bio: 'Legal team',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          gpsLat: 16.0063,
+          gpsLng: 100.5018,
+          priceList: [
+            {
+              service: 'legal contract',
+              quantity: '1',
+              unit: 'job',
+              finalPrice: '2000',
+            },
+          ],
+          user: { name: 'Far Professional', company: 'Far Professional Co' },
+          skills: [{ category: 'professional', name: 'legal contract' }],
+        },
+      ]);
+
+      const result = await service.matchFixers(
+        'professional',
+        'Pathum Wan',
+        'Bangkok',
+        'Need legal contract review',
+        undefined,
+        undefined,
+        13.7563,
+        100.5018,
+        'professional',
+      );
+
+      const ids = result.map((candidate: { id: string }) => candidate.id);
+      expect(ids).toContain('near-professional');
+      expect(ids).not.toContain('far-professional');
+    });
+
+    it('uses a 300 km radius for project team matching', async () => {
+      prisma.fixer.findMany.mockResolvedValue([
+        {
+          id: 'near-project',
+          tier: 'CORPORATE',
+          rating: 4.8,
+          completedJobs: 12,
+          yearsExperience: 6,
+          description: 'Office fitout specialist',
+          pastProjectType: 'project',
+          bio: 'Commercial project team',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          gpsLat: 16.0063,
+          gpsLng: 100.5018,
+          priceList: [
+            {
+              service: 'office fitout',
+              quantity: '1',
+              unit: 'sqm',
+              finalPrice: '2500',
+            },
+          ],
+          user: { name: 'Near Project', company: 'Near Project Co' },
+          skills: [{ category: 'project', name: 'office fitout' }],
+        },
+        {
+          id: 'far-project',
+          tier: 'CORPORATE',
+          rating: 4.9,
+          completedJobs: 20,
+          yearsExperience: 7,
+          description: 'Office fitout specialist',
+          pastProjectType: 'project',
+          bio: 'Commercial project team',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          gpsLat: 17.0063,
+          gpsLng: 100.5018,
+          priceList: [
+            {
+              service: 'office fitout',
+              quantity: '1',
+              unit: 'sqm',
+              finalPrice: '2000',
+            },
+          ],
+          user: { name: 'Far Project', company: 'Far Project Co' },
+          skills: [{ category: 'project', name: 'office fitout' }],
+        },
+      ]);
+
+      const result = await service.matchFixers(
+        'project',
+        'Pathum Wan',
+        'Bangkok',
+        'Need office fitout',
+        undefined,
+        undefined,
+        13.7563,
+        100.5018,
+        'project',
+      );
+
+      const ids = result.map((candidate: { id: string }) => candidate.id);
+      expect(ids).toContain('near-project');
+      expect(ids).not.toContain('far-project');
+    });
+
     it('should match service area by GPS-derived postal code', async () => {
       prisma.fixer.findMany.mockResolvedValue([
         {

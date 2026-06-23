@@ -107,6 +107,9 @@ export class FixerController {
     @Query('description') description?: string,
     @Query('nominateId') nominateId?: string,
     @Query('postalCode') postalCode?: string,
+    @Query('latitude') latitude?: string,
+    @Query('longitude') longitude?: string,
+    @Query('bookingType') bookingType?: string,
   ) {
     return this.fixerService.matchFixers(
       service,
@@ -115,6 +118,9 @@ export class FixerController {
       description,
       nominateId,
       postalCode,
+      latitude,
+      longitude,
+      bookingType,
     );
   }
 
