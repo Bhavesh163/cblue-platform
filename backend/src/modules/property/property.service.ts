@@ -21,16 +21,19 @@ export class PropertyService {
 
   constructor(private readonly prisma: PrismaService) {}
 
+  private normalizeTextValue(value: unknown) {
+    if (['string', 'number', 'boolean'].includes(typeof value)) {
+      return String(value);
+    }
+    return '';
+  }
+
   private normalizeEmail(value?: string | null) {
-    return String(value || '')
-      .trim()
-      .toLowerCase();
+    return this.normalizeTextValue(value).trim().toLowerCase();
   }
 
   private normalizePhone(value?: string | null) {
-    return String(value || '')
-      .trim()
-      .replace(/\D+/g, '');
+    return this.normalizeTextValue(value).trim().replace(/\D+/g, '');
   }
 
   private normalizePositiveInt(value: unknown, fallback: number) {
@@ -47,14 +50,14 @@ export class PropertyService {
   }
 
   private normalizeLocationTerm(value: unknown) {
-    return String(value || '')
+    return this.normalizeTextValue(value)
       .trim()
       .replace(/^(จังหวัด|จ\.|อำเภอ|อ\.|เขต|แขวง|ตำบล|ต\.)\s*/i, '')
       .trim();
   }
 
   private locationSearchTerms(value: unknown) {
-    const raw = String(value || '').trim();
+    const raw = this.normalizeTextValue(value).trim();
     const cleaned = this.normalizeLocationTerm(raw);
     const terms = new Set<string>();
     [raw, cleaned].forEach((term) => {
@@ -69,6 +72,64 @@ export class PropertyService {
     }
 
     return [...terms];
+  }
+
+  private publicPropertyVisibilityExclusions(): Prisma.PropertyWhereInput[] {
+    const diagnosticTitleFilters = [
+      { title: { contains: 'Probe', mode: 'insensitive' as const } },
+      { title: { contains: 'CF Proxy', mode: 'insensitive' as const } },
+      { title: { contains: 'Diag Test', mode: 'insensitive' as const } },
+      { title: { contains: 'Large Body Test', mode: 'insensitive' as const } },
+      {
+        title: {
+          contains: 'Test Fixer Account',
+          mode: 'insensitive' as const,
+        },
+      },
+      { title: { equals: 'Test Property', mode: 'insensitive' as const } },
+    ];
+
+    return [
+      {
+        contactEmail: {
+          contains: '@example.com',
+          mode: 'insensitive' as const,
+        },
+      },
+      { AND: [{ listingType: 'SALE' }, { price: { lte: 1 } }] },
+      ...diagnosticTitleFilters,
+    ];
+  }
+
+  private isPublicSearchProperty(property: Record<string, unknown>) {
+    const contactEmail = this.normalizeTextValue(
+      property.contactEmail,
+    ).toLowerCase();
+    if (contactEmail.endsWith('@example.com')) return false;
+
+    const listingType = this.normalizeTextValue(
+      property.listingType,
+    ).toUpperCase();
+    const price = Number(property.price || 0);
+    if (listingType === 'SALE' && Number.isFinite(price) && price <= 1) {
+      return false;
+    }
+
+    const title = this.normalizeTextValue(property.title).trim().toLowerCase();
+    const description = this.normalizeTextValue(property.description)
+      .trim()
+      .toLowerCase();
+    const combined = `${title} ${description}`;
+
+    if (title === 'test property') return false;
+
+    return ![
+      'probe',
+      'cf proxy',
+      'diag test',
+      'large body test',
+      'test fixer account',
+    ].some((phrase) => combined.includes(phrase));
   }
 
   private appendLocationFilter(
@@ -405,7 +466,7 @@ export class PropertyService {
     if (this.normalizeEmail(property.contactEmail).endsWith('@example.com'))
       return true;
     if (
-      String(property.listingType || '').toUpperCase() === 'SALE' &&
+      this.normalizeTextValue(property.listingType).toUpperCase() === 'SALE' &&
       Number(property.price || 0) <= 1
     ) {
       return true;
@@ -425,6 +486,9 @@ export class PropertyService {
     _linkedPhones: string[],
     _linkedNameTokens: string[],
   ) {
+    void _linkedEmails;
+    void _linkedPhones;
+    void _linkedNameTokens;
     if (!property) return false;
     return new Set(linkedUserIds).has(property.userId);
   }
@@ -867,6 +931,7 @@ export class PropertyService {
 
     const where: Prisma.PropertyWhereInput = {
       status: 'ACTIVE',
+      NOT: this.publicPropertyVisibilityExclusions(),
     };
 
     if (dto.propertyType) where.propertyType = dto.propertyType;
@@ -998,9 +1063,9 @@ export class PropertyService {
       }
     }
 
-    properties = properties.map((property) =>
-      this.normalizePropertyRecord(property),
-    );
+    properties = properties
+      .map((property) => this.normalizePropertyRecord(property))
+      .filter((property) => this.isPublicSearchProperty(property));
 
     return {
       properties,

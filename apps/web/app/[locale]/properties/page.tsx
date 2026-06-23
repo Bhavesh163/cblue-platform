@@ -393,7 +393,20 @@ function getPrimaryImageUrl(images: { url: string }[] | undefined) {
 function isFakeListing(property: Property) {
   if ((property.contactEmail || "").endsWith("@example.com")) return true;
   if (String(property.listingType || "").toUpperCase() === "SALE" && Number(property.price || 0) <= 1) return true;
-  return false;
+
+  const title = String(property.title || "").trim().toLowerCase();
+  const description = String(property.description || "").trim().toLowerCase();
+  const combined = `${title} ${description}`;
+
+  if (title === "test property") return true;
+
+  return [
+    "probe",
+    "cf proxy",
+    "diag test",
+    "large body test",
+    "test fixer account",
+  ].some((phrase) => combined.includes(phrase));
 }
 
 function dedupeProperties(items: Property[]) {

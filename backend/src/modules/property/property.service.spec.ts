@@ -19,7 +19,7 @@ describe('PropertyService', () => {
         createMany: jest.fn(),
         deleteMany: jest.fn(),
       },
-      $transaction: jest.fn(async (cb) => cb(prisma)),
+      $transaction: jest.fn((cb) => Promise.resolve(cb(prisma))),
       user: {
         findUnique: jest.fn(),
         findMany: jest.fn(),
@@ -188,6 +188,64 @@ describe('PropertyService', () => {
       );
     });
 
+    it('keeps real active test-named listings while hiding diagnostic probe listings', async () => {
+      const baseProperty = {
+        userId: 'user-1',
+        propertyType: 'HOUSE',
+        listingType: 'RENT',
+        status: 'ACTIVE',
+        description: '',
+        price: 400000,
+        area: 400,
+        bedrooms: 5,
+        bathrooms: 5,
+        floors: null,
+        province: 'Bangkok',
+        district: 'Wang Thonglang',
+        subdistrict: 'Saphan Song',
+        postalCode: '10310',
+        addressLine: '',
+        latitude: 13.794084,
+        longitude: 100.609586,
+        contactName: 'Bhavesh',
+        contactPhone: '+66812345678',
+        contactEmail: 'bhaveshfung@gmail.com',
+        features: [],
+        yearBuilt: null,
+        tier: 'ECONOMY',
+        images: [],
+        createdAt: new Date('2026-06-23T09:00:00.000Z'),
+        updatedAt: new Date('2026-06-23T09:00:00.000Z'),
+      };
+
+      prisma.property.findMany.mockResolvedValue([
+        { ...baseProperty, id: 'real-house-test', title: 'House test' },
+        { ...baseProperty, id: 'probe-townhouse', title: 'Probe townhouse' },
+        { ...baseProperty, id: 'test-fixer', title: 'Test Fixer Account Prop' },
+        { ...baseProperty, id: 'diag-test', title: 'Diag Test' },
+        { ...baseProperty, id: 'test-property', title: 'Test Property' },
+        { ...baseProperty, id: 'large-body-test', title: 'Large Body Test' },
+        { ...baseProperty, id: 'cf-proxy-test', title: 'CF Proxy Test' },
+      ]);
+      prisma.property.count.mockResolvedValue(7);
+
+      const result = await service.search({ limit: '20' } as any);
+
+      expect(result.properties.map((property) => property.id)).toEqual([
+        'real-house-test',
+      ]);
+      expect(prisma.property.findMany.mock.calls[0][0].where.NOT).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            title: expect.objectContaining({ contains: 'Probe' }),
+          }),
+          expect.objectContaining({
+            title: expect.objectContaining({ contains: 'CF Proxy' }),
+          }),
+        ]),
+      );
+    });
+
     it('should fall back to a legacy-safe property select when newer schema fields are missing', async () => {
       prisma.property.findMany
         .mockRejectedValueOnce(
@@ -218,7 +276,7 @@ describe('PropertyService', () => {
             longitude: null,
             contactName: 'Ghis',
             contactPhone: '+66812345678',
-            contactEmail: 'ghis@example.com',
+            contactEmail: 'ghis@cblue.co',
             features: [],
             yearBuilt: null,
             createdAt: new Date('2026-06-01T00:00:00.000Z'),
@@ -270,7 +328,7 @@ describe('PropertyService', () => {
             longitude: null,
             contactName: 'Ghis',
             contactPhone: '+66812345678',
-            contactEmail: 'ghis@example.com',
+            contactEmail: 'ghis@cblue.co',
             features: [],
             yearBuilt: null,
             createdAt: new Date('2026-06-01T00:00:00.000Z'),
@@ -328,7 +386,7 @@ describe('PropertyService', () => {
             longitude: null,
             contactName: 'Ghis',
             contactPhone: '+66812345678',
-            contactEmail: 'ghis@example.com',
+            contactEmail: 'ghis@cblue.co',
             features: [],
             yearBuilt: null,
             createdAt: new Date('2026-06-01T00:00:00.000Z'),
