@@ -41,7 +41,6 @@ interface Property {
 }
 
 const PLACEHOLDER_PROPERTY_IMAGE = "/images/scenic-house.jpg";
-const DEBUG_LISTING_PATTERN = /\b(test|probe|debug|dummy|sample|qa)\b/i;
 const PLACEHOLDER_LOCATION_PATTERN = /^--\s*select/i;
 
 function parsePropertyTimestamp(value?: string) {
@@ -392,8 +391,6 @@ function getPrimaryImageUrl(images: { url: string }[] | undefined) {
 }
 
 function isFakeListing(property: Property) {
-  const haystack = `${property.title} ${property.description}`.toLowerCase();
-  if (DEBUG_LISTING_PATTERN.test(haystack)) return true;
   if ((property.contactEmail || "").endsWith("@example.com")) return true;
   if (String(property.listingType || "").toUpperCase() === "SALE" && Number(property.price || 0) <= 1) return true;
   return false;
