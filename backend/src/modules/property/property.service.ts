@@ -10,6 +10,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreatePropertyDto } from './dto/create-property.dto';
 import { SearchPropertyDto } from './dto/search-property.dto';
 import { Prisma } from '@prisma/client';
+import {
+  getThaiGpsLocationBounds,
+  normalizeThaiGpsLocation,
+} from '../../common/thai-gps-location';
 
 @Injectable()
 export class PropertyService {
@@ -74,10 +78,19 @@ export class PropertyService {
   ) {
     const terms = this.locationSearchTerms(value);
     if (terms.length === 0) return;
-    const condition = {
-      OR: terms.map((term) => ({
-        [field]: { contains: term, mode: 'insensitive' as const },
+    const coordinateFilters = terms.flatMap((term) =>
+      getThaiGpsLocationBounds(term).map((bounds) => ({
+        latitude: { gte: bounds.minLat, lte: bounds.maxLat },
+        longitude: { gte: bounds.minLng, lte: bounds.maxLng },
       })),
+    );
+    const condition = {
+      OR: [
+        ...terms.map((term) => ({
+          [field]: { contains: term, mode: 'insensitive' as const },
+        })),
+        ...coordinateFilters,
+      ],
     } as Prisma.PropertyWhereInput;
     const currentAnd = Array.isArray(where.AND)
       ? where.AND
@@ -99,88 +112,89 @@ export class PropertyService {
     if (!fallbackId) return [] as string[];
 
     try {
-    const linkedIds = new Set<string>();
-    const subscriberIdCandidates = new Set<string>();
-    const normalizedEmails = new Set<string>();
+      const linkedIds = new Set<string>();
+      const subscriberIdCandidates = new Set<string>();
+      const normalizedEmails = new Set<string>();
 
-    const pushEmail = (value?: string | null) => {
-      const normalized = this.normalizeEmail(value);
-      if (normalized) normalizedEmails.add(normalized);
-    };
+      const pushEmail = (value?: string | null) => {
+        const normalized = this.normalizeEmail(value);
+        if (normalized) normalizedEmails.add(normalized);
+      };
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: fallbackId },
-      select: { id: true, subscriberId: true, email: true },
-    });
-
-    if (user) {
-      linkedIds.add(user.id);
-      if (user.subscriberId) subscriberIdCandidates.add(user.subscriberId);
-      pushEmail(user.email);
-    } else {
-      const bySubscriberId = await this.prisma.user.findMany({
-        where: { subscriberId: fallbackId },
-        select: { id: true },
-      });
-      bySubscriberId.forEach((item) => linkedIds.add(item.id));
-
-      const fallbackSubscriber = await this.prisma.subscriber.findUnique({
+      const user = await this.prisma.user.findUnique({
         where: { id: fallbackId },
-        select: { id: true, email: true },
+        select: { id: true, subscriberId: true, email: true },
       });
-      if (fallbackSubscriber?.id) subscriberIdCandidates.add(fallbackSubscriber.id);
-      pushEmail(fallbackSubscriber?.email);
 
-      if (fallbackId.includes('@')) pushEmail(fallbackId);
-    }
+      if (user) {
+        linkedIds.add(user.id);
+        if (user.subscriberId) subscriberIdCandidates.add(user.subscriberId);
+        pushEmail(user.email);
+      } else {
+        const bySubscriberId = await this.prisma.user.findMany({
+          where: { subscriberId: fallbackId },
+          select: { id: true },
+        });
+        bySubscriberId.forEach((item) => linkedIds.add(item.id));
 
-    if (normalizedEmails.size > 0) {
-      const subscribersByEmail = await this.prisma.subscriber.findMany({
-        where: {
-          OR: Array.from(normalizedEmails).map((email) => ({
-            email: {
-              equals: email,
-              mode: 'insensitive',
-            },
-          })),
-        },
-        select: { id: true, email: true },
-      });
-      subscribersByEmail.forEach((item) => {
-        subscriberIdCandidates.add(item.id);
-        pushEmail(item.email);
-      });
-    }
+        const fallbackSubscriber = await this.prisma.subscriber.findUnique({
+          where: { id: fallbackId },
+          select: { id: true, email: true },
+        });
+        if (fallbackSubscriber?.id)
+          subscriberIdCandidates.add(fallbackSubscriber.id);
+        pushEmail(fallbackSubscriber?.email);
 
-    if (subscriberIdCandidates.size > 0) {
-      const bySubscriberIds = await this.prisma.user.findMany({
-        where: { subscriberId: { in: Array.from(subscriberIdCandidates) } },
-        select: { id: true, email: true },
-      });
-      bySubscriberIds.forEach((item) => {
-        linkedIds.add(item.id);
-        pushEmail(item.email);
-      });
-    }
+        if (fallbackId.includes('@')) pushEmail(fallbackId);
+      }
 
-    if (normalizedEmails.size > 0) {
-      const byEmail = await this.prisma.user.findMany({
-        where: {
-          OR: Array.from(normalizedEmails).map((email) => ({
-            email: {
-              equals: email,
-              mode: 'insensitive',
-            },
-          })),
-        },
-        select: { id: true },
-      });
-      byEmail.forEach((item) => linkedIds.add(item.id));
-    }
+      if (normalizedEmails.size > 0) {
+        const subscribersByEmail = await this.prisma.subscriber.findMany({
+          where: {
+            OR: Array.from(normalizedEmails).map((email) => ({
+              email: {
+                equals: email,
+                mode: 'insensitive',
+              },
+            })),
+          },
+          select: { id: true, email: true },
+        });
+        subscribersByEmail.forEach((item) => {
+          subscriberIdCandidates.add(item.id);
+          pushEmail(item.email);
+        });
+      }
 
-    if (linkedIds.size === 0) linkedIds.add(fallbackId);
+      if (subscriberIdCandidates.size > 0) {
+        const bySubscriberIds = await this.prisma.user.findMany({
+          where: { subscriberId: { in: Array.from(subscriberIdCandidates) } },
+          select: { id: true, email: true },
+        });
+        bySubscriberIds.forEach((item) => {
+          linkedIds.add(item.id);
+          pushEmail(item.email);
+        });
+      }
 
-    return Array.from(linkedIds);
+      if (normalizedEmails.size > 0) {
+        const byEmail = await this.prisma.user.findMany({
+          where: {
+            OR: Array.from(normalizedEmails).map((email) => ({
+              email: {
+                equals: email,
+                mode: 'insensitive',
+              },
+            })),
+          },
+          select: { id: true },
+        });
+        byEmail.forEach((item) => linkedIds.add(item.id));
+      }
+
+      if (linkedIds.size === 0) linkedIds.add(fallbackId);
+
+      return Array.from(linkedIds);
     } catch (error) {
       this.logger.warn(
         `Falling back to single linked user id for ${fallbackId}: ${
@@ -196,54 +210,55 @@ export class PropertyService {
     if (!fallbackRef) return [] as string[];
 
     try {
-    const emails = new Set<string>();
-    const addEmail = (value?: string | null) => {
-      const normalized = this.normalizeEmail(value);
-      if (normalized) emails.add(normalized);
-    };
+      const emails = new Set<string>();
+      const addEmail = (value?: string | null) => {
+        const normalized = this.normalizeEmail(value);
+        if (normalized) emails.add(normalized);
+      };
 
-    const requesterIds =
-      linkedUserIds && linkedUserIds.length > 0
-        ? linkedUserIds
-        : await this.resolveLinkedUserIds(fallbackRef);
+      const requesterIds =
+        linkedUserIds && linkedUserIds.length > 0
+          ? linkedUserIds
+          : await this.resolveLinkedUserIds(fallbackRef);
 
-    if (requesterIds.length > 0) {
-      const linkedUsers = await this.prisma.user.findMany({
-        where: { id: { in: requesterIds } },
-        select: { email: true, subscriberId: true },
-      });
-
-      const subscriberIds = new Set<string>();
-      linkedUsers.forEach((user) => {
-        addEmail(user.email);
-        if (user.subscriberId) subscriberIds.add(user.subscriberId);
-      });
-
-      if (subscriberIds.size > 0) {
-        const subscribers = await this.prisma.subscriber.findMany({
-          where: { id: { in: Array.from(subscriberIds) } },
-          select: { email: true },
+      if (requesterIds.length > 0) {
+        const linkedUsers = await this.prisma.user.findMany({
+          where: { id: { in: requesterIds } },
+          select: { email: true, subscriberId: true },
         });
-        subscribers.forEach((subscriber) => addEmail(subscriber.email));
+
+        const subscriberIds = new Set<string>();
+        linkedUsers.forEach((user) => {
+          addEmail(user.email);
+          if (user.subscriberId) subscriberIds.add(user.subscriberId);
+        });
+
+        if (subscriberIds.size > 0) {
+          const subscribers = await this.prisma.subscriber.findMany({
+            where: { id: { in: Array.from(subscriberIds) } },
+            select: { email: true },
+          });
+          subscribers.forEach((subscriber) => addEmail(subscriber.email));
+        }
       }
-    }
 
-    const fallbackSubscriber = await this.prisma.subscriber.findUnique({
-      where: { id: fallbackRef },
-      select: { email: true },
-    });
-    addEmail(fallbackSubscriber?.email);
+      const fallbackSubscriber = await this.prisma.subscriber.findUnique({
+        where: { id: fallbackRef },
+        select: { email: true },
+      });
+      addEmail(fallbackSubscriber?.email);
 
-    if (fallbackRef.includes('@')) addEmail(fallbackRef);
+      if (fallbackRef.includes('@')) addEmail(fallbackRef);
 
-    return Array.from(emails);
+      return Array.from(emails);
     } catch (error) {
       this.logger.warn(
         `Falling back to empty linked emails for ${fallbackRef}: ${
           error instanceof Error ? error.message : String(error)
         }`,
       );
-      if (fallbackRef.includes('@')) return [this.normalizeEmail(fallbackRef)].filter(Boolean);
+      if (fallbackRef.includes('@'))
+        return [this.normalizeEmail(fallbackRef)].filter(Boolean);
       return [];
     }
   }
@@ -253,48 +268,48 @@ export class PropertyService {
     if (!fallbackRef) return [] as string[];
 
     try {
-    const phones = new Set<string>();
-    const addPhone = (value?: string | null) => {
-      const normalized = this.normalizePhone(value);
-      if (normalized) phones.add(normalized);
-    };
+      const phones = new Set<string>();
+      const addPhone = (value?: string | null) => {
+        const normalized = this.normalizePhone(value);
+        if (normalized) phones.add(normalized);
+      };
 
-    const requesterIds =
-      linkedUserIds && linkedUserIds.length > 0
-        ? linkedUserIds
-        : await this.resolveLinkedUserIds(fallbackRef);
+      const requesterIds =
+        linkedUserIds && linkedUserIds.length > 0
+          ? linkedUserIds
+          : await this.resolveLinkedUserIds(fallbackRef);
 
-    if (requesterIds.length > 0) {
-      const linkedUsers = await this.prisma.user.findMany({
-        where: { id: { in: requesterIds } },
-        select: { phone: true, subscriberId: true },
-      });
-
-      const subscriberIds = new Set<string>();
-      linkedUsers.forEach((user) => {
-        addPhone(user.phone);
-        if (user.subscriberId) subscriberIds.add(user.subscriberId);
-      });
-
-      if (subscriberIds.size > 0) {
-        const subscribers = await this.prisma.subscriber.findMany({
-          where: { id: { in: Array.from(subscriberIds) } },
-          select: { phone: true },
+      if (requesterIds.length > 0) {
+        const linkedUsers = await this.prisma.user.findMany({
+          where: { id: { in: requesterIds } },
+          select: { phone: true, subscriberId: true },
         });
-        subscribers.forEach((subscriber) => addPhone(subscriber.phone));
+
+        const subscriberIds = new Set<string>();
+        linkedUsers.forEach((user) => {
+          addPhone(user.phone);
+          if (user.subscriberId) subscriberIds.add(user.subscriberId);
+        });
+
+        if (subscriberIds.size > 0) {
+          const subscribers = await this.prisma.subscriber.findMany({
+            where: { id: { in: Array.from(subscriberIds) } },
+            select: { phone: true },
+          });
+          subscribers.forEach((subscriber) => addPhone(subscriber.phone));
+        }
       }
-    }
 
-    const fallbackSubscriber = await this.prisma.subscriber.findUnique({
-      where: { id: fallbackRef },
-      select: { phone: true },
-    });
-    addPhone(fallbackSubscriber?.phone);
+      const fallbackSubscriber = await this.prisma.subscriber.findUnique({
+        where: { id: fallbackRef },
+        select: { phone: true },
+      });
+      addPhone(fallbackSubscriber?.phone);
 
-    // Allow direct phone fallback when caller ID is a phone-like value.
-    addPhone(fallbackRef);
+      // Allow direct phone fallback when caller ID is a phone-like value.
+      addPhone(fallbackRef);
 
-    return Array.from(phones);
+      return Array.from(phones);
     } catch (error) {
       this.logger.warn(
         `Falling back to empty linked phones for ${fallbackRef}: ${
@@ -321,49 +336,52 @@ export class PropertyService {
     return Array.from(tokens);
   }
 
-  private async resolveLinkedNameTokens(userRef: string, linkedUserIds?: string[]) {
+  private async resolveLinkedNameTokens(
+    userRef: string,
+    linkedUserIds?: string[],
+  ) {
     const fallbackRef = String(userRef || '').trim();
     if (!fallbackRef) return [] as string[];
 
     try {
-    const names = new Set<string>();
-    const addName = (value?: string | null) => {
-      this.normalizeNameTokens(value).forEach((token) => names.add(token));
-    };
+      const names = new Set<string>();
+      const addName = (value?: string | null) => {
+        this.normalizeNameTokens(value).forEach((token) => names.add(token));
+      };
 
-    const requesterIds =
-      linkedUserIds && linkedUserIds.length > 0
-        ? linkedUserIds
-        : await this.resolveLinkedUserIds(fallbackRef);
+      const requesterIds =
+        linkedUserIds && linkedUserIds.length > 0
+          ? linkedUserIds
+          : await this.resolveLinkedUserIds(fallbackRef);
 
-    if (requesterIds.length > 0) {
-      const linkedUsers = await this.prisma.user.findMany({
-        where: { id: { in: requesterIds } },
-        select: { name: true, subscriberId: true },
-      });
-
-      const subscriberIds = new Set<string>();
-      linkedUsers.forEach((user) => {
-        addName(user.name);
-        if (user.subscriberId) subscriberIds.add(user.subscriberId);
-      });
-
-      if (subscriberIds.size > 0) {
-        const subscribers = await this.prisma.subscriber.findMany({
-          where: { id: { in: Array.from(subscriberIds) } },
-          select: { name: true },
+      if (requesterIds.length > 0) {
+        const linkedUsers = await this.prisma.user.findMany({
+          where: { id: { in: requesterIds } },
+          select: { name: true, subscriberId: true },
         });
-        subscribers.forEach((subscriber) => addName(subscriber.name));
+
+        const subscriberIds = new Set<string>();
+        linkedUsers.forEach((user) => {
+          addName(user.name);
+          if (user.subscriberId) subscriberIds.add(user.subscriberId);
+        });
+
+        if (subscriberIds.size > 0) {
+          const subscribers = await this.prisma.subscriber.findMany({
+            where: { id: { in: Array.from(subscriberIds) } },
+            select: { name: true },
+          });
+          subscribers.forEach((subscriber) => addName(subscriber.name));
+        }
       }
-    }
 
-    const fallbackSubscriber = await this.prisma.subscriber.findUnique({
-      where: { id: fallbackRef },
-      select: { name: true },
-    });
-    addName(fallbackSubscriber?.name);
+      const fallbackSubscriber = await this.prisma.subscriber.findUnique({
+        where: { id: fallbackRef },
+        select: { name: true },
+      });
+      addName(fallbackSubscriber?.name);
 
-    return Array.from(names);
+      return Array.from(names);
     } catch (error) {
       this.logger.warn(
         `Falling back to empty linked name tokens for ${fallbackRef}: ${
@@ -381,10 +399,15 @@ export class PropertyService {
     listingType?: string | null;
     price?: number | null;
   }) {
-    const haystack = `${property.title || ''} ${property.description || ''}`.toLowerCase();
+    const haystack =
+      `${property.title || ''} ${property.description || ''}`.toLowerCase();
     if (/\b(test|probe|debug|dummy|sample|qa)\b/i.test(haystack)) return true;
-    if (this.normalizeEmail(property.contactEmail).endsWith('@example.com')) return true;
-    if (String(property.listingType || '').toUpperCase() === 'SALE' && Number(property.price || 0) <= 1) {
+    if (this.normalizeEmail(property.contactEmail).endsWith('@example.com'))
+      return true;
+    if (
+      String(property.listingType || '').toUpperCase() === 'SALE' &&
+      Number(property.price || 0) <= 1
+    ) {
       return true;
     }
     return false;
@@ -405,10 +428,38 @@ export class PropertyService {
     if (!property) return false;
     return new Set(linkedUserIds).has(property.userId);
   }
-  private async canAccessPropertyViaVisibleList(userId: string, propertyId: string) {
+  private async canAccessPropertyViaVisibleList(
+    userId: string,
+    propertyId: string,
+  ) {
     if (!propertyId) return false;
     const visibleProperties = await this.findByUser(userId);
     return visibleProperties.some((item) => item.id === propertyId);
+  }
+
+  private normalizePropertyRecord<
+    T extends {
+      province?: string | null;
+      district?: string | null;
+      subdistrict?: string | null;
+      postalCode?: string | null;
+      latitude?: number | string | null;
+      longitude?: number | string | null;
+    } | null,
+  >(property: T): T {
+    if (!property) return property;
+    const normalizedLocation = normalizeThaiGpsLocation(property);
+    const next = { ...property };
+    if (!next.province && normalizedLocation.province)
+      next.province = normalizedLocation.province;
+    if (!next.district && normalizedLocation.district)
+      next.district = normalizedLocation.district;
+    if (!next.subdistrict && normalizedLocation.subdistrict) {
+      next.subdistrict = normalizedLocation.subdistrict;
+    }
+    if (!next.postalCode && normalizedLocation.postalCode)
+      next.postalCode = normalizedLocation.postalCode;
+    return next;
   }
 
   async create(
@@ -434,6 +485,8 @@ export class PropertyService {
         );
       }
 
+      const normalizedLocation = normalizeThaiGpsLocation(dto);
+
       // Verify the user exists before attempting insert (prevents FK constraint 500)
       const userExists = await this.prisma.user.findUnique({
         where: { id: userId },
@@ -457,10 +510,10 @@ export class PropertyService {
           bedrooms: dto.bedrooms,
           bathrooms: dto.bathrooms,
           floors: dto.floors,
-          province: dto.province ?? '',
-          district: dto.district ?? '',
-          subdistrict: dto.subdistrict,
-          postalCode: dto.postalCode,
+          province: normalizedLocation.province,
+          district: normalizedLocation.district,
+          subdistrict: normalizedLocation.subdistrict,
+          postalCode: normalizedLocation.postalCode,
           addressLine: dto.addressLine,
           latitude: dto.latitude,
           longitude: dto.longitude,
@@ -846,10 +899,14 @@ export class PropertyService {
     if (keyword) {
       const keywordTerms = [
         keyword,
-        ...keyword.split(/[\s,]+/).map((term) => this.normalizeLocationTerm(term)),
+        ...keyword
+          .split(/[\s,]+/)
+          .map((term) => this.normalizeLocationTerm(term)),
       ].filter(Boolean);
       const uniqueKeywordTerms = [
-        ...new Set(keywordTerms.flatMap((term) => this.locationSearchTerms(term))),
+        ...new Set(
+          keywordTerms.flatMap((term) => this.locationSearchTerms(term)),
+        ),
       ].slice(0, 8);
       where.OR = uniqueKeywordTerms.flatMap((term) => [
         { title: { contains: term, mode: 'insensitive' as const } },
@@ -932,12 +989,18 @@ export class PropertyService {
         if (!this.isSchemaDriftError(countError)) throw countError;
         this.logger.warn(
           `Property search fallback count hit live schema drift; using returned row count: ${
-            countError instanceof Error ? countError.message : String(countError)
+            countError instanceof Error
+              ? countError.message
+              : String(countError)
           }`,
         );
         total = skip + properties.length;
       }
     }
+
+    properties = properties.map((property) =>
+      this.normalizePropertyRecord(property),
+    );
 
     return {
       properties,
@@ -949,13 +1012,14 @@ export class PropertyService {
   }
 
   async findById(id: string) {
-    return this.prisma.property.findUnique({
+    const property = await this.prisma.property.findUnique({
       where: { id },
       include: {
         images: { orderBy: { sortOrder: 'asc' } },
         user: { select: { id: true, name: true } },
       },
     });
+    return this.normalizePropertyRecord(property);
   }
 
   async findByUser(userId: string) {
@@ -992,7 +1056,9 @@ export class PropertyService {
             images: { orderBy: { sortOrder: 'asc' } },
           },
         });
-        return properties;
+        return properties.map((property) =>
+          this.normalizePropertyRecord(property),
+        );
       } catch (error) {
         this.logger.warn(
           `Direct property lookup with images failed for ${userId}: ${
@@ -1003,7 +1069,9 @@ export class PropertyService {
           where: { userId, status: { not: 'REMOVED' } },
           orderBy: { createdAt: 'desc' },
         });
-        return properties.map((property) => ({ ...property, images: [] }));
+        return properties.map((property) =>
+          this.normalizePropertyRecord({ ...property, images: [] }),
+        );
       }
     } catch (error) {
       this.logger.warn(
@@ -1018,7 +1086,7 @@ export class PropertyService {
     const linkedUserIds = await this.resolveLinkedUserIds(userId);
     if (linkedUserIds.length === 0) return [];
 
-    return this.prisma.property.findMany({
+    const properties = await this.prisma.property.findMany({
       where: {
         status: { not: 'REMOVED' },
         userId: { in: linkedUserIds },
@@ -1028,6 +1096,7 @@ export class PropertyService {
         images: { orderBy: { sortOrder: 'asc' } },
       },
     });
+    return properties.map((property) => this.normalizePropertyRecord(property));
   }
   async update(id: string, userId: string, data: Partial<CreatePropertyDto>) {
     const property = await this.prisma.property.findUnique({
@@ -1050,7 +1119,10 @@ export class PropertyService {
     );
 
     if (!hasAccess && property?.id) {
-      hasAccess = await this.canAccessPropertyViaVisibleList(userId, property.id);
+      hasAccess = await this.canAccessPropertyViaVisibleList(
+        userId,
+        property.id,
+      );
     }
 
     if (!hasAccess) {
@@ -1058,8 +1130,10 @@ export class PropertyService {
     }
 
     const { images, ...scalarData } = data;
+    const normalizedLocation = normalizeThaiGpsLocation(scalarData);
     const scalarUpdateData: Record<string, unknown> = {
       ...scalarData,
+      ...normalizedLocation,
     };
     if (scalarData.features !== undefined) {
       scalarUpdateData.features = scalarData.features as Prisma.InputJsonValue;
@@ -1126,7 +1200,10 @@ export class PropertyService {
     );
 
     if (!hasAccess && property?.id) {
-      hasAccess = await this.canAccessPropertyViaVisibleList(userId, property.id);
+      hasAccess = await this.canAccessPropertyViaVisibleList(
+        userId,
+        property.id,
+      );
     }
 
     if (!hasAccess) {

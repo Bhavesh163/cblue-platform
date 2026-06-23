@@ -79,6 +79,45 @@ describe('FixerService', () => {
       ).rejects.toThrow(ConflictException);
     });
 
+    it('normalizes GPS-only service area before registration', async () => {
+      const createdFixer = {
+        id: 'fixer-gps',
+        userId: 'user-1',
+        user: { id: 'user-1' },
+        skills: [],
+      };
+      prisma.fixer.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(createdFixer);
+      prisma.user.update.mockResolvedValue({});
+      prisma.fixer.create.mockResolvedValue(createdFixer);
+
+      await service.register('user-1', {
+        bio: 'Sukhumvit plumbing team',
+        yearsExperience: 5,
+        travelRadius: 15,
+        address: {
+          province: '',
+          district: '',
+          subdistrict: '',
+          postalCode: '',
+        },
+        gpsCoords: { lat: 13.736717, lng: 100.560062 },
+      } as never);
+
+      expect(prisma.fixer.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            serviceProvince: 'กรุงเทพมหานคร',
+            serviceDistrict: 'วัฒนา',
+            servicePostalCode: '10110',
+            gpsLat: 13.736717,
+            gpsLng: 100.560062,
+          }),
+        }),
+      );
+    });
+
     it('should register fixer and emit event', async () => {
       const createdFixer = {
         id: 'fixer-1',
@@ -456,10 +495,9 @@ describe('FixerService', () => {
         'I want a team to carry out a 100 sq.m. office fit out, a 10 page website development and a 100 FAQ chatbot development.',
       );
 
-      expect(result.slice(0, 2).map((candidate: { id: string }) => candidate.id)).toEqual([
-        'suppadesh',
-        'bhavesh',
-      ]);
+      expect(
+        result.slice(0, 2).map((candidate: { id: string }) => candidate.id),
+      ).toEqual(['suppadesh', 'bhavesh']);
     });
 
     it('should rank by the highest-value matched service group before cheaper lower-value groups', async () => {
@@ -476,11 +514,36 @@ describe('FixerService', () => {
           serviceProvince: 'Bangkok',
           serviceDistrict: 'Pathum Wan',
           priceList: [
-            { service: 'Fit-out', quantity: '1', unit: 'sqm', finalPrice: '30000' },
-            { service: 'Reinstatement', quantity: '1', unit: 'sqm', finalPrice: '10000' },
-            { service: 'Construction', quantity: '1', unit: 'sqm', finalPrice: '20000' },
-            { service: 'Website development', quantity: '1', unit: 'page', finalPrice: '1000' },
-            { service: 'Chatbot', quantity: '1', unit: 'FAQ', finalPrice: '100' },
+            {
+              service: 'Fit-out',
+              quantity: '1',
+              unit: 'sqm',
+              finalPrice: '30000',
+            },
+            {
+              service: 'Reinstatement',
+              quantity: '1',
+              unit: 'sqm',
+              finalPrice: '10000',
+            },
+            {
+              service: 'Construction',
+              quantity: '1',
+              unit: 'sqm',
+              finalPrice: '20000',
+            },
+            {
+              service: 'Website development',
+              quantity: '1',
+              unit: 'page',
+              finalPrice: '1000',
+            },
+            {
+              service: 'Chatbot',
+              quantity: '1',
+              unit: 'FAQ',
+              finalPrice: '100',
+            },
           ],
           user: {
             name: 'Bhavesh Fungprasertsuk',
@@ -504,9 +567,24 @@ describe('FixerService', () => {
           serviceProvince: 'Bangkok',
           serviceDistrict: 'Pathum Wan',
           priceList: [
-            { service: 'Fit out', quantity: '1', unit: 'sqm', finalPrice: '25000' },
-            { service: 'Reinstatement', quantity: '1', unit: 'sqm', finalPrice: '5000' },
-            { service: 'Construction', quantity: '1', unit: 'sqm', finalPrice: '15000' },
+            {
+              service: 'Fit out',
+              quantity: '1',
+              unit: 'sqm',
+              finalPrice: '25000',
+            },
+            {
+              service: 'Reinstatement',
+              quantity: '1',
+              unit: 'sqm',
+              finalPrice: '5000',
+            },
+            {
+              service: 'Construction',
+              quantity: '1',
+              unit: 'sqm',
+              finalPrice: '15000',
+            },
           ],
           user: {
             name: 'Suppadesh Funpgrsertsuk',
@@ -526,8 +604,18 @@ describe('FixerService', () => {
           serviceProvince: 'Bangkok',
           serviceDistrict: 'Pathum Wan',
           priceList: [
-            { service: 'Website Development', quantity: '1', unit: 'page', finalPrice: '1200' },
-            { service: 'Chatbot', quantity: '1', unit: 'FAQ', finalPrice: '20' },
+            {
+              service: 'Website Development',
+              quantity: '1',
+              unit: 'page',
+              finalPrice: '1200',
+            },
+            {
+              service: 'Chatbot',
+              quantity: '1',
+              unit: 'FAQ',
+              finalPrice: '20',
+            },
           ],
           user: { name: 'Gatoru Sojo', company: 'Gatoru Sojo' },
           skills: [
@@ -544,11 +632,13 @@ describe('FixerService', () => {
         'I want a team to carry out a 10 sq.m. office fit out, a 10 sq.m. reinstatement work, a 10 sq.m. office building construction and a 1000 page website development and a 1000 FAQ chatbot.',
       );
 
-      expect(result.slice(0, 2).map((candidate: { id: string }) => candidate.id)).toEqual([
-        'bhavesh',
-        'gatoru',
-      ]);
-      expect(result.find((candidate: { id: string }) => candidate.id === 'suppadesh')?.selectedReason).not.toMatch(/Cheapest/);
+      expect(
+        result.slice(0, 2).map((candidate: { id: string }) => candidate.id),
+      ).toEqual(['bhavesh', 'gatoru']);
+      expect(
+        result.find((candidate: { id: string }) => candidate.id === 'suppadesh')
+          ?.selectedReason,
+      ).not.toMatch(/Cheapest/);
     });
   });
 });

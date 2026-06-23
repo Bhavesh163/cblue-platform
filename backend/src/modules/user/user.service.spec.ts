@@ -233,9 +233,12 @@ describe('UserService', () => {
     });
 
     it('should treat Prisma code-only missing-column errors as schema drift', async () => {
-      const codeOnlyDrift = Object.assign(new Error('Invalid Prisma invocation'), {
-        code: 'P2022',
-      });
+      const codeOnlyDrift = Object.assign(
+        new Error('Invalid Prisma invocation'),
+        {
+          code: 'P2022',
+        },
+      );
       prisma.user.findUnique
         .mockRejectedValueOnce(codeOnlyDrift)
         .mockResolvedValueOnce({
@@ -338,6 +341,33 @@ describe('UserService', () => {
   });
 
   describe('createAddress', () => {
+    it('normalizes GPS-only address before creating it', async () => {
+      prisma.address.create.mockResolvedValue({
+        id: 'addr-gps',
+        userId: 'user-1',
+        province: 'กรุงเทพมหานคร',
+      });
+
+      await service.createAddress('user-1', {
+        province: '',
+        district: '',
+        subdistrict: '',
+        postalCode: '',
+        latitude: 13.736717,
+        longitude: 100.560062,
+      } as never);
+
+      expect(prisma.address.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          userId: 'user-1',
+          province: 'กรุงเทพมหานคร',
+          district: 'วัฒนา',
+          subdistrict: 'คลองเตยเหนือ',
+          postalCode: '10110',
+        }),
+      });
+    });
+
     it('should create address', async () => {
       prisma.address.create.mockResolvedValue({
         id: 'addr-1',

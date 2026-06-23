@@ -22,7 +22,7 @@ import {
   getSubdistrictsForDistrict,
   lookupByPostalCode,
 } from "../../lib/thai-subdistrict-data";
-import { reverseGeocodeThaiAddress } from "../../lib/thai-reverse-geocode";
+import { normalizeGpsAddressForSubmit } from "../../lib/gps-location-normalization";
 import ReCaptcha from "../../components/ReCaptcha";
 import GpsDetectButton from "../../components/GpsDetectButton";
 import GpsResolvedLocation from "../../components/GpsResolvedLocation";
@@ -951,7 +951,7 @@ function FixerRegisterContent() {
   async function handleGpsDetected(coords: { lat: number; lng: number }) {
     setGpsCoords(coords);
     setForm((prev) => ({ ...prev, province: "", district: "", postalCode: "" }));
-    const resolved = await reverseGeocodeThaiAddress(coords);
+    const resolved = await normalizeGpsAddressForSubmit(coords);
     if (!resolved) return;
     setForm((prev) => ({
       ...prev,

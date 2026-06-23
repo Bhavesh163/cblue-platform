@@ -111,18 +111,22 @@ function hasValidGpsCoordinatePair(latitude: number | null, longitude: number | 
 }
 
 function getPropertySiteLocation(property: Partial<PropertyDetail>) {
+  const parts = [
+    cleanLocationPart(property.addressLine),
+    cleanLocationPart(property.subdistrict),
+    cleanLocationPart(property.district),
+    cleanLocationPart(property.province),
+  ].filter(Boolean);
+  const locationLabel = parts.join(", " );
+  if (locationLabel) return locationLabel;
+
   const latitude = normalizeCoordinate(property.latitude);
   const longitude = normalizeCoordinate(property.longitude);
   if (latitude !== null && longitude !== null && hasValidGpsCoordinatePair(latitude, longitude)) {
     return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
   }
 
-  return [
-    cleanLocationPart(property.addressLine),
-    cleanLocationPart(property.subdistrict),
-    cleanLocationPart(property.district),
-    cleanLocationPart(property.province),
-  ].filter(Boolean).join(", ") || "Unknown";
+  return "Unknown";
 }
 
 export default function PropertyDetailPage() {

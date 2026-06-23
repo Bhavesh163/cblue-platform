@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CreateAddressDto } from './dto/create-address.dto';
+import { normalizeThaiGpsLocation } from '../../common/thai-gps-location';
 
 @Injectable()
 export class UserService {
@@ -95,7 +96,9 @@ export class UserService {
         if (!this.isSchemaDriftError(legacyError)) throw legacyError;
         this.logger.warn(
           `Legacy profile read still hit schema drift for user ${userId}; retrying with minimal fixer-safe select: ${
-            legacyError instanceof Error ? legacyError.message : String(legacyError)
+            legacyError instanceof Error
+              ? legacyError.message
+              : String(legacyError)
           }`,
         );
         try {
@@ -363,8 +366,10 @@ export class UserService {
       });
     }
 
+    const normalizedLocation = normalizeThaiGpsLocation(dto);
+
     return this.prisma.address.create({
-      data: { ...dto, userId },
+      data: { ...dto, ...normalizedLocation, userId },
     });
   }
 
@@ -385,9 +390,11 @@ export class UserService {
       });
     }
 
+    const normalizedLocation = normalizeThaiGpsLocation(dto);
+
     return this.prisma.address.update({
       where: { id: addressId },
-      data: dto,
+      data: { ...dto, ...normalizedLocation },
     });
   }
 

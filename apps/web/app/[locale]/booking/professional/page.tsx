@@ -7,7 +7,7 @@ import Link from "next/link";
 import { PROFESSIONAL_SERVICES, THAI_PROVINCES } from "../../lib/constants";
 import { getDistrictsForProvince } from "../../lib/thai-address-data";
 import { getSubdistrictsForDistrict, lookupByPostalCode } from "../../lib/thai-subdistrict-data";
-import { reverseGeocodeThaiAddress } from "../../lib/thai-reverse-geocode";
+import { normalizeGpsAddressForSubmit } from "../../lib/gps-location-normalization";
 import ReCaptcha from "../../components/ReCaptcha";
 import GpsDetectButton from "../../components/GpsDetectButton";
 import GpsResolvedLocation from "../../components/GpsResolvedLocation";
@@ -195,7 +195,7 @@ function ProfessionalBookingContent() {
       if (Number.isFinite(lat) && Number.isFinite(lng)) {
         const coords = { lat, lng };
         setGpsCoords(coords);
-        void reverseGeocodeThaiAddress(coords).then((resolved) => {
+        void normalizeGpsAddressForSubmit(coords).then((resolved) => {
           if (!resolved) return;
           setForm((prev) => ({
             ...prev,
@@ -215,7 +215,7 @@ function ProfessionalBookingContent() {
   async function handleGpsDetected(coords: { lat: number; lng: number }) {
     setGpsCoords(coords);
     setForm((prev) => ({ ...prev, province: "", district: "", subdistrict: "", postalCode: "" }));
-    const resolved = await reverseGeocodeThaiAddress(coords);
+    const resolved = await normalizeGpsAddressForSubmit(coords);
     if (!resolved) return;
     setForm((prev) => ({
       ...prev,

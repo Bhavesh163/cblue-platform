@@ -12,20 +12,29 @@ describe('PropertyService', () => {
         findMany: jest.fn(),
         findUnique: jest.fn(),
         count: jest.fn(),
+        create: jest.fn(),
         update: jest.fn(),
       },
+      propertyImage: {
+        createMany: jest.fn(),
+        deleteMany: jest.fn(),
+      },
+      $transaction: jest.fn(async (cb) => cb(prisma)),
       user: {
         findUnique: jest.fn(),
         findMany: jest.fn(),
       },
       subscriber: {
         findUnique: jest.fn(),
-        findMany: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
       },
     };
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [PropertyService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        PropertyService,
+        { provide: PrismaService, useValue: prisma },
+      ],
     }).compile();
 
     service = module.get<PropertyService>(PropertyService);
@@ -33,6 +42,77 @@ describe('PropertyService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  describe('create', () => {
+    it('normalizes GPS-only property location before persisting', async () => {
+      prisma.user.findUnique.mockResolvedValue({ id: 'user-1' });
+      prisma.property.create.mockResolvedValue({ id: 'property-1' });
+
+      await service.create({ id: 'user-1', email: 'owner@example.com' }, {
+        propertyType: 'CONDO',
+        listingType: 'RENT',
+        title: 'Sukhumvit condo',
+        price: 25000,
+        province: '',
+        district: '',
+        subdistrict: '',
+        postalCode: '',
+        latitude: 13.736717,
+        longitude: 100.560062,
+        contactName: 'Owner',
+        contactPhone: '+66812345678',
+        contactEmail: 'owner@example.com',
+      } as never);
+
+      expect(prisma.property.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            province: 'กรุงเทพมหานคร',
+            district: 'วัฒนา',
+            subdistrict: 'คลองเตยเหนือ',
+            postalCode: '10110',
+            latitude: 13.736717,
+            longitude: 100.560062,
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('update', () => {
+    it('normalizes GPS-only property location before updating', async () => {
+      prisma.property.findUnique.mockResolvedValue({
+        id: 'property-1',
+        userId: 'user-1',
+      });
+      prisma.user.findUnique.mockResolvedValue({ id: 'user-1' });
+      prisma.user.findMany.mockResolvedValue([]);
+      prisma.subscriber.findUnique.mockResolvedValue(null);
+      prisma.subscriber.findMany.mockResolvedValue([]);
+      prisma.property.update.mockResolvedValue({ id: 'property-1' });
+
+      await service.update('property-1', 'user-1', {
+        province: '',
+        district: '',
+        subdistrict: '',
+        postalCode: '',
+        latitude: 13.736717,
+        longitude: 100.560062,
+      } as never);
+
+      expect(prisma.property.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'property-1' },
+          data: expect.objectContaining({
+            province: 'กรุงเทพมหานคร',
+            district: 'วัฒนา',
+            subdistrict: 'คลองเตยเหนือ',
+            postalCode: '10110',
+          }),
+        }),
+      );
+    });
   });
 
   describe('search', () => {
@@ -72,7 +152,9 @@ describe('PropertyService', () => {
           expect.objectContaining({
             OR: expect.arrayContaining([
               expect.objectContaining({
-                province: expect.objectContaining({ contains: 'กรุงเทพมหานคร' }),
+                province: expect.objectContaining({
+                  contains: 'กรุงเทพมหานคร',
+                }),
               }),
             ]),
           }),
@@ -86,7 +168,9 @@ describe('PropertyService', () => {
           expect.objectContaining({
             OR: expect.arrayContaining([
               expect.objectContaining({
-                subdistrict: expect.objectContaining({ contains: 'คลองเตยเหนือ' }),
+                subdistrict: expect.objectContaining({
+                  contains: 'คลองเตยเหนือ',
+                }),
               }),
             ]),
           }),
@@ -267,7 +351,9 @@ describe('PropertyService', () => {
     });
 
     it('should rethrow non-schema search errors', async () => {
-      prisma.property.findMany.mockRejectedValue(new Error('connection refused'));
+      prisma.property.findMany.mockRejectedValue(
+        new Error('connection refused'),
+      );
       prisma.property.count.mockResolvedValue(0);
 
       await expect(service.search({ limit: 20 } as any)).rejects.toThrow(
@@ -295,7 +381,9 @@ describe('PropertyService', () => {
         { id: 'bhavesh-sub', email: 'bhaveshfung@gmail.com' },
       ]);
       prisma.user.findMany
-        .mockResolvedValueOnce([{ id: 'bhavesh-user', email: 'bhaveshfung@gmail.com' }])
+        .mockResolvedValueOnce([
+          { id: 'bhavesh-user', email: 'bhaveshfung@gmail.com' },
+        ])
         .mockResolvedValueOnce([{ id: 'bhavesh-user' }]);
       prisma.property.findMany.mockResolvedValue([ownProperty]);
 
@@ -310,7 +398,9 @@ describe('PropertyService', () => {
           },
         }),
       );
-      const whereJson = JSON.stringify(prisma.property.findMany.mock.calls[0][0].where);
+      const whereJson = JSON.stringify(
+        prisma.property.findMany.mock.calls[0][0].where,
+      );
       expect(whereJson).not.toContain('contactEmail');
       expect(whereJson).not.toContain('contactPhone');
     });

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { computeBudgetBreakdown, resolvePartnerPriceList } from "../../../lib/computeBudgetBreakdown";
 import { storePoProjectDetails } from "../../../lib/po-project-details";
 import { refreshSubscriberSession } from "../../../lib/subscriberSession";
+import { normalizeGpsAddressForSubmit } from "../lib/gps-location-normalization";
 
 interface Fixer {
   id: string;
@@ -640,36 +641,73 @@ export default function FixerResults({
   })();
   const latitude = Number(bookingAddress?.latitude ?? fallbackGpsCoords?.lat);
   const longitude = Number(bookingAddress?.longitude ?? fallbackGpsCoords?.lng);
-  const gpsLocationStr = Number.isFinite(latitude) && Number.isFinite(longitude)
+  const hasUsableGps = Number.isFinite(latitude) && Number.isFinite(longitude);
+  const [normalizedBookingAddress, setNormalizedBookingAddress] = useState<BookingAddress | undefined>(bookingAddress);
+  const [gpsNormalizationAttempted, setGpsNormalizationAttempted] = useState(!hasUsableGps);
+
+  useEffect(() => {
+    let cancelled = false;
+    const coords = hasUsableGps ? { lat: latitude, lng: longitude } : null;
+
+    async function normalizeBookingAddress() {
+      setGpsNormalizationAttempted(false);
+      const resolved = await normalizeGpsAddressForSubmit(coords, bookingAddress);
+      if (cancelled) return;
+      setNormalizedBookingAddress({
+        ...(bookingAddress || { province: '', district: '', subdistrict: '', postalCode: '' }),
+        ...(resolved || {}),
+        ...(coords ? { latitude: coords.lat, longitude: coords.lng } : {}),
+      });
+      setGpsNormalizationAttempted(true);
+    }
+
+    void normalizeBookingAddress();
+    return () => { cancelled = true; };
+  }, [
+    bookingAddress?.province,
+    bookingAddress?.district,
+    bookingAddress?.subdistrict,
+    bookingAddress?.postalCode,
+    bookingAddress?.addressText,
+    bookingAddress?.latitude,
+    bookingAddress?.longitude,
+    hasUsableGps,
+    latitude,
+    longitude,
+  ]);
+
+  const effectiveBookingAddress = normalizedBookingAddress || bookingAddress;
+  const gpsLocationStr = hasUsableGps
     ? `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
     : null;
-  const bookingLocation = (bookingAddress?.locationType === 'gps' && gpsLocationStr)
-    ? gpsLocationStr
-    : (bookingAddress?.subdistrict || bookingAddress?.district || bookingAddress?.province || bookingAddress?.addressText || gpsLocationStr || "");
+  const isResolvingGpsOnlyLocation = hasUsableGps && !gpsNormalizationAttempted;
+  const bookingLocation = (effectiveBookingAddress?.locationType === 'gps' && gpsLocationStr)
+    ? (effectiveBookingAddress?.subdistrict || effectiveBookingAddress?.district || effectiveBookingAddress?.province || gpsLocationStr)
+    : (effectiveBookingAddress?.subdistrict || effectiveBookingAddress?.district || effectiveBookingAddress?.province || effectiveBookingAddress?.addressText || gpsLocationStr || "");
   const buildMatchQuery = useCallback((nominateId?: string) => {
     const params = new URLSearchParams({
       service,
-      district: bookingAddress?.district || "auto",
-      province: bookingAddress?.province || "auto",
+      district: effectiveBookingAddress?.district || "auto",
+      province: effectiveBookingAddress?.province || "auto",
     });
-    if (bookingAddress?.postalCode) params.set("postalCode", bookingAddress.postalCode);
+    if (effectiveBookingAddress?.postalCode) params.set("postalCode", effectiveBookingAddress.postalCode);
     if (description) params.set("description", description);
     if (nominateId) params.set("nominateId", nominateId);
     return params.toString();
-  }, [bookingAddress?.district, bookingAddress?.postalCode, bookingAddress?.province, description, service]);
+  }, [effectiveBookingAddress?.district, effectiveBookingAddress?.postalCode, effectiveBookingAddress?.province, description, service]);
   const ensureOrderAddressId = async (token: string) => {
     // Allow creation if at least one geographic field is provided OR GPS coordinates
-    const hasGeo = bookingAddress?.province || bookingAddress?.district || bookingAddress?.subdistrict;
+    const hasGeo = effectiveBookingAddress?.province || effectiveBookingAddress?.district || effectiveBookingAddress?.subdistrict;
     const hasGps = Number.isFinite(latitude) && Number.isFinite(longitude);
     if (!hasGeo && !hasGps) {
       return "";
     }
 
-    const streetParts = [bookingAddress?.houseNumber, bookingAddress?.road, bookingAddress?.soi]
+    const streetParts = [effectiveBookingAddress?.houseNumber, effectiveBookingAddress?.road, effectiveBookingAddress?.soi]
       .map((part) => String(part || "").trim())
       .filter(Boolean);
     const street = streetParts.join(" ") || undefined;
-    const notes = String(bookingAddress?.addressText || "").trim() || undefined;
+    const notes = String(effectiveBookingAddress?.addressText || "").trim() || undefined;
 
     try {
       const existingRes = await fetch("/api/v1/users/me/addresses", {
@@ -679,10 +717,10 @@ export default function FixerResults({
         const existing = await existingRes.json();
         if (Array.isArray(existing)) {
           const matched = existing.find((address: any) =>
-            String(address?.province || "") === bookingAddress?.province &&
-            String(address?.district || "") === bookingAddress?.district &&
-            String(address?.subdistrict || "") === bookingAddress?.subdistrict &&
-            String(address?.postalCode || "") === bookingAddress?.postalCode,
+            String(address?.province || "") === effectiveBookingAddress?.province &&
+            String(address?.district || "") === effectiveBookingAddress?.district &&
+            String(address?.subdistrict || "") === effectiveBookingAddress?.subdistrict &&
+            String(address?.postalCode || "") === effectiveBookingAddress?.postalCode,
           );
           if (matched?.id) return matched.id;
         }
@@ -700,13 +738,13 @@ export default function FixerResults({
         },
         body: JSON.stringify({
           label: bookingType === "project" ? "Project Site" : bookingType === "professional" ? "Professional Service Location" : "Service Location",
-          province: bookingAddress?.province || (hasGps ? "GPS Location" : "Unknown"),
-          district: bookingAddress?.district || (hasGps ? "GPS Location" : "Unknown"),
-          subdistrict: bookingAddress?.subdistrict || (hasGps ? gpsLocationStr || "GPS Location" : "Unknown"),
-          postalCode: bookingAddress?.postalCode || "00000",
+          province: effectiveBookingAddress?.province || (hasGps ? "GPS Location" : "Unknown"),
+          district: effectiveBookingAddress?.district || (hasGps ? "GPS Location" : "Unknown"),
+          subdistrict: effectiveBookingAddress?.subdistrict || (hasGps ? gpsLocationStr || "GPS Location" : "Unknown"),
+          postalCode: effectiveBookingAddress?.postalCode || "00000",
           street,
-          building: bookingAddress?.building || undefined,
-          unit: bookingAddress?.floor || undefined,
+          building: effectiveBookingAddress?.building || undefined,
+          unit: effectiveBookingAddress?.floor || undefined,
           notes,
           latitude: hasGps ? latitude : undefined,
           longitude: hasGps ? longitude : undefined,
@@ -752,6 +790,7 @@ export default function FixerResults({
   // Hydration-safe: initialize random/date-dependent values on client
   useEffect(() => {
     const allowDemoFallback = process.env.NODE_ENV === "development";
+    if (isResolvingGpsOnlyLocation) return;
 
     // Try fetching real candidates from the backend AI Top-8 algorithm
     fetch(`/api/v1/fixers/match?${buildMatchQuery()}`)
@@ -813,7 +852,7 @@ export default function FixerResults({
     };
     const pool = comments[locale] ?? comments["en"]!;
     setFixerCommentOfCustomer(pool[Math.floor(Math.random() * pool.length)]!);
-  }, [buildMatchQuery, description, locale, service]);
+  }, [buildMatchQuery, description, isResolvingGpsOnlyLocation, locale, service]);
 
   // Persist workflow state to localStorage
   useEffect(() => {
@@ -2440,7 +2479,7 @@ export default function FixerResults({
   // Step: Fixer List — AI Top 8 Selection
 
   const handleNominate = async () => {
-    if (!nominateId.trim()) return;
+    if (!nominateId.trim() || isResolvingGpsOnlyLocation) return;
     
     try {
       const url = `/api/v1/fixers/match?${buildMatchQuery(nominateId)}`;

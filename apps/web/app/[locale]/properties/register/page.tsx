@@ -9,7 +9,7 @@ import { getDistrictsForProvince } from "../../lib/thai-address-data";
 import { getSubdistrictsForDistrict, lookupByPostalCode } from "../../lib/thai-subdistrict-data";
 import GpsDetectButton from "../../components/GpsDetectButton";
 import GpsResolvedLocation from "../../components/GpsResolvedLocation";
-import { reverseGeocodeThaiAddress } from "../../lib/thai-reverse-geocode";
+import { normalizeGpsAddressForSubmit } from "../../lib/gps-location-normalization";
 import { clearSubscriberSession, refreshSubscriberSession } from "../../../../lib/subscriberSession";
 const PROPERTY_TYPES = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "APARTMENT", "OFFICE", "WAREHOUSE", "SHOPHOUSE"] as const;
 
@@ -258,7 +258,7 @@ export default function PropertyRegisterPage() {
   async function handleGpsDetected(coords: { lat: number; lng: number }) {
     setGpsCoords(coords);
     setForm((prev) => ({ ...prev, province: "", district: "", subdistrict: "", postalCode: "" }));
-    const resolved = await reverseGeocodeThaiAddress(coords);
+    const resolved = await normalizeGpsAddressForSubmit(coords);
     if (!resolved) return;
     setForm((prev) => ({
       ...prev,

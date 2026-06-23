@@ -16,6 +16,7 @@ import { SetAvailabilityDto } from './dto/set-availability.dto';
 import { UploadKycDto } from './dto/upload-kyc.dto';
 import { firstValueFrom } from 'rxjs';
 import FormData from 'form-data';
+import { normalizeThaiGpsLocation } from '../../common/thai-gps-location';
 
 export interface SelectedFixer {
   id: string;
@@ -96,6 +97,15 @@ export class FixerService {
       data: { role: 'FIXER' },
     });
 
+    const serviceLocation = normalizeThaiGpsLocation({
+      province: dto.address?.province,
+      district: dto.address?.district,
+      subdistrict: dto.address?.subdistrict,
+      postalCode: dto.address?.postalCode,
+      latitude: dto.gpsCoords?.lat,
+      longitude: dto.gpsCoords?.lng,
+    });
+
     const fixer = await this.prisma.fixer.create({
       data: {
         userId,
@@ -112,9 +122,9 @@ export class FixerService {
         priceList: dto.priceList
           ? (JSON.parse(JSON.stringify(dto.priceList)) as Prisma.InputJsonValue)
           : undefined,
-        serviceProvince: dto.address?.province,
-        serviceDistrict: dto.address?.district,
-        servicePostalCode: dto.address?.postalCode,
+        serviceProvince: serviceLocation.province,
+        serviceDistrict: serviceLocation.district,
+        servicePostalCode: serviceLocation.postalCode,
         gpsLat: dto.gpsCoords?.lat,
         gpsLng: dto.gpsCoords?.lng,
         aiScore: dto.aiScore,
@@ -177,6 +187,15 @@ export class FixerService {
   async updateMyFixerProfile(userId: string, dto: RegisterFixerDto) {
     const fixer = await this.getFixerByUserId(userId);
 
+    const serviceLocation = normalizeThaiGpsLocation({
+      province: dto.address?.province,
+      district: dto.address?.district,
+      subdistrict: dto.address?.subdistrict,
+      postalCode: dto.address?.postalCode,
+      latitude: dto.gpsCoords?.lat,
+      longitude: dto.gpsCoords?.lng,
+    });
+
     await this.prisma.user.update({
       where: { id: userId },
       data: {
@@ -206,9 +225,9 @@ export class FixerService {
         priceList: dto.priceList
           ? (JSON.parse(JSON.stringify(dto.priceList)) as Prisma.InputJsonValue)
           : Prisma.JsonNull,
-        serviceProvince: dto.address?.province,
-        serviceDistrict: dto.address?.district,
-        servicePostalCode: dto.address?.postalCode,
+        serviceProvince: serviceLocation.province,
+        serviceDistrict: serviceLocation.district,
+        servicePostalCode: serviceLocation.postalCode,
         gpsLat: dto.gpsCoords?.lat,
         gpsLng: dto.gpsCoords?.lng,
         aiScore: dto.aiScore,
@@ -428,16 +447,14 @@ export class FixerService {
     const separatorMatch = boundarySlice.match(
       /(?:,|;|\n|\b(?:and|plus|พร้อม|และ)\b)/i,
     );
-    const endIdx = separatorMatch?.index != null
-      ? contentStartIdx + separatorMatch.index
-      : maxEnd;
+    const endIdx =
+      separatorMatch?.index != null
+        ? contentStartIdx + separatorMatch.index
+        : maxEnd;
     return normalized.slice(startIdx, endIdx).trim();
   }
 
-  private extractContextTerms(
-    window: string,
-    unitPattern?: RegExp,
-  ): string[] {
+  private extractContextTerms(window: string, unitPattern?: RegExp): string[] {
     return window
       .split(/\s+/)
       .filter(
@@ -471,7 +488,9 @@ export class FixerService {
       return 'build';
     }
 
-    if (/\b(?:legal|law|contract|compliance|permit|license)\b/i.test(normalized)) {
+    if (
+      /\b(?:legal|law|contract|compliance|permit|license)\b/i.test(normalized)
+    ) {
       return 'legal';
     }
 
@@ -556,7 +575,8 @@ export class FixerService {
     const normalizedPostalCode = String(postalCode || '').trim();
     const autoProvince = !normalizedProvince || normalizedProvince === 'auto';
     const autoDistrict = !normalizedDistrict || normalizedDistrict === 'auto';
-    const autoPostalCode = !normalizedPostalCode || normalizedPostalCode === 'auto';
+    const autoPostalCode =
+      !normalizedPostalCode || normalizedPostalCode === 'auto';
 
     if (autoProvince && autoDistrict && autoPostalCode) return true;
 
@@ -681,7 +701,10 @@ export class FixerService {
               // compares only the important high-value lines so partial tiny offers
               // do not become the "cheapest" result.
               let multiTotal = 0;
-              for (const [pairIndex, { qty, contextTerms }] of serviceQtyPairs.entries()) {
+              for (const [
+                pairIndex,
+                { qty, contextTerms },
+              ] of serviceQtyPairs.entries()) {
                 if (contextTerms.length === 0) {
                   const lineTotal = Math.round(pricePerUnit * qty);
                   multiTotal += lineTotal;
@@ -842,7 +865,8 @@ export class FixerService {
       const groupPairMaxTotals = new Map<string, Map<number, number>>();
       for (const partner of formattedPool) {
         for (const line of partner.estimatedBreakdownMeta) {
-          const groupKey = line.serviceGroupKey || this.inferServiceGroupKey(line.service);
+          const groupKey =
+            line.serviceGroupKey || this.inferServiceGroupKey(line.service);
           if (!groupPairMaxTotals.has(groupKey)) {
             groupPairMaxTotals.set(groupKey, new Map<number, number>());
           }
@@ -855,10 +879,13 @@ export class FixerService {
       }
 
       const groupTotalsDescending = [...groupPairMaxTotals.entries()]
-        .map(([groupKey, pairTotals]) => [
-          groupKey,
-          [...pairTotals.values()].reduce((sum, total) => sum + total, 0),
-        ] as [string, number])
+        .map(
+          ([groupKey, pairTotals]) =>
+            [
+              groupKey,
+              [...pairTotals.values()].reduce((sum, total) => sum + total, 0),
+            ] as [string, number],
+        )
         .filter(([, total]) => total > 0)
         .sort((a, b) => b[1] - a[1]);
       const importantGroupKey = groupTotalsDescending[0]?.[0] || '';
@@ -866,8 +893,8 @@ export class FixerService {
       for (const partner of formattedPool) {
         const importantLines = partner.estimatedBreakdownMeta.filter((line) =>
           importantGroupKey
-            ? (line.serviceGroupKey || this.inferServiceGroupKey(line.service)) ===
-              importantGroupKey
+            ? (line.serviceGroupKey ||
+                this.inferServiceGroupKey(line.service)) === importantGroupKey
             : false,
         );
         partner.importantMatchedCount = new Set(
@@ -982,7 +1009,16 @@ export class FixerService {
         pick(r, '💡 Suggested Candidate');
       }
 
-      return results.slice(0, 8).map(({ estimatedBreakdownMeta, comparisonTotal, importantMatchedCount, ...partner }) => partner);
+      return results
+        .slice(0, 8)
+        .map(
+          ({
+            estimatedBreakdownMeta,
+            comparisonTotal,
+            importantMatchedCount,
+            ...partner
+          }) => partner,
+        );
     } catch (error) {
       console.error('[matchFixers] error', error);
       return [];

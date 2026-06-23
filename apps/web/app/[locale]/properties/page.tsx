@@ -75,19 +75,22 @@ function hasValidGpsCoordinatePair(latitude: number | null, longitude: number | 
 }
 
 function getPropertySiteLocation(property: Partial<Property>) {
-  const latitude = normalizeCoordinate(property.latitude);
-  const longitude = normalizeCoordinate(property.longitude);
-  if (latitude !== null && longitude !== null && hasValidGpsCoordinatePair(latitude, longitude)) {
-    return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
-  }
-
   const parts = [
     normalizeOptionalLocationText(property.addressLine),
     normalizeOptionalLocationText(property.subdistrict),
     normalizeOptionalLocationText(property.district),
     normalizeOptionalLocationText(property.province),
   ].filter(Boolean);
-  return parts.join(", ") || "Unknown";
+  const locationLabel = parts.join(", " );
+  if (locationLabel) return locationLabel;
+
+  const latitude = normalizeCoordinate(property.latitude);
+  const longitude = normalizeCoordinate(property.longitude);
+  if (latitude !== null && longitude !== null && hasValidGpsCoordinatePair(latitude, longitude)) {
+    return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+  }
+
+  return "Unknown";
 }
 
 function isLikelyValidImageDataPayload(payload: string) {
