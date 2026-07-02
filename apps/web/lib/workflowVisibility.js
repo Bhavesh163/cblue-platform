@@ -8,6 +8,97 @@ const COMPLETION_CHAT_PATTERN =
   /workflow completed|job is now complete|job is complete|stored in history|rated this project|this inquiry is now closed|moved to history/i;
 const UNKNOWN_PLACE_PATTERN = /^(?:unknown|n\/a|tbd|-|--\s*select)/i;
 
+
+
+const MEETING_VISIBLE_RECENT_CONFIRM_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+
+function parseWorkflowMeetingDateTimeMs(meetingDate, meetingTime, fallback) {
+  const rawDate = String(meetingDate || "").trim();
+  const rawTime = String(meetingTime || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+    const ts = new Date(`${rawDate}T${rawTime || "00:00"}`).getTime();
+    if (Number.isFinite(ts) && ts > 0) return ts;
+  }
+  const ddmmyyyy = rawDate.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (ddmmyyyy) {
+    const [, day, month, year] = ddmmyyyy;
+    const [hour = "00", minute = "00"] = rawTime.split(":");
+    const ts = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute)).getTime();
+    if (Number.isFinite(ts) && ts > 0) return ts;
+  }
+  const numeric = Number(fallback);
+  if (Number.isFinite(numeric) && numeric > 0) return numeric;
+  const ts = new Date(fallback || (rawDate ? `${rawDate}T${rawTime || "00:00"}` : 0)).getTime();
+  return Number.isFinite(ts) ? ts : 0;
+}
+
+export function isWorkflowMeetingCardVisible({
+  meetingDate = "",
+  meetingTime = "",
+  createdAt,
+  date,
+  now = Date.now(),
+  pastWindowMs = MEETING_VISIBLE_RECENT_CONFIRM_WINDOW_MS,
+} = {}) {
+  const currentTs = Number(now);
+  const safeNow = Number.isFinite(currentTs) && currentTs > 0 ? currentTs : Date.now();
+  const meetingTs = parseWorkflowMeetingDateTimeMs(meetingDate, meetingTime, date || createdAt);
+  if (meetingTs > 0 && meetingTs >= safeNow - pastWindowMs) return true;
+  const confirmedTs = parseWorkflowMeetingDateTimeMs("", "", createdAt || date);
+  return confirmedTs > 0 && confirmedTs >= safeNow - pastWindowMs;
+}
+
+export function parseWorkflowMeetingInviteDetails(value) {
+  const text = String(value || "");
+  const match = text.match(/(?:customer\s+sent\s+meeting\s+invitation|meeting\s+invitation|partner\s+confirmed\s+site\s+meeting)(?:\s+for\s+(PO-(?:\d{8}|\d{4}-\d{4,})))?:\s*(\d{2}\/\d{2}\/\d{4})\s+(\d{2}:\d{2})\s+at\s+([\s\S]+?)(?:\.\s*(?:Note:|Next:|Waiting\b)|$)/i);
+  const noteMatch = text.match(/\bNote:\s*([\s\S]*?)(?:\.+\s*Next:|$)/i);
+  const rawNote = String(noteMatch?.[1] || "").trim();
+  const meetingNote = rawNote && !/[.!?]$/.test(rawNote) ? `${rawNote}.` : rawNote;
+  return {
+    po: match?.[1] || "",
+    meetingDate: match?.[2] || "",
+    meetingDateLabel: match?.[2] || "",
+    meetingTime: match?.[3] || "",
+    meetingTimeLabel: match?.[3] || "",
+    meetingVenue: String(match?.[4] || "").trim(),
+    meetingNote,
+  };
+}
+
+export function buildMeetingConfirmedAlert({
+  id,
+  po,
+  audience = "customer",
+  createdAt = Date.now(),
+  time = "",
+  customerEmail = "",
+  customerName = "",
+} = {}) {
+  const normalizedPo = normalizeWorkflowPo(po) || String(po || "").trim();
+  const isPartner = audience === "partner";
+  const msg = isPartner
+    ? `${normalizedPo} Meeting confirmed. Next: Send variation if needed.`
+    : `${normalizedPo} Meeting confirmed`;
+  const numericCreatedAt = Number(createdAt);
+  const safeCreatedAt = Number.isFinite(numericCreatedAt) && numericCreatedAt > 0 ? numericCreatedAt : Date.now();
+  return {
+    id: id || `${isPartner ? "meeting-confirmed" : "meeting-confirmed-cust"}-${normalizedPo}`,
+    po: normalizedPo,
+    type: isPartner ? "meeting_confirmed" : "notice",
+    msg,
+    message: msg,
+    msgTh: msg,
+    msgZh: msg,
+    ...(time ? { time } : {}),
+    timestamp: new Date(safeCreatedAt).toISOString(),
+    createdAt: safeCreatedAt,
+    unread: true,
+    dot: isPartner ? "bg-purple-500" : "bg-green-500",
+    ...(customerEmail ? { customerEmail } : {}),
+    ...(customerName ? { customerName } : {}),
+  };
+}
+
 export function normalizeWorkflowPo(value) {
   const match = String(value ?? "").match(WORKFLOW_PO_PATTERN);
   return match ? match[0].toUpperCase() : "";

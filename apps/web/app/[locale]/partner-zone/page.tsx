@@ -118,52 +118,24 @@ const T: { en: Translations; th: Translations; zh: Translations; [k: string]: Tr
   },
 };
 
-/* --- Demo Data --- */
-const DEMO_JOBS: Job[] = [
-  { id: "j1", customerAlias: "C-1824", serviceCategory: "Plumbing", status: "in_progress", description: "Fix kitchen sink leak", createdAt: "2026-04-17T00:00:00.000Z", type: "household", tier: "Standard" },
-  { id: "j2", customerAlias: "C-3901", serviceCategory: "Electrical", status: "pending", description: "Install new ceiling fan", createdAt: "2026-04-16T00:00:00.000Z", type: "household", tier: "Economy" },
-  { id: "j3", customerAlias: "C-7752", serviceCategory: "Plumbing", status: "completed", description: "Replace bathroom faucet", createdAt: "2026-04-11T00:00:00.000Z", type: "household", tier: "Corporate" },
-  { id: "j4", customerAlias: "C-4409", serviceCategory: "Smart Home", status: "completed", description: "Smart home setup", createdAt: "2026-04-04T00:00:00.000Z", type: "project", tier: "Specialist" },
-  { id: "j5", customerAlias: "C-5510", serviceCategory: "Architect", status: "completed", description: "Building design consultation", createdAt: "2026-03-01T00:00:00.000Z", type: "professional", tier: "Expert" },
-];
+/* --- Empty defaults; live data is loaded from the signed-in partner/session. --- */
+const EMPTY_JOBS: Job[] = [];
 
-const DEMO_PROFILE: ProviderProfile = {
-  name: "Partner Demo", profession: "Plumber / Electrician", tier: "standard",
-  rating: 4.7, totalJobs: 142, email: "partner@cblue.co.th", phone: "091-xxx-xxxx",
-  company: "Demo Services Co.",
-  priceList: [
-    { service: "Basic Repair", price: 500 }, { service: "Pipe Installation", price: 1500 },
-    { service: "Drain Cleaning", price: 800 }, { service: "Water Heater Install", price: 3500 },
-    { service: "Full Bathroom Plumbing", price: 12000 },
-  ],
+const EMPTY_PROFILE: ProviderProfile = {
+  name: "",
+  profession: "",
+  tier: "economy",
+  rating: 0,
+  totalJobs: 0,
+  email: "",
+  phone: "",
+  company: "",
+  priceList: [],
 };
 
-const DEMO_MESSAGES: Record<string, ChatMessage[]> = {
-  j1: [
-    { id: "m1", sender: "customer", text: "Hi, the kitchen sink has been leaking for 2 days", timestamp: "2026-04-17T02:00:00.000Z" },
-    { id: "m2", sender: "provider", text: "I can come check it tomorrow morning. Can you send a photo?", timestamp: "2026-04-17T02:15:00.000Z" },
-    { id: "m3", sender: "customer", text: "Sure, here is the photo. It is under the sink pipe connection.", timestamp: "2026-04-17T02:30:00.000Z" },
-    { id: "m4", sender: "provider", text: "Looks like a worn gasket. I will bring replacement parts.", timestamp: "2026-04-17T02:45:00.000Z" },
-  ],
-  j2: [
-    { id: "m5", sender: "customer", text: "I need a ceiling fan installed in my living room", timestamp: "2026-04-16T04:00:00.000Z" },
-    { id: "m6", sender: "provider", text: "What size fan? And do you already have a mounting bracket?", timestamp: "2026-04-16T04:15:00.000Z" },
-  ],
-};
-
-const DEMO_NOTIFICATIONS: Notification[] = [
-  { id: "n1", msg: "New job request from Customer C-1824", msgTh: "คำขอใหม่จากลูกค้า C-1824 — ประปา", time: "5m ago", dot: "bg-sky-500", unread: true },
-  { id: "n2", msg: "Customer C-3901 confirmed appointment", msgTh: "ลูกค้า C-3901 ยืนยันนัดหมาย", time: "1h ago", dot: "bg-green-500", unread: true },
-  { id: "n3", msg: "You received a 5-star review!", msgTh: "คุณได้รับรีวิว 5 ดาว!", time: "2d ago", dot: "bg-amber-500", unread: false },
-  { id: "n4", msg: "Reminder: appointment with C-1824 tomorrow 10:00 AM", msgTh: "แจ้งเตือน: นัดหมายกับ C-1824 พรุ่งนี้ 10:00 น.", time: "3d ago", dot: "bg-purple-500", unread: false },
-  { id: "n5", msg: "Property inquiry: Customer interested in Condo Sukhumvit", msgTh: "สอบถามอสังหาฯ: ลูกค้าสนใจคอนโดสุขุมวิท", time: "5d ago", dot: "bg-emerald-500", unread: false },
-];
-
-const DEMO_PROPERTIES: PropertyListing[] = [
-  { id: "p1", title: "Condo Sukhumvit 21", titleTh: "คอนโดสุขุมวิท 21", type: "CONDO", listingType: "SALE", price: "5,500,000", status: "active", province: "กรุงเทพมหานคร", views: 234, inquiries: 12 },
-  { id: "p2", title: "House Rama 9", titleTh: "บ้านพระราม 9", type: "HOUSE", listingType: "RENT", price: "35,000/mo", status: "active", province: "กรุงเทพมหานคร", views: 156, inquiries: 8 },
-  { id: "p3", title: "Townhouse Bangna", titleTh: "ทาวน์เฮ้าส์บางนา", type: "TOWNHOUSE", listingType: "SALE", price: "3,200,000", status: "pending", province: "สมุทรปราการ", views: 45, inquiries: 2 },
-];
+const EMPTY_MESSAGES: Record<string, ChatMessage[]> = {};
+const EMPTY_NOTIFICATIONS: Notification[] = [];
+const EMPTY_PROPERTIES: PropertyListing[] = [];
 
 const ICON_MAP: Record<string, string> = { household: "\u{1F3E0}", project: "\u{1F4BC}", professional: "\u{1F454}", property: "\u{1F3E2}" };
 const STATUS_STYLE: Record<string, string> = { pending: "bg-yellow-100 text-yellow-800", in_progress: "bg-blue-100 text-blue-800", completed: "bg-green-100 text-green-800", cancelled: "bg-red-100 text-red-800" };
@@ -181,10 +153,10 @@ export default function PartnerZonePage() {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [selectedJob, setSelectedJob] = useState<string | null>(null);
   const [waitModalJob, setWaitModalJob] = useState<Job | null>(null);
-  const [messages, setMessages] = useState<Record<string, ChatMessage[]>>(DEMO_MESSAGES);
+  const [messages, setMessages] = useState<Record<string, ChatMessage[]>>(EMPTY_MESSAGES);
   const [newMessage, setNewMessage] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const [userProfile, setUserProfile] = useState<ProviderProfile>(DEMO_PROFILE);
+  const [userProfile, setUserProfile] = useState<ProviderProfile>(EMPTY_PROFILE);
 
   useEffect(() => {
     try { 
@@ -271,8 +243,8 @@ export default function PartnerZonePage() {
   }
 
   /* --- Authenticated content --- */
-  const activeJobs = DEMO_JOBS.filter((j) => j.status === "pending" || j.status === "in_progress");
-  const pastJobs = DEMO_JOBS.filter((j) => j.status === "completed" || j.status === "cancelled");
+  const activeJobs = EMPTY_JOBS.filter((j) => j.status === "pending" || j.status === "in_progress");
+  const pastJobs = EMPTY_JOBS.filter((j) => j.status === "completed" || j.status === "cancelled");
   const statusLabels: Record<string, string> = { pending: t.pending, in_progress: t.inProgress, completed: t.completed, cancelled: t.cancelled };
 
   function sendMessage() {
@@ -296,9 +268,9 @@ export default function PartnerZonePage() {
   const tabs: { key: Tab; label: string; icon: string; badge?: number }[] = [
     { key: "overview", label: t.overview, icon: "\u{1F4CA}" },
     { key: "jobs", label: t.jobs, icon: "\u{1F4CB}", badge: activeJobs.length },
-    { key: "properties", label: t.properties, icon: "\u{1F3E2}", badge: DEMO_PROPERTIES.length },
+    { key: "properties", label: t.properties, icon: "\u{1F3E2}", badge: EMPTY_PROPERTIES.length },
     { key: "chat", label: t.chat, icon: "\u{1F4AC}" },
-    { key: "notifications", label: t.notifications, icon: "\u{1F514}", badge: DEMO_NOTIFICATIONS.filter((n) => n.unread).length },
+    { key: "notifications", label: t.notifications, icon: "\u{1F514}", badge: EMPTY_NOTIFICATIONS.filter((n) => n.unread).length },
     { key: "history", label: t.history, icon: "\u{1F4DC}" },
     { key: "profile", label: t.profile, icon: "\u{1F464}" },
   ];
@@ -345,7 +317,7 @@ export default function PartnerZonePage() {
         </div>
 
         {/* Tab Content */}
-        {activeTab === "overview" && <OverviewTab t={t} locale={locale} prefix={prefix} profile={userProfile} activeJobs={activeJobs} pastJobs={pastJobs} notifications={DEMO_NOTIFICATIONS} properties={DEMO_PROPERTIES} onOrderClick={(job) => {
+        {activeTab === "overview" && <OverviewTab t={t} locale={locale} prefix={prefix} profile={userProfile} activeJobs={activeJobs} pastJobs={pastJobs} notifications={EMPTY_NOTIFICATIONS} properties={EMPTY_PROPERTIES} onOrderClick={(job) => {
           if (job && (job.status === "pending" || job.status === "MATCHING" || job.status === "matching")) {
             setWaitModalJob(job);
           } else {
@@ -360,9 +332,9 @@ export default function PartnerZonePage() {
             setSelectedJob(id); setActiveTab("chat"); 
           }
         }} />}
-        {activeTab === "properties" && <PropertiesTab t={t} locale={locale} prefix={prefix} properties={DEMO_PROPERTIES} />}
+        {activeTab === "properties" && <PropertiesTab t={t} locale={locale} prefix={prefix} properties={EMPTY_PROPERTIES} />}
         {activeTab === "chat" && <ChatTabContent t={t} messages={messages} selectedJob={selectedJob} setSelectedJob={setSelectedJob} newMessage={newMessage} setNewMessage={setNewMessage} sendMessage={sendMessage} statusLabels={statusLabels} chatEndRef={chatEndRef} />}
-        {activeTab === "notifications" && <NotificationsTab t={t} locale={locale} notifications={DEMO_NOTIFICATIONS} />}
+        {activeTab === "notifications" && <NotificationsTab t={t} locale={locale} notifications={EMPTY_NOTIFICATIONS} />}
         {activeTab === "history" && <HistoryTab t={t} locale={locale} pastJobs={pastJobs} statusLabels={statusLabels} />}
         {activeTab === "profile" && <ProfileTab t={t} locale={locale} profile={userProfile} renderStars={renderStars} />}
 
@@ -760,7 +732,7 @@ function PropertiesTab({ t, locale, prefix, properties }: {
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">{t.editContact}</label>
                       <input type="text" inputMode="tel" value={editForm.contactPhone} onChange={(e) => setEditForm({ ...editForm, contactPhone: e.target.value })}
-                        className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500" placeholder="091-xxx-xxxx" />
+                        className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500" />
                     </div>
                   </div>
                   <div className="flex gap-3 pt-2">
@@ -800,7 +772,7 @@ function ChatTabContent({ t, messages, selectedJob, setSelectedJob, newMessage, 
           <h3 className="font-semibold text-gray-900">{t.jobs}</h3>
           <p className="text-xs text-gray-400 mt-0.5">{t.realNamesHidden}</p>
         </div>
-        {DEMO_JOBS.filter((j) => j.status !== "cancelled").map((job) => (
+        {EMPTY_JOBS.filter((j) => j.status !== "cancelled").map((job) => (
           <button key={job.id} onClick={() => setSelectedJob(job.id)} className={`w-full text-left p-4 border-b border-gray-50 hover:bg-gray-50 transition ${selectedJob === job.id ? "bg-amber-50 border-l-4 border-l-amber-600" : ""}`}>
             <div className="flex items-center justify-between">
               <span className="font-medium text-sm text-gray-900">{ICON_MAP[job.type]} {t.anonymousCustomer} #{job.customerAlias}</span>
@@ -816,8 +788,8 @@ function ChatTabContent({ t, messages, selectedJob, setSelectedJob, newMessage, 
           <>
             <div className="p-4 border-b border-gray-100 flex items-center justify-between">
               <div>
-                <h3 className="font-semibold text-gray-900">{t.anonymousCustomer} #{DEMO_JOBS.find((j) => j.id === selectedJob)?.customerAlias}</h3>
-                <p className="text-xs text-gray-500">{DEMO_JOBS.find((j) => j.id === selectedJob)?.serviceCategory} {"\u2014"} {DEMO_JOBS.find((j) => j.id === selectedJob)?.description}</p>
+                <h3 className="font-semibold text-gray-900">{t.anonymousCustomer} #{EMPTY_JOBS.find((j) => j.id === selectedJob)?.customerAlias}</h3>
+                <p className="text-xs text-gray-500">{EMPTY_JOBS.find((j) => j.id === selectedJob)?.serviceCategory} {"\u2014"} {EMPTY_JOBS.find((j) => j.id === selectedJob)?.description}</p>
               </div>
               <span className="text-xs text-gray-400">{t.realNamesHidden}</span>
             </div>

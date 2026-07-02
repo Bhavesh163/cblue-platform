@@ -6,11 +6,14 @@ import Image from "next/image";
 import { useTranslations, useLocale } from "next-intl";
 import { refreshSubscriberSession } from "../../../lib/subscriberSession";
 import {
+  buildMeetingConfirmedAlert,
   collectTerminalWorkflowPos,
   filterLiveWorkflowItems,
   isCompletedAwaitingWorkflowRating,
+  isWorkflowMeetingCardVisible,
   isTerminalWorkflowStatus,
   normalizeWorkflowHistoryItems,
+  parseWorkflowMeetingInviteDetails,
   pickWorkflowMeetingVenue,
   pruneWorkflowStorage,
   readBrowserTerminalWorkflowPos,
@@ -211,10 +214,8 @@ const parseWorkflowMeetingDateTimeMs = (meetingDate?: string, meetingTime?: stri
   const ts = new Date(fallback || (rawDate ? `${rawDate}T${rawTime || '00:00'}` : 0)).getTime();
   return Number.isFinite(ts) ? ts : 0;
 };
-const isWorkflowMeetingVisible = (meetingDate?: string, meetingTime?: string, fallback?: any) => {
-  const ts = parseWorkflowMeetingDateTimeMs(meetingDate, meetingTime, fallback);
-  return ts > 0 && ts >= Date.now() - WORKFLOW_MEETING_VISIBLE_WINDOW_MS;
-};
+const isWorkflowMeetingVisible = (meetingDate?: string, meetingTime?: string, fallback?: any) =>
+  isWorkflowMeetingCardVisible({ meetingDate, meetingTime, createdAt: fallback, date: fallback });
 const PO_CODE_PATTERN = /PO-(?:\d{8}|\d{4}-\d{4,})/i;
 const PO_CODE_EXACT_PATTERN = /^PO-(?:\d{8}|\d{4}-\d{4,})$/i;
 const isValidPoCode = (value: string) => PO_CODE_EXACT_PATTERN.test(String(value || '').trim());
@@ -231,21 +232,13 @@ const extractPoCode = (orderLike: any) => {
   const desc = String(orderLike?.description || orderLike?.desc || "");
   return desc.match(PO_CODE_PATTERN)?.[0] || "";
 };
-const parseMeetingInviteDetails = (value: string) => {
-  const text = String(value || '');
-  const match = text.match(/customer sent meeting invitation(?: for (PO-(?:\d{8}|\d{4}-\d{4,})))?:\s*(\d{2}\/\d{2}\/\d{4})\s+(\d{2}:\d{2})\s+at\s+(.+?)(?:\.|$)/i);
-  return {
-    po: match?.[1] || '',
-    meetingDate: match?.[2] || '',
-    meetingTime: match?.[3] || '',
-    meetingVenue: String(match?.[4] || '').trim(),
-  };
-};
+const parseMeetingInviteDetails = (value: string) => parseWorkflowMeetingInviteDetails(value);
 const readMeetingInviteSnapshot = (po: string, fallback?: any) => {
   const normalizedPo = String(po || '').trim();
   const candidates = [
     String(fallback?.meetingMessage || ''),
     String(fallback?.statusNote || ''),
+    String(getWorkflowStatusNote(fallback) || ''),
     String(fallback?.description || ''),
     String(fallback?.desc || ''),
   ];
@@ -2647,12 +2640,14 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         .filter((item: any) => item?.type === 'meeting_scheduled')
         .map((item: any) => String(item.po || '').trim()),
     );
-    const confirmedMeetingByChatPos = new Set(
-      chatFeed
-        .filter((chatItem: any) => /partner confirmed site meeting|meeting confirmed by partner/i.test(String(chatItem?.lastMsg || '')))
-        .map((chatItem: any) => String(chatItem?.po || '').trim())
-        .filter((po: string) => isValidPoCode(po)),
-    );
+    const confirmedMeetingChatByPo = chatFeed
+      .filter((chatItem: any) => /partner confirmed site meeting|meeting confirmed by partner/i.test(String(chatItem?.lastMsg || '')))
+      .reduce((map: Map<string, string>, chatItem: any) => {
+        const chatPo = String(chatItem?.po || '').trim();
+        if (isValidPoCode(chatPo)) map.set(chatPo, String(chatItem?.lastMsg || ''));
+        return map;
+      }, new Map<string, string>());
+    const confirmedMeetingByChatPos = new Set(confirmedMeetingChatByPo.keys());
     const toSchedule = new Set<string>();
     const scheduledPayloadByPo = new Map<string, any>();
     for (const order of workflowOrders) {
@@ -2661,22 +2656,30 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       const currentStatus = String(order.status || '').toUpperCase();
       const prevStatus = prevOrderStatuses.current[order.id];
       const pendingMeeting = pendingMeetingByPo.get(po);
+      const statusNote = getWorkflowStatusNote(order);
       const hasStatusTransitionConfirmation =
         prevStatus === 'MEETING_REQUESTED' && currentStatus === 'IN_PROGRESS';
       const hasChatConfirmation = confirmedMeetingByChatPos.has(po);
+      const hasStatusNoteConfirmation =
+        currentStatus === 'IN_PROGRESS' && /partner confirmed site meeting|meeting confirmed by partner|partner confirmed meeting time/i.test(statusNote);
       const hasConfirmedMeetingSignal =
         !scheduledMeetingPos.has(po) &&
-        (hasStatusTransitionConfirmation || hasChatConfirmation);
+        (hasStatusTransitionConfirmation || hasChatConfirmation || hasStatusNoteConfirmation);
       if (hasConfirmedMeetingSignal) {
         const existingActive = mockActiveItems.find((item: any) => item?.po === po);
-        const inviteDetails = readMeetingInviteSnapshot(po, pendingMeeting || existingActive || order);
+        const confirmationChatText = confirmedMeetingChatByPo.get(po) || '';
+        const inviteDetails = readMeetingInviteSnapshot(po, {
+          ...(pendingMeeting || existingActive || order),
+          meetingMessage: confirmationChatText || pendingMeeting?.meetingMessage || existingActive?.meetingMessage || order?.meetingMessage,
+        });
         const createdAt =
           parseDateMs(
-            pendingMeeting?.createdAt ||
-              pendingMeeting?.date ||
-              existingActive?.createdAt ||
+            order.statusHistory?.[0]?.createdAt ||
               order.statusChangedAt ||
               order.updatedAt ||
+              pendingMeeting?.createdAt ||
+              pendingMeeting?.date ||
+              existingActive?.createdAt ||
               order.createdAt ||
               Date.now(),
           ) || Date.now();
@@ -3684,8 +3687,15 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         return { id: `a-${x.id}`, msg: `${x.po || "Order"}: Waiting for site meeting confirmation${meetingWhen ? ` for ${meetingWhen}` : ""}. Next: partner will confirm the proposed date and venue.`, msgTh: `${x.po || "ออเดอร์"}: รอการยืนยันนัดหมายหน้างาน${meetingWhen ? ` วันที่ ${meetingWhen}` : ""} ขั้นตอนถัดไปคือรอพาร์ทเนอร์ยืนยันวันเวลาและสถานที่`, msgZh: `${x.po || "订单"}: 等待现场确认现场会议${meetingWhen ? `（${meetingWhen}）` : ""}。下一步：等待合作伙伴确认日期和地点。`, time: stableTime, createdAt, dot: "bg-amber-500" };
       }
       if (x.type === "meeting_scheduled") {
-        const meetingWhen = formatWorkflowMeetingLabel(x.meetingDate, x.meetingTime, x.createdAt);
-        return { id: `a-${x.id}`, msg: `${x.po || "Order"}: Site meeting confirmed${meetingWhen ? ` for ${meetingWhen}` : ""}. Next: attend the meeting and wait for partner variation if extra work is needed.`, msgTh: `${x.po || "ออเดอร์"}: ยืนยันนัดหมายหน้างานแล้ว${meetingWhen ? ` วันที่ ${meetingWhen}` : ""} ขั้นตอนถัดไปคือเข้าพบหน้างานและรอ variation จากพาร์ทเนอร์หากมีงานเพิ่ม`, msgZh: `${x.po || "订单"}: 现场会议已确认${meetingWhen ? `（${meetingWhen}）` : ""}。下一步：参加会议，如有额外工作则等待合作伙伴提交变更。`, time: stableTime, createdAt, dot: "bg-teal-500" };
+        return buildMeetingConfirmedAlert({
+          id: `a-${x.id}`,
+          po: x.po || "Order",
+          audience: "customer",
+          createdAt,
+          time: stableTime,
+          customerEmail: x.customerEmail || subscriberEmail,
+          customerName: x.customerName || x.customer || subscriber?.name || "Customer",
+        });
       }
       if (x.type === "variation_pending") return { id: `a-${x.id}`, msg: `${x.po || "Order"}: Partner submitted a variation request. Next: review the revised scope and approve it to continue.`, msgTh: `${x.po || "ออเดอร์"}: พาร์ทเนอร์ส่งคำขอ variation แล้ว ขั้นตอนถัดไปคือพิจารณาขอบเขตงาน/ราคาใหม่และอนุมัติเพื่อดำเนินการต่อ`, msgZh: `${x.po || "订单"}: 合作伙伴已提交变更申请。下一步：查看调整后的范围并批准以继续。`, time: stableTime, createdAt, dot: "bg-purple-500" };
       if (x.type === "complete_pending") return { id: `a-${x.id}`, msg: `${x.po || "Order"}: Partner submitted the project-complete request. Next: review the completion note and confirm if the work is finished.`, msgTh: `${x.po || "ออเดอร์"}: พาร์ทเนอร์ส่งคำของานเสร็จแล้ว ขั้นตอนถัดไปคืออ่านบันทึกสรุปและยืนยันเมื่อโครงการเสร็จจริง`, msgZh: `${x.po || "订单"}: 合作伙伴已提交完工申请。下一步：查看完工说明，并在工作确实完成后确认。`, time: stableTime, createdAt, dot: "bg-green-500" };
@@ -5130,7 +5140,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                               <span className="text-xs text-gray-900 font-bold">{m.title} ({m.po})</span>
                               <span className="bg-amber-100 text-amber-800 text-[10px] px-2 py-1 rounded-full font-bold">{formatWorkflowMeetingLabel(m.meetingDate, m.meetingTime, m.createdAt || m.date)}</span>
                             </div>
-                            <p className="text-[11px] text-gray-600">{locale === "th" ? "สถานที่:" : locale === "zh" ? "地点:" : "Location:"} {getWorkflowDisplayLocation(m.location, m.subdistrict, m.meetingVenue, m.venue) || 'TBD'} | {locale === "th" ? "ผู้ให้บริการ:" : locale === "zh" ? "服务提供商:" : "Provider:"} {m.customer}</p>
+                            <p className="text-[11px] text-gray-600">{locale === "th" ? "สถานที่:" : locale === "zh" ? "地点:" : "Venue:"} {pickWorkflowMeetingVenue(m.meetingVenue, m.venue, m.location, m.subdistrict) || 'TBD'} | {locale === "th" ? "ผู้ให้บริการ:" : locale === "zh" ? "服务提供商:" : "Provider:"} {m.customer}</p>
                           </div>
                         ),
                       }));

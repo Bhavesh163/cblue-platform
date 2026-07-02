@@ -14,6 +14,32 @@ type StorageLike = {
   setItem?(key: string, value: string): void;
 };
 
+export function isWorkflowMeetingCardVisible(input?: {
+  meetingDate?: string;
+  meetingTime?: string;
+  createdAt?: any;
+  date?: any;
+  now?: any;
+  pastWindowMs?: number;
+}): boolean;
+export function parseWorkflowMeetingInviteDetails(value: any): {
+  po: string;
+  meetingDate: string;
+  meetingDateLabel: string;
+  meetingTime: string;
+  meetingTimeLabel: string;
+  meetingVenue: string;
+  meetingNote: string;
+};
+export function buildMeetingConfirmedAlert(input?: {
+  id?: string;
+  po?: any;
+  audience?: "partner" | "customer";
+  createdAt?: any;
+  time?: string;
+  customerEmail?: string;
+  customerName?: string;
+}): any;
 export function normalizeWorkflowPo(value: any): string;
 export function pickWorkflowMeetingVenue(...values: any[]): string;
 export function hasWorkflowCompletionMarker(value: any): boolean;

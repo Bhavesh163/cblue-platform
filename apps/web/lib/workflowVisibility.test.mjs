@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  parseWorkflowMeetingInviteDetails,
+  isWorkflowMeetingCardVisible,
+  buildMeetingConfirmedAlert,
   collectTerminalWorkflowPos,
   filterLiveWorkflowItems,
   hasWorkflowCompletionMarker,
@@ -86,6 +89,68 @@ test("detects terminal workflow markers from chat and closed storage keys", () =
     "PO-2606-8888",
     "PO-2606-9999",
   ]);
+});
+
+test("parses customer meeting invitation without truncating GPS venue", () => {
+  const parsed = parseWorkflowMeetingInviteDetails(
+    "[SYSTEM] Customer sent meeting invitation for PO-2606-4636: 25/06/2026 16:52 at 13.793951, 100.609606. Note: bring water too.. Next: waiting for partner confirmation before variation.",
+  );
+
+  assert.equal(parsed.po, "PO-2606-4636");
+  assert.equal(parsed.meetingDate, "25/06/2026");
+  assert.equal(parsed.meetingTime, "16:52");
+  assert.equal(parsed.meetingVenue, "13.793951, 100.609606");
+  assert.equal(parsed.meetingNote, "bring water too.");
+});
+
+test("parses partner confirmed meeting status note with date time and venue", () => {
+  const parsed = parseWorkflowMeetingInviteDetails(
+    "Partner confirmed site meeting for PO-2606-4636: 25/06/2026 16:52 at 13.793951, 100.609606. Next: Send variation if needed.",
+  );
+
+  assert.equal(parsed.po, "PO-2606-4636");
+  assert.equal(parsed.meetingDate, "25/06/2026");
+  assert.equal(parsed.meetingTime, "16:52");
+  assert.equal(parsed.meetingVenue, "13.793951, 100.609606");
+});
+
+test("keeps recently confirmed meetings visible even when proposed time is past", () => {
+  const now = Date.UTC(2026, 5, 28, 12, 0);
+  const confirmedAt = Date.UTC(2026, 5, 28, 11, 55);
+
+  assert.equal(
+    isWorkflowMeetingCardVisible({
+      meetingDate: "25/06/2026",
+      meetingTime: "16:52",
+      createdAt: confirmedAt,
+      now,
+    }),
+    true,
+  );
+});
+
+test("builds exact meeting-confirmed alerts with timestamps for partner and customer", () => {
+  const createdAt = Date.UTC(2026, 5, 25, 9, 52);
+  const partnerAlert = buildMeetingConfirmedAlert({
+    id: "meeting-confirmed-PO-2606-4636",
+    po: "PO-2606-4636",
+    audience: "partner",
+    createdAt,
+  });
+  const customerAlert = buildMeetingConfirmedAlert({
+    id: "meeting-confirmed-cust-PO-2606-4636",
+    po: "PO-2606-4636",
+    audience: "customer",
+    createdAt,
+  });
+
+  assert.equal(partnerAlert.msg, "PO-2606-4636 Meeting confirmed. Next: Send variation if needed.");
+  assert.equal(partnerAlert.message, partnerAlert.msg);
+  assert.equal(partnerAlert.createdAt, createdAt);
+  assert.equal(partnerAlert.timestamp, new Date(createdAt).toISOString());
+  assert.equal(customerAlert.msg, "PO-2606-4636 Meeting confirmed");
+  assert.equal(customerAlert.message, customerAlert.msg);
+  assert.equal(customerAlert.createdAt, createdAt);
 });
 
 test("keeps backend completed orders visible until rating/history closes the workflow", () => {

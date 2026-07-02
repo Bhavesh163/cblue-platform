@@ -6,29 +6,7 @@ import '../../core/providers.dart';
 class RequestsTab extends StatelessWidget {
   const RequestsTab({super.key});
 
-  static final List<Map<String, dynamic>> _demoRequests = [
-    {
-      'service': {'en': 'Kitchen Renovation', 'th': 'ปรับปรุงครัว', 'zh': '厨房翻新'},
-      'type': 'household',
-      'status': 'MATCHING',
-      'date': '2026-04-11',
-      'description': {'en': 'Full kitchen renovation with new cabinets', 'th': 'ปรับปรุงครัวใหม่พร้อมตู้', 'zh': '全新厨柜厨房翻新'},
-    },
-    {
-      'service': {'en': 'Website Development', 'th': 'พัฒนาเว็บไซต์', 'zh': '网站开发'},
-      'type': 'project',
-      'status': 'PENDING',
-      'date': '2026-04-09',
-      'description': {'en': 'E-commerce website with payment gateway', 'th': 'เว็บอีคอมเมิร์ซพร้อมระบบชำระเงิน', 'zh': '带支付的电商网站'},
-    },
-    {
-      'service': {'en': 'Architect Consultation', 'th': 'ปรึกษาสถาปนิก', 'zh': '建筑师咨询'},
-      'type': 'professional',
-      'status': 'MATCHING',
-      'date': '2026-04-13',
-      'description': {'en': 'House design review and permit assistance', 'th': 'ตรวจสอบแบบบ้านและช่วยเรื่องใบอนุญาต', 'zh': '房屋设计审查和许可协助'},
-    },
-  ];
+  static final List<Map<String, dynamic>> _demoRequests = [];
 
   @override
   Widget build(BuildContext context) {

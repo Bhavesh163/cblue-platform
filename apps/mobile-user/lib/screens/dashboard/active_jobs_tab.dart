@@ -7,44 +7,7 @@ import '../../core/providers.dart';
 class ActiveJobsTab extends StatelessWidget {
   const ActiveJobsTab({super.key});
 
-  static final List<Map<String, dynamic>> _demoJobs = [
-    {
-      'service': {'en': 'AC Repair', 'th': 'ซ่อมแอร์', 'zh': '空调维修'},
-      'partnerId': 'FIX-1042',
-      'tier': 'Standard',
-      'status': 'IN_PROGRESS',
-      'date': '2026-04-10',
-      'progress': 0.65,
-      'rating': 4.5,
-    },
-    {
-      'service': {'en': 'Plumbing Fix', 'th': 'ซ่อมท่อน้ำ', 'zh': '水管维修'},
-      'partnerId': 'FIX-0983',
-      'tier': 'Economy',
-      'status': 'CONFIRMED',
-      'date': '2026-04-12',
-      'progress': 0.3,
-      'rating': 4.8,
-    },
-    {
-      'service': {'en': 'Interior Design', 'th': 'ออกแบบภายใน', 'zh': '室内设计'},
-      'partnerId': 'PRO-0221',
-      'tier': 'Corporate',
-      'status': 'DEPOSIT_PENDING',
-      'date': '2026-04-15',
-      'progress': 0.1,
-      'rating': 0.0,
-    },
-    {
-      'service': {'en': 'Electrical Wiring', 'th': 'เดินสายไฟ', 'zh': '电气布线'},
-      'partnerId': 'FIX-1105',
-      'tier': 'Specialist',
-      'status': 'IN_PROGRESS',
-      'date': '2026-04-08',
-      'progress': 0.85,
-      'rating': 4.2,
-    },
-  ];
+  static final List<Map<String, dynamic>> _demoJobs = [];
 
   @override
   Widget build(BuildContext context) {

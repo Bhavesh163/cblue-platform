@@ -20,11 +20,14 @@ import {
 import { readStoredPoProjectDetails, storePoProjectDetails } from "../../../lib/po-project-details";
 import { refreshSubscriberSession } from "../../../lib/subscriberSession";
 import {
+  buildMeetingConfirmedAlert,
   collectTerminalWorkflowPos,
   filterLiveWorkflowItems,
   isCompletedAwaitingWorkflowRating,
+  isWorkflowMeetingCardVisible,
   isTerminalWorkflowStatus,
   normalizeWorkflowHistoryItems,
+  parseWorkflowMeetingInviteDetails,
   pickWorkflowMeetingVenue,
   pruneWorkflowStorage,
   readBrowserTerminalWorkflowPos,
@@ -382,10 +385,8 @@ const getWorkflowDisplayLocation = (...values: any[]) => {
   return normalized.find((value) => !PARTIAL_GPS_COORDINATE_PATTERN.test(value)) || normalized[0] || '';
 };
 const WORKFLOW_MEETING_VISIBLE_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
-const isWorkflowMeetingVisible = (dateValue?: string, timeValue?: string, fallback?: any) => {
-  const ts = parseMeetingDateTimeMs(dateValue, timeValue) || parseWorkflowSortTs(fallback);
-  return ts > 0 && ts >= Date.now() - WORKFLOW_MEETING_VISIBLE_WINDOW_MS;
-};
+const isWorkflowMeetingVisible = (dateValue?: string, timeValue?: string, fallback?: any) =>
+  isWorkflowMeetingCardVisible({ meetingDate: dateValue, meetingTime: timeValue, createdAt: fallback, date: fallback });
 const PO_CODE_PATTERN = /PO-(?:\d{8}|\d{4}-\d{4,})/i;
 const PO_CODE_EXACT_PATTERN = /^PO-(?:\d{8}|\d{4}-\d{4,})$/i;
 const isPoCode = (value: string) => PO_CODE_EXACT_PATTERN.test(String(value || "").trim());
@@ -398,16 +399,7 @@ const extractPoCode = (value: any) => {
   const desc = String(value?.description || value?.desc || "");
   return desc.match(PO_CODE_PATTERN)?.[0] || "";
 };
-const parseMeetingInviteDetails = (value: string) => {
-  const text = String(value || "");
-  const match = text.match(/customer sent meeting invitation(?: for (PO-(?:\d{8}|\d{4}-\d{4,})))?:\s*(\d{2}\/\d{2}\/\d{4})\s+(\d{2}:\d{2})\s+at\s+(.+?)(?:\.|$)/i);
-  return {
-    po: match?.[1] || "",
-    meetingDateLabel: match?.[2] || "",
-    meetingTimeLabel: match?.[3] || "",
-    meetingVenue: String(match?.[4] || "").trim(),
-  };
-};
+const parseMeetingInviteDetails = (value: string) => parseWorkflowMeetingInviteDetails(value);
 const PLACEHOLDER_LOCATION_PATTERN = /^--\s*select/i;
 const RELATIVE_PUBLIC_ASSET_PATTERN = /^(?:\/|_next\/|api\/|images\/|uploads\/|storage\/)/i;
 const PATH_WITH_EXTENSION_PATTERN = /\/[^/?#]+\.[A-Za-z0-9]{2,8}(?:[?#].*)?$/;
@@ -3607,6 +3599,11 @@ export default function FixerProPage() {
           return !(type === 'rate_partner' && historyPos.has(po));
         });
         // Auto-sync: meeting_pending_partner in ghis_mock_dyn_req → meeting_confirm_partner in partner reqs
+        let partnerMeetingAlerts: any[] = [];
+        try {
+          const rawPartnerAlerts = JSON.parse(localStorage.getItem('partner_alerts') || '[]');
+          partnerMeetingAlerts = Array.isArray(rawPartnerAlerts) ? rawPartnerAlerts : [];
+        } catch {}
         if (d) {
           const ghisReqs: any[] = filterVisibleWorkflowItems(JSON.parse(d), readBrowserTerminalWorkflowPos(localStorage));
           const pendingMeetings = ghisReqs.filter((r: any) => String(r?.workflowType || r?.type || '') === 'meeting_pending_partner');
@@ -3659,11 +3656,29 @@ export default function FixerProPage() {
                   step: 8,
                 },
               ];
+              const alertId = `partner-meeting-invite-${pending.po}`;
+              partnerMeetingAlerts = [
+                {
+                  id: alertId,
+                  type: 'meeting_invite',
+                  po: pending.po,
+                  title: 'Site Meeting Invitation',
+                  message: `${pending.po}: Customer sent a site meeting invitation for ${pending.title || 'Project'}. Open Requests and confirm the schedule.`,
+                  msgTh: `${pending.po}: Customer sent a site meeting invitation for ${pending.title || 'Project'}. Open Requests and confirm the schedule.`,
+                  msgZh: `${pending.po}: Customer sent a site meeting invitation for ${pending.title || 'Project'}. Open Requests and confirm the schedule.`,
+                  timestamp: new Date(pending.createdAt || Date.now()).toISOString(),
+                  createdAt: pending.createdAt || Date.now(),
+                  unread: true,
+                  dot: 'bg-amber-500',
+                },
+                ...partnerMeetingAlerts.filter((alert: any) => alert?.id !== alertId),
+              ].slice(0, 20);
               partnerChanged = true;
             }
           }
           if (partnerChanged) {
             try { partnerReqs = persistWorkflowCacheItems('partner_mock_dyn_req', partnerReqs); } catch {}
+            try { writeWorkflowStorage('partner_alerts', partnerMeetingAlerts); } catch {}
           }
         }
         // Hourly reminder for pending_accept items: refresh notifyAt so alert badge appears fresh
@@ -5076,9 +5091,9 @@ export default function FixerProPage() {
     };
     if (r.type === "meeting_scheduled") return {
       id: `dyn-${r.id}`,
-      msg: `${r.po}: Site meeting confirmed${r.meetingDate ? ` for ${r.meetingDate}` : ''}${r.meetingTime ? ` ${r.meetingTime}` : ''}. Next: attend the meeting, then submit variation if scope changed.`,
-      msgTh: `${r.po}: ยืนยันนัดหมายแล้ว${r.meetingDate ? ` วันที่ ${r.meetingDate}` : ''}${r.meetingTime ? ` เวลา ${r.meetingTime}` : ''} ขั้นตอนถัดไปคือเข้าพบหน้างาน แล้วส่ง variation หากขอบเขตหรือราคามีการเปลี่ยนแปลง`,
-      msgZh: `${r.po}: 现场会议已确认${r.meetingDate ? `，日期 ${r.meetingDate}` : ''}${r.meetingTime ? ` 时间 ${r.meetingTime}` : ''}。下一步：参加会议，如范围或价格变更则提交变更申请。`,
+      msg: `${r.po} Meeting confirmed. Next: Send variation if needed.`,
+      msgTh: `${r.po} Meeting confirmed. Next: Send variation if needed.`,
+      msgZh: `${r.po} Meeting confirmed. Next: Send variation if needed.`,
       unread: true,
       time: displayTime,
       dot: "bg-teal-500",
@@ -5373,7 +5388,7 @@ export default function FixerProPage() {
     meetingDateLabel: waitModalOrder?.meetingDateLabel || waitModalOrder?.meetingDate || parsedWaitModalMeeting.meetingDateLabel,
     meetingTimeLabel: waitModalOrder?.meetingTimeLabel || waitModalOrder?.meetingTime || parsedWaitModalMeeting.meetingTimeLabel,
     meetingVenue: pickWorkflowMeetingVenue(parsedWaitModalMeeting.meetingVenue, waitModalOrder?.meetingVenue, waitModalOrder?.venue, waitModalOrder?.location, waitModalOrder?.subdistrict) || 'Unknown',
-    meetingMessage: waitModalOrder?.meetingMessage || waitModalOrder?.meetingNote || '',
+    meetingMessage: waitModalOrder?.meetingNote || parsedWaitModalMeeting.meetingNote || '',
   };
   const waitModalServiceName = waitModalOrder?.serviceTh || waitModalOrder?.service || 'Project';
   const waitModalCounterpart = firstNameOnly(waitModalOrder?.customer || waitModalOrder?.customerAlias, 'Customer');
@@ -5848,6 +5863,10 @@ export default function FixerProPage() {
                         waitModalOrder.venue,
                         waitModalProjectLocation,
                       );
+                      const confirmedMeetingDateForMessage = /^\d{4}-\d{2}-\d{2}$/.test(String(confirmedMeetingDate || ''))
+                        ? (() => { const [y, m, d] = String(confirmedMeetingDate).split('-'); return `${d}/${m}/${y}`; })()
+                        : confirmedMeetingDate;
+                      const confirmedMeetingBackendText = `Partner confirmed site meeting for ${po}: ${confirmedMeetingDateForMessage} ${confirmedMeetingTime} at ${confirmedMeetingVenue}. Next: Send variation if needed.`;
                       const workflowAttachmentFields = {
                         hasAttachment: Boolean(
                           waitModalOrder.hasAttachment ||
@@ -5865,11 +5884,16 @@ export default function FixerProPage() {
                       };
                       // Use PO-based matching (not waitModalOrder.id) because mockDynReqs IDs are
                       // 'meet-pending-{po}', not the backend UUID stored in waitModalOrder.id
+                      const confirmedAt = Date.now();
                       const meetingCustNoticeId = `meeting-confirmed-notice-${po}`;
+                      const origMeetingItem = mockDynReqs.find((r: any) => r.po === po && r.type === 'meeting_pending_partner');
+                      const backendMeetingItem = mappedOrders.find((r: any) => r.po === po);
+                      const customerEmailForAlert = origMeetingItem?.customerEmail || waitModalOrder.customerEmail || backendMeetingItem?.customerEmail || '';
+                      const customerNameForAlert = origMeetingItem?.customerName || waitModalOrder.customerName || waitModalOrder.customer || backendMeetingItem?.customer || 'Customer';
                       const nextReqs = [
                         ...mockDynReqs.filter((r: any) => !(r.po === po && r.type === 'meeting_pending_partner') && r.id !== schedId && r.id !== meetingCustNoticeId),
-                        { id: schedId, po, title: waitModalOrder.service || serviceTitle, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), budget: budgetLabel, tier: waitModalOrder.tier, type: 'meeting_scheduled', confirmedByPartner: true, step: 8, venue: confirmedMeetingVenue, meetingVenue: confirmedMeetingVenue, location: waitModalProjectLocation, subdistrict: waitModalProjectLocation, meetingDate: confirmedMeetingDate, meetingTime: confirmedMeetingTime, desc: `Meeting confirmed by partner${meetingSummary ? ` for ${meetingSummary}` : ''}${confirmedMeetingVenue ? ` at ${confirmedMeetingVenue}` : ''}. Proceed after the site meeting then mark variation.` },
-                        { id: meetingCustNoticeId, po, title: `Meeting Confirmed — ${po}`, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), type: 'notice', step: 8, desc: `Your fixer confirmed the site meeting${confirmedMeetingVenue ? ` at ${confirmedMeetingVenue}` : ''}${meetingSummary ? ` (${meetingSummary})` : ''}. Proceed to Step 9 after the site visit.`, dot: 'bg-green-500' },
+                        { id: schedId, po, title: waitModalOrder.service || serviceTitle, customer: customerNameForAlert, customerName: customerNameForAlert, customerEmail: customerEmailForAlert, date: now, createdAt: confirmedAt, budget: budgetLabel, tier: waitModalOrder.tier, type: 'meeting_scheduled', confirmedByPartner: true, step: 8, venue: confirmedMeetingVenue, meetingVenue: confirmedMeetingVenue, location: waitModalProjectLocation, subdistrict: waitModalProjectLocation, meetingDate: confirmedMeetingDate, meetingTime: confirmedMeetingTime, desc: `Meeting confirmed by partner${meetingSummary ? ` for ${meetingSummary}` : ''}${confirmedMeetingVenue ? ` at ${confirmedMeetingVenue}` : ''}. Proceed after the site meeting then mark variation.` },
+                        { title: `Meeting Confirmed - ${po}`, customer: customerNameForAlert, date: now, step: 8, desc: `${po} Meeting confirmed`, ...buildMeetingConfirmedAlert({ id: meetingCustNoticeId, po, audience: 'customer', createdAt: confirmedAt, time: now, customerEmail: customerEmailForAlert, customerName: customerNameForAlert }) },
                       ];
                       const existingActive = mockActiveState.find((x: any) => x.po === po);
                       const activeSnapshot = {
@@ -5881,13 +5905,15 @@ export default function FixerProPage() {
                         serviceTh: existingActive?.serviceTh || waitModalOrder.service || serviceTitle,
                         serviceZh: existingActive?.serviceZh || waitModalOrder.service || serviceTitle,
                         title: existingActive?.title || waitModalOrder.service || serviceTitle,
-                        customer: existingActive?.customer || waitModalOrder.customer || 'Ghis Cafe',
+                        customer: existingActive?.customer || customerNameForAlert,
                         date: existingActive?.date || waitModalOrder.date || now,
-                        createdAt: existingActive?.createdAt || waitModalOrder.createdAt || Date.now(),
+                        createdAt: existingActive?.createdAt || waitModalOrder.createdAt || confirmedAt,
                         budget: existingActive?.budget || budgetLabel,
                         fee: existingActive?.fee || budgetLabel,
                         tier: existingActive?.tier || waitModalOrder.tier,
                         description: existingActive?.description || waitModalOrder.description || '',
+                        customerEmail: existingActive?.customerEmail || customerEmailForAlert,
+                        customerName: existingActive?.customerName || customerNameForAlert,
                         ...workflowAttachmentFields,
                         location: existingActive?.location || waitModalProjectLocation,
                         subdistrict: existingActive?.subdistrict || waitModalProjectLocation,
@@ -5907,49 +5933,35 @@ export default function FixerProPage() {
                       const persistedNextActive = persistWorkflowCacheItems("ghis_mock_active", nextActive);
                       const nextPartnerReqs = [
                         ...partnerDynReqs.filter((r: any) => !(r.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(r.type))),
-                        { id: `variation-${po}`, orderId: backendOrderId || waitModalOrder.orderId || undefined, po, service: waitModalOrder.service || serviceTitle, serviceTh: waitModalOrder.service || serviceTitle, serviceZh: waitModalOrder.service || serviceTitle, customer: waitModalOrder.customer || 'Ghis Cafe', date: now, createdAt: Date.now(), fee: budgetLabel, budget: String(budgetLabel).replace(/[^0-9]/g, ''), tier: waitModalOrder.tier, description: (mappedOrders as any[]).find((o: any) => o?.po === po)?.description || waitModalOrder?.description || 'Proceed to submit variation request if extra work or price adjustment is required.', ...workflowAttachmentFields, location: waitModalOrder?.location || waitModalOrder?.subdistrict || '', type: 'variation_partner', step: 9, meetingDate: confirmedMeetingDate, meetingTime: confirmedMeetingTime, meetingVenue: confirmedMeetingVenue, venue: confirmedMeetingVenue },
+                        { id: `variation-${po}`, orderId: backendOrderId || waitModalOrder.orderId || undefined, po, service: waitModalOrder.service || serviceTitle, serviceTh: waitModalOrder.service || serviceTitle, serviceZh: waitModalOrder.service || serviceTitle, customer: customerNameForAlert, customerName: customerNameForAlert, customerEmail: customerEmailForAlert, date: now, createdAt: confirmedAt, fee: budgetLabel, budget: String(budgetLabel).replace(/[^0-9]/g, ''), tier: waitModalOrder.tier, description: (mappedOrders as any[]).find((o: any) => o?.po === po)?.description || waitModalOrder?.description || 'Proceed to submit variation request if extra work or price adjustment is required.', ...workflowAttachmentFields, location: waitModalOrder?.location || waitModalOrder?.subdistrict || '', type: 'variation_partner', step: 9, meetingDate: confirmedMeetingDate, meetingTime: confirmedMeetingTime, meetingVenue: confirmedMeetingVenue, venue: confirmedMeetingVenue },
                       ];
                       const persistedPartnerReqs = persistWorkflowCacheItems("partner_mock_dyn_req", nextPartnerReqs);
                       try {
                         const alertId = `meeting-confirmed-${po}`;
                         const existingAlerts = JSON.parse(localStorage.getItem('partner_alerts') || '[]');
                         const nextAlerts = [
+                          buildMeetingConfirmedAlert({ id: alertId, po, audience: 'partner', createdAt: confirmedAt, time: now }),
                           ...existingAlerts.filter((alert: any) => alert?.id !== alertId),
-                          {
-                            id: alertId,
-                            po,
-                            type: 'meeting_confirmed',
-                            message: `${po}: You confirmed the site meeting. Active job remains open; next action is Step 9 variation if scope or pricing changes.`,
-                            msgTh: `${po}: คุณยืนยันนัดหมายหน้างานแล้ว งานยังอยู่ใน Active Jobs ขั้นตอนถัดไปคือ Step 9 variation หากขอบเขตหรือราคาเปลี่ยน`,
-                            msgZh: `${po}: 您已确认现场会议。该工作仍保留在 Active Jobs；下一步如范围或价格变化则进行第9步变更。`,
-                            createdAt: Date.now(),
-                            dot: 'bg-purple-500',
-                          },
-                        ].slice(-20);
+                        ].slice(0, 20);
                         writeWorkflowStorage('partner_alerts', nextAlerts);
                         setPartnerPersistedAlerts(nextAlerts);
                       } catch {}
                       // Write customer alert to inform customer that partner confirmed the meeting
                       try {
-                        const origMeetingItem = mockDynReqs.find((r: any) => r.po === po && r.type === 'meeting_pending_partner');
-                        const backendMeetingItem = mappedOrders.find((r: any) => r.po === po);
-                        const customerEmailForAlert = origMeetingItem?.customerEmail || waitModalOrder.customerEmail || backendMeetingItem?.customerEmail || '';
                         const custEmailRaw = String(customerEmailForAlert).trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
                         const custAlertsKey = custEmailRaw ? `cblue_customer_alerts_${custEmailRaw}` : 'cblue_customer_alerts';
                         const existingCustAlerts = JSON.parse(localStorage.getItem(custAlertsKey) || '[]');
                         const legacyCustAlerts = JSON.parse(localStorage.getItem('cblue_customer_alerts') || '[]');
                         const custAlertId = `meeting-confirmed-cust-${po}`;
-                        const confirmedCustAlert = {
+                        const confirmedCustAlert = buildMeetingConfirmedAlert({
                           id: custAlertId,
                           po,
-                          type: 'notice',
-                          msg: `${po}: ${partnerName} confirmed your site meeting${meetingSummary ? ` for ${meetingSummary}` : ''}${confirmedMeetingVenue ? ` at ${confirmedMeetingVenue}` : ''}. Proceed to Step 9 after the site visit.`,
-                          msgTh: `${po}: ${partnerName} ยืนยันคำเชิญนัดหมายหน้างานของคุณแล้ว${meetingSummary ? ` วันที่ ${meetingSummary}` : ''}${confirmedMeetingVenue ? ` ที่ ${confirmedMeetingVenue}` : ''} ดำเนินการ Step 9 หลังเยี่ยมชมหน้างาน`,
-                          msgZh: `${po}: ${partnerName} 已确认您的现场会议邀请${meetingSummary ? `（${meetingSummary}）` : ''}${confirmedMeetingVenue ? `，地点：${confirmedMeetingVenue}` : ''}。现场访问后请继续进行第9步。`,
+                          audience: 'customer',
+                          createdAt: confirmedAt,
                           time: now,
-                          createdAt: Date.now(),
-                          dot: 'bg-green-500',
-                        };
+                          customerEmail: customerEmailForAlert,
+                          customerName: customerNameForAlert,
+                        });
                         const nextCustAlerts = [confirmedCustAlert, ...(Array.isArray(existingCustAlerts) ? existingCustAlerts.filter((a: any) => a?.id !== custAlertId) : [])].slice(0, 20);
                         const nextLegacyCustAlerts = [confirmedCustAlert, ...(Array.isArray(legacyCustAlerts) ? legacyCustAlerts.filter((a: any) => a?.id !== custAlertId) : [])].slice(0, 20);
                         writeWorkflowStorage(custAlertsKey, nextCustAlerts);
@@ -5965,13 +5977,13 @@ export default function FixerProPage() {
                           fetch(`/api/v1/orders/${backendOrderId}/status`, {
                             method: 'PUT',
                             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                            body: JSON.stringify({ status: 'IN_PROGRESS', note: 'Partner confirmed meeting time' }),
+                            body: JSON.stringify({ status: 'IN_PROGRESS', note: confirmedMeetingBackendText }),
                           }).catch(() => {});
                         }
                         fetch(`/api/v1/orders/${backendOrderId}/chat`, {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                          body: JSON.stringify({ text: `[SYSTEM] Partner confirmed site meeting for ${po}. Variation request can now be submitted if needed.` }),
+                          body: JSON.stringify({ text: `[SYSTEM] ${confirmedMeetingBackendText}` }),
                         }).catch(() => {});
                       }
                       setWaitModalOrder(null);
@@ -6084,14 +6096,14 @@ export default function FixerProPage() {
               <button 
                 onClick={() => {
                   if (isMeetingConfirmation) {
-                    setMeetingDeclineInfoOpen(true);
+                    setWaitModalOrder(null);
                     return;
                   }
                   setDeclineModalOpen(true);
                 }} 
-                className="flex-1 py-3 bg-gray-100 hover:bg-red-50 hover:text-red-700 text-gray-800 font-bold rounded-xl transition"
+                className={`flex-1 py-3 bg-gray-100 text-gray-800 font-bold rounded-xl transition ${isMeetingConfirmation ? 'hover:bg-gray-200' : 'hover:bg-red-50 hover:text-red-700'}`}
               >
-                Decline
+                {isMeetingConfirmation ? 'Back' : 'Decline'}
               </button>
             </div>
           </div>
@@ -6692,7 +6704,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
                 <div key={meeting.id} className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
                   <p className="text-sm font-bold text-gray-800">{meeting.title} ({meeting.po})</p>
                   <p className="text-xs text-gray-500 mt-1">{formatMeetingDateTimeLabel(meeting.meetingDate || meeting.date, meeting.meetingTime)}</p>
-                  <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "สถานที่:" : locale === "zh" ? "地点:" : "Location:"} {getWorkflowDisplayLocation(meeting.location, meeting.subdistrict, meeting.meetingVenue, meeting.venue) || '-'} | {locale === "th" ? "ลูกค้า:" : locale === "zh" ? "客户:" : "Customer:"} {meeting.customer}</p>
+                  <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "สถานที่:" : locale === "zh" ? "地点:" : "Venue:"} {pickWorkflowMeetingVenue(meeting.meetingVenue, meeting.venue, meeting.location, meeting.subdistrict) || '-'} | {locale === "th" ? "ลูกค้า:" : locale === "zh" ? "客户:" : "Customer:"} {meeting.customer}</p>
                 </div>
               ))}
             </div>
