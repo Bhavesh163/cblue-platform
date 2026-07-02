@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useTranslations, useLocale } from "next-intl";
-import { refreshSubscriberSession } from "../../../lib/subscriberSession";
+import { clearSubscriberSession, refreshSubscriberSession } from "../../../lib/subscriberSession";
 import {
   buildMeetingConfirmedAlert,
   collectTerminalWorkflowPos,
@@ -961,7 +961,7 @@ export default function DashboardPage() {
                   <p className="text-sky-200 text-xs">{subscriber.email}</p>
                 </div>
                 <button
-                  onClick={() => { clearCustomerDashboardSession(); localStorage.removeItem("subscriber"); localStorage.removeItem("subscriber_token"); localStorage.removeItem("pdpa_consent_customer"); localStorage.removeItem("ghis_mock_payments"); localStorage.removeItem("ghis_mock_active"); localStorage.removeItem("ghis_mock_dyn_req"); localStorage.removeItem("ghis_mock_history"); window.dispatchEvent(new Event("storage")); router.push(prefix); }}
+                  onClick={() => { clearSubscriberSession(); localStorage.removeItem("pdpa_consent_customer"); localStorage.removeItem("ghis_mock_payments"); localStorage.removeItem("ghis_mock_active"); localStorage.removeItem("ghis_mock_dyn_req"); localStorage.removeItem("ghis_mock_history"); router.push(prefix); }}
                   className="ml-2 px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold rounded-lg transition"
                 >
                   {locale === "th" ? "ออกจากระบบ" : locale === "zh" ? "退出登录" : "Logout"}
@@ -1016,15 +1016,12 @@ export default function DashboardPage() {
         {/* Main Content */}
         {subscriber && !loading && (
           <CustomerDashboard locale={locale} subscriber={subscriber} prefix={prefix} orders={orders} hasFetchedOrders={hasFetchedOrders} onLogout={() => {
-            clearCustomerDashboardSession();
-            localStorage.removeItem("subscriber"); 
-            localStorage.removeItem("subscriber_token"); 
+            clearSubscriberSession();
             localStorage.removeItem("pdpa_consent_customer"); 
             localStorage.removeItem("ghis_mock_payments");
             localStorage.removeItem("ghis_mock_active");
             localStorage.removeItem("ghis_mock_dyn_req");
             localStorage.removeItem("ghis_mock_history");
-            window.dispatchEvent(new Event("storage"));
             router.push(prefix);
           }} />
         )}
@@ -5795,6 +5792,21 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                   const finalMeetingVenue = pickWorkflowMeetingVenue(meetingVenue, meetingProjectLocation);
                   const desc = `Meeting invitation sent. Proposed: ${dateLabel} ${meetingTime} at ${finalMeetingVenue}.${meetingNote.trim() ? ` Note: ${meetingNote.trim()}.` : ''} Waiting for partner confirmation.`;
                   const chatText = `[SYSTEM] Customer sent meeting invitation for ${meetingModal.po}: ${dateLabel} ${meetingTime} at ${finalMeetingVenue}.${meetingNote.trim() ? ` Note: ${meetingNote.trim()}.` : ''} Next: waiting for partner confirmation before variation.`;
+                  const meetingPartnerIdentity = {
+                    fixerId: meetingModal.fixerId || meetingModal.selectedFixerId || meetingModal.partnerId || meetingModal.providerId || '',
+                    partnerId: meetingModal.partnerId || meetingModal.fixerId || meetingModal.selectedFixerId || meetingModal.providerId || '',
+                    providerId: meetingModal.providerId || meetingModal.fixerId || meetingModal.selectedFixerId || meetingModal.partnerId || '',
+                    selectedFixerId: meetingModal.selectedFixerId || meetingModal.fixerId || meetingModal.partnerId || meetingModal.providerId || '',
+                    fixerAlias: meetingModal.fixerAlias || meetingModal.partnerName || meetingModal.customer || '',
+                    partnerName: meetingModal.partnerName || meetingModal.fixerAlias || meetingModal.customer || '',
+                    selectedFixerName: meetingModal.selectedFixerName || meetingModal.partnerName || meetingModal.fixerAlias || meetingModal.customer || '',
+                    partnerEmail: meetingModal.partnerEmail || meetingModal.fixerEmail || meetingModal.selectedFixerEmail || '',
+                    fixerEmail: meetingModal.fixerEmail || meetingModal.partnerEmail || meetingModal.selectedFixerEmail || '',
+                    selectedFixerEmail: meetingModal.selectedFixerEmail || meetingModal.partnerEmail || meetingModal.fixerEmail || '',
+                    partnerPhone: meetingModal.partnerPhone || meetingModal.fixerPhone || meetingModal.selectedFixerPhone || '',
+                    fixerPhone: meetingModal.fixerPhone || meetingModal.partnerPhone || meetingModal.selectedFixerPhone || '',
+                    selectedFixerPhone: meetingModal.selectedFixerPhone || meetingModal.partnerPhone || meetingModal.fixerPhone || '',
+                  };
                   // Compute new arrays eagerly and write to localStorage BEFORE setState
                   // (same pattern as payment pill — prevents syncMockState interval from overwriting)
                   const existingMeetActive = mockActiveItems.find((x: any) => x.po === meetingModal.po);
@@ -5803,6 +5815,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                     {
                       ...(existingMeetActive || meetingModal),
                       po: meetingModal.po,
+                      ...meetingPartnerIdentity,
                       title: existingMeetActive?.title || meetingModal.title,
                       customer: existingMeetActive?.customer || meetingModal.customer,
                       date: existingMeetActive?.date || meetingModal.date || fmtDateTime(createdAt),
@@ -5826,12 +5839,13 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                   ];
                   const updatedMeetReqs = [
                     ...mockDynRequests.filter((x: any) => x.id !== meetingModal.id && x.id !== pendingId),
-                    { id: pendingId, po: meetingModal.po, title: meetingModal.title, customer: meetingModal.customer, date: fmtDateTime(createdAt), createdAt, budget: meetingModal.budget, tier: meetingModal.tier, desc, type: 'meeting_pending_partner', step: 8, venue: finalMeetingVenue, meetingVenue: finalMeetingVenue, meetingDate, meetingTime, meetingNote: meetingNote.trim(), location: meetingProjectLocation, customerEmail: subscriberEmail },
+                    { id: pendingId, po: meetingModal.po, ...meetingPartnerIdentity, title: meetingModal.title, customer: meetingModal.customer, customerName: subscriber?.name || meetingModal.customerName || meetingModal.customer, date: fmtDateTime(createdAt), createdAt, budget: meetingModal.budget, tier: meetingModal.tier, desc, type: 'meeting_pending_partner', step: 8, venue: finalMeetingVenue, meetingVenue: finalMeetingVenue, meetingDate, meetingTime, meetingNote: meetingNote.trim(), location: meetingProjectLocation, customerEmail: subscriberEmail, customerPhone: subscriber?.phone || '' },
                   ];
                   const partnerMeetingCustomer = subscriber?.name || meetingModal.customerName || "Ghis";
                   const partnerMeetingRequest = {
                     id: `meeting-confirm-${meetingModal.po}`,
                     po: meetingModal.po,
+                    ...meetingPartnerIdentity,
                     service: meetingModal.title,
                     serviceTh: meetingModal.titleTh || meetingModal.title,
                     serviceZh: meetingModal.titleZh || meetingModal.title,
@@ -5890,6 +5904,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                         id: `partner-meeting-invite-${meetingModal.po}`,
                         type: 'meeting_invite',
                         po: meetingModal.po,
+                        ...meetingPartnerIdentity,
                         title: 'Site Meeting Invitation',
                         message: `${meetingModal.po}: Customer proposed a site meeting on ${dateLabel}${meetingTime ? ` at ${meetingTime}` : ''}${finalMeetingVenue ? ` in ${finalMeetingVenue}` : ''}. Confirm it to unlock Step 9.`,
                         msgTh: `${meetingModal.po}: ลูกค้าเสนอเวลานัดหมายหน้างาน วันที่ ${dateLabel}${meetingTime ? ` เวลา ${meetingTime}` : ''}${finalMeetingVenue ? ` ที่ ${finalMeetingVenue}` : ''} กรุณายืนยันเพื่อไปขั้นตอนที่ 9`,

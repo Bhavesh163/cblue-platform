@@ -18,7 +18,12 @@ import {
   type VariationPriceListItem,
 } from "../../../lib/computeBudgetBreakdown";
 import { readStoredPoProjectDetails, storePoProjectDetails } from "../../../lib/po-project-details";
-import { refreshSubscriberSession } from "../../../lib/subscriberSession";
+import { clearSubscriberSession, refreshSubscriberSession } from "../../../lib/subscriberSession";
+import {
+  buildPartnerWorkflowScope,
+  filterPartnerWorkflowItems,
+  isPartnerWorkflowItemForScope,
+} from "../../../lib/partnerWorkflowScope";
 import {
   buildMeetingConfirmedAlert,
   collectTerminalWorkflowPos,
@@ -43,6 +48,8 @@ import {
 
 interface PartnerInfo {
   id?: string;
+  fixerId?: string;
+  userId?: string;
   name: string;
   email: string;
   phone?: string;
@@ -220,8 +227,24 @@ const WORKFLOW_CACHE_RECORD_KEYS = [
   'serviceZh',
   'customer',
   'customerName',
+  'customerEmail',
+  'customerPhone',
+  'partnerId',
+  'partnerEmail',
+  'partnerPhone',
   'fixerAlias',
+  'fixerId',
+  'fixerEmail',
+  'fixerPhone',
   'partnerName',
+  'providerId',
+  'providerEmail',
+  'providerName',
+  'providerPhone',
+  'selectedFixerId',
+  'selectedFixerEmail',
+  'selectedFixerName',
+  'selectedFixerPhone',
   'date',
   'createdAt',
   'budget',
@@ -293,7 +316,7 @@ const toWorkflowCacheRecord = (source: any, overrides: Record<string, any> = {})
   for (const key of ['id', 'orderId', 'po'] as const) {
     if (next[key] !== undefined) next[key] = sanitizeWorkflowCacheText(next[key], 128);
   }
-  for (const key of ['title', 'service', 'serviceTh', 'serviceZh', 'customer', 'customerName', 'fixerAlias', 'partnerName'] as const) {
+  for (const key of ['title', 'service', 'serviceTh', 'serviceZh', 'customer', 'customerName', 'customerEmail', 'customerPhone', 'partnerId', 'partnerEmail', 'partnerPhone', 'fixerAlias', 'fixerId', 'fixerEmail', 'fixerPhone', 'partnerName', 'providerId', 'providerEmail', 'providerName', 'providerPhone', 'selectedFixerId', 'selectedFixerEmail', 'selectedFixerName', 'selectedFixerPhone'] as const) {
     if (next[key] !== undefined) next[key] = sanitizeWorkflowCacheText(next[key], 240);
   }
   for (const key of ['budget', 'fee', 'tier', 'location', 'subdistrict', 'meetingDate', 'meetingTime', 'meetingVenue', 'venue', 'type', 'status', 'statusName'] as const) {
@@ -2661,6 +2684,8 @@ export default function FixerProPage() {
           if (hasFixer) {
             pInfo = {
               ...pInfo,
+              fixerId: user.fixer?.id || storedPartner?.fixerId,
+              userId: user.id || storedPartner?.userId,
               id: user.id || storedPartner?.id,
               name: user.fixer?.contactName || user.name || storedPartner?.name || "Cblue partner",
               email: user.email || storedPartner?.email || "",
@@ -3168,6 +3193,25 @@ export default function FixerProPage() {
     const items: any[] = [];
     const knownPoSet = new Set((mappedOrders as any[]).filter(Boolean).map((o: any) => o.po).filter(Boolean));
     const completedPoSet = new Set((mappedOrders as any[]).filter(Boolean).filter((o: any) => String(o.status || '').toUpperCase() === 'COMPLETED').map((o: any) => o.po).filter(Boolean));
+    const partnerScope = buildPartnerWorkflowScope({ partner, subscriber: readPartnerDashboardSubscriber(), backendOrders: mappedOrders });
+    const readPartnerEvidenceForPo = (po: string) => {
+      const normalizedPo = String(po || '').trim().toUpperCase();
+      const readArray = (key: string) => {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      };
+      return [
+        ...readArray('partner_mock_dyn_req'),
+        ...readArray('ghis_mock_active'),
+        ...readArray('ghis_mock_dyn_req'),
+        ...readArray('ghis_mock_history'),
+        ...readArray('partner_alerts'),
+      ].filter((item: any) => String(item?.po || item?.poNumber || item?.id || '').trim().toUpperCase() === normalizedPo);
+    };
     for (const key of keys) {
       try {
         const po = key.replace("chat_messages_", "");
@@ -3179,6 +3223,10 @@ export default function FixerProPage() {
           localStorage.removeItem(`chat_from_${po}`);
           continue;
         }
+        const chatBelongsToPartner =
+          isPartnerWorkflowItemForScope({ po }, partnerScope) ||
+          readPartnerEvidenceForPo(po).some((item: any) => isPartnerWorkflowItemForScope(item, partnerScope));
+        if (!chatBelongsToPartner) continue;
         if (knownPoSet.size > 0 && !knownPoSet.has(po) && !isPropPoCode(po) && !isWorkflowPoReferencedInStorage(localStorage, po)) {
           localStorage.removeItem(key);
           localStorage.removeItem(`chat_title_${po}`);
@@ -3558,30 +3606,25 @@ export default function FixerProPage() {
           return;
         }
         ensureLegacyPartnerCancel3429Repair();
+        const partnerScope = buildPartnerWorkflowScope({ partner, subscriber: readPartnerDashboardSubscriber(), backendOrders: mappedOrders });
         const d = localStorage.getItem("ghis_mock_dyn_req"); if (d) {
           const terminalPos = readBrowserTerminalWorkflowPos(localStorage);
-          const parsedDyn = filterVisibleWorkflowItems(JSON.parse(d), terminalPos);
-          setMockDynReqs((prev) => {
-            const previousVisible = filterVisibleWorkflowItems(prev, terminalPos);
-            return parsedDyn.length === 0 && previousVisible.length > 0 ? previousVisible : parsedDyn;
-          });
+          const parsedDyn = filterPartnerWorkflowItems(filterVisibleWorkflowItems(JSON.parse(d), terminalPos), partnerScope);
+          setMockDynReqs(parsedDyn);
         }
         const a = localStorage.getItem("ghis_mock_active"); if (a) {
           const terminalPos = readBrowserTerminalWorkflowPos(localStorage);
-          const parsedActive = filterVisibleActiveWorkflowItems(JSON.parse(a), terminalPos);
-          setMockActiveState((prev) => {
-            const previousVisible = filterVisibleActiveWorkflowItems(prev, terminalPos);
-            return parsedActive.length === 0 && previousVisible.length > 0 ? previousVisible : parsedActive;
-          });
+          const parsedActive = filterPartnerWorkflowItems(filterVisibleActiveWorkflowItems(JSON.parse(a), terminalPos), partnerScope);
+          setMockActiveState(parsedActive);
         }
-        const h = localStorage.getItem("ghis_mock_history"); if (h) setMockHistory(filterVisibleWorkflowHistoryItems(JSON.parse(h)));
+        const h = localStorage.getItem("ghis_mock_history"); if (h) setMockHistory(filterPartnerWorkflowItems(filterVisibleWorkflowHistoryItems(JSON.parse(h)), partnerScope));
         const persistedAlerts = localStorage.getItem('partner_alerts');
-        setPartnerPersistedAlerts(persistedAlerts ? JSON.parse(persistedAlerts) : []);
+        setPartnerPersistedAlerts(persistedAlerts ? filterPartnerWorkflowItems(JSON.parse(persistedAlerts), partnerScope) : []);
         const declineLogs = localStorage.getItem('admin_decline_logs');
         setPartnerDeclineLogs(declineLogs ? JSON.parse(declineLogs) : []);
         const p = localStorage.getItem("partner_mock_dyn_req");
         let partnerReqs: any[] = p
-          ? filterVisibleWorkflowItems(JSON.parse(p), readBrowserTerminalWorkflowPos(localStorage)).map((item: any) => ({
+          ? filterPartnerWorkflowItems(filterVisibleWorkflowItems(JSON.parse(p), readBrowserTerminalWorkflowPos(localStorage)), partnerScope).map((item: any) => ({
               ...item,
               workflowType:
                 item?.workflowType ||
@@ -3589,7 +3632,7 @@ export default function FixerProPage() {
             }))
           : [];
         const historyPos = new Set(
-          filterVisibleWorkflowHistoryItems(JSON.parse(localStorage.getItem('ghis_mock_history') || '[]'))
+          filterPartnerWorkflowItems(filterVisibleWorkflowHistoryItems(JSON.parse(localStorage.getItem('ghis_mock_history') || '[]')), partnerScope)
             .map((item: any) => String(item?.po || '').trim())
             .filter(Boolean),
         );
@@ -3605,7 +3648,7 @@ export default function FixerProPage() {
           partnerMeetingAlerts = Array.isArray(rawPartnerAlerts) ? rawPartnerAlerts : [];
         } catch {}
         if (d) {
-          const ghisReqs: any[] = filterVisibleWorkflowItems(JSON.parse(d), readBrowserTerminalWorkflowPos(localStorage));
+          const ghisReqs: any[] = filterPartnerWorkflowItems(filterVisibleWorkflowItems(JSON.parse(d), readBrowserTerminalWorkflowPos(localStorage)), partnerScope);
           const pendingMeetings = ghisReqs.filter((r: any) => String(r?.workflowType || r?.type || '') === 'meeting_pending_partner');
           let partnerChanged = false;
           for (const pending of pendingMeetings) {
@@ -3775,7 +3818,7 @@ export default function FixerProPage() {
       window.removeEventListener('storage', checkMock);
       window.removeEventListener('cblue-workflow-updated', onWorkflowUpdated as EventListener);
     };
-  }, [isFixer]);
+  }, [isFixer, partner?.id, partner?.email, partner?.name, partner?.company, partner?.phone, orders]);
 
   const browserTerminalPOs = readBrowserTerminalWorkflowPos(
     typeof window !== 'undefined' ? window.localStorage : undefined,
@@ -6375,7 +6418,7 @@ export default function FixerProPage() {
                   <p className="text-purple-200 text-xs">{partner.email}</p>
                 </div>
                 <button
-                  onClick={() => { clearPartnerDashboardSession(); localStorage.removeItem("subscriber"); localStorage.removeItem("subscriber_token"); localStorage.removeItem("pdpa_consent_partner"); window.dispatchEvent(new Event("storage")); router.push(prefix); }}
+                  onClick={() => { clearSubscriberSession(); localStorage.removeItem("pdpa_consent_partner"); router.push(prefix); }}
                   className="ml-2 px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold rounded-lg transition"
                 >
                   {locale === "th" ? "ออกจากระบบ" : locale === "zh" ? "退出登录" : "Logout"}
