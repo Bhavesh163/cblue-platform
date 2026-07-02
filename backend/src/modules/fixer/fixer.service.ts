@@ -70,10 +70,57 @@ export class FixerService {
     'with',
     'งาน',
     'project',
+    'professional',
+    'household',
+    'fixer',
+    'pro',
     'service',
     'services',
     'job',
+    'jobs',
     'work',
+    'works',
+    'need',
+    'needs',
+    'want',
+    'wants',
+    'please',
+    'team',
+    'teams',
+    'carry',
+    'out',
+  ]);
+
+  private readonly serviceIntentStopTokens = new Set([
+    ...this.fillerTokens,
+    'area',
+    'site',
+    'location',
+    'office',
+    'room',
+    'rooms',
+    'floor',
+    'floors',
+    'meter',
+    'meters',
+    'square',
+    'sq',
+    'sqm',
+    'm2',
+    'sqft',
+    'ตรม',
+    'ตร',
+    'unit',
+    'units',
+    'item',
+    'items',
+    'page',
+    'pages',
+    'faq',
+    'faqs',
+    'ชุด',
+    'ห้อง',
+    'ชั้น',
   ]);
 
   constructor(
@@ -383,7 +430,7 @@ export class FixerService {
     if (!description) return 1;
     const normalized = this.normalizeSearchText(description);
     const match = normalized.match(
-      /(\d[\d,]*\.?\d*)\s*(sqm|m2|sqft|sq\.?m|ตร\.?ม|ตรม|unit|units|ชุด|ห้อง|room|rooms|floor|floors|ชั้น|item|items|job|งาน)?/i,
+      /(\d[\d,]*\.?\d*)\s*(sqm|m2|sqft|sq\.?m|ตร\.?ม|ตรม|unit|units|ชุด|ห้อง|room|rooms|floor|floors|ชั้น|item|items|job|jobs|page|pages|faq|faqs|งาน)?/i,
     );
     if (match && match[1]) {
       const qty = parseFloat(match[1].replace(/,/g, ''));
@@ -399,9 +446,9 @@ export class FixerService {
     if (!description) return [];
     const normalized = this.normalizeSearchText(description);
     const unitPattern =
-      /sqm|m2|sqft|sq\.?m|ตร\.?ม|ตรม|unit|units|ชุด|ห้อง|room|rooms|floor|floors|ชั้น|item|items|job|งาน/i;
+      /sqm|m2|sqft|sq\.?m|ตร\.?ม|ตรม|unit|units|ชุด|ห้อง|room|rooms|floor|floors|ชั้น|item|items|job|jobs|page|pages|faq|faqs|งาน/i;
     const pattern =
-      /(\d[\d,]*\.?\d*)\s*(sqm|m2|sqft|sq\.?m|ตร\.?ม|ตรม|unit|units|ชุด|ห้อง|room|rooms|floor|floors|ชั้น|item|items|job|งาน)?\b/gi;
+      /(\d[\d,]*\.?\d*)\s*(sqm|m2|sqft|sq\.?m|ตร\.?ม|ตรม|unit|units|ชุด|ห้อง|room|rooms|floor|floors|ชั้น|item|items|job|jobs|page|pages|faq|faqs|งาน)?\b/gi;
     const pairs: Array<{
       qty: number;
       idx: number;
@@ -509,7 +556,17 @@ export class FixerService {
   private normalizeSearchText(value?: string): string {
     return (value || '')
       .toLowerCase()
-      .replace(/fit\s*[- ]?out/g, 'fitout')
+      .replace(/\bf+i+i?t\s*[- ]?\s*out\b/g, 'fitout')
+      .replace(/\bbuild\s*[- ]?\s*out\b/g, 'fitout')
+      .replace(/\bbuildout\b/g, 'fitout')
+      .replace(/\bfitouts\b/g, 'fitout')
+      .replace(/\bmake\s*[- ]?\s*good\b/g, 'reinstatement')
+      .replace(/\breinstate(?:ment)?\b/g, 'reinstatement')
+      .replace(/\bweb\s*site\b/g, 'website')
+      .replace(/\bweb\s*page\b/g, 'webpage')
+      .replace(/\bchat\s*bot\b/g, 'chatbot')
+      .replace(/\bsocial\s*media\b/g, 'socialmedia')
+      .replace(/\bair\s*conditioning\b/g, 'airconditioning')
       .replace(/square\s*meters?/g, 'sqm')
       .replace(/square\s*meter/g, 'sqm')
       .replace(/sq\.?\s*m\.?/g, 'sqm')
@@ -525,6 +582,20 @@ export class FixerService {
       .filter((token) => token.length > 1 && !this.fillerTokens.has(token));
   }
 
+  private addSearchSynonymGroup(
+    tokens: Set<string>,
+    normalizedDescription: string,
+    group: string[],
+  ) {
+    if (
+      group.some(
+        (term) => tokens.has(term) || normalizedDescription.includes(term),
+      )
+    ) {
+      group.forEach((term) => tokens.add(term));
+    }
+  }
+
   private buildSearchTerms(service: string, description?: string): string[] {
     const tokens = new Set<string>([
       ...this.tokenize(service),
@@ -533,15 +604,122 @@ export class FixerService {
     const normalizedDescription = this.normalizeSearchText(description);
 
     if (normalizedDescription.includes('office')) tokens.add('office');
-    if (normalizedDescription.includes('fitout')) {
-      tokens.add('fitout');
-      tokens.add('interior');
-      tokens.add('renovation');
-    }
+    this.addSearchSynonymGroup(tokens, normalizedDescription, [
+      'fitout',
+      'interior',
+      'renovation',
+    ]);
+    this.addSearchSynonymGroup(tokens, normalizedDescription, [
+      'reinstatement',
+      'makegood',
+      'handover',
+    ]);
+    this.addSearchSynonymGroup(tokens, normalizedDescription, [
+      'construction',
+      'construct',
+      'building',
+      'build',
+      'civil',
+    ]);
+    this.addSearchSynonymGroup(tokens, normalizedDescription, [
+      'website',
+      'webpage',
+      'web',
+      'software',
+      'app',
+      'platform',
+      'frontend',
+    ]);
+    this.addSearchSynonymGroup(tokens, normalizedDescription, [
+      'chatbot',
+      'bot',
+      'automation',
+      'ai',
+    ]);
+    this.addSearchSynonymGroup(tokens, normalizedDescription, [
+      'marketing',
+      'seo',
+      'advertising',
+      'ads',
+      'campaign',
+      'socialmedia',
+      'branding',
+    ]);
+    this.addSearchSynonymGroup(tokens, normalizedDescription, [
+      'legal',
+      'law',
+      'contract',
+      'compliance',
+      'permit',
+      'license',
+    ]);
+    this.addSearchSynonymGroup(tokens, normalizedDescription, [
+      'plumbing',
+      'pipe',
+      'water',
+    ]);
+    this.addSearchSynonymGroup(tokens, normalizedDescription, [
+      'electrical',
+      'electric',
+      'wiring',
+    ]);
+    this.addSearchSynonymGroup(tokens, normalizedDescription, [
+      'hvac',
+      'aircon',
+      'airconditioning',
+      'ac',
+    ]);
 
     return [...tokens];
   }
 
+  private getServiceIntentTerms(searchTerms: string[]): string[] {
+    const intentTerms = new Set<string>();
+    for (const term of searchTerms) {
+      for (const token of this.normalizeSearchText(term).split(' ')) {
+        if (
+          token.length > 1 &&
+          !this.serviceIntentStopTokens.has(token) &&
+          isNaN(parseFloat(token))
+        ) {
+          intentTerms.add(token);
+        }
+      }
+    }
+    return [...intentTerms];
+  }
+
+  private hasServiceIntentMatch(
+    candidateServiceText: string,
+    searchTerms: string[],
+  ): boolean {
+    const normalizedCandidate = this.normalizeSearchText(candidateServiceText);
+    if (!normalizedCandidate) return false;
+
+    return this.getServiceIntentTerms(searchTerms).some(
+      (term) =>
+        normalizedCandidate === term ||
+        normalizedCandidate.includes(term) ||
+        (term.length >= 4 && term.includes(normalizedCandidate)),
+    );
+  }
+
+  private scorePriceListItem(
+    item: PriceListRow,
+    searchTerms: string[],
+  ): number {
+    const serviceText = typeof item.service === 'string' ? item.service : '';
+    if (!this.hasServiceIntentMatch(serviceText, searchTerms)) return 0;
+
+    const itemText = [
+      serviceText,
+      typeof item.unit === 'string' ? item.unit : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    return this.scoreTextMatch(itemText, searchTerms);
+  }
   private scoreTextMatch(candidateText: string, searchTerms: string[]): number {
     if (searchTerms.length === 0) return 0;
 
@@ -749,19 +927,10 @@ export class FixerService {
         const estimatedBreakdownMeta: MatchedBreakdownItem[] = [];
         if (list.length > 0) {
           const rankedList = list
-            .map((item) => {
-              const itemText = [
-                typeof item.service === 'string' ? item.service : '',
-                typeof item.unit === 'string' ? item.unit : '',
-              ]
-                .filter(Boolean)
-                .join(' ');
-
-              return {
-                item,
-                score: this.scoreTextMatch(itemText, searchTerms),
-              };
-            })
+            .map((item) => ({
+              item,
+              score: this.scorePriceListItem(item, searchTerms),
+            }))
             .sort((a, b) => {
               if (b.score !== a.score) return b.score - a.score;
               return (
@@ -816,18 +985,10 @@ export class FixerService {
                   continue;
                 }
                 const bestForContext = list
-                  .map((item) => {
-                    const itemText = [
-                      typeof item.service === 'string' ? item.service : '',
-                      typeof item.unit === 'string' ? item.unit : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' ');
-                    return {
-                      item,
-                      score: this.scoreTextMatch(itemText, contextTerms),
-                    };
-                  })
+                  .map((item) => ({
+                    item,
+                    score: this.scorePriceListItem(item, contextTerms),
+                  }))
                   .sort((a, b) => {
                     if (b.score !== a.score) return b.score - a.score;
                     return (
@@ -905,7 +1066,12 @@ export class FixerService {
           profileText,
           searchTerms,
         );
-        const overallScore = Math.max(matchedScore, fallbackProfileScore);
+        const overallScore =
+          estimatedBreakdownMeta.length > 0
+            ? Math.max(matchedScore, fallbackProfileScore)
+            : list.length === 0
+              ? fallbackProfileScore
+              : 0;
         const minListedPrice = list.reduce((min, item) => {
           const value = Number(item.finalPrice) || 0;
           if (value <= 0) return min;
@@ -997,7 +1163,14 @@ export class FixerService {
       const matchedPool = formattedPool.filter(
         (partner) => partner.matchScore > 0,
       );
-      const rankingPool = matchedPool.length > 0 ? matchedPool : formattedPool;
+      const serviceIntentTerms = this.getServiceIntentTerms(searchTerms);
+      const rankingPool =
+        matchedPool.length > 0
+          ? matchedPool
+          : serviceIntentTerms.length > 0
+            ? []
+            : formattedPool;
+      if (rankingPool.length === 0) return [];
       const maxImportantMatchedCount = Math.max(
         0,
         ...rankingPool.map((partner) => partner.importantMatchedCount || 0),

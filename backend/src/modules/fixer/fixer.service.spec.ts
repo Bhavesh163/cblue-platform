@@ -336,6 +336,179 @@ describe('FixerService', () => {
       expect(fitoutCandidate?.estimatedQty).toBe(1000);
     });
 
+    it('should only return Bangkok partners with a matching fit-out price-list service', async () => {
+      prisma.fixer.findMany.mockResolvedValue([
+        {
+          id: 'bhavesh',
+          tier: 'ECONOMY',
+          rating: 4.8,
+          completedJobs: 18,
+          yearsExperience: 8,
+          description: 'Office fitout and web team',
+          pastProjectType: 'fitout',
+          bio: 'Fitout and software delivery',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          priceList: [
+            {
+              service: 'office fitout',
+              quantity: '1',
+              unit: 'sqm',
+              finalPrice: '33200',
+            },
+          ],
+          user: {
+            name: 'Bhavesh Fungprasertsuk',
+            company: 'Bhavesh Fungprasertsuk',
+          },
+          skills: [{ category: 'project', name: 'office fitout' }],
+        },
+        {
+          id: 'suppadesh',
+          tier: 'ECONOMY',
+          rating: 4.9,
+          completedJobs: 20,
+          yearsExperience: 20,
+          description: 'Office fitout specialist',
+          pastProjectType: 'fitout',
+          bio: 'Commercial fitout team',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          priceList: [
+            {
+              service: 'Fit out',
+              quantity: '1',
+              unit: 'sqm',
+              finalPrice: '25000',
+            },
+          ],
+          user: {
+            name: 'Suppadesh Funpgrsertsuk',
+            company: 'Suppadesh Funpgrsertsuk',
+          },
+          skills: [{ category: 'project', name: 'office fitout' }],
+        },
+        {
+          id: 'gatoru',
+          tier: 'ECONOMY',
+          rating: 5,
+          completedJobs: 2,
+          yearsExperience: 2,
+          description: 'Office cleaning and maintenance',
+          pastProjectType: 'maintenance',
+          bio: 'Office maintenance team',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          priceList: [
+            {
+              service: 'office cleaning',
+              quantity: '1',
+              unit: 'sqm',
+              finalPrice: '1200',
+            },
+          ],
+          user: { name: 'Gatoru Sojo', company: 'Gatoru Sojo' },
+          skills: [{ category: 'project', name: 'office cleaning' }],
+        },
+        {
+          id: 'ghis-cafe',
+          tier: 'STANDARD',
+          rating: 4.7,
+          completedJobs: 8,
+          yearsExperience: 4,
+          description: 'Office painting and cafe maintenance',
+          pastProjectType: 'maintenance',
+          bio: 'Office painting crew',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          priceList: [
+            {
+              service: 'office painting',
+              quantity: '1',
+              unit: 'sqm',
+              finalPrice: '15000',
+            },
+          ],
+          user: { name: 'Ghis Cafe', company: 'Ghis Cafe' },
+          skills: [{ category: 'project', name: 'office painting' }],
+        },
+      ]);
+
+      const result = await service.matchFixers(
+        'project',
+        'Pathum Wan',
+        'Bangkok',
+        'Need 1200 sq.m. office fit out work',
+      );
+
+      const ids = result.map((candidate: { id: string }) => candidate.id);
+      expect(ids).toEqual(expect.arrayContaining(['bhavesh', 'suppadesh']));
+      expect(ids).not.toContain('gatoru');
+      expect(ids).not.toContain('ghis-cafe');
+    });
+
+    it('should normalize common fit-out typing mistakes before price-list matching', async () => {
+      prisma.fixer.findMany.mockResolvedValue([
+        {
+          id: 'suppadesh',
+          tier: 'ECONOMY',
+          rating: 4.9,
+          completedJobs: 20,
+          yearsExperience: 20,
+          description: 'Office fitout specialist',
+          pastProjectType: 'fitout',
+          bio: 'Commercial fitout team',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          priceList: [
+            {
+              service: 'Office painting',
+              quantity: '1',
+              unit: 'sqm',
+              finalPrice: '1200',
+            },
+            {
+              service: 'Fit out',
+              quantity: '1',
+              unit: 'sqm',
+              finalPrice: '25000',
+            },
+          ],
+          user: {
+            name: 'Suppadesh Funpgrsertsuk',
+            company: 'Suppadesh Funpgrsertsuk',
+          },
+          skills: [{ category: 'project', name: 'office fitout' }],
+        },
+      ]);
+
+      const result = await service.matchFixers(
+        'project',
+        'Pathum Wan',
+        'Bangkok',
+        'Need 1200 sq.m. office fiitout work',
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual(
+        expect.objectContaining({
+          id: 'suppadesh',
+          estimatedTotal: 30000000,
+          estimatedUnit: 'sqm',
+          estimatedQty: 1200,
+          price: 30000000,
+        }),
+      );
+      expect(result[0]).toHaveProperty('estimatedBreakdown', [
+        {
+          service: 'Fit out',
+          qty: 1200,
+          unit: 'sqm',
+          unitRate: 25000,
+          total: 30000000,
+        },
+      ]);
+    });
     it('filters household fixers to 40 km from the customer GPS site before ranking', async () => {
       prisma.fixer.findMany.mockResolvedValue([
         {
