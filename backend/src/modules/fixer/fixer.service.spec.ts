@@ -509,6 +509,373 @@ describe('FixerService', () => {
         },
       ]);
     });
+    it('should include Bangkok project providers in another district when GPS is absent', async () => {
+      prisma.fixer.findMany.mockResolvedValue([
+        {
+          id: 'suppadesh',
+          tier: 'ECONOMY',
+          rating: 5,
+          completedJobs: 0,
+          yearsExperience: 20,
+          description: '',
+          pastProjectType: 'corporate',
+          bio: '',
+          serviceProvince: 'กรุงเทพมหานคร',
+          serviceDistrict: 'วังทองหลาง',
+          servicePostalCode: '10310',
+          priceList: [
+            {
+              service: 'fit out',
+              quantity: '1',
+              unit: 'sq.m.',
+              finalPrice: '30000',
+            },
+          ],
+          user: {
+            name: 'Suppadesh Funpgrsertsuk',
+            email: 'suppadesh@yahoo.com',
+          },
+          skills: [{ category: 'FITOUT', name: 'FITOUT' }],
+        },
+        {
+          id: 'bhavesh',
+          tier: 'ECONOMY',
+          rating: 5,
+          completedJobs: 0,
+          yearsExperience: 2,
+          description: 'Can do fitout work',
+          pastProjectType: 'specialist',
+          bio: '',
+          serviceProvince: '',
+          serviceDistrict: '',
+          servicePostalCode: '',
+          gpsLat: 13.794067404742384,
+          gpsLng: 100.60958770025377,
+          priceList: [
+            {
+              service: 'Fit-out',
+              quantity: '1',
+              unit: 'sq.m.',
+              finalPrice: '30000',
+            },
+          ],
+          user: {
+            name: 'Bhavesh Fungprasertsuk',
+            email: 'bhaveshfung@gmail.com',
+          },
+          skills: [{ category: 'FITOUT', name: 'Fit-out' }],
+        },
+        {
+          id: 'gatoru',
+          tier: 'ECONOMY',
+          rating: 5,
+          completedJobs: 2,
+          yearsExperience: 2,
+          description: 'Website and chatbot development',
+          pastProjectType: 'digital',
+          bio: 'Digital delivery team',
+          serviceProvince: 'กรุงเทพมหานคร',
+          serviceDistrict: 'ปทุมวัน',
+          servicePostalCode: '10330',
+          priceList: [
+            {
+              service: 'website development',
+              quantity: '1',
+              unit: 'page',
+              finalPrice: '1200',
+            },
+          ],
+          user: { name: 'Gatoru Sojo', email: 'gatoru@example.com' },
+          skills: [{ category: 'project', name: 'website development' }],
+        },
+      ]);
+
+      const result = await service.matchFixers(
+        'project',
+        'Pathum Wan',
+        'Bangkok',
+        'Need 1000 sq.m. office fitout work',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'project',
+      );
+
+      const ids = result.map((candidate: { id: string }) => candidate.id);
+      expect(ids).toEqual(expect.arrayContaining(['suppadesh', 'bhavesh']));
+      expect(ids).not.toContain('gatoru');
+    });
+
+    it('should fall back to stored Bangkok service area for project partners without GPS', async () => {
+      prisma.fixer.findMany.mockResolvedValue([
+        {
+          id: 'suppadesh',
+          tier: 'ECONOMY',
+          rating: 5,
+          completedJobs: 0,
+          yearsExperience: 20,
+          description: '',
+          pastProjectType: 'corporate',
+          bio: '',
+          serviceProvince: 'กรุงเทพมหานคร',
+          serviceDistrict: 'วังทองหลาง',
+          servicePostalCode: '10310',
+          gpsLat: null,
+          gpsLng: null,
+          priceList: [
+            {
+              service: 'fit out',
+              quantity: '1',
+              unit: 'sq.m.',
+              finalPrice: '30000',
+            },
+          ],
+          user: {
+            name: 'Suppadesh Funpgrsertsuk',
+            email: 'suppadesh@yahoo.com',
+          },
+          skills: [{ category: 'FITOUT', name: 'FITOUT' }],
+        },
+        {
+          id: 'near-bhavesh',
+          tier: 'ECONOMY',
+          rating: 5,
+          completedJobs: 0,
+          yearsExperience: 2,
+          description: 'Can do fitout work',
+          pastProjectType: 'specialist',
+          bio: '',
+          serviceProvince: '',
+          serviceDistrict: '',
+          servicePostalCode: '',
+          gpsLat: 13.794067404742384,
+          gpsLng: 100.60958770025377,
+          priceList: [
+            {
+              service: 'Fit-out',
+              quantity: '1',
+              unit: 'sq.m.',
+              finalPrice: '30000',
+            },
+          ],
+          user: {
+            name: 'Bhavesh Fungprasertsuk',
+            email: 'bhaveshfung@gmail.com',
+          },
+          skills: [{ category: 'FITOUT', name: 'Fit-out' }],
+        },
+        {
+          id: 'far-fitout',
+          tier: 'ECONOMY',
+          rating: 5,
+          completedJobs: 0,
+          yearsExperience: 2,
+          description: 'Distant fitout team',
+          pastProjectType: 'specialist',
+          bio: '',
+          serviceProvince: 'Chiang Mai',
+          serviceDistrict: 'Mueang Chiang Mai',
+          servicePostalCode: '50000',
+          gpsLat: 18.7883,
+          gpsLng: 98.9853,
+          priceList: [
+            {
+              service: 'Fit-out',
+              quantity: '1',
+              unit: 'sq.m.',
+              finalPrice: '29000',
+            },
+          ],
+          user: { name: 'Far Fitout', email: 'far@example.com' },
+          skills: [{ category: 'FITOUT', name: 'Fit-out' }],
+        },
+      ]);
+
+      const result = await service.matchFixers(
+        'project',
+        'Pathum Wan',
+        'Bangkok',
+        'Need 1000 sq.m. office fitout work',
+        undefined,
+        undefined,
+        13.7563,
+        100.5018,
+        'project',
+      );
+
+      const ids = result.map((candidate: { id: string }) => candidate.id);
+      expect(ids).toEqual(
+        expect.arrayContaining(['suppadesh', 'near-bhavesh']),
+      );
+      expect(ids).not.toContain('far-fitout');
+    });
+
+    it('should match Thai fit-out synonyms to English fit-out price-list rows', async () => {
+      prisma.fixer.findMany.mockResolvedValue([
+        {
+          id: 'suppadesh',
+          tier: 'ECONOMY',
+          rating: 5,
+          completedJobs: 0,
+          yearsExperience: 20,
+          description: '',
+          pastProjectType: 'corporate',
+          bio: '',
+          serviceProvince: 'กรุงเทพมหานคร',
+          serviceDistrict: 'วังทองหลาง',
+          servicePostalCode: '10310',
+          priceList: [
+            {
+              service: 'fit out',
+              quantity: '1',
+              unit: 'sq.m.',
+              finalPrice: '30000',
+            },
+          ],
+          user: {
+            name: 'Suppadesh Funpgrsertsuk',
+            email: 'suppadesh@yahoo.com',
+          },
+          skills: [{ category: 'FITOUT', name: 'FITOUT' }],
+        },
+      ]);
+
+      const result = await service.matchFixers(
+        'project',
+        'Pathum Wan',
+        'Bangkok',
+        'ต้องการตกแต่งภายในออฟฟิศ 1000 ตรม.',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'project',
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual(
+        expect.objectContaining({
+          id: 'suppadesh',
+          estimatedTotal: 30000000,
+          estimatedUnit: 'sq.m.',
+          estimatedQty: 1000,
+        }),
+      );
+    });
+    it('keeps selected-location household jobs in the same district outside province-wide exceptions', async () => {
+      prisma.fixer.findMany.mockResolvedValue([
+        {
+          id: 'same-district-household',
+          tier: 'STANDARD',
+          rating: 4.8,
+          completedJobs: 12,
+          yearsExperience: 6,
+          description: 'Plumbing repair specialist',
+          pastProjectType: 'household',
+          bio: 'Home plumbing team',
+          serviceProvince: 'Chiang Mai',
+          serviceDistrict: 'Mueang Chiang Mai',
+          priceList: [
+            {
+              service: 'plumbing',
+              quantity: '1',
+              unit: 'job',
+              finalPrice: '2500',
+            },
+          ],
+          user: { name: 'Same District Household' },
+          skills: [{ category: 'household', name: 'plumbing' }],
+        },
+        {
+          id: 'other-district-household',
+          tier: 'STANDARD',
+          rating: 4.9,
+          completedJobs: 20,
+          yearsExperience: 7,
+          description: 'Plumbing repair specialist',
+          pastProjectType: 'household',
+          bio: 'Home plumbing team',
+          serviceProvince: 'Chiang Mai',
+          serviceDistrict: 'Hang Dong',
+          priceList: [
+            {
+              service: 'plumbing',
+              quantity: '1',
+              unit: 'job',
+              finalPrice: '2000',
+            },
+          ],
+          user: { name: 'Other District Household' },
+          skills: [{ category: 'household', name: 'plumbing' }],
+        },
+      ]);
+
+      const result = await service.matchFixers(
+        'plumbing',
+        'Mueang Chiang Mai',
+        'Chiang Mai',
+        'Need plumbing repair',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'household',
+      );
+
+      const ids = result.map((candidate: { id: string }) => candidate.id);
+      expect(ids).toContain('same-district-household');
+      expect(ids).not.toContain('other-district-household');
+    });
+
+    it.each([
+      ['Bangkok', 'Pathum Wan', 'Wang Thonglang'],
+      ['Nonthaburi', 'Mueang Nonthaburi', 'Pak Kret'],
+      ['Phuket', 'Mueang Phuket', 'Kathu'],
+    ])(
+      'matches selected-location household jobs by province in %s',
+      async (province, district, otherDistrict) => {
+        prisma.fixer.findMany.mockResolvedValue([
+          {
+            id: 'province-wide-household',
+            tier: 'STANDARD',
+            rating: 4.8,
+            completedJobs: 12,
+            yearsExperience: 6,
+            description: 'Plumbing repair specialist',
+            pastProjectType: 'household',
+            bio: 'Home plumbing team',
+            serviceProvince: province,
+            serviceDistrict: otherDistrict,
+            priceList: [
+              {
+                service: 'plumbing',
+                quantity: '1',
+                unit: 'job',
+                finalPrice: '2500',
+              },
+            ],
+            user: { name: 'Province Wide Household' },
+            skills: [{ category: 'household', name: 'plumbing' }],
+          },
+        ]);
+
+        const result = await service.matchFixers(
+          'plumbing',
+          district,
+          province,
+          'Need plumbing repair',
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          'household',
+        );
+
+        const ids = result.map((candidate: { id: string }) => candidate.id);
+        expect(ids).toContain('province-wide-household');
+      },
+    );
     it('filters household fixers to 40 km from the customer GPS site before ranking', async () => {
       prisma.fixer.findMany.mockResolvedValue([
         {

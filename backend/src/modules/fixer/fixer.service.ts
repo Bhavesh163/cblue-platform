@@ -58,6 +58,7 @@ interface RankedFixer extends SelectedFixer {
   matchIcon: string;
   comparisonTotal: number;
   importantMatchedCount: number;
+  nominationSearchText: string;
 }
 
 @Injectable()
@@ -556,6 +557,111 @@ export class FixerService {
   private normalizeSearchText(value?: string): string {
     return (value || '')
       .toLowerCase()
+      .replace(
+        /ตกแต่งภายใน|อินทีเรีย|ออกแบบภายใน|ตกแต่งออฟฟิศ|รีโนเวทภายใน|ปรับปรุงภายใน|บิ้วอิน|บิวอิน|装修|裝修|工装|公装|办公室装修|商业装修|室内设计/g,
+        ' fitout ',
+      )
+      .replace(
+        /รื้อถอนคืนสภาพ|คืนสภาพ|ทำคืนสภาพ|ส่งคืนพื้นที่|恢复工程|还原|退租还原/g,
+        ' reinstatement ',
+      )
+      .replace(
+        /ก่อสร้างเขียว|อาคารเขียว|อาคารประหยัดพลังงาน|绿色建筑|绿色施工/g,
+        ' green construction ',
+      )
+      .replace(
+        /ก่อสร้าง|งานโยธา|งานโครงสร้าง|ก่อสร้างอาคาร|土建|施工|建筑施工/g,
+        ' construction ',
+      )
+      .replace(
+        /ประปา|สุขาภิบาล|งานท่อ|ระบบน้ำ|ท่อน้ำ|给排水|管道/g,
+        ' plumbing ',
+      )
+      .replace(
+        /ไฟฟ้า|ระบบไฟ|เดินสายไฟ|แสงสว่าง|电气|电力|照明/g,
+        ' electrical ',
+      )
+      .replace(
+        /เครื่องปรับอากาศ|ระบบปรับอากาศ|ล้างแอร์|ซ่อมแอร์|暖通|空调/g,
+        ' hvac ',
+      )
+      .replace(/จัดสวน|ภูมิทัศน์|จัดภูมิทัศน์|园林|景观/g, ' landscaping ')
+      .replace(
+        /หลังคา|ผนัง|ฝ้าเพดาน|มุงหลังคา|หลังคารั่ว|屋顶|墙体/g,
+        ' roofing ',
+      )
+      .replace(
+        /พัฒนาเว็บไซต์|ทำเว็บ|เขียนเว็บ|เว็บไซต์|เว็บแอป|网站开发|网页设计/g,
+        ' website ',
+      )
+      .replace(
+        /พัฒนาแอป|โมบายแอป|แอปมือถือ|แอปพลิเคชัน|移动应用|app开发/g,
+        ' mobile app ',
+      )
+      .replace(
+        /บูรณาการ\s*ai|ปัญญาประดิษฐ์|ระบบ\s*ai|人工智能/g,
+        ' ai integration ',
+      )
+      .replace(
+        /พัฒนาซอฟต์แวร์|เขียนโปรแกรม|ซอฟต์แวร์|软件开发|软件工程/g,
+        ' software ',
+      )
+      .replace(
+        /แมชชีนเลิร์นนิง|การเรียนรู้ของเครื่อง|机器学习/g,
+        ' machine learning ',
+      )
+      .replace(/ที่ปรึกษา|ผู้เชี่ยวชาญ|顾问|咨询/g, ' consultant ')
+      .replace(/โซลาร์|แผงโซลาร์|พลังงานแสงอาทิตย์|太阳能/g, ' solar ')
+      .replace(
+        /สถานีชาร์จ\s*ev|ชาร์จรถไฟฟ้า|ev\s*charger|ev\s*charging|充电桩/g,
+        ' ev charging ',
+      )
+      .replace(/ครัว|ห้องครัว|厨房/g, ' kitchen ')
+      .replace(/ระบบอัตโนมัติ|อัตโนมัติ|自动化/g, ' automation ')
+      .replace(/สิ่งแวดล้อม|สิ่งแวดล้อมบริการ|环保|环境/g, ' environmental ')
+      .replace(/กล้องวงจรปิด|รักษาความปลอดภัย|安防|监控/g, ' security cctv ')
+      .replace(/คีย์การ์ด|ระบบประตู|ประตูอัตโนมัติ|门禁/g, ' access control ')
+      .replace(
+        /สมาร์ทโฮม|บ้านอัจฉริยะ|อาคารอัจฉริยะ|智能家居|楼宇自控/g,
+        ' smart home bms ',
+      )
+      .replace(/เกษตรอัจฉริยะ|เกษตรแม่นยำ|智慧农业/g, ' smart agriculture ')
+      .replace(/ทนายความ|ทนาย|法律|律师/g, ' legal lawyer ')
+      .replace(/นักบัญชี|บัญชี|会计/g, ' accounting accountant ')
+      .replace(/ผู้สอบบัญชี|สอบบัญชี|审计/g, ' cpa audit ')
+      .replace(/สถาปนิก|建筑师/g, ' architect ')
+      .replace(/มัณฑนากร|นักออกแบบภายใน|室内设计师/g, ' interior designer ')
+      .replace(/วิศวกรโยธาออกแบบ|ออกแบบโยธา|结构设计/g, ' civil design ')
+      .replace(
+        /วิศวกรโยธาก่อสร้าง|โยธาก่อสร้าง|现场土木/g,
+        ' civil construction ',
+      )
+      .replace(
+        /วิศวกรเครื่องกลออกแบบ|ออกแบบเครื่องกล|机械设计/g,
+        ' mechanical design ',
+      )
+      .replace(
+        /วิศวกรเครื่องกลก่อสร้าง|เครื่องกลก่อสร้าง|机械施工/g,
+        ' mechanical construction ',
+      )
+      .replace(/วิศวกรไฟฟ้าออกแบบ|ออกแบบไฟฟ้า|电气设计/g, ' electrical design ')
+      .replace(
+        /วิศวกรไฟฟ้าก่อสร้าง|ไฟฟ้าก่อสร้าง|电气施工/g,
+        ' electrical construction ',
+      )
+      .replace(/โปรแกรมเมอร์|程序员/g, ' programmer software ')
+      .replace(
+        /การตลาดดิจิทัล|ตลาดออนไลน์|网络营销|数字营销/g,
+        ' digital marketing ',
+      )
+      .replace(
+        /เจ้าหน้าที่ความปลอดภัย|จป\.?|安全官|ehs|hse/g,
+        ' safety officer ',
+      )
+      .replace(
+        /\b(?:office\s*)?(?:decoration|decorating|refurbishment|renovation|interior\s*work|interior\s*fitout|tenant\s*improvement)\b/g,
+        ' fitout ',
+      )
       .replace(/\bf+i+i?t\s*[- ]?\s*out\b/g, 'fitout')
       .replace(/\bbuild\s*[- ]?\s*out\b/g, 'fitout')
       .replace(/\bbuildout\b/g, 'fitout')
@@ -571,7 +677,9 @@ export class FixerService {
       .replace(/square\s*meter/g, 'sqm')
       .replace(/sq\.?\s*m\.?/g, 'sqm')
       .replace(/bangkok|bkk/g, 'กรุงเทพมหานคร')
-      .replace(/[^a-z0-9ก-๙\s]/g, ' ')
+      .replace(/nonthaburi/g, 'นนทบุรี')
+      .replace(/phuket/g, 'ภูเก็ต')
+      .replace(/[^a-z0-9ก-๙\u4e00-\u9fff\s]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
   }
@@ -747,6 +855,38 @@ export class FixerService {
     return score;
   }
 
+  private serviceAreaCanSpanProvince(
+    service: string,
+    bookingType?: string,
+  ): boolean {
+    const context = this.normalizeSearchText(
+      `${bookingType || ''} ${service || ''}`,
+    );
+    return context.includes('project') || context.includes('professional');
+  }
+
+  private homeServiceAreaCanSpanProvince(
+    normalizedProvince: string,
+    service: string,
+    bookingType?: string,
+  ): boolean {
+    if (!['กรุงเทพมหานคร', 'นนทบุรี', 'ภูเก็ต'].includes(normalizedProvince)) {
+      return false;
+    }
+
+    const context = this.normalizeSearchText(
+      `${bookingType || ''} ${service || ''}`,
+    );
+
+    return (
+      context.includes('household') ||
+      context.includes('home') ||
+      /\b(?:plumbing|electrical|hvac|airconditioning|roofing|landscaping|security|cctv|access|repair|maintenance)\b/.test(
+        context,
+      )
+    );
+  }
+
   private matchServiceArea(
     fixer: {
       serviceProvince?: string | null;
@@ -756,6 +896,8 @@ export class FixerService {
     district: string,
     province: string,
     postalCode?: string,
+    service = '',
+    bookingType?: string,
   ): boolean {
     const normalizedProvince = this.normalizeSearchText(province);
     const normalizedDistrict = this.normalizeSearchText(district);
@@ -783,10 +925,28 @@ export class FixerService {
       return false;
     }
 
+    const hasExactProvinceMatch =
+      !autoProvince && fixerProvince && fixerProvince === normalizedProvince;
+    const requestIsProvinceLevel =
+      !autoDistrict &&
+      Boolean(normalizedProvince) &&
+      normalizedDistrict === normalizedProvince;
+    const allowProvinceLevelMatch =
+      autoPostalCode &&
+      hasExactProvinceMatch &&
+      (requestIsProvinceLevel ||
+        this.serviceAreaCanSpanProvince(service, bookingType) ||
+        this.homeServiceAreaCanSpanProvince(
+          normalizedProvince,
+          service,
+          bookingType,
+        ));
+
     if (
       !autoDistrict &&
       fixerDistrict &&
-      fixerDistrict !== normalizedDistrict
+      fixerDistrict !== normalizedDistrict &&
+      !allowProvinceLevelMatch
     ) {
       return false;
     }
@@ -795,6 +955,7 @@ export class FixerService {
   }
 
   private toFiniteCoordinate(value: unknown): number | null {
+    if (value === null || value === undefined || value === '') return null;
     const coordinate = Number(value);
     return Number.isFinite(coordinate) ? coordinate : null;
   }
@@ -833,6 +994,16 @@ export class FixerService {
     }
 
     return 40;
+  }
+
+  private hasFixerGps(fixer: {
+    gpsLat?: number | string | null;
+    gpsLng?: number | string | null;
+  }): boolean {
+    return (
+      this.toFiniteCoordinate(fixer.gpsLat) !== null &&
+      this.toFiniteCoordinate(fixer.gpsLng) !== null
+    );
   }
 
   private matchDistanceArea(
@@ -879,16 +1050,33 @@ export class FixerService {
         `[matchFixers] Input district: ${district}, province: ${province}, gps: ${hasCustomerGps ? `${customerLat},${customerLng}` : 'none'}, allFixers length = ${allFixers.length}`,
       );
       const pool = hasCustomerGps
-        ? allFixers.filter((fixer) =>
-            this.matchDistanceArea(
-              fixer,
-              customerLat,
-              customerLng,
-              matchRadiusKm,
-            ),
+        ? allFixers.filter(
+            (fixer) =>
+              this.matchDistanceArea(
+                fixer,
+                customerLat,
+                customerLng,
+                matchRadiusKm,
+              ) ||
+              (!this.hasFixerGps(fixer) &&
+                this.matchServiceArea(
+                  fixer,
+                  district,
+                  province,
+                  postalCode,
+                  service,
+                  bookingType,
+                )),
           )
         : allFixers.filter((fixer) =>
-            this.matchServiceArea(fixer, district, province, postalCode),
+            this.matchServiceArea(
+              fixer,
+              district,
+              province,
+              postalCode,
+              service,
+              bookingType,
+            ),
           );
       console.log(
         `[matchFixers] After ${hasCustomerGps ? `${matchRadiusKm}km radius` : 'matchServiceArea'}, pool length = ${pool.length}`,
@@ -1111,6 +1299,11 @@ export class FixerService {
           matchIcon: '',
           comparisonTotal: basePrice > 0 ? basePrice : minListedPrice || 500,
           importantMatchedCount: 0,
+          nominationSearchText: this.normalizeSearchText(
+            [f.id, f.user?.email, f.user?.name, f.user?.company]
+              .filter(Boolean)
+              .join(' '),
+          ),
         };
       });
 
@@ -1197,6 +1390,16 @@ export class FixerService {
 
       const results: RankedFixer[] = [];
       const usedIds = new Set<string>();
+      const matchesNomination = (partner: RankedFixer, rawId: string) => {
+        const trimmed = rawId.trim();
+        const normalized = this.normalizeSearchText(trimmed);
+        if (!trimmed || !normalized) return false;
+        return (
+          partner.id === trimmed ||
+          partner.id.endsWith(trimmed) ||
+          partner.nominationSearchText.includes(normalized)
+        );
+      };
 
       const pick = (partner: RankedFixer | undefined, reason: string) => {
         if (partner && !usedIds.has(partner.id)) {
@@ -1253,12 +1456,9 @@ export class FixerService {
       }
 
       if (nominateId) {
-        const nominated = rankingPool.find(
-          (f) =>
-            f.id === nominateId ||
-            f.id.endsWith(nominateId) ||
-            f.alias.includes(nominateId),
-        );
+        const nominated =
+          matchedPool.find((f) => matchesNomination(f, nominateId)) ||
+          rankingPool.find((f) => matchesNomination(f, nominateId));
         if (nominated) pick(nominated, '👤 Customer nomination');
       }
 
@@ -1273,11 +1473,13 @@ export class FixerService {
           estimatedBreakdownMeta,
           comparisonTotal,
           importantMatchedCount,
+          nominationSearchText,
           ...partner
         } = candidate;
         void estimatedBreakdownMeta;
         void comparisonTotal;
         void importantMatchedCount;
+        void nominationSearchText;
         return partner;
       });
     } catch (error) {
