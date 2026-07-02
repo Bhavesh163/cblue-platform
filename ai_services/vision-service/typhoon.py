@@ -4,8 +4,11 @@ import json
 import httpx
 
 def ocr_image_typhoon(image_bytes: bytes) -> str:
-    # Use explicitly requested key and model
-    api_key = "sk-9QMPk7A1MYzAGi7dgjTldnK7DB9Ion8fRkiGC1uIX632Fg9y"
+    api_key = os.getenv("TYPHOON_API_KEY")
+    if not api_key:
+        return "[Typhoon OCR error: TYPHOON_API_KEY is not configured]"
+    base_url = os.getenv("TYPHOON_BASE_URL", "https://api.opentyphoon.ai/v1").rstrip("/")
+    model = os.getenv("TYPHOON_MODEL", "typhoon-v2.5-30b-a3b-instruct")
     
     # 1. OCR the image to extract raw text (Typhoon OCR playground API)
     ocr_headers = {
@@ -18,7 +21,7 @@ def ocr_image_typhoon(image_bytes: bytes) -> str:
     extracted_text = ""
     try:
         with httpx.Client(timeout=60.0) as client:
-            ocr_res = client.post("https://api.opentyphoon.ai/v1/ocr", headers=ocr_headers, files=ocr_files)
+            ocr_res = client.post(f"{base_url}/ocr", headers=ocr_headers, files=ocr_files)
             ocr_res.raise_for_status()
             
             ocr_data = ocr_res.json()
@@ -48,7 +51,7 @@ Your task is to analyze OCR text from KYC documents, portfolios, licenses, or ce
 Extract structured information with high accuracy. Find dates, names, license numbers, project experience, and identify if the document acts as identity verification or a professional credential. Do not hallucinate external facts. Translate concepts to English but retain original Thai names and numbers."""
 
         llm_payload = {
-            "model": "Typhoon-v2.5-30b-a3b-instruct",
+            "model": model,
             "messages": [
                 {
                     "role": "system",
@@ -64,7 +67,7 @@ Extract structured information with high accuracy. Find dates, names, license nu
         }
         
         with httpx.Client(timeout=60.0) as client:
-            llm_res = client.post("https://api.opentyphoon.ai/v1/chat/completions", headers=llm_headers, json=llm_payload)
+            llm_res = client.post(f"{base_url}/chat/completions", headers=llm_headers, json=llm_payload)
             llm_res.raise_for_status()
             llm_data = llm_res.json()
             return llm_data['choices'][0]['message']['content'].strip()

@@ -30,8 +30,20 @@ STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 ALLOWED_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp", "application/pdf"}
 MAX_FILE_SIZE = 20 * 1024 * 1024
 
-API_KEY = "sk-9QMPk7A1MYzAGi7dgjTldnK7DB9Ion8fRkiGC1uIX632Fg9y"
-client = openai.AsyncOpenAI(api_key=API_KEY, base_url="https://api.opentyphoon.ai/v1")
+TYPHOON_API_KEY = os.getenv("TYPHOON_API_KEY")
+TYPHOON_BASE_URL = os.getenv("TYPHOON_BASE_URL", "https://api.opentyphoon.ai/v1")
+TYPHOON_VISION_MODEL = os.getenv("TYPHOON_VISION_MODEL", "typhoon-v1.5-vision-preview")
+TYPHOON_TIER_MODEL = os.getenv("TYPHOON_MODEL", "typhoon-v2.5-30b-a3b-instruct")
+client = (
+    openai.AsyncOpenAI(api_key=TYPHOON_API_KEY, base_url=TYPHOON_BASE_URL)
+    if TYPHOON_API_KEY
+    else None
+)
+
+def require_typhoon_client():
+    if client is None:
+        raise HTTPException(503, "TYPHOON_API_KEY is not configured")
+    return client
 
 class RegistrationData(BaseModel):
     partner_id: str
@@ -44,9 +56,10 @@ class RegistrationData(BaseModel):
 async def api_typhoon_extract(image_bytes: bytes) -> str:
     """Use Typhoon Vision to extract info"""
     b64 = base64.b64encode(image_bytes).decode('utf-8')
+    typhoon_client = require_typhoon_client()
     try:
-        response = await client.chat.completions.create(
-            model="typhoon-v1.5-vision-preview", # fallback or standard model
+        response = await typhoon_client.chat.completions.create(
+            model=TYPHOON_VISION_MODEL, # fallback or standard model
             messages=[
                 {
                     "role": "user",
@@ -76,8 +89,9 @@ async def score_registration(data: RegistrationData):
     comb = "\\n".join(data.ocr_texts)[:5000]
     prompt = f"Stats: {data.experience_years} yrs, texts: {comb}"
     
-    resp = await client.chat.completions.create(
-        model="typhoon-v2.5-30b-a3b-instruct",
+    typhoon_client = require_typhoon_client()
+    resp = await typhoon_client.chat.completions.create(
+        model=TYPHOON_TIER_MODEL,
         messages=[
             {"role": "system", "content": sys_prompt},
             {"role": "user", "content": prompt}

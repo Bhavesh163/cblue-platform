@@ -145,6 +145,263 @@ describe('FixerService', () => {
     });
   });
 
+  it('persists the evaluated Standard tier when minimum experience and certificate evidence qualify', async () => {
+    const createdFixer = {
+      id: 'fixer-standard',
+      userId: 'user-1',
+      user: { id: 'user-1' },
+      skills: [],
+    };
+    prisma.fixer.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(createdFixer);
+    prisma.user.update.mockResolvedValue({});
+    prisma.fixer.create.mockResolvedValue(createdFixer);
+
+    await service.register('user-1', {
+      name: 'Standard Partner',
+      email: 'standard@example.com',
+      phone: '0812345678',
+      company: 'Standard Co',
+      bio: 'Experienced repair and project service provider.',
+      description: 'Provides office repair and renovation services.',
+      pastExperience:
+        'More than three years experience with a professional certificate and completed one million baht project.',
+      pastProjectType: 'corporate',
+      yearsExperience: 4,
+      travelRadius: 20,
+      kycImageCount: 3,
+      portfolioImageCount: 2,
+      companyAddress: {
+        province: 'Bangkok',
+        district: 'Pathum Wan',
+        houseNumber: '1',
+      },
+      address: { province: 'Bangkok', district: 'Pathum Wan' },
+      skills: [
+        { category: 'fitout', name: 'fitout' },
+        { category: 'reinstatement', name: 'reinstatement' },
+      ],
+      priceList: [
+        {
+          service: 'fit out',
+          quantity: '1',
+          unit: 'sq.m.',
+          finalPrice: '30000',
+        },
+      ],
+      portfolioDigest: {
+        fallback: false,
+        content_score: 80,
+        total_text_length: 500,
+        results: [
+          {
+            verification_hints: [
+              'Professional certificate detected',
+              'Million baht project completion certificate detected',
+            ],
+          },
+        ],
+      },
+    } as never);
+
+    expect(prisma.fixer.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tier: 'STANDARD',
+          aiTier: 'Standard',
+          aiScore: expect.any(Number),
+          aiCredentialStatus: expect.stringMatching(/partial|verified/),
+          aiBreakdown: expect.arrayContaining([
+            expect.objectContaining({ label: 'Experience', max: 25 }),
+            expect.objectContaining({
+              label: 'Credential Verification',
+              max: 10,
+            }),
+          ]),
+        }),
+      }),
+    );
+  });
+
+  it('does not persist Corporate when the score is high but corporate certificates are missing', async () => {
+    const createdFixer = {
+      id: 'fixer-high-score-no-corporate-cert',
+      userId: 'user-1',
+      user: { id: 'user-1' },
+      skills: [],
+    };
+    prisma.fixer.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(createdFixer);
+    prisma.user.update.mockResolvedValue({});
+    prisma.fixer.create.mockResolvedValue(createdFixer);
+
+    await service.register('user-1', {
+      name: 'High Score Partner',
+      email: 'high@example.com',
+      phone: '0812345678',
+      company: 'High Score Co',
+      bio: 'Very detailed and complete provider profile for many scopes.',
+      description:
+        'Detailed profile with long project descriptions and many service areas but no corporate endorsed certificate.',
+      pastExperience:
+        '15 years experience, many projects, many skills, detailed profile, but no endorsed corporate certificate evidence.',
+      pastProjectType: 'corporate',
+      yearsExperience: 15,
+      travelRadius: 50,
+      kycImageCount: 3,
+      portfolioImageCount: 6,
+      companyAddress: {
+        province: 'Bangkok',
+        district: 'Pathum Wan',
+        houseNumber: '1',
+      },
+      address: { province: 'Bangkok', district: 'Pathum Wan' },
+      skills: [
+        { category: 'fitout', name: 'fitout' },
+        { category: 'reinstatement', name: 'reinstatement' },
+        { category: 'green construction', name: 'green construction' },
+        { category: 'mep', name: 'mep' },
+        { category: 'interior', name: 'interior' },
+      ],
+      priceList: [
+        {
+          service: 'fit out',
+          quantity: '1',
+          unit: 'sq.m.',
+          finalPrice: '30000',
+        },
+        {
+          service: 'reinstatement',
+          quantity: '1',
+          unit: 'sq.m.',
+          finalPrice: '7000',
+        },
+        {
+          service: 'green construction',
+          quantity: '1',
+          unit: 'sq.m.',
+          finalPrice: '20000',
+        },
+      ],
+      portfolioDigest: {
+        fallback: false,
+        content_score: 95,
+        total_text_length: 1200,
+        results: [
+          {
+            verification_hints: [
+              'Portfolio photos and project descriptions detected',
+              'No corporate endorsed certificate detected',
+            ],
+          },
+        ],
+      },
+    } as never);
+
+    expect(prisma.fixer.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tier: 'ECONOMY',
+          aiTier: 'Economy',
+          aiFlags: expect.arrayContaining([
+            expect.objectContaining({
+              type: 'warn',
+              message: expect.stringContaining('Corporate tier requires'),
+            }),
+          ]),
+        }),
+      }),
+    );
+  });
+
+  it('persists Specialist only when corporate completion certificate evidence meets the gate', async () => {
+    const createdFixer = {
+      id: 'fixer-specialist',
+      userId: 'user-1',
+      user: { id: 'user-1' },
+      skills: [],
+    };
+    prisma.fixer.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(createdFixer);
+    prisma.user.update.mockResolvedValue({});
+    prisma.fixer.create.mockResolvedValue(createdFixer);
+
+    await service.register('user-1', {
+      name: 'Specialist Partner',
+      email: 'specialist@example.com',
+      phone: '0812345678',
+      company: 'Specialist Co',
+      bio: 'Corporate project specialist with verified completion evidence.',
+      description:
+        'Specialist provider for large corporate office fit-out and reinstatement projects.',
+      pastExperience:
+        '10 years experience with five corporate client endorsed project completion certificates.',
+      pastProjectType: 'corporate',
+      yearsExperience: 10,
+      travelRadius: 60,
+      kycImageCount: 3,
+      portfolioImageCount: 5,
+      companyAddress: {
+        province: 'Bangkok',
+        district: 'Pathum Wan',
+        houseNumber: '1',
+      },
+      address: { province: 'Bangkok', district: 'Pathum Wan' },
+      skills: [
+        { category: 'fitout', name: 'fitout' },
+        { category: 'reinstatement', name: 'reinstatement' },
+        { category: 'green construction', name: 'green construction' },
+        { category: 'mep', name: 'mep' },
+        { category: 'interior', name: 'interior' },
+      ],
+      priceList: [
+        {
+          service: 'fit out',
+          quantity: '1',
+          unit: 'sq.m.',
+          finalPrice: '30000',
+        },
+        {
+          service: 'reinstatement',
+          quantity: '1',
+          unit: 'sq.m.',
+          finalPrice: '7000',
+        },
+        {
+          service: 'green construction',
+          quantity: '1',
+          unit: 'sq.m.',
+          finalPrice: '20000',
+        },
+      ],
+      portfolioDigest: {
+        fallback: false,
+        content_score: 95,
+        total_text_length: 1600,
+        results: [
+          {
+            verification_hints: [
+              '5 corporate client endorsed project completion certificates detected',
+              'SET-listed corporate client reference detected',
+            ],
+          },
+        ],
+      },
+    } as never);
+
+    expect(prisma.fixer.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tier: 'SPECIALIST',
+          aiTier: 'Specialist',
+          aiCredentialStatus: 'verified',
+        }),
+      }),
+    );
+  });
   describe('getProfile', () => {
     it('should throw NotFoundException if fixer not found', async () => {
       prisma.fixer.findUnique.mockResolvedValue(null);

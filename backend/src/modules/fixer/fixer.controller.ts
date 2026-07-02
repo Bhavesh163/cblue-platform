@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Body,
   Param,
@@ -97,6 +98,15 @@ export class FixerController {
     @Body() dto: RegisterFixerDto,
   ) {
     return this.fixerService.updateMyFixerProfile(userId, dto);
+  }
+
+  @Patch('me/tier')
+  @UseGuards(JwtAuthGuard)
+  refreshMyTier(
+    @CurrentUser('id') userId: string,
+    @Body() dto: RegisterFixerDto,
+  ) {
+    return this.fixerService.refreshMyTierEvaluation(userId, dto);
   }
 
   @Get('match')

@@ -197,4 +197,10 @@ export class RegisterFixerDto {
   @IsOptional()
   @IsString()
   aiCredentialStatus?: string;
+
+  @IsOptional()
+  portfolioDigest?: any;
+
+  @IsOptional()
+  kycDigest?: any;
 }

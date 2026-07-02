@@ -9,7 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
-import { Prisma } from '@prisma/client';
+import { FixerTier, Prisma } from '@prisma/client';
 import { RegisterFixerDto } from './dto/register-fixer.dto';
 import { AddSkillDto } from './dto/add-skill.dto';
 import { SetAvailabilityDto } from './dto/set-availability.dto';
@@ -45,6 +45,40 @@ type MatchedBreakdownItem = EstimatedBreakdownItem & {
   pairIndex: number;
   matchScore: number;
   serviceGroupKey: string;
+};
+
+type FixerTierLabel =
+  | 'Economy'
+  | 'Standard'
+  | 'Corporate'
+  | 'Specialist'
+  | 'Expert';
+type CredentialStatus = 'verified' | 'partial' | 'unverified';
+type TierFlag = { type: 'pass' | 'warn' | 'fail'; message: string };
+type TierBreakdown = { label: string; score: number; max: number };
+
+type TierEvaluationResult = {
+  tier: FixerTierLabel;
+  prismaTier: FixerTier;
+  score: number;
+  breakdown: TierBreakdown[];
+  flags: TierFlag[];
+  credentialStatus: CredentialStatus;
+};
+
+type PortfolioDigestLike = {
+  fallback?: boolean;
+  content_score?: number;
+  total_text_length?: number;
+  results?: Array<{
+    raw_text?: string;
+    verification_hints?: string[];
+  }>;
+};
+
+type RegisterFixerWithEvidence = RegisterFixerDto & {
+  portfolioDigest?: PortfolioDigestLike;
+  kycDigest?: Record<string, unknown>;
 };
 
 interface RankedFixer extends SelectedFixer {
@@ -131,6 +165,462 @@ export class FixerService {
     private httpService: HttpService,
   ) {}
 
+  private scoreBounded(value: number, max: number): number {
+    return Math.max(0, Math.min(Math.round(value), max));
+  }
+
+  private evidenceText(dto: RegisterFixerWithEvidence): string {
+    const digest = dto.portfolioDigest;
+    const digestText = Array.isArray(digest?.results)
+      ? digest.results
+          .flatMap((result) => [
+            result.raw_text || '',
+            ...(Array.isArray(result.verification_hints)
+              ? result.verification_hints
+              : []),
+          ])
+          .join(' ')
+      : '';
+
+    return [
+      dto.name,
+      dto.company,
+      dto.bio,
+      dto.description,
+      dto.pastExperience,
+      dto.pastProjectType,
+      digestText,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+  }
+
+  private affirmativeEvidenceText(dto: RegisterFixerWithEvidence): string {
+    return this.evidenceText(dto)
+      .replace(
+        /\b(?:no|without|missing|not found|none)\b[^.\n]{0,140}\b(?:corporate|endorsed|certificate|completion|award|license)s?\b/g,
+        ' ',
+      )
+      .replace(
+        /\b(?:not|ไม่พบ)\b[^.\n]{0,140}\b(?:verified|certificate|ใบรับรอง|รางวัล)\b/g,
+        ' ',
+      );
+  }
+
+  private evidenceNumber(value: string): number {
+    const normalized = value.toLowerCase();
+    const words: Record<string, number> = {
+      one: 1,
+      two: 2,
+      three: 3,
+      four: 4,
+      five: 5,
+      six: 6,
+      seven: 7,
+      eight: 8,
+      nine: 9,
+      ten: 10,
+    };
+    if (words[normalized] !== undefined) {
+      return words[normalized];
+    }
+    const numericValue = Number(normalized);
+    return Number.isFinite(numericValue) ? numericValue : 0;
+  }
+
+  private maxMentionedCount(text: string, patterns: RegExp[]): number {
+    let max = 0;
+    for (const pattern of patterns) {
+      for (const match of text.matchAll(pattern)) {
+        const rawNumber = match[1] || '';
+        max = Math.max(max, this.evidenceNumber(rawNumber));
+      }
+    }
+    return max;
+  }
+
+  private hasEvidence(text: string, patterns: RegExp[]): boolean {
+    return patterns.some((pattern) => pattern.test(text));
+  }
+
+  private inferCredentialEvidence(dto: RegisterFixerWithEvidence) {
+    const text = this.affirmativeEvidenceText(dto);
+    const professionalCertificateCount = this.maxMentionedCount(text, [
+      /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b[^.\n]{0,80}\b(?:professional|educational|related) certificates?\b/g,
+      /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b[^.\n]{0,80}\b(?:licenses?|ใบรับรอง|ประกาศนียบัตร)\b/g,
+    ]);
+    const hasProfessionalCertificate =
+      professionalCertificateCount > 0 ||
+      this.hasEvidence(text, [
+        /\b(?:professional|educational|related) certificates?\b/g,
+        /\b(?:license|licensed|ใบรับรอง|ประกาศนียบัตร)\b/g,
+      ]);
+
+    const corporateEndorsedCertificateCount = this.maxMentionedCount(text, [
+      /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b[^.\n]{0,100}\b(?:certificates? endorsed by (?:their )?corporate clients?|corporate client endorsed certificates?|corporate endorsed certificates?)\b/g,
+      /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b[^.\n]{0,120}\bcorporate client endorsed project completion certificates?\b/g,
+    ]);
+    const hasCorporateCertificate =
+      corporateEndorsedCertificateCount > 0 ||
+      this.hasEvidence(text, [
+        /\bcorporate certificates?\b/g,
+        /\bcorporate client endorsed certificates?\b/g,
+        /\bcertificate of completion\b[^.\n]{0,80}\b(?:corporate|stock exchange|set listed|international|government)\b/g,
+      ]);
+
+    const corporateCompletionCertificateCount = this.maxMentionedCount(text, [
+      /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b[^.\n]{0,140}\bcorporate client endorsed project completion certificates?\b/g,
+      /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b[^.\n]{0,120}\bproject completion certificates?\b[^.\n]{0,80}\b(?:corporate|client|endorsed|set listed|stock exchange|government)\b/g,
+    ]);
+    const completionCertificateCount = Math.max(
+      corporateCompletionCertificateCount,
+      this.maxMentionedCount(text, [
+        /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b[^.\n]{0,120}\bproject completion certificates?\b/g,
+      ]),
+    );
+
+    const hasMillionBahtProjectCertificate = this.hasEvidence(text, [
+      /\bmillion baht\b[^.\n]{0,80}\b(?:project|certificate|completion)\b/g,
+      /\b(?:project|certificate|completion)\b[^.\n]{0,80}\bmillion baht\b/g,
+      /\b1,?000,?000\b[^.\n]{0,80}\b(?:baht|thb|project|certificate)\b/g,
+    ]);
+    const hasInternationalAward = this.hasEvidence(text, [
+      /\binternational awards?\b/g,
+      /\bglobal awards?\b/g,
+      /\bworld(?:wide)? awards?\b/g,
+    ]);
+    const hasCorporateClientSignal = this.hasEvidence(text, [
+      /\bcorporate clients?\b/g,
+      /\bstock exchange of thailand\b/g,
+      /\bset[- ]?listed\b/g,
+      /\bamerican\b[^.\n]{0,50}\bcompan(?:y|ies)\b/g,
+      /\beuropean\b[^.\n]{0,50}\bcompan(?:y|ies)\b/g,
+      /\bjapanese\b[^.\n]{0,50}\bcompan(?:y|ies)\b/g,
+      /\bgovernment\b/g,
+    ]);
+
+    return {
+      professionalCertificateCount,
+      hasProfessionalCertificate,
+      corporateEndorsedCertificateCount,
+      hasCorporateCertificate,
+      corporateCompletionCertificateCount,
+      completionCertificateCount,
+      hasMillionBahtProjectCertificate,
+      hasInternationalAward,
+      hasCorporateClientSignal,
+    };
+  }
+
+  private tierLabelToPrisma(tier: FixerTierLabel): FixerTier {
+    return tier.toUpperCase() as FixerTier;
+  }
+
+  private buildTyphoonTierPrompt(
+    dto: RegisterFixerWithEvidence,
+    deterministic: TierEvaluationResult,
+  ) {
+    const evidence = this.evidenceText(dto).slice(0, 6000);
+    return [
+      'You are CBLUE credential risk review AI for Fixer & Pro registration.',
+      'Return compact JSON only. Do not invent credentials. If internet/search evidence is not supplied, mark external verification as unverified.',
+      'Do not request or expose secrets. Review only this minimized profile/evidence summary.',
+      'Tier rules: Standard needs 3+ years and required certificate/project proof. Corporate needs 2 corporate-client endorsed certificates. Specialist needs 5 corporate completion certificates, or 5 completion certificates plus an international award. Otherwise Economy/Standard only.',
+      `Deterministic baseline: ${JSON.stringify({ tier: deterministic.tier, score: deterministic.score, credentialStatus: deterministic.credentialStatus })}`,
+      `Evidence summary: ${evidence}`,
+      'JSON schema: {"credentialStatus":"verified|partial|unverified","risk":"low|medium|high","notes":["short note"],"recommendedTier":"Economy|Standard|Corporate|Specialist|Expert"}',
+    ].join('\n');
+  }
+
+  private async requestTyphoonTierReview(
+    dto: RegisterFixerWithEvidence,
+    deterministic: TierEvaluationResult,
+  ): Promise<Partial<TierEvaluationResult> | null> {
+    const apiKey =
+      this.configService.get<string>('typhoon.apiKey') ||
+      process.env.TYPHOON_API_KEY;
+    if (!apiKey) return null;
+
+    const baseUrl =
+      this.configService.get<string>('typhoon.baseUrl') ||
+      process.env.TYPHOON_BASE_URL ||
+      'https://api.opentyphoon.ai/v1';
+    const model =
+      this.configService.get<string>('typhoon.model') ||
+      process.env.TYPHOON_MODEL ||
+      'typhoon-v2.5-30b-a3b-instruct';
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(
+          `${baseUrl.replace(/\/$/, '')}/chat/completions`,
+          {
+            model,
+            temperature: 0,
+            messages: [
+              {
+                role: 'system',
+                content:
+                  'You are a strict credential verification assistant. Respond with JSON only.',
+              },
+              {
+                role: 'user',
+                content: this.buildTyphoonTierPrompt(dto, deterministic),
+              },
+            ],
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+            },
+            timeout: 20000,
+          },
+        ),
+      );
+      const content = response.data?.choices?.[0]?.message?.content;
+      if (!content || typeof content !== 'string') return null;
+      const parsed = JSON.parse(content) as {
+        credentialStatus?: CredentialStatus;
+        risk?: string;
+        notes?: string[];
+      };
+      const flags: TierFlag[] = Array.isArray(parsed.notes)
+        ? parsed.notes.slice(0, 5).map((note) => ({
+            type: parsed.risk === 'high' ? 'warn' : 'pass',
+            message: `Typhoon review: ${note}`,
+          }))
+        : [];
+      return {
+        credentialStatus: parsed.credentialStatus,
+        flags,
+      };
+    } catch (error) {
+      this.logger.warn(
+        `Typhoon tier review unavailable, using deterministic evaluator: ${error instanceof Error ? error.message : 'unknown error'}`,
+      );
+      return null;
+    }
+  }
+
+  private async evaluateFixerTier(
+    dto: RegisterFixerWithEvidence,
+  ): Promise<TierEvaluationResult> {
+    const yearsExperience = Math.max(0, Number(dto.yearsExperience) || 0);
+    const skillCount = Array.isArray(dto.skills) ? dto.skills.length : 0;
+    const kycImageCount = Math.max(0, Number(dto.kycImageCount) || 0);
+    const portfolioImageCount = Math.max(
+      0,
+      Number(dto.portfolioImageCount) || 0,
+    );
+    const validPriceRows = Array.isArray(dto.priceList)
+      ? dto.priceList.filter((row) => row.service && row.finalPrice)
+      : [];
+    const digest = dto.portfolioDigest;
+    const digestContentScore = Number(digest?.content_score) || 0;
+    const digestTextLength = Number(digest?.total_text_length) || 0;
+    const evidence = this.inferCredentialEvidence(dto);
+    const hasCompanyAddress = Boolean(
+      dto.companyAddress?.province &&
+      dto.companyAddress?.district &&
+      dto.companyAddress?.houseNumber,
+    );
+    const hasServiceArea = Boolean(
+      dto.address?.province && dto.address?.district,
+    );
+    const fullName = String(dto.name || '')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+    const hasFullName = fullName.length >= 2;
+    const hasBio = String(dto.bio || '').trim().length >= 30;
+    const hasDetailedDescription =
+      `${dto.description || ''} ${dto.pastExperience || ''}`.trim().length >=
+      100;
+
+    const experienceScore = this.scoreBounded(yearsExperience * 4, 25);
+    const skillsScore = this.scoreBounded(skillCount * 3, 15);
+    const kycScore = kycImageCount >= 3 ? 15 : kycImageCount > 0 ? 10 : 0;
+    let portfolioScore =
+      portfolioImageCount >= 5
+        ? 12
+        : portfolioImageCount >= 3
+          ? 9
+          : portfolioImageCount > 0
+            ? 6
+            : 0;
+    if (digest && !digest.fallback) {
+      if (digestContentScore >= 70) portfolioScore += 3;
+      else if (digestContentScore >= 40) portfolioScore += 2;
+      else if (digestTextLength > 50) portfolioScore += 1;
+    }
+    portfolioScore = this.scoreBounded(portfolioScore, 15);
+    const profileScore = this.scoreBounded(
+      (hasBio ? 3 : 0) +
+        (hasFullName ? 2 : 0) +
+        (hasCompanyAddress ? 3 : 0) +
+        (hasServiceArea ? 2 : 0),
+      10,
+    );
+    const priceScore =
+      validPriceRows.length >= 3 ? 10 : validPriceRows.length > 0 ? 6 : 0;
+
+    let credentialScore = 0;
+    const flags: TierFlag[] = [];
+    if (evidence.hasCorporateClientSignal) {
+      credentialScore += 2;
+      flags.push({ type: 'pass', message: 'Corporate client signal detected' });
+    }
+    if (evidence.hasProfessionalCertificate) {
+      credentialScore += 2;
+      flags.push({
+        type: 'pass',
+        message: 'Professional or educational certificate evidence detected',
+      });
+    }
+    if (evidence.hasCorporateCertificate) {
+      credentialScore += 3;
+      flags.push({
+        type: 'pass',
+        message: 'Corporate certificate evidence detected',
+      });
+    }
+    if (evidence.completionCertificateCount > 0) {
+      credentialScore += Math.min(3, evidence.completionCertificateCount);
+      flags.push({
+        type: 'pass',
+        message: 'Project completion certificate evidence detected',
+      });
+    }
+    if (evidence.hasMillionBahtProjectCertificate) {
+      credentialScore += 2;
+      flags.push({
+        type: 'pass',
+        message: 'Million baht project certificate evidence detected',
+      });
+    }
+    if (evidence.hasInternationalAward) {
+      credentialScore += 2;
+      flags.push({
+        type: 'pass',
+        message: 'International award evidence detected',
+      });
+    }
+    if (!hasFullName) {
+      flags.push({
+        type: 'warn',
+        message: 'Incomplete legal name; use full registered name',
+      });
+    }
+    if (!hasCompanyAddress) {
+      flags.push({
+        type: 'warn',
+        message: 'Company or registered address is incomplete',
+      });
+    }
+    if (!hasDetailedDescription) {
+      flags.push({
+        type: 'warn',
+        message:
+          'Work history description is brief; more detail is needed for higher tiers',
+      });
+    }
+
+    credentialScore = this.scoreBounded(credentialScore, 10);
+    const score = this.scoreBounded(
+      experienceScore +
+        skillsScore +
+        kycScore +
+        portfolioScore +
+        profileScore +
+        priceScore +
+        credentialScore,
+      100,
+    );
+
+    const standardQualified =
+      yearsExperience >= 3 &&
+      (evidence.professionalCertificateCount >= 2 ||
+        evidence.hasCorporateCertificate ||
+        evidence.hasMillionBahtProjectCertificate ||
+        evidence.completionCertificateCount > 0 ||
+        evidence.hasProfessionalCertificate);
+    const corporateQualified = evidence.corporateEndorsedCertificateCount >= 2;
+    const specialistQualified =
+      evidence.corporateCompletionCertificateCount >= 5 ||
+      (evidence.completionCertificateCount >= 5 &&
+        evidence.hasInternationalAward);
+    const expertQualified =
+      specialistQualified &&
+      evidence.hasInternationalAward &&
+      yearsExperience >= 15 &&
+      score >= 90;
+
+    let tier: FixerTierLabel = 'Economy';
+    if (expertQualified) tier = 'Expert';
+    else if (specialistQualified) tier = 'Specialist';
+    else if (corporateQualified) tier = 'Corporate';
+    else if (standardQualified) tier = 'Standard';
+
+    if (
+      score >= 50 &&
+      !corporateQualified &&
+      !specialistQualified &&
+      !expertQualified
+    ) {
+      flags.push({
+        type: 'warn',
+        message:
+          'Corporate tier requires at least 2 corporate-client endorsed certificates; high score alone is not enough',
+      });
+    }
+    if (!standardQualified && score >= 35) {
+      flags.push({
+        type: 'warn',
+        message:
+          'Standard tier requires 3+ years plus certificate or qualifying project evidence',
+      });
+    }
+
+    let credentialStatus: CredentialStatus = 'unverified';
+    if (corporateQualified || specialistQualified || expertQualified) {
+      credentialStatus = 'verified';
+    } else if (standardQualified || credentialScore >= 4) {
+      credentialStatus = 'partial';
+    }
+
+    const deterministic: TierEvaluationResult = {
+      tier,
+      prismaTier: this.tierLabelToPrisma(tier),
+      score,
+      credentialStatus,
+      flags,
+      breakdown: [
+        { label: 'Experience', score: experienceScore, max: 25 },
+        { label: 'Skills Breadth', score: skillsScore, max: 15 },
+        { label: 'KYC Verification', score: kycScore, max: 15 },
+        { label: 'Portfolio & Evidence', score: portfolioScore, max: 15 },
+        { label: 'Profile Completeness', score: profileScore, max: 10 },
+        { label: 'Price List', score: priceScore, max: 10 },
+        { label: 'Credential Verification', score: credentialScore, max: 10 },
+      ],
+    };
+
+    const typhoonReview = await this.requestTyphoonTierReview(
+      dto,
+      deterministic,
+    );
+    if (!typhoonReview) return deterministic;
+
+    return {
+      ...deterministic,
+      credentialStatus:
+        typhoonReview.credentialStatus || deterministic.credentialStatus,
+      flags: [...deterministic.flags, ...(typhoonReview.flags || [])],
+    };
+  }
+
   async register(userId: string, dto: RegisterFixerDto) {
     const existing = await this.prisma.fixer.findUnique({
       where: { userId },
@@ -153,10 +643,14 @@ export class FixerService {
       latitude: dto.gpsCoords?.lat,
       longitude: dto.gpsCoords?.lng,
     });
+    const tierEvaluation = await this.evaluateFixerTier(
+      dto as RegisterFixerWithEvidence,
+    );
 
     const fixer = await this.prisma.fixer.create({
       data: {
         userId,
+        tier: tierEvaluation.prismaTier,
         status: 'APPROVED', // Auto-approved via AI for seamless booking access
         pastProjectType: dto.pastProjectType,
         yearsExperience: dto.yearsExperience,
@@ -175,17 +669,15 @@ export class FixerService {
         servicePostalCode: serviceLocation.postalCode,
         gpsLat: dto.gpsCoords?.lat,
         gpsLng: dto.gpsCoords?.lng,
-        aiScore: dto.aiScore,
-        aiTier: dto.aiTier,
-        aiBreakdown: dto.aiBreakdown
-          ? (JSON.parse(
-              JSON.stringify(dto.aiBreakdown),
-            ) as Prisma.InputJsonValue)
-          : undefined,
-        aiFlags: dto.aiFlags
-          ? (JSON.parse(JSON.stringify(dto.aiFlags)) as Prisma.InputJsonValue)
-          : undefined,
-        aiCredentialStatus: dto.aiCredentialStatus,
+        aiScore: tierEvaluation.score,
+        aiTier: tierEvaluation.tier,
+        aiBreakdown: JSON.parse(
+          JSON.stringify(tierEvaluation.breakdown),
+        ) as Prisma.InputJsonValue,
+        aiFlags: JSON.parse(
+          JSON.stringify(tierEvaluation.flags),
+        ) as Prisma.InputJsonValue,
+        aiCredentialStatus: tierEvaluation.credentialStatus,
       },
       include: { user: true },
     });
@@ -232,6 +724,98 @@ export class FixerService {
     return fixer || null;
   }
 
+  async refreshMyTierEvaluation(
+    userId: string,
+    dto: Partial<RegisterFixerWithEvidence> = {},
+  ) {
+    const fixer = await this.prisma.fixer.findUnique({
+      where: { userId },
+      include: { user: true, skills: true, images: true },
+    });
+    if (!fixer) throw new NotFoundException('Fixer profile not found');
+
+    const rawPriceList = Array.isArray(fixer.priceList)
+      ? (fixer.priceList as PriceListRow[])
+      : [];
+    const toPriceListText = (value: unknown): string | undefined => {
+      if (value === null || value === undefined) return undefined;
+      if (
+        typeof value === 'string' ||
+        typeof value === 'number' ||
+        typeof value === 'boolean'
+      ) {
+        return String(value);
+      }
+      return undefined;
+    };
+    const companyAddress =
+      fixer.companyAddress && typeof fixer.companyAddress === 'object'
+        ? (fixer.companyAddress as Record<string, string>)
+        : undefined;
+    const kycImageCount =
+      dto.kycImageCount ??
+      fixer.images.filter((image) => image.type === 'kyc').length;
+    const portfolioImageCount =
+      dto.portfolioImageCount ??
+      fixer.images.filter((image) => image.type === 'portfolio').length;
+
+    const evaluationInput: RegisterFixerWithEvidence = {
+      name: fixer.user?.name || undefined,
+      email: fixer.user?.email || undefined,
+      phone: fixer.user?.phone || undefined,
+      company: fixer.user?.company || undefined,
+      bio: fixer.bio || undefined,
+      description: fixer.description || undefined,
+      pastExperience: fixer.pastExperience || undefined,
+      pastProjectType: fixer.pastProjectType || undefined,
+      yearsExperience: fixer.yearsExperience ?? undefined,
+      travelRadius: fixer.travelRadius,
+      companyAddress,
+      address: {
+        province: fixer.serviceProvince || undefined,
+        district: fixer.serviceDistrict || undefined,
+        postalCode: fixer.servicePostalCode || undefined,
+      },
+      gpsCoords:
+        fixer.gpsLat !== null && fixer.gpsLng !== null
+          ? { lat: fixer.gpsLat, lng: fixer.gpsLng }
+          : undefined,
+      skills: fixer.skills.map((skill) => ({
+        category: skill.category,
+        name: skill.name,
+      })),
+      priceList: rawPriceList.map((row) => ({
+        service: toPriceListText(row.service) || '',
+        quantity: toPriceListText(row.quantity),
+        unit: toPriceListText(row.unit),
+        finalPrice: toPriceListText(row.finalPrice) || '',
+      })),
+      kycImageCount,
+      portfolioImageCount,
+      portfolioDigest: dto.portfolioDigest,
+      kycDigest: dto.kycDigest,
+    };
+
+    const tierEvaluation = await this.evaluateFixerTier(evaluationInput);
+
+    return this.prisma.fixer.update({
+      where: { id: fixer.id },
+      data: {
+        tier: tierEvaluation.prismaTier,
+        aiScore: tierEvaluation.score,
+        aiTier: tierEvaluation.tier,
+        aiBreakdown: JSON.parse(
+          JSON.stringify(tierEvaluation.breakdown),
+        ) as Prisma.InputJsonValue,
+        aiFlags: JSON.parse(
+          JSON.stringify(tierEvaluation.flags),
+        ) as Prisma.InputJsonValue,
+        aiCredentialStatus: tierEvaluation.credentialStatus,
+      },
+      include: { user: true, skills: true, availability: true },
+    });
+  }
+
   async updateMyFixerProfile(userId: string, dto: RegisterFixerDto) {
     const fixer = await this.getFixerByUserId(userId);
 
@@ -255,9 +839,14 @@ export class FixerService {
       },
     });
 
+    const tierEvaluation = await this.evaluateFixerTier(
+      dto as RegisterFixerWithEvidence,
+    );
+
     const updatedFixer = await this.prisma.fixer.update({
       where: { id: fixer.id },
       data: {
+        tier: tierEvaluation.prismaTier,
         bio: dto.bio,
         description: dto.description,
         pastExperience: dto.pastExperience,
@@ -278,17 +867,15 @@ export class FixerService {
         servicePostalCode: serviceLocation.postalCode,
         gpsLat: dto.gpsCoords?.lat,
         gpsLng: dto.gpsCoords?.lng,
-        aiScore: dto.aiScore,
-        aiTier: dto.aiTier,
-        aiBreakdown: dto.aiBreakdown
-          ? (JSON.parse(
-              JSON.stringify(dto.aiBreakdown),
-            ) as Prisma.InputJsonValue)
-          : Prisma.JsonNull,
-        aiFlags: dto.aiFlags
-          ? (JSON.parse(JSON.stringify(dto.aiFlags)) as Prisma.InputJsonValue)
-          : Prisma.JsonNull,
-        aiCredentialStatus: dto.aiCredentialStatus,
+        aiScore: tierEvaluation.score,
+        aiTier: tierEvaluation.tier,
+        aiBreakdown: JSON.parse(
+          JSON.stringify(tierEvaluation.breakdown),
+        ) as Prisma.InputJsonValue,
+        aiFlags: JSON.parse(
+          JSON.stringify(tierEvaluation.flags),
+        ) as Prisma.InputJsonValue,
+        aiCredentialStatus: tierEvaluation.credentialStatus,
       },
     });
 

@@ -71,7 +71,15 @@ export default () => ({
       'noreply@lblue.tech',
   },
   frontendUrl: process.env.FRONTEND_URL || 'https://cblue.co.th',
+  blueBridge: {
+    apiKey: process.env.CBLUE_BRIDGE_API_KEY || '',
+  },
   visionService: {
     url: process.env.VISION_SERVICE_URL || 'http://localhost:8010',
+  },
+  typhoon: {
+    apiKey: process.env.TYPHOON_API_KEY || '',
+    baseUrl: process.env.TYPHOON_BASE_URL || 'https://api.opentyphoon.ai/v1',
+    model: process.env.TYPHOON_MODEL || 'typhoon-v2.5-30b-a3b-instruct',
   },
 });

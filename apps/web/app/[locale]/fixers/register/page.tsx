@@ -128,11 +128,7 @@ function normalizeDateToIso(value: string): string | null {
   const m = parseInt(ddmmyyyy[2]!, 10);
   const y = parseInt(ddmmyyyy[3]!, 10);
   const dt = new Date(y, m - 1, d);
-  if (
-    dt.getFullYear() !== y ||
-    dt.getMonth() !== m - 1 ||
-    dt.getDate() !== d
-  ) {
+  if (dt.getFullYear() !== y || dt.getMonth() !== m - 1 || dt.getDate() !== d) {
     return null;
   }
 
@@ -199,7 +195,6 @@ function FixerRegisterContent() {
   const [digesting, setDigesting] = useState(false);
   const [scheduledDateInput, setScheduledDateInput] = useState("");
 
-
   const populateFixerForm = useCallback((user: any, fixer: any) => {
     const primaryAddress =
       fixer?.user?.addresses?.find((a: any) => a?.isDefault) ||
@@ -208,8 +203,13 @@ function FixerRegisterContent() {
       user?.addresses?.[0] ||
       user?.address;
 
-    const normalizedDate = normalizeDateToIso(fixer?.availableStartDate || fixer?.scheduledDate || "") || "";
-    const displayDate = normalizedDate ? `${normalizedDate.slice(8, 10)}/${normalizedDate.slice(5, 7)}/${normalizedDate.slice(0, 4)}` : "";
+    const normalizedDate =
+      normalizeDateToIso(
+        fixer?.availableStartDate || fixer?.scheduledDate || "",
+      ) || "";
+    const displayDate = normalizedDate
+      ? `${normalizedDate.slice(8, 10)}/${normalizedDate.slice(5, 7)}/${normalizedDate.slice(0, 4)}`
+      : "";
 
     setForm((prev) => ({
       ...prev,
@@ -227,9 +227,12 @@ function FixerRegisterContent() {
           ? String(fixer.travelRadius)
           : prev.travelRadius,
       selectedSkills: Array.isArray(fixer?.skills)
-        ? fixer.skills.map((skill: any) =>
-            typeof skill === "string" ? skill : (skill?.name ?? skill?.category ?? ""),
-          )
+        ? fixer.skills
+            .map((skill: any) =>
+              typeof skill === "string"
+                ? skill
+                : (skill?.name ?? skill?.category ?? ""),
+            )
             .filter(Boolean)
         : [],
       province: fixer?.serviceProvince || "",
@@ -302,7 +305,7 @@ function FixerRegisterContent() {
               unit: row?.unit || "",
               finalPrice: row?.finalPrice ? String(row.finalPrice) : "",
             }))
-        : [{ service: "", quantity: "", unit: "", finalPrice: "" }];
+          : [{ service: "", quantity: "", unit: "", finalPrice: "" }];
 
     setPriceRows(nextPriceRows);
     setScheduledDateInput(
@@ -325,12 +328,14 @@ function FixerRegisterContent() {
         try {
           const subStr = localStorage.getItem("subscriber");
           if (subStr) userFallback = JSON.parse(subStr);
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
 
         const res = await fetch("/api/v1/users/me", {
           headers: { Authorization: `Bearer ${token}` },
         });
-        
+
         if (!res.ok && !userFallback) {
           setCheckingStatus(false);
           return;
@@ -354,17 +359,23 @@ function FixerRegisterContent() {
         const fixerRes = await fetch("/api/v1/fixers/me", {
           headers: { Authorization: `Bearer ${token}` },
         });
-        
+
         let fixerProfile = null;
-        const cacheKey = `fixer_profile_cache_${data?.email || ''}`;
+        const cacheKey = `fixer_profile_cache_${data?.email || ""}`;
         if (fixerRes.ok) {
           fixerProfile = await fixerRes.json();
           try {
-            if (data?.email) localStorage.setItem(cacheKey, JSON.stringify(fixerProfile));
-            localStorage.setItem("fixer_profile_cache", JSON.stringify(fixerProfile));
+            if (data?.email)
+              localStorage.setItem(cacheKey, JSON.stringify(fixerProfile));
+            localStorage.setItem(
+              "fixer_profile_cache",
+              JSON.stringify(fixerProfile),
+            );
           } catch {}
         } else {
-          console.warn("Failed to fetch fixer profile (e.g. 502/404). Falling back to user data.");
+          console.warn(
+            "Failed to fetch fixer profile (e.g. 502/404). Falling back to user data.",
+          );
           if (data?.fixer) {
             fixerProfile = data.fixer;
           } else {
@@ -375,7 +386,7 @@ function FixerRegisterContent() {
             } catch {}
           }
         }
-        
+
         // Always populate form, even if fixerProfile is null (will use user data)
         populateFixerForm(data, fixerProfile);
       } catch {
@@ -385,7 +396,6 @@ function FixerRegisterContent() {
     }
     checkFixer();
   }, [populateFixerForm]);
-
 
   // Send portfolio files to AI vision service for OCR/text extraction
   const digestPortfolioFiles = useCallback(async (files: File[]) => {
@@ -404,37 +414,41 @@ function FixerRegisterContent() {
       } else {
         // AI OCR fallback on error from backend
         setDigestResult({
-          results: files.map(f => ({
+          results: files.map((f) => ({
             file_id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             filename: f.name,
             raw_text: "",
             text_length: 0,
             has_content: false,
-            verification_hints: ["Vision service unavailable — analysis deferred"],
-            extraction_method: "none_vision_service_unavailable"
+            verification_hints: [
+              "Vision service unavailable — analysis deferred",
+            ],
+            extraction_method: "none_vision_service_unavailable",
           })),
           total_files: files.length,
           total_text_length: 0,
           content_score: 0,
-          fallback: true
+          fallback: true,
         });
       }
     } catch {
       // Vision service unavailable — non-blocking fallback
       setDigestResult({
-        results: files.map(f => ({
+        results: files.map((f) => ({
           file_id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           filename: f.name,
           raw_text: "",
           text_length: 0,
           has_content: false,
-          verification_hints: ["Vision service unavailable — analysis deferred"],
-          extraction_method: "none_vision_service_unavailable"
+          verification_hints: [
+            "Vision service unavailable — analysis deferred",
+          ],
+          extraction_method: "none_vision_service_unavailable",
         })),
         total_files: files.length,
         total_text_length: 0,
         content_score: 0,
-        fallback: true
+        fallback: true,
       });
     } finally {
       setDigesting(false);
@@ -950,7 +964,12 @@ function FixerRegisterContent() {
 
   async function handleGpsDetected(coords: { lat: number; lng: number }) {
     setGpsCoords(coords);
-    setForm((prev) => ({ ...prev, province: "", district: "", postalCode: "" }));
+    setForm((prev) => ({
+      ...prev,
+      province: "",
+      district: "",
+      postalCode: "",
+    }));
     const resolved = await normalizeGpsAddressForSubmit(coords);
     if (!resolved) return;
     setForm((prev) => ({
@@ -1097,12 +1116,14 @@ function FixerRegisterContent() {
               return;
             }
           } else {
-            const msg = Array.isArray(errData.message) ? errData.message.join(", ") : errData.message ||
-              (locale === "th"
-                ? "เข้าสู่ระบบ/สมัครสมาชิกล้มเหลว"
-                : locale === "zh"
-                  ? "登录/注册失败"
-                  : "Login/Register failed");
+            const msg = Array.isArray(errData.message)
+              ? errData.message.join(", ")
+              : errData.message ||
+                (locale === "th"
+                  ? "เข้าสู่ระบบ/สมัครสมาชิกล้มเหลว"
+                  : locale === "zh"
+                    ? "登录/注册失败"
+                    : "Login/Register failed");
             setError(msg);
             return;
           }
@@ -1144,7 +1165,7 @@ function FixerRegisterContent() {
           ? "กรุณาอัปโหลด KYC ให้ครบ 3 รูป (ด้านหน้า, ด้านหลัง, เซลฟี่คู่บัตร)"
           : locale === "zh"
             ? "请上传完整3张KYC图片（正面、背面、手持自拍）"
-            : "Please upload all 3 KYC images (front, back, and selfie with ID)"
+            : "Please upload all 3 KYC images (front, back, and selfie with ID)",
       );
       return;
     }
@@ -1267,9 +1288,12 @@ function FixerRegisterContent() {
         recaptchaToken,
         kycImageCount: kycImages.length,
         portfolioImageCount: portfolioImages.length,
+        portfolioDigest: digestResult || undefined,
       };
 
-      const fixerEndpoint = isRegisteredFixer ? "/api/v1/fixers/me" : "/api/v1/fixers/register";
+      const fixerEndpoint = isRegisteredFixer
+        ? "/api/v1/fixers/me"
+        : "/api/v1/fixers/register";
       const regRes = await fetch(fixerEndpoint, {
         method: isRegisteredFixer ? "PUT" : "POST",
         headers: {
@@ -1730,7 +1754,6 @@ function FixerRegisterContent() {
     return () => clearInterval(phaseInterval);
   }, [success]);
 
-  
   // Persist AI tier to backend when calculated
   useEffect(() => {
     if (!aiTier || !success) return;
@@ -1743,27 +1766,32 @@ function FixerRegisterContent() {
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
-        tier: aiTier.tier,
-        score: aiTier.score,
-        breakdown: aiTier.breakdown,
-        flags: aiTier.flags,
-        credentialStatus: aiTier.credentialStatus,
+        kycImageCount: kycImages.length,
+        portfolioImageCount: portfolioImages.length,
+        portfolioDigest: digestResult || undefined,
       }),
-    }).then(() => {
-      try {
-        const cacheKey = `fixer_profile_cache_${form.email}`;
-        const cached = localStorage.getItem(cacheKey);
-        if (cached) {
-          const profile = JSON.parse(cached);
-          profile.tier = aiTier.tier.toUpperCase();
-          profile.score = aiTier.score;
-          localStorage.setItem(cacheKey, JSON.stringify(profile));
-        }
-      } catch (e) {}
-    }).catch(() => {}); // Non-blocking
-  }, [aiTier, success]);
+    })
+      .then(() => {
+        try {
+          const cacheKey = `fixer_profile_cache_${form.email}`;
+          const cached = localStorage.getItem(cacheKey);
+          if (cached) {
+            const profile = JSON.parse(cached);
+            profile.tier = aiTier.tier.toUpperCase();
+            profile.score = aiTier.score;
+            localStorage.setItem(cacheKey, JSON.stringify(profile));
+          }
+        } catch (e) {}
+      })
+      .catch(() => {}); // Non-blocking
+  }, [aiTier, success, kycImages.length, portfolioImages.length, digestResult]);
 
-  if (!mounted || checkingStatus) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><div className="w-8 h-8 border-4 border-sky-600 border-t-transparent rounded-full animate-spin"></div></div>;
+  if (!mounted || checkingStatus)
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-sky-600 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
 
   if (isAlreadyFixer && !success && !isEditMode) {
     return (
@@ -1772,13 +1800,27 @@ function FixerRegisterContent() {
           <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
             <span className="text-4xl">✓</span>
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">{locale === "th" ? "คุณเป็นช่างของ CBLUE แล้ว" : "You are already a CBLUE Fixer"}</h2>
-          <p className="text-gray-600 mb-8">{locale === "th" ? "บัญชีของคุณได้รับการลงทะเบียนเป็นช่างและมืออาชีพเรียบร้อยแล้ว คุณสามารถไปที่แดชบอร์ดหรือแก้ไขข้อมูลโปรไฟล์เดิมได้ทันที" : "Your account is already registered as a Fixer & Pro. You can go to the dashboard or open your existing fixer profile in edit mode."}</p>
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">
+            {locale === "th"
+              ? "คุณเป็นช่างของ CBLUE แล้ว"
+              : "You are already a CBLUE Fixer"}
+          </h2>
+          <p className="text-gray-600 mb-8">
+            {locale === "th"
+              ? "บัญชีของคุณได้รับการลงทะเบียนเป็นช่างและมืออาชีพเรียบร้อยแล้ว คุณสามารถไปที่แดชบอร์ดหรือแก้ไขข้อมูลโปรไฟล์เดิมได้ทันที"
+              : "Your account is already registered as a Fixer & Pro. You can go to the dashboard or open your existing fixer profile in edit mode."}
+          </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Link href={`${prefix}/fixers`} className="inline-block px-8 py-3 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl shadow-lg transition">
+            <Link
+              href={`${prefix}/fixers`}
+              className="inline-block px-8 py-3 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl shadow-lg transition"
+            >
               {locale === "th" ? "ไปที่หน้าแดชบอร์ด" : "Go to Dashboard"}
             </Link>
-            <Link href={`${prefix}/fixers/register?edit=1`} className="inline-block px-8 py-3 bg-white hover:bg-gray-50 text-gray-900 font-bold rounded-xl border border-gray-300 transition">
+            <Link
+              href={`${prefix}/fixers/register?edit=1`}
+              className="inline-block px-8 py-3 bg-white hover:bg-gray-50 text-gray-900 font-bold rounded-xl border border-gray-300 transition"
+            >
               {locale === "th" ? "แก้ไขโปรไฟล์เดิม" : "Edit Existing Profile"}
             </Link>
           </div>
@@ -1794,9 +1836,33 @@ function FixerRegisterContent() {
     const credentialStatus = aiTier?.credentialStatus ?? "unverified";
 
     const statusConfig = {
-      verified: { bg: "bg-green-50", border: "border-green-100", icon: "", title: locale === "th" ? "ยืนยันโดย AI แล้ว" : "Fully Verified by AI", color: "text-green-900" },
-      partial: { bg: "bg-green-50", border: "border-green-100", icon: "", title: locale === "th" ? "ยืนยันโดย AI แล้ว — เพิ่มข้อมูลเพื่ออัพเกรดคะแนน" : "Fully Verified by AI — Complete profile to improve score", color: "text-green-900" },
-      unverified: { bg: "bg-green-50", border: "border-green-100", icon: "", title: locale === "th" ? "ยืนยันโดย AI แล้ว — เพิ่มข้อมูลเพื่ออัพเกรดคะแนน" : "Fully Verified by AI — Complete profile to improve score", color: "text-green-900" },
+      verified: {
+        bg: "bg-green-50",
+        border: "border-green-100",
+        icon: "",
+        title: locale === "th" ? "ยืนยันโดย AI แล้ว" : "Fully Verified by AI",
+        color: "text-green-900",
+      },
+      partial: {
+        bg: "bg-green-50",
+        border: "border-green-100",
+        icon: "",
+        title:
+          locale === "th"
+            ? "ยืนยันโดย AI แล้ว — เพิ่มข้อมูลเพื่ออัพเกรดคะแนน"
+            : "Fully Verified by AI — Complete profile to improve score",
+        color: "text-green-900",
+      },
+      unverified: {
+        bg: "bg-green-50",
+        border: "border-green-100",
+        icon: "",
+        title:
+          locale === "th"
+            ? "ยืนยันโดย AI แล้ว — เพิ่มข้อมูลเพื่ออัพเกรดคะแนน"
+            : "Fully Verified by AI — Complete profile to improve score",
+        color: "text-green-900",
+      },
     };
     const statusStyle = statusConfig[credentialStatus];
 
@@ -1808,23 +1874,48 @@ function FixerRegisterContent() {
             <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 animate-bounce">
               <span className="text-3xl"></span>
             </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">{locale === "th" ? "ลงทะเบียนสำเร็จ!" : locale === "zh" ? "注册成功!" : "Registration Successful!"}</h2>
-            <p className="text-gray-500 text-sm">{locale === "th" ? "ข้อมูลและ KYC ของคุณได้รับการตรวจสอบทันทีโดย CBLUE AI โปรไฟล์ของคุณเปิดใช้งานแล้ว" : locale === "zh" ? "您的信息和 KYC 文件已由 CBLUE AI 立即验证。您的个人资料已启用。" : "Your information and KYC documents have been instantly verified by CBLUE AI. Your profile is active and ready to accept bookings."}</p>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              {locale === "th"
+                ? "ลงทะเบียนสำเร็จ!"
+                : locale === "zh"
+                  ? "注册成功!"
+                  : "Registration Successful!"}
+            </h2>
+            <p className="text-gray-500 text-sm">
+              {locale === "th"
+                ? "ข้อมูลและ KYC ของคุณได้รับการตรวจสอบทันทีโดย CBLUE AI โปรไฟล์ของคุณเปิดใช้งานแล้ว"
+                : locale === "zh"
+                  ? "您的信息和 KYC 文件已由 CBLUE AI 立即验证。您的个人资料已启用。"
+                  : "Your information and KYC documents have been instantly verified by CBLUE AI. Your profile is active and ready to accept bookings."}
+            </p>
           </div>
 
           {/* AI Assessment Card */}
           <div className="bg-gradient-to-r from-slate-50 to-white px-8 py-5 border-b border-gray-100 flex justify-between items-center">
-            <h3 className="font-bold text-gray-900 flex items-center gap-2">CBLUE AI Tier Assessment</h3>
-            <span className="text-xs text-gray-500 px-2 py-1 bg-white rounded border border-gray-200">Overall Score: <strong className="text-gray-900">{score}/100</strong></span>
+            <h3 className="font-bold text-gray-900 flex items-center gap-2">
+              CBLUE AI Tier Assessment
+            </h3>
+            <span className="text-xs text-gray-500 px-2 py-1 bg-white rounded border border-gray-200">
+              Overall Score:{" "}
+              <strong className="text-gray-900">{score}/100</strong>
+            </span>
           </div>
 
           <div className="p-8 space-y-8">
-            <div className={`flex items-center gap-3 p-4 ${statusStyle.bg} rounded-xl border ${statusStyle.border}`}>
+            <div
+              className={`flex items-center gap-3 p-4 ${statusStyle.bg} rounded-xl border ${statusStyle.border}`}
+            >
               <span className="text-2xl">{statusStyle.icon}</span>
               <div className="flex-1">
-                <h4 className={`font-bold ${statusStyle.color} text-sm`}>{statusStyle.title} — {tierLabel}</h4>
+                <h4 className={`font-bold ${statusStyle.color} text-sm`}>
+                  {statusStyle.title} — {tierLabel}
+                </h4>
                 <p className="text-xs text-gray-600 mt-1">
-                  {locale === "th" ? "เพิ่มประสบการณ์ อัปโหลดผลงาน อัปเดตใบรับรอง และรักษารีวิวที่ดี — CBLUE AI จะประเมินและอัปเกรดระดับของคุณโดยอัตโนมัติเมื่อแก้ไขโปรไฟล์หรือสะสมประวัติงาน" : locale === "zh" ? "积累经验，上传作品，更新认证，保持良好评价 — CBLUE AI将在您编辑个人资料或积累工作历史时自动重新评估并升级您的等级。" : "Gain more experience, upload portfolio work, update certifications, and maintain good reviews — CBLUE AI will automatically re-evaluate and upgrade your tier when you edit your profile or accumulate work history."}
+                  {locale === "th"
+                    ? "เพิ่มประสบการณ์ อัปโหลดผลงาน อัปเดตใบรับรอง และรักษารีวิวที่ดี — CBLUE AI จะประเมินและอัปเกรดระดับของคุณโดยอัตโนมัติเมื่อแก้ไขโปรไฟล์หรือสะสมประวัติงาน"
+                    : locale === "zh"
+                      ? "积累经验，上传作品，更新认证，保持良好评价 — CBLUE AI将在您编辑个人资料或积累工作历史时自动重新评估并升级您的等级。"
+                      : "Gain more experience, upload portfolio work, update certifications, and maintain good reviews — CBLUE AI will automatically re-evaluate and upgrade your tier when you edit your profile or accumulate work history."}
                 </p>
               </div>
             </div>
@@ -1832,41 +1923,87 @@ function FixerRegisterContent() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {/* Evaluation Breakdown */}
               <div>
-                <h4 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wider">{locale === "th" ? "รายละเอียดคะแนน" : locale === "zh" ? "评分详情" : "Evaluation Breakdown"}</h4>
+                <h4 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wider">
+                  {locale === "th"
+                    ? "รายละเอียดคะแนน"
+                    : locale === "zh"
+                      ? "评分详情"
+                      : "Evaluation Breakdown"}
+                </h4>
                 <div className="space-y-4">
-                  {breakdown.length > 0 ? breakdown.map((item) => {
-                    const pct = item.max > 0 ? (item.score / item.max) * 100 : 0;
-                    const color = pct >= 80 ? "bg-green-500" : pct >= 50 ? "bg-amber-400" : "bg-red-400";
-                    return (
-                      <div key={item.label}>
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="font-medium text-gray-700">{item.label}</span>
-                          <span className="text-gray-500 font-bold">{item.score}/{item.max}</span>
+                  {breakdown.length > 0 ? (
+                    breakdown.map((item) => {
+                      const pct =
+                        item.max > 0 ? (item.score / item.max) * 100 : 0;
+                      const color =
+                        pct >= 80
+                          ? "bg-green-500"
+                          : pct >= 50
+                            ? "bg-amber-400"
+                            : "bg-red-400";
+                      return (
+                        <div key={item.label}>
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="font-medium text-gray-700">
+                              {item.label}
+                            </span>
+                            <span className="text-gray-500 font-bold">
+                              {item.score}/{item.max}
+                            </span>
+                          </div>
+                          <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full ${color}`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
                         </div>
-                        <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
-                          <div className={`h-full ${color}`} style={{ width: `${pct}%` }} />
-                        </div>
-                      </div>
-                    );
-                  }) : (
-                    <p className="text-sm text-gray-500">{locale === "th" ? "กำลังประเมิน..." : locale === "zh" ? "正在评估..." : "Evaluating..."}</p>
+                      );
+                    })
+                  ) : (
+                    <p className="text-sm text-gray-500">
+                      {locale === "th"
+                        ? "กำลังประเมิน..."
+                        : locale === "zh"
+                          ? "正在评估..."
+                          : "Evaluating..."}
+                    </p>
                   )}
                 </div>
               </div>
 
               {/* AI Verification Results */}
               <div>
-                <h4 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wider">{locale === "th" ? "ผลการตรวจสอบ AI" : locale === "zh" ? "AI验证结果" : "AI Verification Results"}</h4>
+                <h4 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wider">
+                  {locale === "th"
+                    ? "ผลการตรวจสอบ AI"
+                    : locale === "zh"
+                      ? "AI验证结果"
+                      : "AI Verification Results"}
+                </h4>
                 <ul className="space-y-3 text-sm">
-                  {flags.length > 0 ? flags.map((f, idx) => (
-                    <li key={idx} className="flex items-start gap-2 text-gray-600">
-                      <span className={`mt-0.5 ${f.type === "pass" ? "text-green-500" : f.type === "warn" ? "text-amber-500" : "text-red-500"}`}>
-                        {f.type === "pass" ? "" : f.type === "warn" ? "" : ""}
-                      </span>
-                      <span>{f.message}</span>
+                  {flags.length > 0 ? (
+                    flags.map((f, idx) => (
+                      <li
+                        key={idx}
+                        className="flex items-start gap-2 text-gray-600"
+                      >
+                        <span
+                          className={`mt-0.5 ${f.type === "pass" ? "text-green-500" : f.type === "warn" ? "text-amber-500" : "text-red-500"}`}
+                        >
+                          {f.type === "pass" ? "" : f.type === "warn" ? "" : ""}
+                        </span>
+                        <span>{f.message}</span>
+                      </li>
+                    ))
+                  ) : (
+                    <li className="text-gray-500">
+                      {locale === "th"
+                        ? "รอการวิเคราะห์..."
+                        : locale === "zh"
+                          ? "等待分析..."
+                          : "Pending analysis..."}
                     </li>
-                  )) : (
-                    <li className="text-gray-500">{locale === "th" ? "รอการวิเคราะห์..." : locale === "zh" ? "等待分析..." : "Pending analysis..."}</li>
                   )}
                 </ul>
               </div>
@@ -1874,12 +2011,25 @@ function FixerRegisterContent() {
 
             <div className="p-4 bg-gray-50 rounded-xl text-xs text-gray-500 border border-gray-100 flex items-start gap-3">
               <span className="text-lg"></span>
-              <p>{locale === "th" ? "ความปลอดภัย: ข้อมูลของคุณถูกเข้ารหัสและปกป้องตาม PDPA ข้อมูลรับรองถูกตรวจสอบเพื่อรักษาความสมบูรณ์ของแพลตฟอร์ม" : locale === "zh" ? "安全：您的数据根据PDPA加密和保护。凭证经过验证以维护平台完整性。" : "Security: Your data is encrypted and protected under PDPA. Credentials are verified to maintain platform integrity."}</p>
+              <p>
+                {locale === "th"
+                  ? "ความปลอดภัย: ข้อมูลของคุณถูกเข้ารหัสและปกป้องตาม PDPA ข้อมูลรับรองถูกตรวจสอบเพื่อรักษาความสมบูรณ์ของแพลตฟอร์ม"
+                  : locale === "zh"
+                    ? "安全：您的数据根据PDPA加密和保护。凭证经过验证以维护平台完整性。"
+                    : "Security: Your data is encrypted and protected under PDPA. Credentials are verified to maintain platform integrity."}
+              </p>
             </div>
 
             <div className="text-center pt-4 border-t border-gray-100">
-              <Link href={`${prefix}/fixers`} className="inline-block px-8 py-3 bg-sky-600 hover:bg-sky-700 text-white rounded-xl font-bold shadow transition">
-                {locale === "th" ? "ไปที่แดชบอร์ดของคุณ" : locale === "zh" ? "前往您的仪表板" : "Go to your Dashboard"}
+              <Link
+                href={`${prefix}/fixers`}
+                className="inline-block px-8 py-3 bg-sky-600 hover:bg-sky-700 text-white rounded-xl font-bold shadow transition"
+              >
+                {locale === "th"
+                  ? "ไปที่แดชบอร์ดของคุณ"
+                  : locale === "zh"
+                    ? "前往您的仪表板"
+                    : "Go to your Dashboard"}
               </Link>
             </div>
           </div>
@@ -1888,29 +2038,36 @@ function FixerRegisterContent() {
     );
   }
 
-
   return (
     <div className="bg-gray-50 py-12">
       <div className="mx-auto max-w-3xl px-4 sm:px-6">
         {/* Header */}
         <div className="text-center mb-10">
           <h1 className="text-3xl font-bold text-gray-900">
-            {isEditMode 
-              ? (locale === "th" ? "แก้ไขโปรไฟล์ช่าง" : locale === "zh" ? "编辑技工个人资料" : "Edit Fixer Profile")
-              : (locale === "th"
-              ? "สมัครเป็นช่าง CBLUE และมืออาชีพ"
-              : locale === "zh"
-                ? "注册为 CBLUE 技工与专业人士"
-                : "Register as CBLUE Fixer & Pro")}
+            {isEditMode
+              ? locale === "th"
+                ? "แก้ไขโปรไฟล์ช่าง"
+                : locale === "zh"
+                  ? "编辑技工个人资料"
+                  : "Edit Fixer Profile"
+              : locale === "th"
+                ? "สมัครเป็นช่าง CBLUE และมืออาชีพ"
+                : locale === "zh"
+                  ? "注册为 CBLUE 技工与专业人士"
+                  : "Register as CBLUE Fixer & Pro"}
           </h1>
           <p className="mt-3 text-lg text-gray-500">
-            {isEditMode 
-              ? (locale === "th" ? "อัปเดตข้อมูลและข้อมูลประจำตัวของคุณ" : locale === "zh" ? "更新您的信息和身份信息" : "Update your information and credentials")
-              : (locale === "th"
-              ? "สมัครเพื่อเข้าถึงบริการมืออาชีพและจัดการคำขอของคุณ"
-              : locale === "zh"
-                ? "注册以访问专业服务并管理您的请求"
-                : "Sign up to access professional services and manage your requests")}
+            {isEditMode
+              ? locale === "th"
+                ? "อัปเดตข้อมูลและข้อมูลประจำตัวของคุณ"
+                : locale === "zh"
+                  ? "更新您的信息和身份信息"
+                  : "Update your information and credentials"
+              : locale === "th"
+                ? "สมัครเพื่อเข้าถึงบริการมืออาชีพและจัดการคำขอของคุณ"
+                : locale === "zh"
+                  ? "注册以访问专业服务并管理您的请求"
+                  : "Sign up to access professional services and manage your requests"}
           </p>
         </div>
 
@@ -2411,13 +2568,13 @@ function FixerRegisterContent() {
           </fieldset>
 
           {/* KYC */}
-            <fieldset>
-              <legend className="text-lg font-semibold text-gray-900 mb-4">
-                {locale === "th"
-                  ? "ยืนยันตัวตน (KYC)"
-                  : locale === "zh"
-                    ? "身份验证 (KYC)"
-                    : "Identity Verification (KYC)"}
+          <fieldset>
+            <legend className="text-lg font-semibold text-gray-900 mb-4">
+              {locale === "th"
+                ? "ยืนยันตัวตน (KYC)"
+                : locale === "zh"
+                  ? "身份验证 (KYC)"
+                  : "Identity Verification (KYC)"}
             </legend>
             <div className="space-y-4">
               <div>
@@ -2624,7 +2781,7 @@ function FixerRegisterContent() {
                 )}
               </div>
             </div>
-            </fieldset>
+          </fieldset>
 
           {/* Portfolio */}
           <fieldset>
