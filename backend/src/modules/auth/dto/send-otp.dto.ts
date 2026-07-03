@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, Matches } from 'class-validator';
+import { IsString, IsNotEmpty, Matches, IsOptional } from 'class-validator';
 
 export class SendOtpDto {
   @IsString()
@@ -7,4 +7,8 @@ export class SendOtpDto {
     message: 'Phone must be a valid Thai phone number',
   })
   phone: string;
+
+  @IsOptional()
+  @IsString()
+  recaptchaToken?: string;
 }

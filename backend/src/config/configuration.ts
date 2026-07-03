@@ -23,6 +23,10 @@ export default () => ({
     expiryMinutes: parseInt(process.env.OTP_EXPIRY_MINUTES ?? '5', 10),
     length: parseInt(process.env.OTP_LENGTH ?? '6', 10),
   },
+  recaptcha: {
+    secretKey: process.env.RECAPTCHA_SECRET_KEY || '',
+    minimumScore: Number(process.env.RECAPTCHA_MINIMUM_SCORE ?? '0') || 0,
+  },
   spaces: {
     endpoint: process.env.SPACES_ENDPOINT,
     key: process.env.SPACES_KEY,

@@ -134,6 +134,14 @@ export function Header() {
             >
               {t("bookNow")}
             </Link>
+            <Link
+              href={`${prefix}/admin`}
+              aria-label="CBLUE admin console"
+              title="CBLUE admin console"
+              className="hidden sm:inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold text-slate-400 hover:bg-sky-50 hover:text-sky-700 transition-colors"
+            >
+              *
+            </Link>
             <button
               onClick={() => setMobileOpen(!mobileOpen)}
               className="md:hidden p-2 text-gray-600 hover:text-gray-900"
@@ -221,6 +229,14 @@ export function Header() {
             className="mt-2 block w-full text-center px-4 py-2.5 text-sm font-semibold text-white bg-sky-600 rounded-lg"
           >
             {t("bookNow")}
+          </Link>
+          <Link
+            href={`${prefix}/admin`}
+            onClick={() => setMobileOpen(false)}
+            aria-label="CBLUE admin console"
+            className="mt-2 block w-full rounded-lg px-4 py-2 text-center text-sm font-semibold text-slate-500 hover:bg-sky-50 hover:text-sky-700"
+          >
+            * Admin
           </Link>
         </div>
       )}

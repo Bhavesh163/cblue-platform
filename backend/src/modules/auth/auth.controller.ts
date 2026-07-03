@@ -14,10 +14,22 @@ export class AuthController {
     return this.authService.sendOtp(dto);
   }
 
+  @Post('admin/otp/send')
+  @HttpCode(HttpStatus.OK)
+  sendAdminOtp(@Body() dto: SendOtpDto) {
+    return this.authService.sendAdminOtp(dto);
+  }
+
   @Post('otp/verify')
   @HttpCode(HttpStatus.OK)
   verifyOtp(@Body() dto: VerifyOtpDto) {
     return this.authService.verifyOtp(dto);
+  }
+
+  @Post('admin/otp/verify')
+  @HttpCode(HttpStatus.OK)
+  verifyAdminOtp(@Body() dto: VerifyOtpDto) {
+    return this.authService.verifyAdminOtp(dto);
   }
 
   @Post('refresh')

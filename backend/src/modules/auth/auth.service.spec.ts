@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { RecaptchaService } from './recaptcha.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -13,6 +14,7 @@ describe('AuthService', () => {
   };
   let jwtService: { signAsync: jest.Mock; verify: jest.Mock };
   let configService: { get: jest.Mock; getOrThrow: jest.Mock };
+  let recaptchaService: { verify: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
@@ -34,6 +36,9 @@ describe('AuthService', () => {
       get: jest.fn().mockReturnValue('development'),
       getOrThrow: jest.fn().mockReturnValue('30m'),
     };
+    recaptchaService = {
+      verify: jest.fn().mockResolvedValue(undefined),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -41,6 +46,7 @@ describe('AuthService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: JwtService, useValue: jwtService },
         { provide: ConfigService, useValue: configService },
+        { provide: RecaptchaService, useValue: recaptchaService },
       ],
     }).compile();
 
@@ -75,6 +81,48 @@ describe('AuthService', () => {
       expect(result.message).toBe('OTP sent successfully');
       expect(result.phone).toBe('+66812345678');
       expect(prisma.otpCode.create).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('sendAdminOtp', () => {
+    it('should verify recaptcha before sending admin OTP', async () => {
+      prisma.otpCode.findFirst.mockResolvedValue(null);
+      prisma.otpCode.create.mockResolvedValue({ id: 'otp-1' });
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'admin-1',
+        phone: '+66812345678',
+        role: 'ADMIN',
+        isActive: true,
+      });
+
+      await service.sendAdminOtp({
+        phone: '0812345678',
+        recaptchaToken: 'captcha-token',
+      });
+
+      expect(recaptchaService.verify).toHaveBeenCalledWith(
+        'captcha-token',
+        'admin_login',
+      );
+      expect(prisma.otpCode.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('should reject non-admin phones before creating an OTP', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-1',
+        phone: '+66812345678',
+        role: 'USER',
+        isActive: true,
+      });
+
+      await expect(
+        service.sendAdminOtp({
+          phone: '0812345678',
+          recaptchaToken: 'captcha-token',
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+
+      expect(prisma.otpCode.create).not.toHaveBeenCalled();
     });
   });
 
@@ -164,6 +212,54 @@ describe('AuthService', () => {
 
       expect(prisma.user.create).toHaveBeenCalledTimes(1);
       expect(result.user.id).toBe('user-new');
+    });
+  });
+
+  describe('verifyAdminOtp', () => {
+    it('should return tokens for an admin OTP verification', async () => {
+      prisma.otpCode.findFirst.mockResolvedValue({
+        id: 'otp-1',
+        code: '123456',
+        attempts: 0,
+      });
+      prisma.otpCode.update.mockResolvedValue({});
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'admin-1',
+        phone: '+66812345678',
+        role: 'ADMIN',
+        name: 'Admin',
+        isActive: true,
+      });
+
+      const result = await service.verifyAdminOtp({
+        phone: '0812345678',
+        code: '123456',
+      });
+
+      expect(result.accessToken).toBe('mock-token');
+      expect(result.user.role).toBe('ADMIN');
+    });
+
+    it('should reject non-admin OTP verification without creating a user', async () => {
+      prisma.otpCode.findFirst.mockResolvedValue({
+        id: 'otp-1',
+        code: '123456',
+        attempts: 0,
+      });
+      prisma.otpCode.update.mockResolvedValue({});
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-1',
+        phone: '+66812345678',
+        role: 'USER',
+        name: 'User',
+        isActive: true,
+      });
+
+      await expect(
+        service.verifyAdminOtp({ phone: '0812345678', code: '123456' }),
+      ).rejects.toThrow(UnauthorizedException);
+
+      expect(prisma.user.create).not.toHaveBeenCalled();
     });
   });
 

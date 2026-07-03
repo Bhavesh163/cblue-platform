@@ -8,7 +8,9 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { webcrypto } from 'crypto';
 import ms from 'ms';
+import { UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RecaptchaService } from './recaptcha.service';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
@@ -23,11 +25,27 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private recaptchaService: RecaptchaService,
   ) {}
 
   async sendOtp(dto: SendOtpDto) {
     const phone = this.normalizePhone(dto.phone);
+    return this.createOtp(phone, 'OTP sent successfully');
+  }
 
+  async sendAdminOtp(dto: SendOtpDto) {
+    const phone = this.normalizePhone(dto.phone);
+    await this.recaptchaService.verify(dto.recaptchaToken, 'admin_login');
+
+    const admin = await this.prisma.user.findUnique({ where: { phone } });
+    if (!admin || !admin.isActive || admin.role !== UserRole.ADMIN) {
+      throw new UnauthorizedException('Admin access required');
+    }
+
+    return this.createOtp(phone, 'Admin OTP sent successfully');
+  }
+
+  private async createOtp(phone: string, message: string) {
     // Check cooldown - prevent rapid OTP requests
     const recentOtp = await this.prisma.otpCode.findFirst({
       where: {
@@ -65,44 +83,12 @@ export class AuthService {
       this.logger.log(`OTP sent to ${phone}`);
     }
 
-    return { message: 'OTP sent successfully', phone };
+    return { message, phone };
   }
 
   async verifyOtp(dto: VerifyOtpDto) {
     const phone = this.normalizePhone(dto.phone);
-
-    const otpRecord = await this.prisma.otpCode.findFirst({
-      where: {
-        phone,
-        verified: false,
-        expiresAt: { gte: new Date() },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (!otpRecord) {
-      throw new UnauthorizedException('OTP expired or not found');
-    }
-
-    if (otpRecord.attempts >= MAX_OTP_ATTEMPTS) {
-      throw new UnauthorizedException(
-        'Maximum OTP attempts exceeded. Request a new OTP.',
-      );
-    }
-
-    if (otpRecord.code !== dto.code) {
-      await this.prisma.otpCode.update({
-        where: { id: otpRecord.id },
-        data: { attempts: { increment: 1 } },
-      });
-      throw new UnauthorizedException('Invalid OTP');
-    }
-
-    // Mark OTP as verified
-    await this.prisma.otpCode.update({
-      where: { id: otpRecord.id },
-      data: { verified: true },
-    });
+    await this.verifyOtpCode(phone, dto.code);
 
     // Find or create user
     let user = await this.prisma.user.findUnique({ where: { phone } });
@@ -129,6 +115,67 @@ export class AuthService {
         name: user.name,
       },
     };
+  }
+
+  async verifyAdminOtp(dto: VerifyOtpDto) {
+    const phone = this.normalizePhone(dto.phone);
+    await this.verifyOtpCode(phone, dto.code);
+
+    const user = await this.prisma.user.findUnique({ where: { phone } });
+    if (!user || !user.isActive || user.role !== UserRole.ADMIN) {
+      throw new UnauthorizedException('Admin access required');
+    }
+
+    const tokens = await this.generateTokens(
+      user.id,
+      user.phone ?? '',
+      user.role,
+    );
+
+    return {
+      ...tokens,
+      user: {
+        id: user.id,
+        phone: user.phone,
+        role: user.role,
+        name: user.name,
+      },
+    };
+  }
+
+  private async verifyOtpCode(phone: string, code: string) {
+    const otpRecord = await this.prisma.otpCode.findFirst({
+      where: {
+        phone,
+        verified: false,
+        expiresAt: { gte: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!otpRecord) {
+      throw new UnauthorizedException('OTP expired or not found');
+    }
+
+    if (otpRecord.attempts >= MAX_OTP_ATTEMPTS) {
+      throw new UnauthorizedException(
+        'Maximum OTP attempts exceeded. Request a new OTP.',
+      );
+    }
+
+    if (otpRecord.code !== code) {
+      await this.prisma.otpCode.update({
+        where: { id: otpRecord.id },
+        data: { attempts: { increment: 1 } },
+      });
+      throw new UnauthorizedException('Invalid OTP');
+    }
+
+    // Mark OTP as verified
+    await this.prisma.otpCode.update({
+      where: { id: otpRecord.id },
+      data: { verified: true },
+    });
   }
 
   async refreshToken(dto: RefreshTokenDto) {
