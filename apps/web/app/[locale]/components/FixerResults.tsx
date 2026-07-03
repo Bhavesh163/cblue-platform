@@ -2498,21 +2498,6 @@ export default function FixerResults({
       console.error(err);
     }
 
-    if (process.env.NODE_ENV === "development") {
-      const found: Fixer = {
-        id: `f-nom-${nominateId}`,
-        alias: `Partner-${nominateId.padStart(4, "0")}`,
-        tier: (["economy", "standard", "corporate", "specialist", "expert"] as const)[Math.floor(Math.random() * 5)]!,
-        rating: parseFloat((3.0 + Math.random() * 2).toFixed(1)),
-        totalJobs: 5 + Math.floor(Math.random() * 100),
-        price: 300 + Math.floor(Math.random() * 500),
-        satisfaction: 70 + Math.floor(Math.random() * 30),
-        specialties: [service || "General"],
-        experienceYears: 2 + Math.floor(Math.random() * 10),
-      };
-      setNominatedFixer(found);
-      return;
-    }
 
     setMatchError(
       locale === "th"

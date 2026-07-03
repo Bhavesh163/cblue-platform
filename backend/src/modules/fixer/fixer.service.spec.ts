@@ -879,6 +879,134 @@ describe('FixerService', () => {
         }),
       );
     });
+    it('does not allow 8th nomination to bypass area and matched fit-out price-list filters', async () => {
+      const fixture = [
+        {
+          id: 'suppadesh',
+          tier: 'ECONOMY',
+          rating: 5,
+          completedJobs: 0,
+          yearsExperience: 20,
+          description: 'Office fitout specialist',
+          pastProjectType: 'fitout',
+          bio: 'Commercial fitout team',
+          serviceProvince: 'กรุงเทพมหานคร',
+          serviceDistrict: 'วังทองหลาง',
+          servicePostalCode: '10310',
+          priceList: [
+            {
+              service: 'Fit out',
+              quantity: '1',
+              unit: 'sq.m.',
+              finalPrice: '28000',
+            },
+          ],
+          user: {
+            name: 'Suppadesh Funpgrsertsuk',
+            email: 'suppadesh@yahoo.com',
+          },
+          skills: [{ category: 'FITOUT', name: 'FITOUT' }],
+        },
+        {
+          id: 'bhavesh',
+          tier: 'ECONOMY',
+          rating: 4.9,
+          completedJobs: 0,
+          yearsExperience: 2,
+          description: 'Can do fitout work',
+          pastProjectType: 'fitout',
+          bio: '',
+          serviceProvince: 'กรุงเทพมหานคร',
+          serviceDistrict: 'วังทองหลาง',
+          servicePostalCode: '10310',
+          priceList: [
+            {
+              service: 'Fit-out',
+              quantity: '1',
+              unit: 'sq.m.',
+              finalPrice: '30000',
+            },
+          ],
+          user: {
+            name: 'Bhavesh Fungprasertsuk',
+            email: 'bhaveshfung@gmail.com',
+          },
+          skills: [{ category: 'FITOUT', name: 'Fit-out' }],
+        },
+        {
+          id: 'ghis-cafe',
+          tier: 'ECONOMY',
+          rating: 5,
+          completedJobs: 0,
+          yearsExperience: 2,
+          description: 'Digital marketing and image ads',
+          pastProjectType: 'marketing',
+          bio: 'Cafe marketing support',
+          serviceProvince: 'กรุงเทพมหานคร',
+          serviceDistrict: 'วังทองหลาง',
+          servicePostalCode: '10310',
+          priceList: [
+            {
+              service: 'image ads',
+              quantity: '600',
+              unit: 'image',
+              finalPrice: '1200000',
+            },
+          ],
+          user: {
+            name: 'Ghis Cafe',
+            email: 'ghiscafe@gmail.com',
+          },
+          skills: [{ category: 'DIGITAL_MARKETING', name: 'image ads' }],
+        },
+        {
+          id: 'far-fitout',
+          tier: 'ECONOMY',
+          rating: 5,
+          completedJobs: 0,
+          yearsExperience: 4,
+          description: 'Fitout team outside the requested area',
+          pastProjectType: 'fitout',
+          bio: 'Out of area fitout team',
+          serviceProvince: 'เชียงใหม่',
+          serviceDistrict: 'เมืองเชียงใหม่',
+          servicePostalCode: '50000',
+          priceList: [
+            {
+              service: 'Fit out',
+              quantity: '1',
+              unit: 'sq.m.',
+              finalPrice: '10000',
+            },
+          ],
+          user: {
+            name: 'Far Fitout',
+            email: 'far@example.com',
+          },
+          skills: [{ category: 'FITOUT', name: 'FITOUT' }],
+        },
+      ];
+
+      for (const bookingType of ['household', 'project', 'professional']) {
+        prisma.fixer.findMany.mockResolvedValueOnce(fixture);
+        const result = await service.matchFixers(
+          'DIGITAL_MARKETING',
+          'วังทองหลาง',
+          'กรุงเทพมหานคร',
+          'I have a 600 fitout work.',
+          'ghis',
+          undefined,
+          undefined,
+          undefined,
+          bookingType,
+        );
+
+        const ids = result.map((candidate: { id: string }) => candidate.id);
+        expect(ids).toEqual(expect.arrayContaining(['suppadesh', 'bhavesh']));
+        expect(ids).not.toContain('ghis-cafe');
+        expect(ids).not.toContain('far-fitout');
+      }
+    });
     it('should include Bangkok project providers in another district when GPS is absent', async () => {
       prisma.fixer.findMany.mockResolvedValue([
         {
