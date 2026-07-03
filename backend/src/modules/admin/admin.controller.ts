@@ -37,6 +37,11 @@ export class AdminController {
     return this.adminService.getPendingFixers(pagination);
   }
 
+  @Get('fixers/tier-review')
+  getTierReviewFixers(@Query() pagination: PaginationDto) {
+    return this.adminService.getTierReviewFixers(pagination);
+  }
+
   @Put('fixers/:fixerId/status')
   approveFixer(
     @Param('fixerId') fixerId: string,

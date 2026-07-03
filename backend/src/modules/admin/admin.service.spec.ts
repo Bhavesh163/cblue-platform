@@ -60,6 +60,48 @@ describe('AdminService', () => {
     });
   });
 
+  describe('getTierReviewFixers', () => {
+    it('returns approved upper-tier fixers that need admin review', async () => {
+      prisma.fixer.findMany.mockResolvedValue([
+        {
+          id: 'fixer-specialist',
+          tier: 'SPECIALIST',
+          status: FixerStatus.APPROVED,
+          aiTier: 'Specialist',
+          aiCredentialStatus: 'verified',
+          aiFlags: [
+            {
+              type: 'warn',
+              message: 'Admin tier review required before public promotion',
+            },
+          ],
+          user: { id: 'user-1', name: 'Specialist Partner' },
+          skills: [],
+          images: [],
+        },
+      ]);
+      prisma.fixer.count.mockResolvedValue(1);
+
+      const result = await service.getTierReviewFixers({ page: 1, limit: 20 });
+
+      expect(prisma.fixer.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            status: FixerStatus.APPROVED,
+            tier: { in: ['CORPORATE', 'SPECIALIST', 'EXPERT'] },
+          }),
+        }),
+      );
+      expect(result.total).toBe(1);
+      expect(result.fixers[0]).toEqual(
+        expect.objectContaining({
+          id: 'fixer-specialist',
+          reviewStatus: 'NEEDS_ADMIN_REVIEW',
+          reviewReason: expect.stringContaining('Admin tier review required'),
+        }),
+      );
+    });
+  });
   describe('approveFixer', () => {
     it('should throw NotFoundException if fixer not found', async () => {
       prisma.fixer.findUnique.mockResolvedValue(null);

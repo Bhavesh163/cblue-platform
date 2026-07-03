@@ -1,5 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { FixerStatus, OrderStatus } from '@prisma/client';
+import { FixerStatus, FixerTier, OrderStatus } from '@prisma/client';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ApproveFixerDto } from './dto/approve-fixer.dto';
@@ -17,6 +17,31 @@ export class AdminService {
 
   // ── Fixer management ──
 
+  private getTierReviewReason(fixer: {
+    aiFlags?: unknown;
+    aiTier?: string | null;
+    tier?: unknown;
+  }): string {
+    const flags = Array.isArray(fixer.aiFlags) ? fixer.aiFlags : [];
+    const adminFlag = flags.find(
+      (flag) =>
+        flag &&
+        typeof flag === 'object' &&
+        typeof (flag as { message?: unknown }).message === 'string' &&
+        (flag as { message: string }).message.includes('Admin tier review'),
+    ) as { message?: string } | undefined;
+    if (adminFlag?.message) return adminFlag.message;
+
+    const cautionFlag = flags.find(
+      (flag) =>
+        flag &&
+        typeof flag === 'object' &&
+        ['warn', 'fail'].includes(String((flag as { type?: unknown }).type)),
+    ) as { message?: string } | undefined;
+    if (cautionFlag?.message) return cautionFlag.message;
+
+    return `Upper tier ${String(fixer.aiTier || fixer.tier || 'partner')} requires human evidence review`;
+  }
   async getPendingFixers(pagination: PaginationDto) {
     const { page = 1, limit = 20 } = pagination;
     const [fixers, total] = await Promise.all([
@@ -35,6 +60,36 @@ export class AdminService {
     return { fixers, total, page, limit };
   }
 
+  async getTierReviewFixers(pagination: PaginationDto) {
+    const { page = 1, limit = 20 } = pagination;
+    const where = {
+      status: FixerStatus.APPROVED,
+      tier: {
+        in: [FixerTier.CORPORATE, FixerTier.SPECIALIST, FixerTier.EXPERT],
+      },
+    };
+    const [fixers, total] = await Promise.all([
+      this.prisma.fixer.findMany({
+        where,
+        include: { user: true, skills: true, images: true },
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { updatedAt: 'desc' },
+      }),
+      this.prisma.fixer.count({ where }),
+    ]);
+
+    return {
+      fixers: fixers.map((fixer) => ({
+        ...fixer,
+        reviewStatus: 'NEEDS_ADMIN_REVIEW' as const,
+        reviewReason: this.getTierReviewReason(fixer),
+      })),
+      total,
+      page,
+      limit,
+    };
+  }
   async approveFixer(fixerId: string, dto: ApproveFixerDto) {
     const fixer = await this.prisma.fixer.findUnique({
       where: { id: fixerId },

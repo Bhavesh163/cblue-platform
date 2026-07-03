@@ -403,6 +403,12 @@ describe('FixerService', () => {
           tier: 'SPECIALIST',
           aiTier: 'Specialist',
           aiCredentialStatus: 'verified',
+          aiFlags: expect.arrayContaining([
+            expect.objectContaining({
+              type: 'warn',
+              message: expect.stringContaining('Admin tier review required'),
+            }),
+          ]),
         }),
       }),
     );
@@ -843,6 +849,32 @@ describe('FixerService', () => {
       expect(fitoutCandidate?.price).toBe(1200000);
       expect(fitoutCandidate?.estimatedUnit).toBe('sqm');
       expect(fitoutCandidate?.estimatedQty).toBe(1000);
+      expect((fitoutCandidate as any)?.matchTrace).toEqual(
+        expect.objectContaining({
+          eligible: true,
+          service: expect.objectContaining({
+            matched: true,
+            source: 'price_list',
+            requested: 'project',
+          }),
+          area: expect.objectContaining({
+            matched: true,
+            district: 'Pathum Wan',
+            province: 'Bangkok',
+          }),
+          budget: expect.objectContaining({
+            total: 1200000,
+            breakdown: expect.arrayContaining([
+              expect.objectContaining({
+                service: 'office fitout',
+                qty: 1000,
+                total: 1200000,
+              }),
+            ]),
+          }),
+          typhoon: expect.objectContaining({ applied: false }),
+        }),
+      );
     });
 
     it('should only return Bangkok partners with a matching fit-out price-list service', async () => {
@@ -1405,6 +1437,12 @@ describe('FixerService', () => {
         result.map((candidate: { id: string }) => candidate.id),
       ).not.toContain('digital-only');
       expect(result[0]?.selectedReason).toContain('Typhoon: Best balance');
+      expect((result[0] as any)?.matchTrace?.typhoon).toEqual(
+        expect.objectContaining({
+          applied: true,
+          note: expect.stringContaining('Best balance'),
+        }),
+      );
     });
 
     it('uses deterministic Top-8 matching when Typhoon API key is missing', async () => {

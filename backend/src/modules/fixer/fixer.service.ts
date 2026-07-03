@@ -29,6 +29,7 @@ export interface SelectedFixer {
   specialties: string[];
   experienceYears: number;
   selectedReason?: string;
+  matchTrace?: CandidateMatchTrace;
 }
 
 type PriceListRow = Record<string, unknown>;
@@ -45,6 +46,34 @@ type MatchedBreakdownItem = EstimatedBreakdownItem & {
   pairIndex: number;
   matchScore: number;
   serviceGroupKey: string;
+};
+
+type CandidateMatchTrace = {
+  eligible: boolean;
+  service: {
+    requested: string;
+    matched: boolean;
+    source: 'price_list' | 'profile' | 'none';
+    matchScore: number;
+    importantMatchedCount: number;
+  };
+  area: {
+    matched: boolean;
+    district: string;
+    province: string;
+    postalCode?: string;
+    gpsRadiusApplied: boolean;
+  };
+  budget: {
+    total: number | null;
+    comparisonTotal: number;
+    breakdown: EstimatedBreakdownItem[];
+  };
+  typhoon: {
+    applied: boolean;
+    note?: string;
+  };
+  selectedReason?: string;
 };
 
 type FixerTierLabel =
@@ -524,6 +553,53 @@ export class FixerService {
       return null;
     }
   }
+  private buildCandidateMatchTrace(
+    candidate: RankedFixer,
+    input: {
+      service: string;
+      district: string;
+      province: string;
+      postalCode?: string;
+      hasCustomerGps: boolean;
+    },
+    typhoonApplied: boolean,
+    typhoonNote?: string,
+  ): CandidateMatchTrace {
+    const breakdown = candidate.estimatedBreakdown || [];
+    const priceListMatched = breakdown.length > 0;
+
+    return {
+      eligible: candidate.matchScore > 0,
+      service: {
+        requested: input.service,
+        matched: priceListMatched || candidate.matchScore > 0,
+        source: priceListMatched
+          ? 'price_list'
+          : candidate.matchScore > 0
+            ? 'profile'
+            : 'none',
+        matchScore: candidate.matchScore,
+        importantMatchedCount: candidate.importantMatchedCount,
+      },
+      area: {
+        matched: true,
+        district: input.district,
+        province: input.province,
+        ...(input.postalCode ? { postalCode: input.postalCode } : {}),
+        gpsRadiusApplied: input.hasCustomerGps,
+      },
+      budget: {
+        total: candidate.estimatedTotal,
+        comparisonTotal: candidate.comparisonTotal,
+        breakdown,
+      },
+      typhoon: {
+        applied: typhoonApplied,
+        ...(typhoonNote ? { note: typhoonNote } : {}),
+      },
+      selectedReason: candidate.selectedReason,
+    };
+  }
   private parseTyphoonTop8Review(
     content: string,
     allowedCandidateIds: Set<string>,
@@ -884,6 +960,13 @@ export class FixerService {
         type: 'warn',
         message:
           'Standard tier requires 3+ years plus certificate or qualifying project evidence',
+      });
+    }
+    if (['Corporate', 'Specialist', 'Expert'].includes(tier)) {
+      flags.push({
+        type: 'warn',
+        message:
+          'Admin tier review required before public promotion for Corporate, Specialist, or Expert tier evidence',
       });
     }
 
@@ -2412,6 +2495,21 @@ export class FixerService {
         deterministicTop8,
         typhoonTop8Review,
       );
+      const typhoonNotes = typhoonTop8Review?.notesByCandidateId || {};
+      for (const candidate of finalTop8) {
+        candidate.matchTrace = this.buildCandidateMatchTrace(
+          candidate,
+          {
+            service,
+            district,
+            province,
+            postalCode,
+            hasCustomerGps,
+          },
+          Boolean(typhoonTop8Review),
+          typhoonNotes[candidate.id],
+        );
+      }
 
       return finalTop8.map((candidate) => {
         const {
