@@ -66,6 +66,15 @@ type TierEvaluationResult = {
   credentialStatus: CredentialStatus;
 };
 
+type TyphoonRisk = 'low' | 'medium' | 'high';
+
+type TyphoonTierReview = {
+  credentialStatus?: CredentialStatus;
+  risk: TyphoonRisk;
+  notes: string[];
+  recommendedTier?: FixerTierLabel;
+};
+
 type PortfolioDigestLike = {
   fallback?: boolean;
   content_score?: number;
@@ -99,7 +108,15 @@ interface RankedFixer extends SelectedFixer {
 export class FixerService {
   private readonly logger = new Logger(FixerService.name);
   private readonly fillerTokens = new Set([
+    'a',
+    'an',
     'and',
+    'at',
+    'i',
+    'in',
+    'of',
+    'per',
+    'to',
     'the',
     'for',
     'with',
@@ -317,26 +334,124 @@ export class FixerService {
     return tier.toUpperCase() as FixerTier;
   }
 
+  private isCredentialStatus(value: unknown): value is CredentialStatus {
+    return (
+      value === 'verified' || value === 'partial' || value === 'unverified'
+    );
+  }
+
+  private isTierLabel(value: unknown): value is FixerTierLabel {
+    return (
+      value === 'Economy' ||
+      value === 'Standard' ||
+      value === 'Corporate' ||
+      value === 'Specialist' ||
+      value === 'Expert'
+    );
+  }
+
+  private isTyphoonRisk(value: unknown): value is TyphoonRisk {
+    return value === 'low' || value === 'medium' || value === 'high';
+  }
+
+  private extractTyphoonJson(content: string): string | null {
+    const trimmed = content.trim();
+    const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+    if (fenced?.[1]) return fenced[1].trim();
+
+    const firstBrace = trimmed.indexOf('{');
+    const lastBrace = trimmed.lastIndexOf('}');
+    if (firstBrace >= 0 && lastBrace > firstBrace) {
+      return trimmed.slice(firstBrace, lastBrace + 1);
+    }
+
+    return null;
+  }
+
+  private parseTyphoonTierReview(content: string): TyphoonTierReview | null {
+    const json = this.extractTyphoonJson(content);
+    if (!json) return null;
+
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(json) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+
+    if (
+      !this.isTyphoonRisk(parsed.risk) ||
+      (parsed.credentialStatus != null &&
+        !this.isCredentialStatus(parsed.credentialStatus)) ||
+      (parsed.recommendedTier != null &&
+        !this.isTierLabel(parsed.recommendedTier))
+    ) {
+      return null;
+    }
+
+    const notes = Array.isArray(parsed.notes)
+      ? parsed.notes
+          .filter((note): note is string => typeof note === 'string')
+          .map((note) => note.trim())
+          .filter(Boolean)
+          .slice(0, 5)
+      : [];
+
+    const review: TyphoonTierReview = {
+      risk: parsed.risk,
+      notes,
+    };
+    if (this.isCredentialStatus(parsed.credentialStatus)) {
+      review.credentialStatus = parsed.credentialStatus;
+    }
+    if (this.isTierLabel(parsed.recommendedTier)) {
+      review.recommendedTier = parsed.recommendedTier;
+    }
+
+    return review;
+  }
+
+  private saferCredentialStatus(
+    deterministic: CredentialStatus,
+    typhoon?: CredentialStatus,
+  ): CredentialStatus {
+    if (!typhoon) return deterministic;
+    const rank: Record<CredentialStatus, number> = {
+      unverified: 0,
+      partial: 1,
+      verified: 2,
+    };
+    return rank[typhoon] < rank[deterministic] ? typhoon : deterministic;
+  }
+
   private buildTyphoonTierPrompt(
     dto: RegisterFixerWithEvidence,
     deterministic: TierEvaluationResult,
   ) {
     const evidence = this.evidenceText(dto).slice(0, 6000);
     return [
-      'You are CBLUE credential risk review AI for Fixer & Pro registration.',
-      'Return compact JSON only. Do not invent credentials. If internet/search evidence is not supplied, mark external verification as unverified.',
-      'Do not request or expose secrets. Review only this minimized profile/evidence summary.',
-      'Tier rules: Standard needs 3+ years and required certificate/project proof. Corporate needs 2 corporate-client endorsed certificates. Specialist needs 5 corporate completion certificates, or 5 completion certificates plus an international award. Otherwise Economy/Standard only.',
+      'You are the CBLUE credential risk-review AI for Fixer & Pro registration.',
+      'Return one compact JSON object only. Do not wrap it in prose. Do not invent credentials, projects, clients, awards, dates, or web evidence.',
+      'Security: never request, reveal, transform, or store secrets. Review only the minimized profile/evidence summary below.',
+      'Important: no live internet/search evidence is provided in this request. If proof is not explicitly present in the evidence summary, treat external credential verification as unverified.',
+      'Your role is advisory risk review. The deterministic CBLUE gate remains authoritative for tier qualification. You may recommend extra caution or downgrading credential confidence, but you must not override certificate gates.',
+      'Score model for context only: Experience 25, Skills Breadth 15, KYC 15, Portfolio & Evidence 15, Profile Completeness 10, Price List 10, Credential Verification 10.',
+      'Tier qualification gates: Standard requires 3+ years plus 2 related educational/professional certificates, or 1 corporate certificate, or a million-baht project completion certificate. Corporate requires 2 certificates endorsed by corporate clients. Specialist requires 5 corporate-client project completion certificates, or 5 project completion certificates plus an international award. Expert requires Specialist-level evidence plus exceptional experience/score. Otherwise Economy.',
+      'Corporate clients mean Stock Exchange of Thailand listed companies, international American/European/Japanese companies, or country governments.',
+      'Fraud/risk checks: name completeness, KYC consistency, company/address completeness, vague or generic descriptions, insufficient experience for premium claims, unsupported corporate/client/award claims, price-list plausibility, and portfolio evidence quality.',
       `Deterministic baseline: ${JSON.stringify({ tier: deterministic.tier, score: deterministic.score, credentialStatus: deterministic.credentialStatus })}`,
       `Evidence summary: ${evidence}`,
-      'JSON schema: {"credentialStatus":"verified|partial|unverified","risk":"low|medium|high","notes":["short note"],"recommendedTier":"Economy|Standard|Corporate|Specialist|Expert"}',
+      'Required JSON schema: {"credentialStatus":"verified|partial|unverified","risk":"low|medium|high","recommendedTier":"Economy|Standard|Corporate|Specialist|Expert","notes":["short factual audit note"]}',
     ].join('\n');
   }
 
   private async requestTyphoonTierReview(
     dto: RegisterFixerWithEvidence,
     deterministic: TierEvaluationResult,
-  ): Promise<Partial<TierEvaluationResult> | null> {
+  ): Promise<{
+    credentialStatus?: CredentialStatus;
+    flags: TierFlag[];
+  } | null> {
     const apiKey =
       this.configService.get<string>('typhoon.apiKey') ||
       process.env.TYPHOON_API_KEY;
@@ -358,11 +473,12 @@ export class FixerService {
           {
             model,
             temperature: 0,
+            max_tokens: 700,
             messages: [
               {
                 role: 'system',
                 content:
-                  'You are a strict credential verification assistant. Respond with JSON only.',
+                  'You are a strict enterprise credential risk reviewer. Return valid JSON only.',
               },
               {
                 role: 'user',
@@ -381,17 +497,17 @@ export class FixerService {
       );
       const content = response.data?.choices?.[0]?.message?.content;
       if (!content || typeof content !== 'string') return null;
-      const parsed = JSON.parse(content) as {
-        credentialStatus?: CredentialStatus;
-        risk?: string;
-        notes?: string[];
-      };
-      const flags: TierFlag[] = Array.isArray(parsed.notes)
-        ? parsed.notes.slice(0, 5).map((note) => ({
-            type: parsed.risk === 'high' ? 'warn' : 'pass',
-            message: `Typhoon review: ${note}`,
-          }))
-        : [];
+
+      const parsed = this.parseTyphoonTierReview(content);
+      if (!parsed) return null;
+
+      const flagType: TierFlag['type'] =
+        parsed.risk === 'low' ? 'pass' : 'warn';
+      const flags = parsed.notes.map((note) => ({
+        type: flagType,
+        message: `Typhoon review: ${note}`,
+      }));
+
       return {
         credentialStatus: parsed.credentialStatus,
         flags,
@@ -403,7 +519,6 @@ export class FixerService {
       return null;
     }
   }
-
   private async evaluateFixerTier(
     dto: RegisterFixerWithEvidence,
   ): Promise<TierEvaluationResult> {
@@ -615,9 +730,11 @@ export class FixerService {
 
     return {
       ...deterministic,
-      credentialStatus:
-        typhoonReview.credentialStatus || deterministic.credentialStatus,
-      flags: [...deterministic.flags, ...(typhoonReview.flags || [])],
+      credentialStatus: this.saferCredentialStatus(
+        deterministic.credentialStatus,
+        typhoonReview.credentialStatus,
+      ),
+      flags: [...deterministic.flags, ...typhoonReview.flags],
     };
   }
 
@@ -1032,7 +1149,7 @@ export class FixerService {
     description?: string,
   ): Array<{ qty: number; contextTerms: string[] }> {
     if (!description) return [];
-    const normalized = this.normalizeSearchText(description);
+    const normalized = this.normalizeSearchText(description, true);
     const unitPattern =
       /sqm|m2|sqft|sq\.?m|ตร\.?ม|ตรม|unit|units|ชุด|ห้อง|room|rooms|floor|floors|ชั้น|item|items|job|jobs|page|pages|faq|faqs|งาน/i;
     const pattern =
@@ -1059,11 +1176,13 @@ export class FixerService {
     // For each qty match, grab the context window (words around it) to identify the service
     for (let i = 0; i < pairs.length; i++) {
       const end = pairs[i + 1] ? pairs[i + 1].idx : normalized.length;
+      const previousEnd = pairs[i - 1]?.endIdx ?? 0;
       const window = this.sliceServiceContext(
         normalized,
         pairs[i].idx,
         pairs[i].endIdx,
         end,
+        previousEnd,
       );
       const tokens = this.extractContextTerms(window, unitPattern);
       pairs[i].contextTerms = tokens;
@@ -1076,22 +1195,44 @@ export class FixerService {
     startIdx: number,
     contentStartIdx: number,
     nextPairIdx: number,
+    previousPairEndIdx = 0,
   ): string {
+    const separatorPattern =
+      /(?:,|;|\n|(?:^|\s)(?:and|plus|พร้อม|และ)(?=\s|$))/gi;
     const maxEnd = nextPairIdx > startIdx ? nextPairIdx : normalized.length;
     const boundarySlice = normalized.slice(contentStartIdx, maxEnd);
     const separatorMatch = boundarySlice.match(
-      /(?:,|;|\n|\b(?:and|plus|พร้อม|และ)\b)/i,
+      /(?:,|;|\n|(?:^|\s)(?:and|plus|พร้อม|และ)(?=\s|$))/i,
     );
     const endIdx =
       separatorMatch?.index != null
         ? contentStartIdx + separatorMatch.index
         : maxEnd;
-    return normalized.slice(startIdx, endIdx).trim();
+
+    const beforeSlice = normalized.slice(previousPairEndIdx, startIdx);
+    let contextStartIdx = previousPairEndIdx;
+    for (const match of beforeSlice.matchAll(separatorPattern)) {
+      contextStartIdx =
+        previousPairEndIdx + (match.index ?? 0) + match[0].length;
+    }
+
+    const hasLeadingServiceTerms = normalized
+      .slice(contextStartIdx, startIdx)
+      .split(/[\s,;]+/)
+      .some(
+        (token) =>
+          token.length > 1 &&
+          !this.fillerTokens.has(token) &&
+          isNaN(parseFloat(token)),
+      );
+    const localEndIdx = hasLeadingServiceTerms ? contentStartIdx : endIdx;
+
+    return normalized.slice(contextStartIdx, localEndIdx).trim();
   }
 
   private extractContextTerms(window: string, unitPattern?: RegExp): string[] {
     return window
-      .split(/\s+/)
+      .split(/[\s,;]+/)
       .filter(
         (token) =>
           token.length > 1 &&
@@ -1141,7 +1282,7 @@ export class FixerService {
     return this.tokenize(normalized).slice(0, 3).join('-') || 'other';
   }
 
-  private normalizeSearchText(value?: string): string {
+  private normalizeSearchText(value?: string, preserveBreaks = false): string {
     return (value || '')
       .toLowerCase()
       .replace(
@@ -1253,6 +1394,7 @@ export class FixerService {
       .replace(/\bbuild\s*[- ]?\s*out\b/g, 'fitout')
       .replace(/\bbuildout\b/g, 'fitout')
       .replace(/\bfitouts\b/g, 'fitout')
+      .replace(/\bgreen\s+construction\b/g, 'construction')
       .replace(/\bmake\s*[- ]?\s*good\b/g, 'reinstatement')
       .replace(/\breinstate(?:ment)?\b/g, 'reinstatement')
       .replace(/\bweb\s*site\b/g, 'website')
@@ -1266,7 +1408,12 @@ export class FixerService {
       .replace(/bangkok|bkk/g, 'กรุงเทพมหานคร')
       .replace(/nonthaburi/g, 'นนทบุรี')
       .replace(/phuket/g, 'ภูเก็ต')
-      .replace(/[^a-z0-9ก-๙\u4e00-\u9fff\s]/g, ' ')
+      .replace(
+        preserveBreaks
+          ? /[^a-z0-9ก-๙\u4e00-\u9fff\s,;\n]/g
+          : /[^a-z0-9ก-๙\u4e00-\u9fff\s]/g,
+        ' ',
+      )
       .replace(/\s+/g, ' ')
       .trim();
   }

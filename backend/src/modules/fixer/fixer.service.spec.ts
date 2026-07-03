@@ -9,6 +9,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { of } from 'rxjs';
 
 describe('FixerService', () => {
   let service: FixerService;
@@ -20,6 +21,8 @@ describe('FixerService', () => {
     image: Record<string, jest.Mock>;
   };
   let eventEmitter: { emit: jest.Mock };
+  let configService: { get: jest.Mock };
+  let httpService: { post: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
@@ -48,14 +51,16 @@ describe('FixerService', () => {
       },
     };
     eventEmitter = { emit: jest.fn() };
+    configService = { get: jest.fn() };
+    httpService = { post: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         FixerService,
         { provide: PrismaService, useValue: prisma },
         { provide: EventEmitter2, useValue: eventEmitter },
-        { provide: ConfigService, useValue: { get: jest.fn() } },
-        { provide: HttpService, useValue: { post: jest.fn() } },
+        { provide: ConfigService, useValue: configService },
+        { provide: HttpService, useValue: httpService },
       ],
     }).compile();
 
@@ -398,6 +403,253 @@ describe('FixerService', () => {
           tier: 'SPECIALIST',
           aiTier: 'Specialist',
           aiCredentialStatus: 'verified',
+        }),
+      }),
+    );
+  });
+
+  const enableTyphoonReview = () => {
+    configService.get.mockImplementation((key: string) => {
+      const values: Record<string, string> = {
+        'typhoon.apiKey': 'test-typhoon-key',
+        'typhoon.baseUrl': 'https://api.opentyphoon.ai/v1',
+        'typhoon.model': 'typhoon-v2.5-30b-a3b-instruct',
+      };
+      return values[key];
+    });
+  };
+
+  it('keeps deterministic tier gates when Typhoon recommends an unsafe upgrade', async () => {
+    enableTyphoonReview();
+    httpService.post.mockReturnValue(
+      of({
+        data: {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  credentialStatus: 'verified',
+                  risk: 'low',
+                  recommendedTier: 'Corporate',
+                  notes: [
+                    'Claims look polished but no corporate certificates were supplied',
+                  ],
+                }),
+              },
+            },
+          ],
+        },
+      }),
+    );
+    const createdFixer = {
+      id: 'fixer-unsafe-typhoon-upgrade',
+      userId: 'user-1',
+      user: { id: 'user-1' },
+      skills: [],
+    };
+    prisma.fixer.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(createdFixer);
+    prisma.user.update.mockResolvedValue({});
+    prisma.fixer.create.mockResolvedValue(createdFixer);
+
+    await service.register('user-1', {
+      name: 'Unsafe Upgrade Partner',
+      email: 'unsafe@example.com',
+      phone: '0812345678',
+      company: 'Unsafe Upgrade Co',
+      bio: 'Detailed provider profile with a polished but unsupported corporate claim.',
+      description:
+        'Provider claims large corporate projects but has not uploaded corporate endorsed certificates.',
+      pastExperience:
+        'Two years experience with marketing language and no corporate client endorsed certificates.',
+      yearsExperience: 2,
+      travelRadius: 20,
+      kycImageCount: 3,
+      portfolioImageCount: 5,
+      companyAddress: {
+        province: 'Bangkok',
+        district: 'Pathum Wan',
+        houseNumber: '1',
+      },
+      address: { province: 'Bangkok', district: 'Pathum Wan' },
+      skills: [{ category: 'fitout', name: 'fitout' }],
+      priceList: [
+        {
+          service: 'fit out',
+          quantity: '1',
+          unit: 'sq.m.',
+          finalPrice: '30000',
+        },
+      ],
+    } as never);
+
+    expect(prisma.fixer.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tier: 'ECONOMY',
+          aiTier: 'Economy',
+          aiCredentialStatus: 'unverified',
+          aiFlags: expect.arrayContaining([
+            expect.objectContaining({
+              message: expect.stringContaining('Typhoon review:'),
+            }),
+          ]),
+        }),
+      }),
+    );
+  });
+
+  it('parses fenced Typhoon JSON and allows risk review to downgrade credential status', async () => {
+    enableTyphoonReview();
+    httpService.post.mockReturnValue(
+      of({
+        data: {
+          choices: [
+            {
+              message: {
+                content:
+                  '```json\n{"credentialStatus":"unverified","risk":"high","recommendedTier":"Economy","notes":["External credential evidence was not supplied"]}\n```',
+              },
+            },
+          ],
+        },
+      }),
+    );
+    const createdFixer = {
+      id: 'fixer-typhoon-downgrade',
+      userId: 'user-1',
+      user: { id: 'user-1' },
+      skills: [],
+    };
+    prisma.fixer.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(createdFixer);
+    prisma.user.update.mockResolvedValue({});
+    prisma.fixer.create.mockResolvedValue(createdFixer);
+
+    await service.register('user-1', {
+      name: 'Downgrade Partner',
+      email: 'downgrade@example.com',
+      phone: '0812345678',
+      company: 'Downgrade Co',
+      bio: 'Experienced repair and project service provider.',
+      description: 'Provides office repair and renovation services.',
+      pastExperience:
+        'More than three years experience with a professional certificate and completed one million baht project.',
+      yearsExperience: 4,
+      travelRadius: 20,
+      kycImageCount: 3,
+      portfolioImageCount: 2,
+      companyAddress: {
+        province: 'Bangkok',
+        district: 'Pathum Wan',
+        houseNumber: '1',
+      },
+      address: { province: 'Bangkok', district: 'Pathum Wan' },
+      skills: [{ category: 'fitout', name: 'fitout' }],
+      priceList: [
+        {
+          service: 'fit out',
+          quantity: '1',
+          unit: 'sq.m.',
+          finalPrice: '30000',
+        },
+      ],
+    } as never);
+
+    expect(prisma.fixer.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tier: 'STANDARD',
+          aiTier: 'Standard',
+          aiCredentialStatus: 'unverified',
+          aiFlags: expect.arrayContaining([
+            expect.objectContaining({
+              type: 'warn',
+              message: expect.stringContaining('External credential evidence'),
+            }),
+          ]),
+        }),
+      }),
+    );
+  });
+
+  it('ignores invalid Typhoon schema values instead of persisting them', async () => {
+    enableTyphoonReview();
+    httpService.post.mockReturnValue(
+      of({
+        data: {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  credentialStatus: 'super_verified',
+                  risk: 'severe',
+                  recommendedTier: 'Owner',
+                  notes: [
+                    'Invalid enum values should not enter persisted AI fields',
+                  ],
+                }),
+              },
+            },
+          ],
+        },
+      }),
+    );
+    const createdFixer = {
+      id: 'fixer-invalid-typhoon-schema',
+      userId: 'user-1',
+      user: { id: 'user-1' },
+      skills: [],
+    };
+    prisma.fixer.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(createdFixer);
+    prisma.user.update.mockResolvedValue({});
+    prisma.fixer.create.mockResolvedValue(createdFixer);
+
+    await service.register('user-1', {
+      name: 'Schema Partner',
+      email: 'schema@example.com',
+      phone: '0812345678',
+      company: 'Schema Co',
+      bio: 'Experienced repair and project service provider.',
+      description: 'Provides office repair and renovation services.',
+      pastExperience:
+        'More than three years experience with a professional certificate and completed one million baht project.',
+      yearsExperience: 4,
+      travelRadius: 20,
+      kycImageCount: 3,
+      portfolioImageCount: 2,
+      companyAddress: {
+        province: 'Bangkok',
+        district: 'Pathum Wan',
+        houseNumber: '1',
+      },
+      address: { province: 'Bangkok', district: 'Pathum Wan' },
+      skills: [{ category: 'fitout', name: 'fitout' }],
+      priceList: [
+        {
+          service: 'fit out',
+          quantity: '1',
+          unit: 'sq.m.',
+          finalPrice: '30000',
+        },
+      ],
+    } as never);
+
+    expect(prisma.fixer.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tier: 'STANDARD',
+          aiTier: 'Standard',
+          aiCredentialStatus: 'partial',
+          aiFlags: expect.not.arrayContaining([
+            expect.objectContaining({
+              message: expect.stringContaining('Invalid enum values'),
+            }),
+          ]),
         }),
       }),
     );
@@ -1884,6 +2136,168 @@ describe('FixerService', () => {
         result.find((candidate: { id: string }) => candidate.id === 'suppadesh')
           ?.selectedReason,
       ).not.toMatch(/Cheapest/);
+    });
+
+    it('matches each mixed project quantity only to its local service phrase', async () => {
+      prisma.fixer.findMany.mockResolvedValue([
+        {
+          id: 'suppadesh',
+          tier: 'ECONOMY',
+          rating: 5,
+          completedJobs: 0,
+          yearsExperience: 20,
+          description: 'Office fitout and green construction specialist',
+          pastProjectType: 'fitout green construction',
+          bio: 'Commercial fitout and green construction team',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          priceList: [
+            {
+              service: 'Fit out',
+              quantity: '1',
+              unit: 'sq.m.',
+              finalPrice: '25000',
+            },
+            {
+              service: 'Construction',
+              quantity: '1',
+              unit: 'sq.m.',
+              finalPrice: '20000',
+            },
+          ],
+          user: {
+            name: 'Suppadesh Funpgrsertsuk',
+            company: 'Suppadesh Funpgrsertsuk',
+          },
+          skills: [{ category: 'project', name: 'fitout green construction' }],
+        },
+        {
+          id: 'bhavesh',
+          tier: 'ECONOMY',
+          rating: 5,
+          completedJobs: 0,
+          yearsExperience: 2,
+          description: 'Office fitout, green construction, and website',
+          pastProjectType: 'fitout green construction website',
+          bio: 'Commercial build and website team',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          priceList: [
+            {
+              service: 'Fit-out',
+              quantity: '1',
+              unit: 'sq.m.',
+              finalPrice: '30000',
+            },
+            {
+              service: 'Construction',
+              quantity: '1',
+              unit: 'sq.m.',
+              finalPrice: '20000',
+            },
+            {
+              service: 'Website Development',
+              quantity: '1',
+              unit: 'page',
+              finalPrice: '1000',
+            },
+          ],
+          user: {
+            name: 'Bhavesh Fungprasertsuk',
+            company: 'Bhavesh Fungprasertsuk',
+          },
+          skills: [
+            { category: 'project', name: 'fitout green construction' },
+            { category: 'project', name: 'website development' },
+          ],
+        },
+        {
+          id: 'gatoru',
+          tier: 'ECONOMY',
+          rating: 5,
+          completedJobs: 0,
+          yearsExperience: 2,
+          description: 'Website development',
+          pastProjectType: 'website development',
+          bio: 'Website team',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          priceList: [
+            {
+              service: 'Website Development',
+              quantity: '1',
+              unit: 'page',
+              finalPrice: '1200',
+            },
+          ],
+          user: { name: 'Gatoru Sojo', company: 'Gatoru Sojo' },
+          skills: [{ category: 'project', name: 'website development' }],
+        },
+      ]);
+
+      const result = await service.matchFixers(
+        'INTERIOR',
+        'Pathum Wan',
+        'Bangkok',
+        'fit out 1000 sq.m., green construction 100 sq.m., and website 10 pages',
+      );
+
+      expect(
+        result.find(
+          (candidate: { id: string }) => candidate.id === 'suppadesh',
+        ),
+      ).toHaveProperty('estimatedBreakdown', [
+        {
+          service: 'Fit out',
+          qty: 1000,
+          unit: 'sq.m.',
+          unitRate: 25000,
+          total: 25000000,
+        },
+        {
+          service: 'Construction',
+          qty: 100,
+          unit: 'sq.m.',
+          unitRate: 20000,
+          total: 2000000,
+        },
+      ]);
+      expect(
+        result.find((candidate: { id: string }) => candidate.id === 'bhavesh'),
+      ).toHaveProperty('estimatedBreakdown', [
+        {
+          service: 'Fit-out',
+          qty: 1000,
+          unit: 'sq.m.',
+          unitRate: 30000,
+          total: 30000000,
+        },
+        {
+          service: 'Construction',
+          qty: 100,
+          unit: 'sq.m.',
+          unitRate: 20000,
+          total: 2000000,
+        },
+        {
+          service: 'Website Development',
+          qty: 10,
+          unit: 'page',
+          unitRate: 1000,
+          total: 10000,
+        },
+      ]);
+      expect(
+        result.find((candidate: { id: string }) => candidate.id === 'gatoru'),
+      ).toHaveProperty('estimatedBreakdown', [
+        {
+          service: 'Website Development',
+          qty: 10,
+          unit: 'page',
+          unitRate: 1200,
+          total: 12000,
+        },
+      ]);
     });
   });
 });
