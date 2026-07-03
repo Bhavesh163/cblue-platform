@@ -2,7 +2,13 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { computeBudgetBreakdown, resolvePartnerPriceList } from "../../../lib/computeBudgetBreakdown";
+import {
+  computeBudgetBreakdown,
+  readStoredBreakdown,
+  resolvePartnerPriceList,
+  type BudgetBreakdownItem,
+} from "../../../lib/computeBudgetBreakdown";
+import { chooseAuthoritativeBudgetBreakdown } from "../../../lib/bookingBudgetBreakdown";
 import { storePoProjectDetails } from "../../../lib/po-project-details";
 import { refreshSubscriberSession } from "../../../lib/subscriberSession";
 import { normalizeGpsAddressForSubmit } from "../lib/gps-location-normalization";
@@ -2298,31 +2304,21 @@ export default function FixerResults({
             <div className="bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">
               <span className="text-gray-500 text-xs block mb-1">{locale === "th" ? "งบประมาณ" : locale === "zh" ? "预算计算" : "Budget"}</span>
               {(() => {
-                let bd: Array<{ service: string; qty: number; unit: string; unitRate: number; total: number }> | null = null;
-                // 1. Try priceList-based recompute first — most accurate
-                try {
-                  const pl = resolvePartnerPriceList(poNumber);
-                  if (pl.length > 0 && description) {
-                    const computed = computeBudgetBreakdown(description, pl);
-                    if (computed && computed.length > 0) {
-                      bd = computed;
-                      try { localStorage.setItem(`cblue_po_breakdown_${poNumber}`, JSON.stringify(bd)); } catch {}
-                    }
-                  }
-                } catch {}
-                // 2. Prefer frontend-computed breakdown from localStorage (avoids backend phantom items)
-                if (!bd || bd.length === 0) {
-                  try {
-                    const storedBd = localStorage.getItem(`cblue_po_breakdown_${poNumber}`);
-                    if (storedBd) {
-                      const parsed = JSON.parse(storedBd);
-                      if (Array.isArray(parsed) && parsed.length > 0) bd = parsed;
-                    }
-                  } catch {}
-                }
-                // 3. Fall back to backend breakdown only if nothing else works
-                if (!bd || bd.length === 0) {
-                  bd = (selectedFixer as any)?.estimatedBreakdown ?? null;
+                let bd: BudgetBreakdownItem[] | null = null;
+                const selectedBreakdown = Array.isArray((selectedFixer as any)?.estimatedBreakdown)
+                  ? (selectedFixer as any).estimatedBreakdown
+                  : null;
+                const storedBreakdown = readStoredBreakdown(poNumber);
+                const partnerPriceList = resolvePartnerPriceList(poNumber);
+                bd = chooseAuthoritativeBudgetBreakdown({
+                  selectedBreakdown,
+                  storedBreakdown,
+                  description,
+                  priceList: partnerPriceList,
+                  computeBudgetBreakdown,
+                }) as BudgetBreakdownItem[] | null;
+                if (bd && bd.length > 0) {
+                  try { localStorage.setItem(`cblue_po_breakdown_${poNumber}`, JSON.stringify(bd)); } catch {}
                 }
                 if (bd && bd.length >= 1) {
                   const bdTotal = bd.reduce((s, it) => s + (it?.total ?? 0), 0);

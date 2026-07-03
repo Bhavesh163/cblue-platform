@@ -1292,10 +1292,15 @@ export class FixerService {
   }
 
   private buildSearchTerms(service: string, description?: string): string[] {
-    const tokens = new Set<string>([
-      ...this.tokenize(service),
-      ...this.tokenize(description),
-    ]);
+    const descriptionTokens = this.tokenize(description);
+    const serviceTokens = this.tokenize(service);
+    const descriptionHasExplicitIntent =
+      this.getServiceIntentTerms(descriptionTokens).length > 0;
+    const tokens = new Set<string>(
+      descriptionHasExplicitIntent
+        ? descriptionTokens
+        : [...serviceTokens, ...descriptionTokens],
+    );
     const normalizedDescription = this.normalizeSearchText(description);
 
     if (normalizedDescription.includes('office')) tokens.add('office');
