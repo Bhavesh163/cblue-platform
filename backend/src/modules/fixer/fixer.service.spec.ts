@@ -1259,6 +1259,224 @@ describe('FixerService', () => {
         expect(ids).not.toContain('far-fitout');
       }
     });
+    it('lets Typhoon reorder only deterministic Top-8 candidate ids', async () => {
+      enableTyphoonReview();
+      httpService.post.mockReturnValue(
+        of({
+          data: {
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    rankedCandidateIds: [
+                      'premium-fitout',
+                      'ghost-provider',
+                      'budget-fitout',
+                    ],
+                    notesByCandidateId: {
+                      'premium-fitout':
+                        'Best balance of rating and complete matched fit-out budget',
+                      'ghost-provider':
+                        'This hallucinated provider must be ignored',
+                    },
+                  }),
+                },
+              },
+            ],
+          },
+        }),
+      );
+      prisma.fixer.findMany.mockResolvedValue([
+        {
+          id: 'budget-fitout',
+          tier: 'ECONOMY',
+          rating: 4.6,
+          completedJobs: 3,
+          yearsExperience: 4,
+          description: 'Budget office fitout team',
+          pastProjectType: 'fitout',
+          bio: 'Office fitout delivery',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          servicePostalCode: '10330',
+          priceList: [
+            {
+              service: 'Fit out',
+              quantity: '1',
+              unit: 'sq.m.',
+              finalPrice: '25000',
+            },
+          ],
+          user: { name: 'Budget Fitout', email: 'budget@example.com' },
+          skills: [{ category: 'FITOUT', name: 'FITOUT' }],
+        },
+        {
+          id: 'standard-fitout',
+          tier: 'STANDARD',
+          rating: 4.8,
+          completedJobs: 10,
+          yearsExperience: 8,
+          description: 'Standard office fitout team',
+          pastProjectType: 'fitout',
+          bio: 'Office fitout delivery',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          servicePostalCode: '10330',
+          priceList: [
+            {
+              service: 'Fit out',
+              quantity: '1',
+              unit: 'sq.m.',
+              finalPrice: '28000',
+            },
+          ],
+          user: { name: 'Standard Fitout', email: 'standard@example.com' },
+          skills: [{ category: 'FITOUT', name: 'FITOUT' }],
+        },
+        {
+          id: 'premium-fitout',
+          tier: 'CORPORATE',
+          rating: 5,
+          completedJobs: 20,
+          yearsExperience: 12,
+          description: 'Corporate office fitout team',
+          pastProjectType: 'fitout',
+          bio: 'Office fitout delivery',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          servicePostalCode: '10330',
+          priceList: [
+            {
+              service: 'Fit out',
+              quantity: '1',
+              unit: 'sq.m.',
+              finalPrice: '32000',
+            },
+          ],
+          user: { name: 'Premium Fitout', email: 'premium@example.com' },
+          skills: [{ category: 'FITOUT', name: 'FITOUT' }],
+        },
+        {
+          id: 'digital-only',
+          tier: 'ECONOMY',
+          rating: 5,
+          completedJobs: 30,
+          yearsExperience: 6,
+          description: 'Digital ads only',
+          pastProjectType: 'marketing',
+          bio: 'Marketing team',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          servicePostalCode: '10330',
+          priceList: [
+            {
+              service: 'image ads',
+              quantity: '1',
+              unit: 'image',
+              finalPrice: '2000',
+            },
+          ],
+          user: { name: 'Digital Only', email: 'digital@example.com' },
+          skills: [{ category: 'DIGITAL_MARKETING', name: 'image ads' }],
+        },
+      ]);
+
+      const result = await service.matchFixers(
+        'project',
+        'Pathum Wan',
+        'Bangkok',
+        'Need 1000 sq.m. office fitout work',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'project',
+      );
+
+      expect(result.map((candidate: { id: string }) => candidate.id)).toEqual([
+        'premium-fitout',
+        'budget-fitout',
+        'standard-fitout',
+      ]);
+      expect(
+        result.map((candidate: { id: string }) => candidate.id),
+      ).not.toContain('ghost-provider');
+      expect(
+        result.map((candidate: { id: string }) => candidate.id),
+      ).not.toContain('digital-only');
+      expect(result[0]?.selectedReason).toContain('Typhoon: Best balance');
+    });
+
+    it('uses deterministic Top-8 matching when Typhoon API key is missing', async () => {
+      prisma.fixer.findMany.mockResolvedValue([
+        {
+          id: 'budget-fitout',
+          tier: 'ECONOMY',
+          rating: 4.6,
+          completedJobs: 3,
+          yearsExperience: 4,
+          description: 'Budget office fitout team',
+          pastProjectType: 'fitout',
+          bio: 'Office fitout delivery',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          servicePostalCode: '10330',
+          priceList: [
+            {
+              service: 'Fit out',
+              quantity: '1',
+              unit: 'sq.m.',
+              finalPrice: '25000',
+            },
+          ],
+          user: { name: 'Budget Fitout', email: 'budget@example.com' },
+          skills: [{ category: 'FITOUT', name: 'FITOUT' }],
+        },
+        {
+          id: 'premium-fitout',
+          tier: 'CORPORATE',
+          rating: 5,
+          completedJobs: 20,
+          yearsExperience: 12,
+          description: 'Corporate office fitout team',
+          pastProjectType: 'fitout',
+          bio: 'Office fitout delivery',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          servicePostalCode: '10330',
+          priceList: [
+            {
+              service: 'Fit out',
+              quantity: '1',
+              unit: 'sq.m.',
+              finalPrice: '32000',
+            },
+          ],
+          user: { name: 'Premium Fitout', email: 'premium@example.com' },
+          skills: [{ category: 'FITOUT', name: 'FITOUT' }],
+        },
+      ]);
+
+      const result = await service.matchFixers(
+        'project',
+        'Pathum Wan',
+        'Bangkok',
+        'Need 1000 sq.m. office fitout work',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'project',
+      );
+
+      expect(httpService.post).not.toHaveBeenCalled();
+      expect(result[0]).toEqual(
+        expect.objectContaining({
+          id: 'budget-fitout',
+          estimatedTotal: 25000000,
+        }),
+      );
+    });
     it('should include Bangkok project providers in another district when GPS is absent', async () => {
       prisma.fixer.findMany.mockResolvedValue([
         {
