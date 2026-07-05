@@ -385,6 +385,7 @@ jobs:
             MAILJET_SECRET_SUBACCOUNT_KEY_RUNTIME=$(resolve_runtime_env MAILJET_SECRET_SUBACCOUNT_KEY)
             MAILJET_FROM_EMAIL_RUNTIME=$(resolve_runtime_env MAILJET_FROM_EMAIL)
             MAILJET_SENDER_EMAIL_RUNTIME=$(resolve_runtime_env MAILJET_SENDER_EMAIL)
+            CBLUE_BRIDGE_API_KEY_RUNTIME=$(resolve_runtime_env CBLUE_BRIDGE_API_KEY)
 
             if [ -z "$MAILJET_API_SUBACCOUNT_KEY_RUNTIME" ]; then MAILJET_API_SUBACCOUNT_KEY_RUNTIME="$MAILJET_API_KEY_RUNTIME"; fi
             if [ -z "$MAILJET_SECRET_SUBACCOUNT_KEY_RUNTIME" ]; then MAILJET_SECRET_SUBACCOUNT_KEY_RUNTIME="$MAILJET_SECRET_KEY_RUNTIME"; fi
@@ -415,6 +416,7 @@ jobs:
                 -e MAILJET_SENDER_EMAIL="$MAILJET_SENDER_EMAIL_RUNTIME" \
                 -e RESET_PASSWORD_DEBUG_HEADER=true \
                 -e FRONTEND_URL="https://cblue.co.th" \
+                -e CBLUE_BRIDGE_API_KEY="$CBLUE_BRIDGE_API_KEY_RUNTIME" \
                 -e PORT=3002 -e NODE_ENV=production \
                 --restart unless-stopped \
                 "$IMAGE" 2>&1 || {
@@ -564,6 +566,7 @@ jobs:
                 -e MAILJET_SENDER_EMAIL="$MAILJET_SENDER_EMAIL_RUNTIME" \
                 -e RESET_PASSWORD_DEBUG_HEADER=true \
                 -e FRONTEND_URL="https://cblue.co.th" \
+                -e CBLUE_BRIDGE_API_KEY="$CBLUE_BRIDGE_API_KEY_RUNTIME" \
                 -e PORT=3002 -e NODE_ENV=production \
                 "$IMAGE" 2>&1
 

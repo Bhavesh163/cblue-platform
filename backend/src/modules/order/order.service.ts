@@ -5,7 +5,7 @@ import {
   ForbiddenException,
   Logger,
 } from '@nestjs/common';
-import { OrderStatus, UserRole } from '@prisma/client';
+import { OrderStatus, Prisma, UserRole } from '@prisma/client';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -13,6 +13,7 @@ import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { CreateOrderChatMessageDto } from './dto/create-order-chat-message.dto';
 import { UploadOrderAttachmentDto } from './dto/upload-order-attachment.dto';
 import { UploadOrderAttachmentsBatchDto } from './dto/upload-order-attachments-batch.dto';
+import { UpdateOrderBudgetBreakdownDto } from './dto/update-order-budget-breakdown.dto';
 
 // Valid status transitions
 const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
@@ -91,6 +92,12 @@ export class OrderService {
         isUrgent: dto.isUrgent ?? false,
         scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : null,
         estimatedPrice: dto.estimatedPrice,
+        ...(dto.budgetBreakdown
+          ? {
+              budgetBreakdown:
+                dto.budgetBreakdown as unknown as Prisma.InputJsonValue,
+            }
+          : {}),
         fixerId: dto.fixerId || null,
         statusHistory: {
           create: {
@@ -128,13 +135,35 @@ export class OrderService {
       orderId: order.id,
       userId,
       serviceCategory: dto.serviceCategory,
-      addressId: dto.addressId,
+      addressId,
       isUrgent: dto.isUrgent,
     });
 
     return order;
   }
 
+  async updateBudgetBreakdown(
+    orderId: string,
+    userId: string,
+    dto: UpdateOrderBudgetBreakdownDto,
+  ) {
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, userId },
+      select: { id: true },
+    });
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    return this.prisma.order.update({
+      where: { id: order.id },
+      data: {
+        budgetBreakdown:
+          dto.budgetBreakdown as unknown as Prisma.InputJsonValue,
+      },
+      select: { id: true, budgetBreakdown: true, updatedAt: true },
+    });
+  }
   async findById(orderId: string) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
@@ -221,7 +250,8 @@ export class OrderService {
         fixer: order.fixer
           ? {
               ...order.fixer,
-              user: fixerUserMap.get(String(order.fixer.userId || '').trim()) ||
+              user:
+                fixerUserMap.get(String(order.fixer.userId || '').trim()) ||
                 null,
             }
           : null,
@@ -311,7 +341,9 @@ export class OrderService {
       });
     }
 
-    const customerIds = Array.from(new Set(orders.map((order) => order.userId)));
+    const customerIds = Array.from(
+      new Set(orders.map((order) => order.userId)),
+    );
     let customers: any[] = [];
     try {
       customers = customerIds.length
@@ -343,7 +375,8 @@ export class OrderService {
   }
 
   private async getOrderForParticipant(orderId: string, userId: string) {
-    let order: { id: string; userId: string; fixerId: string | null } | null = null;
+    let order: { id: string; userId: string; fixerId: string | null } | null =
+      null;
     try {
       order = await this.prisma.order.findUnique({
         where: { id: orderId },
@@ -419,7 +452,9 @@ export class OrderService {
       }
 
       const senderIds = Array.from(
-        new Set(messages.map((message) => message.senderUserId).filter(Boolean)),
+        new Set(
+          messages.map((message) => message.senderUserId).filter(Boolean),
+        ),
       );
       let senders: any[] = [];
       try {
@@ -513,7 +548,8 @@ export class OrderService {
       };
     }
 
-    let senderProfile: { name: string | null; email: string | null } | null = null;
+    let senderProfile: { name: string | null; email: string | null } | null =
+      null;
     try {
       senderProfile = await this.prisma.user.findUnique({
         where: { id: userId },

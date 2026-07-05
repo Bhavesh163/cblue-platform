@@ -26,6 +26,7 @@ describe('OrderService', () => {
       },
       address: {
         findFirst: jest.fn(),
+        create: jest.fn(),
       },
       fixer: {
         findUnique: jest.fn(),
@@ -92,6 +93,33 @@ describe('OrderService', () => {
       expect(eventEmitter.emit).toHaveBeenCalledWith(
         'order.created',
         expect.objectContaining({ orderId: 'order-1' }),
+      );
+    });
+
+    it('should emit the resolved fallback address id when no address id is provided', async () => {
+      const address = { id: 'addr-created', userId: 'user-1' };
+      const order = {
+        id: 'order-1',
+        userId: 'user-1',
+        addressId: address.id,
+        status: OrderStatus.CREATED,
+      };
+
+      prisma.address.create.mockResolvedValue(address);
+      prisma.order.create.mockResolvedValue(order);
+
+      await service.create('user-1', {
+        orderType: 'PROJECT' as never,
+        serviceCategory: 'Fit-out',
+        description: 'Need 10 sq.m. office fit out',
+      });
+
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'order.created',
+        expect.objectContaining({
+          orderId: 'order-1',
+          addressId: 'addr-created',
+        }),
       );
     });
   });

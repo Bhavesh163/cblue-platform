@@ -19,6 +19,7 @@ import { PropertyModule } from './modules/property/property.module';
 import { PropertyInquiryModule } from './modules/property-inquiry/property-inquiry.module';
 import { SubscriptionModule } from './modules/subscription/subscription.module';
 import { QueueModule } from './queue/queue.module';
+import { BlueBridgeModule } from './modules/blue-bridge/blue-bridge.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -57,6 +58,7 @@ import configuration from './config/configuration';
     PropertyModule,
     PropertyInquiryModule,
     SubscriptionModule,
+    BlueBridgeModule,
   ],
   controllers: [AppController],
   providers: [

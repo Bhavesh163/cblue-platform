@@ -267,6 +267,7 @@ model Order {
   scheduledAt     DateTime?
   estimatedPrice  Float?
   finalPrice      Float?
+  budgetBreakdown Json?
 
   statusHistory OrderStatusHistory[]
   payment       Payment?

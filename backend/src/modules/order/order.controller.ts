@@ -13,6 +13,7 @@ import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { CreateOrderChatMessageDto } from './dto/create-order-chat-message.dto';
 import { UploadOrderAttachmentDto } from './dto/upload-order-attachment.dto';
 import { UploadOrderAttachmentsBatchDto } from './dto/upload-order-attachments-batch.dto';
+import { UpdateOrderBudgetBreakdownDto } from './dto/update-order-budget-breakdown.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -84,6 +85,14 @@ export class OrderController {
     return this.orderService.uploadOrderAttachments(orderId, userId, dto);
   }
 
+  @Put(':orderId/budget-breakdown')
+  updateBudgetBreakdown(
+    @Param('orderId') orderId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto: UpdateOrderBudgetBreakdownDto,
+  ) {
+    return this.orderService.updateBudgetBreakdown(orderId, userId, dto);
+  }
   @Get(':orderId')
   findById(@Param('orderId') orderId: string) {
     return this.orderService.findById(orderId);
