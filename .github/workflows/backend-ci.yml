@@ -132,7 +132,11 @@ jobs:
           if [ -z "${{ secrets.DROPLET_HOST }}" ]; then
             echo "⚠️ DROPLET_HOST secret not configured — skipping deploy"
             echo "Add secrets in GitHub → Settings → Secrets and variables → Actions"
-            echo "Required: DROPLET_HOST, DROPLET_USER, DROPLET_SSH_KEY"
+            echo "Required: DROPLET_HOST, DROPLET_USER, DROPLET_SSH_KEY, CBLUE_BRIDGE_API_KEY"
+            echo "has_secrets=false" >> "$GITHUB_OUTPUT"
+          elif [ -z "${{ secrets.CBLUE_BRIDGE_API_KEY }}" ]; then
+            echo "CBLUE_BRIDGE_API_KEY secret not configured - skipping deploy"
+            echo "Set it to the exact same raw value used by BLUE, without quotes or trailing spaces"
             echo "has_secrets=false" >> "$GITHUB_OUTPUT"
           else
             echo "has_secrets=true" >> "$GITHUB_OUTPUT"
@@ -175,11 +179,12 @@ jobs:
           MAILJET_SECRET_SUBACCOUNT_KEY: ${{ secrets.MAILJET_SECRET_SUBACCOUNT_KEY || secrets.MAILJET_SECRET_KEY }}
           MAILJET_FROM_EMAIL: ${{ secrets.MAILJET_FROM_EMAIL || vars.MAILJET_FROM_EMAIL }}
           MAILJET_SENDER_EMAIL: ${{ secrets.MAILJET_SENDER_EMAIL || secrets.MAILJET_FROM_EMAIL || vars.MAILJET_SENDER_EMAIL || vars.MAILJET_FROM_EMAIL }}
+          CBLUE_BRIDGE_API_KEY: ${{ secrets.CBLUE_BRIDGE_API_KEY }}
         with:
           host: ${{ secrets.DROPLET_HOST }}
           username: ${{ secrets.DROPLET_USER }}
           key: ${{ secrets.DROPLET_SSH_KEY }}
-          envs: GH_TOKEN,GH_REPO,DEPLOY_SHA,MAILJET_API_KEY,MAILJET_SECRET_KEY,MAILJET_API_SUBACCOUNT_KEY,MAILJET_SECRET_SUBACCOUNT_KEY,MAILJET_FROM_EMAIL,MAILJET_SENDER_EMAIL
+          envs: GH_TOKEN,GH_REPO,DEPLOY_SHA,MAILJET_API_KEY,MAILJET_SECRET_KEY,MAILJET_API_SUBACCOUNT_KEY,MAILJET_SECRET_SUBACCOUNT_KEY,MAILJET_FROM_EMAIL,MAILJET_SENDER_EMAIL,CBLUE_BRIDGE_API_KEY
           command_timeout: 120m
           script: |
             set -e
