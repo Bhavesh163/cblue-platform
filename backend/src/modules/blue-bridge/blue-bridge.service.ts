@@ -199,11 +199,37 @@ function parseBudgetItems(value: Prisma.JsonValue | null): BudgetItem[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((item) => {
     if (!isRecord(item)) return [];
-    const service = stringValue(item.service);
-    const unit = stringValue(item.unit);
-    const qty = numberValue(item.qty);
-    const unitRate = numberValue(item.unitRate);
-    const total = numberValue(item.total);
+    const service = firstStringValue(item, [
+      'service',
+      'item',
+      'name',
+      'label',
+    ]);
+    const unit = firstStringValue(item, ['unit', 'unitLabel', 'uom']);
+    const qty = firstNumberValue(item, ['qty', 'quantity', 'count']);
+    const storedUnitRate = firstNumberValue(item, [
+      'unitRate',
+      'rate',
+      'pricePerUnit',
+    ]);
+    const storedTotal = firstNumberValue(item, [
+      'total',
+      'amount',
+      'lineTotal',
+      'estimatedTotal',
+    ]);
+    const unitRate =
+      storedUnitRate >= 0
+        ? storedUnitRate
+        : qty > 0 && storedTotal >= 0
+          ? Math.round(storedTotal / qty)
+          : -1;
+    const total =
+      storedTotal >= 0
+        ? storedTotal
+        : qty >= 0 && unitRate >= 0
+          ? Math.round(qty * unitRate)
+          : -1;
     if (!service || !unit || qty < 0 || unitRate < 0 || total < 0) return [];
     return [{ service, qty, unit, unitRate, total }];
   });
@@ -269,6 +295,28 @@ function cleanProjectDetails(description: string): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function firstStringValue(
+  record: Record<string, unknown>,
+  keys: string[],
+): string {
+  for (const key of keys) {
+    const value = stringValue(record[key]);
+    if (value) return value;
+  }
+  return '';
+}
+
+function firstNumberValue(
+  record: Record<string, unknown>,
+  keys: string[],
+): number {
+  for (const key of keys) {
+    const value = numberValue(record[key]);
+    if (value >= 0) return value;
+  }
+  return -1;
 }
 
 function stringValue(value: unknown): string {
