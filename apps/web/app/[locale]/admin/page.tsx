@@ -231,7 +231,7 @@ export default function AdminPage() {
   const router = useRouter();
   const prefix = "/" + locale;
 
-  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [recaptchaToken, setRecaptchaToken] = useState("");
   const [otpSent, setOtpSent] = useState(false);
@@ -315,11 +315,11 @@ export default function AdminPage() {
 
   async function handleSendOtp(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const normalizedPhone = phone.trim();
+    const normalizedEmail = email.trim().toLowerCase();
     setAuthError("");
 
-    if (!/^(\+66|0)\d{8,9}$/.test(normalizedPhone)) {
-      setAuthError("Please enter a valid Thai admin phone number.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      setAuthError("Please enter a valid admin email address.");
       return;
     }
     if (!recaptchaToken) {
@@ -330,7 +330,7 @@ export default function AdminPage() {
     setAuthLoading(true);
     try {
       await postJson("/auth/admin/otp/send", {
-        phone: normalizedPhone,
+        email: normalizedEmail,
         recaptchaToken,
       });
       setOtpSent(true);
@@ -344,7 +344,7 @@ export default function AdminPage() {
 
   async function handleVerifyOtp(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const normalizedPhone = phone.trim();
+    const normalizedEmail = email.trim().toLowerCase();
     const normalizedOtp = otp.trim();
     setAuthError("");
 
@@ -356,7 +356,7 @@ export default function AdminPage() {
     setAuthLoading(true);
     try {
       const data = await postJson<AuthResponse>("/auth/admin/otp/verify", {
-        phone: normalizedPhone,
+        email: normalizedEmail,
         code: normalizedOtp,
       });
       if (!data.accessToken || data.user?.role !== "ADMIN") {
@@ -401,7 +401,7 @@ export default function AdminPage() {
 
           <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="text-xl font-bold text-slate-950">Admin login</h2>
-            <p className="mt-1 text-sm text-slate-500">Use the phone number of a CBLUE user with role ADMIN.</p>
+            <p className="mt-1 text-sm text-slate-500">Use the email address of a CBLUE user with role ADMIN.</p>
 
             {authError && (
               <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
@@ -412,16 +412,16 @@ export default function AdminPage() {
             {!otpSent ? (
               <form onSubmit={handleSendOtp} className="mt-5 space-y-4" noValidate>
                 <div>
-                  <label htmlFor="admin-phone" className="block text-sm font-semibold text-slate-700">
-                    Admin phone
+                  <label htmlFor="admin-email" className="block text-sm font-semibold text-slate-700">
+                    Admin email
                   </label>
                   <input
-                    id="admin-phone"
-                    type="tel"
-                    inputMode="tel"
-                    value={phone}
-                    onChange={(event) => setPhone(event.target.value)}
-                    placeholder="0812345678"
+                    id="admin-email"
+                    type="email"
+                    inputMode="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="admin@example.com"
                     className="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                   />
                 </div>
@@ -433,7 +433,7 @@ export default function AdminPage() {
                   disabled={authLoading || !recaptchaToken}
                   className="w-full rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                 >
-                  {authLoading ? "Sending OTP..." : "Send admin OTP"}
+                  {authLoading ? "Sending OTP..." : "Send admin email OTP"}
                 </button>
               </form>
             ) : (
@@ -468,7 +468,7 @@ export default function AdminPage() {
                   }}
                   className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                 >
-                  Use another phone
+                  Use another email
                 </button>
               </form>
             )}
@@ -486,7 +486,7 @@ export default function AdminPage() {
             <p className="text-sm font-semibold text-sky-700">CBLUE.co.th + BLUE service operations</p>
             <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-950">Admin Control Center</h1>
             <p className="mt-2 text-sm text-slate-500">
-              Signed in as {adminUser?.name || adminUser?.phone || "admin"}. Protected by ADMIN role APIs.
+              Signed in as {adminUser?.name || adminUser?.email || adminUser?.phone || "admin"}. Protected by ADMIN role APIs.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">

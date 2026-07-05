@@ -13,6 +13,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { RecaptchaService } from './recaptcha.service';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { SendAdminOtpDto } from './dto/send-admin-otp.dto';
+import { VerifyAdminOtpDto } from './dto/verify-admin-otp.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { MAX_OTP_ATTEMPTS, OTP_COOLDOWN_SECONDS } from '../../common/constants';
 import { JwtPayload } from './strategies/jwt.strategy';
@@ -33,19 +35,26 @@ export class AuthService {
     return this.createOtp(phone, 'OTP sent successfully');
   }
 
-  async sendAdminOtp(dto: SendOtpDto) {
-    const phone = this.normalizePhone(dto.phone);
+  async sendAdminOtp(dto: SendAdminOtpDto) {
+    const email = this.normalizeEmail(dto.email);
     await this.recaptchaService.verify(dto.recaptchaToken, 'admin_login');
 
-    const admin = await this.prisma.user.findUnique({ where: { phone } });
+    const admin = await this.prisma.user.findUnique({ where: { email } });
     if (!admin || !admin.isActive || admin.role !== UserRole.ADMIN) {
       throw new UnauthorizedException('Admin access required');
     }
 
-    return this.createOtp(phone, 'Admin OTP sent successfully');
+    return this.createOtp(email, 'Admin OTP sent successfully', {
+      email,
+      purpose: 'admin_login',
+    });
   }
 
-  private async createOtp(phone: string, message: string) {
+  private async createOtp(
+    phone: string,
+    message: string,
+    delivery?: { email: string; purpose: 'admin_login' },
+  ) {
     // Check cooldown - prevent rapid OTP requests
     const recentOtp = await this.prisma.otpCode.findFirst({
       where: {
@@ -75,8 +84,9 @@ export class AuthService {
       },
     });
 
-    // In development, log OTP. In production, send via SMS provider.
-    if (this.configService.get('nodeEnv') === 'development') {
+    if (delivery?.email) {
+      await this.sendAdminOtpEmail(delivery.email, code);
+    } else if (this.configService.get('nodeEnv') === 'development') {
       this.logger.log(`[DEV] OTP for ${phone}: ${code}`);
     } else {
       // TODO: Integrate SMS provider (Twilio / AWS SNS)
@@ -117,11 +127,11 @@ export class AuthService {
     };
   }
 
-  async verifyAdminOtp(dto: VerifyOtpDto) {
-    const phone = this.normalizePhone(dto.phone);
-    await this.verifyOtpCode(phone, dto.code);
+  async verifyAdminOtp(dto: VerifyAdminOtpDto) {
+    const email = this.normalizeEmail(dto.email);
+    await this.verifyOtpCode(email, dto.code);
 
-    const user = await this.prisma.user.findUnique({ where: { phone } });
+    const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user || !user.isActive || user.role !== UserRole.ADMIN) {
       throw new UnauthorizedException('Admin access required');
     }
@@ -137,6 +147,7 @@ export class AuthService {
       user: {
         id: user.id,
         phone: user.phone,
+        email: user.email,
         role: user.role,
         name: user.name,
       },
@@ -176,6 +187,50 @@ export class AuthService {
       where: { id: otpRecord.id },
       data: { verified: true },
     });
+  }
+
+  private async sendAdminOtpEmail(email: string, code: string) {
+    const apiKey = this.configService.get<string>('mailjet.apiKey') || '';
+    const apiSecret = this.configService.get<string>('mailjet.apiSecret') || '';
+    const fromEmail =
+      this.configService.get<string>('mailjet.fromEmail') || 'noreply@lblue.tech';
+    const nodeEnv = this.configService.get<string>('nodeEnv') || 'development';
+
+    if (!apiKey || !apiSecret) {
+      if (nodeEnv === 'production') {
+        throw new BadRequestException('Admin OTP email is not configured');
+      }
+      this.logger.log(`[DEV] Admin OTP for ${email}: ${code}`);
+      return;
+    }
+
+    const response = await fetch('https://api.mailjet.com/v3.1/send', {
+      method: 'POST',
+      headers: {
+        Authorization:
+          'Basic ' + Buffer.from(`${apiKey}:${apiSecret}`).toString('base64'),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        Messages: [
+          {
+            From: { Email: fromEmail, Name: 'CBLUE Admin' },
+            To: [{ Email: email }],
+            Subject: 'CBLUE admin login OTP',
+            TextPart: `Your CBLUE admin login OTP is ${code}. It expires in a few minutes.`,
+            HTMLPart: `<p>Your CBLUE admin login OTP is <strong>${code}</strong>.</p><p>It expires in a few minutes.</p>`,
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      this.logger.warn(
+        `Admin OTP email send failed for ${email}: ${response.status} ${errorText}`,
+      );
+      throw new BadRequestException('Unable to send admin OTP email');
+    }
   }
 
   async refreshToken(dto: RefreshTokenDto) {
@@ -237,5 +292,9 @@ export class AuthService {
       return '+66' + phone.slice(1);
     }
     return phone;
+  }
+
+  private normalizeEmail(email: string): string {
+    return email.trim().toLowerCase();
   }
 }

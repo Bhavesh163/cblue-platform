@@ -2,6 +2,8 @@ import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { SendAdminOtpDto } from './dto/send-admin-otp.dto';
+import { VerifyAdminOtpDto } from './dto/verify-admin-otp.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 
 @Controller('auth')
@@ -16,7 +18,7 @@ export class AuthController {
 
   @Post('admin/otp/send')
   @HttpCode(HttpStatus.OK)
-  sendAdminOtp(@Body() dto: SendOtpDto) {
+  sendAdminOtp(@Body() dto: SendAdminOtpDto) {
     return this.authService.sendAdminOtp(dto);
   }
 
@@ -28,7 +30,7 @@ export class AuthController {
 
   @Post('admin/otp/verify')
   @HttpCode(HttpStatus.OK)
-  verifyAdminOtp(@Body() dto: VerifyOtpDto) {
+  verifyAdminOtp(@Body() dto: VerifyAdminOtpDto) {
     return this.authService.verifyAdminOtp(dto);
   }
 
