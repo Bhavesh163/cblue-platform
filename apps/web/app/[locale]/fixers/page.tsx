@@ -24,6 +24,7 @@ import {
   filterPartnerWorkflowItems,
   isPartnerWorkflowItemForScope,
 } from "../../../lib/partnerWorkflowScope";
+import { shouldPreservePartnerDashboardState } from "../../../lib/partnerDashboardState";
 import {
   buildMeetingConfirmedAlert,
   collectTerminalWorkflowPos,
@@ -2615,6 +2616,29 @@ export default function FixerProPage() {
         // Eagerly set state from localStorage to prevent flash of logged-out state
         const storedPartner = readPartnerDashboardSubscriber();
         const storedAccess = inferStoredPartnerAccess(storedPartner);
+        const preserveCachedPartnerDashboard = (reason: string) => {
+          if (!isMounted) return false;
+          const preserve = shouldPreservePartnerDashboardState({
+            reason,
+            hasStoredPartner: Boolean(storedPartner),
+            hadFixerAccess: isFixer || storedAccess.isFixer,
+            hadListerAccess: isLister || storedAccess.isLister,
+            hadVisibleOrders: orders.length > 0,
+            hadVisibleProperties: myProperties.length > 0,
+          });
+          if (!preserve) return false;
+          if (storedPartner) {
+            setPartner(prev => {
+              if (prev?.id && storedPartner.id !== prev.id) return prev;
+              return storedPartner;
+            });
+          }
+          setIsFixer(prev => prev || storedAccess.isFixer);
+          setIsLister(prev => prev || storedAccess.isLister);
+          setPartnerAccessChecked(true);
+          setLoading(false);
+          return true;
+        };
         if (isMounted) {
           if (storedPartner) {
             setPartner(prev => {
@@ -2652,15 +2676,12 @@ export default function FixerProPage() {
               hasLister = verifiedProperties.length > 0;
               setMyProperties(verifiedProperties);
               setIsLister(hasLister);
-            } else if (isMounted) {
+            } else if (isMounted && !preserveCachedPartnerDashboard("properties_fetch_failed")) {
               setMyProperties([]);
               setIsLister(false);
             }
           } catch {
-            if (isMounted) {
-              setMyProperties([]);
-              setIsLister(false);
-            }
+            preserveCachedPartnerDashboard("properties_fetch_failed");
           }
           return { hasLister };
         };
@@ -2721,13 +2742,7 @@ export default function FixerProPage() {
         });
 
         if (!res) {
-          if (isMounted) {
-            if (storedPartner) {
-              setPartner(prev => {
-                if (prev?.id && storedPartner.id !== prev.id) return prev;
-                return storedPartner;
-              });
-            }
+          if (isMounted && !preserveCachedPartnerDashboard("profile_fetch_failed")) {
             setOrders([]);
             setMyProperties([]);
             setIsFixer(false);
@@ -2772,7 +2787,7 @@ export default function FixerProPage() {
             setIsLister(false);
             setPartnerAccessChecked(true);
           }
-        } else if (isMounted) {
+        } else if (isMounted && !preserveCachedPartnerDashboard("profile_fetch_failed")) {
           setOrders([]);
           setMyProperties([]);
           setIsFixer(false);
