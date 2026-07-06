@@ -317,5 +317,70 @@ describe('BlueBridgeService', () => {
     expect(result.budgetLines.join(' ')).not.toContain('2,606');
     expect(result.budgetLines.join(' ')).not.toContain('4,636');
   });
+  it('uses wrapped stored selection budget items without parsing title or description', async () => {
+    const prisma = {
+      subscriber: { findFirst: jest.fn().mockResolvedValue(null) },
+      user: { findMany: jest.fn().mockResolvedValue([{ id: 'user-1' }]) },
+      order: {
+        findFirst: jest.fn().mockResolvedValue({
+          description:
+            'PO-2607-0001 | Title says 2607 pages and 4636 sq.m. but must not be parsed',
+          budgetBreakdown: {
+            source: 'step-2-selection',
+            items: [
+              {
+                service: 'Fit-out',
+                quantity: 600,
+                unit: 'sq.m.',
+                unitPrice: 28000,
+                total: 16800000,
+              },
+            ],
+          },
+          user: { name: 'Customer', email: 'customer@example.com' },
+          address: {
+            unit: null,
+            building: null,
+            street: null,
+            subdistrict: 'Saphansong',
+            district: 'Wang Thonglang',
+            province: 'Bangkok',
+            postalCode: '10310',
+            latitude: null,
+            longitude: null,
+          },
+          images: [],
+        }),
+      },
+    } as unknown as PrismaService;
+    const service = new BlueBridgeService(
+      prisma,
+      new ConfigService({ blueBridge: { apiKey: 'bridge-key' } }),
+    );
+
+    const result = await service.workflowDetails({
+      poNumber: 'PO-2607-0001',
+      legacySubjectId: 'user-1',
+      bridgeKey: 'bridge-key',
+    });
+
+    expect(result.budgetBreakdown).toEqual([
+      {
+        service: 'Fit-out',
+        qty: 600,
+        unit: 'sq.m.',
+        unitRate: 28000,
+        total: 16800000,
+      },
+    ]);
+    expect(result.budgetLines).toEqual([
+      '1) Fit-out 600 sq.m. \u00d7 \u0e3f28,000',
+      '= \u0e3f16,800,000',
+      'Budget',
+      '= \u0e3f16,800,000',
+    ]);
+    expect(result.budgetLines.join(' ')).not.toContain('2,607');
+    expect(result.budgetLines.join(' ')).not.toContain('4,636');
+  });
 
 });

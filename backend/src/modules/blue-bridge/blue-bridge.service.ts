@@ -196,8 +196,7 @@ export class BlueBridgeService {
 }
 
 function parseBudgetItems(value: Prisma.JsonValue | null): BudgetItem[] {
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((item) => {
+  return budgetItemRows(value).flatMap((item) => {
     if (!isRecord(item)) return [];
     const service = firstStringValue(item, [
       'service',
@@ -209,6 +208,7 @@ function parseBudgetItems(value: Prisma.JsonValue | null): BudgetItem[] {
     const qty = firstNumberValue(item, ['qty', 'quantity', 'count']);
     const storedUnitRate = firstNumberValue(item, [
       'unitRate',
+      'unitPrice',
       'rate',
       'pricePerUnit',
     ]);
@@ -233,6 +233,24 @@ function parseBudgetItems(value: Prisma.JsonValue | null): BudgetItem[] {
     if (!service || !unit || qty < 0 || unitRate < 0 || total < 0) return [];
     return [{ service, qty, unit, unitRate, total }];
   });
+}
+
+function budgetItemRows(value: Prisma.JsonValue | null): Prisma.JsonValue[] {
+  if (Array.isArray(value)) return value;
+  if (!isRecord(value)) return [];
+
+  for (const key of [
+    'items',
+    'budgetBreakdown',
+    'breakdown',
+    'lineItems',
+    'estimatedBreakdown',
+  ]) {
+    const candidate = value[key];
+    if (Array.isArray(candidate)) return candidate;
+  }
+
+  return [];
 }
 
 function formatBudgetLines(items: BudgetItem[]): string[] {
