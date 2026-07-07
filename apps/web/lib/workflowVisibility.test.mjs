@@ -15,6 +15,7 @@ import {
   pruneWorkflowStorage,
   readBrowserTerminalWorkflowPos,
   setWorkflowStorageItem,
+  filterWorkflowItemsByKnownBackendPos,
 } from "./workflowVisibility.js";
 
 function fakeStorage(entries, options = {}) {
@@ -343,6 +344,20 @@ test("filters terminal workflow requests without hiding completed jobs awaiting 
   assert.deepEqual(visible, ["PO-2606-1111", "PO-2606-2222"]);
 });
 
+test("keeps partner workflow rows visible during transient empty backend PO refresh", () => {
+  const rows = [
+    { po: "PO-2607-8341", title: "SAFETY_OFFICER", step: 5 },
+    { po: "PO-2607-9999", title: "Other customer", step: 5 },
+  ];
+
+  const visible = filterWorkflowItemsByKnownBackendPos(rows, {
+    allowLocalCustomerWorkflow: false,
+    backendPoValues: [],
+    fallbackBackendPoValues: ["PO-2607-8341"],
+  }).map((item) => item.po);
+
+  assert.deepEqual(visible, ["PO-2607-8341"]);
+});
 test("preserves terminal customer history entries during storage synchronization", () => {
   const history = normalizeWorkflowHistoryItems([
     {

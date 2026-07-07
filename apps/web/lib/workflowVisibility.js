@@ -189,6 +189,33 @@ export function filterLiveWorkflowItems(items = [], terminalPoValues = []) {
   });
 }
 
+function normalizeWorkflowPoSet(values = []) {
+  const source = values instanceof Set ? [...values] : Array.from(values || []);
+  return new Set(source.map(normalizeWorkflowPo).filter(Boolean));
+}
+
+export function filterWorkflowItemsByKnownBackendPos(
+  items = [],
+  {
+    allowLocalCustomerWorkflow = false,
+    backendPoValues = [],
+    fallbackBackendPoValues = [],
+  } = {},
+) {
+  const backendPos = normalizeWorkflowPoSet(backendPoValues);
+  const fallbackPos = normalizeWorkflowPoSet(fallbackBackendPoValues);
+  const knownBackendPos = backendPos.size > 0 ? backendPos : fallbackPos;
+
+  return (Array.isArray(items) ? items : []).filter((item) => {
+    const po = normalizeWorkflowPo(
+      item?.po || item?.poNumber || item?.id || item?.description || item?.desc || item,
+    );
+    if (!po) return allowLocalCustomerWorkflow;
+    if (po.startsWith("PRE-")) return true;
+    if (knownBackendPos.size === 0) return allowLocalCustomerWorkflow;
+    return knownBackendPos.has(po);
+  });
+}
 export function normalizeWorkflowHistoryItems(items = []) {
   if (!Array.isArray(items)) return [];
   const byKey = new Map();

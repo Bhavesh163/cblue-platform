@@ -9,6 +9,7 @@ import {
   buildMeetingConfirmedAlert,
   collectTerminalWorkflowPos,
   filterLiveWorkflowItems,
+  filterWorkflowItemsByKnownBackendPos,
   isCompletedAwaitingWorkflowRating,
   isWorkflowMeetingCardVisible,
   isTerminalWorkflowStatus,
@@ -1494,6 +1495,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   // Property inquiry workflow state (cblue_prop_inquiries — not ghis-gated)
   interface PropInquiry { id: string; poNumber: string; propertyId: string; propertyTitle: string; propertyTier: string; propertyFee: number; propertyType: string; listingType: string; propertyPrice: number; province: string; district: string; subdistrict?: string; addressLine?: string; latitude?: number | null; longitude?: number | null; area?: number | null; bedrooms?: number | null; bathrooms?: number | null; propertyImages?: string[]; customerEmail: string; customerName: string; listerName: string; status: string; step: number; createdAt: number; updatedAt: number; meetingDate?: string; meetingTime?: string; meetingVenue?: string; customerRating?: number | null; customerComment?: string; listerRating?: number | null; listerComment?: string; reselectedOnce?: boolean; }
   const [propInquiries, setPropInquiries] = useState<PropInquiry[]>([]);
+  const lastKnownBackendOrderPosRef = useRef<Set<string>>(new Set());
   const [propPayModal, setPropPayModal] = useState<PropInquiry | null>(null);
   const [propMeetingModal, setPropMeetingModal] = useState<PropInquiry | null>(null);
   const [propModalImages, setPropModalImages] = useState<string[]>([]);
@@ -1903,6 +1905,28 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   };
   const isPoCode = (value: string) => isValidPoCode(value);
   const workflowOrders = (orders || []).filter((order: any) => !isHiddenTestPo(extractPo(order)));
+  const workflowScopeKey = String(subscriber?.id || subscriber?.email || '').trim().toLowerCase();
+  const workflowKnownPoStorageKey = workflowScopeKey ? `cblue_live_workflow_pos_${workflowScopeKey}` : '';
+
+  useEffect(() => {
+    const currentBackendPos = new Set(
+      (orders || [])
+        .map((order: any) => extractPo(order))
+        .filter((po: string) => isPoCode(po)),
+    );
+    if (currentBackendPos.size === 0) return;
+    lastKnownBackendOrderPosRef.current = currentBackendPos;
+    try {
+      if (workflowKnownPoStorageKey) {
+        localStorage.setItem(
+          workflowKnownPoStorageKey,
+          JSON.stringify([...currentBackendPos]),
+        );
+      }
+    } catch {
+      // Keep the in-memory fallback even if storage is unavailable.
+    }
+  }, [orders, workflowKnownPoStorageKey]);
   const filterVisibleWorkflowItems = (items: any[], terminalPoValues: Set<string> | string[] = []) =>
     filterLiveWorkflowItems(items, terminalPoValues).filter((item: any) => !isHiddenTestPo(item?.po));
   const filterVisibleActiveWorkflowItems = (items: any[], terminalPoValues: Set<string> | string[] = []) =>
@@ -3155,15 +3179,23 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   ];
 
   const backendOrderPos = new Set(workflowOrders.map((o: any) => extractPo(o)).filter((po: string) => isPoCode(po)));
+  const fallbackBackendOrderPos = (() => {
+    if (backendOrderPos.size > 0) return backendOrderPos;
+    if (lastKnownBackendOrderPosRef.current.size > 0) return lastKnownBackendOrderPosRef.current;
+    if (typeof window === 'undefined' || !workflowKnownPoStorageKey) return new Set<string>();
+    try {
+      const parsed = JSON.parse(localStorage.getItem(workflowKnownPoStorageKey) || '[]');
+      return new Set(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      return new Set<string>();
+    }
+  })();
   const allowLocalCustomerWorkflow = Boolean(subscriber?.email?.toLowerCase().includes('ghis'));
   const filterCustomerScopedWorkflowItems = (items: any[]) =>
-    (Array.isArray(items) ? items : []).filter((item: any) => {
-      const po = String(item?.po || '').trim();
-      if (!po) return allowLocalCustomerWorkflow;
-      if (isPropPoCode(po)) return true;
-      if (!isPoCode(po)) return allowLocalCustomerWorkflow;
-      if (backendOrderPos.size === 0) return allowLocalCustomerWorkflow;
-      return backendOrderPos.has(po);
+    filterWorkflowItemsByKnownBackendPos(items, {
+      allowLocalCustomerWorkflow,
+      backendPoValues: backendOrderPos,
+      fallbackBackendPoValues: fallbackBackendOrderPos,
     });
   const useStaticDemoData = allowLocalCustomerWorkflow && !hasFetchedOrders && backendOrderPos.size === 0;
   const browserTerminalPOs = readBrowserTerminalWorkflowPos(
