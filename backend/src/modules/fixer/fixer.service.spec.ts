@@ -1845,6 +1845,103 @@ describe('FixerService', () => {
         }),
       );
     });
+
+    it('matches shorthand plumbing requests to water pipe price-list rows', async () => {
+      prisma.fixer.findMany.mockResolvedValue([
+        {
+          id: 'pipe-team',
+          tier: 'STANDARD',
+          rating: 4.8,
+          completedJobs: 12,
+          yearsExperience: 6,
+          description: 'Water pipe repair specialist',
+          pastProjectType: 'plumbing',
+          bio: 'Home water pipe team',
+          serviceProvince: '\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23',
+          serviceDistrict: '\u0e27\u0e31\u0e07\u0e17\u0e2d\u0e07\u0e2b\u0e25\u0e32\u0e07',
+          servicePostalCode: '10310',
+          priceList: [
+            {
+              service: 'water pipe repair',
+              quantity: '1',
+              unit: 'job',
+              finalPrice: '2500',
+            },
+          ],
+          user: { name: 'Pipe Team' },
+          skills: [{ category: 'household', name: 'water pipe repair' }],
+        },
+        {
+          id: 'ads-team',
+          tier: 'STANDARD',
+          rating: 5,
+          completedJobs: 20,
+          yearsExperience: 8,
+          description: 'Digital ads team',
+          pastProjectType: 'marketing',
+          bio: 'Image ads and social media',
+          serviceProvince: '\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23',
+          serviceDistrict: '\u0e27\u0e31\u0e07\u0e17\u0e2d\u0e07\u0e2b\u0e25\u0e32\u0e07',
+          servicePostalCode: '10310',
+          priceList: [
+            {
+              service: 'image ads',
+              quantity: '1',
+              unit: 'image',
+              finalPrice: '2000',
+            },
+          ],
+          user: { name: 'Ads Team' },
+          skills: [{ category: 'marketing', name: 'image ads' }],
+        },
+      ]);
+
+      const result = await service.matchFixers(
+        'home services',
+        '\u0e27\u0e31\u0e07\u0e17\u0e2d\u0e07\u0e2b\u0e25\u0e32\u0e07',
+        '\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23',
+        'Need plumb repair 3 jobs',
+        undefined,
+        '10310',
+        undefined,
+        undefined,
+        'household',
+      );
+
+      expect(result.map((candidate: { id: string }) => candidate.id)).toContain(
+        'pipe-team',
+      );
+      expect(
+        result.find((candidate: { id: string }) => candidate.id === 'ads-team'),
+      ).toBeUndefined();
+      expect(
+        result.find((candidate: { id: string }) => candidate.id === 'pipe-team'),
+      ).toHaveProperty('estimatedBreakdown', [
+        {
+          service: 'water pipe repair',
+          qty: 3,
+          unit: 'job',
+          unitRate: 2500,
+          total: 7500,
+        },
+      ]);
+
+      const thaiTypoResult = await service.matchFixers(
+        'home services',
+        '\u0e27\u0e31\u0e07\u0e17\u0e2d\u0e07\u0e2b\u0e25\u0e32\u0e07',
+        '\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23',
+        '\u0e07\u0e32\u0e19\u0e1b\u0e1b\u0e23\u0e30\u0e1b\u0e32 3 \u0e07\u0e32\u0e19',
+        undefined,
+        '10310',
+        undefined,
+        undefined,
+        'household',
+      );
+
+      expect(
+        thaiTypoResult.map((candidate: { id: string }) => candidate.id),
+      ).toContain('pipe-team');
+    });
     it('keeps selected-location household jobs in the same district outside province-wide exceptions', async () => {
       prisma.fixer.findMany.mockResolvedValue([
         {

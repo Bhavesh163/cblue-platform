@@ -5,6 +5,8 @@
  * and a partner's priceList, without relying on possibly-stale backend data.
  */
 
+import { normalizeBudgetServiceText } from './budgetSynonyms';
+
 export type BudgetBreakdownItem = {
   service: string;
   qty: number;
@@ -91,18 +93,17 @@ const parseVariationPriceListLine = (value: string): VariationPriceListItem | nu
 };
 
 const normalizeBudgetText = (value: unknown): string =>
-  String(value || '')
-    .toLowerCase()
-    .replace(/fit\s*[-\s]?out/g, 'fitout')
-    .replace(/re\s*instate(ment)?/g, 'reinstatement');
+  normalizeBudgetServiceText(String(value || ''));
 
 const CONTEXT_BREAK_PATTERN = /(?:,|;|\n|\b(?:and|plus|พร้อม|และ)\b)/i;
+const CONTEXT_BREAK_GLOBAL_PATTERN = /(?:,|;|\n|\b(?:and|plus|พร้อม|และ)\b)/gi;
 
 const trimContextWindow = (
   text: string,
   startIdx: number,
   maxEndIdx: number,
   contentStartIdx: number = startIdx,
+  previousPairEndIdx: number = 0,
 ): string => {
   const hardEnd = maxEndIdx > startIdx ? maxEndIdx : text.length;
   const boundarySlice = text.slice(contentStartIdx, hardEnd);
@@ -110,7 +111,15 @@ const trimContextWindow = (
   const endIdx = boundaryMatch?.index != null
     ? contentStartIdx + boundaryMatch.index
     : hardEnd;
-  return text.slice(startIdx, endIdx).trim();
+
+  const beforeSlice = text.slice(previousPairEndIdx, startIdx);
+  let contextStartIdx = previousPairEndIdx;
+  CONTEXT_BREAK_GLOBAL_PATTERN.lastIndex = 0;
+  for (const match of beforeSlice.matchAll(CONTEXT_BREAK_GLOBAL_PATTERN)) {
+    contextStartIdx = previousPairEndIdx + (match.index ?? 0) + match[0].length;
+  }
+
+  return text.slice(contextStartIdx, endIdx).trim();
 };
 
 /**
@@ -138,13 +147,13 @@ export function computeBudgetBreakdown(
   const cleanDesc = normalizeBudgetText(stripPrefix(description));
 
   // ── Strict pass ──────────────────────────────────────────────────────────
-  const strictPat = /(\d[\d,]*\.?\d*)\s*(sqm|m2|sq\.?m\.?|m²|ตร\.?ม\.?|ตารางเมตร|sq\.?ft\.?|unit)/gi;
-  const pairs: Array<{ qty: number; idx: number; contentStartIdx: number }> = [];
+  const strictPat = /(\d[\d,]*\.?\d*)\s*(sqm|m2|sq\.?m\.?|m²|ตร\.?ม\.?|ตารางเมตร|sq\.?ft\.?|unit|page|pages|faq|faqs)/gi;
+  const pairs: Array<{ qty: number; idx: number; contentStartIdx: number; endIdx: number }> = [];
   let m: RegExpExecArray | null;
   while ((m = strictPat.exec(cleanDesc)) !== null) {
     const qty = parseFloat((m[1] ?? '').replace(/,/g, ''));
     if (!isNaN(qty) && qty > 0 && qty < 1_000_000) {
-      pairs.push({ qty, idx: m.index, contentStartIdx: strictPat.lastIndex });
+      pairs.push({ qty, idx: m.index, contentStartIdx: strictPat.lastIndex, endIdx: strictPat.lastIndex });
     }
   }
 
@@ -153,7 +162,8 @@ export function computeBudgetBreakdown(
   const loosePat = /(?<!\d)(\d{2,6})(?!\s*(?:sqm|m2|sq\.?m|m²|ตร|unit|,\d|[.,]\d))/gi;
   const filler = new Set([
     'and', 'the', 'a', 'an', 'of', 'in', 'at', 'for', 'with', 'to',
-    'sqm', 'sq', 'm2', 'unit', 'units', 'per', 'i', 'have', 'want', 'need',
+    'sqm', 'sq', 'm2', 'unit', 'units', 'page', 'pages', 'faq', 'faqs',
+    'per', 'i', 'have', 'want', 'need', 'team', 'teams', 'carry', 'out', 'work', 'works',
   ]);
   const tokenize = (text: string) =>
     text.split(/[\s.,]+/).filter(t => t.length > 1 && !filler.has(t) && isNaN(parseFloat(t)));
@@ -196,7 +206,7 @@ export function computeBudgetBreakdown(
     const toks = tokenize(win);
     // Only include if context scores against at least one priceList service
     if (findBestServiceMatch(toks)) {
-      pairs.push({ qty, idx: lm.index, contentStartIdx: loosePat.lastIndex });
+      pairs.push({ qty, idx: lm.index, contentStartIdx: loosePat.lastIndex, endIdx: loosePat.lastIndex });
     }
   }
 
@@ -209,11 +219,13 @@ export function computeBudgetBreakdown(
     const pair = pairs[i]!;
     const nextPair = pairs[i + 1];
     const end = nextPair ? nextPair.idx : cleanDesc.length;
+    const previousEnd = pairs[i - 1]?.endIdx ?? 0;
     const window = trimContextWindow(
       cleanDesc,
       pair.idx,
       end,
       pair.contentStartIdx,
+      previousEnd,
     );
     const localTokens = tokenize(window);
     const tokens = localTokens.length > 0
