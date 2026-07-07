@@ -18,6 +18,7 @@ import {
   type VariationPriceListItem,
 } from "../../../lib/computeBudgetBreakdown";
 import { readStoredPoProjectDetails, storePoProjectDetails } from "../../../lib/po-project-details";
+import { fetchPartnerDashboardWithAuthRetry } from "../../../lib/partnerDashboardAuth";
 import { clearSubscriberSession, refreshSubscriberSession } from "../../../lib/subscriberSession";
 import {
   buildPartnerWorkflowScope,
@@ -1139,37 +1140,15 @@ const fetchWithSubscriberAuthRetry = async ({
 }: {
   endpoint: string;
   token?: string;
-}) => {
-  if (typeof window === 'undefined') {
-    return { token: '', response: null as Response | null };
-  }
-
-  let authToken = String(token || getPartnerDashboardToken() || '').trim();
-  if (!authToken) {
-    return { token: '', response: null as Response | null };
-  }
-
-  const send = async (bearerToken: string) => {
-    try {
-      return await fetch(endpoint, {
-        headers: { Authorization: `Bearer ${bearerToken}` },
-      });
-    } catch {
-      return null;
-    }
-  };
-
-  let response = await send(authToken);
-  if (response && [401, 403].includes(response.status)) {
-    const refreshed = await refreshSubscriberSession(authToken);
-    if (refreshed) {
-      authToken = refreshed;
-      response = await send(authToken);
-    }
-  }
-
-  return { token: authToken, response };
-};
+}) =>
+  fetchPartnerDashboardWithAuthRetry({
+    endpoint,
+    token,
+    getToken: getPartnerDashboardToken,
+    refreshSession: refreshSubscriberSession,
+    readSubscriber: readPartnerDashboardSubscriber,
+    writeSession: writePartnerDashboardSession,
+  }) as Promise<{ token: string; response: Response | null }>;
 const rememberPoOrderId = (po: any, orderId: any) => {
   const poKey = normalizePoLookupValue(po);
   const resolvedOrderId = String(orderId || '').trim();
@@ -2656,12 +2635,14 @@ export default function FixerProPage() {
         const refreshPartnerData = async (access = storedAccess, authToken: string = token, owner: any = storedPartner) => {
           let hasLister = false;
           try {
-            const [ordersRes, propRes] = await Promise.all([
-              access.isFixer
-                ? fetch("/api/v1/orders/fixer", { headers: { Authorization: `Bearer ${authToken}` } }).catch(() => null)
-                : Promise.resolve(null),
-              fetch("/api/v1/properties/my", { headers: { Authorization: `Bearer ${authToken}` } }).catch(() => null),
-            ]);
+            let activeToken = authToken;
+            const ordersAttempt = access.isFixer
+              ? await fetchWithSubscriberAuthRetry({ endpoint: "/api/v1/orders/fixer", token: activeToken })
+              : { token: activeToken, response: null as Response | null };
+            activeToken = ordersAttempt.token || activeToken;
+            const propAttempt = await fetchWithSubscriberAuthRetry({ endpoint: "/api/v1/properties/my", token: activeToken });
+            const ordersRes = ordersAttempt.response;
+            const propRes = propAttempt.response;
 
             if (ordersRes && ordersRes.ok && isMounted) {
               setOrders(await ordersRes.json());
@@ -2810,16 +2791,14 @@ export default function FixerProPage() {
         const token = getPartnerDashboardToken();
         if (!token || !partnerAccessChecked || (!isFixer && !isLister)) return;
 
-        const [ordersRes, propRes] = await Promise.all([
-          isFixer
-            ? fetch("/api/v1/orders/fixer", {
-                headers: { Authorization: `Bearer ${token}` },
-              }).catch(() => null)
-            : Promise.resolve(null),
-          fetch("/api/v1/properties/my", {
-            headers: { Authorization: `Bearer ${token}` },
-          }).catch(() => null),
-        ]);
+        let activeToken = token;
+        const ordersAttempt = isFixer
+          ? await fetchWithSubscriberAuthRetry({ endpoint: "/api/v1/orders/fixer", token: activeToken })
+          : { token: activeToken, response: null as Response | null };
+        activeToken = ordersAttempt.token || activeToken;
+        const propAttempt = await fetchWithSubscriberAuthRetry({ endpoint: "/api/v1/properties/my", token: activeToken });
+        const ordersRes = ordersAttempt.response;
+        const propRes = propAttempt.response;
 
         if (ordersRes && ordersRes.ok && isMounted) {
           const nextOrders = await ordersRes.json();
