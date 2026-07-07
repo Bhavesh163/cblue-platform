@@ -1942,6 +1942,147 @@ describe('FixerService', () => {
         thaiTypoResult.map((candidate: { id: string }) => candidate.id),
       ).toContain('pipe-team');
     });
+
+    it('matches expanded home-service typos to exact price-list items only', async () => {
+      prisma.fixer.findMany.mockResolvedValue([
+        {
+          id: 'electric-team',
+          tier: 'STANDARD',
+          rating: 4.8,
+          completedJobs: 12,
+          yearsExperience: 6,
+          description: 'Electrical wiring specialist',
+          pastProjectType: 'household',
+          bio: 'Home electrical team',
+          serviceProvince: '\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23',
+          serviceDistrict: '\u0e27\u0e31\u0e07\u0e17\u0e2d\u0e07\u0e2b\u0e25\u0e32\u0e07',
+          servicePostalCode: '10310',
+          priceList: [
+            { service: 'electrical wiring', quantity: '1', unit: 'job', finalPrice: '1800' },
+          ],
+          user: { name: 'Electric Team' },
+          skills: [{ category: 'household', name: 'electrical wiring' }],
+        },
+        {
+          id: 'roof-team',
+          tier: 'STANDARD',
+          rating: 4.7,
+          completedJobs: 9,
+          yearsExperience: 5,
+          description: 'Roof leak and waterproofing specialist',
+          pastProjectType: 'household',
+          bio: 'Roofing repair team',
+          serviceProvince: '\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23',
+          serviceDistrict: '\u0e27\u0e31\u0e07\u0e17\u0e2d\u0e07\u0e2b\u0e25\u0e32\u0e07',
+          servicePostalCode: '10310',
+          priceList: [
+            { service: 'roof leak waterproofing', quantity: '1', unit: 'sq.m.', finalPrice: '900' },
+          ],
+          user: { name: 'Roof Team' },
+          skills: [{ category: 'household', name: 'roof leak waterproofing' }],
+        },
+        {
+          id: 'ads-team',
+          tier: 'STANDARD',
+          rating: 5,
+          completedJobs: 20,
+          yearsExperience: 8,
+          description: 'Digital ads team',
+          pastProjectType: 'marketing',
+          bio: 'Image ads and social media',
+          serviceProvince: '\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23',
+          serviceDistrict: '\u0e27\u0e31\u0e07\u0e17\u0e2d\u0e07\u0e2b\u0e25\u0e32\u0e07',
+          servicePostalCode: '10310',
+          priceList: [
+            { service: 'image ads', quantity: '1', unit: 'image', finalPrice: '2000' },
+          ],
+          user: { name: 'Ads Team' },
+          skills: [{ category: 'marketing', name: 'image ads' }],
+        },
+      ]);
+
+      const result = await service.matchFixers(
+        'home services',
+        '\u0e27\u0e31\u0e07\u0e17\u0e2d\u0e07\u0e2b\u0e25\u0e32\u0e07',
+        '\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23',
+        'Need electrial wirring 2 jobs and roof leak waterproofing 30 sq.m.',
+        undefined,
+        '10310',
+        undefined,
+        undefined,
+        'household',
+      );
+
+      const ids = result.map((candidate: { id: string }) => candidate.id);
+      expect(ids).toContain('electric-team');
+      expect(ids).toContain('roof-team');
+      expect(ids).not.toContain('ads-team');
+      expect(
+        result.find((candidate: { id: string }) => candidate.id === 'electric-team'),
+      ).toHaveProperty('estimatedBreakdown', [
+        { service: 'electrical wiring', qty: 2, unit: 'job', unitRate: 1800, total: 3600 },
+      ]);
+    });
+
+    it('matches digital service typos without forcing unrelated lower-value offers', async () => {
+      prisma.fixer.findMany.mockResolvedValue([
+        {
+          id: 'web-team',
+          tier: 'STANDARD',
+          rating: 4.9,
+          completedJobs: 18,
+          yearsExperience: 7,
+          description: 'Website and chatbot delivery',
+          pastProjectType: 'digital',
+          bio: 'Web and automation team',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          priceList: [
+            { service: 'website development', quantity: '1', unit: 'page', finalPrice: '1000' },
+            { service: 'chatbot development', quantity: '100', unit: 'FAQ', finalPrice: '10000' },
+          ],
+          user: { name: 'Web Team' },
+          skills: [{ category: 'project', name: 'website development' }],
+        },
+        {
+          id: 'pipe-team',
+          tier: 'STANDARD',
+          rating: 4.8,
+          completedJobs: 12,
+          yearsExperience: 6,
+          description: 'Water pipe repair specialist',
+          pastProjectType: 'plumbing',
+          bio: 'Home water pipe team',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          priceList: [
+            { service: 'water pipe repair', quantity: '1', unit: 'job', finalPrice: '2500' },
+          ],
+          user: { name: 'Pipe Team' },
+          skills: [{ category: 'household', name: 'water pipe repair' }],
+        },
+      ]);
+
+      const result = await service.matchFixers(
+        'project',
+        'Pathum Wan',
+        'Bangkok',
+        'Need webiste 10 pages and chat boot 100 FAQ.',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'project',
+      );
+
+      expect(result.map((candidate: { id: string }) => candidate.id)).toEqual([
+        'web-team',
+      ]);
+      expect(result[0]).toHaveProperty('estimatedBreakdown', [
+        { service: 'website development', qty: 10, unit: 'page', unitRate: 1000, total: 10000 },
+        { service: 'chatbot development', qty: 100, unit: 'FAQ', unitRate: 100, total: 10000 },
+      ]);
+    });
     it('keeps selected-location household jobs in the same district outside province-wide exceptions', async () => {
       prisma.fixer.findMany.mockResolvedValue([
         {
