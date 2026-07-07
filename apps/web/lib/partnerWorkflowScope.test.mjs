@@ -3,7 +3,9 @@ import test from "node:test";
 
 import {
   buildPartnerWorkflowScope,
+  filterBlockedPartnerAdvancedItems,
   filterPartnerWorkflowItems,
+  isPartnerPreAcceptanceWorkflowItem,
   isPartnerWorkflowItemForScope,
 } from "./partnerWorkflowScope.js";
 
@@ -56,4 +58,28 @@ test("keeps explicitly addressed pending accept cards visible before backend pol
   };
 
   assert.equal(isPartnerWorkflowItemForScope(request, scope), true);
+});
+
+test("blocks stale advanced partner cards when backend still requires PO acceptance", () => {
+  const backendPendingAccept = {
+    po: "PO-2607-8341",
+    type: "pending_accept",
+    status: "PENDING",
+    step: 5,
+    service: "SAFETY OFFICER",
+  };
+  const staleMeetingConfirm = {
+    po: "PO-2607-8341",
+    type: "meeting_confirm_partner",
+    workflowType: "meeting_confirm_partner",
+    status: "MEETING_REQUESTED",
+    step: 8,
+    desc: "Customer sent a site meeting invitation.",
+  };
+
+  assert.equal(isPartnerPreAcceptanceWorkflowItem(backendPendingAccept), true);
+  assert.deepEqual(
+    filterBlockedPartnerAdvancedItems([staleMeetingConfirm, { po: "PO-2607-9999", type: "meeting_confirm_partner", step: 8 }], [backendPendingAccept]),
+    [{ po: "PO-2607-9999", type: "meeting_confirm_partner", step: 8 }],
+  );
 });

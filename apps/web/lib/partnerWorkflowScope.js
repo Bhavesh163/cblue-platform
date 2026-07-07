@@ -155,3 +155,62 @@ export function isPartnerWorkflowItemForScope(item, scope) {
 export function filterPartnerWorkflowItems(items, scope) {
   return (Array.isArray(items) ? items : []).filter((item) => isPartnerWorkflowItemForScope(item, scope));
 }
+const PARTNER_PRE_ACCEPTANCE_STATUSES = new Set(["CREATED", "PENDING", "MATCHING"]);
+const PARTNER_ADVANCED_TYPES = new Set([
+  "meeting_confirm_partner",
+  "variation_partner",
+  "complete_partner",
+  "rate_partner",
+]);
+const PARTNER_ADVANCED_STATUSES = new Set([
+  "MEETING_REQUESTED",
+  "MEETING_CONFIRMED",
+  "VARIATION_PENDING",
+  "COMPLETE_PENDING",
+]);
+
+function workflowTypeOf(item) {
+  return normalizeText(item?.workflowType || item?.type || "");
+}
+
+function workflowStatusOf(item) {
+  return String(item?.status || "").trim().toUpperCase();
+}
+
+function workflowStepOf(item) {
+  const parsed = Number(item?.step || item?.mockStep || 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function isPartnerPreAcceptanceWorkflowItem(item) {
+  if (!item || typeof item !== "object") return false;
+  const type = workflowTypeOf(item);
+  if (type === "pending_accept") return true;
+  const status = workflowStatusOf(item);
+  if (PARTNER_PRE_ACCEPTANCE_STATUSES.has(status)) return true;
+  const step = workflowStepOf(item);
+  return step > 0 && step <= 5 && !isPartnerAdvancedWorkflowItem(item);
+}
+
+export function isPartnerAdvancedWorkflowItem(item) {
+  if (!item || typeof item !== "object") return false;
+  const type = workflowTypeOf(item);
+  if (PARTNER_ADVANCED_TYPES.has(type)) return true;
+  const status = workflowStatusOf(item);
+  if (PARTNER_ADVANCED_STATUSES.has(status)) return true;
+  return workflowStepOf(item) >= 8;
+}
+
+export function filterBlockedPartnerAdvancedItems(items = [], preAcceptanceItems = []) {
+  const blockedPos = new Set(
+    (Array.isArray(preAcceptanceItems) ? preAcceptanceItems : [])
+      .filter(isPartnerPreAcceptanceWorkflowItem)
+      .map((item) => normalizePo(item?.po || item?.poNumber || item?.id))
+      .filter(Boolean),
+  );
+  if (blockedPos.size === 0) return Array.isArray(items) ? items : [];
+  return (Array.isArray(items) ? items : []).filter((item) => {
+    const po = normalizePo(item?.po || item?.poNumber || item?.id);
+    return !(po && blockedPos.has(po) && isPartnerAdvancedWorkflowItem(item));
+  });
+}

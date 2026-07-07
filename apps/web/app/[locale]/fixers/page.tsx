@@ -21,6 +21,7 @@ import { readStoredPoProjectDetails, storePoProjectDetails } from "../../../lib/
 import { clearSubscriberSession, refreshSubscriberSession } from "../../../lib/subscriberSession";
 import {
   buildPartnerWorkflowScope,
+  filterBlockedPartnerAdvancedItems,
   filterPartnerWorkflowItems,
   isPartnerWorkflowItemForScope,
 } from "../../../lib/partnerWorkflowScope";
@@ -3806,6 +3807,12 @@ export default function FixerProPage() {
           // non-blocking
         }
 
+        const beforeBlockedAdvancedCleanup = partnerReqs.length;
+        partnerReqs = filterBlockedPartnerAdvancedItems(partnerReqs, mappedOrders);
+        if (partnerReqs.length !== beforeBlockedAdvancedCleanup) {
+          try { partnerReqs = persistWorkflowCacheItems('partner_mock_dyn_req', partnerReqs); } catch {}
+        }
+
         const beforeStaleCleanup = partnerReqs.length;
         partnerReqs = partnerReqs.filter((req: any) => {
           if (isClosedPartnerWorkflowPo(req?.po)) return false;
@@ -3905,12 +3912,17 @@ export default function FixerProPage() {
   activeJobs = activeJobs.map(job => {
       const stepLookup = mockActiveState.find((x: any) => x.po === job.po);
       const backendStep = getWorkflowStepFromStatus(job.status);
-      const partnerWorkflowStep = Math.max(0, ...partnerDynReqs.filter((x: any) => x.po === job.po).map((x: any) => parseWorkflowStep(x.step)));
+      const visiblePartnerDynReqs = filterBlockedPartnerAdvancedItems(
+        partnerDynReqs.filter((x: any) => x.po === job.po),
+        [job],
+      );
+      const partnerWorkflowStep = Math.max(0, ...visiblePartnerDynReqs.map((x: any) => parseWorkflowStep(x.step)));
       const localSubmittedStep = getPartnerPinnedWorkflowStep(job.po);
       const waitingCustomerStep =
         completeWaitingCustomerPos.has(job.po) ? 10 :
         variationWaitingCustomerPos.has(job.po) ? 9 : 0;
-      const step = Math.max(parseWorkflowStep(stepLookup?.step), backendStep, partnerWorkflowStep, localSubmittedStep, waitingCustomerStep);
+      const blockedStepLookup = filterBlockedPartnerAdvancedItems(stepLookup ? [stepLookup] : [], [job])[0];
+      const step = Math.max(parseWorkflowStep(blockedStepLookup?.step), backendStep, partnerWorkflowStep, localSubmittedStep, waitingCustomerStep);
       const meetingConfirmPendingFromStep =
         step === 8 &&
         !mockDynReqs.some((req: any) => req?.po === job.po && String(req?.type || req?.workflowType || '').toLowerCase() === 'meeting_scheduled') &&
@@ -3920,7 +3932,7 @@ export default function FixerProPage() {
         !chatFeed.some((chat: any) => chat?.po === job.po && /partner confirmed site meeting|meeting confirmed by partner/i.test(String(chat?.lastMsg || '')));
       // For partner view: actionNeeded = partner has a pending workflow request OR backend requires partner action
       // Exclude accept_sent which is a permanent marker, not an action item
-      const hasPartnerDynAction = partnerDynReqs.some((r: any) => r.po === job.po && r.type !== 'accept_sent');
+      const hasPartnerDynAction = visiblePartnerDynReqs.some((r: any) => r.po === job.po && r.type !== 'accept_sent');
       const partnerActionNeeded = hasPartnerDynAction ||
         String(job.status || '').toUpperCase() === 'MEETING_REQUESTED' ||
         backendStep === 5 ||
@@ -4214,8 +4226,9 @@ export default function FixerProPage() {
     }
     return 0;
   };
+  const localWorkflowActiveJobsForMerge = filterBlockedPartnerAdvancedItems(localWorkflowActiveJobs, mappedOrders);
   const mergedActiveJobs = new Map<string, any>();
-  [...activeJobs, ...backendCompletedAwaitingRatingJobs, ...localWorkflowActiveJobs, ...propActiveJobs].forEach((job: any) => {
+  [...activeJobs, ...backendCompletedAwaitingRatingJobs, ...localWorkflowActiveJobsForMerge, ...propActiveJobs].forEach((job: any) => {
     const key = String(job?.po || job?.id || '').trim();
     if (!key || isHiddenTestPo(key) || isClosedPartnerLiveItem(job)) return;
     const existing = mergedActiveJobs.get(key);
@@ -4758,6 +4771,12 @@ export default function FixerProPage() {
         }
       }
 
+      const blockedAdvancedNext = filterBlockedPartnerAdvancedItems(next, mappedOrders);
+      if (blockedAdvancedNext.length !== next.length) {
+        next = blockedAdvancedNext;
+        changed = true;
+      }
+
       if (!changed) return prev;
       try { next = persistWorkflowCacheItems("partner_mock_dyn_req", next); } catch {}
       return next;
@@ -4855,14 +4874,19 @@ export default function FixerProPage() {
       };
     });
 
-  const partnerRequestItems = Array.from([
-    ...partnerDynReqs.filter((r: any) => {
+  const partnerDynReqsForRequests = filterBlockedPartnerAdvancedItems(
+    partnerDynReqs.filter((r: any) => {
       const po = String(r?.po || '').trim();
       const type = String(r?.workflowType || r?.type || '');
       return !['accept_sent'].includes(String(r.type || '')) && !isClosedPartnerLiveItem(r);
     }),
+    incomingJobs,
+  );
+  const activeMeetingConfirmRequestsForRequests = filterBlockedPartnerAdvancedItems(activeMeetingConfirmRequests, incomingJobs);
+  const partnerRequestItems = Array.from([
+    ...partnerDynReqsForRequests,
     ...backendCompletedAwaitingRatingRequests,
-    ...activeMeetingConfirmRequests,
+    ...activeMeetingConfirmRequestsForRequests,
     ...incomingJobs.filter((job: any) => !(String(job.status || '').toUpperCase() === 'MEETING_REQUESTED' && partnerDynReqs.some((req: any) => req.po === job.po && req.workflowType === 'meeting_confirm_partner'))),
   ].reduce((map: Map<string, any>, item: any) => {
     const key = item.po || item.id;

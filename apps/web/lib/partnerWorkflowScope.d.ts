@@ -15,3 +15,8 @@ export function buildPartnerWorkflowScope(input?: {
 export function isPartnerWorkflowItemForScope(item: any, scope: PartnerWorkflowScope): boolean;
 
 export function filterPartnerWorkflowItems(items: any[], scope: PartnerWorkflowScope): any[];
+export function isPartnerPreAcceptanceWorkflowItem(item: any): boolean;
+
+export function isPartnerAdvancedWorkflowItem(item: any): boolean;
+
+export function filterBlockedPartnerAdvancedItems(items: any[], preAcceptanceItems: any[]): any[];
