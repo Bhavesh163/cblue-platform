@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, Logger } from '@nestjs/common';
+import { ValidationPipe, Logger, RequestMethod } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
@@ -19,7 +19,13 @@ async function bootstrap() {
   app.use(helmet());
 
   // Global prefix
-  app.setGlobalPrefix('api/v1');
+  app.setGlobalPrefix('api/v1', {
+    exclude: [
+      { path: '.well-known/openid-configuration', method: RequestMethod.GET },
+      { path: 'oauth/jwks.json', method: RequestMethod.GET },
+      { path: 'oauth/token', method: RequestMethod.POST },
+    ],
+  });
 
   // CORS
   app.enableCors({

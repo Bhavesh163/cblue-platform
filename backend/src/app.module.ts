@@ -20,6 +20,7 @@ import { PropertyInquiryModule } from './modules/property-inquiry/property-inqui
 import { SubscriptionModule } from './modules/subscription/subscription.module';
 import { QueueModule } from './queue/queue.module';
 import { BlueBridgeModule } from './modules/blue-bridge/blue-bridge.module';
+import { OauthModule } from './modules/oauth/oauth.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -59,6 +60,7 @@ import configuration from './config/configuration';
     PropertyInquiryModule,
     SubscriptionModule,
     BlueBridgeModule,
+    OauthModule,
   ],
   controllers: [AppController],
   providers: [

@@ -27,10 +27,36 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     configService: ConfigService,
     private prisma: PrismaService,
   ) {
+    const legacyJwtSecret = configService.getOrThrow<string>('jwt.secret');
+    const oauthPublicKey = (configService.get<string>('oauth.publicKeyPem') || '')
+      .replace(/\\n/g, '\n')
+      .trim();
+
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.getOrThrow<string>('jwt.secret'),
+      algorithms: ['HS256', 'RS256'],
+      secretOrKeyProvider: (_request, rawJwtToken, done) => {
+        try {
+          const headerSegment = rawJwtToken?.split('.')[0] || '';
+          const header = JSON.parse(
+            Buffer.from(headerSegment, 'base64url').toString('utf8'),
+          ) as { alg?: string };
+
+          if (header.alg === 'RS256') {
+            if (!oauthPublicKey) {
+              done(new UnauthorizedException('OAuth public key is not configured'));
+              return;
+            }
+            done(null, oauthPublicKey);
+            return;
+          }
+
+          done(null, legacyJwtSecret);
+        } catch (error) {
+          done(error as Error);
+        }
+      },
     });
   }
 

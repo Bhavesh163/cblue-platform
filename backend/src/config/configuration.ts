@@ -78,6 +78,34 @@ export default () => ({
   blueBridge: {
     apiKey: process.env.CBLUE_BRIDGE_API_KEY || '',
   },
+  oauth: {
+    issuer:
+      process.env.CBLUE_OAUTH_ISSUER ||
+      process.env.FRONTEND_URL ||
+      'https://cblue.co.th',
+    keyId: process.env.CBLUE_OAUTH_KEY_ID || 'cblue-oauth-key-1',
+    privateKeyPem: process.env.CBLUE_OAUTH_PRIVATE_KEY_PEM || '',
+    publicKeyPem: process.env.CBLUE_OAUTH_PUBLIC_KEY_PEM || '',
+    accessTokenTtlSeconds: parseInt(
+      process.env.CBLUE_OAUTH_ACCESS_TOKEN_TTL_SECONDS ?? '900',
+      10,
+    ),
+    refreshEnabled:
+      (process.env.CBLUE_OAUTH_REFRESH_ENABLED || 'true').toLowerCase() ===
+      'true',
+    allowedAudiences: (
+      process.env.CBLUE_OAUTH_ALLOWED_AUDIENCES || 'CBLUE,LBLUE'
+    )
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean),
+    blueIssuer: process.env.BLUE_OIDC_ISSUER || '',
+    blueAudience: process.env.BLUE_OIDC_AUDIENCE || '',
+    blueJwksUrl: process.env.BLUE_OIDC_JWKS_URL || '',
+    blueJwksJson: process.env.BLUE_OIDC_JWKS_JSON || '',
+    blueClientId: process.env.BLUE_OAUTH_CLIENT_ID || '',
+    blueClientSecret: process.env.BLUE_OAUTH_CLIENT_SECRET || '',
+  },
   visionService: {
     url: process.env.VISION_SERVICE_URL || 'http://localhost:8010',
   },
