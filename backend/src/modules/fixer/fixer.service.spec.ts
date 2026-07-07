@@ -1163,6 +1163,82 @@ describe('FixerService', () => {
         }),
       );
     });
+    it('keeps fit-out and website lines when quantity comes before each service phrase', async () => {
+      prisma.fixer.findMany.mockResolvedValue([
+        {
+          id: 'bhavesh',
+          tier: 'ECONOMY',
+          rating: 4.9,
+          completedJobs: 0,
+          yearsExperience: 2,
+          description: 'Office fitout and website development',
+          pastProjectType: 'fitout website',
+          bio: 'Commercial fitout and web delivery',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          servicePostalCode: '10310',
+          priceList: [
+            {
+              service: 'Fit-out',
+              quantity: '1',
+              unit: 'sq.m.',
+              finalPrice: '30000',
+            },
+            {
+              service: 'Website development',
+              quantity: '1',
+              unit: 'page',
+              finalPrice: '1000',
+            },
+          ],
+          user: {
+            name: 'Bhavesh Fungprasertsuk',
+            email: 'bhaveshfung@gmail.com',
+          },
+          skills: [
+            { category: 'FITOUT', name: 'Fit-out' },
+            { category: 'WEBSITE', name: 'Website development' },
+          ],
+        },
+      ]);
+
+      const result = await service.matchFixers(
+        'SAFETY_OFFICER',
+        '??????????',
+        '?????????????',
+        'I have a 1200 sq.m fit out and 100 page website development.',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'professional',
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual(
+        expect.objectContaining({
+          id: 'bhavesh',
+          estimatedTotal: 36100000,
+          price: 36000000,
+          estimatedBreakdown: [
+            {
+              service: 'Fit-out',
+              qty: 1200,
+              unit: 'sq.m.',
+              unitRate: 30000,
+              total: 36000000,
+            },
+            {
+              service: 'Website development',
+              qty: 100,
+              unit: 'page',
+              unitRate: 1000,
+              total: 100000,
+            },
+          ],
+        }),
+      );
+    });
     it('does not allow 8th nomination to bypass area and matched fit-out price-list filters', async () => {
       const fixture = [
         {
