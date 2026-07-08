@@ -151,6 +151,74 @@ describe('BlueBridgeService', () => {
     );
   });
 
+  it('resolves workflow details when legacySubjectId is a CBLUE account email', async () => {
+    const prisma = {
+      subscriber: { findFirst: jest.fn().mockResolvedValue(null) },
+      user: { findMany: jest.fn().mockResolvedValue([{ id: 'user-email-1' }]) },
+      order: {
+        findFirst: jest.fn().mockResolvedValue({
+          description: 'PO-2606-4636 | Customer selected real budget lines',
+          budgetBreakdown: [
+            {
+              service: 'Fit-out',
+              qty: 20,
+              unit: 'sq.m.',
+              unitRate: 30000,
+              total: 600000,
+            },
+          ],
+          user: { name: 'Bhisashmintra', email: 'customer@example.com' },
+          address: {
+            unit: null,
+            building: null,
+            street: null,
+            subdistrict: 'Saphansong',
+            district: 'Wang Thonglang',
+            province: 'Bangkok',
+            postalCode: '10310',
+            latitude: null,
+            longitude: null,
+          },
+          images: [],
+        }),
+      },
+    } as unknown as PrismaService;
+    const service = new BlueBridgeService(
+      prisma,
+      new ConfigService({ blueBridge: { apiKey: 'bridge-key' } }),
+    );
+
+    const result = await service.workflowDetails({
+      poNumber: 'PO-2606-4636',
+      legacySubjectId: 'bhaveshfung@gmail.com',
+      bridgeKey: 'bridge-key',
+    });
+
+    expect(prisma.user.findMany).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        OR: expect.arrayContaining([
+          { email: { equals: 'bhaveshfung@gmail.com', mode: 'insensitive' } },
+        ]),
+      }),
+      select: { id: true },
+    });
+    expect(result.budgetBreakdown).toEqual([
+      {
+        service: 'Fit-out',
+        qty: 20,
+        unit: 'sq.m.',
+        unitRate: 30000,
+        total: 600000,
+      },
+    ]);
+    expect(result.budgetLines).toEqual([
+      '1) Fit-out 20 sq.m. × ฿30,000',
+      '= ฿600,000',
+      'Budget',
+      '= ฿600,000',
+    ]);
+  });
+
   it('returns an empty budget when Order.budgetBreakdown is missing instead of cooking values from text', async () => {
     const prisma = {
       subscriber: { findFirst: jest.fn().mockResolvedValue(null) },
@@ -382,5 +450,4 @@ describe('BlueBridgeService', () => {
     expect(result.budgetLines.join(' ')).not.toContain('2,607');
     expect(result.budgetLines.join(' ')).not.toContain('4,636');
   });
-
 });

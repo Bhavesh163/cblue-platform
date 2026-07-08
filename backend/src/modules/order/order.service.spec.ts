@@ -96,6 +96,59 @@ describe('OrderService', () => {
       );
     });
 
+    it('should persist budgetBreakdown during order creation for BLUE bridge workflow details', async () => {
+      const address = { id: 'addr-1', userId: 'user-1' };
+      const order = {
+        id: 'order-1',
+        userId: 'user-1',
+        status: OrderStatus.CREATED,
+        budgetBreakdown: [
+          {
+            service: 'Fit-out',
+            qty: 20,
+            unit: 'sq.m.',
+            unitRate: 30000,
+            total: 600000,
+          },
+        ],
+      };
+
+      prisma.address.findFirst.mockResolvedValue(address);
+      prisma.order.create.mockResolvedValue(order);
+
+      await service.create('user-1', {
+        addressId: 'addr-1',
+        orderType: 'PROJECT' as never,
+        serviceCategory: 'Fit-out',
+        description: 'PO-2607-9999 | Need 20 sq.m. office fit out',
+        budgetBreakdown: [
+          {
+            service: 'Fit-out',
+            qty: 20,
+            unit: 'sq.m.',
+            unitRate: 30000,
+            total: 600000,
+          },
+        ],
+      });
+
+      expect(prisma.order.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            budgetBreakdown: [
+              {
+                service: 'Fit-out',
+                qty: 20,
+                unit: 'sq.m.',
+                unitRate: 30000,
+                total: 600000,
+              },
+            ],
+          }),
+        }),
+      );
+    });
+
     it('should emit the resolved fallback address id when no address id is provided', async () => {
       const address = { id: 'addr-created', userId: 'user-1' };
       const order = {
@@ -168,7 +221,10 @@ describe('OrderService', () => {
     });
 
     it('should allow customer free pass to start active work from assigned payment states', async () => {
-      for (const status of [OrderStatus.ASSIGNED, OrderStatus.DEPOSIT_PENDING]) {
+      for (const status of [
+        OrderStatus.ASSIGNED,
+        OrderStatus.DEPOSIT_PENDING,
+      ]) {
         prisma.order.findUnique.mockResolvedValueOnce({
           id: 'order-1',
           userId: 'user-1',
@@ -182,7 +238,10 @@ describe('OrderService', () => {
 
         const result = await service.updateStatus(
           'order-1',
-          { status: OrderStatus.IN_PROGRESS, note: 'Customer paid processing fee' },
+          {
+            status: OrderStatus.IN_PROGRESS,
+            note: 'Customer paid processing fee',
+          },
           'user-1',
           UserRole.USER,
         );
@@ -203,7 +262,8 @@ describe('OrderService', () => {
         status: OrderStatus.MEETING_REQUESTED,
       });
 
-      const note = 'Customer sent meeting invitation: 05/06/2026 10:00 at 13.794068, 100.609587';
+      const note =
+        'Customer sent meeting invitation: 05/06/2026 10:00 at 13.794068, 100.609587';
       const result = await service.updateStatus(
         'order-1',
         { status: OrderStatus.MEETING_REQUESTED, note },
@@ -233,7 +293,9 @@ describe('OrderService', () => {
   describe('findMyFixerOrders', () => {
     it('should keep fixer orders visible when user-fixer relation lookup drifts', async () => {
       prisma.user.findUnique.mockRejectedValue(
-        new Error('The table `public.fixers` does not exist in the current database.'),
+        new Error(
+          'The table `public.fixers` does not exist in the current database.',
+        ),
       );
       prisma.fixer.findUnique.mockResolvedValue({ id: 'fixer-1' });
       prisma.order.findMany.mockResolvedValue([
@@ -246,7 +308,9 @@ describe('OrderService', () => {
         },
       ]);
       prisma.user.findMany.mockRejectedValue(
-        new Error('The column `users.company` does not exist in the current database.'),
+        new Error(
+          'The column `users.company` does not exist in the current database.',
+        ),
       );
 
       const result = await service.findMyFixerOrders('partner-user-1');
@@ -273,10 +337,14 @@ describe('OrderService', () => {
         fixerId: null,
       });
       prisma.image.findMany.mockRejectedValue(
-        new Error('The table `public.images` does not exist in the current database.'),
+        new Error(
+          'The table `public.images` does not exist in the current database.',
+        ),
       );
 
-      await expect(service.getOrderAttachments('order-1', 'user-1')).resolves.toEqual([]);
+      await expect(
+        service.getOrderAttachments('order-1', 'user-1'),
+      ).resolves.toEqual([]);
     });
   });
 });
