@@ -13,11 +13,13 @@ export class TokenExchangeDto {
   @IsString()
   audience!: string;
 
+  @IsOptional()
   @IsString()
-  client_id!: string;
+  client_id?: string;
 
+  @IsOptional()
   @IsString()
-  client_secret!: string;
+  client_secret?: string;
 
   @IsOptional()
   @IsString()

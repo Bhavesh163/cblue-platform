@@ -22,8 +22,7 @@ import { UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TokenExchangeDto } from './dto/token-exchange.dto';
 
-const TOKEN_EXCHANGE_GRANT =
-  'urn:ietf:params:oauth:grant-type:token-exchange';
+const TOKEN_EXCHANGE_GRANT = 'urn:ietf:params:oauth:grant-type:token-exchange';
 const JWT_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:jwt';
 const ACCESS_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:access_token';
 
@@ -79,7 +78,10 @@ export class OauthService {
       jwks_uri: `${issuer}/oauth/jwks.json`,
       token_endpoint: `${issuer}/oauth/token`,
       grant_types_supported: [TOKEN_EXCHANGE_GRANT],
-      token_endpoint_auth_methods_supported: ['client_secret_post'],
+      token_endpoint_auth_methods_supported: [
+        'client_secret_basic',
+        'client_secret_post',
+      ],
       subject_token_types_supported: [JWT_TOKEN_TYPE],
       response_types_supported: ['token'],
       scopes_supported: ['offline_access'],
@@ -114,7 +116,7 @@ export class OauthService {
 
   async exchangeToken(dto: TokenExchangeDto) {
     this.validateTokenExchangeRequest(dto);
-    this.validateClient(dto.client_id, dto.client_secret);
+    this.validateClient(dto.client_id || '', dto.client_secret || '');
 
     const allowedAudiences = this.allowedAudiences();
     if (!allowedAudiences.includes(dto.audience)) {
@@ -174,7 +176,8 @@ export class OauthService {
   }
 
   private validateClient(clientId: string, clientSecret: string) {
-    const expectedId = this.configService.get<string>('oauth.blueClientId') || '';
+    const expectedId =
+      this.configService.get<string>('oauth.blueClientId') || '';
     const expectedSecret =
       this.configService.get<string>('oauth.blueClientSecret') || '';
     if (
@@ -230,7 +233,10 @@ export class OauthService {
     if (!expectedIssuer || payload.iss !== expectedIssuer) {
       throw new UnauthorizedException('Invalid subject token issuer');
     }
-    if (!expectedAudience || !this.audienceMatches(payload.aud, expectedAudience)) {
+    if (
+      !expectedAudience ||
+      !this.audienceMatches(payload.aud, expectedAudience)
+    ) {
       throw new UnauthorizedException('Invalid subject token audience');
     }
     if (typeof payload.exp !== 'number' || payload.exp <= now) {
@@ -473,7 +479,10 @@ export class OauthService {
   }
 
   private accessTokenTtlSeconds() {
-    return Number(this.configService.get<number>('oauth.accessTokenTtlSeconds')) || 900;
+    return (
+      Number(this.configService.get<number>('oauth.accessTokenTtlSeconds')) ||
+      900
+    );
   }
 
   private allowedAudiences() {
@@ -482,7 +491,10 @@ export class OauthService {
     );
     if (Array.isArray(configured)) return configured;
     if (typeof configured === 'string' && configured.trim()) {
-      return configured.split(',').map((value) => value.trim()).filter(Boolean);
+      return configured
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean);
     }
     return ['CBLUE', 'LBLUE'];
   }
@@ -495,10 +507,9 @@ export class OauthService {
 
   private parseBase64Json(value: string) {
     try {
-      return JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as Record<
-        string,
-        unknown
-      >;
+      return JSON.parse(
+        Buffer.from(value, 'base64url').toString('utf8'),
+      ) as Record<string, unknown>;
     } catch {
       throw new UnauthorizedException('Invalid subject token');
     }
@@ -516,7 +527,10 @@ export class OauthService {
     return email.trim().toLowerCase();
   }
 
-  private audienceMatches(actual: string | string[] | undefined, expected: string) {
+  private audienceMatches(
+    actual: string | string[] | undefined,
+    expected: string,
+  ) {
     if (Array.isArray(actual)) return actual.includes(expected);
     return actual === expected;
   }

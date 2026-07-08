@@ -36,7 +36,9 @@ describe('OauthService', () => {
     type: 'pkcs8',
     format: 'pem',
   }) as string;
-  const bluePublicJwk = blueKeys.publicKey.export({ format: 'jwk' }) as JsonWebKey;
+  const bluePublicJwk = blueKeys.publicKey.export({
+    format: 'jwk',
+  }) as JsonWebKey;
   const cbluePrivateKey = cblueKeys.privateKey.export({
     type: 'pkcs8',
     format: 'pem',
@@ -80,7 +82,9 @@ describe('OauthService', () => {
           'oauth.blueClientId': 'blue-client',
           'oauth.blueClientSecret': 'blue-secret',
           'oauth.blueJwksJson': JSON.stringify({
-            keys: [{ ...bluePublicJwk, kid: 'blue-key', alg: 'RS256', use: 'sig' }],
+            keys: [
+              { ...bluePublicJwk, kid: 'blue-key', alg: 'RS256', use: 'sig' },
+            ],
           }),
           'oauth.privateKeyPem': cbluePrivateKey,
           'oauth.publicKeyPem': cbluePublicKey,
@@ -120,6 +124,20 @@ describe('OauthService', () => {
       ...overrides,
     });
   }
+
+  it('advertises both Basic and POST client authentication for token exchange', () => {
+    expect(service.discovery()).toEqual(
+      expect.objectContaining({
+        grant_types_supported: [
+          'urn:ietf:params:oauth:grant-type:token-exchange',
+        ],
+        token_endpoint_auth_methods_supported: [
+          'client_secret_basic',
+          'client_secret_post',
+        ],
+      }),
+    );
+  });
 
   it('exchanges a valid BLUE token for this user scoped CBLUE token', async () => {
     prisma.user.findUnique.mockResolvedValue({
@@ -168,6 +186,19 @@ describe('OauthService', () => {
     ).rejects.toThrow(UnauthorizedException);
   });
 
+  it('rejects BLUE subject tokens without a verified email', async () => {
+    await expect(
+      service.exchangeToken({
+        grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
+        subject_token_type: 'urn:ietf:params:oauth:token-type:jwt',
+        subject_token: validBlueToken({ email_verified: false }),
+        audience: 'CBLUE',
+        client_id: 'blue-client',
+        client_secret: 'blue-secret',
+      }),
+    ).rejects.toThrow(UnauthorizedException);
+  });
+
   it('rejects invalid BLUE token signatures', async () => {
     const otherKey = generateKeyPairSync('rsa', { modulusLength: 2048 });
     const invalidToken = signJwt(
@@ -209,18 +240,16 @@ describe('OauthService', () => {
   });
 
   it('maps by an existing legacy subscriber link when present', async () => {
-    prisma.user.findUnique
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({
-        id: 'linked-user',
-        email: 'partner@example.com',
-        name: 'Linked User',
-        phone: '+66810000000',
-        role: 'USER',
-        isActive: true,
-        subscriberId: 'legacy-sub-1',
-        fixer: null,
-      });
+    prisma.user.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      id: 'linked-user',
+      email: 'partner@example.com',
+      name: 'Linked User',
+      phone: '+66810000000',
+      role: 'USER',
+      isActive: true,
+      subscriberId: 'legacy-sub-1',
+      fixer: null,
+    });
 
     const result = await service.exchangeToken({
       grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
