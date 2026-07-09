@@ -403,10 +403,10 @@ export default function Home() {
               <div className="p-8">
                 <p className="text-center text-gray-600 mb-6 max-w-3xl mx-auto leading-relaxed">
                   {locale === "th"
-                    ? "สมัครเป็นพาร์ทเนอร์ CBLUE วันนี้! ระบบ AI จะประเมินโปรไฟล์และจัดอันดับคุณใน 5 ระดับ (Economy – Expert) เพื่อให้คุณได้งานที่ตรงกับทักษะ รับการแจ้งเตือนงานใหม่ทันที แชทกับลูกค้า และรับเงินผ่าน PromptPay อย่างปลอดภัย"
+                    ? "สมัครเป็นพาร์ทเนอร์ CBLUE วันนี้! ระบบ AI จะประเมินโปรไฟล์และจัดอันดับคุณใน 5 ระดับ (Economy – Expert) เพื่อให้คุณได้งานที่ตรงกับทักษะ รับการแจ้งเตือนงานใหม่ทันที พร้อมแชทกับลูกค้าและตกลงรายละเอียดกันเองได้โดยตรงโดยไม่เสียค่าใช้จ่าย"
                     : locale === "zh"
-                    ? "立即成为 CBLUE 合作伙伴！AI 系统评估您的资料并分配5个等级（Economy-Expert），匹配适合您技能的工作。即时通知、客户聊天、PromptPay安全收款"
-                    : "Join CBLUE as a partner today! Our AI system evaluates your profile and ranks you across 5 tiers (Economy – Expert) to match you with jobs that fit your skills. Instant job alerts, customer chat, and secure PromptPay payments."}
+                    ? "立即成为 CBLUE 合作伙伴！AI 系统会评估您的资料并分配 5 个等级（Economy – Expert），为您匹配符合技能的工作。即时接收新工作通知，并可直接与客户聊天、自行协商细节，且无需支付费用。"
+                    : "Join CBLUE as a partner today! Our AI system evaluates your profile and ranks you across 5 tiers (Economy – Expert) to match you with jobs that fit your skills. Receive instant job alerts, chat with customers, and agree on details directly at no cost."}
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
                   <Link href={`${prefix}/fixers`} className="bg-white rounded-xl p-5 text-center shadow-md hover:shadow-xl transition-all transform hover:-translate-y-1 border border-emerald-100 group">
