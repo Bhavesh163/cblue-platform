@@ -19,6 +19,7 @@ import {
 } from "../../../lib/computeBudgetBreakdown";
 import { readStoredPoProjectDetails, storePoProjectDetails } from "../../../lib/po-project-details";
 import { fetchPartnerDashboardWithAuthRetry } from "../../../lib/partnerDashboardAuth";
+import { toggleWorkflowModalChromeLock } from "../../../lib/workflowModalChromeLock";
 import { clearSubscriberSession, refreshSubscriberSession } from "../../../lib/subscriberSession";
 import {
   buildPartnerWorkflowScope,
@@ -358,25 +359,6 @@ const persistWorkflowCacheItems = (key: string, items: any[]) => {
     } catch {}
   }
   return normalized;
-};
-const toggleWorkflowModalChromeLock = (isOpen: boolean) => {
-  if (typeof document === 'undefined') return;
-  document.body.classList.toggle('cblue-workflow-modal-open', isOpen);
-  document.documentElement.classList.toggle('cblue-workflow-modal-open', isOpen);
-  const header = document.querySelector<HTMLElement>('[data-cblue-header-root]');
-  if (!header) return;
-  header.classList.toggle('pointer-events-none', isOpen);
-  header.classList.toggle('select-none', isOpen);
-  header.classList.toggle('blur-sm', isOpen);
-  if (isOpen) {
-    header.style.zIndex = '1';
-    header.setAttribute('aria-hidden', 'true');
-    header.setAttribute('data-modal-open', 'true');
-  } else {
-    header.style.zIndex = '';
-    header.removeAttribute('aria-hidden');
-    header.setAttribute('data-modal-open', 'false');
-  }
 };
 const parseMeetingDateTimeMs = (dateValue?: string, timeValue?: string) => {
   const date = String(dateValue || '').trim();
