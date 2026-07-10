@@ -1310,6 +1310,7 @@ const CLOSED_PARTNER_WORKFLOW_POS = new Set([
   "PO-2605-2121",
   "PO-2605-1304",
   "PO-2605-2863",
+  "PO-2606-9036",
 ]);
 const isClosedPartnerWorkflowPo = (value: any) => CLOSED_PARTNER_WORKFLOW_POS.has(String(value || '').trim().toUpperCase());
 const filterVisibleWorkflowItems = (items: any[], terminalPoValues: Set<string> | string[] = []) =>
@@ -1318,6 +1319,53 @@ const filterVisibleActiveWorkflowItems = (items: any[], terminalPoValues: Set<st
   filterVisibleWorkflowItems(items, terminalPoValues).filter((item: any) => !isLocalWorkflowHistoryStatus(item));
 const filterVisibleWorkflowHistoryItems = (items: any[]) =>
   normalizeWorkflowHistoryItems(items).filter((item: any) => !isHiddenTestPo(item?.po));
+const ensureLegacyPartnerOrphan9036Removed = () => {
+  if (typeof window === "undefined") return false;
+  const po = "PO-2606-9036";
+  const arrayKeys = [
+    "ghis_mock_active",
+    "ghis_mock_dyn_req",
+    "partner_mock_dyn_req",
+    "ghis_mock_history",
+    "partner_alerts",
+    "admin_decline_logs",
+  ];
+  let changed = false;
+  const mentionsPo = (item: any) => {
+    const text = String(item?.po || item?.poNumber || item?.id || item?.msg || item?.message || item?.title || "");
+    return text.includes(po);
+  };
+  for (const key of arrayKeys) {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+      if (!Array.isArray(parsed)) continue;
+      const filtered = parsed.filter((item: any) => !mentionsPo(item));
+      if (filtered.length !== parsed.length) {
+        writeWorkflowStorage(key, filtered);
+        changed = true;
+      }
+    } catch {
+      // Ignore malformed legacy cache entries.
+    }
+  }
+  const exactKeys = [
+    `chat_messages_${po}`,
+    `chat_title_${po}`,
+    `chat_closed_${po}`,
+    `po_to_order_${po}`,
+    `cblue_po_breakdown_${po}`,
+    `cblue_partner_pricelist_${po}`,
+    `partner_variation_sent_${po}`,
+    `partner_complete_sent_${po}`,
+  ];
+  for (const key of exactKeys) {
+    if (localStorage.getItem(key) !== null) {
+      localStorage.removeItem(key);
+      changed = true;
+    }
+  }
+  return changed;
+};
 const ensureLegacyPartnerCancel3429Repair = () => {
   if (typeof window === "undefined") return false;
   const po = "PO-2606-3429";
@@ -3640,6 +3688,7 @@ export default function FixerProPage() {
           return;
         }
         ensureLegacyPartnerCancel3429Repair();
+        ensureLegacyPartnerOrphan9036Removed();
         const partnerScope = buildPartnerWorkflowScope({ partner, subscriber: readPartnerDashboardSubscriber(), backendOrders: mappedOrders });
         const d = localStorage.getItem("ghis_mock_dyn_req"); if (d) {
           const terminalPos = readBrowserTerminalWorkflowPos(localStorage);
