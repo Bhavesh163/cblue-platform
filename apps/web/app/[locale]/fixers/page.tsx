@@ -2581,6 +2581,8 @@ export default function FixerProPage() {
         // Eagerly set state from localStorage to prevent flash of logged-out state
         const storedPartner = readPartnerDashboardSubscriber();
         const storedAccess = inferStoredPartnerAccess(storedPartner);
+        const consent = localStorage.getItem("pdpa_consent_partner");
+        if (!consent) setShowPdpa(true);
         const preserveCachedPartnerDashboard = (reason: string) => {
           if (!isMounted) return false;
           const preserve = shouldPreservePartnerDashboardState({
@@ -6212,7 +6214,7 @@ export default function FixerProPage() {
         <PdpaConsent
           locale={locale}
           prefix={prefix}
-          role="fixer"
+          role="partner"
           onAccept={(ts) => {
             localStorage.setItem("pdpa_consent_partner", ts);
             setShowPdpa(false);

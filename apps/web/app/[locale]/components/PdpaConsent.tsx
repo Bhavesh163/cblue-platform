@@ -7,7 +7,7 @@ interface PdpaConsentProps {
   locale: string;
   prefix: string;
   /** Which user role is accepting */
-  role: "customer" | "fixer" | "professional" | "property_lister";
+  role: "customer" | "partner" | "fixer" | "professional" | "property_lister";
   /** Called with timestamp when user accepts */
   onAccept: (consentTimestamp: string) => void;
   /** If true, show as inline section instead of modal */
@@ -32,6 +32,16 @@ const T: Record<string, Record<string, string>> = {
     declineBtn: "Decline",
     acceptedAt: "PDPA consent accepted on",
     role_customer: "Customer",
+    role_partner: "Partner",
+    partner_intro: "CBLUE collects, uses, and stores partner personal data to verify your identity, evaluate your tier, match you with suitable jobs, and support secure platform operations. By proceeding to the partner page, you acknowledge and consent to the following:",
+    partner_bullet1: "We collect your name, email, phone number, service areas, service preferences, price list, KYC information, credentials, portfolio, and work history to verify and match your partner profile.",
+    partner_bullet2: "Your direct contact details are not shown to customers during matching. You may chat with customers and agree work details directly when the workflow allows communication.",
+    partner_bullet3: "Your PDPA consent record will be stored for 3 years from the date of acceptance as required by Thai law.",
+    partner_bullet4: "Your profile and account may be deleted or deactivated if inactive for 12 consecutive months or if required by platform safety rules.",
+    partner_bullet5: "Service history, tier evaluation records, and transaction records will be retained for 18 months for dispute resolution, audit, safety, and compliance purposes.",
+    partner_bullet6: "You may request access, correction, or deletion of your personal data at any time at Profile or through CBLUE support, subject to lawful retention duties.",
+    partner_bullet7: "CBLUE implements industry-standard security measures including encryption, access controls, and limited-access review workflows to protect partner and customer data.",
+    partner_disclaimer: "CBLUE acts as a matching platform only. The agreed price, scope of work, schedule, work quality, and payment between the customer and partner are a direct arrangement between both parties. Partners are responsible for the accuracy of their profile, credentials, price list, licenses, tax obligations, and service performance. CBLUE may review, rank, suspend, or remove partner profiles to protect platform safety and service quality.",
     role_fixer: "Fixer / Technician",
     role_professional: "Professional",
     role_property_lister: "Property Owner / Dealer",
@@ -57,6 +67,16 @@ const T: Record<string, Record<string, string>> = {
     declineBtn: "ปฏิเสธ",
     acceptedAt: "ยินยอม PDPA เมื่อ",
     role_customer: "ลูกค้า",
+    role_partner: "พาร์ทเนอร์",
+    partner_intro: "CBLUE เก็บรวบรวม ใช้ และจัดเก็บข้อมูลส่วนบุคคลของพาร์ทเนอร์ เพื่อยืนยันตัวตน ประเมินระดับ จับคู่งานที่เหมาะสม และดูแลความปลอดภัยของแพลตฟอร์ม โดยการเข้าสู่หน้าพาร์ทเนอร์ คุณรับทราบและยินยอมดังต่อไปนี้:",
+    partner_bullet1: "เราเก็บรวบรวมชื่อ อีเมล เบอร์โทรศัพท์ พื้นที่ให้บริการ ความต้องการรับงาน รายการราคา ข้อมูล KYC เอกสารรับรอง ผลงาน และประวัติการทำงาน เพื่อยืนยันและจับคู่โปรไฟล์พาร์ทเนอร์ของคุณ",
+    partner_bullet2: "ข้อมูลติดต่อโดยตรงของคุณจะไม่แสดงต่อลูกค้าในขั้นตอนจับคู่ คุณสามารถแชทกับลูกค้าและตกลงรายละเอียดงานกันเองได้โดยตรงเมื่อขั้นตอนงานเปิดให้สื่อสาร",
+    partner_bullet3: "บันทึกความยินยอม PDPA ของคุณจะถูกจัดเก็บเป็นเวลา 3 ปี นับจากวันที่ยอมรับตามที่กฎหมายไทยกำหนด",
+    partner_bullet4: "โปรไฟล์และบัญชีของคุณอาจถูกลบหรือปิดใช้งานหากไม่มีการใช้งานติดต่อกัน 12 เดือน หรือเมื่อจำเป็นตามกฎความปลอดภัยของแพลตฟอร์ม",
+    partner_bullet5: "ประวัติบริการ บันทึกการประเมินระดับ และบันทึกธุรกรรมจะถูกเก็บรักษาไว้ 18 เดือน เพื่อการระงับข้อพิพาท ตรวจสอบ ความปลอดภัย และการปฏิบัติตามกฎหมาย",
+    partner_bullet6: "คุณสามารถขอเข้าถึง แก้ไข หรือลบข้อมูลส่วนบุคคลของคุณได้ตลอดเวลาที่โปรไฟล์หรือผ่านฝ่ายสนับสนุน CBLUE ภายใต้หน้าที่การเก็บรักษาตามกฎหมาย",
+    partner_bullet7: "CBLUE ใช้มาตรการรักษาความปลอดภัยมาตรฐานอุตสาหกรรม รวมถึงการเข้ารหัส การควบคุมการเข้าถึง และขั้นตอนตรวจสอบที่จำกัดสิทธิ์ เพื่อปกป้องข้อมูลพาร์ทเนอร์และลูกค้า",
+    partner_disclaimer: "CBLUE ทำหน้าที่เป็นแพลตฟอร์มจับคู่เท่านั้น ราคา ขอบเขตงาน ระยะเวลา คุณภาพงาน และการชำระเงินระหว่างลูกค้าและพาร์ทเนอร์เป็นข้อตกลงโดยตรงระหว่างทั้งสองฝ่าย พาร์ทเนอร์ต้องรับผิดชอบต่อความถูกต้องของโปรไฟล์ เอกสารรับรอง รายการราคา ใบอนุญาต ภาษี และคุณภาพการให้บริการของตน CBLUE อาจตรวจสอบ จัดอันดับ ระงับ หรือลบโปรไฟล์พาร์ทเนอร์เพื่อรักษาความปลอดภัยและคุณภาพของแพลตฟอร์ม",
     role_fixer: "ช่าง / ผู้ให้บริการ",
     role_professional: "มืออาชีพ",
     role_property_lister: "เจ้าของ / ตัวแทนอสังหาฯ",
@@ -82,6 +102,16 @@ const T: Record<string, Record<string, string>> = {
     declineBtn: "拒绝",
     acceptedAt: "PDPA 同意时间",
     role_customer: "客户",
+    role_partner: "合作伙伴",
+    partner_intro: "CBLUE 会收集、使用并存储合作伙伴的个人数据，用于身份验证、等级评估、工作匹配以及平台安全运营。进入合作伙伴页面即表示您知悉并同意以下内容：",
+    partner_bullet1: "我们会收集您的姓名、电子邮件、电话号码、服务区域、接单偏好、价格清单、KYC 信息、资质证明、作品集和工作经历，以验证并匹配您的合作伙伴资料。",
+    partner_bullet2: "在匹配阶段，您的直接联系方式不会显示给客户。当流程允许沟通时，您可以与客户聊天并直接协商工作细节。",
+    partner_bullet3: "您的 PDPA 同意记录将自接受之日起保存 3 年，符合泰国法律要求。",
+    partner_bullet4: "如果连续 12 个月不活跃，或根据平台安全规则需要，您的资料和账户可能被删除或停用。",
+    partner_bullet5: "服务历史、等级评估记录和交易记录将保留 18 个月，用于争议解决、审计、安全和合规。",
+    partner_bullet6: "您可以随时在个人资料或通过 CBLUE 支持请求访问、更正或删除个人数据，但须遵守法定保留义务。",
+    partner_bullet7: "CBLUE 采用行业标准安全措施，包括加密、访问控制和受限审核流程，以保护合作伙伴和客户数据。",
+    partner_disclaimer: "CBLUE 仅作为匹配平台。客户与合作伙伴之间约定的价格、工作范围、时间安排、工作质量和付款均为双方直接安排。合作伙伴须对其资料、资质、价格清单、许可证、税务义务和服务表现的准确性负责。为保护平台安全和服务质量，CBLUE 可以审核、评级、暂停或移除合作伙伴资料。",
     role_fixer: "技工",
     role_professional: "专业人士",
     role_property_lister: "业主 / 经纪人",
@@ -93,7 +123,38 @@ const T: Record<string, Record<string, string>> = {
 };
 
 export default function PdpaConsent({ locale, prefix, role, onAccept, inline }: PdpaConsentProps) {
-  const t = useCallback((key: string) => T[locale]?.[key] ?? T["en"]?.[key] ?? key, [locale]);
+  const isPartner = role === "partner";
+  const t = useCallback((key: string) => {
+    const roleKey = isPartner ? `partner_${key}` : key;
+    return T[locale]?.[roleKey] ?? T[locale]?.[key] ?? T["en"]?.[roleKey] ?? T["en"]?.[key] ?? key;
+  }, [isPartner, locale]);
+  const theme = isPartner
+    ? {
+        icon: "bg-green-100",
+        badge: "bg-green-50 border-green-200 text-green-700",
+        retention: "bg-green-50 border-green-200",
+        retentionTitle: "text-green-800",
+        retentionCard: "border-green-100",
+        retentionNumber: "text-green-700",
+        disclaimer: "bg-green-50 border-green-200",
+        disclaimerTitle: "text-green-800",
+        disclaimerText: "text-green-700",
+        link: "text-green-700 hover:underline",
+        button: "bg-green-600 hover:bg-green-700",
+      }
+    : {
+        icon: "bg-blue-100",
+        badge: "bg-sky-50 border-sky-200 text-sky-700",
+        retention: "bg-amber-50 border-amber-200",
+        retentionTitle: "text-amber-800",
+        retentionCard: "border-amber-100",
+        retentionNumber: "text-amber-700",
+        disclaimer: "bg-red-50 border-red-200",
+        disclaimerTitle: "text-red-800",
+        disclaimerText: "text-red-700",
+        link: "text-blue-600 hover:underline",
+        button: "bg-sky-600 hover:bg-sky-700",
+      };
   const [accepted, setAccepted] = useState(false);
   const [existingConsent, setExistingConsent] = useState<string | null>(null);
 
@@ -143,7 +204,7 @@ export default function PdpaConsent({ locale, prefix, role, onAccept, inline }: 
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl flex-shrink-0">🛡️</div>
+        <div className={`w-12 h-12 rounded-xl ${theme.icon} flex items-center justify-center text-2xl flex-shrink-0`}>🛡️</div>
         <div>
           <h2 className="text-lg font-bold text-gray-900">{t("title")}</h2>
           <p className="text-xs text-gray-500">{t("subtitle")}</p>
@@ -151,7 +212,7 @@ export default function PdpaConsent({ locale, prefix, role, onAccept, inline }: 
       </div>
 
       {/* Role badge */}
-      <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-sky-50 border border-sky-200 rounded-full text-xs font-semibold text-sky-700">
+      <div className={`inline-flex items-center gap-2 px-3 py-1.5 border rounded-full text-xs font-semibold ${theme.badge}`}>
          {t(`role_${role}`)}
       </div>
 
@@ -169,43 +230,43 @@ export default function PdpaConsent({ locale, prefix, role, onAccept, inline }: 
       </div>
 
       {/* Data Retention Summary */}
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-        <h3 className="text-sm font-bold text-amber-800 mb-2 flex items-center gap-2"> {t("dataRetention")}</h3>
+      <div className={`border rounded-xl p-4 ${theme.retention}`}>
+        <h3 className={`text-sm font-bold mb-2 flex items-center gap-2 ${theme.retentionTitle}`}> {t("dataRetention")}</h3>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-          <div className="bg-white rounded-lg p-3 text-center border border-amber-100">
-            <p className="text-2xl font-bold text-amber-700">3</p>
+          <div className={`bg-white rounded-lg p-3 text-center border ${theme.retentionCard}`}>
+            <p className={`text-2xl font-bold ${theme.retentionNumber}`}>3</p>
             <p className="text-gray-600">{locale === "th" ? "ปี — บันทึกความยินยอม" : locale === "zh" ? "年 — 同意记录" : "Years — Consent record"}</p>
           </div>
-          <div className="bg-white rounded-lg p-3 text-center border border-amber-100">
-            <p className="text-2xl font-bold text-amber-700">18</p>
+          <div className={`bg-white rounded-lg p-3 text-center border ${theme.retentionCard}`}>
+            <p className={`text-2xl font-bold ${theme.retentionNumber}`}>18</p>
             <p className="text-gray-600">{locale === "th" ? "เดือน — ประวัติการใช้บริการ" : locale === "zh" ? "月 — 服务历史" : "Months — Service history"}</p>
           </div>
-          <div className="bg-white rounded-lg p-3 text-center border border-amber-100">
-            <p className="text-2xl font-bold text-amber-700">12</p>
+          <div className={`bg-white rounded-lg p-3 text-center border ${theme.retentionCard}`}>
+            <p className={`text-2xl font-bold ${theme.retentionNumber}`}>12</p>
             <p className="text-gray-600">{locale === "th" ? "เดือน — ลบบัญชีถ้าไม่ใช้" : locale === "zh" ? "月 — 不活跃删除" : "Months — Inactive deletion"}</p>
           </div>
         </div>
       </div>
 
       {/* Disclaimer */}
-      <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-        <h3 className="text-sm font-bold text-red-800 mb-2 flex items-center gap-2"> {t("disclaimerTitle")}</h3>
-        <p className="text-xs text-red-700 leading-relaxed">{t("disclaimer")}</p>
+      <div className={`border rounded-xl p-4 ${theme.disclaimer}`}>
+        <h3 className={`text-sm font-bold mb-2 flex items-center gap-2 ${theme.disclaimerTitle}`}> {t("disclaimerTitle")}</h3>
+        <p className={`text-xs leading-relaxed ${theme.disclaimerText}`}>{t("disclaimer")}</p>
       </div>
 
       {/* Links */}
       <p className="text-xs text-gray-500">
         {t("learnMore")}{" "}
-        <Link href={`${prefix}/privacy`} className="text-blue-600 hover:underline">{t("privacyPolicy")}</Link>
+        <Link href={`${prefix}/privacy`} className={theme.link}>{t("privacyPolicy")}</Link>
         {" & "}
-        <Link href={`${prefix}/terms`} className="text-blue-600 hover:underline">{t("termsOfService")}</Link>
+        <Link href={`${prefix}/terms`} className={theme.link}>{t("termsOfService")}</Link>
       </p>
 
       {/* Action buttons */}
       <div className="flex gap-3 pt-2">
         <button
           onClick={handleAccept}
-          className="flex-1 py-3 bg-sky-600 hover:bg-sky-700 text-white text-sm font-bold rounded-xl transition shadow-lg"
+          className={`flex-1 py-3 ${theme.button} text-white text-sm font-bold rounded-xl transition shadow-lg`}
         >
           🛡️ {t("acceptBtn")}
         </button>
