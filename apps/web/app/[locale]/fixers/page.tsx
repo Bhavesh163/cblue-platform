@@ -2650,10 +2650,47 @@ export default function FixerProPage() {
           return { hasLister };
         };
 
-        const applyPartnerUser = (user: any, authToken: string): boolean => {
+        const fetchCurrentFixerProfile = async (authToken: string) => {
+          const attempt = await fetchWithSubscriberAuthRetry({ endpoint: "/api/v1/fixers/me", token: authToken });
+          const response = attempt.response;
+          const activeToken = attempt.token || authToken;
+          if (response?.ok) {
+            const profile = await response.json().catch(() => null);
+            return { token: activeToken, profile, confirmedMissing: false };
+          }
+          return { token: activeToken, profile: null, confirmedMissing: response?.status === 404 };
+        };
+
+        const resolvePartnerProfile = async (user: any, authToken: string) => {
+          let activeToken = authToken;
+          let fixerProfileOverride: any = null;
+          if (!user?.fixer) {
+            const fixerLookup = await fetchCurrentFixerProfile(activeToken);
+            activeToken = fixerLookup.token || activeToken;
+            if (fixerLookup.profile) {
+              fixerProfileOverride = fixerLookup.profile;
+            } else if (!fixerLookup.confirmedMissing) {
+              return { token: activeToken, fixerProfileOverride: null, transientIncomplete: true };
+            }
+          }
+          return { token: activeToken, fixerProfileOverride, transientIncomplete: false };
+        };
+
+        const preserveOrWaitForPartnerProfile = (user: any) => {
+          if (preserveCachedPartnerDashboard("profile_incomplete")) return true;
+          if (isMounted) {
+            setPartner(user || storedPartner || null);
+            setPartnerAccessChecked(false);
+            setLoading(false);
+          }
+          return true;
+        };
+
+        const applyPartnerUser = (user: any, authToken: string, fixerProfileOverride: any = null): boolean => {
           const profileFallback = !!user.profileFallback;
           const profileRole = String(user.role || "").toUpperCase();
-          const hasFixer = !!user.fixer || profileRole === "FIXER";
+          const fixerProfile = fixerProfileOverride || user.fixer || null;
+          const hasFixer = !!fixerProfile || profileRole === "FIXER";
           if (!isMounted) return hasFixer;
           setIsFixer(hasFixer);
 
@@ -2669,21 +2706,21 @@ export default function FixerProPage() {
           if (hasFixer) {
             pInfo = {
               ...pInfo,
-              fixerId: user.fixer?.id || storedPartner?.fixerId,
+              fixerId: fixerProfile?.id || storedPartner?.fixerId,
               userId: user.id || storedPartner?.userId,
               id: user.id || storedPartner?.id,
-              name: user.fixer?.contactName || user.name || storedPartner?.name || "Cblue partner",
+              name: fixerProfile?.contactName || user.name || storedPartner?.name || "Cblue partner",
               email: user.email || storedPartner?.email || "",
-              phone: user.fixer?.contactPhone || user.phone || storedPartner?.phone || "",
-              company: user.fixer?.companyName || storedPartner?.company || "-",
-              status: user.fixer?.status || storedPartner?.status || "ACTIVE",
-              tier: user.fixer?.aiTier || user.fixer?.tier || storedPartner?.tier || "Standard",
-              tierScore: user.fixer?.aiScore || storedPartner?.tierScore || 69,
-              breakdown: user.fixer?.aiBreakdown || storedPartner?.breakdown || [],
-              flags: user.fixer?.aiFlags || storedPartner?.flags || [],
-              credentialStatus: user.fixer?.aiCredentialStatus || storedPartner?.credentialStatus || "unverified",
-              createdAt: user.fixer?.createdAt || user.createdAt || storedPartner?.createdAt,
-              priceList: user.fixer?.priceList ?? storedPartner?.priceList ?? [],
+              phone: fixerProfile?.contactPhone || user.phone || storedPartner?.phone || "",
+              company: fixerProfile?.companyName || storedPartner?.company || "-",
+              status: fixerProfile?.status || storedPartner?.status || "ACTIVE",
+              tier: fixerProfile?.aiTier || fixerProfile?.tier || storedPartner?.tier || "Standard",
+              tierScore: fixerProfile?.aiScore || storedPartner?.tierScore || 69,
+              breakdown: fixerProfile?.aiBreakdown || storedPartner?.breakdown || [],
+              flags: fixerProfile?.aiFlags || storedPartner?.flags || [],
+              credentialStatus: fixerProfile?.aiCredentialStatus || storedPartner?.credentialStatus || "unverified",
+              createdAt: fixerProfile?.createdAt || user.createdAt || storedPartner?.createdAt,
+              priceList: fixerProfile?.priceList ?? storedPartner?.priceList ?? [],
             };
           }
 
@@ -2715,8 +2752,14 @@ export default function FixerProPage() {
           }
         } else if (res.ok) {
           const user = await res.json();
-          const hasFixer = applyPartnerUser(user, token);
-          await refreshPartnerData({ isFixer: hasFixer, isLister: false }, token, user);
+          const resolved = await resolvePartnerProfile(user, token);
+          if (resolved.transientIncomplete) {
+            preserveOrWaitForPartnerProfile(user);
+            return;
+          }
+          const effectiveUser = resolved.fixerProfileOverride ? { ...user, fixer: resolved.fixerProfileOverride } : user;
+          const hasFixer = applyPartnerUser(effectiveUser, resolved.token, resolved.fixerProfileOverride);
+          await refreshPartnerData({ isFixer: hasFixer, isLister: false }, resolved.token, effectiveUser);
           if (isMounted) setPartnerAccessChecked(true);
 
         } else if (res.status === 401 || res.status === 403) {
@@ -2730,8 +2773,14 @@ export default function FixerProPage() {
             }).catch(() => null);
             if (retryRes && retryRes.ok) {
               const retryUser = await retryRes.json();
-              const hasFixer = applyPartnerUser(retryUser, refreshedToken);
-              await refreshPartnerData({ isFixer: hasFixer, isLister: false }, refreshedToken, retryUser);
+              const resolved = await resolvePartnerProfile(retryUser, refreshedToken);
+              if (resolved.transientIncomplete) {
+                preserveOrWaitForPartnerProfile(retryUser);
+                return;
+              }
+              const effectiveUser = resolved.fixerProfileOverride ? { ...retryUser, fixer: resolved.fixerProfileOverride } : retryUser;
+              const hasFixer = applyPartnerUser(effectiveUser, resolved.token, resolved.fixerProfileOverride);
+              await refreshPartnerData({ isFixer: hasFixer, isLister: false }, resolved.token, effectiveUser);
               if (isMounted) {
                 setPartnerAccessChecked(true);
                 setLoading(false);

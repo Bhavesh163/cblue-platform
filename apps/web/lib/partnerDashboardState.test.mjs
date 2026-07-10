@@ -17,6 +17,18 @@ test("preserves partner dashboard data during transient profile fetch failures",
   );
 });
 
+test("preserves verified partner access while a live profile is temporarily incomplete", () => {
+  assert.equal(
+    shouldPreservePartnerDashboardState({
+      reason: "profile_incomplete",
+      hasStoredPartner: true,
+      hadFixerAccess: true,
+      hadVisibleOrders: false,
+    }),
+    true,
+  );
+});
+
 test("does not preserve partner dashboard data for confirmed logout", () => {
   assert.equal(
     shouldPreservePartnerDashboardState({
