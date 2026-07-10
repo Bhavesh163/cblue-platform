@@ -450,4 +450,123 @@ describe('BlueBridgeService', () => {
     expect(result.budgetLines.join(' ')).not.toContain('2,607');
     expect(result.budgetLines.join(' ')).not.toContain('4,636');
   });
+
+  it.each([
+    {
+      name: 'a live step-5 matching order',
+      status: 'MATCHING',
+      note: 'Order created',
+      reviewAt: null,
+      activityBucket: 'request',
+      lifecycleStatus: 'MATCHING',
+      terminalField: null,
+    },
+    {
+      name: 'a live step-8 meeting confirmation request',
+      status: 'MEETING_REQUESTED',
+      note: 'Customer requested a site meeting',
+      reviewAt: null,
+      activityBucket: 'request',
+      lifecycleStatus: 'MEETING_REQUESTED',
+      terminalField: null,
+    },
+    {
+      name: 'a live in-progress order',
+      status: 'IN_PROGRESS',
+      note: 'Payment confirmed',
+      reviewAt: null,
+      activityBucket: 'active',
+      lifecycleStatus: 'IN_PROGRESS',
+      terminalField: null,
+    },
+    {
+      name: 'a finished and rated order',
+      status: 'COMPLETED',
+      note: 'Project completed',
+      reviewAt: '2026-07-11T10:15:00.000Z',
+      activityBucket: 'history',
+      lifecycleStatus: 'RATED',
+      terminalField: 'ratedAt',
+    },
+    {
+      name: 'a customer-cancelled order',
+      status: 'CANCELLED',
+      note: 'Customer cancelled this order',
+      reviewAt: null,
+      activityBucket: 'history',
+      lifecycleStatus: 'CANCELLED',
+      terminalField: 'cancelledAt',
+    },
+    {
+      name: 'a partner-declined order',
+      status: 'CANCELLED',
+      note: 'The selected service provider is unavailable and cannot proceed.',
+      reviewAt: null,
+      activityBucket: 'history',
+      lifecycleStatus: 'DECLINED',
+      terminalField: 'declinedAt',
+    },
+  ])(
+    'returns persisted lifecycle placement for $name',
+    async ({
+      status,
+      note,
+      reviewAt,
+      activityBucket,
+      lifecycleStatus,
+      terminalField,
+    }) => {
+      const stateChangedAt = new Date('2026-07-11T09:00:00.000Z');
+      const prisma = {
+        subscriber: { findFirst: jest.fn().mockResolvedValue(null) },
+        user: { findMany: jest.fn().mockResolvedValue([{ id: 'user-1' }]) },
+        order: {
+          findFirst: jest.fn().mockResolvedValue({
+            status,
+            statusHistory: [{ status, note, createdAt: stateChangedAt }],
+            review: reviewAt ? { createdAt: new Date(reviewAt) } : null,
+            description: 'PO-2607-1234 | This text must not control lifecycle placement',
+            budgetBreakdown: null,
+            user: { name: 'Customer', email: 'customer@example.com' },
+            address: {
+              unit: null,
+              building: null,
+              street: null,
+              subdistrict: 'Saphansong',
+              district: 'Wang Thonglang',
+              province: 'Bangkok',
+              postalCode: '10310',
+              latitude: null,
+              longitude: null,
+            },
+            images: [],
+          }),
+        },
+      } as unknown as PrismaService;
+      const service = new BlueBridgeService(
+        prisma,
+        new ConfigService({ blueBridge: { apiKey: 'bridge-key' } }),
+      );
+
+      const result = await service.workflowDetails({
+        poNumber: 'PO-2607-1234',
+        legacySubjectId: 'user-1',
+        bridgeKey: 'bridge-key',
+      });
+
+      expect(result.activityBucket).toBe(activityBucket);
+      expect(result.lifecycleStatus).toBe(lifecycleStatus);
+      if (terminalField) {
+        expect(result[terminalField]).toBe(
+          reviewAt || stateChangedAt.toISOString(),
+        );
+        expect(result.archivedAt).toBe(reviewAt || stateChangedAt.toISOString());
+      } else {
+        expect(result.archivedAt).toBeNull();
+        expect(result.cancelledAt).toBeNull();
+        expect(result.declinedAt).toBeNull();
+        expect(result.ratedAt).toBeNull();
+      }
+    },
+  );
 });

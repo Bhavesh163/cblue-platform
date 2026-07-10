@@ -30,4 +30,10 @@ export interface BlueWorkflowDetailResponse {
     total: number;
   }>;
   uploadedFiles: Array<{ label: string; url: string }>;
+  activityBucket: 'request' | 'active' | 'history';
+  lifecycleStatus: string;
+  archivedAt: string | null;
+  cancelledAt: string | null;
+  declinedAt: string | null;
+  ratedAt: string | null;
 }

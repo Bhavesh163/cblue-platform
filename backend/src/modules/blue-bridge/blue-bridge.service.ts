@@ -22,6 +22,21 @@ interface BudgetItem {
   total: number;
 }
 
+interface PersistedStatusEvent {
+  status: string;
+  note?: string | null;
+  createdAt: Date | string;
+}
+
+interface WorkflowLifecycle {
+  activityBucket: 'request' | 'active' | 'history';
+  lifecycleStatus: string;
+  archivedAt: string | null;
+  cancelledAt: string | null;
+  declinedAt: string | null;
+  ratedAt: string | null;
+}
+
 @Injectable()
 export class BlueBridgeService {
   constructor(
@@ -59,6 +74,8 @@ export class BlueBridgeService {
           where: { type: { in: ['order_attachment', 'order_photo'] } },
           orderBy: { createdAt: 'asc' },
         },
+        statusHistory: { orderBy: { createdAt: 'desc' } },
+        review: { select: { createdAt: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -83,6 +100,7 @@ export class BlueBridgeService {
       if (!inquiry) {
         throw new NotFoundException('Workflow detail not found');
       }
+      const lifecycle = resolvePropertyLifecycle(inquiry);
       return {
         detailRows: [
           { label: 'Customer', value: inquiry.customerName },
@@ -127,10 +145,16 @@ export class BlueBridgeService {
           label: `Property image ${index + 1}`,
           url: image.url,
         })),
+        ...lifecycle,
       };
     }
 
     const budgetItems = parseBudgetItems(order.budgetBreakdown);
+    const lifecycle = resolveOrderLifecycle({
+      status: order.status,
+      statusHistory: order.statusHistory,
+      ratedAt: order.review?.createdAt,
+    });
     return {
       detailRows: [
         {
@@ -152,6 +176,7 @@ export class BlueBridgeService {
         label: `Uploaded file ${index + 1}`,
         url: image.url,
       })),
+      ...lifecycle,
     };
   }
 
@@ -193,6 +218,103 @@ export class BlueBridgeService {
     });
     return Array.from(new Set(users.map((user) => user.id)));
   }
+}
+
+function resolveOrderLifecycle({
+  status,
+  statusHistory,
+  ratedAt,
+}: {
+  status?: string | null;
+  statusHistory?: PersistedStatusEvent[];
+  ratedAt?: Date | string | null;
+}): WorkflowLifecycle {
+  return resolveLifecycle({ status, statusHistory, ratedAt });
+}
+
+function resolvePropertyLifecycle(inquiry: {
+  status?: string | null;
+  customerRating?: number | null;
+  listerRating?: number | null;
+  updatedAt?: Date | string | null;
+}): WorkflowLifecycle {
+  const hasPersistedRating =
+    Number(inquiry.customerRating || 0) > 0 ||
+    Number(inquiry.listerRating || 0) > 0;
+  return resolveLifecycle({
+    status: inquiry.status,
+    ratedAt: hasPersistedRating ? inquiry.updatedAt : null,
+  });
+}
+
+function resolveLifecycle({
+  status,
+  statusHistory = [],
+  ratedAt,
+}: {
+  status?: string | null;
+  statusHistory?: PersistedStatusEvent[];
+  ratedAt?: Date | string | null;
+}): WorkflowLifecycle {
+  const normalizedStatus = String(status || '').trim().toUpperCase() || 'UNKNOWN';
+  const latestEventForStatus = (targetStatus: string) =>
+    statusHistory.find(
+      (event) => String(event?.status || '').trim().toUpperCase() === targetStatus,
+    );
+  const cancelledEvent = latestEventForStatus('CANCELLED');
+  const completedEvent = latestEventForStatus('COMPLETED');
+  const persistedRatedAt = toIsoTimestamp(ratedAt);
+  const isDeclined =
+    normalizedStatus === 'DECLINED' ||
+    (normalizedStatus === 'CANCELLED' && isPersistedPartnerDecline(cancelledEvent?.note));
+  const cancelledAt =
+    normalizedStatus === 'CANCELLED' && !isDeclined
+      ? toIsoTimestamp(cancelledEvent?.createdAt)
+      : null;
+  const declinedAt = isDeclined ? toIsoTimestamp(cancelledEvent?.createdAt) : null;
+  const completedAt =
+    normalizedStatus === 'COMPLETED' ? toIsoTimestamp(completedEvent?.createdAt) : null;
+  const isHistory =
+    normalizedStatus === 'CANCELLED' ||
+    normalizedStatus === 'DECLINED' ||
+    normalizedStatus === 'COMPLETED' ||
+    normalizedStatus === 'RATED';
+  const activityBucket: WorkflowLifecycle['activityBucket'] = isHistory
+    ? 'history'
+    : ['CREATED', 'MATCHING', 'MEETING_REQUESTED', 'NOTIFY_SENT'].includes(
+          normalizedStatus,
+        )
+      ? 'request'
+      : 'active';
+
+  return {
+    activityBucket,
+    lifecycleStatus: persistedRatedAt
+      ? 'RATED'
+      : isDeclined
+        ? 'DECLINED'
+        : normalizedStatus,
+    archivedAt:
+      activityBucket === 'history'
+        ? persistedRatedAt || declinedAt || cancelledAt || completedAt
+        : null,
+    cancelledAt,
+    declinedAt,
+    ratedAt: persistedRatedAt,
+  };
+}
+
+function isPersistedPartnerDecline(note?: string | null): boolean {
+  const text = String(note || '').trim();
+  return /\b(?:partner|service provider|fixer|professional|project team)\b[\s\S]{0,160}\b(?:declin(?:e|ed)|unavailable|cannot proceed|busy)\b/i.test(
+    text,
+  );
+}
+
+function toIsoTimestamp(value?: Date | string | null): string | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
 }
 
 function parseBudgetItems(value: Prisma.JsonValue | null): BudgetItem[] {
