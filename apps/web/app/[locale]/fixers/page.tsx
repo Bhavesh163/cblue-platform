@@ -17,6 +17,7 @@ import {
   type BudgetBreakdownItem,
   type VariationPriceListItem,
 } from "../../../lib/computeBudgetBreakdown";
+import { chooseAuthoritativeBudgetBreakdown } from "../../../lib/bookingBudgetBreakdown";
 import { readStoredPoProjectDetails, storePoProjectDetails } from "../../../lib/po-project-details";
 import { fetchPartnerDashboardWithAuthRetry } from "../../../lib/partnerDashboardAuth";
 import { toggleWorkflowModalChromeLock } from "../../../lib/workflowModalChromeLock";
@@ -190,6 +191,45 @@ function writeWorkflowStorage(key: string, value: any) {
   if (typeof window === "undefined") return value;
   return setWorkflowStorageItem(localStorage, key, value).value;
 }
+
+const normalizePersistedBudgetBreakdown = (
+  value: unknown,
+): BudgetBreakdownItem[] | null => {
+  const rows = Array.isArray(value)
+    ? value
+    : value && typeof value === "object" && Array.isArray((value as any).items)
+      ? (value as any).items
+      : [];
+  const items = rows
+    .map((row: any) => ({
+      service: String(row?.service || "").trim(),
+      qty: Number(row?.qty),
+      unit: String(row?.unit || "").trim(),
+      unitRate: Number(row?.unitRate),
+      total: Number(row?.total),
+    }))
+    .filter(
+      (row: BudgetBreakdownItem) =>
+        row.service &&
+        row.unit &&
+        Number.isFinite(row.qty) &&
+        Number.isFinite(row.unitRate) &&
+        Number.isFinite(row.total),
+    );
+  return items.length > 0 ? items : null;
+};
+
+const readStoredPoBudgetBreakdown = (po: unknown): BudgetBreakdownItem[] | null => {
+  const key = String(po || "").trim();
+  if (!key || typeof window === "undefined") return null;
+  try {
+    return normalizePersistedBudgetBreakdown(
+      JSON.parse(localStorage.getItem(`cblue_po_breakdown_${key}`) || "null"),
+    );
+  } catch {
+    return null;
+  }
+};
 
 const isLocalWorkflowHistoryStatus = (item: any) => {
   const status = String(item?.status || "").toUpperCase();
@@ -2316,7 +2356,14 @@ export default function FixerProPage() {
           if (pl.length === 0) {
             try { const stored = localStorage.getItem('cblue_partner_pricelist_general'); if (stored) pl = JSON.parse(stored); } catch {}
           }
-          const bd = computeBudgetBreakdown(desc, pl, total);
+          const bd = chooseAuthoritativeBudgetBreakdown({
+            selectedBreakdown: normalizePersistedBudgetBreakdown(job?.budgetBreakdown),
+            storedBreakdown: readStoredPoBudgetBreakdown(po),
+            description: desc,
+            priceList: pl,
+            computeBudgetBreakdown: (details, priceList) =>
+              computeBudgetBreakdown(details, priceList, total),
+          }) as BudgetBreakdownItem[] | null;
           if (bd && bd.length > 0) {
             localStorage.setItem(`cblue_po_breakdown_${po}`, JSON.stringify(bd));
           }
@@ -3153,6 +3200,7 @@ export default function FixerProPage() {
       statusChangedAt: o.statusHistory?.[0]?.createdAt || o.updatedAt || o.createdAt,
       tier: desc.includes('TIER:') ? desc.split('TIER:')[1].split(' |')[0] : "Standard",
       status: normalizedStatus,
+      budgetBreakdown: normalizePersistedBudgetBreakdown(o.budgetBreakdown),
       progress: normalizedStatus === 'COMPLETED' ? 100 : (['IN_PROGRESS', 'CONFIRMED', 'ACCEPTED'].includes(normalizedStatus) ? 40 : 15),
       fee: o.estimatedPrice ? `฿${o.estimatedPrice.toLocaleString()}` : "0", 
       budget: o.estimatedPrice ? o.estimatedPrice.toLocaleString() : "0",
@@ -5937,12 +5985,19 @@ export default function FixerProPage() {
                 {(() => {
                   const brkDesc = String(waitModalOrder?.description || waitModalOrder?.desc || '');
                   const brkTotal = parseFloat(String(waitModalBudgetDisplay || '').replace(/[฿,]/g, '')) || 0;
+                  const po = waitModalOrder?.po;
                   let pl = (partner as any)?.priceList ?? [];
                   if (pl.length === 0) { try { const stored = localStorage.getItem(`cblue_partner_pricelist_${waitModalOrder?.po}`); if (stored) pl = JSON.parse(stored); } catch {} }
                   if (pl.length === 0) { try { const stored = localStorage.getItem('cblue_partner_pricelist_general'); if (stored) pl = JSON.parse(stored); } catch {} }
-                  let bd = computeBudgetBreakdown(brkDesc, pl, brkTotal);
+                  const bd = chooseAuthoritativeBudgetBreakdown({
+                    selectedBreakdown: normalizePersistedBudgetBreakdown(waitModalOrder?.budgetBreakdown),
+                    storedBreakdown: readStoredPoBudgetBreakdown(po),
+                    description: brkDesc,
+                    priceList: pl,
+                    computeBudgetBreakdown: (details, priceList) =>
+                      computeBudgetBreakdown(details, priceList, brkTotal),
+                  }) as BudgetBreakdownItem[] | null;
                   if (bd && bd.length > 0) { try { localStorage.setItem(`cblue_po_breakdown_${waitModalOrder?.po}`, JSON.stringify(bd)); } catch {} }
-                  if (!bd || bd.length === 0) { try { const stored = JSON.parse(localStorage.getItem(`cblue_po_breakdown_${waitModalOrder?.po}`) || 'null'); if (Array.isArray(stored) && stored.length > 0) bd = stored as BudgetBreakdownItem[]; } catch {} }
                   if (bd && bd.length >= 1) {
                     return (
                       <div className="font-mono text-xs space-y-0.5">
