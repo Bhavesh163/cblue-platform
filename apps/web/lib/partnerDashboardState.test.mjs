@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  preserveVisiblePartnerListOnEmptyRefresh,
   shouldPreservePartnerDashboardState,
 } from "./partnerDashboardState.js";
 
@@ -51,4 +52,15 @@ test("does not preserve partner dashboard data when no partner identity exists",
     }),
     false,
   );
+});
+
+test("keeps visible partner lists when a refresh temporarily returns empty", () => {
+  const previous = [{ po: "PO-1" }];
+  assert.deepEqual(preserveVisiblePartnerListOnEmptyRefresh(previous, []), previous);
+});
+
+test("accepts non-empty partner refresh results as authoritative", () => {
+  const previous = [{ po: "PO-1" }];
+  const next = [{ po: "PO-2" }];
+  assert.deepEqual(preserveVisiblePartnerListOnEmptyRefresh(previous, next), next);
 });

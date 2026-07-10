@@ -15,3 +15,10 @@ export function shouldPreservePartnerDashboardState({
       hadVisibleProperties,
   );
 }
+
+export function preserveVisiblePartnerListOnEmptyRefresh(previous, next) {
+  const previousList = Array.isArray(previous) ? previous : [];
+  if (!Array.isArray(next)) return previousList;
+  if (previousList.length > 0 && next.length === 0) return previousList;
+  return next;
+}

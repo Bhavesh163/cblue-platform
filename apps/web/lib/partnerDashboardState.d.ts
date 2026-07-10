@@ -6,3 +6,5 @@ export function shouldPreservePartnerDashboardState(input?: {
   hadVisibleOrders?: boolean;
   hadVisibleProperties?: boolean;
 }): boolean;
+
+export function preserveVisiblePartnerListOnEmptyRefresh<T>(previous: T[] | undefined | null, next: T[] | undefined | null): T[];

@@ -27,7 +27,10 @@ import {
   filterPartnerWorkflowItems,
   isPartnerWorkflowItemForScope,
 } from "../../../lib/partnerWorkflowScope";
-import { shouldPreservePartnerDashboardState } from "../../../lib/partnerDashboardState";
+import {
+  preserveVisiblePartnerListOnEmptyRefresh,
+  shouldPreservePartnerDashboardState,
+} from "../../../lib/partnerDashboardState";
 import {
   buildMeetingConfirmedAlert,
   collectTerminalWorkflowPos,
@@ -2627,7 +2630,8 @@ export default function FixerProPage() {
             const propRes = propAttempt.response;
 
             if (ordersRes && ordersRes.ok && isMounted) {
-              setOrders(await ordersRes.json());
+              const nextOrders = await ordersRes.json();
+              setOrders(prev => preserveVisiblePartnerListOnEmptyRefresh(prev, nextOrders));
               window.dispatchEvent(new Event("cblue-workflow-updated"));
               window.dispatchEvent(new Event("cblue-chat-updated"));
             } else if (!access.isFixer && isMounted) {
@@ -2833,7 +2837,7 @@ export default function FixerProPage() {
 
         if (ordersRes && ordersRes.ok && isMounted) {
           const nextOrders = await ordersRes.json();
-          setOrders(nextOrders);
+          setOrders(prev => preserveVisiblePartnerListOnEmptyRefresh(prev, nextOrders));
           window.dispatchEvent(new Event("cblue-workflow-updated"));
           window.dispatchEvent(new Event("cblue-chat-updated"));
         } else if (!isFixer && isMounted) {
@@ -2931,7 +2935,7 @@ export default function FixerProPage() {
     async function loadProps() {
       try {
         let token = getPartnerDashboardToken();
-        if (!token) { setPropInquiries([]); return; }
+        if (!token) return;
         const load = (authToken: string) => fetch("/api/v1/property-inquiries/lister", { headers: { Authorization: `Bearer ${authToken}` } });
         let res = await load(token);
         if (!res.ok && [401, 403].includes(res.status)) {
@@ -2944,7 +2948,9 @@ export default function FixerProPage() {
         }
         if (!res.ok) return;
         const data = await res.json();
-        setPropInquiries(Array.isArray(data) ? data.map(mapApiInquiry).filter((p: PropInquiry) => ["NOTIFY_SENT", "ACCEPTED", "PAID", "MEETING_SENT", "MEETING_CONFIRMED", "COMPLETED"].includes(p.status)) : []);
+        if (!Array.isArray(data)) return;
+        const nextInquiries = data.map(mapApiInquiry).filter((p: PropInquiry) => ["NOTIFY_SENT", "ACCEPTED", "PAID", "MEETING_SENT", "MEETING_CONFIRMED", "COMPLETED"].includes(p.status));
+        setPropInquiries(prev => preserveVisiblePartnerListOnEmptyRefresh(prev, nextInquiries));
       } catch {
         // Keep the last visible inquiry state during transient failures.
       }
