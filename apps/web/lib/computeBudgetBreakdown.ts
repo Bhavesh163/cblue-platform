@@ -5,7 +5,7 @@
  * and a partner's priceList, without relying on possibly-stale backend data.
  */
 
-import { normalizeBudgetServiceText } from './budgetSynonyms';
+import { normalizeBudgetServiceText } from "./budgetSynonyms";
 
 export type BudgetBreakdownItem = {
   service: string;
@@ -25,46 +25,58 @@ export type VariationPriceListItem = {
 
 /** Strip the workflow metadata prefix prepended to order descriptions */
 const stripPrefix = (value: unknown): string =>
-  String(value || '').replace(/^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?(LOC:[^|]+\|\s*)?/i, '').trim();
+  String(value || "")
+    .replace(
+      /^PO-[\w-]+\s*\|\s*(TIER:[a-zA-Z]+\s*\|\s*)?(LOC:[^|]+\|\s*)?/i,
+      "",
+    )
+    .trim();
 
 const toNumericValue = (value: unknown): number | null => {
-  const raw = String(value || '').replace(/[^0-9.]/g, '').trim();
+  const raw = String(value || "")
+    .replace(/[^0-9.]/g, "")
+    .trim();
   if (!raw) return null;
   const parsed = Number(raw);
   return Number.isFinite(parsed) ? parsed : null;
 };
 
 const toDisplayNumber = (value: number | null): string => {
-  if (value == null || !Number.isFinite(value)) return '';
+  if (value == null || !Number.isFinite(value)) return "";
   return Number.isInteger(value)
     ? value.toLocaleString()
     : value.toLocaleString(undefined, { maximumFractionDigits: 2 });
 };
 
 const extractVariationPriceListSection = (value: unknown): string => {
-  const text = String(value || '').trim();
-  if (!text) return '';
+  const text = String(value || "").trim();
+  if (!text) return "";
 
   const explicitSection = text.match(/(?:^|\n)Price List:\s*([\s\S]*)$/i)?.[1];
   if (explicitSection) return explicitSection.trim();
 
-  return /^(?:\s*(?:[-•]|\d+\)))\s/m.test(text) ? text : '';
+  return /^(?:\s*(?:[-•]|\d+\)))\s/m.test(text) ? text : "";
 };
 
-const parseVariationPriceListLine = (value: string): VariationPriceListItem | null => {
-  const normalizedLine = String(value || '')
+const parseVariationPriceListLine = (
+  value: string,
+): VariationPriceListItem | null => {
+  const normalizedLine = String(value || "")
     .trim()
-    .replace(/^\s*(?:[-•]|\d+\))\s*/, '')
+    .replace(/^\s*(?:[-•]|\d+\))\s*/, "")
     .trim();
   if (!normalizedLine) return null;
 
-  if (normalizedLine.includes('|')) {
-    const parts = normalizedLine.split('|').map((part) => part.trim()).filter(Boolean);
+  if (normalizedLine.includes("|")) {
+    const parts = normalizedLine
+      .split("|")
+      .map((part) => part.trim())
+      .filter(Boolean);
     const qtyUnitMatch = parts[1]?.match(/([\d,]+(?:\.\d+)?)\s+(.+)/i);
     return {
       item: parts[0] || normalizedLine,
       qty: toNumericValue(qtyUnitMatch?.[1]),
-      unit: String(qtyUnitMatch?.[2] || '').trim(),
+      unit: String(qtyUnitMatch?.[2] || "").trim(),
       rate: toNumericValue(parts[2]),
       amount: toNumericValue(parts[3]),
     };
@@ -77,7 +89,7 @@ const parseVariationPriceListLine = (value: string): VariationPriceListItem | nu
     return {
       item: formattedMatch[1]?.trim() || normalizedLine,
       qty: toNumericValue(formattedMatch[2]),
-      unit: String(formattedMatch[3] || '').trim(),
+      unit: String(formattedMatch[3] || "").trim(),
       rate: toNumericValue(formattedMatch[4]),
       amount: toNumericValue(formattedMatch[5]),
     };
@@ -86,14 +98,14 @@ const parseVariationPriceListLine = (value: string): VariationPriceListItem | nu
   return {
     item: normalizedLine,
     qty: null,
-    unit: '',
+    unit: "",
     rate: null,
     amount: null,
   };
 };
 
 const normalizeBudgetText = (value: unknown): string =>
-  normalizeBudgetServiceText(String(value || ''));
+  normalizeBudgetServiceText(String(value || ""));
 
 const CONTEXT_BREAK_PATTERN = /(?:,|;|\n|\b(?:and|plus|พร้อม|และ)\b)/i;
 const CONTEXT_BREAK_GLOBAL_PATTERN = /(?:,|;|\n|\b(?:and|plus|พร้อม|และ)\b)/gi;
@@ -104,13 +116,19 @@ const trimContextWindow = (
   maxEndIdx: number,
   contentStartIdx: number = startIdx,
   previousPairEndIdx: number = 0,
+  hasTrailingContext?: (value: string) => boolean,
 ): string => {
   const hardEnd = maxEndIdx > startIdx ? maxEndIdx : text.length;
   const boundarySlice = text.slice(contentStartIdx, hardEnd);
   const boundaryMatch = boundarySlice.match(CONTEXT_BREAK_PATTERN);
-  const endIdx = boundaryMatch?.index != null
-    ? contentStartIdx + boundaryMatch.index
-    : hardEnd;
+  const endIdx =
+    boundaryMatch?.index != null
+      ? contentStartIdx + boundaryMatch.index
+      : hardEnd;
+  const trailingSlice = text.slice(contentStartIdx, endIdx);
+  if (hasTrailingContext?.(trailingSlice)) {
+    return text.slice(startIdx, endIdx).trim();
+  }
 
   const beforeSlice = text.slice(previousPairEndIdx, startIdx);
   let contextStartIdx = previousPairEndIdx;
@@ -139,7 +157,7 @@ const trimContextWindow = (
 export function computeBudgetBreakdown(
   description: string,
   priceList: unknown[],
-  _totalOverride?: number
+  _totalOverride?: number,
 ): BudgetBreakdownItem[] | null {
   if (!priceList || priceList.length === 0 || !description) return null;
   const pl = priceList as Array<Record<string, unknown>>;
@@ -147,30 +165,117 @@ export function computeBudgetBreakdown(
   const cleanDesc = normalizeBudgetText(stripPrefix(description));
 
   // ── Strict pass ──────────────────────────────────────────────────────────
-  const strictPat = /(\d[\d,]*\.?\d*)\s*(sqm|m2|sq\.?m\.?|m²|ตร\.?ม\.?|ตารางเมตร|sq\.?ft\.?|unit|page|pages|faq|faqs)/gi;
-  const pairs: Array<{ qty: number; idx: number; contentStartIdx: number; endIdx: number }> = [];
+  const strictPat =
+    /(\d[\d,]*\.?\d*)\s*(sqm|m2|sq\.?m\.?|m²|ตร\.?ม\.?|ตารางเมตร|sq\.?ft\.?|unit|page|pages|faq|faqs)/gi;
+  const pairs: Array<{
+    qty: number;
+    idx: number;
+    contentStartIdx: number;
+    endIdx: number;
+  }> = [];
   let m: RegExpExecArray | null;
   while ((m = strictPat.exec(cleanDesc)) !== null) {
-    const qty = parseFloat((m[1] ?? '').replace(/,/g, ''));
+    const qty = parseFloat((m[1] ?? "").replace(/,/g, ""));
     if (!isNaN(qty) && qty > 0 && qty < 1_000_000) {
-      pairs.push({ qty, idx: m.index, contentStartIdx: strictPat.lastIndex, endIdx: strictPat.lastIndex });
+      pairs.push({
+        qty,
+        idx: m.index,
+        contentStartIdx: strictPat.lastIndex,
+        endIdx: strictPat.lastIndex,
+      });
     }
   }
 
   // ── Loose pass ───────────────────────────────────────────────────────────
-  const strictIndices = pairs.map(p => p.idx);
-  const loosePat = /(?<!\d)(\d{2,6})(?!\s*(?:sqm|m2|sq\.?m|m²|ตร|unit|,\d|[.,]\d))/gi;
+  const strictIndices = pairs.map((p) => p.idx);
+  const loosePat =
+    /(?<!\d)(\d{2,6})(?!\s*(?:sqm|m2|sq\.?m|m²|ตร|unit|,\d|[.,]\d))/gi;
   const filler = new Set([
-    'and', 'the', 'a', 'an', 'of', 'in', 'at', 'for', 'with', 'to',
-    'sqm', 'sq', 'm2', 'unit', 'units', 'page', 'pages', 'faq', 'faqs',
-    'per', 'i', 'have', 'want', 'need', 'team', 'teams', 'carry', 'out', 'work', 'works',
+    "and",
+    "the",
+    "a",
+    "an",
+    "of",
+    "in",
+    "at",
+    "for",
+    "with",
+    "to",
+    "sqm",
+    "sq",
+    "m2",
+    "unit",
+    "units",
+    "page",
+    "pages",
+    "faq",
+    "faqs",
+    "per",
+    "i",
+    "have",
+    "want",
+    "need",
+    "team",
+    "teams",
+    "carry",
+    "out",
+    "work",
+    "works",
   ]);
   const tokenize = (text: string) =>
-    text.split(/[\s.,]+/).filter(t => t.length > 1 && !filler.has(t) && isNaN(parseFloat(t)));
+    text
+      .split(/[\s.,]+/)
+      .filter((t) => t.length > 1 && !filler.has(t) && isNaN(parseFloat(t)));
 
-  const scorePriceListItem = (item: Record<string, unknown>, tokens: string[]) => {
-    const itemText = normalizeBudgetText(`${item['service'] ?? ''} ${item['unit'] ?? ''}`);
-    return tokens.filter(token => itemText.includes(token)).length;
+  const hasServiceContext = (text: string) => tokenize(text).length > 0;
+
+  const inferBudgetServiceKey = (value: string | string[]): string => {
+    const normalized = normalizeBudgetText(
+      Array.isArray(value) ? value.join(" ") : value,
+    );
+    if (!normalized) return "";
+
+    const intents = new Set<string>();
+    const addIntent = (intent: string, pattern: RegExp) => {
+      if (pattern.test(normalized)) intents.add(intent);
+    };
+
+    addIntent("chatbot", /\b(?:chatbot|bot|faq|faqs)\b/i);
+    addIntent("website", /\b(?:website|webpage|web|page|pages)\b/i);
+    addIntent(
+      "construction",
+      /\b(?:construction|construct|building|build|civil)\b/i,
+    );
+    addIntent("reinstatement", /\b(?:reinstatement|makegood|handover)\b/i);
+    addIntent("fitout", /\b(?:fitout|interior|renovation)\b/i);
+    addIntent("plumbing", /\b(?:plumbing|pipe|water)\b/i);
+    addIntent("electrical", /\b(?:electrical|electric|wiring)\b/i);
+    addIntent("hvac", /\b(?:hvac|aircon|airconditioning|ac)\b/i);
+    addIntent("roofing", /\b(?:roofing|roof|waterproofing|leak)\b/i);
+    addIntent("painting", /\b(?:painting|paint|repaint)\b/i);
+    addIntent("tiling", /\b(?:tiling|tile)\b/i);
+    addIntent("carpentry", /\b(?:carpentry|carpenter|woodwork)\b/i);
+    addIntent("steel", /\b(?:steel|metal|welding|ironwork)\b/i);
+    addIntent("glass", /\b(?:glass|aluminium|aluminum|partition)\b/i);
+    addIntent("cleaning", /\b(?:cleaning|clean|maid|housekeeping)\b/i);
+    addIntent("pest", /\b(?:pest|termite|extermination)\b/i);
+    addIntent("moving", /\b(?:moving|relocation|transport)\b/i);
+    addIntent("safety", /\b(?:safety|officer|hse|ehs)\b/i);
+
+    return intents.size === 1 ? (Array.from(intents)[0] ?? "") : "";
+  };
+
+  const scorePriceListItem = (
+    item: Record<string, unknown>,
+    tokens: string[],
+  ) => {
+    const itemText = normalizeBudgetText(
+      `${item["service"] ?? ""} ${item["unit"] ?? ""}`,
+    );
+    const requestedIntent = inferBudgetServiceKey(tokens);
+    const itemIntent = inferBudgetServiceKey(itemText);
+    if (requestedIntent && itemIntent !== requestedIntent) return 0;
+    return tokens.filter((token) => itemText.includes(token)).length;
   };
 
   const findBestServiceMatch = (tokens: string[]) => {
@@ -180,8 +285,8 @@ export function computeBudgetBreakdown(
       const score = scorePriceListItem(item, tokens);
       const cheaper =
         !best ||
-        (parseFloat(String(item['finalPrice'] ?? 0)) || Infinity) <
-          (parseFloat(String(best['finalPrice'] ?? 0)) || Infinity);
+        (parseFloat(String(item["finalPrice"] ?? 0)) || Infinity) <
+          (parseFloat(String(best["finalPrice"] ?? 0)) || Infinity);
       if (score > bestScore || (score === bestScore && score > 0 && cheaper)) {
         bestScore = score;
         best = item;
@@ -192,21 +297,28 @@ export function computeBudgetBreakdown(
 
   let lm: RegExpExecArray | null;
   while ((lm = loosePat.exec(cleanDesc)) !== null) {
-    const qty = parseFloat((lm[1] ?? '').replace(/,/g, ''));
+    const qty = parseFloat((lm[1] ?? "").replace(/,/g, ""));
     if (isNaN(qty) || qty < 10 || qty >= 1_000_000) continue;
     // Skip if the strict pass already captured a nearby number
-    if (strictIndices.some(idx => Math.abs(idx - lm!.index) < 4)) continue;
+    if (strictIndices.some((idx) => Math.abs(idx - lm!.index) < 4)) continue;
 
     const win = trimContextWindow(
       cleanDesc,
       lm.index,
       Math.min(lm.index + 80, cleanDesc.length),
       loosePat.lastIndex,
+      0,
+      hasServiceContext,
     );
     const toks = tokenize(win);
     // Only include if context scores against at least one priceList service
     if (findBestServiceMatch(toks)) {
-      pairs.push({ qty, idx: lm.index, contentStartIdx: loosePat.lastIndex, endIdx: loosePat.lastIndex });
+      pairs.push({
+        qty,
+        idx: lm.index,
+        contentStartIdx: loosePat.lastIndex,
+        endIdx: loosePat.lastIndex,
+      });
     }
   }
 
@@ -226,23 +338,28 @@ export function computeBudgetBreakdown(
       end,
       pair.contentStartIdx,
       previousEnd,
+      hasServiceContext,
     );
     const localTokens = tokenize(window);
-    const tokens = localTokens.length > 0
-      ? localTokens
-      : pairs.length === 1
-      ? tokenize(cleanDesc)
-      : [];
+    const tokens =
+      localTokens.length > 0
+        ? localTokens
+        : pairs.length === 1
+          ? tokenize(cleanDesc)
+          : [];
     const match = tokens.length > 0 ? findBestServiceMatch(tokens) : null;
     if (!match) continue;
 
     const item = match.item;
-    const partnerQty = parseFloat(String(item['amount'] ?? item['quantity'] ?? 1)) || 1;
-    const unitRate = Math.round((parseFloat(String(item['finalPrice'] ?? 0)) || 0) / partnerQty);
+    const partnerQty =
+      parseFloat(String(item["amount"] ?? item["quantity"] ?? 1)) || 1;
+    const unitRate = Math.round(
+      (parseFloat(String(item["finalPrice"] ?? 0)) || 0) / partnerQty,
+    );
     breakdown.push({
-      service: String(item['service'] ?? `Service ${i + 1}`),
+      service: String(item["service"] ?? `Service ${i + 1}`),
       qty: pair.qty,
-      unit: String(item['unit'] ?? 'sqm'),
+      unit: String(item["unit"] ?? "sqm"),
       unitRate,
       total: Math.round(unitRate * pair.qty),
     });
@@ -253,7 +370,7 @@ export function computeBudgetBreakdown(
 
 /** Read a stored breakdown from localStorage, return null if missing/corrupt */
 export function readStoredBreakdown(po: string): BudgetBreakdownItem[] | null {
-  if (typeof window === 'undefined') return null;
+  if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(`cblue_po_breakdown_${po}`);
     if (!raw) return null;
@@ -266,10 +383,14 @@ export function readStoredBreakdown(po: string): BudgetBreakdownItem[] | null {
 }
 
 export function stripVariationPriceList(value: unknown): string {
-  return String(value || '').replace(/\n*\s*Price List:\s*[\s\S]*$/i, '').trim();
+  return String(value || "")
+    .replace(/\n*\s*Price List:\s*[\s\S]*$/i, "")
+    .trim();
 }
 
-export function parseVariationPriceList(value: unknown): VariationPriceListItem[] {
+export function parseVariationPriceList(
+  value: unknown,
+): VariationPriceListItem[] {
   const section = extractVariationPriceListSection(value);
   if (!section) return [];
 
@@ -283,23 +404,35 @@ export function formatVariationPriceListItem(
   item: VariationPriceListItem,
   index: number,
 ): string {
-  const qtyLabel = item.qty != null ? ` ${toDisplayNumber(item.qty)}${item.unit ? ` ${item.unit}` : ''}` : '';
-  const rateLabel = item.rate != null ? ` x ฿${toDisplayNumber(item.rate)}/unit` : '';
-  const computedAmount = item.amount != null
-    ? item.amount
-    : item.qty != null && item.rate != null
-    ? item.qty * item.rate
-    : null;
-  const amountLabel = computedAmount != null ? ` = ฿${toDisplayNumber(computedAmount)}` : '';
+  const qtyLabel =
+    item.qty != null
+      ? ` ${toDisplayNumber(item.qty)}${item.unit ? ` ${item.unit}` : ""}`
+      : "";
+  const rateLabel =
+    item.rate != null ? ` x ฿${toDisplayNumber(item.rate)}/unit` : "";
+  const computedAmount =
+    item.amount != null
+      ? item.amount
+      : item.qty != null && item.rate != null
+        ? item.qty * item.rate
+        : null;
+  const amountLabel =
+    computedAmount != null ? ` = ฿${toDisplayNumber(computedAmount)}` : "";
   return `${index + 1}) ${item.item}${qtyLabel}${rateLabel}${amountLabel}`.trim();
 }
 
-export function formatVariationPriceListText(items: VariationPriceListItem[]): string {
-  return items.map((item, index) => formatVariationPriceListItem(item, index)).join('\n');
+export function formatVariationPriceListText(
+  items: VariationPriceListItem[],
+): string {
+  return items
+    .map((item, index) => formatVariationPriceListItem(item, index))
+    .join("\n");
 }
 
-export function readStoredVariationPriceList(po: string): VariationPriceListItem[] {
-  if (typeof window === 'undefined' || !po) return [];
+export function readStoredVariationPriceList(
+  po: string,
+): VariationPriceListItem[] {
+  if (typeof window === "undefined" || !po) return [];
   try {
     const raw = localStorage.getItem(`cblue_variation_price_list_${po}`);
     if (!raw) return [];
@@ -314,13 +447,16 @@ export function storeVariationPriceList(
   po: string,
   items: VariationPriceListItem[],
 ): void {
-  if (typeof window === 'undefined' || !po) return;
+  if (typeof window === "undefined" || !po) return;
   try {
     if (!items || items.length === 0) {
       localStorage.removeItem(`cblue_variation_price_list_${po}`);
       return;
     }
-    localStorage.setItem(`cblue_variation_price_list_${po}`, JSON.stringify(items));
+    localStorage.setItem(
+      `cblue_variation_price_list_${po}`,
+      JSON.stringify(items),
+    );
   } catch {
     // non-blocking
   }
@@ -328,7 +464,7 @@ export function storeVariationPriceList(
 
 /** Resolve priceList from various localStorage keys, in priority order */
 export function resolvePartnerPriceList(po?: string): unknown[] {
-  if (typeof window === 'undefined') return [];
+  if (typeof window === "undefined") return [];
   const tryParse = (key: string): unknown[] => {
     try {
       const raw = localStorage.getItem(key);
@@ -343,7 +479,7 @@ export function resolvePartnerPriceList(po?: string): unknown[] {
     const fromPo = tryParse(`cblue_partner_pricelist_${po}`);
     if (fromPo.length > 0) return fromPo;
   }
-  return tryParse('cblue_partner_pricelist_general');
+  return tryParse("cblue_partner_pricelist_general");
 }
 
 /** Render props for a budget breakdown block */
@@ -370,8 +506,12 @@ export function resolveBreakdown(
   // 2. Recompute if missing
   if (!items || items.length === 0) {
     items = computeBudgetBreakdown(description, priceList);
-    if (items && items.length > 0 && typeof window !== 'undefined') {
-      try { localStorage.setItem(`cblue_po_breakdown_${po}`, JSON.stringify(items)); } catch { /* quota */ }
+    if (items && items.length > 0 && typeof window !== "undefined") {
+      try {
+        localStorage.setItem(`cblue_po_breakdown_${po}`, JSON.stringify(items));
+      } catch {
+        /* quota */
+      }
     }
   }
 

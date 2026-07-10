@@ -1459,6 +1459,7 @@ export class FixerService {
         pairs[i].endIdx,
         end,
         previousEnd,
+        unitPattern,
       );
       const tokens = this.extractContextTerms(window, unitPattern);
       pairs[i].contextTerms = tokens;
@@ -1472,6 +1473,7 @@ export class FixerService {
     contentStartIdx: number,
     nextPairIdx: number,
     previousPairEndIdx = 0,
+    unitPattern?: RegExp,
   ): string {
     const separatorPattern =
       /(?:,|;|\n|(?:^|\s)(?:and|plus|พร้อม|และ)(?=\s|$))/gi;
@@ -1484,6 +1486,13 @@ export class FixerService {
       separatorMatch?.index != null
         ? contentStartIdx + separatorMatch.index
         : maxEnd;
+    const trailingServiceTerms = this.extractContextTerms(
+      normalized.slice(contentStartIdx, endIdx),
+      unitPattern,
+    );
+    if (trailingServiceTerms.length > 0) {
+      return normalized.slice(startIdx, endIdx).trim();
+    }
 
     const beforeSlice = normalized.slice(previousPairEndIdx, startIdx);
     let contextStartIdx = previousPairEndIdx;
@@ -1558,6 +1567,51 @@ export class FixerService {
     return this.tokenize(normalized).slice(0, 3).join('-') || 'other';
   }
 
+  private inferServiceIntentKey(value: unknown): string {
+    const sourceText = Array.isArray(value)
+      ? value
+          .map((item) =>
+            ['string', 'number', 'boolean'].includes(typeof item)
+              ? String(item)
+              : '',
+          )
+          .join(' ')
+      : ['string', 'number', 'boolean'].includes(typeof value)
+        ? String(value)
+        : '';
+    const normalized = this.normalizeSearchText(sourceText);
+    if (!normalized) return '';
+
+    const intents = new Set<string>();
+    const addIntent = (intent: string, pattern: RegExp) => {
+      if (pattern.test(normalized)) intents.add(intent);
+    };
+
+    addIntent('chatbot', /\b(?:chatbot|bot|faq|faqs)\b/i);
+    addIntent('website', /\b(?:website|webpage|web|page|pages)\b/i);
+    addIntent(
+      'construction',
+      /\b(?:construction|construct|building|build|civil)\b/i,
+    );
+    addIntent('reinstatement', /\b(?:reinstatement|makegood|handover)\b/i);
+    addIntent('fitout', /\b(?:fitout|interior|renovation)\b/i);
+    addIntent('plumbing', /\b(?:plumbing|pipe|water)\b/i);
+    addIntent('electrical', /\b(?:electrical|electric|wiring)\b/i);
+    addIntent('hvac', /\b(?:hvac|aircon|airconditioning|ac)\b/i);
+    addIntent('roofing', /\b(?:roofing|roof|waterproofing|leak)\b/i);
+    addIntent('painting', /\b(?:painting|paint|repaint)\b/i);
+    addIntent('tiling', /\b(?:tiling|tile)\b/i);
+    addIntent('carpentry', /\b(?:carpentry|carpenter|woodwork)\b/i);
+    addIntent('steel', /\b(?:steel|metal|welding|ironwork)\b/i);
+    addIntent('glass', /\b(?:glass|aluminium|aluminum|partition)\b/i);
+    addIntent('cleaning', /\b(?:cleaning|clean|maid|housekeeping)\b/i);
+    addIntent('pest', /\b(?:pest|termite|extermination)\b/i);
+    addIntent('moving', /\b(?:moving|relocation|transport)\b/i);
+    addIntent('safety', /\b(?:safety|officer|hse|ehs)\b/i);
+
+    return intents.size === 1 ? (Array.from(intents)[0] ?? '') : '';
+  }
+
   private normalizeSearchText(value?: string, preserveBreaks = false): string {
     return (value || '')
       .toLowerCase()
@@ -1594,14 +1648,38 @@ export class FixerService {
         /หลังคา|ผนัง|ฝ้าเพดาน|มุงหลังคา|หลังคารั่ว|屋顶|墙体/g,
         ' roofing ',
       )
-      .replace(/\u0e17\u0e32\u0e2a\u0e35|\u0e2a\u0e35\u0e1c\u0e19\u0e31\u0e07|\u0e07\u0e32\u0e19\u0e2a\u0e35/g, ' painting ')
-      .replace(/\u0e1b\u0e39\u0e01\u0e23\u0e30\u0e40\u0e1a\u0e37\u0e49\u0e2d\u0e07|\u0e01\u0e23\u0e30\u0e40\u0e1a\u0e37\u0e49\u0e2d\u0e07/g, ' tiling ')
-      .replace(/\u0e0a\u0e48\u0e32\u0e07\u0e44\u0e21\u0e49|\u0e07\u0e32\u0e19\u0e44\u0e21\u0e49/g, ' carpentry ')
-      .replace(/\u0e40\u0e2b\u0e25\u0e47\u0e01|\u0e07\u0e32\u0e19\u0e40\u0e2b\u0e25\u0e47\u0e01|\u0e40\u0e0a\u0e37\u0e48\u0e2d\u0e21/g, ' steel ')
-      .replace(/\u0e01\u0e23\u0e30\u0e08\u0e01|\u0e2d\u0e25\u0e39\u0e21\u0e34\u0e40\u0e19\u0e35\u0e22\u0e21?/g, ' glass aluminium ')
-      .replace(/\u0e17\u0e33\u0e04\u0e27\u0e32\u0e21\u0e2a\u0e30\u0e2d\u0e32\u0e14|\u0e41\u0e21\u0e48\u0e1a\u0e49\u0e32\u0e19/g, ' cleaning ')
-      .replace(/\u0e1b\u0e25\u0e27\u0e01|\u0e01\u0e33\u0e08\u0e31\u0e14\u0e1b\u0e25\u0e27\u0e01/g, ' pest control ')
-      .replace(/\u0e02\u0e19\u0e22\u0e49\u0e32\u0e22|\u0e22\u0e49\u0e32\u0e22\u0e1a\u0e49\u0e32\u0e19/g, ' moving ')
+      .replace(
+        /\u0e17\u0e32\u0e2a\u0e35|\u0e2a\u0e35\u0e1c\u0e19\u0e31\u0e07|\u0e07\u0e32\u0e19\u0e2a\u0e35/g,
+        ' painting ',
+      )
+      .replace(
+        /\u0e1b\u0e39\u0e01\u0e23\u0e30\u0e40\u0e1a\u0e37\u0e49\u0e2d\u0e07|\u0e01\u0e23\u0e30\u0e40\u0e1a\u0e37\u0e49\u0e2d\u0e07/g,
+        ' tiling ',
+      )
+      .replace(
+        /\u0e0a\u0e48\u0e32\u0e07\u0e44\u0e21\u0e49|\u0e07\u0e32\u0e19\u0e44\u0e21\u0e49/g,
+        ' carpentry ',
+      )
+      .replace(
+        /\u0e40\u0e2b\u0e25\u0e47\u0e01|\u0e07\u0e32\u0e19\u0e40\u0e2b\u0e25\u0e47\u0e01|\u0e40\u0e0a\u0e37\u0e48\u0e2d\u0e21/g,
+        ' steel ',
+      )
+      .replace(
+        /\u0e01\u0e23\u0e30\u0e08\u0e01|\u0e2d\u0e25\u0e39\u0e21\u0e34\u0e40\u0e19\u0e35\u0e22\u0e21?/g,
+        ' glass aluminium ',
+      )
+      .replace(
+        /\u0e17\u0e33\u0e04\u0e27\u0e32\u0e21\u0e2a\u0e30\u0e2d\u0e32\u0e14|\u0e41\u0e21\u0e48\u0e1a\u0e49\u0e32\u0e19/g,
+        ' cleaning ',
+      )
+      .replace(
+        /\u0e1b\u0e25\u0e27\u0e01|\u0e01\u0e33\u0e08\u0e31\u0e14\u0e1b\u0e25\u0e27\u0e01/g,
+        ' pest control ',
+      )
+      .replace(
+        /\u0e02\u0e19\u0e22\u0e49\u0e32\u0e22|\u0e22\u0e49\u0e32\u0e22\u0e1a\u0e49\u0e32\u0e19/g,
+        ' moving ',
+      )
       .replace(
         /พัฒนาเว็บไซต์|ทำเว็บ|เขียนเว็บ|เว็บไซต์|เว็บแอป|网站开发|网页设计/g,
         ' website ',
@@ -1674,15 +1752,36 @@ export class FixerService {
         /\b(?:office\s*)?(?:decoration|decorating|refurbishment|renovation|interior\s*work|interior\s*fitout|tenant\s*improvement)\b/g,
         ' fitout ',
       )
-      .replace(/\b(?:plumb(?:ing|er)?|plum(?:b|p|bing)?|pipes?|pipework|water\s+pipe|water\s+system|sanitary|sanitation)\b/g, 'plumbing')
-      .replace(/\b(?:elec|electric|electricals?|electrician|electrial|electic|wiring|wirring|wireing|rewiring|lighting)\b/g, 'electrical')
-      .replace(/\b(?:air\s*conditioning|air\s*con|aircon|a\/c|ac|hvac|air\s*conditioner|airconditioner)\b/g, 'hvac')
-      .replace(/\b(?:roof\s*leak|roof(?:ing)?|waterproof(?:ing)?|leak\s*repair)\b/g, 'roofing')
-      .replace(/\b(?:paint(?:ing)?|repaint(?:ing)?|wall\s*paint)\b/g, 'painting')
+      .replace(
+        /\b(?:plumb(?:ing|er)?|plum(?:b|p|bing)?|pipes?|pipework|water\s+pipe|water\s+system|sanitary|sanitation)\b/g,
+        'plumbing',
+      )
+      .replace(
+        /\b(?:elec|electric|electricals?|electrician|electrial|electic|wiring|wirring|wireing|rewiring|lighting)\b/g,
+        'electrical',
+      )
+      .replace(
+        /\b(?:air\s*conditioning|air\s*con|aircon|a\/c|ac|hvac|air\s*conditioner|airconditioner)\b/g,
+        'hvac',
+      )
+      .replace(
+        /\b(?:roof\s*leak|roof(?:ing)?|waterproof(?:ing)?|leak\s*repair)\b/g,
+        'roofing',
+      )
+      .replace(
+        /\b(?:paint(?:ing)?|repaint(?:ing)?|wall\s*paint)\b/g,
+        'painting',
+      )
       .replace(/\b(?:tile|tiles|tiling)\b/g, 'tiling')
       .replace(/\b(?:carpenter|carpentry|woodwork|wood\s*work)\b/g, 'carpentry')
-      .replace(/\b(?:steel|metal|welding|welder|ironwork|metalwork)\b/g, 'steel')
-      .replace(/\b(?:glass|aluminium|aluminum|alum(?:inium)?|partition)\b/g, 'glass aluminium')
+      .replace(
+        /\b(?:steel|metal|welding|welder|ironwork|metalwork)\b/g,
+        'steel',
+      )
+      .replace(
+        /\b(?:glass|aluminium|aluminum|alum(?:inium)?|partition)\b/g,
+        'glass aluminium',
+      )
       .replace(/\b(?:clean(?:ing)?|maid|housekeep(?:ing)?)\b/g, 'cleaning')
       .replace(/\b(?:pest|termite|exterminat(?:e|ion))\b/g, 'pest control')
       .replace(/\b(?:moving|relocation|mover|transport)\b/g, 'moving')
@@ -1693,16 +1792,43 @@ export class FixerService {
       .replace(/\bgreen\s+construction\b/g, 'construction')
       .replace(/\bmake\s*[- ]?\s*good\b/g, 'reinstatement')
       .replace(/\breinstate(?:ment)?\b/g, 'reinstatement')
-      .replace(/\b(?:web\s*site|web\s*page|webpage|web\s*dev|webdev|webiste|webstie|wordpress|ecommerce|e-commerce|landing\s*page)\b/g, 'website')
-      .replace(/\b(?:chat\s*bot|chat\s*boot|chatbt|chatboot|faq\s*bot)\b/g, 'chatbot')
-      .replace(/\b(?:mobile\s*app|app\s*dev|application|ios|android)\b/g, 'mobile app')
-      .replace(/\b(?:software|saas|api|backend|frontend|program(?:ming|mer))\b/g, 'software')
-      .replace(/\b(?:ai|a\.i\.|automation|machine\s*learning|ml|data\s*analytics|dashboard)\b/g, 'ai integration')
-      .replace(/\b(?:digital\s*marketing|seo|sem|ads?|advert(?:ising)?|campaign|social\s*media|facebook\s*ads?|google\s*ads?|content|branding)\b/g, 'digital marketing')
-      .replace(/\b(?:legal|lawyer|law|contract|compliance|permit|license)\b/g, 'legal lawyer')
-      .replace(/\b(?:account(?:ing|ant)?|bookkeep(?:ing)?|tax)\b/g, 'accounting accountant')
+      .replace(
+        /\b(?:web\s*site|web\s*page|webpage|web\s*dev|webdev|webiste|webstie|wordpress|ecommerce|e-commerce|landing\s*page)\b/g,
+        'website',
+      )
+      .replace(
+        /\b(?:chat\s*bot|chat\s*boot|chatbt|chatboot|faq\s*bot)\b/g,
+        'chatbot',
+      )
+      .replace(
+        /\b(?:mobile\s*app|app\s*dev|application|ios|android)\b/g,
+        'mobile app',
+      )
+      .replace(
+        /\b(?:software|saas|api|backend|frontend|program(?:ming|mer))\b/g,
+        'software',
+      )
+      .replace(
+        /\b(?:ai|a\.i\.|automation|machine\s*learning|ml|data\s*analytics|dashboard)\b/g,
+        'ai integration',
+      )
+      .replace(
+        /\b(?:digital\s*marketing|seo|sem|ads?|advert(?:ising)?|campaign|social\s*media|facebook\s*ads?|google\s*ads?|content|branding)\b/g,
+        'digital marketing',
+      )
+      .replace(
+        /\b(?:legal|lawyer|law|contract|compliance|permit|license)\b/g,
+        'legal lawyer',
+      )
+      .replace(
+        /\b(?:account(?:ing|ant)?|bookkeep(?:ing)?|tax)\b/g,
+        'accounting accountant',
+      )
       .replace(/\b(?:audit|auditor|cpa)\b/g, 'cpa audit')
-      .replace(/\b(?:architect|architecture|interior\s*designer|engineer|engineering|structural|civil|mechanical|mep)\b/g, 'professional design')
+      .replace(
+        /\b(?:architect|architecture|interior\s*designer|engineer|engineering|structural|civil|mechanical|mep)\b/g,
+        'professional design',
+      )
       .replace(/\b(?:safety\s*officer|safety|hse|ehs)\b/g, 'safety officer')
       .replace(/\bsocial\s*media\b/g, 'socialmedia')
       .replace(/\bair\s*conditioning\b/g, 'airconditioning')
@@ -1915,6 +2041,11 @@ export class FixerService {
   ): boolean {
     const normalizedCandidate = this.normalizeSearchText(candidateServiceText);
     if (!normalizedCandidate) return false;
+    const requestedIntent = this.inferServiceIntentKey(searchTerms);
+    const candidateIntent = this.inferServiceIntentKey(candidateServiceText);
+    if (requestedIntent) {
+      return candidateIntent === requestedIntent;
+    }
 
     return this.getServiceIntentTerms(searchTerms).some(
       (term) =>

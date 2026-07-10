@@ -1857,8 +1857,10 @@ describe('FixerService', () => {
           description: 'Water pipe repair specialist',
           pastProjectType: 'plumbing',
           bio: 'Home water pipe team',
-          serviceProvince: '\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23',
-          serviceDistrict: '\u0e27\u0e31\u0e07\u0e17\u0e2d\u0e07\u0e2b\u0e25\u0e32\u0e07',
+          serviceProvince:
+            '\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23',
+          serviceDistrict:
+            '\u0e27\u0e31\u0e07\u0e17\u0e2d\u0e07\u0e2b\u0e25\u0e32\u0e07',
           servicePostalCode: '10310',
           priceList: [
             {
@@ -1880,8 +1882,10 @@ describe('FixerService', () => {
           description: 'Digital ads team',
           pastProjectType: 'marketing',
           bio: 'Image ads and social media',
-          serviceProvince: '\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23',
-          serviceDistrict: '\u0e27\u0e31\u0e07\u0e17\u0e2d\u0e07\u0e2b\u0e25\u0e32\u0e07',
+          serviceProvince:
+            '\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23',
+          serviceDistrict:
+            '\u0e27\u0e31\u0e07\u0e17\u0e2d\u0e07\u0e2b\u0e25\u0e32\u0e07',
           servicePostalCode: '10310',
           priceList: [
             {
@@ -1915,7 +1919,9 @@ describe('FixerService', () => {
         result.find((candidate: { id: string }) => candidate.id === 'ads-team'),
       ).toBeUndefined();
       expect(
-        result.find((candidate: { id: string }) => candidate.id === 'pipe-team'),
+        result.find(
+          (candidate: { id: string }) => candidate.id === 'pipe-team',
+        ),
       ).toHaveProperty('estimatedBreakdown', [
         {
           service: 'water pipe repair',
@@ -1954,11 +1960,18 @@ describe('FixerService', () => {
           description: 'Electrical wiring specialist',
           pastProjectType: 'household',
           bio: 'Home electrical team',
-          serviceProvince: '\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23',
-          serviceDistrict: '\u0e27\u0e31\u0e07\u0e17\u0e2d\u0e07\u0e2b\u0e25\u0e32\u0e07',
+          serviceProvince:
+            '\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23',
+          serviceDistrict:
+            '\u0e27\u0e31\u0e07\u0e17\u0e2d\u0e07\u0e2b\u0e25\u0e32\u0e07',
           servicePostalCode: '10310',
           priceList: [
-            { service: 'electrical wiring', quantity: '1', unit: 'job', finalPrice: '1800' },
+            {
+              service: 'electrical wiring',
+              quantity: '1',
+              unit: 'job',
+              finalPrice: '1800',
+            },
           ],
           user: { name: 'Electric Team' },
           skills: [{ category: 'household', name: 'electrical wiring' }],
@@ -1972,11 +1985,18 @@ describe('FixerService', () => {
           description: 'Roof leak and waterproofing specialist',
           pastProjectType: 'household',
           bio: 'Roofing repair team',
-          serviceProvince: '\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23',
-          serviceDistrict: '\u0e27\u0e31\u0e07\u0e17\u0e2d\u0e07\u0e2b\u0e25\u0e32\u0e07',
+          serviceProvince:
+            '\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23',
+          serviceDistrict:
+            '\u0e27\u0e31\u0e07\u0e17\u0e2d\u0e07\u0e2b\u0e25\u0e32\u0e07',
           servicePostalCode: '10310',
           priceList: [
-            { service: 'roof leak waterproofing', quantity: '1', unit: 'sq.m.', finalPrice: '900' },
+            {
+              service: 'roof leak waterproofing',
+              quantity: '1',
+              unit: 'sq.m.',
+              finalPrice: '900',
+            },
           ],
           user: { name: 'Roof Team' },
           skills: [{ category: 'household', name: 'roof leak waterproofing' }],
@@ -1990,11 +2010,18 @@ describe('FixerService', () => {
           description: 'Digital ads team',
           pastProjectType: 'marketing',
           bio: 'Image ads and social media',
-          serviceProvince: '\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23',
-          serviceDistrict: '\u0e27\u0e31\u0e07\u0e17\u0e2d\u0e07\u0e2b\u0e25\u0e32\u0e07',
+          serviceProvince:
+            '\u0e01\u0e23\u0e38\u0e07\u0e40\u0e17\u0e1e\u0e21\u0e2b\u0e32\u0e19\u0e04\u0e23',
+          serviceDistrict:
+            '\u0e27\u0e31\u0e07\u0e17\u0e2d\u0e07\u0e2b\u0e25\u0e32\u0e07',
           servicePostalCode: '10310',
           priceList: [
-            { service: 'image ads', quantity: '1', unit: 'image', finalPrice: '2000' },
+            {
+              service: 'image ads',
+              quantity: '1',
+              unit: 'image',
+              finalPrice: '2000',
+            },
           ],
           user: { name: 'Ads Team' },
           skills: [{ category: 'marketing', name: 'image ads' }],
@@ -2018,9 +2045,17 @@ describe('FixerService', () => {
       expect(ids).toContain('roof-team');
       expect(ids).not.toContain('ads-team');
       expect(
-        result.find((candidate: { id: string }) => candidate.id === 'electric-team'),
+        result.find(
+          (candidate: { id: string }) => candidate.id === 'electric-team',
+        ),
       ).toHaveProperty('estimatedBreakdown', [
-        { service: 'electrical wiring', qty: 2, unit: 'job', unitRate: 1800, total: 3600 },
+        {
+          service: 'electrical wiring',
+          qty: 2,
+          unit: 'job',
+          unitRate: 1800,
+          total: 3600,
+        },
       ]);
     });
 
@@ -2038,8 +2073,18 @@ describe('FixerService', () => {
           serviceProvince: 'Bangkok',
           serviceDistrict: 'Pathum Wan',
           priceList: [
-            { service: 'website development', quantity: '1', unit: 'page', finalPrice: '1000' },
-            { service: 'chatbot development', quantity: '100', unit: 'FAQ', finalPrice: '10000' },
+            {
+              service: 'website development',
+              quantity: '1',
+              unit: 'page',
+              finalPrice: '1000',
+            },
+            {
+              service: 'chatbot development',
+              quantity: '100',
+              unit: 'FAQ',
+              finalPrice: '10000',
+            },
           ],
           user: { name: 'Web Team' },
           skills: [{ category: 'project', name: 'website development' }],
@@ -2056,7 +2101,12 @@ describe('FixerService', () => {
           serviceProvince: 'Bangkok',
           serviceDistrict: 'Pathum Wan',
           priceList: [
-            { service: 'water pipe repair', quantity: '1', unit: 'job', finalPrice: '2500' },
+            {
+              service: 'water pipe repair',
+              quantity: '1',
+              unit: 'job',
+              finalPrice: '2500',
+            },
           ],
           user: { name: 'Pipe Team' },
           skills: [{ category: 'household', name: 'water pipe repair' }],
@@ -2079,8 +2129,20 @@ describe('FixerService', () => {
         'web-team',
       ]);
       expect(result[0]).toHaveProperty('estimatedBreakdown', [
-        { service: 'website development', qty: 10, unit: 'page', unitRate: 1000, total: 10000 },
-        { service: 'chatbot development', qty: 100, unit: 'FAQ', unitRate: 100, total: 10000 },
+        {
+          service: 'website development',
+          qty: 10,
+          unit: 'page',
+          unitRate: 1000,
+          total: 10000,
+        },
+        {
+          service: 'chatbot development',
+          qty: 100,
+          unit: 'FAQ',
+          unitRate: 100,
+          total: 10000,
+        },
       ]);
     });
     it('keeps selected-location household jobs in the same district outside province-wide exceptions', async () => {
@@ -2706,6 +2768,117 @@ describe('FixerService', () => {
         result.find((candidate: { id: string }) => candidate.id === 'suppadesh')
           ?.selectedReason,
       ).not.toMatch(/Cheapest/);
+    });
+
+    it('keeps construction and chatbot lines for mixed quantity-after-service phrases', async () => {
+      prisma.fixer.findMany.mockResolvedValue([
+        {
+          id: 'bhavesh',
+          tier: 'ECONOMY',
+          rating: 5,
+          completedJobs: 0,
+          yearsExperience: 2,
+          description: 'Office build and digital delivery team',
+          pastProjectType: 'fitout website chatbot construction',
+          bio: 'Fitout, reinstatement, construction, website, and chatbot',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Pathum Wan',
+          priceList: [
+            {
+              service: 'Fit-out',
+              quantity: '1',
+              unit: 'sq.m.',
+              finalPrice: '30000',
+            },
+            {
+              service: 'Reinstatement',
+              quantity: '1',
+              unit: 'sq.m.',
+              finalPrice: '10000',
+            },
+            {
+              service: 'Construction',
+              quantity: '1',
+              unit: 'sq.m.',
+              finalPrice: '20000',
+            },
+            {
+              service: 'Website development',
+              quantity: '1',
+              unit: 'page',
+              finalPrice: '1000',
+            },
+            {
+              service: 'Chatbot',
+              quantity: '1',
+              unit: 'FAQ',
+              finalPrice: '100',
+            },
+          ],
+          user: {
+            name: 'Bhavesh Fungprasertsuk',
+            company: 'Bhavesh Fungprasertsuk',
+          },
+          skills: [
+            { category: 'project', name: 'fitout' },
+            { category: 'project', name: 'construction' },
+            { category: 'project', name: 'website development' },
+            { category: 'project', name: 'chatbot' },
+          ],
+        },
+      ]);
+
+      const result = await service.matchFixers(
+        'LANDSCAPING',
+        'Pathum Wan',
+        'Bangkok',
+        'I want a team to carry out a 600 sq.m. office fit out, a 300 sq.m. reinstatement work a 700 office building construction and a 10 page website development and a 100 FAQ chatbot development.',
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toHaveProperty('estimatedBreakdown', [
+        {
+          service: 'Fit-out',
+          qty: 600,
+          unit: 'sq.m.',
+          unitRate: 30000,
+          total: 18000000,
+        },
+        {
+          service: 'Reinstatement',
+          qty: 300,
+          unit: 'sq.m.',
+          unitRate: 10000,
+          total: 3000000,
+        },
+        {
+          service: 'Construction',
+          qty: 700,
+          unit: 'sq.m.',
+          unitRate: 20000,
+          total: 14000000,
+        },
+        {
+          service: 'Website development',
+          qty: 10,
+          unit: 'page',
+          unitRate: 1000,
+          total: 10000,
+        },
+        {
+          service: 'Chatbot',
+          qty: 100,
+          unit: 'FAQ',
+          unitRate: 100,
+          total: 10000,
+        },
+      ]);
+      expect(result[0]).toEqual(
+        expect.objectContaining({
+          estimatedTotal: 35020000,
+          price: 35000000,
+        }),
+      );
     });
 
     it('matches each mixed project quantity only to its local service phrase', async () => {
