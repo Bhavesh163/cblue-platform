@@ -3190,14 +3190,13 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       return new Set<string>();
     }
   })();
-  const allowLocalCustomerWorkflow = Boolean(subscriber?.email?.toLowerCase().includes('ghis'));
+  const allowLocalCustomerWorkflow = false;
   const filterCustomerScopedWorkflowItems = (items: any[]) =>
     filterWorkflowItemsByKnownBackendPos(items, {
       allowLocalCustomerWorkflow,
       backendPoValues: backendOrderPos,
       fallbackBackendPoValues: fallbackBackendOrderPos,
     });
-  const useStaticDemoData = allowLocalCustomerWorkflow && !hasFetchedOrders && backendOrderPos.size === 0;
   const browserTerminalPOs = readBrowserTerminalWorkflowPos(
     typeof window !== 'undefined' ? window.localStorage : undefined,
   );
@@ -3216,8 +3215,6 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   const visibleMockDynRequests = filterCustomerScopedWorkflowItems(filterVisibleWorkflowItems(mockDynRequests, browserTerminalPOs));
   const visibleMockHistory = filterCustomerScopedWorkflowItems(mockHistory.filter((x: any) => !isHiddenTestPo(x.po)));
 
-  // Merge: mockActiveItems overrides ACTIVE_MOCK items with same po (for step progression)
-  const paidPOs = new Set(visibleMockActiveItems.map((x: any) => x.po));
   const alertClosedPOs = new Set(
     persistedCustomerAlerts
       .map((alert: any) => String(alert?.po || alert?.msg || alert?.message || '').match(/PO-(?:\d{8}|\d{4}-\d{4,})/i)?.[0] || '')
@@ -3282,10 +3279,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         orderId: o.id,
         po,
         title: (o.serviceCategory || '').replace(/_/g, ' '),
-        customer: o.fixer?.user?.name || o.partnerName || 'Suppadesh',
-        customerName: o.fixer?.user?.name || o.partnerName || 'Suppadesh',
-        fixerAlias: o.fixer?.user?.name || o.partnerName || 'Suppadesh',
-        partnerName: o.fixer?.user?.name || o.partnerName || 'Suppadesh',
+        customer: o.fixer?.user?.name || o.partnerName || 'Partner',
+        customerName: o.fixer?.user?.name || o.partnerName || 'Partner',
+        fixerAlias: o.fixer?.user?.name || o.partnerName || 'Partner',
+        partnerName: o.fixer?.user?.name || o.partnerName || 'Partner',
         date: toDisplayDateTime(o.createdAt),
         createdAt: parseDateMs(o.createdAt),
         budget: o.estimatedPrice ? `฿${Number(o.estimatedPrice).toLocaleString()}` : '฿0',
@@ -3304,12 +3301,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         description: o.description || '',
       };
     });
-  const backendActivePOs = new Set(backendActiveItems.map((item: any) => item.po));
-  const filteredStaticMock = (useStaticDemoData ? ACTIVE_MOCK : []).filter((item: any) => !paidPOs.has(item.po) && !completedPOs.has(item.po) && !backendActivePOs.has(item.po));
   const activeByPo = new Map<string, any>();
-  for (const item of filteredStaticMock) {
-    activeByPo.set(item.po, item);
-  }
   for (const item of backendActiveItems) {
     if (!completedPOs.has(item.po)) {
       activeByPo.set(item.po, item);
@@ -3344,11 +3336,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       return !isHiddenTestPo(po) && !isClosedCustomerWorkflowPo(po) && !(po && customerSideCompletedPropPos.has(po));
     })
     .sort((a: any, b: any) => parseDateMs(b.createdAt || b.date) - parseDateMs(a.createdAt || a.date));
-  // Filter static requests: hide items whose PO already has a dynamic entry (already progressed past step 6)
-  const progressedPos = new Set(visibleMockDynRequests.map((x: any) => x.po));
-  const filteredStaticRequests = (useStaticDemoData ? REQUESTS_MOCK : []).filter((x: any) => !progressedPos.has(x.po));
   const dedupedRequestMap = new Map<string, any>();
-  for (const requestItem of [...filteredStaticRequests, ...visibleMockDynRequests].filter(
+  for (const requestItem of visibleMockDynRequests.filter(
     (m: any) => !mockPayments[m.id] && !['notice', 'meeting_scheduled', 'chat_ready', 'meeting_pending_partner'].includes(String(m.type || '')),
   )) {
     const requestType = String(requestItem.type || '');
@@ -3950,19 +3939,16 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
           .filter((po: string) => isPoCode(po)),
       );
       // Gather all step-7 jobs missing a meeting_invite (repairs dashboard after F5 incorrectly removed it)
-      const step7StaticJobs = liveBackendPOs.size === 0 ? ACTIVE_MOCK.filter(
-        (j: any) => Number(j.step) === 7 && !existingMeetingPos.has(j.po) && !advancedWorkflowPos.has(j.po) && !active.find((a: any) => a.po === j.po)
-      ) : [];
       const step7ActiveJobs = active.filter((j: any) => Number(j.step) === 7 && !existingMeetingPos.has(j.po) && !advancedWorkflowPos.has(j.po) && (liveBackendPOs.size === 0 || liveBackendPOs.has(j.po)));
       const toCreate: any[] = [];
-      for (const job of [...step7StaticJobs, ...step7ActiveJobs]) {
+      for (const job of step7ActiveJobs) {
         const createdAt = job.createdAt || Date.now();
         if (!existingChatPos.has(job.po)) {
           toCreate.push({
             id: `chat-${job.po}`,
             po: job.po,
             title: job.title,
-            customer: job.fixerAlias || job.customer || 'Suppadesh',
+            customer: job.fixerAlias || job.customer || 'Partner',
             budget: job.budget || '฿0',
             tier: job.tier || 'Standard',
             desc: 'Chat is active. Send meeting invitation when you are ready.',
@@ -3976,7 +3962,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
           id: `meet-invite-${job.po}`,
           po: job.po,
           title: job.title,
-          customer: job.fixerAlias || job.customer || 'Suppadesh',
+          customer: job.fixerAlias || job.customer || 'Partner',
           budget: job.budget || '฿0',
           tier: job.tier || 'Standard',
           desc: 'Please send a meeting invitation to your partner. Fill in the venue and proposed date/time.',

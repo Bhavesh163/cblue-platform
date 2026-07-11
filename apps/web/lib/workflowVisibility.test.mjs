@@ -358,6 +358,22 @@ test("keeps partner workflow rows visible during transient empty backend PO refr
 
   assert.deepEqual(visible, ["PO-2607-8341"]);
 });
+test("rejects browser-only workflow cards when no backend PO is known", () => {
+  const visible = filterWorkflowItemsByKnownBackendPos(
+    [
+      { po: "PO-2605-1200", title: "Static demo request" },
+      { po: "PO-2607-8879", title: "Unpersisted browser request" },
+    ],
+    {
+      allowLocalCustomerWorkflow: false,
+      backendPoValues: [],
+      fallbackBackendPoValues: [],
+    },
+  );
+
+  assert.deepEqual(visible, []);
+});
+
 test("preserves terminal customer history entries during storage synchronization", () => {
   const history = normalizeWorkflowHistoryItems([
     {
