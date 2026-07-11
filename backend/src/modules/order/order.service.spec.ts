@@ -327,6 +327,40 @@ describe('OrderService', () => {
         }),
       ]);
     });
+
+    it('excludes legacy orders whose collection rows cannot satisfy the workflow detail contract', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        fixer: { id: 'fixer-1' },
+      });
+      prisma.order.findMany.mockResolvedValue([
+        {
+          id: 'legacy-1100',
+          userId: 'customer-1',
+          fixerId: 'fixer-1',
+          description: 'PO-2606-1100 | Legacy browser-only workflow',
+        },
+        {
+          id: 'legacy-2677',
+          userId: 'customer-1',
+          fixerId: 'fixer-1',
+          description: 'PO-2606-2677 | Legacy browser-only workflow',
+        },
+        {
+          id: 'live-8879',
+          userId: 'customer-1',
+          fixerId: 'fixer-1',
+          description: 'PO-2607-8879 | Persisted workflow',
+        },
+      ]);
+      prisma.user.findMany.mockResolvedValue([
+        { id: 'customer-1', name: 'Customer', email: 'customer@example.com' },
+      ]);
+
+      const result = await service.findMyFixerOrders('partner-user-1');
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual(expect.objectContaining({ id: 'live-8879' }));
+    });
   });
 
   describe('getOrderAttachments', () => {

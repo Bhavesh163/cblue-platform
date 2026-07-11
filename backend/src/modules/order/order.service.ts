@@ -35,7 +35,13 @@ const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   COMPLETED: [],
   CANCELLED: [],
 };
-const HIDDEN_TEST_PO_MARKERS = ['PO-2605-6716', 'PO-2605-9605', 'PO-2605-8699'];
+const HIDDEN_TEST_PO_MARKERS = [
+  'PO-2605-6716',
+  'PO-2605-9605',
+  'PO-2605-8699',
+  'PO-2606-1100',
+  'PO-2606-2677',
+];
 const isHiddenTestOrder = (description?: string | null) =>
   HIDDEN_TEST_PO_MARKERS.some((po) =>
     String(description || '')

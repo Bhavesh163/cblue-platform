@@ -1098,6 +1098,11 @@ export default function FixerResults({
           description: `${poNumber} | TIER:${typeof selectedFixer?.tier === "string" ? selectedFixer.tier.toUpperCase() : "STANDARD"} | LOC:${bookingLocation} | ${description}`,
           fixerId: selectedFixer.id,
           estimatedPrice: estPrice,
+          budgetBreakdown: Array.isArray(
+            (selectedFixer as any)?.estimatedBreakdown,
+          )
+            ? (selectedFixer as any).estimatedBreakdown
+            : [],
           ...(attachmentPayload.length > 0 ? { attachments: attachmentPayload } : {}),
         };
 
