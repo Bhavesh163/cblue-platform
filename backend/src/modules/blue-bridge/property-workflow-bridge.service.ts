@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PropertyInquiryStatus, Prisma } from '@prisma/client';
 import { randomInt } from 'crypto';
+import { PropertyInquiryService } from '../property-inquiry/property-inquiry.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PropertyService } from '../property/property.service';
 import {
@@ -32,12 +33,21 @@ export class PropertyWorkflowBridgeService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly propertyService: PropertyService,
+    private readonly propertyInquiryService?: PropertyInquiryService,
   ) {}
 
   async listings(query: PropertyWorkflowListingQueryDto) {
     const result = await this.propertyService.search({
       page: query.page || 1,
       limit: query.limit || 20,
+      propertyType: query.propertyType,
+      listingType: query.listingType,
+      province: query.province,
+      district: query.district,
+      subdistrict: query.subdistrict,
+      minPrice: query.minPrice,
+      maxPrice: query.maxPrice,
+      keyword: query.keyword,
     });
     return {
       ...result,
@@ -96,13 +106,29 @@ export class PropertyWorkflowBridgeService {
             }
           : {}),
         workflowEvents: {
-          create: {
-            action: 'inquiry-created',
-            status: PropertyInquiryStatus.NOTIFY_SENT,
-            step: 3,
-            actorId: customer.id,
-            metadata: { sourceVersion: SOURCE_VERSION },
-          },
+          create: [
+            {
+              action: 'match-selected',
+              status: PropertyInquiryStatus.NOTIFY_SENT,
+              step: 1,
+              actorId: customer.id,
+              metadata: { sourceVersion: SOURCE_VERSION },
+            },
+            {
+              action: 'listing-selected',
+              status: PropertyInquiryStatus.NOTIFY_SENT,
+              step: 2,
+              actorId: customer.id,
+              metadata: { sourceVersion: SOURCE_VERSION },
+            },
+            {
+              action: 'partner-notified',
+              status: PropertyInquiryStatus.NOTIFY_SENT,
+              step: 3,
+              actorId: customer.id,
+              metadata: { sourceVersion: SOURCE_VERSION },
+            },
+          ],
         },
       },
     });
@@ -114,7 +140,17 @@ export class PropertyWorkflowBridgeService {
     const inquiry = await this.loadInquiry(reference);
     const actor = this.actorFor(inquiry, userId);
     if (!actor) throw new ForbiddenException('Not authorized for this inquiry');
-    return this.projectSnapshot(inquiry, actor);
+    const messages = await this.loadChat(userId, inquiry.poNumber);
+    return this.projectSnapshot(inquiry, actor, messages);
+  }
+
+  private async loadChat(userId: string, reference: string) {
+    try {
+      if (!this.propertyInquiryService) return [];
+      return await this.propertyInquiryService.listChatByPo(userId, reference);
+    } catch {
+      return [];
+    }
   }
 
   async action(
@@ -304,12 +340,21 @@ export class PropertyWorkflowBridgeService {
           status: PropertyInquiryStatus.CANCELLED,
           step: inquiry.step,
           metadata: {},
-      }
         };
+      }
     }
   }
 
-  private projectSnapshot(inquiry: any, actor: 'customer' | 'lister') {
+  private projectSnapshot(
+    inquiry: any,
+    actor: 'customer' | 'lister',
+    messages: Array<Record<string, unknown>>,
+  ) {
+    const terminal = [
+      PropertyInquiryStatus.CANCELLED,
+      PropertyInquiryStatus.DECLINED,
+      PropertyInquiryStatus.COMPLETED,
+    ].includes(inquiry.status);
     const postFee = [
       PropertyInquiryStatus.PAID,
       PropertyInquiryStatus.MEETING_SENT,
@@ -319,12 +364,23 @@ export class PropertyWorkflowBridgeService {
     const events = inquiry.workflowEvents.filter(
       (event: any) => actor === 'lister' || !event.isPrivate,
     );
+    const feeEvent = inquiry.workflowEvents.find(
+      (event: any) => event.action === 'fee',
+    );
     return {
       reference: inquiry.poNumber,
       status: inquiry.status,
+      poNumber: inquiry.poNumber,
       currentStep: inquiry.step,
       totalSteps: TOTAL_STEPS,
       actionOwner: this.actionOwner(inquiry.status),
+      availableActions: this.availableActions(inquiry.status, actor),
+      activityBucket: terminal
+        ? 'history'
+        : inquiry.step <= 4
+          ? 'request'
+          : 'active',
+      terminalState: terminal ? inquiry.status : null,
       stepLabels: [
         'Select listing',
         'Review listing',
@@ -338,7 +394,17 @@ export class PropertyWorkflowBridgeService {
       sourceVersion: SOURCE_VERSION,
       listing: this.publicListing(inquiry.property, postFee),
       selectedLister: { id: inquiry.listerUserId, name: inquiry.listerName },
+      customer: {
+        id: inquiry.customerId,
+        name: inquiry.customerName,
+        email: inquiry.customerEmail,
+      },
       requestDetails: inquiry.requestDetails || '',
+      feeState: {
+        required: inquiry.status === PropertyInquiryStatus.ACCEPTED,
+        paid: postFee,
+        freePass: Boolean((feeEvent?.metadata as any)?.freePass),
+      },
       attachments: inquiry.attachments.map((file: any) => ({
         id: file.id,
         label: file.label || 'Uploaded file',
@@ -353,8 +419,9 @@ export class PropertyWorkflowBridgeService {
       },
       chat: {
         reference: inquiry.poNumber,
-        enabled: postFee,
-        state: postFee ? 'available' : 'locked',
+        enabled: postFee && !terminal,
+        state: terminal ? 'closed' : postFee ? 'available' : 'locked',
+        messages: terminal ? [] : messages,
       },
       ratings: {
         customer: inquiry.customerRating
@@ -369,20 +436,29 @@ export class PropertyWorkflowBridgeService {
         status: event.status,
         step: event.step,
         note: event.note,
+        private: event.isPrivate,
         createdAt: event.createdAt,
       })),
-      alerts: events
-        .filter(
-          (event: any) =>
-            event.actorId !==
-            (actor === 'customer' ? inquiry.customerId : inquiry.listerUserId),
-        )
-        .map((event: any) => ({
-          action: event.action,
-          status: event.status,
-          step: event.step,
-          createdAt: event.createdAt,
-        })),
+      timestamps: {
+        createdAt: inquiry.createdAt,
+        updatedAt: inquiry.updatedAt,
+      },
+      alerts: terminal
+        ? []
+        : events
+            .filter(
+              (event: any) =>
+                event.actorId !==
+                (actor === 'customer'
+                  ? inquiry.customerId
+                  : inquiry.listerUserId),
+            )
+            .map((event: any) => ({
+              action: event.action,
+              status: event.status,
+              step: event.step,
+              createdAt: event.createdAt,
+            })),
     };
   }
 
@@ -391,9 +467,45 @@ export class PropertyWorkflowBridgeService {
     if (status === PropertyInquiryStatus.ACCEPTED) return 'customer';
     if (status === PropertyInquiryStatus.PAID) return 'customer';
     if (status === PropertyInquiryStatus.MEETING_SENT) return 'lister';
-    if (status === PropertyInquiryStatus.MEETING_CONFIRMED)
+    if (status === PropertyInquiryStatus.MEETING_CONFIRMED) {
       return 'customer-and-lister';
+    }
     return 'none';
+  }
+
+  private availableActions(
+    status: PropertyInquiryStatus,
+    actor: 'customer' | 'lister',
+  ) {
+    const terminalStatuses: PropertyInquiryStatus[] = [
+      PropertyInquiryStatus.CANCELLED,
+      PropertyInquiryStatus.DECLINED,
+      PropertyInquiryStatus.COMPLETED,
+    ];
+    if (terminalStatuses.includes(status)) {
+      return [];
+    }
+    if (status === PropertyInquiryStatus.NOTIFY_SENT) {
+      return actor === 'lister'
+        ? ['partner-accept', 'partner-decline', 'customer-cancel']
+        : ['customer-cancel'];
+    }
+    if (status === PropertyInquiryStatus.ACCEPTED) {
+      return actor === 'customer'
+        ? ['fee-proceed', 'free-pass', 'customer-cancel']
+        : ['customer-cancel'];
+    }
+    if (status === PropertyInquiryStatus.PAID) {
+      return actor === 'customer'
+        ? ['viewing-invite', 'customer-cancel']
+        : ['customer-cancel'];
+    }
+    if (status === PropertyInquiryStatus.MEETING_SENT) {
+      return actor === 'lister'
+        ? ['viewing-confirm', 'customer-cancel']
+        : ['customer-cancel'];
+    }
+    return actor === 'customer' ? ['rate-partner'] : ['rate-customer'];
   }
 
   private publicListing(property: any, includeContact = false) {
