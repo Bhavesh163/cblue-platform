@@ -512,6 +512,7 @@ model PropertyInquiry {
   meetingDate   String?
   meetingTime   String?
   meetingVenue  String?
+  requestDetails String?
   customerRating   Int?
   customerComment  String?
   listerRating     Int?
@@ -519,6 +520,8 @@ model PropertyInquiry {
   reselectedOnce   Boolean           @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  attachments PropertyInquiryAttachment[]
+  workflowEvents PropertyInquiryWorkflowEvent[]
 
   @@index([customerId])
   @@index([listerUserId])
@@ -561,4 +564,33 @@ model Subscriber {
   @@index([email])
   @@index([status])
   @@map("subscribers")
+}
+
+model PropertyInquiryAttachment {
+  id String @id @default(uuid())
+  inquiryId String
+  inquiry PropertyInquiry @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+  uploadedBy String
+  label String?
+  url String
+  key String
+  createdAt DateTime @default(now())
+  @@index([inquiryId])
+  @@map("property_inquiry_attachments")
+}
+
+model PropertyInquiryWorkflowEvent {
+  id String @id @default(uuid())
+  inquiryId String
+  inquiry PropertyInquiry @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+  action String
+  status PropertyInquiryStatus
+  step Int
+  actorId String
+  isPrivate Boolean @default(false)
+  note String?
+  metadata Json?
+  createdAt DateTime @default(now())
+  @@index([inquiryId, createdAt])
+  @@map("property_inquiry_workflow_events")
 }

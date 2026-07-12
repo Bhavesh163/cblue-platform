@@ -1,9 +1,13 @@
 import { Module } from '@nestjs/common';
+import { PropertyModule } from '../property/property.module';
 import { BlueBridgeController } from './blue-bridge.controller';
 import { BlueBridgeService } from './blue-bridge.service';
+import { PropertyWorkflowBridgeController } from './property-workflow-bridge.controller';
+import { PropertyWorkflowBridgeService } from './property-workflow-bridge.service';
 
 @Module({
-  controllers: [BlueBridgeController],
-  providers: [BlueBridgeService],
+  imports: [PropertyModule],
+  controllers: [BlueBridgeController, PropertyWorkflowBridgeController],
+  providers: [BlueBridgeService, PropertyWorkflowBridgeService],
 })
 export class BlueBridgeModule {}
