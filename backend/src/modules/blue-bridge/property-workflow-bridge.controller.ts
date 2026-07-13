@@ -8,6 +8,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { UserRole } from '@prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import {
   CreatePropertyWorkflowInquiryDto,
@@ -39,8 +40,9 @@ export class PropertyWorkflowBridgeController {
   inquiry(
     @Param('reference') reference: string,
     @CurrentUser('id') userId: string,
+    @CurrentUser('role') userRole: UserRole,
   ) {
-    return this.workflow.snapshot(reference, userId);
+    return this.workflow.snapshot(reference, userId, userRole);
   }
 
   @Post('inquiries/:reference/accept')

@@ -5813,8 +5813,13 @@ export default function FixerProPage() {
                     }, ...(Array.isArray(existingAlerts) ? existingAlerts : [])].slice(0, 20);
                     writeWorkflowStorage(customerAlertsKey, nextAlerts);
                   } catch {}
-                  await updatePropInquiry(inquiry.id, { status: "DECLINED", step: 8 }, po);
-                  setPropInquiries((prev) => prev.map((p) => p.id === inquiry.id ? { ...p, status: 'DECLINED', step: 8, updatedAt: declineAt } : p));
+                  const declined = await updatePropInquiry(
+                    inquiry.id,
+                    { status: "DECLINED", listerComment: propDeclineComment },
+                    po,
+                  );
+                  if (!declined) return;
+                  setPropInquiries((prev) => prev.map((p) => p.id === inquiry.id ? { ...p, status: 'DECLINED', step: 4, updatedAt: declineAt } : p));
                   setPropAcceptModal(null);
                   setPropDeclineModal(null);
                   setPropDeclineComment('');
@@ -5888,7 +5893,7 @@ export default function FixerProPage() {
                 </button>
                 <button
                   onClick={async () => {
-                    await updatePropInquiry(propMeetingConfirmModal!.id, { status: "MEETING_CONFIRMED", step: 8 }, propMeetingConfirmModal!.poNumber);
+                    await updatePropInquiry(propMeetingConfirmModal!.id, { status: "MEETING_CONFIRMED", step: 7 }, propMeetingConfirmModal!.poNumber);
                     setPropMeetingConfirmModal(null);
                     alert(locale === "th" ? "ยืนยันนัดหมายแล้ว! การนัดหมายจะปรากฏในปฏิทิน" : "Meeting confirmed! It will appear in upcoming meetings for both parties.");
                   }}

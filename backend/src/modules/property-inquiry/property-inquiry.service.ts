@@ -236,7 +236,7 @@ export class PropertyInquiryService {
           ...listerEmailFilters,
         ],
       },
-      select: { id: true, poNumber: true },
+      select: { id: true, poNumber: true, status: true },
     });
 
     if (!inquiry) {
@@ -281,6 +281,16 @@ export class PropertyInquiryService {
     }
 
     const inquiry = await this.findAuthorizedInquiryByPo(userId, poNumber);
+    const chatEnabledStatuses: PropertyInquiryStatus[] = [
+      PropertyInquiryStatus.PAID,
+      PropertyInquiryStatus.MEETING_SENT,
+      PropertyInquiryStatus.MEETING_CONFIRMED,
+    ];
+    if (!chatEnabledStatuses.includes(inquiry.status)) {
+      throw new BadRequestException(
+        'Chat is available after Fee & Proceed and closes when the workflow is completed',
+      );
+    }
     await this.ensurePropertyInquiryChatTable();
 
     const sender = await this.prisma.user.findUnique({
@@ -379,6 +389,16 @@ export class PropertyInquiryService {
         customerName: dto.customerName || customer.name || '',
         customerEmail: this.normalizeEmail(dto.customerEmail || customer.email),
         listerName: dto.listerName || lister.name || property.contactName || '',
+        status: PropertyInquiryStatus.NOTIFY_SENT,
+        step: 3,
+        workflowEvents: {
+          create: {
+            action: 'partner-notified',
+            status: PropertyInquiryStatus.NOTIFY_SENT,
+            step: 3,
+            actorId: customerId,
+          },
+        },
       },
     });
   }
@@ -565,71 +585,147 @@ export class PropertyInquiryService {
     if (!inquiry) {
       throw new NotFoundException('Inquiry not found');
     }
-    // Allow canonicalized bridge identities (same subscriber/email) to update.
+
     const requesterIds = await this.resolveLinkedUserIds(userId);
-    const requesterEmails = await this.resolveLinkedEmails(
-      userId,
-      requesterIds,
-    );
-    const isAllowed =
+    const requesterEmails = await this.resolveLinkedEmails(userId, requesterIds);
+    const isCustomer =
       requesterIds.includes(inquiry.customerId) ||
-      requesterIds.includes(inquiry.listerUserId) ||
       this.hasAnyLinkedEmail(requesterEmails, [
         inquiry.customerEmail,
         inquiry.customer?.email,
+      ]);
+    const isLister =
+      requesterIds.includes(inquiry.listerUserId) ||
+      this.hasAnyLinkedEmail(requesterEmails, [
         inquiry.lister?.email,
         inquiry.property?.user?.email,
       ]);
-    if (!isAllowed) {
+    if (!isCustomer && !isLister) {
       throw new ForbiddenException('Not authorized to update this inquiry');
     }
 
-    const ratingProvided =
-      dto.customerRating !== undefined || dto.listerRating !== undefined;
-    const mergedCustomerRating =
-      dto.customerRating !== undefined
-        ? dto.customerRating
-        : inquiry.customerRating;
-    const mergedListerRating =
-      dto.listerRating !== undefined ? dto.listerRating : inquiry.listerRating;
-    const bothRatingsSubmitted =
-      mergedCustomerRating != null && mergedListerRating != null;
+    const requireCustomer = () => {
+      if (!isCustomer) throw new ForbiddenException('Only the customer may perform this action');
+    };
+    const requireLister = () => {
+      if (!isLister) throw new ForbiddenException('Only the selected lister may perform this action');
+    };
+    const requireStatus = (...statuses: PropertyInquiryStatus[]) => {
+      if (!statuses.includes(inquiry.status)) {
+        throw new BadRequestException(
+          'Action is invalid while inquiry is ' + inquiry.status,
+        );
+      }
+    };
 
-    let nextStatus = dto.status;
-    if (ratingProvided && !bothRatingsSubmitted) {
+    let nextStatus: PropertyInquiryStatus;
+    let nextStep: number;
+    let action: string;
+    let privateNote: string | null = null;
+    let customerRating = inquiry.customerRating;
+    let customerComment = inquiry.customerComment;
+    let listerRating = inquiry.listerRating;
+    let listerComment = inquiry.listerComment;
+    let meetingDate = inquiry.meetingDate;
+    let meetingTime = inquiry.meetingTime;
+    let meetingVenue = inquiry.meetingVenue;
+    let reselectedOnce = inquiry.reselectedOnce;
+
+    if (dto.status === PropertyInquiryStatus.ACCEPTED) {
+      requireLister();
+      requireStatus(PropertyInquiryStatus.NOTIFY_SENT);
+      nextStatus = PropertyInquiryStatus.ACCEPTED;
+      nextStep = 4;
+      action = 'partner-accept';
+    } else if (dto.status === PropertyInquiryStatus.DECLINED) {
+      requireLister();
+      requireStatus(PropertyInquiryStatus.NOTIFY_SENT);
+      nextStatus = PropertyInquiryStatus.DECLINED;
+      nextStep = 4;
+      action = 'partner-decline';
+      privateNote = String(dto.listerComment || '').trim() || null;
+    } else if (dto.status === PropertyInquiryStatus.PAID) {
+      requireCustomer();
+      requireStatus(PropertyInquiryStatus.ACCEPTED);
+      nextStatus = PropertyInquiryStatus.PAID;
+      nextStep = 5;
+      action = 'fee-proceed';
+    } else if (dto.status === PropertyInquiryStatus.MEETING_SENT) {
+      requireCustomer();
+      requireStatus(PropertyInquiryStatus.PAID);
+      if (!dto.meetingDate || !dto.meetingTime || !dto.meetingVenue) {
+        throw new BadRequestException('Viewing date, time, and venue are required');
+      }
+      nextStatus = PropertyInquiryStatus.MEETING_SENT;
+      nextStep = 7;
+      action = 'viewing-invite';
+      meetingDate = dto.meetingDate;
+      meetingTime = dto.meetingTime;
+      meetingVenue = dto.meetingVenue;
+    } else if (dto.status === PropertyInquiryStatus.MEETING_CONFIRMED) {
+      requireLister();
+      requireStatus(PropertyInquiryStatus.MEETING_SENT);
       nextStatus = PropertyInquiryStatus.MEETING_CONFIRMED;
+      nextStep = 7;
+      action = 'viewing-confirmation';
+    } else if (dto.status === PropertyInquiryStatus.CANCELLED) {
+      requireCustomer();
+      requireStatus(
+        PropertyInquiryStatus.NOTIFY_SENT,
+        PropertyInquiryStatus.ACCEPTED,
+        PropertyInquiryStatus.PAID,
+        PropertyInquiryStatus.MEETING_SENT,
+        PropertyInquiryStatus.MEETING_CONFIRMED,
+      );
+      nextStatus = PropertyInquiryStatus.CANCELLED;
+      nextStep = inquiry.step;
+      action = 'customer-cancel';
+      reselectedOnce = dto.reselectedOnce ?? inquiry.reselectedOnce;
+    } else if (dto.customerRating !== undefined || dto.listerRating !== undefined) {
+      requireStatus(PropertyInquiryStatus.MEETING_CONFIRMED);
+      if (dto.customerRating !== undefined) {
+        requireCustomer();
+        customerRating = dto.customerRating;
+        customerComment = dto.customerComment || null;
+        action = 'customer-rating';
+      } else {
+        requireLister();
+        listerRating = dto.listerRating ?? null;
+        listerComment = dto.listerComment || null;
+        action = 'lister-rating';
+      }
+      nextStatus =
+        customerRating != null && listerRating != null
+          ? PropertyInquiryStatus.COMPLETED
+          : PropertyInquiryStatus.MEETING_CONFIRMED;
+      nextStep = 8;
+    } else {
+      throw new BadRequestException('Unsupported property workflow update');
     }
-    if (bothRatingsSubmitted) {
-      nextStatus = PropertyInquiryStatus.COMPLETED;
-    }
-
-    const nextStep = ratingProvided ? 8 : dto.step;
 
     return this.prisma.propertyInquiry.update({
       where: { id },
       data: {
-        ...(nextStatus !== undefined && { status: nextStatus }),
-        ...(nextStep !== undefined && { step: nextStep }),
-        ...(dto.meetingDate !== undefined && { meetingDate: dto.meetingDate }),
-        ...(dto.meetingTime !== undefined && { meetingTime: dto.meetingTime }),
-        ...(dto.meetingVenue !== undefined && {
-          meetingVenue: dto.meetingVenue,
-        }),
-        ...(dto.customerRating !== undefined && {
-          customerRating: dto.customerRating,
-        }),
-        ...(dto.customerComment !== undefined && {
-          customerComment: dto.customerComment,
-        }),
-        ...(dto.listerRating !== undefined && {
-          listerRating: dto.listerRating,
-        }),
-        ...(dto.listerComment !== undefined && {
-          listerComment: dto.listerComment,
-        }),
-        ...(dto.reselectedOnce !== undefined && {
-          reselectedOnce: dto.reselectedOnce,
-        }),
+        status: nextStatus,
+        step: nextStep,
+        meetingDate,
+        meetingTime,
+        meetingVenue,
+        customerRating,
+        customerComment,
+        listerRating,
+        listerComment,
+        reselectedOnce,
+        workflowEvents: {
+          create: {
+            action,
+            status: nextStatus,
+            step: nextStep,
+            actorId: userId,
+            isPrivate: action === 'partner-decline',
+            note: privateNote,
+          },
+        },
       },
     });
   }

@@ -224,4 +224,63 @@ describe('PropertyWorkflowBridgeService', () => {
       'https://files.example/listing.jpg',
     );
   });
+  it('keeps the meeting invitation and confirmation on Step 7', async () => {
+    const before = {
+      ...inquiry(PropertyInquiryStatus.PAID),
+      status: PropertyInquiryStatus.PAID,
+      step: 5,
+    };
+    const after = {
+      ...before,
+      status: PropertyInquiryStatus.MEETING_SENT,
+      step: 7,
+    };
+    const prisma = {
+      propertyInquiry: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValueOnce(before)
+          .mockResolvedValueOnce(after),
+        update: jest.fn().mockResolvedValue({ poNumber: before.poNumber }),
+      },
+    } as unknown as PrismaService;
+    const service = new PropertyWorkflowBridgeService(prisma, {
+      search: jest.fn(),
+    } as unknown as PropertyService);
+
+    const result = await service.action(
+      before.poNumber,
+      'customer-1',
+      'viewing-invite',
+      {
+        meetingDate: '2026-07-20',
+        meetingTime: '14:00',
+        meetingVenue: 'Saphan Song',
+      },
+    );
+
+    expect(prisma.propertyInquiry.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ step: 7 }),
+      }),
+    );
+    expect(result.currentStep).toBe(7);
+  });
+
+  it('does not expose customer cancellation as a lister action', async () => {
+    const stored = inquiry(PropertyInquiryStatus.ACCEPTED);
+    const prisma = {
+      propertyInquiry: { findUnique: jest.fn().mockResolvedValue(stored) },
+    } as unknown as PrismaService;
+    const service = new PropertyWorkflowBridgeService(prisma, {
+      search: jest.fn(),
+    } as unknown as PropertyService);
+
+    const snapshot = await service.snapshot(stored.poNumber, 'lister-1');
+
+    expect(snapshot.availableActions).not.toContain('customer-cancel');
+    await expect(
+      service.action(stored.poNumber, 'lister-1', 'cancel', {}),
+    ).rejects.toThrow('Only the customer may perform this action');
+  });
 });

@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { PropertyInquiryStatus, Prisma } from '@prisma/client';
+import { PropertyInquiryStatus, Prisma, UserRole } from '@prisma/client';
 import { randomInt } from 'crypto';
 import { PropertyInquiryService } from '../property-inquiry/property-inquiry.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -136,9 +136,9 @@ export class PropertyWorkflowBridgeService {
     return this.snapshot(inquiry.poNumber, customer.id);
   }
 
-  async snapshot(reference: string, userId: string) {
+  async snapshot(reference: string, userId: string, callerRole?: UserRole) {
     const inquiry = await this.loadInquiry(reference);
-    const actor = this.actorFor(inquiry, userId);
+    const actor = this.actorFor(inquiry, userId, callerRole);
     if (!actor) throw new ForbiddenException('Not authorized for this inquiry');
     const messages = await this.loadChat(userId, inquiry.poNumber);
     return this.projectSnapshot(inquiry, actor, messages);
@@ -162,6 +162,9 @@ export class PropertyWorkflowBridgeService {
     const inquiry = await this.loadInquiry(reference);
     const actor = this.actorFor(inquiry, userId);
     if (!actor) throw new ForbiddenException('Not authorized for this inquiry');
+    if (actor === 'admin') {
+      throw new ForbiddenException('Administrators may review but not advance this inquiry');
+    }
 
     const transition = this.transition(action, actor, inquiry, dto);
     const updated = await this.prisma.propertyInquiry.update({
@@ -225,7 +228,9 @@ export class PropertyWorkflowBridgeService {
   private actorFor(
     inquiry: { customerId: string; listerUserId: string },
     userId: string,
+    callerRole?: UserRole,
   ) {
+    if (callerRole === UserRole.ADMIN) return 'admin' as const;
     if (inquiry.customerId === userId) return 'customer' as const;
     if (inquiry.listerUserId === userId) return 'lister' as const;
     return null;
@@ -288,7 +293,7 @@ export class PropertyWorkflowBridgeService {
           );
         return {
           status: PropertyInquiryStatus.MEETING_SENT,
-          step: 6,
+          step: 7,
           meetingDate: dto.meetingDate,
           meetingTime: dto.meetingTime,
           meetingVenue: dto.meetingVenue,
@@ -329,6 +334,7 @@ export class PropertyWorkflowBridgeService {
           metadata: {},
         };
       case 'cancel': {
+        requireActor('customer');
         const closedStatuses: PropertyInquiryStatus[] = [
           PropertyInquiryStatus.COMPLETED,
           PropertyInquiryStatus.CANCELLED,
@@ -347,7 +353,7 @@ export class PropertyWorkflowBridgeService {
 
   private projectSnapshot(
     inquiry: any,
-    actor: 'customer' | 'lister',
+    actor: 'customer' | 'lister' | 'admin',
     messages: Array<Record<string, unknown>>,
   ) {
     const terminal = [
@@ -362,7 +368,7 @@ export class PropertyWorkflowBridgeService {
       PropertyInquiryStatus.COMPLETED,
     ].includes(inquiry.status);
     const events = inquiry.workflowEvents.filter(
-      (event: any) => actor === 'lister' || !event.isPrivate,
+      (event: any) => actor === 'lister' || actor === 'admin' || !event.isPrivate,
     );
     const feeEvent = inquiry.workflowEvents.find(
       (event: any) => event.action === 'fee',
@@ -423,6 +429,7 @@ export class PropertyWorkflowBridgeService {
         state: terminal ? 'closed' : postFee ? 'available' : 'locked',
         messages: terminal ? [] : messages,
       },
+      chatHistory: terminal ? messages : [],
       ratings: {
         customer: inquiry.customerRating
           ? { score: inquiry.customerRating, comment: inquiry.customerComment }
@@ -443,7 +450,7 @@ export class PropertyWorkflowBridgeService {
         createdAt: inquiry.createdAt,
         updatedAt: inquiry.updatedAt,
       },
-      alerts: terminal
+      alerts: terminal || actor === 'admin'
         ? []
         : events
             .filter(
@@ -475,34 +482,34 @@ export class PropertyWorkflowBridgeService {
 
   private availableActions(
     status: PropertyInquiryStatus,
-    actor: 'customer' | 'lister',
+    actor: 'customer' | 'lister' | 'admin',
   ) {
     const terminalStatuses: PropertyInquiryStatus[] = [
       PropertyInquiryStatus.CANCELLED,
       PropertyInquiryStatus.DECLINED,
       PropertyInquiryStatus.COMPLETED,
     ];
-    if (terminalStatuses.includes(status)) {
+    if (actor === 'admin' || terminalStatuses.includes(status)) {
       return [];
     }
     if (status === PropertyInquiryStatus.NOTIFY_SENT) {
       return actor === 'lister'
-        ? ['partner-accept', 'partner-decline', 'customer-cancel']
+        ? ['partner-accept', 'partner-decline']
         : ['customer-cancel'];
     }
     if (status === PropertyInquiryStatus.ACCEPTED) {
       return actor === 'customer'
         ? ['fee-proceed', 'free-pass', 'customer-cancel']
-        : ['customer-cancel'];
+        : [];
     }
     if (status === PropertyInquiryStatus.PAID) {
       return actor === 'customer'
         ? ['viewing-invite', 'customer-cancel']
-        : ['customer-cancel'];
+        : [];
     }
     if (status === PropertyInquiryStatus.MEETING_SENT) {
       return actor === 'lister'
-        ? ['viewing-confirm', 'customer-cancel']
+        ? ['viewing-confirm']
         : ['customer-cancel'];
     }
     return actor === 'customer' ? ['rate-partner'] : ['rate-customer'];
