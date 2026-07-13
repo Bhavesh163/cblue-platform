@@ -10,6 +10,25 @@ const SCOPED_SUBSCRIBER_KEYS = [
   'cblue_partner_dashboard_subscriber',
 ];
 
+let refreshInFlight: Promise<string | null> | null = null;
+
+function getTokenExpirySeconds(token: string): number | null {
+  try {
+    const encodedPayload = token.split('.')[1];
+    if (!encodedPayload) return null;
+    const normalized = encodedPayload.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=');
+    const payload = JSON.parse(atob(padded)) as { exp?: unknown };
+    return typeof payload.exp === 'number' ? payload.exp : null;
+  } catch {
+    return null;
+  }
+}
+
+export function shouldRefreshSubscriberSession(token: string, leewaySeconds = 60): boolean {
+  const expiresAt = getTokenExpirySeconds(token);
+  return expiresAt !== null && expiresAt <= Math.floor(Date.now() / 1000) + leewaySeconds;
+}
 function clearScopedSessionTokens() {
   if (typeof window === 'undefined') return;
   try {
@@ -40,8 +59,11 @@ export async function refreshSubscriberSession(
   const token = currentToken ?? localStorage.getItem('subscriber_token');
   if (!token) return null;
 
-  try {
-    const res = await fetch('/api/v1/subscription/refresh-session', {
+  if (refreshInFlight) return refreshInFlight;
+
+  const refresh = async (): Promise<string | null> => {
+    try {
+      const res = await fetch('/api/v1/subscription/refresh-session', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -64,7 +86,24 @@ export async function refreshSubscriberSession(
     clearScopedSessionTokens();
     window.dispatchEvent(new Event('storage'));
     return nextToken;
-  } catch {
-    return null;
+    } catch {
+      return null;
+    }
+  };
+
+  refreshInFlight = refresh();
+  try {
+    return await refreshInFlight;
+  } finally {
+    refreshInFlight = null;
   }
+}
+
+export async function ensureFreshSubscriberSession(
+  currentToken?: string | null,
+): Promise<string | null> {
+  if (typeof window === 'undefined') return currentToken ?? null;
+  const token = currentToken ?? localStorage.getItem('subscriber_token');
+  if (!token) return null;
+  return shouldRefreshSubscriberSession(token) ? refreshSubscriberSession(token) : token;
 }

@@ -21,7 +21,7 @@ import { chooseAuthoritativeBudgetBreakdown } from "../../../lib/bookingBudgetBr
 import { readStoredPoProjectDetails, storePoProjectDetails } from "../../../lib/po-project-details";
 import { fetchPartnerDashboardWithAuthRetry } from "../../../lib/partnerDashboardAuth";
 import { toggleWorkflowModalChromeLock } from "../../../lib/workflowModalChromeLock";
-import { clearSubscriberSession, refreshSubscriberSession } from "../../../lib/subscriberSession";
+import { clearSubscriberSession, ensureFreshSubscriberSession, refreshSubscriberSession } from "../../../lib/subscriberSession";
 import {
   buildPartnerWorkflowScope,
   filterBlockedPartnerAdvancedItems,
@@ -93,7 +93,14 @@ function getPartnerDashboardSessionValue(sessionKey: string, sharedKey: string) 
 }
 
 function getPartnerDashboardToken() {
-  return getPartnerDashboardSessionValue(PARTNER_DASHBOARD_TOKEN_KEY, "subscriber_token");
+  if (typeof window === "undefined") return "";
+  const shared = localStorage.getItem("subscriber_token") || "";
+  const scoped = sessionStorage.getItem(PARTNER_DASHBOARD_TOKEN_KEY) || "";
+  if (shared && shared !== scoped) {
+    sessionStorage.setItem(PARTNER_DASHBOARD_TOKEN_KEY, shared);
+    return shared;
+  }
+  return scoped || shared;
 }
 
 function getPartnerDashboardSubscriberRaw() {
@@ -1170,6 +1177,7 @@ const fetchWithSubscriberAuthRetry = async ({
     endpoint,
     token,
     getToken: getPartnerDashboardToken,
+    refreshBeforeRequest: ensureFreshSubscriberSession,
     refreshSession: refreshSubscriberSession,
     readSubscriber: readPartnerDashboardSubscriber,
     writeSession: writePartnerDashboardSession,
@@ -2836,8 +2844,12 @@ export default function FixerProPage() {
           return hasFixer;
         };
 
+        let activeToken = await ensureFreshSubscriberSession(token) || token;
+        if (activeToken !== token) {
+          writePartnerDashboardSession(readPartnerDashboardSubscriber(), activeToken);
+        }
         const res = await fetch("/api/v1/users/me", {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${activeToken}` }
         }).catch(err => {
           console.error("Failed to fetch user data:", err);
           return null;
@@ -2853,7 +2865,7 @@ export default function FixerProPage() {
           }
         } else if (res.ok) {
           const user = await res.json();
-          const resolved = await resolvePartnerProfile(user, token);
+          const resolved = await resolvePartnerProfile(user, activeToken);
           if (resolved.transientIncomplete) {
             preserveOrWaitForPartnerProfile(user);
             return;
@@ -2867,7 +2879,7 @@ export default function FixerProPage() {
           // The 24h access token may simply be past its window. Attempt a
           // sliding refresh and retry before logging the partner out, so a
           // returning partner keeps their session instead of seeing a blank page.
-          const refreshedToken = await refreshSubscriberSession(token);
+          const refreshedToken = await refreshSubscriberSession(activeToken);
           if (refreshedToken) {
             const retryRes = await fetch("/api/v1/users/me", {
               headers: { Authorization: `Bearer ${refreshedToken}` },
@@ -3033,6 +3045,8 @@ export default function FixerProPage() {
       try {
         let token = getPartnerDashboardToken();
         if (!token) return;
+        token = await ensureFreshSubscriberSession(token) || token;
+        writePartnerDashboardSession(readPartnerDashboardSubscriber(), token);
         const load = (authToken: string) => fetch("/api/v1/property-inquiries/lister", { headers: { Authorization: `Bearer ${authToken}` } });
         let res = await load(token);
         if (!res.ok && [401, 403].includes(res.status)) {

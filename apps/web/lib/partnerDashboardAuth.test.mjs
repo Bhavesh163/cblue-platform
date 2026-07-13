@@ -49,3 +49,30 @@ test("does not call protected partner endpoints when no token is available", asy
   assert.equal(fetchCalled, false);
   assert.deepEqual(result, { token: "", response: null });
 });
+
+test("refreshes an expiring partner session before the protected request", async () => {
+  const calls = [];
+  const writes = [];
+
+  const result = await fetchPartnerDashboardWithAuthRetry({
+    endpoint: "/api/v1/property-inquiries/lister",
+    token: "nearly-expired-token",
+    refreshBeforeRequest: async (token) => {
+      assert.equal(token, "nearly-expired-token");
+      return "fresh-token";
+    },
+    refreshSession: async () => {
+      throw new Error("a proactive refresh must prevent the initial 401 retry");
+    },
+    readSubscriber: () => ({ id: "partner-1" }),
+    writeSession: (subscriber, token) => writes.push({ subscriber, token }),
+    fetchImpl: async (_endpoint, init) => {
+      calls.push(init.headers.Authorization);
+      return { status: 200, ok: true };
+    },
+  });
+
+  assert.equal(result.token, "fresh-token");
+  assert.deepEqual(calls, ["Bearer fresh-token"]);
+  assert.deepEqual(writes, [{ subscriber: { id: "partner-1" }, token: "fresh-token" }]);
+});

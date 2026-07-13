@@ -2,6 +2,7 @@ export async function fetchPartnerDashboardWithAuthRetry({
   endpoint,
   token,
   getToken,
+  refreshBeforeRequest,
   refreshSession,
   readSubscriber,
   writeSession,
@@ -11,6 +12,16 @@ export async function fetchPartnerDashboardWithAuthRetry({
   let authToken = String(token || (typeof getToken === "function" ? getToken() : "") || "").trim();
   if (!authToken) {
     return { token: "", response: null };
+  }
+
+  if (typeof refreshBeforeRequest === "function") {
+    const refreshed = await refreshBeforeRequest(authToken);
+    if (refreshed) {
+      authToken = refreshed;
+      if (typeof writeSession === "function") {
+        writeSession(typeof readSubscriber === "function" ? readSubscriber() : null, refreshed);
+      }
+    }
   }
 
   const send = async (bearerToken) => {
