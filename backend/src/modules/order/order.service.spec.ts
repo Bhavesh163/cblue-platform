@@ -39,6 +39,10 @@ describe('OrderService', () => {
         findMany: jest.fn(),
         create: jest.fn(),
       },
+      orderChatMessage: {
+        findMany: jest.fn(),
+        create: jest.fn(),
+      },
     };
     eventEmitter = { emit: jest.fn() };
 
@@ -184,6 +188,19 @@ describe('OrderService', () => {
         NotFoundException,
       );
     });
+
+    it('rejects an order-detail read by a user outside the workflow', async () => {
+      prisma.order.findUnique.mockResolvedValue({
+        id: 'order-1',
+        userId: 'customer-1',
+        fixerId: null,
+        status: OrderStatus.MATCHING,
+      });
+
+      await expect(
+        service.findByIdForParticipant('order-1', 'other-user'),
+      ).rejects.toThrow('You do not have access to this order');
+    });
   });
 
   describe('updateStatus', () => {
@@ -248,6 +265,25 @@ describe('OrderService', () => {
 
         expect(result.status).toBe(OrderStatus.IN_PROGRESS);
       }
+    });
+
+    it('rejects a status update from a fixer who is not assigned to the order', async () => {
+      prisma.order.findUnique.mockResolvedValue({
+        id: 'order-1',
+        userId: 'customer-1',
+        fixerId: 'assigned-fixer',
+        status: OrderStatus.MATCHING,
+      });
+      prisma.fixer.findUnique.mockResolvedValue({ userId: 'assigned-fixer-user' });
+
+      await expect(
+        service.updateStatus(
+          'order-1',
+          { status: OrderStatus.ASSIGNED },
+          'other-fixer-user',
+          UserRole.FIXER,
+        ),
+      ).rejects.toThrow('You do not have access to this order');
     });
 
     it('should record a workflow note when customer resends meeting invitation for an already meeting-requested order', async () => {
@@ -360,6 +396,21 @@ describe('OrderService', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual(expect.objectContaining({ id: 'live-8879' }));
+    });
+  });
+
+  describe('createOrderChatMessage', () => {
+    it('rejects chat before the customer activates the free-pass workflow', async () => {
+      prisma.order.findUnique.mockResolvedValue({
+        id: 'order-1',
+        userId: 'customer-1',
+        fixerId: null,
+        status: OrderStatus.MATCHING,
+      });
+
+      await expect(
+        service.createOrderChatMessage('order-1', 'customer-1', { text: 'Hello' }),
+      ).rejects.toThrow('Chat is available after Fee & Proceed and closes when the project is completed');
     });
   });
 

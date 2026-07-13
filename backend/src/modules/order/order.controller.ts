@@ -94,8 +94,12 @@ export class OrderController {
     return this.orderService.updateBudgetBreakdown(orderId, userId, dto);
   }
   @Get(':orderId')
-  findById(@Param('orderId') orderId: string) {
-    return this.orderService.findById(orderId);
+  findById(
+    @Param('orderId') orderId: string,
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') userRole: UserRole,
+  ) {
+    return this.orderService.findByIdForParticipant(orderId, userId, userRole);
   }
 
   @Put(':orderId/status')

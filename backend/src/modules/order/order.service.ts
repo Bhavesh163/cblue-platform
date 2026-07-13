@@ -381,8 +381,12 @@ export class OrderService {
   }
 
   private async getOrderForParticipant(orderId: string, userId: string) {
-    let order: { id: string; userId: string; fixerId: string | null } | null =
-      null;
+    let order: {
+      id: string;
+      userId: string;
+      fixerId: string | null;
+      status: OrderStatus;
+    } | null = null;
     try {
       order = await this.prisma.order.findUnique({
         where: { id: orderId },
@@ -390,6 +394,7 @@ export class OrderService {
           id: true,
           userId: true,
           fixerId: true,
+          status: true,
         },
       });
     } catch (error) {
@@ -427,6 +432,17 @@ export class OrderService {
     }
 
     return { order, isCustomer, isFixer };
+  }
+
+  async findByIdForParticipant(
+    orderId: string,
+    userId: string,
+    callerRole?: UserRole,
+  ) {
+    if (callerRole !== UserRole.ADMIN) {
+      await this.getOrderForParticipant(orderId, userId);
+    }
+    return this.findById(orderId);
   }
 
   async getOrderChatMessages(orderId: string, userId: string) {
@@ -511,7 +527,15 @@ export class OrderService {
     userId: string,
     dto: CreateOrderChatMessageDto,
   ) {
-    await this.getOrderForParticipant(orderId, userId);
+    const participant = await this.getOrderForParticipant(orderId, userId);
+    if (
+      participant.order.status !== OrderStatus.IN_PROGRESS &&
+      participant.order.status !== OrderStatus.MEETING_REQUESTED
+    ) {
+      throw new BadRequestException(
+        'Chat is available after Fee & Proceed and closes when the project is completed',
+      );
+    }
 
     let sender: { role: UserRole } | null = null;
     try {
@@ -690,8 +714,9 @@ export class OrderService {
     const isCustomer = order.userId === changedBy;
     const isAssignedFixer = fixer?.userId === changedBy;
 
-    // Role-based access: customers advance their own side; assigned partners advance partner-side steps.
-    if (callerRole === UserRole.USER) {
+    // Every authenticated participant is constrained to their own side of the
+    // workflow. The omitted role path is retained only for trusted internal calls.
+    if (callerRole && callerRole !== UserRole.ADMIN) {
       if (!isCustomer && !isAssignedFixer) {
         throw new ForbiddenException('You do not have access to this order');
       }
