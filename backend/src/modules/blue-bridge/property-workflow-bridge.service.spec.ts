@@ -180,7 +180,7 @@ describe('PropertyWorkflowBridgeService', () => {
     const result = await service.action(
       before.poNumber,
       'lister-1',
-      'accept',
+      'partner-accept',
       {},
     );
 
@@ -200,6 +200,20 @@ describe('PropertyWorkflowBridgeService', () => {
         nextActionStep: 5,
         nextActionLabel: 'Fee or free pass',
         nextActionOwner: 'customer',
+        actions: expect.arrayContaining([
+          expect.objectContaining({
+            key: 'fee-proceed',
+            owner: 'customer',
+            actionStep: 5,
+            feeMode: 'payment',
+          }),
+          expect.objectContaining({
+            key: 'free-pass',
+            owner: 'customer',
+            actionStep: 5,
+            feeMode: 'free-pass',
+          }),
+        ]),
       }),
     );
   });
@@ -273,6 +287,13 @@ describe('PropertyWorkflowBridgeService', () => {
         nextActionStep: 7,
         nextActionLabel: 'Confirm viewing invitation',
         nextActionOwner: 'lister',
+        actions: expect.arrayContaining([
+          expect.objectContaining({
+            key: 'viewing-confirm',
+            owner: 'lister',
+            actionStep: 7,
+          }),
+        ]),
       }),
     );
   });
@@ -304,16 +325,16 @@ describe('PropertyWorkflowBridgeService', () => {
     [
       PropertyInquiryStatus.PAID,
       'customer-1',
-      6,
-      'Chat is available; customer may send a viewing invitation at Step 7',
-      'customer-and-lister',
+      7,
+      'Send viewing invitation',
+      'customer',
     ],
     [
       PropertyInquiryStatus.MEETING_CONFIRMED,
       'customer-1',
       8,
-      'Submit ratings',
-      'customer-and-lister',
+      'Rate lister',
+      'customer',
     ],
     [PropertyInquiryStatus.CANCELLED, 'customer-1', null, null, null],
     [PropertyInquiryStatus.DECLINED, 'customer-1', null, null, null],
@@ -338,6 +359,69 @@ describe('PropertyWorkflowBridgeService', () => {
           nextActionOwner,
         }),
       );
+    },
+  );
+  it.each([
+    [
+      PropertyInquiryStatus.NOTIFY_SENT,
+      'lister-1',
+      [
+        { key: 'partner-accept', owner: 'lister', actionStep: 4 },
+        { key: 'partner-decline', owner: 'lister', actionStep: 4 },
+      ],
+    ],
+    [
+      PropertyInquiryStatus.ACCEPTED,
+      'customer-1',
+      [
+        {
+          key: 'fee-proceed',
+          owner: 'customer',
+          actionStep: 5,
+          feeMode: 'payment',
+        },
+        {
+          key: 'free-pass',
+          owner: 'customer',
+          actionStep: 5,
+          feeMode: 'free-pass',
+        },
+      ],
+    ],
+    [
+      PropertyInquiryStatus.MEETING_SENT,
+      'lister-1',
+      [{ key: 'viewing-confirm', owner: 'lister', actionStep: 7 }],
+    ],
+    [
+      PropertyInquiryStatus.MEETING_CONFIRMED,
+      'customer-1',
+      [
+        { key: 'rate-partner', owner: 'customer', actionStep: 8 },
+        { key: 'rate-customer', owner: 'lister', actionStep: 8 },
+      ],
+    ],
+  ])(
+    'returns server-owned actions for %s',
+    async (status, userId, expectedActions) => {
+      const stored = inquiry(status as PropertyInquiryStatus);
+      const prisma = {
+        propertyInquiry: { findUnique: jest.fn().mockResolvedValue(stored) },
+      } as unknown as PrismaService;
+      const service = new PropertyWorkflowBridgeService(prisma, {
+        search: jest.fn(),
+      } as unknown as PropertyService);
+
+      const snapshot = await service.snapshot(stored.poNumber, userId as string);
+
+      expect(snapshot.actions).toEqual(
+        expect.arrayContaining(
+          expectedActions.map((action) => expect.objectContaining(action)),
+        ),
+      );
+      for (const action of snapshot.actions) {
+        expect(['customer', 'lister']).toContain(action.owner);
+      }
     },
   );
 });

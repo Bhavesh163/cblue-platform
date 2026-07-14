@@ -20,13 +20,21 @@ const SOURCE_VERSION = 'cblue-property-workflow-v1';
 
 type WorkflowAction =
   | 'accept'
+  | 'partner-accept'
   | 'decline'
+  | 'partner-decline'
   | 'fee'
+  | 'fee-proceed'
+  | 'free-pass'
   | 'viewing-invite'
   | 'viewing-confirmation'
+  | 'viewing-confirm'
   | 'customer-rating'
+  | 'rate-partner'
   | 'lister-rating'
-  | 'cancel';
+  | 'rate-customer'
+  | 'cancel'
+  | 'customer-cancel';
 
 @Injectable()
 export class PropertyWorkflowBridgeService {
@@ -261,6 +269,7 @@ export class PropertyWorkflowBridgeService {
     };
     switch (action) {
       case 'accept':
+      case 'partner-accept':
         requireActor('lister');
         requireStatus(PropertyInquiryStatus.NOTIFY_SENT);
         return {
@@ -269,6 +278,7 @@ export class PropertyWorkflowBridgeService {
           metadata: {},
         };
       case 'decline':
+      case 'partner-decline':
         requireActor('lister');
         requireStatus(PropertyInquiryStatus.NOTIFY_SENT);
         return {
@@ -277,12 +287,14 @@ export class PropertyWorkflowBridgeService {
           metadata: {},
         };
       case 'fee':
+      case 'fee-proceed':
+      case 'free-pass':
         requireActor('customer');
         requireStatus(PropertyInquiryStatus.ACCEPTED);
         return {
           status: PropertyInquiryStatus.PAID,
           step: 5,
-          metadata: { freePass: Boolean(dto.freePass) },
+          metadata: { freePass: action === 'free-pass' || Boolean(dto.freePass) },
         };
       case 'viewing-invite':
         requireActor('customer');
@@ -300,6 +312,7 @@ export class PropertyWorkflowBridgeService {
           metadata: {},
         };
       case 'viewing-confirmation':
+      case 'viewing-confirm':
         requireActor('lister');
         requireStatus(PropertyInquiryStatus.MEETING_SENT);
         return {
@@ -308,6 +321,7 @@ export class PropertyWorkflowBridgeService {
           metadata: {},
         };
       case 'customer-rating':
+      case 'rate-partner':
         requireActor('customer');
         requireStatus(PropertyInquiryStatus.MEETING_CONFIRMED);
         if (!dto.rating) throw new BadRequestException('Rating is required');
@@ -321,6 +335,7 @@ export class PropertyWorkflowBridgeService {
           metadata: {},
         };
       case 'lister-rating':
+      case 'rate-customer':
         requireActor('lister');
         requireStatus(PropertyInquiryStatus.MEETING_CONFIRMED);
         if (!dto.rating) throw new BadRequestException('Rating is required');
@@ -333,7 +348,8 @@ export class PropertyWorkflowBridgeService {
           listerComment: dto.note,
           metadata: {},
         };
-      case 'cancel': {
+      case 'cancel':
+      case 'customer-cancel': {
         requireActor('customer');
         const closedStatuses: PropertyInquiryStatus[] = [
           PropertyInquiryStatus.COMPLETED,
@@ -373,7 +389,8 @@ export class PropertyWorkflowBridgeService {
     const feeEvent = inquiry.workflowEvents.find(
       (event: any) => event.action === 'fee',
     );
-    const nextAction = this.nextAction(inquiry.status);
+    const actions = this.actions(inquiry.status, inquiry.step);
+    const nextAction = this.nextAction(inquiry.status, actor);
     return {
       reference: inquiry.poNumber,
       status: inquiry.status,
@@ -381,7 +398,8 @@ export class PropertyWorkflowBridgeService {
       currentStep: inquiry.step,
       totalSteps: TOTAL_STEPS,
       actionOwner: this.actionOwner(inquiry.status),
-      availableActions: this.availableActions(inquiry.status, actor),
+      actions,
+      availableActions: this.availableActions(actions, actor),
       nextActionStep: nextAction.step,
       nextActionLabel: nextAction.label,
       nextActionOwner: nextAction.owner,
@@ -483,11 +501,15 @@ export class PropertyWorkflowBridgeService {
     }
     return 'none';
   }
-  private nextAction(status: PropertyInquiryStatus): {
+  private nextAction(
+    status: PropertyInquiryStatus,
+    actor: 'customer' | 'lister' | 'admin',
+  ): {
     step: number | null;
     label: string | null;
-    owner: 'customer' | 'lister' | 'customer-and-lister' | null;
+    owner: 'customer' | 'lister' | null;
   } {
+    if (actor === 'admin') return { step: null, label: null, owner: null };
     switch (status) {
       case PropertyInquiryStatus.NOTIFY_SENT:
         return {
@@ -503,9 +525,9 @@ export class PropertyWorkflowBridgeService {
         };
       case PropertyInquiryStatus.PAID:
         return {
-          step: 6,
-          label: 'Chat is available; customer may send a viewing invitation at Step 7',
-          owner: 'customer-and-lister',
+          step: 7,
+          label: 'Send viewing invitation',
+          owner: 'customer',
         };
       case PropertyInquiryStatus.MEETING_SENT:
         return {
@@ -514,49 +536,113 @@ export class PropertyWorkflowBridgeService {
           owner: 'lister',
         };
       case PropertyInquiryStatus.MEETING_CONFIRMED:
-        return {
-          step: 8,
-          label: 'Submit ratings',
-          owner: 'customer-and-lister',
-        };
+        return actor === 'customer'
+          ? { step: 8, label: 'Rate lister', owner: 'customer' }
+          : { step: 8, label: 'Rate customer', owner: 'lister' };
       default:
         return { step: null, label: null, owner: null };
     }
   }
 
-  private availableActions(
+  private actions(
     status: PropertyInquiryStatus,
+    currentStep: number,
+  ): Array<{
+    key: string;
+    owner: 'customer' | 'lister';
+    label: string;
+    actionStep: number;
+    feeMode?: 'payment' | 'free-pass';
+  }> {
+    const cancel = {
+      key: 'customer-cancel',
+      owner: 'customer' as const,
+      label: 'Cancel property inquiry',
+      actionStep: currentStep,
+    };
+    switch (status) {
+      case PropertyInquiryStatus.NOTIFY_SENT:
+        return [
+          {
+            key: 'partner-accept',
+            owner: 'lister',
+            label: 'Accept property inquiry',
+            actionStep: 4,
+          },
+          {
+            key: 'partner-decline',
+            owner: 'lister',
+            label: 'Decline property inquiry',
+            actionStep: 4,
+          },
+          cancel,
+        ];
+      case PropertyInquiryStatus.ACCEPTED:
+        return [
+          {
+            key: 'fee-proceed',
+            owner: 'customer',
+            label: 'Proceed with fee',
+            actionStep: 5,
+            feeMode: 'payment',
+          },
+          {
+            key: 'free-pass',
+            owner: 'customer',
+            label: 'Continue with free pass',
+            actionStep: 5,
+            feeMode: 'free-pass',
+          },
+          cancel,
+        ];
+      case PropertyInquiryStatus.PAID:
+        return [
+          {
+            key: 'viewing-invite',
+            owner: 'customer',
+            label: 'Send viewing invitation',
+            actionStep: 7,
+          },
+          cancel,
+        ];
+      case PropertyInquiryStatus.MEETING_SENT:
+        return [
+          {
+            key: 'viewing-confirm',
+            owner: 'lister',
+            label: 'Confirm viewing invitation',
+            actionStep: 7,
+          },
+          cancel,
+        ];
+      case PropertyInquiryStatus.MEETING_CONFIRMED:
+        return [
+          {
+            key: 'rate-partner',
+            owner: 'customer',
+            label: 'Rate lister',
+            actionStep: 8,
+          },
+          {
+            key: 'rate-customer',
+            owner: 'lister',
+            label: 'Rate customer',
+            actionStep: 8,
+          },
+        ];
+      default:
+        return [];
+    }
+  }
+
+  private availableActions(
+    actions: Array<{ key: string; owner: 'customer' | 'lister' }>,
     actor: 'customer' | 'lister' | 'admin',
   ) {
-    const terminalStatuses: PropertyInquiryStatus[] = [
-      PropertyInquiryStatus.CANCELLED,
-      PropertyInquiryStatus.DECLINED,
-      PropertyInquiryStatus.COMPLETED,
-    ];
-    if (actor === 'admin' || terminalStatuses.includes(status)) {
-      return [];
-    }
-    if (status === PropertyInquiryStatus.NOTIFY_SENT) {
-      return actor === 'lister'
-        ? ['partner-accept', 'partner-decline']
-        : ['customer-cancel'];
-    }
-    if (status === PropertyInquiryStatus.ACCEPTED) {
-      return actor === 'customer'
-        ? ['fee-proceed', 'free-pass', 'customer-cancel']
-        : [];
-    }
-    if (status === PropertyInquiryStatus.PAID) {
-      return actor === 'customer'
-        ? ['viewing-invite', 'customer-cancel']
-        : [];
-    }
-    if (status === PropertyInquiryStatus.MEETING_SENT) {
-      return actor === 'lister'
-        ? ['viewing-confirm']
-        : ['customer-cancel'];
-    }
-    return actor === 'customer' ? ['rate-partner'] : ['rate-customer'];
+    if (actor === 'admin') return [];
+    return actions
+      .filter((action) => action.owner === actor)
+      .map((action) => action.key);
   }
 
   private publicListing(property: any, includeContact = false) {
