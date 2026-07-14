@@ -200,11 +200,13 @@ export function filterWorkflowItemsByKnownBackendPos(
     allowLocalCustomerWorkflow = false,
     backendPoValues = [],
     fallbackBackendPoValues = [],
+    hasFetchedBackend = false,
   } = {},
 ) {
   const backendPos = normalizeWorkflowPoSet(backendPoValues);
   const fallbackPos = normalizeWorkflowPoSet(fallbackBackendPoValues);
-  const knownBackendPos = backendPos.size > 0 ? backendPos : fallbackPos;
+  const knownBackendPos =
+    backendPos.size > 0 || hasFetchedBackend ? backendPos : fallbackPos;
 
   return (Array.isArray(items) ? items : []).filter((item) => {
     const po = normalizeWorkflowPo(

@@ -52,6 +52,7 @@ export function filterWorkflowItemsByKnownBackendPos(
     allowLocalCustomerWorkflow?: boolean;
     backendPoValues?: any;
     fallbackBackendPoValues?: any;
+    hasFetchedBackend?: boolean;
   },
 ): any[];
 export function normalizeWorkflowHistoryItems(items?: any[]): any[];

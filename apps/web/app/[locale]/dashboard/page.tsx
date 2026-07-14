@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useTranslations, useLocale } from "next-intl";
-import { clearSubscriberSession, refreshSubscriberSession } from "../../../lib/subscriberSession";
+import { clearSubscriberSession, ensureFreshSubscriberSession, refreshSubscriberSession } from "../../../lib/subscriberSession";
 import {
   buildMeetingConfirmedAlert,
   collectTerminalWorkflowPos,
@@ -78,6 +78,23 @@ function getCustomerDashboardSessionValue(sessionKey: string, sharedKey: string)
 
 function getCustomerDashboardToken() {
   return getCustomerDashboardSessionValue(CUSTOMER_DASHBOARD_TOKEN_KEY, "subscriber_token");
+}
+
+async function fetchCustomerOrdersWithSession(token: string) {
+  let authToken = await ensureFreshSubscriberSession(token);
+  if (!authToken) return null;
+
+  let response = await fetch("/api/v1/orders/my", {
+    headers: { Authorization: `Bearer ${authToken}` },
+  }).catch(() => null);
+  if (response && (response.status === 401 || response.status === 403)) {
+    authToken = await refreshSubscriberSession(authToken);
+    if (!authToken) return null;
+    response = await fetch("/api/v1/orders/my", {
+      headers: { Authorization: `Bearer ${authToken}` },
+    }).catch(() => null);
+  }
+  return response;
 }
 
 function getCustomerDashboardSubscriberRaw() {
@@ -759,13 +776,25 @@ export default function DashboardPage() {
     let isMounted = true;
     const fetchUser = async () => {
       try {
-        const token = getCustomerDashboardToken();
+        let token = getCustomerDashboardToken();
         if (!token) {
           setOrders([]);
           setHasFetchedOrders(false);
           setLoading(false);
           return;
         }
+
+        const freshToken = await ensureFreshSubscriberSession(token);
+        if (!freshToken) {
+          if (isMounted) {
+            setSubscriber(null);
+            setOrders([]);
+            setHasFetchedOrders(false);
+            setLoading(false);
+          }
+          return;
+        }
+        token = freshToken;
 
         // Eagerly set state from localStorage to prevent flash of logged-out state
         if (isMounted) {
@@ -784,7 +813,7 @@ export default function DashboardPage() {
         }
 
         const refreshCustomerOrders = async (authToken: string = token) => {
-          const ordersRes = await fetch("/api/v1/orders/my", { headers: { Authorization: `Bearer ${authToken}` } }).catch(() => null);
+          const ordersRes = await fetchCustomerOrdersWithSession(authToken);
           if (ordersRes && ordersRes.ok && isMounted) {
             setHasFetchedOrders(true);
             setOrders(await ordersRes.json());
@@ -873,9 +902,7 @@ export default function DashboardPage() {
       try {
         const token = getCustomerDashboardToken();
         if (!token) return;
-        const ordersRes = await fetch("/api/v1/orders/my", {
-          headers: { Authorization: `Bearer ${token}` },
-        }).catch(() => null);
+        const ordersRes = await fetchCustomerOrdersWithSession(token);
         if (!ordersRes || !ordersRes.ok || !isMounted) return;
         setHasFetchedOrders(true);
         setOrders(await ordersRes.json());
@@ -3168,17 +3195,20 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orders, mockReady]);
 
-  const REQUESTS_MOCK = [
-    { id: "req1", title: "REINSTATEMENT", customer: "Suppadesh", date: "5/11/2026, 2:30:00 PM", budget: "฿5,000,000", po: "PO-2605-1200", tier: "ECONOMY", desc: "I want a team to carry out a 3000 sq.m. housing project." },
-    { id: "req2", title: "FITOUT", customer: "Suppadesh", date: "5/11/2026, 2:35:00 PM", budget: "฿25,000,000", po: "PO-2605-6812", tier: "STANDARD", desc: "I want to have a project team to carry out a 1000 sq.m. office fitout in Bangkok" },
-  ];
-
-  const ACTIVE_MOCK = [
-    { title: "REINSTATEMENT", customer: "Suppadesh", date: "5/11/2026, 2:30:00 PM", budget: "฿5,000,000", po: "PO-2605-1200", location: "Saphansong", tier: "ECONOMY", actionNeeded: true, step: 6 },
-    { title: "FITOUT", customer: "Suppadesh", date: "5/11/2026, 2:35:00 PM", budget: "฿25,000,000", po: "PO-2605-6812", location: "Saphansong", tier: "Standard", actionNeeded: true, step: 6 },
-  ];
 
   const backendOrderPos = new Set(workflowOrders.map((o: any) => extractPo(o)).filter((po: string) => isPoCode(po)));
+  const backendActiveOrderPos = new Set(
+    workflowOrders
+      .filter((order: any) => isBackendWorkflowActiveStatus(order))
+      .map((order: any) => extractPo(order))
+      .filter((po: string) => isPoCode(po)),
+  );
+  const backendHistoryOrderPos = new Set(
+    workflowOrders
+      .filter((order: any) => isBackendWorkflowHistoryStatus(order))
+      .map((order: any) => extractPo(order))
+      .filter((po: string) => isPoCode(po)),
+  );
   const fallbackBackendOrderPos = (() => {
     if (backendOrderPos.size > 0) return backendOrderPos;
     if (lastKnownBackendOrderPosRef.current.size > 0) return lastKnownBackendOrderPosRef.current;
@@ -3191,16 +3221,25 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     }
   })();
   const allowLocalCustomerWorkflow = false;
-  const filterCustomerScopedWorkflowItems = (items: any[]) =>
+  const filterCustomerScopedWorkflowItems = (
+    items: any[],
+    authoritativePoValues: Set<string> = backendOrderPos,
+  ) =>
     filterWorkflowItemsByKnownBackendPos(items, {
       allowLocalCustomerWorkflow,
-      backendPoValues: backendOrderPos,
+      backendPoValues: authoritativePoValues,
       fallbackBackendPoValues: fallbackBackendOrderPos,
+      hasFetchedBackend: hasFetchedOrders,
     });
-  const browserTerminalPOs = readBrowserTerminalWorkflowPos(
-    typeof window !== 'undefined' ? window.localStorage : undefined,
+  const browserTerminalPOs = hasFetchedOrders
+    ? new Set<string>()
+    : readBrowserTerminalWorkflowPos(
+        typeof window !== 'undefined' ? window.localStorage : undefined,
+      );
+  const rawVisibleMockActiveItems = filterCustomerScopedWorkflowItems(
+    filterVisibleWorkflowItems(mockActiveItems, browserTerminalPOs),
+    backendActiveOrderPos,
   );
-  const rawVisibleMockActiveItems = filterCustomerScopedWorkflowItems(filterVisibleWorkflowItems(mockActiveItems, browserTerminalPOs));
   const localTerminalWorkflowPOs = new Set(
     rawVisibleMockActiveItems
       .filter((item: any) => isBackendWorkflowHistoryStatus(item))
@@ -3212,8 +3251,14 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   );
   // Backend bridge effects (F4/F6/F7/F9/F10) write into mockDynRequests/mockHistory for all
   // logged-in customers. Only gate the static demo seed data, not bridge-built workflow rows.
-  const visibleMockDynRequests = filterCustomerScopedWorkflowItems(filterVisibleWorkflowItems(mockDynRequests, browserTerminalPOs));
-  const visibleMockHistory = filterCustomerScopedWorkflowItems(mockHistory.filter((x: any) => !isHiddenTestPo(x.po)));
+  const visibleMockDynRequests = filterCustomerScopedWorkflowItems(
+    filterVisibleWorkflowItems(mockDynRequests, browserTerminalPOs),
+    backendActiveOrderPos,
+  );
+  const visibleMockHistory = filterCustomerScopedWorkflowItems(
+    mockHistory.filter((x: any) => !isHiddenTestPo(x.po)),
+    backendHistoryOrderPos,
+  );
 
   const alertClosedPOs = new Set(
     persistedCustomerAlerts
@@ -3313,22 +3358,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       activeByPo.set(item.po, item);
       continue;
     }
-    activeByPo.set(item.po, {
-      ...existing,
-      ...item,
-      title: item.title || existing.title,
-      customer: item.customer || existing.customer,
-      customerName: item.customerName || existing.customerName,
-      fixerAlias: item.fixerAlias || existing.fixerAlias,
-      partnerName: item.partnerName || existing.partnerName,
-      budget: item.budget || existing.budget,
-      location: item.location || item.subdistrict || existing.location || existing.subdistrict,
-      subdistrict: item.subdistrict || item.location || existing.subdistrict || existing.location,
-      date: item.date || existing.date,
-      createdAt: parseDateMs(item.createdAt || item.date || existing.createdAt || existing.date),
-      actionNeeded: typeof item.actionNeeded === 'boolean' ? item.actionNeeded : existing.actionNeeded,
-      step: Math.max(Number(existing.step || 0), Number(item.step || 0)) || existing.step || item.step,
-    });
+    // Preserve local-only modal details, but persisted backend fields own lifecycle and display data.
+    activeByPo.set(item.po, { ...item, ...existing });
   }
   const combinedActive = Array.from(activeByPo.values())
     .filter((item: any) => {

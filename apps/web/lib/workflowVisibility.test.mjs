@@ -358,6 +358,19 @@ test("keeps partner workflow rows visible during transient empty backend PO refr
 
   assert.deepEqual(visible, ["PO-2607-8341"]);
 });
+test("does not revive browser workflow rows after an authoritative empty fetch", () => {
+  const visible = filterWorkflowItemsByKnownBackendPos(
+    [{ po: "PO-2607-8341", title: "Cached browser workflow", step: 8 }],
+    {
+      allowLocalCustomerWorkflow: false,
+      backendPoValues: [],
+      fallbackBackendPoValues: ["PO-2607-8341"],
+      hasFetchedBackend: true,
+    },
+  );
+
+  assert.deepEqual(visible, []);
+});
 test("rejects browser-only workflow cards when no backend PO is known", () => {
   const visible = filterWorkflowItemsByKnownBackendPos(
     [
