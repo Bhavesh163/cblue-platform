@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { BlueBridgeController } from './blue-bridge.controller';
 import { BlueBridgeService } from './blue-bridge.service';
+import { FixerWorkflowBridgeService } from './fixer-workflow-bridge.service';
 
 describe('BlueBridgeController', () => {
   let app: INestApplication;
@@ -14,12 +15,17 @@ describe('BlueBridgeController', () => {
       uploadedFiles: [],
     }),
   };
+  const fixerWorkflow = { action: jest.fn() };
 
   beforeEach(async () => {
     bridge.workflowDetails.mockClear();
+    fixerWorkflow.action.mockClear();
     const moduleRef = await Test.createTestingModule({
       controllers: [BlueBridgeController],
-      providers: [{ provide: BlueBridgeService, useValue: bridge }],
+      providers: [
+        { provide: BlueBridgeService, useValue: bridge },
+        { provide: FixerWorkflowBridgeService, useValue: fixerWorkflow },
+      ],
     }).compile();
 
     app = moduleRef.createNestApplication();

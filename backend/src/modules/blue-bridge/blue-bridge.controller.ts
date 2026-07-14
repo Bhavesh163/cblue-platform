@@ -1,9 +1,25 @@
-import { Controller, Get, Headers, Param, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { BlueBridgeService } from './blue-bridge.service';
+import { FixerWorkflowActionDto } from './dto/fixer-workflow-action.dto';
+import { FixerWorkflowBridgeService } from './fixer-workflow-bridge.service';
 
 @Controller('blue')
 export class BlueBridgeController {
-  constructor(private readonly bridge: BlueBridgeService) {}
+  constructor(
+    private readonly bridge: BlueBridgeService,
+    private readonly fixerWorkflow: FixerWorkflowBridgeService,
+  ) {}
 
   @Get('workflow-details/:poNumber')
   workflowDetails(
@@ -16,6 +32,24 @@ export class BlueBridgeController {
       legacySubjectId,
       bridgeKey,
     });
+  }
+
+  @Post('workflow-details/:poNumber/actions/:action')
+  @UseGuards(JwtAuthGuard)
+  workflowAction(
+    @Param('poNumber') poNumber: string,
+    @Param('action') action: string,
+    @CurrentUser('id') userId: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Body() dto: FixerWorkflowActionDto,
+  ): Promise<BlueWorkflowDetailResponse> {
+    return this.fixerWorkflow.action(
+      poNumber,
+      userId,
+      action,
+      dto,
+      idempotencyKey,
+    );
   }
 }
 
@@ -54,4 +88,5 @@ export interface BlueWorkflowDetailResponse {
   nextActionOwner?: 'customer' | 'partner' | null;
   nextActionStep?: number | null;
   sourceVersion?: 'cblue-fixer-workflow-v1';
+  workflowVersion?: number;
 }

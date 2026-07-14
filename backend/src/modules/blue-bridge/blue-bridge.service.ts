@@ -58,6 +58,7 @@ interface OrderWorkflowSnapshot {
   nextActionStep: number | null;
   sourceVersion: 'cblue-fixer-workflow-v1';
   activityBucket: 'request' | 'active' | 'history';
+  workflowVersion: number;
 }
 @Injectable()
 export class BlueBridgeService {
@@ -65,6 +66,17 @@ export class BlueBridgeService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
   ) {}
+
+  async authenticatedWorkflowDetails(
+    poNumber: string,
+    userId: string,
+  ): Promise<BlueWorkflowDetailResponse> {
+    return this.workflowDetails({
+      poNumber,
+      legacySubjectId: userId,
+      bridgeKey: this.config.get<string>('blueBridge.apiKey'),
+    });
+  }
 
   async workflowDetails(
     input: WorkflowDetailInput,
@@ -99,6 +111,10 @@ export class BlueBridgeService {
         statusHistory: { orderBy: { createdAt: 'desc' } },
         review: { select: { createdAt: true } },
         fixer: { select: { userId: true } },
+        workflowActions: {
+          select: { action: true },
+          orderBy: { createdAt: 'asc' },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -183,6 +199,10 @@ export class BlueBridgeService {
       ratedAt: order.review?.createdAt,
       status: order.status,
       workflowPhase: order.workflowPhase,
+      workflowVersion: order.workflowRevision,
+      completedActionKeys: (order.workflowActions || []).map(
+        (event) => event.action,
+      ),
       customerUserId: order.userId,
       fixerUserId: order.fixer?.userId,
       viewerUserIds: linkedUserIds,
@@ -373,6 +393,7 @@ function resolveOrderWorkflowSnapshot({
     sourceVersion: 'cblue-fixer-workflow-v1',
     activityBucket: currentStep === 11 ? 'history' : 'active',
     poNumber,
+    workflowVersion: 0,
     currentStep,
     totalSteps: 11,
     status: normalizedStatus,
@@ -385,10 +406,12 @@ function resolveOrderWorkflowSnapshot({
     nextActionStep: nextAction?.actionStep || null,
   };
 }
-function resolvePersistedFixerWorkflowSnapshot({
+export function resolvePersistedFixerWorkflowSnapshot({
   poNumber,
   status,
   workflowPhase,
+  workflowVersion,
+  completedActionKeys = [],
   customerUserId,
   ratedAt,
   fixerUserId,
@@ -397,6 +420,8 @@ function resolvePersistedFixerWorkflowSnapshot({
   poNumber: string;
   status?: string | null;
   workflowPhase?: string | null;
+  workflowVersion?: number | null;
+  completedActionKeys?: string[];
   customerUserId?: string | null;
   ratedAt?: Date | string | null;
   fixerUserId?: string | null;
@@ -576,10 +601,24 @@ function resolvePersistedFixerWorkflowSnapshot({
     DRAFT: { step: 3, bucket: 'request', actions: [] },
   };
   const state = definition[phase] || definition.UNKNOWN_ACTIVE;
-  const actions = state.actions.filter(
+  const completed = new Set(completedActionKeys);
+  const actionsForPhase =
+    phase === 'TERMINAL'
+      ? state.actions
+      : [
+          ...state.actions,
+          {
+            key: 'customer-cancel',
+            owner: 'customer' as const,
+            label: 'Cancel Job',
+            actionStep: state.step,
+          },
+        ];
+  const actions = actionsForPhase.filter(
     (action) =>
-      (action.owner === 'customer' && viewerIsCustomer) ||
-      (action.owner === 'partner' && viewerIsPartner),
+      !completed.has(action.key) &&
+      ((action.owner === 'customer' && viewerIsCustomer) ||
+        (action.owner === 'partner' && viewerIsPartner)),
   );
   const nextAction = actions[0] || null;
   return {
@@ -589,6 +628,7 @@ function resolvePersistedFixerWorkflowSnapshot({
     totalSteps: 11,
     status: normalizedStatus,
     activityBucket: state.bucket,
+    workflowVersion: Number(workflowVersion || 0),
     actions,
     availableActions: actions.map((action) => action.key),
     actionOwner: nextAction?.owner || null,

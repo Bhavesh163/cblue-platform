@@ -269,12 +269,14 @@ model Order {
   finalPrice      Float?
   budgetBreakdown Json?
   workflowPhase  String?
+  workflowRevision Int @default(0)
 
   statusHistory OrderStatusHistory[]
   payment       Payment?
   review        Review?
   images        Image[]
   chatMessages  OrderChatMessage[]
+  workflowActions FixerWorkflowAction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -317,6 +319,22 @@ model OrderStatusHistory {
 
   @@index([orderId])
   @@map("order_status_history")
+}
+
++model FixerWorkflowAction {
+  id               String   @id @default(uuid())
+  orderId          String
+  order            Order    @relation(fields: [orderId], references: [id])
+  actorUserId      String
+  action           String
+  idempotencyKey   String?
+  workflowRevision Int
+  payload          Json?
+  createdAt        DateTime @default(now())
+
+  @@unique([orderId, idempotencyKey])
+  @@index([orderId, createdAt])
+  @@map("fixer_workflow_actions")
 }
 
 model Payment {

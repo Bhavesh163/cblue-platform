@@ -184,7 +184,7 @@ describe('BLUE workflow production contracts', () => {
         totalSteps: 11,
         status: 'IN_PROGRESS',
         activityBucket: 'active',
-        availableActions: ['send-meeting-invitation'],
+        availableActions: ['send-meeting-invitation', 'customer-cancel'],
         nextActionKey: 'send-meeting-invitation',
         nextActionOwner: 'customer',
         nextActionStep: 8,
@@ -226,7 +226,7 @@ describe('BLUE workflow production contracts', () => {
       'FEE',
       'CONFIRMED',
       'customer-1',
-      ['fee-proceed', 'free-pass'],
+      ['fee-proceed', 'free-pass', 'customer-cancel'],
       6,
       'active',
     ],
@@ -234,7 +234,7 @@ describe('BLUE workflow production contracts', () => {
       'CHAT',
       'IN_PROGRESS',
       'customer-1',
-      ['send-meeting-invitation'],
+      ['send-meeting-invitation', 'customer-cancel'],
       7,
       'active',
     ],
@@ -258,7 +258,7 @@ describe('BLUE workflow production contracts', () => {
       'VARIATION_CONFIRM',
       'IN_PROGRESS',
       'customer-1',
-      ['confirm-variation'],
+      ['confirm-variation', 'customer-cancel'],
       9,
       'active',
     ],
@@ -274,11 +274,11 @@ describe('BLUE workflow production contracts', () => {
       'COMPLETION_CONFIRM',
       'IN_PROGRESS',
       'customer-1',
-      ['confirm-completion'],
+      ['confirm-completion', 'customer-cancel'],
       10,
       'active',
     ],
-    ['RATING', 'COMPLETED', 'customer-1', ['rate-partner'], 11, 'active'],
+    ['RATING', 'COMPLETED', 'customer-1', ['rate-partner', 'customer-cancel'], 11, 'active'],
     ['RATING', 'COMPLETED', 'partner-1', ['rate-customer'], 11, 'active'],
     ['TERMINAL', 'CANCELLED', 'customer-1', [], 11, 'history'],
   ])(
@@ -354,6 +354,10 @@ describe('BLUE workflow production contracts', () => {
         new ConfigService({ blueBridge: { apiKey: 'bridge-key' } }),
       );
       if (workflowPhase !== 'RATING') {
+        const expectedOtherActions =
+          workflowPhase === 'TERMINAL' || otherViewer === 'partner-1'
+            ? []
+            : ['customer-cancel'];
         expect(
           (
             await other.workflowDetails({
@@ -361,8 +365,8 @@ describe('BLUE workflow production contracts', () => {
               legacySubjectId: otherViewer,
               bridgeKey: 'bridge-key',
             })
-          ).actions,
-        ).toEqual([]);
+          ).availableActions,
+        ).toEqual(expectedOtherActions);
       }
     },
   );
