@@ -197,6 +197,9 @@ describe('PropertyWorkflowBridgeService', () => {
         status: PropertyInquiryStatus.ACCEPTED,
         currentStep: 4,
         actionOwner: 'customer',
+        nextActionStep: 5,
+        nextActionLabel: 'Fee or free pass',
+        nextActionOwner: 'customer',
       }),
     );
   });
@@ -265,6 +268,13 @@ describe('PropertyWorkflowBridgeService', () => {
       }),
     );
     expect(result.currentStep).toBe(7);
+    expect(result).toEqual(
+      expect.objectContaining({
+        nextActionStep: 7,
+        nextActionLabel: 'Confirm viewing invitation',
+        nextActionOwner: 'lister',
+      }),
+    );
   });
 
   it('does not expose customer cancellation as a lister action', async () => {
@@ -283,4 +293,51 @@ describe('PropertyWorkflowBridgeService', () => {
       service.action(stored.poNumber, 'lister-1', 'cancel', {}),
     ).rejects.toThrow('Only the customer may perform this action');
   });
+  it.each([
+    [
+      PropertyInquiryStatus.NOTIFY_SENT,
+      'lister-1',
+      4,
+      'Respond to property inquiry',
+      'lister',
+    ],
+    [
+      PropertyInquiryStatus.PAID,
+      'customer-1',
+      6,
+      'Chat is available; customer may send a viewing invitation at Step 7',
+      'customer-and-lister',
+    ],
+    [
+      PropertyInquiryStatus.MEETING_CONFIRMED,
+      'customer-1',
+      8,
+      'Submit ratings',
+      'customer-and-lister',
+    ],
+    [PropertyInquiryStatus.CANCELLED, 'customer-1', null, null, null],
+    [PropertyInquiryStatus.DECLINED, 'customer-1', null, null, null],
+    [PropertyInquiryStatus.COMPLETED, 'customer-1', null, null, null],
+  ])(
+    'returns the authoritative next action for %s',
+    async (status, userId, nextActionStep, nextActionLabel, nextActionOwner) => {
+      const stored = inquiry(status as PropertyInquiryStatus);
+      const prisma = {
+        propertyInquiry: { findUnique: jest.fn().mockResolvedValue(stored) },
+      } as unknown as PrismaService;
+      const service = new PropertyWorkflowBridgeService(prisma, {
+        search: jest.fn(),
+      } as unknown as PropertyService);
+
+      const snapshot = await service.snapshot(stored.poNumber, userId as string);
+
+      expect(snapshot).toEqual(
+        expect.objectContaining({
+          nextActionStep,
+          nextActionLabel,
+          nextActionOwner,
+        }),
+      );
+    },
+  );
 });

@@ -373,6 +373,7 @@ export class PropertyWorkflowBridgeService {
     const feeEvent = inquiry.workflowEvents.find(
       (event: any) => event.action === 'fee',
     );
+    const nextAction = this.nextAction(inquiry.status);
     return {
       reference: inquiry.poNumber,
       status: inquiry.status,
@@ -381,6 +382,9 @@ export class PropertyWorkflowBridgeService {
       totalSteps: TOTAL_STEPS,
       actionOwner: this.actionOwner(inquiry.status),
       availableActions: this.availableActions(inquiry.status, actor),
+      nextActionStep: nextAction.step,
+      nextActionLabel: nextAction.label,
+      nextActionOwner: nextAction.owner,
       activityBucket: terminal
         ? 'history'
         : inquiry.step <= 4
@@ -388,13 +392,13 @@ export class PropertyWorkflowBridgeService {
           : 'active',
       terminalState: terminal ? inquiry.status : null,
       stepLabels: [
+        'Match listing',
         'Select listing',
-        'Review listing',
         'Inquiry issued',
         'Lister decision',
         'Fee or free pass',
-        'Viewing invitation',
-        'Viewing confirmation',
+        'Chat',
+        'Viewing invitation and confirmation',
         'Ratings',
       ],
       sourceVersion: SOURCE_VERSION,
@@ -478,6 +482,46 @@ export class PropertyWorkflowBridgeService {
       return 'customer-and-lister';
     }
     return 'none';
+  }
+  private nextAction(status: PropertyInquiryStatus): {
+    step: number | null;
+    label: string | null;
+    owner: 'customer' | 'lister' | 'customer-and-lister' | null;
+  } {
+    switch (status) {
+      case PropertyInquiryStatus.NOTIFY_SENT:
+        return {
+          step: 4,
+          label: 'Respond to property inquiry',
+          owner: 'lister',
+        };
+      case PropertyInquiryStatus.ACCEPTED:
+        return {
+          step: 5,
+          label: 'Fee or free pass',
+          owner: 'customer',
+        };
+      case PropertyInquiryStatus.PAID:
+        return {
+          step: 6,
+          label: 'Chat is available; customer may send a viewing invitation at Step 7',
+          owner: 'customer-and-lister',
+        };
+      case PropertyInquiryStatus.MEETING_SENT:
+        return {
+          step: 7,
+          label: 'Confirm viewing invitation',
+          owner: 'lister',
+        };
+      case PropertyInquiryStatus.MEETING_CONFIRMED:
+        return {
+          step: 8,
+          label: 'Submit ratings',
+          owner: 'customer-and-lister',
+        };
+      default:
+        return { step: null, label: null, owner: null };
+    }
   }
 
   private availableActions(
