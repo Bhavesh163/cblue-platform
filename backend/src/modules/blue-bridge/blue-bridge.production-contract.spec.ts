@@ -133,4 +133,80 @@ describe('BLUE workflow production contracts', () => {
       }),
     );
   });
+  it('returns participant-owned actions after free pass and meeting invitation', async () => {
+    const order = {
+      userId: 'customer-1',
+      fixer: { userId: 'partner-1' },
+      status: 'IN_PROGRESS',
+      statusHistory: [],
+      review: null,
+      description: 'PO-2607-9001 | UI text must not determine workflow state',
+      budgetBreakdown: null,
+      user: { name: 'Customer', email: 'customer@example.com' },
+      address,
+      images: [],
+    };
+    const createParticipantService = (
+      viewerId: string,
+      status: string,
+      statusHistory: Array<Record<string, unknown>>,
+    ) =>
+      new BlueBridgeService(
+        {
+          subscriber: { findFirst: jest.fn().mockResolvedValue(null) },
+          user: { findMany: jest.fn().mockResolvedValue([{ id: viewerId }]) },
+          order: {
+            findFirst: jest
+              .fn()
+              .mockResolvedValue({ ...order, status, statusHistory }),
+          },
+        } as unknown as PrismaService,
+        new ConfigService({ blueBridge: { apiKey: 'bridge-key' } }),
+      );
+
+    const customer = await createParticipantService(
+      'customer-1',
+      'IN_PROGRESS',
+      [],
+    ).workflowDetails({
+      poNumber: 'PO-2607-9001',
+      legacySubjectId: 'customer-1',
+      bridgeKey: 'bridge-key',
+    });
+    expect(customer).toEqual(
+      expect.objectContaining({
+        poNumber: 'PO-2607-9001',
+        currentStep: 7,
+        totalSteps: 11,
+        status: 'IN_PROGRESS',
+        activityBucket: 'active',
+        availableActions: ['send-meeting-invitation'],
+        nextActionKey: 'send-meeting-invitation',
+        nextActionOwner: 'customer',
+        nextActionStep: 8,
+      }),
+    );
+
+    const partner = await createParticipantService(
+      'partner-1',
+      'MEETING_REQUESTED',
+      [{ status: 'MEETING_REQUESTED', createdAt: new Date() }],
+    ).workflowDetails({
+      poNumber: 'PO-2607-9001',
+      legacySubjectId: 'partner-1',
+      bridgeKey: 'bridge-key',
+    });
+    expect(partner).toEqual(
+      expect.objectContaining({
+        currentStep: 8,
+        totalSteps: 11,
+        status: 'MEETING_REQUESTED',
+        activityBucket: 'request',
+        availableActions: ['confirm-meeting'],
+        nextActionKey: 'confirm-meeting',
+        nextActionOwner: 'partner',
+        nextActionStep: 8,
+      }),
+    );
+  });
 });

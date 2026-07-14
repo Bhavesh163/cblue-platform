@@ -37,6 +37,26 @@ interface WorkflowLifecycle {
   ratedAt: string | null;
 }
 
+interface WorkflowAction {
+  key: string;
+  owner: 'customer' | 'partner';
+  label: string;
+  actionStep: number;
+  feeMode?: 'payment' | 'free-pass';
+}
+interface OrderWorkflowSnapshot {
+  poNumber: string;
+  currentStep: number;
+  totalSteps: 11;
+  status: string;
+  actions: WorkflowAction[];
+  availableActions: string[];
+  actionOwner: WorkflowAction['owner'] | null;
+  nextActionKey: string | null;
+  nextActionLabel: string | null;
+  nextActionOwner: WorkflowAction['owner'] | null;
+  nextActionStep: number | null;
+}
 @Injectable()
 export class BlueBridgeService {
   constructor(
@@ -76,6 +96,7 @@ export class BlueBridgeService {
         },
         statusHistory: { orderBy: { createdAt: 'desc' } },
         review: { select: { createdAt: true } },
+        fixer: { select: { userId: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -155,6 +176,14 @@ export class BlueBridgeService {
       statusHistory: order.statusHistory,
       ratedAt: order.review?.createdAt,
     });
+    const workflow = resolveOrderWorkflowSnapshot({
+      poNumber,
+      status: order.status,
+      statusHistory: order.statusHistory,
+      customerUserId: order.userId,
+      fixerUserId: order.fixer?.userId,
+      viewerUserIds: linkedUserIds,
+    });
     return {
       detailRows: [
         {
@@ -177,6 +206,7 @@ export class BlueBridgeService {
         url: image.url,
       })),
       ...lifecycle,
+      ...workflow,
     };
   }
 
@@ -232,6 +262,124 @@ function resolveOrderLifecycle({
   return resolveLifecycle({ status, statusHistory, ratedAt });
 }
 
+function resolveOrderWorkflowSnapshot({
+  poNumber,
+  status,
+  statusHistory = [],
+  customerUserId,
+  fixerUserId,
+  viewerUserIds,
+}: {
+  poNumber: string;
+  status?: string | null;
+  statusHistory?: PersistedStatusEvent[];
+  customerUserId?: string | null;
+  fixerUserId?: string | null;
+  viewerUserIds: string[];
+}): OrderWorkflowSnapshot {
+  const normalizedStatus =
+    String(status || '')
+      .trim()
+      .toUpperCase() || 'UNKNOWN';
+  const viewerIsCustomer = viewerUserIds.includes(String(customerUserId || ''));
+  const viewerIsPartner = viewerUserIds.includes(String(fixerUserId || ''));
+  const meetingWasConfirmed =
+    normalizedStatus === 'IN_PROGRESS' &&
+    statusHistory.some(
+      (event) =>
+        String(event?.status || '')
+          .trim()
+          .toUpperCase() === 'MEETING_REQUESTED',
+    );
+  let currentStep = 3;
+  let actions: WorkflowAction[] = [];
+  switch (normalizedStatus) {
+    case 'MATCHING':
+      currentStep = 5;
+      actions = [
+        {
+          key: 'partner-accept',
+          owner: 'partner',
+          label: 'Accept PO',
+          actionStep: 5,
+        },
+        {
+          key: 'partner-decline',
+          owner: 'partner',
+          label: 'Decline PO',
+          actionStep: 5,
+        },
+      ];
+      break;
+    case 'ASSIGNED':
+    case 'DEPOSIT_PENDING':
+    case 'CONFIRMED':
+      currentStep = 6;
+      actions = [
+        {
+          key: 'fee-proceed',
+          owner: 'customer',
+          label: 'Fee & Proceed',
+          actionStep: 6,
+          feeMode: 'payment',
+        },
+        {
+          key: 'free-pass',
+          owner: 'customer',
+          label: 'Testing Period / Free Pass',
+          actionStep: 6,
+          feeMode: 'free-pass',
+        },
+      ];
+      break;
+    case 'IN_PROGRESS':
+      currentStep = meetingWasConfirmed ? 9 : 7;
+      if (!meetingWasConfirmed)
+        actions = [
+          {
+            key: 'send-meeting-invitation',
+            owner: 'customer',
+            label: 'Send Meeting Invitation',
+            actionStep: 8,
+          },
+        ];
+      break;
+    case 'MEETING_REQUESTED':
+      currentStep = 8;
+      actions = [
+        {
+          key: 'confirm-meeting',
+          owner: 'partner',
+          label: 'Confirm Meeting',
+          actionStep: 8,
+        },
+      ];
+      break;
+    case 'COMPLETED':
+    case 'CANCELLED':
+      currentStep = 11;
+      break;
+  }
+  const actorActions = actions.filter(
+    (action) =>
+      (action.owner === 'customer' && viewerIsCustomer) ||
+      (action.owner === 'partner' && viewerIsPartner),
+  );
+  const nextAction = actorActions[0] || null;
+  return {
+    poNumber,
+    currentStep,
+    totalSteps: 11,
+    status: normalizedStatus,
+    actions: actorActions,
+    availableActions: actorActions.map((action) => action.key),
+    actionOwner: nextAction?.owner || null,
+    nextActionKey: nextAction?.key || null,
+    nextActionLabel: nextAction?.label || null,
+    nextActionOwner: nextAction?.owner || null,
+    nextActionStep: nextAction?.actionStep || null,
+  };
+}
 function resolvePropertyLifecycle(inquiry: {
   status?: string | null;
   customerRating?: number | null;
@@ -256,24 +404,35 @@ function resolveLifecycle({
   statusHistory?: PersistedStatusEvent[];
   ratedAt?: Date | string | null;
 }): WorkflowLifecycle {
-  const normalizedStatus = String(status || '').trim().toUpperCase() || 'UNKNOWN';
+  const normalizedStatus =
+    String(status || '')
+      .trim()
+      .toUpperCase() || 'UNKNOWN';
   const latestEventForStatus = (targetStatus: string) =>
     statusHistory.find(
-      (event) => String(event?.status || '').trim().toUpperCase() === targetStatus,
+      (event) =>
+        String(event?.status || '')
+          .trim()
+          .toUpperCase() === targetStatus,
     );
   const cancelledEvent = latestEventForStatus('CANCELLED');
   const completedEvent = latestEventForStatus('COMPLETED');
   const persistedRatedAt = toIsoTimestamp(ratedAt);
   const isDeclined =
     normalizedStatus === 'DECLINED' ||
-    (normalizedStatus === 'CANCELLED' && isPersistedPartnerDecline(cancelledEvent?.note));
+    (normalizedStatus === 'CANCELLED' &&
+      isPersistedPartnerDecline(cancelledEvent?.note));
   const cancelledAt =
     normalizedStatus === 'CANCELLED' && !isDeclined
       ? toIsoTimestamp(cancelledEvent?.createdAt)
       : null;
-  const declinedAt = isDeclined ? toIsoTimestamp(cancelledEvent?.createdAt) : null;
+  const declinedAt = isDeclined
+    ? toIsoTimestamp(cancelledEvent?.createdAt)
+    : null;
   const completedAt =
-    normalizedStatus === 'COMPLETED' ? toIsoTimestamp(completedEvent?.createdAt) : null;
+    normalizedStatus === 'COMPLETED'
+      ? toIsoTimestamp(completedEvent?.createdAt)
+      : null;
   const isHistory =
     normalizedStatus === 'CANCELLED' ||
     normalizedStatus === 'DECLINED' ||
@@ -396,7 +555,10 @@ function formatLocation(address: {
   latitude?: number | null;
   longitude?: number | null;
 }): string {
-  if (typeof address.latitude === 'number' && typeof address.longitude === 'number') {
+  if (
+    typeof address.latitude === 'number' &&
+    typeof address.longitude === 'number'
+  ) {
     return `${address.latitude}, ${address.longitude}`;
   }
 

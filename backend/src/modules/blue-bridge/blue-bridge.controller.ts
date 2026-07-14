@@ -36,4 +36,21 @@ export interface BlueWorkflowDetailResponse {
   cancelledAt: string | null;
   declinedAt: string | null;
   ratedAt: string | null;
+  poNumber?: string;
+  currentStep?: number;
+  totalSteps?: number;
+  status?: string;
+  actions?: Array<{
+    key: string;
+    owner: 'customer' | 'partner';
+    label: string;
+    actionStep: number;
+    feeMode?: 'payment' | 'free-pass';
+  }>;
+  availableActions?: string[];
+  actionOwner?: 'customer' | 'partner' | null;
+  nextActionKey?: string | null;
+  nextActionLabel?: string | null;
+  nextActionOwner?: 'customer' | 'partner' | null;
+  nextActionStep?: number | null;
 }
