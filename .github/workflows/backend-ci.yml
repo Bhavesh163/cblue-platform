@@ -424,7 +424,8 @@ jobs:
                 -e CBLUE_BRIDGE_API_KEY="$CBLUE_BRIDGE_API_KEY_RUNTIME" \
                 -e PORT=3002 -e NODE_ENV=production \
                 --restart unless-stopped \
-                "$IMAGE" 2>&1 || {
+                --entrypoint sh \
+                "$IMAGE" -c "node dist/src/main.js" 2>&1 || {
                   echo "❌ Failed to start candidate backend container"
                   docker ps -a 2>&1
                   exit 1
@@ -466,9 +467,16 @@ jobs:
               MIG_SQL="$MIG_DIR/migration.sql"
               if [ ! -f "$MIG_SQL" ]; then continue; fi
 
+              # Recover the known idempotent migration that previously ran
+              # before candidate startup had a compatible database schema.
+              if [ "$MIG_NAME" = "20260714123000_add_order_workflow_phase" ]; then
+                docker exec "$POSTGRES_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -c \
+                  "UPDATE _prisma_migrations SET rolled_back_at = now() WHERE migration_name='$MIG_NAME' AND finished_at IS NULL AND rolled_back_at IS NULL;" 2>&1
+              fi
+
               # Check if already applied
                 ALREADY=$(docker exec "$POSTGRES_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -t -c \
-                "SELECT count(*) FROM _prisma_migrations WHERE migration_name='$MIG_NAME';" 2>&1 | tr -d ' ')
+                "SELECT count(*) FROM _prisma_migrations WHERE migration_name='$MIG_NAME' AND finished_at IS NOT NULL AND rolled_back_at IS NULL;" 2>&1 | tr -d ' ')
 
               if [ "$ALREADY" = "0" ]; then
                 echo "  Applying: $MIG_NAME"
