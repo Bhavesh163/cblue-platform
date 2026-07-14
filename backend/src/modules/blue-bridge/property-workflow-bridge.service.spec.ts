@@ -87,6 +87,34 @@ function inquiry(status = PropertyInquiryStatus.NOTIFY_SENT) {
   };
 }
 
+function expectAuthoritativeSnapshot(snapshot: any) {
+  expect(snapshot).toEqual(
+    expect.objectContaining({
+      sourceVersion: 'cblue-property-workflow-v1',
+      totalSteps: 8,
+      currentStep: expect.any(Number),
+      actions: expect.any(Array),
+    }),
+  );
+  expect(snapshot.currentStep).toBeGreaterThanOrEqual(1);
+  expect(snapshot.currentStep).toBeLessThanOrEqual(8);
+  expect([null, 'customer', 'lister']).toContain(snapshot.nextActionOwner);
+  expect([null, expect.any(Number)]).toContainEqual(snapshot.nextActionStep);
+  expect([null, expect.any(String)]).toContainEqual(snapshot.nextActionLabel);
+  for (const action of snapshot.actions) {
+    expect(action).toEqual(
+      expect.objectContaining({
+        key: expect.any(String),
+        owner: expect.stringMatching(/^(customer|lister)$/),
+        label: expect.any(String),
+        actionStep: expect.any(Number),
+      }),
+    );
+    expect(action.actionStep).toBeGreaterThanOrEqual(1);
+    expect(action.actionStep).toBeLessThanOrEqual(8);
+  }
+}
+
 describe('PropertyWorkflowBridgeService', () => {
   it('creates a CBLUE-owned inquiry and projects persisted data for both participants', async () => {
     const stored = inquiry();
@@ -138,6 +166,9 @@ describe('PropertyWorkflowBridgeService', () => {
         }),
       }),
     );
+    expectAuthoritativeSnapshot(customerSnapshot);
+    expectAuthoritativeSnapshot(listerSnapshot);
+    expect(customerSnapshot.currentStep).toBe(3);
     expect(customerSnapshot.reference).toBe(stored.poNumber);
     expect(customerSnapshot.attachments).toHaveLength(1);
     expect(customerSnapshot.history).toHaveLength(1);
@@ -352,6 +383,7 @@ describe('PropertyWorkflowBridgeService', () => {
 
       const snapshot = await service.snapshot(stored.poNumber, userId as string);
 
+      expectAuthoritativeSnapshot(snapshot);
       expect(snapshot).toEqual(
         expect.objectContaining({
           nextActionStep,
@@ -424,4 +456,18 @@ describe('PropertyWorkflowBridgeService', () => {
       }
     },
   );
+  it('normalizes malformed persisted steps into the authoritative 1-8 range', async () => {
+    const stored = { ...inquiry(), step: 99 };
+    const prisma = {
+      propertyInquiry: { findUnique: jest.fn().mockResolvedValue(stored) },
+    } as unknown as PrismaService;
+    const service = new PropertyWorkflowBridgeService(prisma, {
+      search: jest.fn(),
+    } as unknown as PropertyService);
+
+    const snapshot = await service.snapshot(stored.poNumber, 'customer-1');
+
+    expectAuthoritativeSnapshot(snapshot);
+    expect(snapshot.currentStep).toBe(3);
+  });
 });

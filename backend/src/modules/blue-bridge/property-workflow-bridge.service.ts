@@ -389,13 +389,14 @@ export class PropertyWorkflowBridgeService {
     const feeEvent = inquiry.workflowEvents.find(
       (event: any) => event.action === 'fee',
     );
-    const actions = this.actions(inquiry.status, inquiry.step);
+    const currentStep = this.currentStep(inquiry.status, inquiry.step);
+    const actions = this.actions(inquiry.status, currentStep);
     const nextAction = this.nextAction(inquiry.status, actor);
     return {
       reference: inquiry.poNumber,
       status: inquiry.status,
       poNumber: inquiry.poNumber,
-      currentStep: inquiry.step,
+      currentStep,
       totalSteps: TOTAL_STEPS,
       actionOwner: this.actionOwner(inquiry.status),
       actions,
@@ -405,7 +406,7 @@ export class PropertyWorkflowBridgeService {
       nextActionOwner: nextAction.owner,
       activityBucket: terminal
         ? 'history'
-        : inquiry.step <= 4
+        : currentStep <= 4
           ? 'request'
           : 'active',
       terminalState: terminal ? inquiry.status : null,
@@ -491,6 +492,33 @@ export class PropertyWorkflowBridgeService {
     };
   }
 
+  private currentStep(
+    status: PropertyInquiryStatus,
+    persistedStep: unknown,
+  ): number {
+    const step = Number(persistedStep);
+    if (Number.isInteger(step) && step >= 1 && step <= TOTAL_STEPS) {
+      return step;
+    }
+
+    switch (status) {
+      case PropertyInquiryStatus.NOTIFY_SENT:
+        return 3;
+      case PropertyInquiryStatus.ACCEPTED:
+        return 4;
+      case PropertyInquiryStatus.PAID:
+        return 5;
+      case PropertyInquiryStatus.MEETING_SENT:
+      case PropertyInquiryStatus.MEETING_CONFIRMED:
+        return 7;
+      case PropertyInquiryStatus.COMPLETED:
+        return 8;
+      case PropertyInquiryStatus.DECLINED:
+        return 4;
+      default:
+        return 1;
+    }
+  }
   private actionOwner(status: PropertyInquiryStatus) {
     if (status === PropertyInquiryStatus.NOTIFY_SENT) return 'lister';
     if (status === PropertyInquiryStatus.ACCEPTED) return 'customer';
