@@ -169,6 +169,14 @@ describe('PropertyWorkflowBridgeService', () => {
     expectAuthoritativeSnapshot(customerSnapshot);
     expectAuthoritativeSnapshot(listerSnapshot);
     expect(customerSnapshot.currentStep).toBe(3);
+    const createData = (prisma.propertyInquiry.create as jest.Mock).mock.calls[0][0].data;
+    expect(createData.workflowEvents.create).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ action: 'match-selected', step: 1 }),
+        expect.objectContaining({ action: 'listing-selected', step: 2 }),
+        expect.objectContaining({ action: 'partner-notified', step: 3 }),
+      ]),
+    );
     expect(customerSnapshot.reference).toBe(stored.poNumber);
     expect(customerSnapshot.attachments).toHaveLength(1);
     expect(customerSnapshot.history).toHaveLength(1);
@@ -421,6 +429,11 @@ describe('PropertyWorkflowBridgeService', () => {
       ],
     ],
     [
+      PropertyInquiryStatus.PAID,
+      'customer-1',
+      [{ key: 'viewing-invite', owner: 'customer', actionStep: 7 }],
+    ],
+    [
       PropertyInquiryStatus.MEETING_SENT,
       'lister-1',
       [{ key: 'viewing-confirm', owner: 'lister', actionStep: 7 }],
@@ -626,4 +639,34 @@ describe('PropertyWorkflowBridgeService', () => {
       }
     },
   );
+  it('exposes Step 6 chat without inventing a shared action owner', async () => {
+    const stored = {
+      ...inquiry(PropertyInquiryStatus.PAID),
+      status: PropertyInquiryStatus.PAID,
+      step: 5,
+    };
+    const prisma = {
+      propertyInquiry: { findUnique: jest.fn().mockResolvedValue(stored) },
+    } as unknown as PrismaService;
+    const service = new PropertyWorkflowBridgeService(prisma, {
+      search: jest.fn(),
+    } as unknown as PropertyService);
+
+    const snapshot = await service.snapshot(stored.poNumber, 'customer-1');
+
+    expectAuthoritativeSnapshot(snapshot);
+    expect(snapshot.stepLabels[5]).toBe('Chat');
+    expect(snapshot.chat).toEqual(
+      expect.objectContaining({ enabled: true, state: 'available' }),
+    );
+    expect(snapshot.actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: 'viewing-invite',
+          owner: 'customer',
+          actionStep: 7,
+        }),
+      ]),
+    );
+  });
 });
