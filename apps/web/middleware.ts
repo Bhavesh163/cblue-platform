@@ -8,7 +8,7 @@ const intlMiddleware = createMiddleware(routing);
 export default function middleware(request: Parameters<typeof intlMiddleware>[0]) {
   const canonicalUrl = getCanonicalCblueUrl(
     request.url,
-    request.headers.get('host'),
+    request.nextUrl.hostname,
   );
   if (canonicalUrl) return NextResponse.redirect(canonicalUrl, 308);
   return intlMiddleware(request);
