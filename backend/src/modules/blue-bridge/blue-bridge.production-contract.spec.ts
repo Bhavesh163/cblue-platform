@@ -156,9 +156,13 @@ describe('BLUE workflow production contracts', () => {
           subscriber: { findFirst: jest.fn().mockResolvedValue(null) },
           user: { findMany: jest.fn().mockResolvedValue([{ id: viewerId }]) },
           order: {
-            findFirst: jest
-              .fn()
-              .mockResolvedValue({ ...order, status, statusHistory }),
+            findFirst: jest.fn().mockResolvedValue({
+              ...order,
+              status,
+              statusHistory,
+              workflowPhase:
+                status === 'MEETING_REQUESTED' ? 'MEETING_CONFIRM' : 'CHAT',
+            }),
           },
         } as unknown as PrismaService,
         new ConfigService({ blueBridge: { apiKey: 'bridge-key' } }),
@@ -209,4 +213,157 @@ describe('BLUE workflow production contracts', () => {
       }),
     );
   });
+  it.each([
+    [
+      'PARTNER_DECISION',
+      'MATCHING',
+      'partner-1',
+      ['partner-accept', 'partner-decline'],
+      5,
+      'request',
+    ],
+    [
+      'FEE',
+      'CONFIRMED',
+      'customer-1',
+      ['fee-proceed', 'free-pass'],
+      6,
+      'active',
+    ],
+    [
+      'CHAT',
+      'IN_PROGRESS',
+      'customer-1',
+      ['send-meeting-invitation'],
+      7,
+      'active',
+    ],
+    [
+      'MEETING_CONFIRM',
+      'MEETING_REQUESTED',
+      'partner-1',
+      ['confirm-meeting'],
+      8,
+      'request',
+    ],
+    [
+      'VARIATION',
+      'IN_PROGRESS',
+      'partner-1',
+      ['send-variation', 'skip-variation'],
+      9,
+      'active',
+    ],
+    [
+      'VARIATION_CONFIRM',
+      'IN_PROGRESS',
+      'customer-1',
+      ['confirm-variation'],
+      9,
+      'active',
+    ],
+    [
+      'COMPLETION',
+      'IN_PROGRESS',
+      'partner-1',
+      ['send-completion'],
+      10,
+      'active',
+    ],
+    [
+      'COMPLETION_CONFIRM',
+      'IN_PROGRESS',
+      'customer-1',
+      ['confirm-completion'],
+      10,
+      'active',
+    ],
+    ['RATING', 'COMPLETED', 'customer-1', ['rate-partner'], 11, 'active'],
+    ['RATING', 'COMPLETED', 'partner-1', ['rate-customer'], 11, 'active'],
+    ['TERMINAL', 'CANCELLED', 'customer-1', [], 11, 'history'],
+  ])(
+    'returns only the owning actions for %s',
+    async (
+      workflowPhase,
+      status,
+      viewerId,
+      expectedActions,
+      currentStep,
+      activityBucket,
+    ) => {
+      const service = new BlueBridgeService(
+        {
+          subscriber: { findFirst: jest.fn().mockResolvedValue(null) },
+          user: { findMany: jest.fn().mockResolvedValue([{ id: viewerId }]) },
+          order: {
+            findFirst: jest.fn().mockResolvedValue({
+              userId: 'customer-1',
+              fixer: { userId: 'partner-1' },
+              status,
+              workflowPhase,
+              statusHistory: [],
+              review: null,
+              description: 'PO-2607-9002 | never used for workflow actions',
+              budgetBreakdown: null,
+              user: { name: 'Customer', email: 'customer@example.com' },
+              address,
+              images: [],
+            }),
+          },
+        } as unknown as PrismaService,
+        new ConfigService({ blueBridge: { apiKey: 'bridge-key' } }),
+      );
+      const snapshot = await service.workflowDetails({
+        poNumber: 'PO-2607-9002',
+        legacySubjectId: viewerId,
+        bridgeKey: 'bridge-key',
+      });
+      expect(snapshot).toEqual(
+        expect.objectContaining({
+          sourceVersion: 'cblue-fixer-workflow-v1',
+          currentStep,
+          totalSteps: 11,
+          activityBucket,
+          availableActions: expectedActions,
+        }),
+      );
+      const otherViewer =
+        viewerId === 'customer-1' ? 'partner-1' : 'customer-1';
+      const other = new BlueBridgeService(
+        {
+          subscriber: { findFirst: jest.fn().mockResolvedValue(null) },
+          user: {
+            findMany: jest.fn().mockResolvedValue([{ id: otherViewer }]),
+          },
+          order: {
+            findFirst: jest.fn().mockResolvedValue({
+              userId: 'customer-1',
+              fixer: { userId: 'partner-1' },
+              status,
+              workflowPhase,
+              statusHistory: [],
+              review: null,
+              description: 'PO-2607-9002',
+              budgetBreakdown: null,
+              user: { name: 'Customer', email: 'customer@example.com' },
+              address,
+              images: [],
+            }),
+          },
+        } as unknown as PrismaService,
+        new ConfigService({ blueBridge: { apiKey: 'bridge-key' } }),
+      );
+      if (workflowPhase !== 'RATING') {
+        expect(
+          (
+            await other.workflowDetails({
+              poNumber: 'PO-2607-9002',
+              legacySubjectId: otherViewer,
+              bridgeKey: 'bridge-key',
+            })
+          ).actions,
+        ).toEqual([]);
+      }
+    },
+  );
 });

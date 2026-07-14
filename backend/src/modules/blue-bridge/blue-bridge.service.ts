@@ -56,6 +56,8 @@ interface OrderWorkflowSnapshot {
   nextActionLabel: string | null;
   nextActionOwner: WorkflowAction['owner'] | null;
   nextActionStep: number | null;
+  sourceVersion: 'cblue-fixer-workflow-v1';
+  activityBucket: 'request' | 'active' | 'history';
 }
 @Injectable()
 export class BlueBridgeService {
@@ -176,10 +178,11 @@ export class BlueBridgeService {
       statusHistory: order.statusHistory,
       ratedAt: order.review?.createdAt,
     });
-    const workflow = resolveOrderWorkflowSnapshot({
+    const workflow = resolvePersistedFixerWorkflowSnapshot({
       poNumber,
+      ratedAt: order.review?.createdAt,
       status: order.status,
-      statusHistory: order.statusHistory,
+      workflowPhase: order.workflowPhase,
       customerUserId: order.userId,
       fixerUserId: order.fixer?.userId,
       viewerUserIds: linkedUserIds,
@@ -367,12 +370,227 @@ function resolveOrderWorkflowSnapshot({
   );
   const nextAction = actorActions[0] || null;
   return {
+    sourceVersion: 'cblue-fixer-workflow-v1',
+    activityBucket: currentStep === 11 ? 'history' : 'active',
     poNumber,
     currentStep,
     totalSteps: 11,
     status: normalizedStatus,
     actions: actorActions,
     availableActions: actorActions.map((action) => action.key),
+    actionOwner: nextAction?.owner || null,
+    nextActionKey: nextAction?.key || null,
+    nextActionLabel: nextAction?.label || null,
+    nextActionOwner: nextAction?.owner || null,
+    nextActionStep: nextAction?.actionStep || null,
+  };
+}
+function resolvePersistedFixerWorkflowSnapshot({
+  poNumber,
+  status,
+  workflowPhase,
+  customerUserId,
+  ratedAt,
+  fixerUserId,
+  viewerUserIds,
+}: {
+  poNumber: string;
+  status?: string | null;
+  workflowPhase?: string | null;
+  customerUserId?: string | null;
+  ratedAt?: Date | string | null;
+  fixerUserId?: string | null;
+  viewerUserIds: string[];
+}): OrderWorkflowSnapshot {
+  const normalizedStatus =
+    String(status || '')
+      .trim()
+      .toUpperCase() || 'UNKNOWN';
+  const phase =
+    String(workflowPhase || '')
+      .trim()
+      .toUpperCase() ||
+    (normalizedStatus === 'IN_PROGRESS'
+      ? 'UNKNOWN_ACTIVE'
+      : normalizedStatus === 'MEETING_REQUESTED'
+        ? 'MEETING_CONFIRM'
+        : ['ASSIGNED', 'DEPOSIT_PENDING', 'CONFIRMED'].includes(
+              normalizedStatus,
+            )
+          ? 'FEE'
+          : normalizedStatus === 'MATCHING'
+            ? 'PARTNER_DECISION'
+            : normalizedStatus === 'COMPLETED'
+              ? ratedAt
+                ? 'TERMINAL'
+                : 'RATING'
+              : normalizedStatus === 'CANCELLED'
+                ? 'TERMINAL'
+                : 'DRAFT');
+  const viewerIsCustomer = viewerUserIds.includes(String(customerUserId || ''));
+  const viewerIsPartner = viewerUserIds.includes(String(fixerUserId || ''));
+  const definition: Record<
+    string,
+    {
+      step: number;
+      bucket: 'request' | 'active' | 'history';
+      actions: WorkflowAction[];
+    }
+  > = {
+    PARTNER_DECISION: {
+      step: 5,
+      bucket: 'request',
+      actions: [
+        {
+          key: 'partner-accept',
+          owner: 'partner',
+          label: 'Accept PO',
+          actionStep: 5,
+        },
+        {
+          key: 'partner-decline',
+          owner: 'partner',
+          label: 'Decline PO',
+          actionStep: 5,
+        },
+      ],
+    },
+    FEE: {
+      step: 6,
+      bucket: 'active',
+      actions: [
+        {
+          key: 'fee-proceed',
+          owner: 'customer',
+          label: 'Fee & Proceed',
+          actionStep: 6,
+          feeMode: 'payment',
+        },
+        {
+          key: 'free-pass',
+          owner: 'customer',
+          label: 'Testing Period / Free Pass',
+          actionStep: 6,
+          feeMode: 'free-pass',
+        },
+      ],
+    },
+    CHAT: {
+      step: 7,
+      bucket: 'active',
+      actions: [
+        {
+          key: 'send-meeting-invitation',
+          owner: 'customer',
+          label: 'Send Meeting Invitation',
+          actionStep: 8,
+        },
+      ],
+    },
+    MEETING_CONFIRM: {
+      step: 8,
+      bucket: 'request',
+      actions: [
+        {
+          key: 'confirm-meeting',
+          owner: 'partner',
+          label: 'Confirm Meeting',
+          actionStep: 8,
+        },
+      ],
+    },
+    VARIATION: {
+      step: 9,
+      bucket: 'active',
+      actions: [
+        {
+          key: 'send-variation',
+          owner: 'partner',
+          label: 'Send Variation',
+          actionStep: 9,
+        },
+        {
+          key: 'skip-variation',
+          owner: 'partner',
+          label: 'Skip Variation',
+          actionStep: 9,
+        },
+      ],
+    },
+    VARIATION_CONFIRM: {
+      step: 9,
+      bucket: 'active',
+      actions: [
+        {
+          key: 'confirm-variation',
+          owner: 'customer',
+          label: 'Confirm Variation',
+          actionStep: 9,
+        },
+      ],
+    },
+    COMPLETION: {
+      step: 10,
+      bucket: 'active',
+      actions: [
+        {
+          key: 'send-completion',
+          owner: 'partner',
+          label: 'Send Completion',
+          actionStep: 10,
+        },
+      ],
+    },
+    COMPLETION_CONFIRM: {
+      step: 10,
+      bucket: 'active',
+      actions: [
+        {
+          key: 'confirm-completion',
+          owner: 'customer',
+          label: 'Confirm Completion',
+          actionStep: 10,
+        },
+      ],
+    },
+    RATING: {
+      step: 11,
+      bucket: 'active',
+      actions: [
+        {
+          key: 'rate-partner',
+          owner: 'customer',
+          label: 'Rate Partner',
+          actionStep: 11,
+        },
+        {
+          key: 'rate-customer',
+          owner: 'partner',
+          label: 'Rate Customer',
+          actionStep: 11,
+        },
+      ],
+    },
+    TERMINAL: { step: 11, bucket: 'history', actions: [] },
+    UNKNOWN_ACTIVE: { step: 7, bucket: 'active', actions: [] },
+    DRAFT: { step: 3, bucket: 'request', actions: [] },
+  };
+  const state = definition[phase] || definition.UNKNOWN_ACTIVE;
+  const actions = state.actions.filter(
+    (action) =>
+      (action.owner === 'customer' && viewerIsCustomer) ||
+      (action.owner === 'partner' && viewerIsPartner),
+  );
+  const nextAction = actions[0] || null;
+  return {
+    sourceVersion: 'cblue-fixer-workflow-v1',
+    poNumber,
+    currentStep: state.step,
+    totalSteps: 11,
+    status: normalizedStatus,
+    activityBucket: state.bucket,
+    actions,
+    availableActions: actions.map((action) => action.key),
     actionOwner: nextAction?.owner || null,
     nextActionKey: nextAction?.key || null,
     nextActionLabel: nextAction?.label || null,

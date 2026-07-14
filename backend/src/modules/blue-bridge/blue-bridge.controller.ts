@@ -53,4 +53,5 @@ export interface BlueWorkflowDetailResponse {
   nextActionLabel?: string | null;
   nextActionOwner?: 'customer' | 'partner' | null;
   nextActionStep?: number | null;
+  sourceVersion?: 'cblue-fixer-workflow-v1';
 }

@@ -35,6 +35,29 @@ const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   COMPLETED: [],
   CANCELLED: [],
 };
+function resolveNextWorkflowPhase({
+  previousStatus,
+  nextStatus,
+  previousPhase,
+  changedByCustomer,
+}: {
+  previousStatus: OrderStatus;
+  nextStatus: OrderStatus;
+  previousPhase?: string | null;
+  changedByCustomer: boolean;
+}): string | null {
+  if (nextStatus === OrderStatus.CANCELLED) return 'TERMINAL';
+  if (nextStatus === OrderStatus.MATCHING) return 'PARTNER_DECISION';
+  if (nextStatus === OrderStatus.CONFIRMED) return 'FEE';
+  if (nextStatus === OrderStatus.MEETING_REQUESTED) return 'MEETING_CONFIRM';
+  if (nextStatus === OrderStatus.IN_PROGRESS)
+    return previousStatus === OrderStatus.MEETING_REQUESTED &&
+      !changedByCustomer
+      ? 'VARIATION'
+      : 'CHAT';
+  if (nextStatus === OrderStatus.COMPLETED) return 'RATING';
+  return previousPhase || null;
+}
 const HIDDEN_TEST_PO_MARKERS = [
   'PO-2605-6716',
   'PO-2605-9605',
@@ -100,6 +123,7 @@ export class OrderService {
         estimatedPrice: dto.estimatedPrice,
         ...(dto.budgetBreakdown
           ? {
+              workflowPhase: dto.fixerId ? 'PARTNER_DECISION' : null,
               budgetBreakdown:
                 dto.budgetBreakdown as unknown as Prisma.InputJsonValue,
             }
@@ -697,6 +721,7 @@ export class OrderService {
       where: { id: orderId },
       select: {
         id: true,
+        workflowPhase: true,
         userId: true,
         fixerId: true,
         status: true,
@@ -802,6 +827,12 @@ export class OrderService {
       where: { id: orderId },
       data: {
         status: dto.status,
+        workflowPhase: resolveNextWorkflowPhase({
+          previousStatus: order.status,
+          nextStatus: dto.status,
+          previousPhase: order.workflowPhase,
+          changedByCustomer: isCustomer,
+        }),
         statusHistory: {
           create: {
             status: dto.status,
