@@ -18,6 +18,17 @@ import {
 const TOTAL_STEPS = 8;
 const SOURCE_VERSION = 'cblue-property-workflow-v1';
 
+type PropertyWorkflowActionKey =
+  | 'partner-accept'
+  | 'partner-decline'
+  | 'fee-proceed'
+  | 'free-pass'
+  | 'viewing-invite'
+  | 'viewing-confirm'
+  | 'rate-partner'
+  | 'rate-customer'
+  | 'customer-cancel';
+
 type WorkflowAction =
   | 'accept'
   | 'partner-accept'
@@ -387,7 +398,8 @@ export class PropertyWorkflowBridgeService {
       (event: any) => actor === 'lister' || actor === 'admin' || !event.isPrivate,
     );
     const feeEvent = inquiry.workflowEvents.find(
-      (event: any) => event.action === 'fee',
+      (event: any) =>
+        ['fee', 'fee-proceed', 'free-pass'].includes(event.action),
     );
     const currentStep = this.currentStep(inquiry.status, inquiry.step);
     const actions = this.actions(inquiry.status, currentStep);
@@ -576,14 +588,14 @@ export class PropertyWorkflowBridgeService {
     status: PropertyInquiryStatus,
     currentStep: number,
   ): Array<{
-    key: string;
+    key: PropertyWorkflowActionKey;
     owner: 'customer' | 'lister';
     label: string;
     actionStep: number;
     feeMode?: 'payment' | 'free-pass';
   }> {
     const cancel = {
-      key: 'customer-cancel',
+      key: 'customer-cancel' as const,
       owner: 'customer' as const,
       label: 'Cancel property inquiry',
       actionStep: currentStep,
@@ -664,7 +676,10 @@ export class PropertyWorkflowBridgeService {
   }
 
   private availableActions(
-    actions: Array<{ key: string; owner: 'customer' | 'lister' }>,
+    actions: Array<{
+      key: PropertyWorkflowActionKey;
+      owner: 'customer' | 'lister';
+    }>,
     actor: 'customer' | 'lister' | 'admin',
   ) {
     if (actor === 'admin') return [];

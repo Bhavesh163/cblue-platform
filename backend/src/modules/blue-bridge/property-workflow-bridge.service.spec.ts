@@ -470,4 +470,160 @@ describe('PropertyWorkflowBridgeService', () => {
     expectAuthoritativeSnapshot(snapshot);
     expect(snapshot.currentStep).toBe(3);
   });
+  it.each([
+    [
+      'lister accepts',
+      PropertyInquiryStatus.NOTIFY_SENT,
+      'lister-1',
+      'partner-accept',
+      {},
+      PropertyInquiryStatus.ACCEPTED,
+      4,
+    ],
+    [
+      'lister declines',
+      PropertyInquiryStatus.NOTIFY_SENT,
+      'lister-1',
+      'partner-decline',
+      {},
+      PropertyInquiryStatus.DECLINED,
+      4,
+    ],
+    [
+      'customer proceeds with normal fee',
+      PropertyInquiryStatus.ACCEPTED,
+      'customer-1',
+      'fee-proceed',
+      {},
+      PropertyInquiryStatus.PAID,
+      5,
+    ],
+    [
+      'customer uses free pass',
+      PropertyInquiryStatus.ACCEPTED,
+      'customer-1',
+      'free-pass',
+      {},
+      PropertyInquiryStatus.PAID,
+      5,
+    ],
+    [
+      'customer sends viewing invitation',
+      PropertyInquiryStatus.PAID,
+      'customer-1',
+      'viewing-invite',
+      {
+        meetingDate: '2026-07-20',
+        meetingTime: '14:00',
+        meetingVenue: 'Saphan Song',
+      },
+      PropertyInquiryStatus.MEETING_SENT,
+      7,
+    ],
+    [
+      'lister confirms viewing invitation',
+      PropertyInquiryStatus.MEETING_SENT,
+      'lister-1',
+      'viewing-confirm',
+      {},
+      PropertyInquiryStatus.MEETING_CONFIRMED,
+      7,
+    ],
+    [
+      'customer rates lister',
+      PropertyInquiryStatus.MEETING_CONFIRMED,
+      'customer-1',
+      'rate-partner',
+      { rating: 5 },
+      PropertyInquiryStatus.MEETING_CONFIRMED,
+      8,
+    ],
+    [
+      'lister rates customer',
+      PropertyInquiryStatus.MEETING_CONFIRMED,
+      'lister-1',
+      'rate-customer',
+      { rating: 5 },
+      PropertyInquiryStatus.MEETING_CONFIRMED,
+      8,
+    ],
+    [
+      'customer cancels',
+      PropertyInquiryStatus.ACCEPTED,
+      'customer-1',
+      'customer-cancel',
+      {},
+      PropertyInquiryStatus.CANCELLED,
+      4,
+    ],
+  ])(
+    'returns an authoritative snapshot after %s',
+    async (
+      _name,
+      beforeStatus,
+      userId,
+      action,
+      dto,
+      afterStatus,
+      afterStep,
+    ) => {
+      const before = {
+        ...inquiry(beforeStatus as PropertyInquiryStatus),
+        status: beforeStatus as PropertyInquiryStatus,
+      };
+      const after = {
+        ...before,
+        status: afterStatus as PropertyInquiryStatus,
+        step: afterStep as number,
+        workflowEvents: [
+          ...before.workflowEvents,
+          {
+            action,
+            status: afterStatus,
+            step: afterStep,
+            actorId: userId,
+            isPrivate: false,
+            note: null,
+            metadata: action === 'free-pass' ? { freePass: true } : {},
+            createdAt: new Date('2026-07-12T03:00:00.000Z'),
+          },
+        ],
+      };
+      const prisma = {
+        propertyInquiry: {
+          findUnique: jest
+            .fn()
+            .mockResolvedValueOnce(before)
+            .mockResolvedValueOnce(after),
+          update: jest.fn().mockResolvedValue({ poNumber: before.poNumber }),
+        },
+      } as unknown as PrismaService;
+      const service = new PropertyWorkflowBridgeService(prisma, {
+        search: jest.fn(),
+      } as unknown as PropertyService);
+
+      const result = await service.action(
+        before.poNumber,
+        userId as string,
+        action as any,
+        dto as any,
+      );
+
+      expect(result.status).toBe(afterStatus);
+      expect(result.currentStep).toBe(afterStep);
+      expectAuthoritativeSnapshot(result);
+      if (
+        [
+          PropertyInquiryStatus.CANCELLED,
+          PropertyInquiryStatus.DECLINED,
+        ].includes(afterStatus as PropertyInquiryStatus)
+      ) {
+        expect(result.actions).toEqual([]);
+        expect(result.activityBucket).toBe('history');
+      }
+      if (action === 'free-pass') {
+        expect(result.feeState.freePass).toBe(true);
+      }
+    },
+  );
 });
