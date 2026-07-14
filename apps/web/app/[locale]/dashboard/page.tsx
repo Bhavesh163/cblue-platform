@@ -11,6 +11,7 @@ import {
   filterLiveWorkflowItems,
   filterWorkflowItemsByKnownBackendPos,
   isCompletedAwaitingWorkflowRating,
+  isCustomerMeetingInviteActionAvailable,
   isWorkflowMeetingCardVisible,
   isTerminalWorkflowStatus,
   normalizeWorkflowHistoryItems,
@@ -3367,8 +3368,39 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       return !isHiddenTestPo(po) && !isClosedCustomerWorkflowPo(po) && !(po && customerSideCompletedPropPos.has(po));
     })
     .sort((a: any, b: any) => parseDateMs(b.createdAt || b.date) - parseDateMs(a.createdAt || a.date));
+  const backendMeetingInviteRequests = workflowOrders
+    .filter((order: any) => {
+      const po = extractPo(order);
+      return po && isPoCode(po) && isCustomerMeetingInviteActionAvailable(order);
+    })
+    .map((order: any) => {
+      const po = extractPo(order);
+      const activeItem = combinedActive.find((item: any) => item.po === po);
+      const createdAt = parseDateMs(
+        order.statusHistory?.[0]?.createdAt ||
+        order.statusChangedAt ||
+        order.updatedAt ||
+        order.createdAt,
+      ) || Date.now();
+      return {
+        id: `meet-invite-${po}`,
+        po,
+        orderId: order.id,
+        title: activeItem?.title || String(order.serviceCategory || order.service || 'Service').replace(/_/g, ' '),
+        customer: activeItem?.fixerAlias || activeItem?.partnerName || order.fixerName || order.partnerName || 'Partner',
+        budget: activeItem?.budget || (order.estimatedPrice ? `\u0E3F${Number(order.estimatedPrice).toLocaleString()}` : "\u0E3F0"),
+        tier: activeItem?.tier || String(order.description || '').match(/TIER:([A-Za-z]+)/)?.[1] || 'Standard',
+        desc: 'Please send a meeting invitation to your partner. Fill in the venue and proposed date/time.',
+        type: 'meeting_invite',
+        authoritative: true,
+        date: fmtDateTime(createdAt),
+        createdAt,
+        step: 8,
+        location: activeItem?.location || activeItem?.subdistrict || '',
+      };
+    });
   const dedupedRequestMap = new Map<string, any>();
-  for (const requestItem of visibleMockDynRequests.filter(
+  for (const requestItem of [...visibleMockDynRequests, ...backendMeetingInviteRequests].filter(
     (m: any) => !mockPayments[m.id] && !['notice', 'meeting_scheduled', 'chat_ready', 'meeting_pending_partner'].includes(String(m.type || '')),
   )) {
     const requestType = String(requestItem.type || '');
@@ -3384,7 +3416,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     const nextStep = Number(requestItem.step || 0);
     const existingTs = parseDateMs(existing.createdAt || existing.date);
     const nextTs = parseDateMs(requestItem.createdAt || requestItem.date);
-    if (nextStep > existingStep || (nextStep === existingStep && nextTs >= existingTs)) {
+    if (
+      nextStep > existingStep ||
+      (nextStep === existingStep && (requestItem.authoritative || nextTs >= existingTs))
+    ) {
       dedupedRequestMap.set(dedupeKey, requestItem);
     }
   }
@@ -3858,6 +3893,17 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
           dot: "bg-green-500",
         }];
       }
+      if (isCustomerMeetingInviteActionAvailable(order)) {
+        return [{
+          id: `a-chat-${po}`,
+          msg: `${po}: Chat room is active. Next: send your site meeting invitation when you are ready.`,
+          msgTh: `${po}: Chat room is active. Next: send your site meeting invitation when you are ready.`,
+          msgZh: `${po}: Chat room is active. Next: send your site meeting invitation when you are ready.`,
+          time,
+          createdAt,
+          dot: "bg-sky-500",
+        }];
+      }
     }
     if (status === 'CANCELLED') {
       const note = getWorkflowStatusNote(order);
@@ -3949,69 +3995,6 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   const alertsPageItems = allAlerts.slice(0, 20);
   const overviewAlerts = allAlerts.slice(0, 3);
   const overviewIncomingChats = chatFeed.filter((c: any) => c.hasIncoming).slice(0, 3);
-
-  // Auto-create chat_ready requests for active jobs stuck at step 7 with no pending workflow request.
-  // This repairs the dashboard for users whose payment completed but the dynamic request wasn't written.
-  useEffect(() => {
-    if (!mockReady) return;
-    try {
-      const dynReqs = JSON.parse(localStorage.getItem('ghis_mock_dyn_req') || '[]');
-      const active = JSON.parse(localStorage.getItem('ghis_mock_active') || '[]');
-      const existingChatPos = new Set(dynReqs.filter((x: any) => x.type === 'chat_ready').map((x: any) => x.po));
-      const existingMeetingPos = new Set(dynReqs.filter((x: any) => ['meeting_invite', 'meeting_pending_partner', 'meeting_scheduled'].includes(x.type)).map((x: any) => x.po));
-      const liveBackendPOs = new Set(workflowOrders.map((o: any) => extractPo(o)).filter((po: string) => isPoCode(po)));
-      const advancedWorkflowPos = new Set(
-        chatFeed
-          .filter((chatItem: any) => {
-            const workflowText = `${String(chatItem?.lastMsg || '')} ${String(chatItem?.incomingMsg || '')}`.toLowerCase();
-            return /customer sent meeting invitation|partner confirmed site meeting|meeting confirmed by partner|submitted a variation|marked the job as complete|confirmed job complete/.test(workflowText);
-          })
-          .map((chatItem: any) => chatItem.po)
-          .filter((po: string) => isPoCode(po)),
-      );
-      // Gather all step-7 jobs missing a meeting_invite (repairs dashboard after F5 incorrectly removed it)
-      const step7ActiveJobs = active.filter((j: any) => Number(j.step) === 7 && !existingMeetingPos.has(j.po) && !advancedWorkflowPos.has(j.po) && (liveBackendPOs.size === 0 || liveBackendPOs.has(j.po)));
-      const toCreate: any[] = [];
-      for (const job of step7ActiveJobs) {
-        const createdAt = job.createdAt || Date.now();
-        if (!existingChatPos.has(job.po)) {
-          toCreate.push({
-            id: `chat-${job.po}`,
-            po: job.po,
-            title: job.title,
-            customer: job.fixerAlias || job.customer || 'Partner',
-            budget: job.budget || '฿0',
-            tier: job.tier || 'Standard',
-            desc: 'Chat is active. Send meeting invitation when you are ready.',
-            type: 'chat_ready',
-            date: fmtDateTime(createdAt),
-            createdAt,
-            step: 7,
-          });
-        }
-        toCreate.push({
-          id: `meet-invite-${job.po}`,
-          po: job.po,
-          title: job.title,
-          customer: job.fixerAlias || job.customer || 'Partner',
-          budget: job.budget || '฿0',
-          tier: job.tier || 'Standard',
-          desc: 'Please send a meeting invitation to your partner. Fill in the venue and proposed date/time.',
-          type: 'meeting_invite',
-          date: fmtDateTime(createdAt),
-          createdAt,
-          step: 8,
-          location: job.location || job.subdistrict || 'Saphansong',
-        });
-      }
-      if (toCreate.length > 0) {
-        const updated = [...dynReqs, ...toCreate];
-        writeWorkflowStorage('ghis_mock_dyn_req', updated);
-        setMockDynRequests(updated);
-      }
-    } catch {}
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mockReady, orders, subscriber?.email, chatFeed]);
 
   const FIXER_ACTIVE_STEPS = ["Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Variation", "Complete", "Rate"];
   const PROPERTY_ACTIVE_STEPS = ["Match", "Select", "Notify", "Accept", "Fee & Proceed", "Chat", "Meet", "Rate"];

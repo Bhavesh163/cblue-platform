@@ -7,6 +7,8 @@ const TERMINAL_ALERT_PATTERN =
 const COMPLETION_CHAT_PATTERN =
   /workflow completed|job is now complete|job is complete|stored in history|rated this project|this inquiry is now closed|moved to history/i;
 const UNKNOWN_PLACE_PATTERN = /^(?:unknown|n\/a|tbd|-|--\s*select)/i;
+const CUSTOMER_MEETING_ADVANCED_PATTERN =
+  /customer sent meeting invitation|meeting invitation sent|partner confirmed (?:site )?meeting|meeting confirmed by partner|submitted a variation|variation (?:request|approved)|marked the job as complete|confirmed (?:the )?job complete|rating is now open|rated this project/i;
 
 
 
@@ -135,6 +137,14 @@ function getTextFields(value) {
   ]
     .filter((entry) => entry != null)
     .flatMap(getTextFields);
+}
+
+export function isCustomerMeetingInviteActionAvailable(value = {}) {
+  const status = String(value?.status || "").toUpperCase();
+  if (!["IN_PROGRESS", "CHAT_READY"].includes(status)) return false;
+  return !getTextFields(value).some((text) =>
+    CUSTOMER_MEETING_ADVANCED_PATTERN.test(text),
+  );
 }
 
 export function hasWorkflowCompletionMarker(value) {

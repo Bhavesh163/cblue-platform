@@ -9,6 +9,7 @@ import {
   filterLiveWorkflowItems,
   hasWorkflowCompletionMarker,
   isCompletedAwaitingWorkflowRating,
+  isCustomerMeetingInviteActionAvailable,
   isTerminalWorkflowStatus,
   normalizeWorkflowHistoryItems,
   pickWorkflowMeetingVenue,
@@ -342,6 +343,38 @@ test("filters terminal workflow requests without hiding completed jobs awaiting 
   ).map((item) => item.po);
 
   assert.deepEqual(visible, ["PO-2606-1111", "PO-2606-2222"]);
+});
+
+test("derives customer meeting invitation action only from live server workflow state", () => {
+  assert.equal(
+    isCustomerMeetingInviteActionAvailable({
+      status: "IN_PROGRESS",
+      statusHistory: [{ note: "Processing fee confirmed. Chat room is active." }],
+    }),
+    true,
+  );
+  assert.equal(
+    isCustomerMeetingInviteActionAvailable({
+      status: "IN_PROGRESS",
+      statusHistory: [{ note: "Partner confirmed site meeting for PO-2607-8879." }],
+    }),
+    false,
+  );
+  assert.equal(
+    isCustomerMeetingInviteActionAvailable({
+      status: "IN_PROGRESS",
+      statusHistory: [{ note: "Partner submitted a variation request." }],
+    }),
+    false,
+  );
+  assert.equal(
+    isCustomerMeetingInviteActionAvailable({
+      status: "MEETING_REQUESTED",
+      statusHistory: [{ note: "Customer sent meeting invitation." }],
+    }),
+    false,
+  );
+  assert.equal(isCustomerMeetingInviteActionAvailable({ status: "COMPLETED" }), false);
 });
 
 test("keeps partner workflow rows visible during transient empty backend PO refresh", () => {
