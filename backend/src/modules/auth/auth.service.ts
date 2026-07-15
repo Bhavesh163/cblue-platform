@@ -249,16 +249,64 @@ export class AuthService {
       ),
     );
 
-    for (const fromEmail of senderCandidates) {
+    const mailjetHeaders = {
+      Authorization:
+        'Basic ' + Buffer.from(`${apiKey}:${apiSecret}`).toString('base64'),
+      'Content-Type': 'application/json',
+    };
+    let activeSenderCandidates: string[] = [];
+    try {
+      const response = await fetch(
+        'https://api.mailjet.com/v3/REST/sender?Limit=100',
+        {
+          method: 'GET',
+          headers: mailjetHeaders,
+        },
+      );
+      const rawResponse = await response.text();
+      if (!response.ok) {
+        this.logger.warn(
+          `Admin OTP Mailjet sender lookup was rejected (status ${response.status})`,
+        );
+        throw new BadRequestException(
+          'Admin OTP email sender could not be verified',
+        );
+      }
+
+      const parsed = JSON.parse(rawResponse) as {
+        Data?: Array<{ Email?: string; Status?: string }>;
+      };
+      const activeSenders = new Set(
+        (parsed.Data || [])
+          .filter(
+            (sender) =>
+              String(sender.Status || '').trim().toLowerCase() === 'active',
+          )
+          .map((sender) => String(sender.Email || '').trim().toLowerCase())
+          .filter(Boolean),
+      );
+      activeSenderCandidates = senderCandidates.filter((fromEmail) =>
+        activeSenders.has(fromEmail.toLowerCase()),
+      );
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      this.logger.warn('Admin OTP Mailjet sender lookup failed');
+      throw new BadRequestException(
+        'Admin OTP email sender could not be verified',
+      );
+    }
+
+    if (activeSenderCandidates.length === 0) {
+      throw new BadRequestException('Admin OTP email sender is not verified');
+    }
+
+    for (const fromEmail of activeSenderCandidates) {
       try {
         const response = await fetch('https://api.mailjet.com/v3.1/send', {
           method: 'POST',
-          headers: {
-            Authorization:
-              'Basic ' +
-              Buffer.from(`${apiKey}:${apiSecret}`).toString('base64'),
-            'Content-Type': 'application/json',
-          },
+          headers: mailjetHeaders,
           body: JSON.stringify({
             Messages: [
               {

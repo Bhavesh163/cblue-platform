@@ -142,6 +142,51 @@ describe('AuthService', () => {
       expect(prisma.otpCode.findFirst).not.toHaveBeenCalled();
       expect(prisma.otpCode.create).not.toHaveBeenCalled();
     });
+    it('fails closed when no approved Mailjet sender is active', async () => {
+      prisma.otpCode.findFirst.mockResolvedValue(null);
+      prisma.otpCode.create.mockResolvedValue({ id: 'otp-1' });
+      prisma.otpCode.delete.mockResolvedValue({});
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'admin-1',
+        email: 'suppadesh@hotmail.com',
+        role: 'ADMIN',
+        isActive: true,
+      });
+      configService.get.mockImplementation((key: string) => {
+        if (key === 'nodeEnv') return 'production';
+        if (key === 'otp.expiryMinutes') return 5;
+        if (key === 'mailjet.apiKey') return 'mailjet-key';
+        if (key === 'mailjet.apiSecret') return 'mailjet-secret';
+        if (key === 'mailjet.fromEmail') return 'noreply@cblue.co.th';
+        return undefined;
+      });
+      const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: jest.fn().mockResolvedValue(
+          JSON.stringify({
+            Data: [{ Email: 'noreply@cblue.co.th', Status: 'Inactive' }],
+          }),
+        ),
+      } as Response);
+
+      await expect(
+        service.sendAdminOtp({
+          email: 'suppadesh@hotmail.com',
+          recaptchaToken: 'captcha-token',
+        }),
+      ).rejects.toThrow('Admin OTP email sender is not verified');
+
+      expect(fetchSpy).toHaveBeenCalledWith(
+        'https://api.mailjet.com/v3/REST/sender?Limit=100',
+        expect.objectContaining({ method: 'GET' }),
+      );
+      expect(prisma.otpCode.delete).toHaveBeenCalledWith({
+        where: { id: 'otp-1' },
+      });
+      fetchSpy.mockRestore();
+    });
+
     it('should retry a verified Mailjet sender when the configured sender fails', async () => {
       prisma.otpCode.findFirst.mockResolvedValue(null);
       prisma.otpCode.create.mockResolvedValue({ id: 'otp-1' });
@@ -161,6 +206,18 @@ describe('AuthService', () => {
       });
       const fetchSpy = jest
         .spyOn(global, 'fetch')
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: jest.fn().mockResolvedValue(
+            JSON.stringify({
+              Data: [
+                { Email: 'unverified@example.com', Status: 'Active' },
+                { Email: 'noreply@cblue.co.th', Status: 'Active' },
+              ],
+            }),
+          ),
+        } as Response)
         .mockResolvedValueOnce({
           ok: false,
           status: 400,
@@ -184,8 +241,8 @@ describe('AuthService', () => {
         phone: 'suppadesh@hotmail.com',
       });
 
-      expect(fetchSpy).toHaveBeenCalledTimes(2);
-      expect(fetchSpy.mock.calls[1][1]).toEqual(
+      expect(fetchSpy).toHaveBeenCalledTimes(3);
+      expect(fetchSpy.mock.calls[2][1]).toEqual(
         expect.objectContaining({
           body: expect.stringContaining('noreply@cblue.co.th'),
         }),
@@ -211,11 +268,22 @@ describe('AuthService', () => {
         if (key === 'mailjet.fromEmail') return 'unverified@example.com';
         return undefined;
       });
-      const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
-        ok: false,
-        status: 401,
-        text: jest.fn().mockResolvedValue('invalid credentials'),
-      } as Response);
+      const fetchSpy = jest
+        .spyOn(global, 'fetch')
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: jest.fn().mockResolvedValue(
+            JSON.stringify({
+              Data: [{ Email: 'noreply@cblue.co.th', Status: 'Active' }],
+            }),
+          ),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          text: jest.fn().mockResolvedValue('invalid credentials'),
+        } as Response);
 
       await expect(
         service.sendAdminOtp({
