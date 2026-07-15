@@ -59,6 +59,9 @@ interface OrderWorkflowSnapshot {
   sourceVersion: 'cblue-fixer-workflow-v1';
   activityBucket: 'request' | 'active' | 'history';
   workflowVersion: number;
+  chat: {
+    enabled: boolean;
+  };
 }
 @Injectable()
 export class BlueBridgeService {
@@ -200,6 +203,7 @@ export class BlueBridgeService {
       status: order.status,
       workflowPhase: order.workflowPhase,
       workflowVersion: order.workflowRevision,
+      chatEnabled: order.chatEnabled,
       completedActionKeys: (order.workflowActions || []).map(
         (event) => event.action,
       ),
@@ -394,6 +398,7 @@ function resolveOrderWorkflowSnapshot({
     activityBucket: currentStep === 11 ? 'history' : 'active',
     poNumber,
     workflowVersion: 0,
+    chat: { enabled: false },
     currentStep,
     totalSteps: 11,
     status: normalizedStatus,
@@ -411,6 +416,7 @@ export function resolvePersistedFixerWorkflowSnapshot({
   status,
   workflowPhase,
   workflowVersion,
+  chatEnabled,
   completedActionKeys = [],
   customerUserId,
   ratedAt,
@@ -421,6 +427,7 @@ export function resolvePersistedFixerWorkflowSnapshot({
   status?: string | null;
   workflowPhase?: string | null;
   workflowVersion?: number | null;
+  chatEnabled?: boolean | null;
   completedActionKeys?: string[];
   customerUserId?: string | null;
   ratedAt?: Date | string | null;
@@ -629,6 +636,7 @@ export function resolvePersistedFixerWorkflowSnapshot({
     status: normalizedStatus,
     activityBucket: state.bucket,
     workflowVersion: Number(workflowVersion || 0),
+    chat: { enabled: chatEnabled === true },
     actions,
     availableActions: actions.map((action) => action.key),
     actionOwner: nextAction?.owner || null,

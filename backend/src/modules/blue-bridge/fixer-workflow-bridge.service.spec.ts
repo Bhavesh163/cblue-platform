@@ -119,6 +119,9 @@ describe('FixerWorkflowBridgeService', () => {
         data: {
           status: expectedStatus,
           workflowPhase: expectedPhase,
+          ...(action === 'fee-proceed' || action === 'free-pass'
+            ? { chatEnabled: true }
+            : {}),
           workflowRevision: { increment: 1 },
         },
       });

@@ -370,4 +370,46 @@ describe('BLUE workflow production contracts', () => {
       }
     },
   );
+
+  it('returns persisted chat availability independently of IN_PROGRESS status', async () => {
+    const order = {
+      userId: 'customer-1',
+      fixer: { userId: 'partner-1' },
+      status: 'IN_PROGRESS',
+      workflowPhase: 'FEE',
+      chatEnabled: false,
+      workflowActions: [],
+      statusHistory: [],
+      review: null,
+      description: 'PO-2607-9003 | text is not workflow state',
+      budgetBreakdown: null,
+      user: { name: 'Customer', email: 'customer' },
+      address,
+      images: [],
+    };
+
+    const beforeFee = await createService(order).workflowDetails({
+      poNumber: 'PO-2607-9003',
+      legacySubjectId: 'customer-1',
+      bridgeKey: 'bridge-key',
+    });
+    expect(beforeFee).toEqual(
+      expect.objectContaining({
+        currentStep: 6,
+        status: 'IN_PROGRESS',
+        chat: { enabled: false },
+      }),
+    );
+
+    const afterFee = await createService({
+      ...order,
+      workflowPhase: 'CHAT',
+      chatEnabled: true,
+    }).workflowDetails({
+      poNumber: 'PO-2607-9003',
+      legacySubjectId: 'customer-1',
+      bridgeKey: 'bridge-key',
+    });
+    expect(afterFee.chat).toEqual({ enabled: true });
+  });
 });

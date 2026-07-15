@@ -269,6 +269,7 @@ model Order {
   finalPrice      Float?
   budgetBreakdown Json?
   workflowPhase  String?
+  chatEnabled    Boolean @default(false)
   workflowRevision Int @default(0)
 
   statusHistory OrderStatusHistory[]

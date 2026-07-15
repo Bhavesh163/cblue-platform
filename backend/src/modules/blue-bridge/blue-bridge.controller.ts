@@ -89,4 +89,7 @@ export interface BlueWorkflowDetailResponse {
   nextActionStep?: number | null;
   sourceVersion?: 'cblue-fixer-workflow-v1';
   workflowVersion?: number;
+  chat?: {
+    enabled: boolean;
+  };
 }

@@ -151,6 +151,9 @@ export class FixerWorkflowBridgeService {
           data: {
             status: transition.status,
             workflowPhase: transition.workflowPhase,
+            ...(key === 'fee-proceed' || key === 'free-pass'
+              ? { chatEnabled: true }
+              : {}),
             workflowRevision: { increment: 1 },
           },
         });
