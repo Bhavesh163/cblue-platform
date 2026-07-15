@@ -19,6 +19,12 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { MAX_OTP_ATTEMPTS, OTP_COOLDOWN_SECONDS } from '../../common/constants';
 import { JwtPayload } from './strategies/jwt.strategy';
 
+const ADMIN_OTP_EMAIL_ALLOWLIST = new Set([
+  'suppadesh@hotmail.com',
+  'ghiscafe@gmail.com',
+  'bhaveshfung@gmail.com',
+]);
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -39,6 +45,8 @@ export class AuthService {
     const email = this.normalizeEmail(dto.email);
     await this.recaptchaService.verify(dto.recaptchaToken, 'admin_login');
 
+    this.assertApprovedAdminOtpEmail(email);
+
     const admin = await this.prisma.user.findUnique({ where: { email } });
     if (!admin || !admin.isActive || admin.role !== UserRole.ADMIN) {
       throw new UnauthorizedException('Admin access required');
@@ -48,6 +56,12 @@ export class AuthService {
       email,
       purpose: 'admin_login',
     });
+  }
+
+  private assertApprovedAdminOtpEmail(email: string): void {
+    if (!ADMIN_OTP_EMAIL_ALLOWLIST.has(email)) {
+      throw new UnauthorizedException('Admin access required');
+    }
   }
 
   private async createOtp(
@@ -140,6 +154,7 @@ export class AuthService {
 
   async verifyAdminOtp(dto: VerifyAdminOtpDto) {
     const email = this.normalizeEmail(dto.email);
+    this.assertApprovedAdminOtpEmail(email);
     await this.verifyOtpCode(email, dto.code);
 
     const user = await this.prisma.user.findUnique({ where: { email } });

@@ -43,6 +43,11 @@ const ADMIN_USERS = [
     name: 'Bhavesh Fungprasertsuk',
     phone: '+66821056357',
   },
+  {
+    email: 'ghiscafe@gmail.com',
+    name: 'Ghis Cafe',
+    phone: '+66818544291',
+  },
 ];
 
 async function ensureAdminUser(adminUser) {

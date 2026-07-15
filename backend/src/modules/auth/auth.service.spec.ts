@@ -94,18 +94,22 @@ describe('AuthService', () => {
   });
 
   describe('sendAdminOtp', () => {
-    it('should verify recaptcha before sending admin OTP', async () => {
+    it.each([
+      'suppadesh@hotmail.com',
+      'ghiscafe@gmail.com',
+      'bhaveshfung@gmail.com',
+    ])('should verify reCAPTCHA before sending an approved admin OTP for %s', async (email) => {
       prisma.otpCode.findFirst.mockResolvedValue(null);
       prisma.otpCode.create.mockResolvedValue({ id: 'otp-1' });
       prisma.user.findUnique.mockResolvedValue({
         id: 'admin-1',
-        email: 'admin@example.com',
+        email,
         role: 'ADMIN',
         isActive: true,
       });
 
       await service.sendAdminOtp({
-        email: 'Admin@Example.com',
+        email: email.toUpperCase(),
         recaptchaToken: 'captcha-token',
       });
 
@@ -115,26 +119,27 @@ describe('AuthService', () => {
       );
       expect(prisma.otpCode.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ phone: 'admin@example.com' }),
+          data: expect.objectContaining({ phone: email }),
         }),
       );
     });
 
-    it('should reject non-admin emails before creating an OTP', async () => {
+    it('should reject an unapproved active ADMIN before creating an OTP', async () => {
       prisma.user.findUnique.mockResolvedValue({
-        id: 'user-1',
-        email: 'user@example.com',
-        role: 'USER',
+        id: 'other-admin-1',
+        email: 'other-admin@example.com',
+        role: 'ADMIN',
         isActive: true,
       });
 
       await expect(
         service.sendAdminOtp({
-          email: 'user@example.com',
+          email: 'other-admin@example.com',
           recaptchaToken: 'captcha-token',
         }),
       ).rejects.toThrow(UnauthorizedException);
 
+      expect(prisma.otpCode.findFirst).not.toHaveBeenCalled();
       expect(prisma.otpCode.create).not.toHaveBeenCalled();
     });
     it('should retry a verified Mailjet sender when the configured sender fails', async () => {
@@ -142,7 +147,7 @@ describe('AuthService', () => {
       prisma.otpCode.create.mockResolvedValue({ id: 'otp-1' });
       prisma.user.findUnique.mockResolvedValue({
         id: 'admin-1',
-        email: 'admin@example.com',
+        email: 'suppadesh@hotmail.com',
         role: 'ADMIN',
         isActive: true,
       });
@@ -171,12 +176,12 @@ describe('AuthService', () => {
 
       await expect(
         service.sendAdminOtp({
-          email: 'admin@example.com',
+          email: 'suppadesh@hotmail.com',
           recaptchaToken: 'captcha-token',
         }),
       ).resolves.toEqual({
         message: 'Admin OTP sent successfully',
-        phone: 'admin@example.com',
+        phone: 'suppadesh@hotmail.com',
       });
 
       expect(fetchSpy).toHaveBeenCalledTimes(2);
@@ -194,7 +199,7 @@ describe('AuthService', () => {
       prisma.otpCode.delete.mockResolvedValue({});
       prisma.user.findUnique.mockResolvedValue({
         id: 'admin-1',
-        email: 'admin@example.com',
+        email: 'suppadesh@hotmail.com',
         role: 'ADMIN',
         isActive: true,
       });
@@ -214,7 +219,7 @@ describe('AuthService', () => {
 
       await expect(
         service.sendAdminOtp({
-          email: 'admin@example.com',
+          email: 'suppadesh@hotmail.com',
           recaptchaToken: 'captcha-token',
         }),
       ).rejects.toThrow('Unable to send admin OTP email');
@@ -326,7 +331,7 @@ describe('AuthService', () => {
       prisma.otpCode.update.mockResolvedValue({});
       prisma.user.findUnique.mockResolvedValue({
         id: 'admin-1',
-        email: 'admin@example.com',
+        email: 'suppadesh@hotmail.com',
         phone: '+66812345678',
         role: 'ADMIN',
         name: 'Admin',
@@ -334,7 +339,7 @@ describe('AuthService', () => {
       });
 
       const result = await service.verifyAdminOtp({
-        email: 'Admin@Example.com',
+        email: 'Suppadesh@Hotmail.com',
         code: '123456',
       });
 
@@ -342,30 +347,28 @@ describe('AuthService', () => {
       expect(result.user.role).toBe('ADMIN');
       expect(prisma.otpCode.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({ phone: 'admin@example.com' }),
+          where: expect.objectContaining({ phone: 'suppadesh@hotmail.com' }),
         }),
       );
     });
 
-    it('should reject non-admin OTP verification without creating a user', async () => {
-      prisma.otpCode.findFirst.mockResolvedValue({
-        id: 'otp-1',
-        code: '123456',
-        attempts: 0,
-      });
-      prisma.otpCode.update.mockResolvedValue({});
+    it('should reject an unapproved active ADMIN before consuming an OTP', async () => {
       prisma.user.findUnique.mockResolvedValue({
-        id: 'user-1',
-        email: 'user@example.com',
-        role: 'USER',
-        name: 'User',
+        id: 'other-admin-1',
+        email: 'other-admin@example.com',
+        role: 'ADMIN',
+        name: 'Other Admin',
         isActive: true,
       });
 
       await expect(
-        service.verifyAdminOtp({ email: 'user@example.com', code: '123456' }),
+        service.verifyAdminOtp({
+          email: 'other-admin@example.com',
+          code: '123456',
+        }),
       ).rejects.toThrow(UnauthorizedException);
 
+      expect(prisma.otpCode.findFirst).not.toHaveBeenCalled();
       expect(prisma.user.create).not.toHaveBeenCalled();
     });
   });
