@@ -823,6 +823,17 @@ export class OrderService {
       );
     }
 
+    const chatActivationStatuses: OrderStatus[] = [
+      OrderStatus.ASSIGNED,
+      OrderStatus.DEPOSIT_PENDING,
+      OrderStatus.CONFIRMED,
+    ];
+    const activatesChat =
+      isCustomer &&
+      dto.status === OrderStatus.IN_PROGRESS &&
+      (String(order.workflowPhase || '').trim().toUpperCase() === 'FEE' ||
+        chatActivationStatuses.includes(order.status));
+
     const updated = await this.prisma.order.update({
       where: { id: orderId },
       data: {
@@ -833,6 +844,7 @@ export class OrderService {
           previousPhase: order.workflowPhase,
           changedByCustomer: isCustomer,
         }),
+        ...(activatesChat ? { chatEnabled: true } : {}),
         statusHistory: {
           create: {
             status: dto.status,

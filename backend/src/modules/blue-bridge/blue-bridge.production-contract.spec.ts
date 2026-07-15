@@ -371,6 +371,39 @@ describe('BLUE workflow production contracts', () => {
     },
   );
 
+  it.each(['customer-1', 'partner-1'])(
+    'exposes persisted chat availability to %s after fee/free-plan activation',
+    async (viewerId) => {
+      const snapshot = await createService({
+        userId: 'customer-1',
+        fixer: { userId: 'partner-1' },
+        status: 'MEETING_REQUESTED',
+        workflowPhase: 'MEETING_CONFIRM',
+        chatEnabled: true,
+        workflowActions: [],
+        statusHistory: [],
+        review: null,
+        description: 'PO-2607-8879 | persisted workflow state',
+        budgetBreakdown: null,
+        user: { name: 'Customer', email: 'customer@example.com' },
+        address,
+        images: [],
+      }).workflowDetails({
+        poNumber: 'PO-2607-8879',
+        legacySubjectId: viewerId,
+        bridgeKey: 'bridge-key',
+      });
+
+      expect(snapshot).toEqual(
+        expect.objectContaining({
+          currentStep: 8,
+          status: 'MEETING_REQUESTED',
+          chat: { enabled: true },
+        }),
+      );
+    },
+  );
+
   it('returns persisted chat availability independently of IN_PROGRESS status', async () => {
     const order = {
       userId: 'customer-1',

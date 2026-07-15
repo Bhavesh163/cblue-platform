@@ -267,6 +267,49 @@ describe('OrderService', () => {
       }
     });
 
+    it.each([
+      ['paid processing fee', 'Customer paid processing fee'],
+      ['free plan', 'Customer activated free pass'],
+    ])('persists chat availability after customer %s activation', async (_name, note) => {
+      prisma.order.findUnique.mockResolvedValue({
+        id: 'order-1',
+        userId: 'user-1',
+        fixerId: null,
+        status: OrderStatus.CONFIRMED,
+        workflowPhase: 'FEE',
+      });
+      prisma.order.update.mockResolvedValue({
+        id: 'order-1',
+        status: OrderStatus.IN_PROGRESS,
+      });
+
+      await service.updateStatus(
+        'order-1',
+        { status: OrderStatus.IN_PROGRESS, note },
+        'user-1',
+        UserRole.USER,
+      );
+
+      expect(prisma.order.update).toHaveBeenCalledWith({
+        where: { id: 'order-1' },
+        data: {
+          status: OrderStatus.IN_PROGRESS,
+          workflowPhase: 'CHAT',
+          chatEnabled: true,
+          statusHistory: {
+            create: {
+              status: OrderStatus.IN_PROGRESS,
+              note,
+              changedBy: 'user-1',
+            },
+          },
+        },
+        include: {
+          statusHistory: { orderBy: { createdAt: 'desc' }, take: 1 },
+        },
+      });
+    });
+
     it('rejects a status update from a fixer who is not assigned to the order', async () => {
       prisma.order.findUnique.mockResolvedValue({
         id: 'order-1',
