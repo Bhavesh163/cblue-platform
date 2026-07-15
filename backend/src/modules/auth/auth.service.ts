@@ -76,7 +76,7 @@ export class AuthService {
     const expiryMinutes =
       this.configService.get<number>('otp.expiryMinutes') ?? 5;
 
-    await this.prisma.otpCode.create({
+    const otpRecord = await this.prisma.otpCode.create({
       data: {
         phone,
         code,
@@ -85,7 +85,18 @@ export class AuthService {
     });
 
     if (delivery?.email) {
-      await this.sendAdminOtpEmail(delivery.email, code);
+      try {
+        await this.sendAdminOtpEmail(delivery.email, code);
+      } catch (error) {
+        await this.prisma.otpCode.delete({ where: { id: otpRecord.id } }).catch(
+          () => {
+            this.logger.warn(
+              'Admin OTP delivery failed and its OTP record could not be removed',
+            );
+          },
+        );
+        throw error;
+      }
     } else if (this.configService.get('nodeEnv') === 'development') {
       this.logger.log(`[DEV] OTP for ${phone}: ${code}`);
     } else {
@@ -190,10 +201,19 @@ export class AuthService {
   }
 
   private async sendAdminOtpEmail(email: string, code: string) {
-    const apiKey = this.configService.get<string>('mailjet.apiKey') || '';
-    const apiSecret = this.configService.get<string>('mailjet.apiSecret') || '';
-    const fromEmail =
-      this.configService.get<string>('mailjet.fromEmail') || 'noreply@lblue.tech';
+    const normalizeConfigString = (value?: string | null) =>
+      String(value || '')
+        .trim()
+        .replace(/^['"]|['"]$/g, '');
+    const apiKey = normalizeConfigString(
+      this.configService.get<string>('mailjet.apiKey'),
+    );
+    const apiSecret = normalizeConfigString(
+      this.configService.get<string>('mailjet.apiSecret'),
+    );
+    const configuredFromEmail = normalizeConfigString(
+      this.configService.get<string>('mailjet.fromEmail'),
+    );
     const nodeEnv = this.configService.get<string>('nodeEnv') || 'development';
 
     if (!apiKey || !apiSecret) {
@@ -204,33 +224,72 @@ export class AuthService {
       return;
     }
 
-    const response = await fetch('https://api.mailjet.com/v3.1/send', {
-      method: 'POST',
-      headers: {
-        Authorization:
-          'Basic ' + Buffer.from(`${apiKey}:${apiSecret}`).toString('base64'),
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        Messages: [
-          {
-            From: { Email: fromEmail, Name: 'CBLUE Admin' },
-            To: [{ Email: email }],
-            Subject: 'CBLUE admin login OTP',
-            TextPart: `Your CBLUE admin login OTP is ${code}. It expires in a few minutes.`,
-            HTMLPart: `<p>Your CBLUE admin login OTP is <strong>${code}</strong>.</p><p>It expires in a few minutes.</p>`,
-          },
-        ],
-      }),
-    });
+    const senderCandidates = Array.from(
+      new Set(
+        [
+          configuredFromEmail,
+          'noreply@cblue.co.th',
+          'noreply@lblue.tech',
+        ].filter(Boolean),
+      ),
+    );
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => '');
-      this.logger.warn(
-        `Admin OTP email send failed for ${email}: ${response.status} ${errorText}`,
-      );
-      throw new BadRequestException('Unable to send admin OTP email');
+    for (const fromEmail of senderCandidates) {
+      try {
+        const response = await fetch('https://api.mailjet.com/v3.1/send', {
+          method: 'POST',
+          headers: {
+            Authorization:
+              'Basic ' +
+              Buffer.from(`${apiKey}:${apiSecret}`).toString('base64'),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            Messages: [
+              {
+                From: { Email: fromEmail, Name: 'CBLUE Admin' },
+                To: [{ Email: email }],
+                Subject: 'CBLUE admin login OTP',
+                TextPart: `Your CBLUE admin login OTP is ${code}. It expires in a few minutes.`,
+                HTMLPart: `<p>Your CBLUE admin login OTP is <strong>${code}</strong>.</p><p>It expires in a few minutes.</p>`,
+              },
+            ],
+          }),
+        });
+        const rawResponse = await response.text();
+        let messageStatuses: string[] = [];
+        try {
+          const parsed = JSON.parse(rawResponse) as {
+            Messages?: Array<{ Status?: string }>;
+          };
+          messageStatuses = (parsed.Messages || []).map((message) =>
+            String(message.Status || '').toLowerCase(),
+          );
+        } catch {
+          messageStatuses = [];
+        }
+
+        if (
+          response.ok &&
+          messageStatuses.some((status) =>
+            ['success', 'queued', 'sent'].includes(status),
+          )
+        ) {
+          return;
+        }
+
+        this.logger.warn(
+          `Admin OTP Mailjet delivery was rejected (status ${response.status})`,
+        );
+        if (response.status === 401 || response.status === 403) {
+          break;
+        }
+      } catch {
+        this.logger.warn('Admin OTP Mailjet delivery request failed');
+      }
     }
+
+    throw new BadRequestException('Unable to send admin OTP email');
   }
 
   async refreshToken(dto: RefreshTokenDto) {
