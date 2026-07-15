@@ -180,11 +180,12 @@ jobs:
           MAILJET_FROM_EMAIL: ${{ secrets.MAILJET_FROM_EMAIL || vars.MAILJET_FROM_EMAIL }}
           MAILJET_SENDER_EMAIL: ${{ secrets.MAILJET_SENDER_EMAIL || secrets.MAILJET_FROM_EMAIL || vars.MAILJET_SENDER_EMAIL || vars.MAILJET_FROM_EMAIL }}
           CBLUE_BRIDGE_API_KEY: ${{ secrets.CBLUE_BRIDGE_API_KEY }}
+          RECAPTCHA_SECRET_KEY: ${{ secrets.RECAPTCHA_SECRET_KEY }}
         with:
           host: ${{ secrets.DROPLET_HOST }}
           username: ${{ secrets.DROPLET_USER }}
           key: ${{ secrets.DROPLET_SSH_KEY }}
-          envs: GH_TOKEN,GH_REPO,DEPLOY_SHA,MAILJET_API_KEY,MAILJET_SECRET_KEY,MAILJET_API_SUBACCOUNT_KEY,MAILJET_SECRET_SUBACCOUNT_KEY,MAILJET_FROM_EMAIL,MAILJET_SENDER_EMAIL,CBLUE_BRIDGE_API_KEY
+          envs: GH_TOKEN,GH_REPO,DEPLOY_SHA,MAILJET_API_KEY,MAILJET_SECRET_KEY,MAILJET_API_SUBACCOUNT_KEY,MAILJET_SECRET_SUBACCOUNT_KEY,MAILJET_FROM_EMAIL,MAILJET_SENDER_EMAIL,CBLUE_BRIDGE_API_KEY,RECAPTCHA_SECRET_KEY
           command_timeout: 120m
           script: |
             set -e
@@ -391,6 +392,7 @@ jobs:
             MAILJET_FROM_EMAIL_RUNTIME=$(resolve_runtime_env MAILJET_FROM_EMAIL)
             MAILJET_SENDER_EMAIL_RUNTIME=$(resolve_runtime_env MAILJET_SENDER_EMAIL)
             CBLUE_BRIDGE_API_KEY_RUNTIME=$(resolve_runtime_env CBLUE_BRIDGE_API_KEY)
+            RECAPTCHA_SECRET_KEY_RUNTIME=$(resolve_runtime_env RECAPTCHA_SECRET_KEY)
 
             if [ -z "$MAILJET_API_SUBACCOUNT_KEY_RUNTIME" ]; then MAILJET_API_SUBACCOUNT_KEY_RUNTIME="$MAILJET_API_KEY_RUNTIME"; fi
             if [ -z "$MAILJET_SECRET_SUBACCOUNT_KEY_RUNTIME" ]; then MAILJET_SECRET_SUBACCOUNT_KEY_RUNTIME="$MAILJET_SECRET_KEY_RUNTIME"; fi
@@ -422,6 +424,7 @@ jobs:
                 -e RESET_PASSWORD_DEBUG_HEADER=true \
                 -e FRONTEND_URL="https://cblue.co.th" \
                 -e CBLUE_BRIDGE_API_KEY="$CBLUE_BRIDGE_API_KEY_RUNTIME" \
+                -e RECAPTCHA_SECRET_KEY="$RECAPTCHA_SECRET_KEY_RUNTIME" \
                 -e PORT=3002 -e NODE_ENV=production \
                 --restart unless-stopped \
                 --entrypoint sh \
@@ -580,6 +583,7 @@ jobs:
                 -e RESET_PASSWORD_DEBUG_HEADER=true \
                 -e FRONTEND_URL="https://cblue.co.th" \
                 -e CBLUE_BRIDGE_API_KEY="$CBLUE_BRIDGE_API_KEY_RUNTIME" \
+                -e RECAPTCHA_SECRET_KEY="$RECAPTCHA_SECRET_KEY_RUNTIME" \
                 -e PORT=3002 -e NODE_ENV=production \
                 "$IMAGE" 2>&1
 
