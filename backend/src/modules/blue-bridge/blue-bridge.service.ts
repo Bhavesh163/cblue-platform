@@ -211,6 +211,9 @@ export class BlueBridgeService {
       workflowPhase: order.workflowPhase,
       archivedAt: order.archivedAt,
       ratedAt: fullyRatedAt(order),
+      completedActionKeys: (order.workflowActions || []).map(
+        (event: any) => event.action,
+      ),
     });
     const workflow = resolvePersistedFixerWorkflowSnapshot({
       poNumber,
@@ -472,6 +475,9 @@ export class BlueBridgeService {
       workflowPhase: order.workflowPhase,
       archivedAt: order.archivedAt,
       ratedAt: fullyRatedAt(order),
+      completedActionKeys: (order.workflowActions || []).map(
+        (event: any) => event.action,
+      ),
     });
     const workflow = resolvePersistedFixerWorkflowSnapshot({
       poNumber,
@@ -508,6 +514,9 @@ export class BlueBridgeService {
       workflowPhase: order.workflowPhase,
       archivedAt: order.archivedAt,
       ratedAt: fullyRatedAt(order),
+      completedActionKeys: (order.workflowActions || []).map(
+        (event: any) => event.action,
+      ),
     });
     const workflow = resolvePersistedFixerWorkflowSnapshot({
       poNumber,
@@ -655,12 +664,14 @@ function resolveOrderLifecycle({
   workflowPhase,
   archivedAt,
   ratedAt,
+  completedActionKeys = [],
 }: {
   status?: string | null;
   statusHistory?: PersistedStatusEvent[];
   workflowPhase?: string | null;
   archivedAt?: Date | string | null;
   ratedAt?: Date | string | null;
+  completedActionKeys?: string[];
 }): WorkflowLifecycle {
   return resolveLifecycle({
     status,
@@ -668,6 +679,7 @@ function resolveOrderLifecycle({
     workflowPhase,
     archivedAt,
     ratedAt,
+    completedActionKeys,
   });
 }
 
@@ -827,6 +839,7 @@ export function resolvePersistedFixerWorkflowSnapshot({
     workflowPhase,
     archivedAt,
     ratedAt,
+    completedActionKeys,
   });
   const phase =
     lifecycle.activityBucket === 'history'
@@ -1112,12 +1125,14 @@ function resolveLifecycle({
   workflowPhase,
   archivedAt,
   ratedAt,
+  completedActionKeys = [],
 }: {
   status?: string | null;
   statusHistory?: PersistedStatusEvent[];
   workflowPhase?: string | null;
   archivedAt?: Date | string | null;
   ratedAt?: Date | string | null;
+  completedActionKeys?: string[];
 }): WorkflowLifecycle {
   const normalizedStatus =
     String(status || '')
@@ -1169,7 +1184,10 @@ function resolveLifecycle({
   const isPersistedRatingPhase =
     String(workflowPhase || '')
       .trim()
-      .toUpperCase() === 'RATING';
+      .toUpperCase() === 'RATING' &&
+    completedActionKeys.some((action) =>
+      ['confirm-completion', 'rate-partner', 'rate-customer'].includes(action),
+    );
   const isLegacyCompleted =
     normalizedStatus === 'COMPLETED' && !isPersistedRatingPhase;
   const isHistory =

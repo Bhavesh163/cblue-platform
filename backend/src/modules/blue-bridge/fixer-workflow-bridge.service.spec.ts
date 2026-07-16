@@ -99,7 +99,15 @@ describe('FixerWorkflowBridgeService', () => {
       expectedStatus,
       expectedPhase,
     ) => {
-      const { service, prisma } = createHarness(workflowPhase, status);
+      const persistedActions =
+        workflowPhase === 'RATING'
+          ? [{ action: 'confirm-completion' }]
+          : [];
+      const { service, prisma } = createHarness(
+        workflowPhase,
+        status,
+        persistedActions,
+      );
       const dto: any = { workflowVersion: 0 };
       if (action === 'send-meeting-invitation') {
         Object.assign(dto, {

@@ -217,7 +217,7 @@ describe('BlueBridgeService workflow activities', () => {
       ['partner-1'],
       workflowOrder({
         status: 'COMPLETED',
-        workflowPhase: null,
+        workflowPhase: 'RATING',
         workflowRevision: 0,
         review: null,
         workflowActions: [],

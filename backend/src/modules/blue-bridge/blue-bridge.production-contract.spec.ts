@@ -301,6 +301,11 @@ describe('BLUE workflow production contracts', () => {
               fixer: { userId: 'partner-1' },
               status,
               workflowPhase,
+              workflowRevision: workflowPhase === 'RATING' ? 1 : 0,
+              workflowActions:
+                workflowPhase === 'RATING'
+                  ? [{ action: 'confirm-completion' }]
+                  : [],
               statusHistory: [],
               review: null,
               description: 'PO-2607-9002 | never used for workflow actions',
@@ -341,6 +346,11 @@ describe('BLUE workflow production contracts', () => {
               fixer: { userId: 'partner-1' },
               status,
               workflowPhase,
+              workflowRevision: workflowPhase === 'RATING' ? 1 : 0,
+              workflowActions:
+                workflowPhase === 'RATING'
+                  ? [{ action: 'confirm-completion' }]
+                  : [],
               statusHistory: [],
               review: null,
               description: 'PO-2607-9002',
