@@ -304,6 +304,58 @@ export class AuthService {
       }
     }
 
+    for (const fromEmail of senderCandidates) {
+      try {
+        const response = await fetch('https://api.mailjet.com/v3/send', {
+          method: 'POST',
+          headers: mailjetHeaders,
+          body: JSON.stringify({
+            FromEmail: fromEmail,
+            FromName: 'blue AI',
+            Subject: 'CBLUE admin login OTP',
+            'Text-part':
+              'Your CBLUE admin login OTP is ' +
+              code +
+              '. It expires in a few minutes.',
+            'Html-part':
+              '<p>Your CBLUE admin login OTP is <strong>' +
+              code +
+              '</strong>.</p><p>It expires in a few minutes.</p>',
+            Recipients: [{ Email: email, Name: 'CBLUE Administrator' }],
+          }),
+        });
+        const rawResponse = await response.text();
+        let sentCount = 0;
+        try {
+          const parsed = JSON.parse(rawResponse) as {
+            Sent?: unknown;
+            Messages?: unknown;
+          };
+          const sent = Number(parsed.Sent || 0);
+          sentCount = Number.isFinite(sent) && sent > 0
+            ? sent
+            : Array.isArray(parsed.Messages)
+              ? parsed.Messages.length
+              : 0;
+        } catch {
+          sentCount = 0;
+        }
+
+        if (response.ok && sentCount > 0) {
+          this.logger.log('Admin OTP email accepted by Mailjet legacy API');
+          return;
+        }
+
+        this.logger.warn(
+          'Admin OTP Mailjet legacy delivery was rejected (status ' +
+            response.status +
+            ')',
+        );
+      } catch {
+        this.logger.warn('Admin OTP Mailjet legacy delivery request failed');
+      }
+    }
+
     throw new BadRequestException('Unable to send admin OTP email');
   }
 

@@ -244,6 +244,62 @@ describe('AuthService', () => {
       fetchSpy.mockRestore();
     });
 
+    it('falls back to the working Mailjet legacy API when v3.1 cannot send an admin OTP', async () => {
+      prisma.otpCode.findFirst.mockResolvedValue(null);
+      prisma.otpCode.create.mockResolvedValue({ id: 'otp-1' });
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'admin-1',
+        email: 'suppadesh@hotmail.com',
+        role: 'ADMIN',
+        isActive: true,
+      });
+      configService.get.mockImplementation((key: string) => {
+        if (key === 'nodeEnv') return 'production';
+        if (key === 'otp.expiryMinutes') return 5;
+        if (key === 'mailjet.apiKey') return 'mailjet-key';
+        if (key === 'mailjet.apiSecret') return 'mailjet-secret';
+        if (key === 'mailjet.fromEmail') return 'noreply@lblue.tech';
+        return undefined;
+      });
+      const fetchSpy = jest
+        .spyOn(global, 'fetch')
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 503,
+          text: jest.fn().mockResolvedValue('Mailjet v3.1 unavailable'),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 503,
+          text: jest.fn().mockResolvedValue('Mailjet v3.1 unavailable'),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: jest.fn().mockResolvedValue(JSON.stringify({ Sent: 1 })),
+        } as Response);
+
+      await expect(
+        service.sendAdminOtp({
+          email: 'suppadesh@hotmail.com',
+          recaptchaToken: 'captcha-token',
+        }),
+      ).resolves.toEqual({
+        message: 'Admin OTP sent successfully',
+        phone: 'suppadesh@hotmail.com',
+      });
+
+      expect(fetchSpy).toHaveBeenNthCalledWith(
+        3,
+        'https://api.mailjet.com/v3/send',
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.stringContaining('noreply@lblue.tech'),
+        }),
+      );
+      fetchSpy.mockRestore();
+    });
+
     it('should remove an undelivered admin OTP so the email is not throttled', async () => {
       prisma.otpCode.findFirst.mockResolvedValue(null);
       prisma.otpCode.create.mockResolvedValue({ id: 'otp-1' });
