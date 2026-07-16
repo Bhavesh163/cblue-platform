@@ -212,6 +212,39 @@ describe('BlueBridgeService workflow activities', () => {
     ]);
   });
 
+  it('places legacy completed workflows without a persisted rating phase in history', async () => {
+    const { service } = createService(
+      ['partner-1'],
+      workflowOrder({
+        status: 'COMPLETED',
+        workflowPhase: null,
+        workflowRevision: 0,
+        review: null,
+        workflowActions: [],
+        chatEnabled: true,
+      }),
+    );
+
+    const result = await (service as any).workflowActivities({
+      legacySubjectId: 'partner@example.com',
+      persona: 'partner',
+      bridgeKey: 'bridge-key',
+    });
+
+    expect(result.requests).toEqual([]);
+    expect(result.activeJobs).toEqual([]);
+    expect(result.chatRooms).toEqual([]);
+    expect(result.history).toEqual([
+      expect.objectContaining({
+        poNumber: 'PO-2607-8879',
+        lifecycleStatus: 'COMPLETED',
+        activityBucket: 'history',
+        actions: [],
+        chat: { enabled: false },
+      }),
+    ]);
+  });
+
   it('uses the newest persisted order as the canonical duplicate PO record', async () => {
     const archivedAt = new Date('2026-07-10T08:00:00.000Z');
     const olderArchived = workflowOrder({

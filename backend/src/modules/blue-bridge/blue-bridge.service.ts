@@ -1166,7 +1166,17 @@ function resolveLifecycle({
     Boolean(persistedArchivedAt) ||
     terminalPhase ||
     normalizedStatus === 'ARCHIVED';
-  const isHistory = isArchived || isTerminalStatus || Boolean(persistedRatedAt);
+  const isPersistedRatingPhase =
+    String(workflowPhase || '')
+      .trim()
+      .toUpperCase() === 'RATING';
+  const isLegacyCompleted =
+    normalizedStatus === 'COMPLETED' && !isPersistedRatingPhase;
+  const isHistory =
+    isArchived ||
+    isTerminalStatus ||
+    isLegacyCompleted ||
+    Boolean(persistedRatedAt);
   const activityBucket: WorkflowLifecycle['activityBucket'] = isHistory
     ? 'history'
     : ['CREATED', 'MATCHING', 'MEETING_REQUESTED', 'NOTIFY_SENT'].includes(
