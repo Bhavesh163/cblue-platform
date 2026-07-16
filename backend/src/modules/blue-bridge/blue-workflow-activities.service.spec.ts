@@ -110,6 +110,7 @@ describe('BlueBridgeService workflow activities', () => {
     expect(result.activeJobs).toEqual([
       expect.objectContaining({
         poNumber: 'PO-2607-8879',
+        workflowVersion: 5,
         chat: { enabled: true },
         meeting: {
           venue: meeting.meetingVenue,

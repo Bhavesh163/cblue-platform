@@ -517,6 +517,7 @@ export class BlueBridgeService {
       poNumber,
       currentStep: workflow.currentStep,
       totalSteps: workflow.totalSteps,
+      workflowVersion: workflow.workflowVersion,
       status: workflow.status,
       lifecycleStatus: lifecycle.lifecycleStatus,
       activityBucket: workflow.activityBucket,
