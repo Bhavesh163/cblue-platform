@@ -287,7 +287,7 @@ export class AuthService {
         if (
           response.ok &&
           messageStatuses.some((status) =>
-            ['success', 'queued', 'sent'].includes(status),
+            ['success', 'sent'].includes(status),
           )
         ) {
           return;

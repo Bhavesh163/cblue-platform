@@ -165,7 +165,7 @@ describe('AuthService', () => {
         status: 200,
         text: jest
           .fn()
-          .mockResolvedValue(JSON.stringify({ Messages: [{ Status: 'queued' }] })),
+          .mockResolvedValue(JSON.stringify({ Messages: [{ Status: 'success' }] })),
       } as Response);
 
       await expect(service.sendAdminOtp({
@@ -189,6 +189,61 @@ describe('AuthService', () => {
       expect(fetchSpy).not.toHaveBeenCalledWith(
         expect.stringContaining('/v3/REST/sender'),
         expect.anything(),
+      );
+      fetchSpy.mockRestore();
+    });
+
+    it('does not treat a queued Mailjet response as a delivered admin OTP', async () => {
+      prisma.otpCode.findFirst.mockResolvedValue(null);
+      prisma.otpCode.create.mockResolvedValue({ id: 'otp-1' });
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'admin-1',
+        email: 'suppadesh@hotmail.com',
+        role: 'ADMIN',
+        isActive: true,
+      });
+      configService.get.mockImplementation((key: string) => {
+        if (key === 'nodeEnv') return 'production';
+        if (key === 'otp.expiryMinutes') return 5;
+        if (key === 'mailjet.apiKey') return 'mailjet-key';
+        if (key === 'mailjet.apiSecret') return 'mailjet-secret';
+        if (key === 'mailjet.fromEmail') return 'noreply@lblue.tech';
+        return undefined;
+      });
+      const fetchSpy = jest
+        .spyOn(global, 'fetch')
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: jest
+            .fn()
+            .mockResolvedValue(JSON.stringify({ Messages: [{ Status: 'queued' }] })),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 400,
+          text: jest.fn().mockResolvedValue('sender is not verified'),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: jest.fn().mockResolvedValue(JSON.stringify({ Sent: 1 })),
+        } as Response);
+
+      await expect(
+        service.sendAdminOtp({
+          email: 'suppadesh@hotmail.com',
+          recaptchaToken: 'captcha-token',
+        }),
+      ).resolves.toEqual({
+        message: 'Admin OTP sent successfully',
+        phone: 'suppadesh@hotmail.com',
+      });
+
+      expect(fetchSpy).toHaveBeenNthCalledWith(
+        3,
+        'https://api.mailjet.com/v3/send',
+        expect.objectContaining({ method: 'POST' }),
       );
       fetchSpy.mockRestore();
     });
@@ -222,7 +277,7 @@ describe('AuthService', () => {
           status: 200,
           text: jest
             .fn()
-            .mockResolvedValue(JSON.stringify({ Messages: [{ Status: 'queued' }] })),
+            .mockResolvedValue(JSON.stringify({ Messages: [{ Status: 'success' }] })),
         } as Response);
 
       await expect(
