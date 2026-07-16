@@ -271,6 +271,7 @@ model Order {
   workflowPhase  String?
   chatEnabled    Boolean @default(false)
   workflowRevision Int @default(0)
+  archivedAt      DateTime?
 
   statusHistory OrderStatusHistory[]
   payment       Payment?
@@ -285,6 +286,7 @@ model Order {
   @@index([userId])
   @@index([fixerId])
   @@index([status])
+  @@index([archivedAt])
   @@index([serviceCategory])
   @@map("orders")
 }

@@ -65,15 +65,21 @@ function workflowOrder(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function createService(userIds: string[], order = workflowOrder()) {
+function createService(
+  userIds: string[],
+  orderOrOrders:
+    | Record<string, unknown>
+    | Record<string, unknown>[] = workflowOrder(),
+) {
+  const orders = Array.isArray(orderOrOrders) ? orderOrOrders : [orderOrOrders];
   const prisma = {
     subscriber: { findFirst: jest.fn().mockResolvedValue(null) },
     user: {
       findMany: jest.fn().mockResolvedValue(userIds.map((id) => ({ id }))),
     },
     order: {
-      findMany: jest.fn().mockResolvedValue([order]),
-      findFirst: jest.fn().mockResolvedValue(order),
+      findMany: jest.fn().mockResolvedValue(orders),
+      findFirst: jest.fn().mockResolvedValue(orders[0] || null),
     },
     notification: { findMany: jest.fn().mockResolvedValue([]) },
     orderChatMessage: {
@@ -107,7 +113,7 @@ describe('BlueBridgeService workflow activities', () => {
       bridgeKey: 'bridge-key',
     });
 
-    expect(result.activeJobs).toEqual([
+    expect(result.requests).toEqual([
       expect.objectContaining({
         poNumber: 'PO-2607-8879',
         workflowVersion: 5,
@@ -119,6 +125,7 @@ describe('BlueBridgeService workflow activities', () => {
         },
       }),
     ]);
+    expect(result.activeJobs).toEqual([]);
     expect(result.chatRooms).toEqual([
       expect.objectContaining({
         poNumber: 'PO-2607-8879',
@@ -138,12 +145,13 @@ describe('BlueBridgeService workflow activities', () => {
       bridgeKey: 'bridge-key',
     });
 
-    expect(result.activeJobs).toEqual([
+    expect(result.requests).toEqual([
       expect.objectContaining({
         poNumber: 'PO-2607-8879',
         chat: { enabled: true },
       }),
     ]);
+    expect(result.activeJobs).toEqual([]);
   });
 
   it('places terminal persisted workflows in history only', async () => {
@@ -167,6 +175,217 @@ describe('BlueBridgeService workflow activities', () => {
     expect(result.history).toEqual([
       expect.objectContaining({ poNumber: 'PO-2607-8879' }),
     ]);
+  });
+
+  it('keeps Step 11 active for the partner after only the customer rating is persisted', async () => {
+    const { service } = createService(
+      ['partner-1'],
+      workflowOrder({
+        status: 'COMPLETED',
+        workflowPhase: 'RATING',
+        review: { createdAt: new Date('2026-07-15T08:00:00.000Z') },
+        workflowActions: [
+          {
+            action: 'rate-partner',
+            payload: { rating: 5 },
+            createdAt: new Date('2026-07-15T08:00:00.000Z'),
+          },
+        ],
+      }),
+    );
+
+    const result = await (service as any).workflowActivities({
+      legacySubjectId: 'partner@example.com',
+      persona: 'partner',
+      bridgeKey: 'bridge-key',
+    });
+
+    expect(result.history).toEqual([]);
+    expect(result.activeJobs).toEqual([
+      expect.objectContaining({
+        poNumber: 'PO-2607-8879',
+        currentStep: 11,
+        activityBucket: 'active',
+        availableActions: ['rate-customer'],
+        ratedAt: null,
+      }),
+    ]);
+  });
+
+  it('uses the newest persisted order as the canonical duplicate PO record', async () => {
+    const archivedAt = new Date('2026-07-10T08:00:00.000Z');
+    const olderArchived = workflowOrder({
+      id: 'older-archived',
+      status: 'ASSIGNED',
+      workflowPhase: 'TERMINAL',
+      archivedAt,
+      createdAt: new Date('2026-07-10T00:00:00.000Z'),
+      updatedAt: archivedAt,
+    });
+    const newerActive = workflowOrder({
+      id: 'newer-active',
+      status: 'IN_PROGRESS',
+      workflowPhase: 'CHAT',
+      archivedAt: null,
+      createdAt: new Date('2026-07-16T00:00:00.000Z'),
+      updatedAt: new Date('2026-07-16T01:00:00.000Z'),
+    });
+    const { service } = createService(
+      ['partner-1'],
+      [olderArchived, newerActive],
+    );
+
+    const result = await (service as any).workflowActivities({
+      legacySubjectId: 'partner@example.com',
+      persona: 'partner',
+      bridgeKey: 'bridge-key',
+    });
+
+    expect(result.history).toEqual([]);
+    expect(result.activeJobs).toEqual([
+      expect.objectContaining({
+        poNumber: 'PO-2607-8879',
+        activityBucket: 'active',
+        status: 'IN_PROGRESS',
+      }),
+    ]);
+  });
+
+  it.each([
+    { status: 'CANCELLED', workflowPhase: 'TERMINAL', review: null },
+    { status: 'DECLINED', workflowPhase: 'TERMINAL', review: null },
+    { status: 'FINISHED', workflowPhase: 'TERMINAL', review: null },
+    { status: 'DONE', workflowPhase: 'TERMINAL', review: null },
+    { status: 'RATED', workflowPhase: 'TERMINAL', review: null },
+    {
+      status: 'COMPLETED',
+      workflowPhase: 'RATING',
+      review: { createdAt: new Date('2026-07-15T08:00:00.000Z') },
+      workflowActions: [
+        {
+          action: 'rate-partner',
+          payload: { rating: 5 },
+          createdAt: new Date('2026-07-15T08:00:00.000Z'),
+        },
+        {
+          action: 'rate-customer',
+          payload: { rating: 5 },
+          createdAt: new Date('2026-07-15T09:00:00.000Z'),
+        },
+      ],
+    },
+  ])(
+    'never exposes fully terminal $status workflows in requests, active jobs, or chat rooms',
+    async ({ status, workflowPhase, review, workflowActions }) => {
+      const { service } = createService(
+        ['partner-1'],
+        workflowOrder({
+          status,
+          workflowPhase,
+          review,
+          workflowActions,
+          chatEnabled: true,
+        }),
+      );
+
+      const result = await (service as any).workflowActivities({
+        legacySubjectId: 'partner@example.com',
+        persona: 'partner',
+        bridgeKey: 'bridge-key',
+      });
+
+      expect(result.requests).toEqual([]);
+      expect(result.activeJobs).toEqual([]);
+      expect(result.chatRooms).toEqual([]);
+      expect(result.history).toHaveLength(1);
+    },
+  );
+
+  it('uses persisted archival for Suppadesh and deduplicates each PO across every activity bucket', async () => {
+    const archivedAt = new Date('2026-07-15T08:00:00.000Z');
+    const archived = workflowOrder({
+      id: 'archived-order',
+      description: 'PO-2605-2747 | legacy test workflow',
+      status: 'IN_PROGRESS',
+      workflowPhase: 'CHAT',
+      chatEnabled: true,
+      archivedAt,
+      fixer: {
+        userId: 'suppadesh-user',
+        user: {
+          id: 'suppadesh-user',
+          name: 'Suppadesh',
+          email: 'suppadesh@yahoo.com',
+        },
+      },
+    });
+    const duplicate = workflowOrder({
+      ...archived,
+      id: 'older-duplicate',
+      updatedAt: new Date('2026-07-14T08:00:00.000Z'),
+    });
+    const { service } = createService(
+      ['suppadesh-user'],
+      [archived, duplicate],
+    );
+
+    const result = await (service as any).workflowActivities({
+      legacySubjectId: 'suppadesh@yahoo.com',
+      persona: 'partner',
+      bridgeKey: 'bridge-key',
+    });
+
+    expect(result.requests).toEqual([]);
+    expect(result.activeJobs).toEqual([]);
+    expect(result.chatRooms).toEqual([]);
+    expect(result.history).toEqual([
+      expect.objectContaining({
+        poNumber: 'PO-2605-2747',
+        lifecycleStatus: 'ARCHIVED',
+        activityBucket: 'history',
+        archivedAt: archivedAt.toISOString(),
+        actions: [],
+        chat: { enabled: false },
+      }),
+    ]);
+  });
+
+  it('returns the same persisted archive lifecycle from workflow detail', async () => {
+    const archivedAt = new Date('2026-07-15T08:00:00.000Z');
+    const { service } = createService(
+      ['suppadesh-user'],
+      workflowOrder({
+        description: 'PO-2605-2747 | legacy test workflow',
+        status: 'ASSIGNED',
+        workflowPhase: 'FEE',
+        chatEnabled: true,
+        archivedAt,
+        fixer: {
+          userId: 'suppadesh-user',
+          user: {
+            id: 'suppadesh-user',
+            name: 'Suppadesh',
+            email: 'suppadesh@yahoo.com',
+          },
+        },
+      }),
+    );
+
+    const result = await service.workflowDetails({
+      poNumber: 'PO-2605-2747',
+      legacySubjectId: 'suppadesh@yahoo.com',
+      bridgeKey: 'bridge-key',
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        lifecycleStatus: 'ARCHIVED',
+        activityBucket: 'history',
+        archivedAt: archivedAt.toISOString(),
+        actions: [],
+        chat: { enabled: false },
+      }),
+    );
   });
 
   it('rejects an invalid bridge key before exposing activities', async () => {

@@ -208,13 +208,16 @@ export class BlueBridgeService {
     const lifecycle = resolveOrderLifecycle({
       status: order.status,
       statusHistory: order.statusHistory,
-      ratedAt: order.review?.createdAt,
+      workflowPhase: order.workflowPhase,
+      archivedAt: order.archivedAt,
+      ratedAt: fullyRatedAt(order),
     });
     const workflow = resolvePersistedFixerWorkflowSnapshot({
       poNumber,
-      ratedAt: order.review?.createdAt,
+      ratedAt: fullyRatedAt(order),
       status: order.status,
       workflowPhase: order.workflowPhase,
+      archivedAt: order.archivedAt,
       workflowVersion: order.workflowRevision,
       chatEnabled: order.chatEnabled,
       completedActionKeys: (order.workflowActions || []).map(
@@ -292,9 +295,11 @@ export class BlueBridgeService {
       orderBy: { createdAt: 'desc' },
     })) as any[];
 
-    const activities = orders
-      .map((order) => this.workflowActivity(order, viewerUserIds))
-      .filter(Boolean) as Array<Record<string, any>>;
+    const activities = deduplicateWorkflowActivities(
+      orders
+        .map((order) => this.workflowActivity(order, viewerUserIds))
+        .filter(Boolean) as Array<Record<string, any>>,
+    );
     const notifications = await this.prisma.notification.findMany({
       where: { userId: { in: viewerUserIds } },
       orderBy: { createdAt: 'desc' },
@@ -307,7 +312,7 @@ export class BlueBridgeService {
         (activity) => activity.activityBucket === 'request',
       ),
       activeJobs: activities.filter(
-        (activity) => activity.activityBucket !== 'history',
+        (activity) => activity.activityBucket === 'active',
       ),
       history: activities.filter(
         (activity) => activity.activityBucket === 'history',
@@ -364,7 +369,7 @@ export class BlueBridgeService {
     const context = await this.visibleWorkflowChat(input);
     const snapshot = resolvePersistedFixerWorkflowSnapshot({
       poNumber: context.poNumber,
-      ratedAt: context.order.review?.createdAt,
+      ratedAt: fullyRatedAt(context.order),
       status: context.order.status,
       workflowPhase: context.order.workflowPhase,
       workflowVersion: context.order.workflowRevision,
@@ -464,13 +469,16 @@ export class BlueBridgeService {
     const lifecycle = resolveOrderLifecycle({
       status: order.status,
       statusHistory: order.statusHistory || [],
-      ratedAt: order.review?.createdAt,
+      workflowPhase: order.workflowPhase,
+      archivedAt: order.archivedAt,
+      ratedAt: fullyRatedAt(order),
     });
     const workflow = resolvePersistedFixerWorkflowSnapshot({
       poNumber,
-      ratedAt: order.review?.createdAt,
+      ratedAt: fullyRatedAt(order),
       status: order.status,
       workflowPhase: order.workflowPhase,
+      archivedAt: order.archivedAt,
       workflowVersion: order.workflowRevision,
       chatEnabled: order.chatEnabled,
       completedActionKeys: (order.workflowActions || []).map(
@@ -497,13 +505,16 @@ export class BlueBridgeService {
     const lifecycle = resolveOrderLifecycle({
       status: order.status,
       statusHistory: order.statusHistory || [],
-      ratedAt: order.review?.createdAt,
+      workflowPhase: order.workflowPhase,
+      archivedAt: order.archivedAt,
+      ratedAt: fullyRatedAt(order),
     });
     const workflow = resolvePersistedFixerWorkflowSnapshot({
       poNumber,
-      ratedAt: order.review?.createdAt,
+      ratedAt: fullyRatedAt(order),
       status: order.status,
       workflowPhase: order.workflowPhase,
+      archivedAt: order.archivedAt,
       workflowVersion: order.workflowRevision,
       chatEnabled: order.chatEnabled,
       completedActionKeys: (order.workflowActions || []).map(
@@ -641,13 +652,23 @@ function messageItem(message: {
 function resolveOrderLifecycle({
   status,
   statusHistory,
+  workflowPhase,
+  archivedAt,
   ratedAt,
 }: {
   status?: string | null;
   statusHistory?: PersistedStatusEvent[];
+  workflowPhase?: string | null;
+  archivedAt?: Date | string | null;
   ratedAt?: Date | string | null;
 }): WorkflowLifecycle {
-  return resolveLifecycle({ status, statusHistory, ratedAt });
+  return resolveLifecycle({
+    status,
+    statusHistory,
+    workflowPhase,
+    archivedAt,
+    ratedAt,
+  });
 }
 
 function resolveOrderWorkflowSnapshot({
@@ -776,6 +797,7 @@ export function resolvePersistedFixerWorkflowSnapshot({
   poNumber,
   status,
   workflowPhase,
+  archivedAt,
   workflowVersion,
   chatEnabled,
   completedActionKeys = [],
@@ -787,6 +809,7 @@ export function resolvePersistedFixerWorkflowSnapshot({
   poNumber: string;
   status?: string | null;
   workflowPhase?: string | null;
+  archivedAt?: Date | string | null;
   workflowVersion?: number | null;
   chatEnabled?: boolean | null;
   completedActionKeys?: string[];
@@ -799,27 +822,35 @@ export function resolvePersistedFixerWorkflowSnapshot({
     String(status || '')
       .trim()
       .toUpperCase() || 'UNKNOWN';
+  const lifecycle = resolveLifecycle({
+    status,
+    workflowPhase,
+    archivedAt,
+    ratedAt,
+  });
   const phase =
-    String(workflowPhase || '')
-      .trim()
-      .toUpperCase() ||
-    (normalizedStatus === 'IN_PROGRESS'
-      ? 'UNKNOWN_ACTIVE'
-      : normalizedStatus === 'MEETING_REQUESTED'
-        ? 'MEETING_CONFIRM'
-        : ['ASSIGNED', 'DEPOSIT_PENDING', 'CONFIRMED'].includes(
-              normalizedStatus,
-            )
-          ? 'FEE'
-          : normalizedStatus === 'MATCHING'
-            ? 'PARTNER_DECISION'
-            : normalizedStatus === 'COMPLETED'
-              ? ratedAt
-                ? 'TERMINAL'
-                : 'RATING'
-              : normalizedStatus === 'CANCELLED'
-                ? 'TERMINAL'
-                : 'DRAFT');
+    lifecycle.activityBucket === 'history'
+      ? 'TERMINAL'
+      : String(workflowPhase || '')
+          .trim()
+          .toUpperCase() ||
+        (normalizedStatus === 'IN_PROGRESS'
+          ? 'UNKNOWN_ACTIVE'
+          : normalizedStatus === 'MEETING_REQUESTED'
+            ? 'MEETING_CONFIRM'
+            : ['ASSIGNED', 'DEPOSIT_PENDING', 'CONFIRMED'].includes(
+                  normalizedStatus,
+                )
+              ? 'FEE'
+              : normalizedStatus === 'MATCHING'
+                ? 'PARTNER_DECISION'
+                : normalizedStatus === 'COMPLETED'
+                  ? ratedAt
+                    ? 'TERMINAL'
+                    : 'RATING'
+                  : normalizedStatus === 'CANCELLED'
+                    ? 'TERMINAL'
+                    : 'DRAFT');
   const viewerIsCustomer = viewerUserIds.includes(String(customerUserId || ''));
   const viewerIsPartner = viewerUserIds.includes(String(fixerUserId || ''));
   const definition: Record<
@@ -997,7 +1028,9 @@ export function resolvePersistedFixerWorkflowSnapshot({
     status: normalizedStatus,
     activityBucket: state.bucket,
     workflowVersion: Number(workflowVersion || 0),
-    chat: { enabled: chatEnabled === true },
+    chat: {
+      enabled: state.bucket !== 'history' && chatEnabled === true,
+    },
     actions,
     availableActions: actions.map((action) => action.key),
     actionOwner: nextAction?.owner || null,
@@ -1007,6 +1040,57 @@ export function resolvePersistedFixerWorkflowSnapshot({
     nextActionStep: nextAction?.actionStep || null,
   };
 }
+function fullyRatedAt(order: any): Date | string | null {
+  const ratingActions = (order.workflowActions || []).filter((event: any) =>
+    ['rate-partner', 'rate-customer'].includes(String(event?.action || '')),
+  );
+  const completedRatings = new Set(
+    ratingActions.map((event: any) => String(event.action)),
+  );
+  if (
+    completedRatings.has('rate-partner') &&
+    completedRatings.has('rate-customer')
+  ) {
+    return (
+      [...ratingActions].reverse().find((event: any) => event?.createdAt)
+        ?.createdAt ||
+      order.review?.createdAt ||
+      null
+    );
+  }
+
+  const workflowPhase = String(order.workflowPhase || '')
+    .trim()
+    .toUpperCase();
+  if (!workflowPhase || workflowPhase === 'TERMINAL') {
+    return order.review?.createdAt || null;
+  }
+  return null;
+}
+
+function deduplicateWorkflowActivities(
+  activities: Array<Record<string, any>>,
+): Array<Record<string, any>> {
+  const newestFirst = [...activities].sort((left, right) => {
+    const leftCreatedAt = Date.parse(String(left.createdAt || ''));
+    const rightCreatedAt = Date.parse(String(right.createdAt || ''));
+    return (
+      (Number.isFinite(rightCreatedAt) ? rightCreatedAt : 0) -
+      (Number.isFinite(leftCreatedAt) ? leftCreatedAt : 0)
+    );
+  });
+  const byPo = new Map<string, Record<string, any>>();
+  for (const activity of newestFirst) {
+    const poNumber = String(activity.poNumber || '')
+      .trim()
+      .toUpperCase();
+    if (poNumber && !byPo.has(poNumber)) {
+      byPo.set(poNumber, activity);
+    }
+  }
+  return [...byPo.values()];
+}
+
 function resolvePropertyLifecycle(inquiry: {
   status?: string | null;
   customerRating?: number | null;
@@ -1025,10 +1109,14 @@ function resolvePropertyLifecycle(inquiry: {
 function resolveLifecycle({
   status,
   statusHistory = [],
+  workflowPhase,
+  archivedAt,
   ratedAt,
 }: {
   status?: string | null;
   statusHistory?: PersistedStatusEvent[];
+  workflowPhase?: string | null;
+  archivedAt?: Date | string | null;
   ratedAt?: Date | string | null;
 }): WorkflowLifecycle {
   const normalizedStatus =
@@ -1045,6 +1133,11 @@ function resolveLifecycle({
   const cancelledEvent = latestEventForStatus('CANCELLED');
   const completedEvent = latestEventForStatus('COMPLETED');
   const persistedRatedAt = toIsoTimestamp(ratedAt);
+  const persistedArchivedAt = toIsoTimestamp(archivedAt);
+  const terminalPhase =
+    String(workflowPhase || '')
+      .trim()
+      .toUpperCase() === 'TERMINAL';
   const isDeclined =
     normalizedStatus === 'DECLINED' ||
     (normalizedStatus === 'CANCELLED' &&
@@ -1060,11 +1153,20 @@ function resolveLifecycle({
     normalizedStatus === 'COMPLETED'
       ? toIsoTimestamp(completedEvent?.createdAt)
       : null;
-  const isHistory =
-    normalizedStatus === 'CANCELLED' ||
-    normalizedStatus === 'DECLINED' ||
-    normalizedStatus === 'COMPLETED' ||
-    normalizedStatus === 'RATED';
+  const isTerminalStatus = [
+    'CANCELLED',
+    'CANCELED',
+    'DECLINED',
+    'FINISHED',
+    'DONE',
+    'RATED',
+    'ARCHIVED',
+  ].includes(normalizedStatus);
+  const isArchived =
+    Boolean(persistedArchivedAt) ||
+    terminalPhase ||
+    normalizedStatus === 'ARCHIVED';
+  const isHistory = isArchived || isTerminalStatus || Boolean(persistedRatedAt);
   const activityBucket: WorkflowLifecycle['activityBucket'] = isHistory
     ? 'history'
     : ['CREATED', 'MATCHING', 'MEETING_REQUESTED', 'NOTIFY_SENT'].includes(
@@ -1079,10 +1181,16 @@ function resolveLifecycle({
       ? 'RATED'
       : isDeclined
         ? 'DECLINED'
-        : normalizedStatus,
+        : isArchived && !isTerminalStatus
+          ? 'ARCHIVED'
+          : normalizedStatus,
     archivedAt:
       activityBucket === 'history'
-        ? persistedRatedAt || declinedAt || cancelledAt || completedAt
+        ? persistedArchivedAt ||
+          persistedRatedAt ||
+          declinedAt ||
+          cancelledAt ||
+          completedAt
         : null,
     cancelledAt,
     declinedAt,
