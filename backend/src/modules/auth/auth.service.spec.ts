@@ -142,7 +142,7 @@ describe('AuthService', () => {
       expect(prisma.otpCode.findFirst).not.toHaveBeenCalled();
       expect(prisma.otpCode.create).not.toHaveBeenCalled();
     });
-    it('fails closed when no approved Mailjet sender is active', async () => {
+    it('uses the proven Mailjet sender identity without a sender-status preflight', async () => {
       prisma.otpCode.findFirst.mockResolvedValue(null);
       prisma.otpCode.create.mockResolvedValue({ id: 'otp-1' });
       prisma.otpCode.delete.mockResolvedValue({});
@@ -157,37 +157,43 @@ describe('AuthService', () => {
         if (key === 'otp.expiryMinutes') return 5;
         if (key === 'mailjet.apiKey') return 'mailjet-key';
         if (key === 'mailjet.apiSecret') return 'mailjet-secret';
-        if (key === 'mailjet.fromEmail') return 'noreply@cblue.co.th';
+        if (key === 'mailjet.fromEmail') return 'noreply@lblue.tech';
         return undefined;
       });
       const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
         ok: true,
         status: 200,
-        text: jest.fn().mockResolvedValue(
-          JSON.stringify({
-            Data: [{ Email: 'noreply@cblue.co.th', Status: 'Inactive' }],
-          }),
-        ),
+        text: jest
+          .fn()
+          .mockResolvedValue(JSON.stringify({ Messages: [{ Status: 'queued' }] })),
       } as Response);
 
-      await expect(
-        service.sendAdminOtp({
-          email: 'suppadesh@hotmail.com',
-          recaptchaToken: 'captcha-token',
-        }),
-      ).rejects.toThrow('Admin OTP email sender is not verified');
+      await expect(service.sendAdminOtp({
+        email: 'suppadesh@hotmail.com',
+        recaptchaToken: 'captcha-token',
+      })).resolves.toEqual({
+        message: 'Admin OTP sent successfully',
+        phone: 'suppadesh@hotmail.com',
+      });
 
       expect(fetchSpy).toHaveBeenCalledWith(
-        'https://api.mailjet.com/v3/REST/sender?Limit=100',
-        expect.objectContaining({ method: 'GET' }),
+        'https://api.mailjet.com/v3.1/send',
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.stringContaining('noreply@lblue.tech'),
+        }),
       );
-      expect(prisma.otpCode.delete).toHaveBeenCalledWith({
-        where: { id: 'otp-1' },
-      });
+      expect(fetchSpy.mock.calls[0][1]).toEqual(expect.objectContaining({
+        body: expect.stringContaining('blue AI'),
+      }));
+      expect(fetchSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining('/v3/REST/sender'),
+        expect.anything(),
+      );
       fetchSpy.mockRestore();
     });
 
-    it('should retry a verified Mailjet sender when the configured sender fails', async () => {
+    it('should retry the fallback sender when the configured sender fails', async () => {
       prisma.otpCode.findFirst.mockResolvedValue(null);
       prisma.otpCode.create.mockResolvedValue({ id: 'otp-1' });
       prisma.user.findUnique.mockResolvedValue({
@@ -206,18 +212,6 @@ describe('AuthService', () => {
       });
       const fetchSpy = jest
         .spyOn(global, 'fetch')
-        .mockResolvedValueOnce({
-          ok: true,
-          status: 200,
-          text: jest.fn().mockResolvedValue(
-            JSON.stringify({
-              Data: [
-                { Email: 'unverified@example.com', Status: 'Active' },
-                { Email: 'noreply@cblue.co.th', Status: 'Active' },
-              ],
-            }),
-          ),
-        } as Response)
         .mockResolvedValueOnce({
           ok: false,
           status: 400,
@@ -241,8 +235,8 @@ describe('AuthService', () => {
         phone: 'suppadesh@hotmail.com',
       });
 
-      expect(fetchSpy).toHaveBeenCalledTimes(3);
-      expect(fetchSpy.mock.calls[2][1]).toEqual(
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+      expect(fetchSpy.mock.calls[1][1]).toEqual(
         expect.objectContaining({
           body: expect.stringContaining('noreply@cblue.co.th'),
         }),
@@ -270,15 +264,6 @@ describe('AuthService', () => {
       });
       const fetchSpy = jest
         .spyOn(global, 'fetch')
-        .mockResolvedValueOnce({
-          ok: true,
-          status: 200,
-          text: jest.fn().mockResolvedValue(
-            JSON.stringify({
-              Data: [{ Email: 'noreply@cblue.co.th', Status: 'Active' }],
-            }),
-          ),
-        } as Response)
         .mockResolvedValueOnce({
           ok: false,
           status: 401,
