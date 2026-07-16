@@ -21,6 +21,43 @@ export class BlueBridgeController {
     private readonly fixerWorkflow: FixerWorkflowBridgeService,
   ) {}
 
+  @Get('workflow-activities')
+  workflowActivities(
+    @Query('legacySubjectId') legacySubjectId: string,
+    @Query('persona') persona: 'customer' | 'partner',
+    @Headers('x-blue-bridge-key') bridgeKey?: string,
+  ): any {
+    return this.bridge.workflowActivities({
+      legacySubjectId,
+      persona,
+      bridgeKey,
+    });
+  }
+
+  @Get('workflow-details/:poNumber/chat')
+  workflowChat(
+    @Param('poNumber') poNumber: string,
+    @Query('legacySubjectId') legacySubjectId: string,
+    @Headers('x-blue-bridge-key') bridgeKey?: string,
+  ): any {
+    return this.bridge.workflowChat({ poNumber, legacySubjectId, bridgeKey });
+  }
+
+  @Post('workflow-details/:poNumber/chat')
+  postWorkflowChat(
+    @Param('poNumber') poNumber: string,
+    @Query('legacySubjectId') legacySubjectId: string,
+    @Headers('x-blue-bridge-key') bridgeKey: string | undefined,
+    @Body() body: { text?: string },
+  ): any {
+    return this.bridge.postWorkflowChat({
+      poNumber,
+      legacySubjectId,
+      bridgeKey,
+      text: String(body?.text || ''),
+    });
+  }
+
   @Get('workflow-details/:poNumber')
   workflowDetails(
     @Param('poNumber') poNumber: string,
@@ -92,4 +129,9 @@ export interface BlueWorkflowDetailResponse {
   chat?: {
     enabled: boolean;
   };
+  meeting?: {
+    venue: string;
+    date: string;
+    time: string;
+  } | null;
 }

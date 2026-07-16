@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -9,6 +10,18 @@ import { PrismaService } from '../../prisma/prisma.service';
 import type { BlueWorkflowDetailResponse } from './blue-bridge.controller';
 
 interface WorkflowDetailInput {
+  poNumber: string;
+  legacySubjectId: string;
+  bridgeKey?: string;
+}
+
+interface WorkflowActivitiesInput {
+  legacySubjectId: string;
+  persona: 'customer' | 'partner';
+  bridgeKey?: string;
+}
+
+interface WorkflowChatInput {
   poNumber: string;
   legacySubjectId: string;
   bridgeKey?: string;
@@ -115,7 +128,7 @@ export class BlueBridgeService {
         review: { select: { createdAt: true } },
         fixer: { select: { userId: true } },
         workflowActions: {
-          select: { action: true },
+          select: { action: true, payload: true, createdAt: true },
           orderBy: { createdAt: 'asc' },
         },
       },
@@ -234,6 +247,300 @@ export class BlueBridgeService {
       })),
       ...lifecycle,
       ...workflow,
+      meeting: persistedMeeting(order.workflowActions),
+    };
+  }
+
+  async workflowActivities(input: WorkflowActivitiesInput) {
+    this.assertBridgeKey(input.bridgeKey);
+    const legacySubjectId = String(input.legacySubjectId || '').trim();
+    if (!legacySubjectId || !['customer', 'partner'].includes(input.persona)) {
+      throw new BadRequestException('A valid actor and persona are required');
+    }
+
+    const viewerUserIds = await this.resolveLinkedUserIds(legacySubjectId);
+    if (viewerUserIds.length === 0) {
+      throw new NotFoundException('Workflow activities not found');
+    }
+
+    const orders = (await this.prisma.order.findMany({
+      where:
+        input.persona === 'customer'
+          ? { userId: { in: viewerUserIds } }
+          : { fixer: { userId: { in: viewerUserIds } } },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        fixer: {
+          select: {
+            userId: true,
+            user: { select: { id: true, name: true, email: true } },
+          },
+        },
+        address: true,
+        review: { select: { createdAt: true } },
+        statusHistory: { orderBy: { createdAt: 'desc' } },
+        workflowActions: {
+          select: { action: true, payload: true, createdAt: true },
+          orderBy: { createdAt: 'asc' },
+        },
+        chatMessages: {
+          include: { senderUser: { select: { name: true, email: true } } },
+          orderBy: { createdAt: 'asc' },
+          take: 50,
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    })) as any[];
+
+    const activities = orders
+      .map((order) => this.workflowActivity(order, viewerUserIds))
+      .filter(Boolean) as Array<Record<string, any>>;
+    const notifications = await this.prisma.notification.findMany({
+      where: { userId: { in: viewerUserIds } },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    return {
+      sourceVersion: 'cblue-fixer-workflow-activities-v1' as const,
+      requests: activities.filter(
+        (activity) => activity.activityBucket === 'request',
+      ),
+      activeJobs: activities.filter(
+        (activity) => activity.activityBucket !== 'history',
+      ),
+      history: activities.filter(
+        (activity) => activity.activityBucket === 'history',
+      ),
+      chatRooms: activities
+        .filter(
+          (activity) =>
+            activity.activityBucket !== 'history' && activity.chat.enabled,
+        )
+        .map((activity) => ({
+          poNumber: activity.poNumber,
+          title: activity.title,
+          customer: activity.customer,
+          partner: activity.partner,
+          messageItems: activity.messageItems,
+        })),
+      alerts: notifications.map((notification) => ({
+        id: notification.id,
+        type: notification.type,
+        status: notification.status,
+        title: notification.title,
+        body: notification.body,
+        createdAt: toIsoTimestamp(notification.createdAt),
+        readAt: toIsoTimestamp(notification.readAt),
+      })),
+      upcomingMeetings: activities
+        .filter(
+          (activity) =>
+            activity.activityBucket !== 'history' && activity.meeting,
+        )
+        .map((activity) => ({
+          poNumber: activity.poNumber,
+          title: activity.title,
+          meeting: activity.meeting,
+          customer: activity.customer,
+          partner: activity.partner,
+        })),
+    };
+  }
+
+  async workflowChat(input: WorkflowChatInput) {
+    const context = await this.visibleWorkflowChat(input);
+    return this.workflowChatSnapshot(context.order, context.poNumber);
+  }
+
+  async postWorkflowChat(input: WorkflowChatInput & { text: string }) {
+    const text = String(input.text || '').trim();
+    if (!text || text.length > 4000) {
+      throw new BadRequestException(
+        'Chat text must be between 1 and 4000 characters',
+      );
+    }
+
+    const context = await this.visibleWorkflowChat(input);
+    const snapshot = resolvePersistedFixerWorkflowSnapshot({
+      poNumber: context.poNumber,
+      ratedAt: context.order.review?.createdAt,
+      status: context.order.status,
+      workflowPhase: context.order.workflowPhase,
+      workflowVersion: context.order.workflowRevision,
+      chatEnabled: context.order.chatEnabled,
+      completedActionKeys: (context.order.workflowActions || []).map(
+        (event: any) => event.action,
+      ),
+      customerUserId: context.order.userId,
+      fixerUserId: context.order.fixer?.userId,
+      viewerUserIds: context.viewerUserIds,
+    });
+    if (!snapshot.chat.enabled || snapshot.activityBucket === 'history') {
+      throw new BadRequestException('Chat is not available for this workflow');
+    }
+
+    const senderRole =
+      context.order.userId === context.actorUserId ? 'USER' : 'FIXER';
+    const created = await this.prisma.orderChatMessage.create({
+      data: {
+        orderId: context.order.id,
+        senderUserId: context.actorUserId,
+        senderRole,
+        text,
+      },
+    });
+    const result = this.workflowChatSnapshot(context.order, context.poNumber);
+    return {
+      ...result,
+      chat: {
+        ...result.chat,
+        messageItems: [
+          ...result.chat.messageItems,
+          messageItem({
+            ...created,
+            senderUser:
+              context.order.userId === context.actorUserId
+                ? context.order.user
+                : context.order.fixer?.user,
+          }),
+        ],
+      },
+    };
+  }
+
+  private async visibleWorkflowChat(input: WorkflowChatInput) {
+    this.assertBridgeKey(input.bridgeKey);
+    const poNumber = String(input.poNumber || '').trim();
+    const legacySubjectId = String(input.legacySubjectId || '').trim();
+    if (!poNumber || !legacySubjectId) {
+      throw new NotFoundException('Workflow chat not found');
+    }
+    const viewerUserIds = await this.resolveLinkedUserIds(legacySubjectId);
+    if (viewerUserIds.length === 0) {
+      throw new NotFoundException('Workflow chat not found');
+    }
+    const order = await this.prisma.order.findFirst({
+      where: {
+        description: { contains: poNumber, mode: 'insensitive' },
+        OR: [
+          { userId: { in: viewerUserIds } },
+          { fixer: { userId: { in: viewerUserIds } } },
+        ],
+      },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        fixer: {
+          select: {
+            userId: true,
+            user: { select: { id: true, name: true, email: true } },
+          },
+        },
+        review: { select: { createdAt: true } },
+        workflowActions: {
+          select: { action: true, payload: true, createdAt: true },
+          orderBy: { createdAt: 'asc' },
+        },
+        chatMessages: {
+          include: { senderUser: { select: { name: true, email: true } } },
+          orderBy: { createdAt: 'asc' },
+          take: 50,
+        },
+      },
+    });
+    if (!order) {
+      throw new NotFoundException('Workflow chat not found');
+    }
+    const actorUserId = viewerUserIds.find(
+      (id) => id === order.userId || id === order.fixer?.userId,
+    );
+    if (!actorUserId) {
+      throw new NotFoundException('Workflow chat not found');
+    }
+    return { order: order as any, poNumber, viewerUserIds, actorUserId };
+  }
+
+  private workflowChatSnapshot(order: any, poNumber: string) {
+    const lifecycle = resolveOrderLifecycle({
+      status: order.status,
+      statusHistory: order.statusHistory || [],
+      ratedAt: order.review?.createdAt,
+    });
+    const workflow = resolvePersistedFixerWorkflowSnapshot({
+      poNumber,
+      ratedAt: order.review?.createdAt,
+      status: order.status,
+      workflowPhase: order.workflowPhase,
+      workflowVersion: order.workflowRevision,
+      chatEnabled: order.chatEnabled,
+      completedActionKeys: (order.workflowActions || []).map(
+        (event: any) => event.action,
+      ),
+      customerUserId: order.userId,
+      fixerUserId: order.fixer?.userId,
+      viewerUserIds: [],
+    });
+    return {
+      ...lifecycle,
+      ...workflow,
+      meeting: persistedMeeting(order.workflowActions),
+      chat: {
+        enabled: workflow.chat.enabled,
+        messageItems: (order.chatMessages || []).map(messageItem),
+      },
+    };
+  }
+
+  private workflowActivity(order: any, viewerUserIds: string[]) {
+    const poNumber = persistedWorkflowReference(order.description);
+    if (!poNumber) return null;
+    const lifecycle = resolveOrderLifecycle({
+      status: order.status,
+      statusHistory: order.statusHistory || [],
+      ratedAt: order.review?.createdAt,
+    });
+    const workflow = resolvePersistedFixerWorkflowSnapshot({
+      poNumber,
+      ratedAt: order.review?.createdAt,
+      status: order.status,
+      workflowPhase: order.workflowPhase,
+      workflowVersion: order.workflowRevision,
+      chatEnabled: order.chatEnabled,
+      completedActionKeys: (order.workflowActions || []).map(
+        (event: any) => event.action,
+      ),
+      customerUserId: order.userId,
+      fixerUserId: order.fixer?.userId,
+      viewerUserIds,
+    });
+    return {
+      poNumber,
+      currentStep: workflow.currentStep,
+      totalSteps: workflow.totalSteps,
+      status: workflow.status,
+      lifecycleStatus: lifecycle.lifecycleStatus,
+      activityBucket: workflow.activityBucket,
+      archivedAt: lifecycle.archivedAt,
+      cancelledAt: lifecycle.cancelledAt,
+      declinedAt: lifecycle.declinedAt,
+      ratedAt: lifecycle.ratedAt,
+      title: order.serviceCategory,
+      serviceCategory: order.serviceCategory,
+      createdAt: toIsoTimestamp(order.createdAt),
+      updatedAt: toIsoTimestamp(order.updatedAt),
+      location: order.address ? formatLocation(order.address) : '',
+      customer: identity(order.user),
+      partner: identity(order.fixer?.user),
+      actions: workflow.actions,
+      availableActions: workflow.availableActions,
+      actionOwner: workflow.actionOwner,
+      nextActionKey: workflow.nextActionKey,
+      nextActionLabel: workflow.nextActionLabel,
+      nextActionOwner: workflow.nextActionOwner,
+      nextActionStep: workflow.nextActionStep,
+      chat: workflow.chat,
+      meeting: persistedMeeting(order.workflowActions),
+      messageItems: (order.chatMessages || []).map(messageItem),
     };
   }
 
@@ -275,6 +582,59 @@ export class BlueBridgeService {
     });
     return Array.from(new Set(users.map((user) => user.id)));
   }
+}
+
+function persistedWorkflowReference(description: unknown): string | null {
+  const match = /^\s*(PO-\d{4}-\d+)\s*(?:\||$)/i.exec(
+    String(description || ''),
+  );
+  return match ? match[1].toUpperCase() : null;
+}
+
+function persistedMeeting(
+  actions: Array<{ action?: string; payload?: unknown }> | undefined,
+): { venue: string; date: string; time: string } | null {
+  const action = [...(actions || [])]
+    .reverse()
+    .find((event) => event.action === 'send-meeting-invitation');
+  if (!action || !isRecord(action.payload)) return null;
+  const venue = stringValue(action.payload.meetingVenue);
+  const date = stringValue(action.payload.meetingDate);
+  const time = stringValue(action.payload.meetingTime);
+  return venue && date && time ? { venue, date, time } : null;
+}
+
+function identity(
+  user:
+    | { id?: string; name?: string | null; email?: string | null }
+    | null
+    | undefined,
+) {
+  if (!user) return null;
+  return {
+    id: String(user.id || ''),
+    displayName: String(user.name || user.email || '').trim(),
+  };
+}
+
+function messageItem(message: {
+  id?: string;
+  senderUserId?: string;
+  senderRole?: string | null;
+  text?: string;
+  createdAt?: Date | string | null;
+  senderUser?: { name?: string | null; email?: string | null } | null;
+}) {
+  return {
+    id: String(message.id || ''),
+    senderUserId: String(message.senderUserId || ''),
+    senderRole: message.senderRole || null,
+    senderName: String(
+      message.senderUser?.name || message.senderUser?.email || 'User',
+    ).trim(),
+    text: String(message.text || ''),
+    createdAt: toIsoTimestamp(message.createdAt),
+  };
 }
 
 function resolveOrderLifecycle({
