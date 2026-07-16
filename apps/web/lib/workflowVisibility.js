@@ -155,6 +155,36 @@ export function isTerminalWorkflowStatus(status) {
   return TERMINAL_STATUS_VALUES.has(String(status || "").toUpperCase());
 }
 
+const CANCELLABLE_WORKFLOW_STATUSES = new Set([
+  "CREATED",
+  "MATCHING",
+  "ASSIGNED",
+  "DEPOSIT_PENDING",
+  "CONFIRMED",
+  "IN_PROGRESS",
+  "MEETING_REQUESTED",
+]);
+
+export function isClosedWorkflowActivity(value = {}) {
+  const status = String(value?.status || "").toUpperCase();
+  const workflowPhase = String(value?.workflowPhase || "").toUpperCase();
+  return workflowPhase === "TERMINAL" || status === "COMPLETED" || isTerminalWorkflowStatus(status);
+}
+
+export function isWorkflowOrderCancellable(value = {}) {
+  const status = String(value?.status || "").toUpperCase();
+  return !isClosedWorkflowActivity(value) && CANCELLABLE_WORKFLOW_STATUSES.has(status);
+}
+
+export function isWorkflowOrderChatEnabled(value = {}) {
+  const status = String(value?.status || "").toUpperCase();
+  return (
+    !isClosedWorkflowActivity(value) &&
+    value?.chatEnabled === true &&
+    (status === "IN_PROGRESS" || status === "MEETING_REQUESTED")
+  );
+}
+
 function hasSubmittedWorkflowRating(value) {
   if (!value || typeof value !== "object") return false;
   for (const key of ["rating", "partnerRating", "customerRating", "fixerRating", "listerRating"]) {

@@ -10,10 +10,12 @@ import {
   collectTerminalWorkflowPos,
   filterLiveWorkflowItems,
   filterWorkflowItemsByKnownBackendPos,
-  isCompletedAwaitingWorkflowRating,
+  isClosedWorkflowActivity,
   isCustomerMeetingInviteActionAvailable,
   isWorkflowMeetingCardVisible,
   isTerminalWorkflowStatus,
+  isWorkflowOrderCancellable,
+  isWorkflowOrderChatEnabled,
   normalizeWorkflowHistoryItems,
   parseWorkflowMeetingInviteDetails,
   pickWorkflowMeetingVenue,
@@ -207,14 +209,8 @@ const getWorkflowDisplayLocation = (...values: any[]) => {
 };
 const isCustomerCancellationText = (value: any) =>
   /\bcustomer\s+(?:cancelled|canceled|cancel)\b|\bcancelled\s+by\s+customer\b|\bcanceled\s+by\s+customer\b/i.test(String(value || ''));
-const isBackendWorkflowActiveStatus = (orderLike: any) => {
-  const status = String(orderLike?.status || '').toUpperCase();
-  return !isTerminalWorkflowStatus(status) && (status !== 'COMPLETED' || isCompletedAwaitingWorkflowRating(orderLike));
-};
-const isBackendWorkflowHistoryStatus = (orderLike: any) => {
-  const status = String(orderLike?.status || '').toUpperCase();
-  return isTerminalWorkflowStatus(status) || (status === 'COMPLETED' && !isCompletedAwaitingWorkflowRating(orderLike));
-};
+const isBackendWorkflowActiveStatus = (orderLike: any) => !isClosedWorkflowActivity(orderLike);
+const isBackendWorkflowHistoryStatus = (orderLike: any) => isClosedWorkflowActivity(orderLike);
 const WORKFLOW_MEETING_VISIBLE_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 const parseWorkflowMeetingDateTimeMs = (meetingDate?: string, meetingTime?: string, fallback?: any) => {
   const rawDate = String(meetingDate || '').trim();
@@ -2248,8 +2244,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     const isIncomingMessage = (m: any) => isVisibleMessage(m) && !isOwnSender(m.sender);
     const keys = Object.keys(localStorage).filter((k) => k.startsWith("chat_messages_"));
     const items: any[] = [];
-    const knownPoSet = new Set(workflowOrders.map((o: any) => extractPo(o)).filter((p: string) => isPoCode(p)));
-    const completedPoSet = new Set(workflowOrders.filter((o: any) => String(o.status || '').toUpperCase() === 'COMPLETED').map((o: any) => extractPo(o)).filter((p: string) => isPoCode(p)));
+    const workflowOrderByPo = new Map(
+      workflowOrders
+        .map((order: any) => [extractPo(order), order] as const)
+        .filter(([po]) => isPoCode(po)),
+    );
     for (const key of keys) {
       try {
         const po = key.replace("chat_messages_", "");
@@ -2260,14 +2259,17 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
           localStorage.removeItem(`chat_from_${po}`);
           continue;
         }
-        if (knownPoSet.size > 0 && !knownPoSet.has(po) && !isWorkflowPoReferencedInStorage(localStorage, po)) {
+        const workflowOrder = workflowOrderByPo.get(po);
+        if (!workflowOrder) {
           localStorage.removeItem(key);
           localStorage.removeItem(`chat_title_${po}`);
           localStorage.removeItem(`chat_from_${po}`);
           continue;
         }
-        if (completedPoSet.has(po)) {
-          localStorage.setItem(`chat_closed_${po}`, '1');
+        if (!isWorkflowOrderChatEnabled(workflowOrder)) {
+          if (isClosedWorkflowActivity(workflowOrder)) {
+            localStorage.setItem(`chat_closed_${po}`, '1');
+          }
           continue;
         }
         if (localStorage.getItem(`chat_closed_${po}`)) continue;
@@ -2371,16 +2373,13 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
 
     const viewerUserId = String(subscriber?.id || "");
     const items: any[] = [];
-    const chatOpenStatuses = new Set(["IN_PROGRESS", "MEETING_REQUESTED"]);
     const openOrders = (orders || []).filter((order: any) => {
       const orderId = order?.id;
       if (!orderId) return false;
       const po = extractPo(order);
       if (!po || !isPoCode(po)) return false;
       if (localStorage.getItem(`chat_closed_${po}`)) return false;
-      const status = String(order?.status || "").toUpperCase();
-      const hasLocalChatCache = Boolean(localStorage.getItem(`chat_messages_${po}`));
-      return chatOpenStatuses.has(status) || hasLocalChatCache;
+      return isWorkflowOrderChatEnabled(order);
     });
 
     const loadOrderChat = async (order: any) => {
@@ -3344,6 +3343,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         tier,
         actionNeeded: [6, 8, 9, 10, 11].includes(step),
         step,
+        status: o.status,
+        workflowPhase: o.workflowPhase,
+        chatEnabled: o.chatEnabled === true,
         description: o.description || '',
       };
     });
@@ -4520,7 +4522,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       <div className="flex flex-col items-end gap-1 flex-shrink-0">
         <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${item.tier === 'ECONOMY' || item.tier === 'Economy' ? 'bg-green-50 text-green-700' : item.tier === 'Standard' || item.tier === 'STANDARD' ? 'bg-blue-50 text-blue-700' : item.tier === 'Corporate' ? 'bg-purple-50 text-purple-700' : item.tier === 'Specialist' ? 'bg-amber-50 text-amber-700' : item.tier === 'Expert' ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-600'}`}>{item.tier || 'Standard'}</span>
         {(item.actionNeeded || actionableRequestPos.has(item.po)) && item.type !== 'prop_waiting' && <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-red-50 text-red-700">{locale === "th" ? "ต้องดำเนินการ" : locale === "zh" ? "需要操作" : "Action Needed"}</span>}
-        {item.type !== 'prop_waiting' && <button
+        {item.type !== 'prop_waiting' && isWorkflowOrderCancellable(item) && <button
           onClick={(e) => {
             e.stopPropagation();
             setCancelJobReason("");
@@ -6426,6 +6428,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                     const createdAt = Date.now();
                     const serviceName = item.title || item.service || item.propertyTitle || 'this job';
                     const backendOrder = workflowOrders.find((order: any) => extractPo(order) === po);
+                    if (!isWorkflowOrderCancellable(backendOrder || item)) {
+                      setCancelJobModal(null);
+                      setCancelJobReason("");
+                      return;
+                    }
                     let backendOrderId = backendOrder?.id || item.orderId || (isOrderUuid(item.id) ? item.id : '');
                     if (!backendOrderId && po) {
                       // Cross-browser cancel requires the backend order id so the partner
@@ -6435,7 +6442,6 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                     }
                     const isPropertyCancel = isPropPoCode(po) || item.isPropertyJob || item.propInquiry;
                     const customerChatText = `[SYSTEM] Customer cancelled ${serviceName} (${po}). Reason: ${reason}. This job has been moved to History.`;
-                    const partnerChatText = `[SYSTEM] Customer cancelled ${serviceName} (${po}). Reason: ${reason}. Please check History for the cancelled job record.`;
                     const historyEntry = {
                       ...item,
                       po,
@@ -6524,17 +6530,12 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                     if (isPropertyCancel && item.propInquiry?.id) {
                       void updatePropInquiry(item.propInquiry.id, { status: 'CANCELLED' }, po);
                     }
-                    if (backendOrderId && token) {
+                    if (backendOrderId && token && isWorkflowOrderCancellable(backendOrder || item)) {
                       try { localStorage.setItem(`po_to_order_${po}`, backendOrderId); } catch {}
                       fetch(`/api/v1/orders/${backendOrderId}/status`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                         body: JSON.stringify({ status: 'CANCELLED', note: `Customer cancelled. Reason: ${reason}` }),
-                      }).catch(() => {});
-                      fetch(`/api/v1/orders/${backendOrderId}/chat`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                        body: JSON.stringify({ text: partnerChatText }),
                       }).catch(() => {});
                     }
                     setCancelJobModal(null);

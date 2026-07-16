@@ -9,7 +9,10 @@ import {
   filterLiveWorkflowItems,
   hasWorkflowCompletionMarker,
   isCompletedAwaitingWorkflowRating,
+  isClosedWorkflowActivity,
   isCustomerMeetingInviteActionAvailable,
+  isWorkflowOrderCancellable,
+  isWorkflowOrderChatEnabled,
   isTerminalWorkflowStatus,
   normalizeWorkflowHistoryItems,
   pickWorkflowMeetingVenue,
@@ -343,6 +346,32 @@ test("filters terminal workflow requests without hiding completed jobs awaiting 
   ).map((item) => item.po);
 
   assert.deepEqual(visible, ["PO-2606-1111", "PO-2606-2222"]);
+});
+
+test("keeps completed and terminal-phase fixer jobs out of live activity surfaces", () => {
+  assert.equal(isClosedWorkflowActivity({ status: "COMPLETED", workflowPhase: "RATING" }), true);
+  assert.equal(isClosedWorkflowActivity({ status: "IN_PROGRESS", workflowPhase: "TERMINAL" }), true);
+  assert.equal(isClosedWorkflowActivity({ status: "CANCELLED" }), true);
+  assert.equal(isClosedWorkflowActivity({ status: "DECLINED" }), true);
+  assert.equal(isClosedWorkflowActivity({ status: "IN_PROGRESS", workflowPhase: "MEETING_CONFIRM" }), false);
+});
+
+test("offers cancellation only for backend states that accept cancellation", () => {
+  for (const status of ["CREATED", "MATCHING", "ASSIGNED", "DEPOSIT_PENDING", "CONFIRMED", "IN_PROGRESS", "MEETING_REQUESTED"]) {
+    assert.equal(isWorkflowOrderCancellable({ status }), true, status);
+  }
+  for (const status of ["COMPLETED", "CANCELLED", "DECLINED", "FINISHED", "RATED"]) {
+    assert.equal(isWorkflowOrderCancellable({ status }), false, status);
+  }
+  assert.equal(isWorkflowOrderCancellable({ status: "IN_PROGRESS", workflowPhase: "TERMINAL" }), false);
+});
+
+test("opens fixer chat only from persisted live chat state", () => {
+  assert.equal(isWorkflowOrderChatEnabled({ status: "IN_PROGRESS", chatEnabled: true }), true);
+  assert.equal(isWorkflowOrderChatEnabled({ status: "MEETING_REQUESTED", chatEnabled: true }), true);
+  assert.equal(isWorkflowOrderChatEnabled({ status: "IN_PROGRESS", chatEnabled: false }), false);
+  assert.equal(isWorkflowOrderChatEnabled({ status: "COMPLETED", chatEnabled: true }), false);
+  assert.equal(isWorkflowOrderChatEnabled({ status: "CANCELLED", chatEnabled: true }), false);
 });
 
 test("derives customer meeting invitation action only from live server workflow state", () => {
