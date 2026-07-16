@@ -255,6 +255,9 @@ export class AuthService {
         host: string;
         port: number;
         secure: boolean;
+        connectionTimeout: number;
+        greetingTimeout: number;
+        socketTimeout: number;
         auth: { user: string; pass: string };
       }) => {
         sendMail: (options: {
@@ -272,13 +275,17 @@ export class AuthService {
         host: 'in-v3.mailjet.com',
         port: 587,
         secure: false,
+        connectionTimeout: 5000,
+        greetingTimeout: 5000,
+        socketTimeout: 10000,
         auth: { user: apiKey, pass: apiSecret },
       });
 
-      for (const fromEmail of senderCandidates) {
+      const smtpFromEmail = senderCandidates[0];
+      if (smtpFromEmail) {
         try {
           await transporter.sendMail({
-            from: `blue AI <${fromEmail}>`,
+            from: `blue AI <${smtpFromEmail}>`,
             to: email,
             subject: 'CBLUE admin login OTP',
             text: `Your CBLUE admin login OTP is ${code}. It expires in a few minutes.`,

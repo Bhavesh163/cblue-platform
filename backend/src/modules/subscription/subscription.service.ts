@@ -911,6 +911,9 @@ export class SubscriptionService {
         host: string;
         port: number;
         secure: boolean;
+        connectionTimeout: number;
+        greetingTimeout: number;
+        socketTimeout: number;
         auth: { user: string; pass: string };
       }) => SmtpTransporter;
     };
@@ -920,33 +923,37 @@ export class SubscriptionService {
         host: 'in-v3.mailjet.com',
         port: 587,
         secure: false,
+        connectionTimeout: 5000,
+        greetingTimeout: 5000,
+        socketTimeout: 10000,
         auth: {
           user: mailjetApiKey,
           pass: mailjetApiSecret,
         },
       });
 
-      for (const fromEmail of fromCandidates) {
+      const smtpFromEmail = fromCandidates[0];
+      if (smtpFromEmail) {
         try {
           await transporter.sendMail({
-            from: `CBLUE <${fromEmail}>`,
+            from: `CBLUE <${smtpFromEmail}>`,
             to: normalizedRecipientEmail,
             subject,
             text: textPart,
             html: htmlPart,
           });
           this.logger.log(
-            `Password reset email sent to ${normalizedRecipientEmail} via Mailjet SMTP (${fromEmail})`,
+            `Password reset email sent to ${normalizedRecipientEmail} via Mailjet SMTP (${smtpFromEmail})`,
           );
           this.logger.log(
             `[BACKUP-LINK] /en/subscription/reset-password?token=${resetToken}`,
           );
-          return { sent: true, path: 'mailjet_smtp', fromEmail };
+          return { sent: true, path: 'mailjet_smtp', fromEmail: smtpFromEmail };
         } catch (smtpError) {
           const smtpErrorText =
             smtpError instanceof Error ? smtpError.message : String(smtpError);
           this.logger.error(
-            `Mailjet SMTP send failed from ${fromEmail}: ${smtpErrorText}`,
+            `Mailjet SMTP send failed from ${smtpFromEmail}: ${smtpErrorText}`,
           );
         }
       }

@@ -184,6 +184,13 @@ describe('AuthService', () => {
         phone: 'suppadesh@hotmail.com',
       });
 
+      expect(nodemailer.createTransport).toHaveBeenCalledWith(
+        expect.objectContaining({
+          connectionTimeout: 5000,
+          greetingTimeout: 5000,
+          socketTimeout: 10000,
+        }),
+      );
       expect(sendMail).toHaveBeenCalledWith(
         expect.objectContaining({
           from: 'blue AI <noreply@lblue.tech>',
