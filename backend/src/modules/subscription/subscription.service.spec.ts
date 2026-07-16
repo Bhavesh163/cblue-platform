@@ -4,10 +4,17 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import * as nodemailer from 'nodemailer';
 
 jest.mock('bcrypt', () => ({
   hash: jest.fn().mockResolvedValue('mock_hash'),
   compare: jest.fn().mockResolvedValue(false),
+}));
+
+jest.mock('nodemailer', () => ({
+  createTransport: jest.fn(() => ({
+    sendMail: jest.fn().mockRejectedValue(new Error('SMTP unavailable')),
+  })),
 }));
 
 type SubscriberMock = {
@@ -97,12 +104,36 @@ describe('SubscriptionService', () => {
 
     service = module.get<SubscriptionService>(SubscriptionService);
     jest.clearAllMocks();
+    (nodemailer.createTransport as jest.Mock).mockReturnValue({
+      sendMail: jest.fn().mockRejectedValue(new Error('SMTP unavailable')),
+    });
     (bcrypt.hash as jest.Mock).mockResolvedValue('mock_hash');
     (bcrypt.compare as jest.Mock).mockResolvedValue(false);
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  it('uses Mailjet SMTP before the REST API for password reset email delivery', async () => {
+    const sendMail = jest.fn().mockResolvedValue({ messageId: 'mail-1' });
+    (nodemailer.createTransport as jest.Mock).mockReturnValue({ sendMail });
+    const fetchSpy = jest.spyOn(global, 'fetch');
+
+    const result = await (service as any).sendResetEmail(
+      'person@example.com',
+      'Person',
+      'reset-token',
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({ sent: true, path: 'mailjet_smtp' }),
+    );
+    expect(sendMail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'person@example.com' }),
+    );
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
   });
 
   describe('register', () => {

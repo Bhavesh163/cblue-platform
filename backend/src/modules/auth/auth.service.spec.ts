@@ -5,6 +5,13 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { RecaptchaService } from './recaptcha.service';
+import * as nodemailer from 'nodemailer';
+
+jest.mock('nodemailer', () => ({
+  createTransport: jest.fn(() => ({
+    sendMail: jest.fn().mockRejectedValue(new Error('SMTP unavailable')),
+  })),
+}));
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -56,6 +63,9 @@ describe('AuthService', () => {
     }).compile();
 
     service = module.get<AuthService>(AuthService);
+    (nodemailer.createTransport as jest.Mock).mockReturnValue({
+      sendMail: jest.fn().mockRejectedValue(new Error('SMTP unavailable')),
+    });
   });
 
   afterEach(() => {
@@ -142,6 +152,48 @@ describe('AuthService', () => {
       expect(prisma.otpCode.findFirst).not.toHaveBeenCalled();
       expect(prisma.otpCode.create).not.toHaveBeenCalled();
     });
+
+    it('uses Mailjet SMTP before the REST API for an approved admin OTP', async () => {
+      prisma.otpCode.findFirst.mockResolvedValue(null);
+      prisma.otpCode.create.mockResolvedValue({ id: 'otp-1' });
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'admin-1',
+        email: 'suppadesh@hotmail.com',
+        role: 'ADMIN',
+        isActive: true,
+      });
+      configService.get.mockImplementation((key: string) => {
+        if (key === 'nodeEnv') return 'production';
+        if (key === 'otp.expiryMinutes') return 5;
+        if (key === 'mailjet.apiKey') return 'mailjet-key';
+        if (key === 'mailjet.apiSecret') return 'mailjet-secret';
+        if (key === 'mailjet.fromEmail') return 'noreply@lblue.tech';
+        return undefined;
+      });
+      const sendMail = jest.fn().mockResolvedValue({ messageId: 'mail-1' });
+      (nodemailer.createTransport as jest.Mock).mockReturnValue({ sendMail });
+      const fetchSpy = jest.spyOn(global, 'fetch');
+
+      await expect(
+        service.sendAdminOtp({
+          email: 'suppadesh@hotmail.com',
+          recaptchaToken: 'captcha-token',
+        }),
+      ).resolves.toEqual({
+        message: 'Admin OTP sent successfully',
+        phone: 'suppadesh@hotmail.com',
+      });
+
+      expect(sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          from: 'blue AI <noreply@lblue.tech>',
+          to: 'suppadesh@hotmail.com',
+        }),
+      );
+      expect(fetchSpy).not.toHaveBeenCalled();
+      fetchSpy.mockRestore();
+    });
+
     it('uses the proven Mailjet sender identity without a sender-status preflight', async () => {
       prisma.otpCode.findFirst.mockResolvedValue(null);
       prisma.otpCode.create.mockResolvedValue({ id: 'otp-1' });

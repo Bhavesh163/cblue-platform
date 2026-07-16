@@ -906,6 +906,58 @@ export class SubscriptionService {
           `;
     const textPart = `Hello ${recipientName},\n\nWe received a request to reset your password for your CBLUE account.\n\nClick the link below to reset your password (valid for 1 hour):\n${resetUrl}\n\nIf you did not request this, please ignore this email.\n\n© ${new Date().getFullYear()} Construction Blue Co., Ltd. All rights reserved.`;
 
+    const smtpTransportFactory = nodemailer as unknown as {
+      createTransport: (options: {
+        host: string;
+        port: number;
+        secure: boolean;
+        auth: { user: string; pass: string };
+      }) => SmtpTransporter;
+    };
+
+    try {
+      const transporter = smtpTransportFactory.createTransport({
+        host: 'in-v3.mailjet.com',
+        port: 587,
+        secure: false,
+        auth: {
+          user: mailjetApiKey,
+          pass: mailjetApiSecret,
+        },
+      });
+
+      for (const fromEmail of fromCandidates) {
+        try {
+          await transporter.sendMail({
+            from: `CBLUE <${fromEmail}>`,
+            to: normalizedRecipientEmail,
+            subject,
+            text: textPart,
+            html: htmlPart,
+          });
+          this.logger.log(
+            `Password reset email sent to ${normalizedRecipientEmail} via Mailjet SMTP (${fromEmail})`,
+          );
+          this.logger.log(
+            `[BACKUP-LINK] /en/subscription/reset-password?token=${resetToken}`,
+          );
+          return { sent: true, path: 'mailjet_smtp', fromEmail };
+        } catch (smtpError) {
+          const smtpErrorText =
+            smtpError instanceof Error ? smtpError.message : String(smtpError);
+          this.logger.error(
+            `Mailjet SMTP send failed from ${fromEmail}: ${smtpErrorText}`,
+          );
+        }
+      }
+    } catch (smtpInitError) {
+      const smtpErrorText =
+        smtpInitError instanceof Error
+          ? smtpInitError.message
+          : String(smtpInitError);
+      this.logger.error(`Mailjet SMTP transport init failed: ${smtpErrorText}`);
+    }
+
     const isSenderConfigError = (errorText: string) => {
       const lower = errorText.toLowerCase();
       return (
@@ -1109,63 +1161,6 @@ export class SubscriptionService {
       }
     }
 
-    const smtpTransportFactory = nodemailer as unknown as {
-      createTransport: (options: {
-        host: string;
-        port: number;
-        secure: boolean;
-        auth: { user: string; pass: string };
-      }) => SmtpTransporter;
-    };
-
-    const transporter = smtpTransportFactory.createTransport({
-      host: 'in-v3.mailjet.com',
-      port: 587,
-      secure: false,
-      auth: {
-        user: mailjetApiKey,
-        pass: mailjetApiSecret,
-      },
-    });
-
-    try {
-      for (const fromEmail of fromCandidates) {
-        try {
-          await transporter.sendMail({
-            from: `CBLUE <${fromEmail}>`,
-            to: normalizedRecipientEmail,
-            subject,
-            text: textPart,
-            html: htmlPart,
-          });
-
-          this.logger.log(
-            `Password reset email sent to ${normalizedRecipientEmail} via Mailjet SMTP (${fromEmail})`,
-          );
-          if (apiError) {
-            this.logger.warn(
-              `Mailjet API path failed before SMTP fallback: ${apiError}`,
-            );
-          }
-          this.logger.log(
-            `[BACKUP-LINK] /en/subscription/reset-password?token=${resetToken}`,
-          );
-          return { sent: true, path: 'mailjet_smtp', fromEmail };
-        } catch (smtpError) {
-          const smtpErrorText =
-            smtpError instanceof Error ? smtpError.message : String(smtpError);
-          this.logger.error(
-            `Mailjet SMTP send failed from ${fromEmail}: ${smtpErrorText}`,
-          );
-        }
-      }
-    } catch (smtpInitError) {
-      const smtpErrorText =
-        smtpInitError instanceof Error
-          ? smtpInitError.message
-          : String(smtpInitError);
-      this.logger.error(`Mailjet SMTP transport init failed: ${smtpErrorText}`);
-    }
 
     this.logger.error(`Password reset email could not be sent to ${normalizedRecipientEmail}`);
     if (apiError) {

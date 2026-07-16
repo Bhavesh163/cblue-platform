@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { webcrypto } from 'crypto';
+import * as nodemailer from 'nodemailer';
 import ms from 'ms';
 import { UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -248,6 +249,50 @@ export class AuthService {
         ].filter(Boolean),
       ),
     );
+
+    const smtpTransportFactory = nodemailer as unknown as {
+      createTransport: (options: {
+        host: string;
+        port: number;
+        secure: boolean;
+        auth: { user: string; pass: string };
+      }) => {
+        sendMail: (options: {
+          from: string;
+          to: string;
+          subject: string;
+          text: string;
+          html: string;
+        }) => Promise<unknown>;
+      };
+    };
+
+    try {
+      const transporter = smtpTransportFactory.createTransport({
+        host: 'in-v3.mailjet.com',
+        port: 587,
+        secure: false,
+        auth: { user: apiKey, pass: apiSecret },
+      });
+
+      for (const fromEmail of senderCandidates) {
+        try {
+          await transporter.sendMail({
+            from: `blue AI <${fromEmail}>`,
+            to: email,
+            subject: 'CBLUE admin login OTP',
+            text: `Your CBLUE admin login OTP is ${code}. It expires in a few minutes.`,
+            html: `<p>Your CBLUE admin login OTP is <strong>${code}</strong>.</p><p>It expires in a few minutes.</p>`,
+          });
+          this.logger.log('Admin OTP email accepted by Mailjet SMTP');
+          return;
+        } catch {
+          this.logger.warn('Admin OTP Mailjet SMTP delivery request failed');
+        }
+      }
+    } catch {
+      this.logger.warn('Admin OTP Mailjet SMTP transport init failed');
+    }
 
     const mailjetHeaders = {
       Authorization:
