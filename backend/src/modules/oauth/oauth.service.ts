@@ -21,8 +21,10 @@ import ms from 'ms';
 import { UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TokenExchangeDto } from './dto/token-exchange.dto';
+import { RefreshSessionService } from '../auth/refresh-session.service';
 
 const TOKEN_EXCHANGE_GRANT = 'urn:ietf:params:oauth:grant-type:token-exchange';
+const REFRESH_TOKEN_GRANT = 'refresh_token';
 const JWT_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:jwt';
 const ACCESS_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:access_token';
 
@@ -69,6 +71,7 @@ export class OauthService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly jwtService: JwtService,
+    private readonly refreshSessions: RefreshSessionService,
   ) {}
 
   discovery() {
@@ -77,7 +80,7 @@ export class OauthService {
       issuer,
       jwks_uri: `${issuer}/oauth/jwks.json`,
       token_endpoint: `${issuer}/oauth/token`,
-      grant_types_supported: [TOKEN_EXCHANGE_GRANT],
+      grant_types_supported: [TOKEN_EXCHANGE_GRANT, REFRESH_TOKEN_GRANT],
       token_endpoint_auth_methods_supported: [
         'client_secret_basic',
         'client_secret_post',
@@ -114,16 +117,23 @@ export class OauthService {
     };
   }
 
+  async token(dto: TokenExchangeDto) {
+    if (dto.grant_type === REFRESH_TOKEN_GRANT) {
+      return this.refreshAccessToken(dto);
+    }
+    return this.exchangeToken(dto);
+  }
+
   async exchangeToken(dto: TokenExchangeDto) {
     this.validateTokenExchangeRequest(dto);
     this.validateClient(dto.client_id || '', dto.client_secret || '');
 
     const allowedAudiences = this.allowedAudiences();
-    if (!allowedAudiences.includes(dto.audience)) {
+    if (!dto.audience || !allowedAudiences.includes(dto.audience)) {
       throw new UnauthorizedException('Invalid audience');
     }
 
-    const blueClaims = await this.verifyBlueSubjectToken(dto.subject_token);
+    const blueClaims = await this.verifyBlueSubjectToken(dto.subject_token || '');
     const user = await this.mapBlueUser(blueClaims);
     const capabilities = this.capabilitiesFor(user);
     const expiresIn = this.accessTokenTtlSeconds();
@@ -137,6 +147,7 @@ export class OauthService {
       issued_token_type: ACCESS_TOKEN_TYPE,
       token_type: 'Bearer',
       expires_in: expiresIn,
+      access_token_expires_at: new Date(Date.now() + expiresIn * 1000).toISOString(),
       scope: capabilities.join(' '),
       subject_id: user.id,
       email: user.email,
@@ -146,32 +157,70 @@ export class OauthService {
     };
 
     if (this.shouldIssueRefreshToken(dto.scope)) {
-      response.refresh_token = await this.jwtService.signAsync(
-        {
-          sub: user.id,
-          email: user.email ?? undefined,
-          phone: user.phone ?? undefined,
-          role: user.role,
-          capabilities,
-        },
-        {
-          secret: this.configService.getOrThrow<string>('jwt.refreshSecret'),
-          expiresIn: this.configService.getOrThrow<ms.StringValue>(
-            'jwt.refreshExpiration',
-          ),
-        },
-      );
+      const refresh = await this.refreshSessions.issue({
+        userId: user.id,
+        clientId: dto.client_id || '',
+        audience: dto.audience,
+      });
+      response.refresh_token = refresh.refreshToken;
+      response.refresh_token_expires_at = refresh.refreshTokenExpiresAt.toISOString();
     }
 
     return response;
+  }
+
+  private async refreshAccessToken(dto: TokenExchangeDto) {
+    this.validateClient(dto.client_id || '', dto.client_secret || '');
+    if (!dto.refresh_token) {
+      throw new BadRequestException('refresh_token is required');
+    }
+    const audience = dto.audience || undefined;
+    if (audience && !this.allowedAudiences().includes(audience)) {
+      throw new UnauthorizedException('Invalid audience');
+    }
+    const rotated = await this.refreshSessions.rotate({
+      refreshToken: dto.refresh_token,
+      clientId: dto.client_id || '',
+      audience,
+    });
+    const user = await this.prisma.user.findUnique({
+      where: { id: rotated.user.id },
+      include: { fixer: true },
+    });
+    if (!user?.isActive) {
+      throw new UnauthorizedException('User is not active');
+    }
+    const effectiveAudience = audience || rotated.session.audience;
+    const capabilities = this.capabilitiesFor(user);
+    const expiresIn = this.accessTokenTtlSeconds();
+    return {
+      access_token: this.signCblueAccessToken(user, capabilities, {
+        audience: effectiveAudience,
+        expiresIn,
+      }),
+      refresh_token: rotated.refreshToken,
+      token_type: 'Bearer',
+      expires_in: expiresIn,
+      access_token_expires_at: new Date(Date.now() + expiresIn * 1000).toISOString(),
+      refresh_token_expires_at: rotated.refreshTokenExpiresAt.toISOString(),
+      scope: capabilities.join(' '),
+      subject_id: user.id,
+      email: user.email,
+      email_verified: Boolean(user.email),
+      display_name: user.name || user.email || user.id,
+      capabilities,
+    };
   }
 
   private validateTokenExchangeRequest(dto: TokenExchangeDto) {
     if (dto.grant_type !== TOKEN_EXCHANGE_GRANT) {
       throw new BadRequestException('Unsupported grant_type');
     }
-    if (dto.subject_token_type !== JWT_TOKEN_TYPE) {
+    if (!dto.subject_token || dto.subject_token_type !== JWT_TOKEN_TYPE) {
       throw new BadRequestException('Unsupported subject_token_type');
+    }
+    if (!dto.audience) {
+      throw new BadRequestException('audience is required');
     }
   }
 

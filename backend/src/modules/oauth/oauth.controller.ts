@@ -31,7 +31,7 @@ export class OauthController {
     @Headers('authorization') authorization?: string,
   ) {
     const basicClient = this.basicClientCredentials(authorization);
-    return this.oauthService.exchangeToken({
+    return this.oauthService.token({
       ...dto,
       client_id: dto.client_id || basicClient?.client_id || '',
       client_secret: dto.client_secret || basicClient?.client_secret || '',

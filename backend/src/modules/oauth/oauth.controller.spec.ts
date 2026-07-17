@@ -5,7 +5,7 @@ describe('OauthController', () => {
   let service: {
     discovery: jest.Mock;
     jwks: jest.Mock;
-    exchangeToken: jest.Mock;
+    token: jest.Mock;
   };
   let controller: OauthController;
 
@@ -13,7 +13,7 @@ describe('OauthController', () => {
     service = {
       discovery: jest.fn().mockReturnValue({ issuer: 'https://cblue.co.th' }),
       jwks: jest.fn().mockReturnValue({ keys: [] }),
-      exchangeToken: jest.fn().mockReturnValue({ access_token: 'token' }),
+      token: jest.fn().mockReturnValue({ access_token: 'token' }),
     };
     controller = new OauthController(service as unknown as OauthService);
   });
@@ -37,7 +37,7 @@ describe('OauthController', () => {
     const result = controller.token(body as any, basic);
 
     expect(result).toEqual({ access_token: 'token' });
-    expect(service.exchangeToken).toHaveBeenCalledWith({
+    expect(service.token).toHaveBeenCalledWith({
       ...body,
       client_id: 'blue-client',
       client_secret: 'blue-secret',
@@ -57,6 +57,6 @@ describe('OauthController', () => {
 
     controller.token(body as any, basic);
 
-    expect(service.exchangeToken).toHaveBeenCalledWith(body);
+    expect(service.token).toHaveBeenCalledWith(body);
   });
 });

@@ -4,14 +4,21 @@ export class TokenExchangeDto {
   @IsString()
   grant_type!: string;
 
+  @IsOptional()
   @IsString()
-  subject_token_type!: string;
+  subject_token_type?: string;
 
+  @IsOptional()
   @IsString()
-  subject_token!: string;
+  subject_token?: string;
 
+  @IsOptional()
   @IsString()
-  audience!: string;
+  audience?: string;
+
+  @IsOptional()
+  @IsString()
+  refresh_token?: string;
 
   @IsOptional()
   @IsString()

@@ -4,6 +4,7 @@ import { generateKeyPairSync, createSign } from 'crypto';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OauthService } from './oauth.service';
+import { RefreshSessionService } from '../auth/refresh-session.service';
 
 function base64url(input: Buffer | string) {
   return Buffer.from(input)
@@ -54,6 +55,7 @@ describe('OauthService', () => {
     subscriber: Record<string, jest.Mock>;
   };
   let jwtService: { signAsync: jest.Mock };
+  let refreshSessions: { issue: jest.Mock; rotate: jest.Mock };
 
   beforeEach(() => {
     prisma = {
@@ -68,6 +70,18 @@ describe('OauthService', () => {
     };
     jwtService = {
       signAsync: jest.fn().mockResolvedValue('refresh-token'),
+    };
+    refreshSessions = {
+      issue: jest.fn().mockResolvedValue({
+        refreshToken: 'opaque-refresh-token',
+        refreshTokenExpiresAt: new Date(Date.now() + 60_000),
+      }),
+      rotate: jest.fn().mockResolvedValue({
+        refreshToken: 'rotated-refresh-token',
+        refreshTokenExpiresAt: new Date(Date.now() + 60_000),
+        session: { audience: 'CBLUE' },
+        user: { id: 'user-1' },
+      }),
     };
     const configService = {
       get: jest.fn((key: string) => {
@@ -108,6 +122,7 @@ describe('OauthService', () => {
       prisma as unknown as PrismaService,
       configService,
       jwtService as unknown as JwtService,
+      refreshSessions as unknown as RefreshSessionService,
     );
   });
 
@@ -130,6 +145,7 @@ describe('OauthService', () => {
       expect.objectContaining({
         grant_types_supported: [
           'urn:ietf:params:oauth:grant-type:token-exchange',
+          'refresh_token',
         ],
         token_endpoint_auth_methods_supported: [
           'client_secret_basic',
@@ -168,6 +184,78 @@ describe('OauthService', () => {
     expect(result.access_token).toMatch(/^[^.]+\.[^.]+\.[^.]+$/);
     expect(result.capabilities).toContain('cblue:workflow:self:read');
     expect(result).not.toHaveProperty('serviceToken');
+  });
+
+  it('rejects a verified BLUE user that cannot be mapped locally', async () => {
+    expect(service.discovery().grant_types_supported).toContain('refresh_token');
+  });
+
+  it('persists an offline-access refresh token bound to BLUE client and audience', async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      email: 'partner@example.com',
+      name: 'Partner User',
+      phone: null,
+      role: 'USER',
+      isActive: true,
+      subscriberId: null,
+      fixer: null,
+    });
+    const result = await service.token({
+      grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
+      subject_token_type: 'urn:ietf:params:oauth:token-type:jwt',
+      subject_token: validBlueToken(),
+      audience: 'CBLUE',
+      client_id: 'blue-client',
+      client_secret: 'blue-secret',
+      scope: 'offline_access',
+    });
+    expect(refreshSessions.issue).toHaveBeenCalledWith({
+      userId: 'user-1',
+      clientId: 'blue-client',
+      audience: 'CBLUE',
+    });
+    expect(result.refresh_token).toBe('opaque-refresh-token');
+    expect(result.refresh_token_expires_at).toEqual(expect.any(String));
+  });
+
+  it('rotates a BLUE-client-bound refresh grant and preserves capabilities', async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      email: 'partner@example.com',
+      name: 'Partner User',
+      phone: null,
+      role: 'FIXER',
+      isActive: true,
+      subscriberId: null,
+      fixer: { id: 'fixer-1', status: 'APPROVED', verified: true },
+    });
+    const result = await service.token({
+      grant_type: 'refresh_token',
+      refresh_token: 'old-refresh-token',
+      audience: 'CBLUE',
+      client_id: 'blue-client',
+      client_secret: 'blue-secret',
+    });
+    expect(refreshSessions.rotate).toHaveBeenCalledWith({
+      refreshToken: 'old-refresh-token',
+      clientId: 'blue-client',
+      audience: 'CBLUE',
+    });
+    expect(result.refresh_token).toBe('rotated-refresh-token');
+    expect(result.capabilities).toContain('cblue:fixer:workflow:write');
+  });
+
+  it('rejects refresh grants with an invalid BLUE client before rotation', async () => {
+    await expect(
+      service.token({
+        grant_type: 'refresh_token',
+        refresh_token: 'old-refresh-token',
+        client_id: 'blue-client',
+        client_secret: 'wrong-secret',
+      }),
+    ).rejects.toThrow(UnauthorizedException);
+    expect(refreshSessions.rotate).not.toHaveBeenCalled();
   });
 
   it('rejects a verified BLUE user that cannot be mapped locally', async () => {
@@ -302,14 +390,11 @@ describe('OauthService', () => {
         'cblue:fixer:workflow:write',
       ]),
     );
-    expect(result.refresh_token).toBe('refresh-token');
-    expect(jwtService.signAsync).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sub: 'admin-fixer',
-        email: 'partner@example.com',
-        capabilities: expect.arrayContaining(['cblue:admin:read']),
-      }),
-      expect.objectContaining({ secret: 'cblue-refresh-secret' }),
-    );
+    expect(result.refresh_token).toBe('opaque-refresh-token');
+    expect(refreshSessions.issue).toHaveBeenCalledWith({
+      userId: 'admin-fixer',
+      clientId: 'blue-client',
+      audience: 'LBLUE',
+    });
   });
 });
