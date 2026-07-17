@@ -4,7 +4,7 @@
 
 **Goal:** Persist and expose authoritative fixer Step 8 meeting details, project customers and partners into the correct activity buckets, render the persisted invitation in the partner modal, and prove terminal property workflows remain in history.
 
-**Architecture:** Store the current meeting snapshot on `Order` while retaining `FixerWorkflowAction.payload` as the audit record. Port the existing unmerged CBLUE activity/chat bridge onto current `main`, then make the workflow projection persona-aware so phase-owned actions determine requests while cancellation remains a secondary capability. The web partner modal consumes server fields through a small pure mapping helper and renders flexible full-width rows.
+**Architecture:** Store the current meeting snapshot on `Order` while retaining `FixerWorkflowAction.payload` as the audit record. Extend the existing CBLUE activity/chat bridge on current `origin/main`, then make the workflow projection persona-aware so phase-owned actions determine requests while cancellation remains a secondary capability. The web partner modal consumes server fields through a small pure mapping helper and renders flexible full-width rows.
 
 **Tech Stack:** NestJS, Prisma/PostgreSQL, Jest, Next.js/React, TypeScript, Node test runner.
 
@@ -127,9 +127,9 @@ npm test -- --runInBand src/modules/blue-bridge/blue-bridge.controller.spec.ts s
 
 Expected: FAIL because current `main` lacks workflow activities and meeting/subdistrict response fields.
 
-- [ ] **Step 3: Port the existing activity/chat bridge**
+- [ ] **Step 3: Extend the existing activity/chat bridge**
 
-Use commit `3770d54` as the working reference, but adapt it to current `main` rather than replacing newer lifecycle, refresh-token, processing-fee, or chat-enabled behavior. Preserve bridge-key checks and participant visibility.
+Modify the implementation already present on current `origin/main`. Preserve bridge-key checks, participant visibility, lifecycle filtering, refresh-token work, processing-fee fields, and chat-enabled behavior.
 
 - [ ] **Step 4: Read authoritative meeting and subdistrict fields**
 

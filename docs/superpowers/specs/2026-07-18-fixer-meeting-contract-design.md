@@ -17,7 +17,7 @@ Make CBLUE the authoritative source for fixer Step 8 meeting details and persona
 
 The fixer action endpoint currently stores Step 8 meeting values only in `FixerWorkflowAction.payload`. `Order` has no authoritative meeting columns, and the current workflow detail snapshot does not read the payload. The partner page therefore relies on text parsing and browser-state fallbacks.
 
-The authoritative activity endpoint was implemented on an older CBLUE branch but is absent from current `main`. Its shared `MEETING_CONFIRM` definition also assigns `activityBucket: request` to both personas. Because `customer-cancel` is appended to every non-terminal phase, a customer can see cancellation as the only and therefore primary Step 8 request action.
+The authoritative activity endpoint exists on current `origin/main`; the local dirty `main` checkout was stale during the initial inspection. Its shared `MEETING_CONFIRM` definition assigns `activityBucket: request` to both personas. Because `customer-cancel` is appended to every non-terminal phase, a customer can see cancellation as the only and therefore primary Step 8 request action.
 
 ## Architecture
 
@@ -36,7 +36,7 @@ Existing orders may have meeting values only in action-event payloads. The bridg
 
 ### Authoritative bridge contract
 
-Port the existing CBLUE `GET /api/v1/blue/workflow-activities` and fixer chat bridge implementation onto current `main`, adapting it to the latest lifecycle and refresh-token work already present.
+Extend the existing CBLUE `GET /api/v1/blue/workflow-activities` and fixer chat bridge implementation on current `origin/main`, preserving its lifecycle, refresh-token, processing-fee, and chat behavior.
 
 Both `GET /api/v1/blue/workflow-activities` and `GET /api/v1/blue/workflow-details/:poNumber` will return:
 
