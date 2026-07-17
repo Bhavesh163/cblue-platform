@@ -7,6 +7,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { RecaptchaService } from './recaptcha.service';
+import { RefreshSessionService } from './refresh-session.service';
 
 @Module({
   imports: [
@@ -25,7 +26,7 @@ import { RecaptchaService } from './recaptcha.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, RecaptchaService],
-  exports: [AuthService, JwtModule],
+  providers: [AuthService, JwtStrategy, RecaptchaService, RefreshSessionService],
+  exports: [AuthService, JwtModule, RefreshSessionService],
 })
 export class AuthModule {}
