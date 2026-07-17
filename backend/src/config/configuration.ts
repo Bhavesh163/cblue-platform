@@ -12,6 +12,10 @@ export default () => ({
       'dev-refresh-secret-change-in-production',
     refreshExpiration: process.env.JWT_REFRESH_EXPIRATION || '7d',
   },
+  auth: {
+    firstPartyClientId: process.env.CBLUE_AUTH_CLIENT_ID || 'cblue-web',
+    firstPartyAudience: process.env.CBLUE_AUTH_AUDIENCE || 'CBLUE',
+  },
   redis: {
     host: process.env.REDIS_HOST || 'localhost',
     port: parseInt(process.env.REDIS_PORT ?? '6379', 10),

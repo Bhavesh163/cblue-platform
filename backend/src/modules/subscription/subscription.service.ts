@@ -15,6 +15,7 @@ import { ForgotPasswordDto, ResetPasswordDto } from './dto/forgot-password.dto';
 import * as nodemailer from 'nodemailer';
 
 import * as crypto from 'crypto';
+import { RefreshSessionService } from '../auth/refresh-session.service';
 
 type SessionJwtPayload = {
   sub?: string;
@@ -50,10 +51,6 @@ type ForgotPasswordServiceResponse = {
 
 @Injectable()
 export class SubscriptionService {
-  // How long after a 24h access token expires it may still be exchanged for a
-  // fresh one via refresh-session (sliding session). 30 days keeps returning
-  // users logged in without forcing a re-login on every visit.
-  private static readonly REFRESH_GRACE_SECONDS = 30 * 24 * 60 * 60;
 
   private readonly logger = new Logger(SubscriptionService.name);
   private readonly SALT_ROUNDS = 12;
@@ -62,6 +59,7 @@ export class SubscriptionService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private refreshSessions: RefreshSessionService,
   ) {}
 
   private normalizeEmail(value?: string | null) {
@@ -176,14 +174,14 @@ export class SubscriptionService {
       return { subscriber, user };
     });
 
-    const token = await this.generateToken(
+    const tokens = await this.generateTokenBundle(
       user.id,
       subscriber.email,
       subscriber.phone,
     );
 
     return {
-      accessToken: token,
+      ...tokens,
       subscriber: {
         id: subscriber.id,
         email: subscriber.email,
@@ -227,14 +225,14 @@ export class SubscriptionService {
       throw new UnauthorizedException('Could not resolve your account session');
     }
 
-    const token = await this.generateToken(
+    const tokens = await this.generateTokenBundle(
       user.id,
       subscriber.email,
       subscriber.phone,
     );
 
     return {
-      accessToken: token,
+      ...tokens,
       subscriber: {
         id: subscriber.id,
         email: subscriber.email,
@@ -255,13 +253,9 @@ export class SubscriptionService {
 
     let payload: SessionJwtPayload;
     try {
-      // Sliding session: accept a still-valid token, OR one whose 24h window
-      // has lapsed, so a returning user is not silently logged out. The token
-      // signature must still be valid (forgery is rejected) and the account is
-      // re-validated against the DB below, so security is preserved.
       payload = await this.jwtService.verifyAsync<SessionJwtPayload>(token, {
         secret: this.configService.getOrThrow<string>('jwt.secret'),
-        ignoreExpiration: true,
+        ignoreExpiration: false,
       });
     } catch (error) {
       this.logger.warn(
@@ -270,15 +264,6 @@ export class SubscriptionService {
       throw new UnauthorizedException('Session expired. Please log in again.');
     }
 
-    // Bound the sliding window: a token expired more than 30 days ago cannot be
-    // refreshed and must re-authenticate. Tokens within the grace window slide.
-    if (typeof payload.exp === 'number') {
-      const nowSeconds = Math.floor(Date.now() / 1000);
-      const expiredForSeconds = nowSeconds - payload.exp;
-      if (expiredForSeconds > SubscriptionService.REFRESH_GRACE_SECONDS) {
-        throw new UnauthorizedException('Session expired. Please log in again.');
-      }
-    }
 
     const user = await this.resolveBridgedUserFromPayload(payload);
     if (!user || !user.isActive) {
@@ -579,6 +564,29 @@ export class SubscriptionService {
         expiresIn: '24h',
       },
     );
+  }
+
+  private async generateTokenBundle(
+    userId: string,
+    email: string,
+    phone?: string | null,
+  ) {
+    const accessToken = await this.generateToken(userId, email, phone);
+    const accessTokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const refresh = await this.refreshSessions.issue({
+      userId,
+      clientId:
+        this.configService.get<string>('auth.firstPartyClientId') || 'cblue-web',
+      audience:
+        this.configService.get<string>('auth.firstPartyAudience') || 'CBLUE',
+    });
+    return {
+      accessToken,
+      refreshToken: refresh.refreshToken,
+      accessTokenExpiresAt: accessTokenExpiresAt.toISOString(),
+      refreshTokenExpiresAt: refresh.refreshTokenExpiresAt.toISOString(),
+      tokenType: 'Bearer' as const,
+    };
   }
 
   private async findSubscriberByIdentity(

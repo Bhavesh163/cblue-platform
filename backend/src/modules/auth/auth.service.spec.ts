@@ -6,6 +6,7 @@ import { ConfigService } from '@nestjs/config';
 import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { RecaptchaService } from './recaptcha.service';
 import * as nodemailer from 'nodemailer';
+import { RefreshSessionService } from './refresh-session.service';
 
 jest.mock('nodemailer', () => ({
   createTransport: jest.fn(() => ({
@@ -22,6 +23,11 @@ describe('AuthService', () => {
   let jwtService: { signAsync: jest.Mock; verify: jest.Mock };
   let configService: { get: jest.Mock; getOrThrow: jest.Mock };
   let recaptchaService: { verify: jest.Mock };
+  let refreshSessions: {
+    issue: jest.Mock;
+    rotate: jest.Mock;
+    revokeFamily: jest.Mock;
+  };
 
   beforeEach(async () => {
     prisma = {
@@ -51,6 +57,28 @@ describe('AuthService', () => {
     recaptchaService = {
       verify: jest.fn().mockResolvedValue(undefined),
     };
+    refreshSessions = {
+      issue: jest.fn().mockResolvedValue({
+        refreshToken: 'mock-refresh-token',
+        refreshTokenExpiresAt: new Date(Date.now() + 60_000),
+      }),
+      rotate: jest.fn(({ refreshToken }) =>
+        refreshToken === 'bad-token'
+          ? Promise.reject(new UnauthorizedException('Invalid refresh token'))
+          : Promise.resolve({
+              refreshToken: 'rotated-refresh-token',
+              refreshTokenExpiresAt: new Date(Date.now() + 60_000),
+              user: {
+                id: 'user-1',
+                phone: '+66812345678',
+                email: 'user@example.com',
+                role: 'USER',
+                isActive: true,
+              },
+            }),
+      ),
+      revokeFamily: jest.fn().mockResolvedValue(undefined),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -59,6 +87,7 @@ describe('AuthService', () => {
         { provide: JwtService, useValue: jwtService },
         { provide: ConfigService, useValue: configService },
         { provide: RecaptchaService, useValue: recaptchaService },
+        { provide: RefreshSessionService, useValue: refreshSessions },
       ],
     }).compile();
 
@@ -625,7 +654,10 @@ describe('AuthService', () => {
       });
 
       expect(result.accessToken).toBe('mock-token');
-      expect(result.refreshToken).toBe('mock-token');
+      expect(result.refreshToken).toBe('rotated-refresh-token');
+      expect(result.accessTokenExpiresAt).toEqual(expect.any(String));
+      expect(result.refreshTokenExpiresAt).toEqual(expect.any(String));
+      expect(result.tokenType).toBe('Bearer');
     });
   });
 });

@@ -5,6 +5,7 @@ import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { SendAdminOtpDto } from './dto/send-admin-otp.dto';
 import { VerifyAdminOtpDto } from './dto/verify-admin-otp.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { LogoutDto } from './dto/logout.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -38,5 +39,11 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   refreshToken(@Body() dto: RefreshTokenDto) {
     return this.authService.refreshToken(dto);
+  }
+
+  @Post('logout')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async logout(@Body() dto: LogoutDto) {
+    await this.authService.logout(dto);
   }
 }

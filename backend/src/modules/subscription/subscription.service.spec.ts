@@ -5,6 +5,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import * as nodemailer from 'nodemailer';
+import { RefreshSessionService } from '../auth/refresh-session.service';
 
 jest.mock('bcrypt', () => ({
   hash: jest.fn().mockResolvedValue('mock_hash'),
@@ -92,6 +93,15 @@ describe('SubscriptionService', () => {
         SubscriptionService,
         { provide: PrismaService, useValue: prismaService },
         { provide: JwtService, useValue: jwtService },
+        {
+          provide: RefreshSessionService,
+          useValue: {
+            issue: jest.fn().mockResolvedValue({
+              refreshToken: 'test_refresh_token',
+              refreshTokenExpiresAt: new Date(Date.now() + 60_000),
+            }),
+          },
+        },
         {
           provide: ConfigService,
           useValue: {
@@ -347,12 +357,12 @@ describe('SubscriptionService', () => {
       ).rejects.toThrow('Session expired. Please log in again.');
     });
 
-    it('refreshes a recently-expired token within the sliding window', async () => {
-      const recentlyExpiredSeconds = Math.floor(Date.now() / 1000) - 60 * 60;
+    it('refreshes only a currently valid access token for compatibility', async () => {
+      const validUntil = Math.floor(Date.now() / 1000) + 60 * 60;
       jwtService.verifyAsync.mockResolvedValue({
         sub: 'user-1',
         email: 'ghis@example.com',
-        exp: recentlyExpiredSeconds,
+        exp: validUntil,
       });
       prismaService.user.findUnique.mockResolvedValue({
         id: 'user-1',
@@ -375,6 +385,10 @@ describe('SubscriptionService', () => {
 
       expect(result.accessToken).toBe('test_token');
       expect(result.subscriber.id).toBe('sub-1');
+      expect(jwtService.verifyAsync).toHaveBeenCalledWith(
+        'recent-token',
+        expect.objectContaining({ ignoreExpiration: false }),
+      );
     });
   });
 });
