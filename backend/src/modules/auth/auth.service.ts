@@ -105,13 +105,13 @@ export class AuthService {
       try {
         await this.sendAdminOtpEmail(delivery.email, code);
       } catch (error) {
-        await this.prisma.otpCode.delete({ where: { id: otpRecord.id } }).catch(
-          () => {
+        await this.prisma.otpCode
+          .delete({ where: { id: otpRecord.id } })
+          .catch(() => {
             this.logger.warn(
               'Admin OTP delivery failed and its OTP record could not be removed',
             );
-          },
-        );
+          });
         throw error;
       }
     } else if (this.configService.get('nodeEnv') === 'development') {
@@ -332,9 +332,7 @@ export class AuthService {
 
         if (
           response.ok &&
-          messageStatuses.some((status) =>
-            ['success', 'sent'].includes(status),
-          )
+          messageStatuses.some((status) => ['success', 'sent'].includes(status))
         ) {
           return;
         }
@@ -378,11 +376,12 @@ export class AuthService {
             Messages?: unknown;
           };
           const sent = Number(parsed.Sent || 0);
-          sentCount = Number.isFinite(sent) && sent > 0
-            ? sent
-            : Array.isArray(parsed.Messages)
-              ? parsed.Messages.length
-              : 0;
+          sentCount =
+            Number.isFinite(sent) && sent > 0
+              ? sent
+              : Array.isArray(parsed.Messages)
+                ? parsed.Messages.length
+                : 0;
         } catch {
           sentCount = 0;
         }
@@ -436,7 +435,12 @@ export class AuthService {
   }
 
   private async tokenBundle(
-    user: { id: string; phone: string | null; email: string | null; role: string },
+    user: {
+      id: string;
+      phone: string | null;
+      email: string | null;
+      role: string;
+    },
     refresh: { refreshToken: string; refreshTokenExpiresAt: Date },
   ) {
     const expiration =
@@ -462,7 +466,9 @@ export class AuthService {
   }
 
   private firstPartyClientId() {
-    return this.configService.get<string>('auth.firstPartyClientId') || 'cblue-web';
+    return (
+      this.configService.get<string>('auth.firstPartyClientId') || 'cblue-web'
+    );
   }
 
   private firstPartyAudience() {

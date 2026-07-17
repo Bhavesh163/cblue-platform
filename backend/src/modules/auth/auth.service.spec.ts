@@ -137,31 +137,34 @@ describe('AuthService', () => {
       'suppadesh@hotmail.com',
       'ghiscafe@gmail.com',
       'bhaveshfung@gmail.com',
-    ])('should verify reCAPTCHA before sending an approved admin OTP for %s', async (email) => {
-      prisma.otpCode.findFirst.mockResolvedValue(null);
-      prisma.otpCode.create.mockResolvedValue({ id: 'otp-1' });
-      prisma.user.findUnique.mockResolvedValue({
-        id: 'admin-1',
-        email,
-        role: 'ADMIN',
-        isActive: true,
-      });
+    ])(
+      'should verify reCAPTCHA before sending an approved admin OTP for %s',
+      async (email) => {
+        prisma.otpCode.findFirst.mockResolvedValue(null);
+        prisma.otpCode.create.mockResolvedValue({ id: 'otp-1' });
+        prisma.user.findUnique.mockResolvedValue({
+          id: 'admin-1',
+          email,
+          role: 'ADMIN',
+          isActive: true,
+        });
 
-      await service.sendAdminOtp({
-        email: email.toUpperCase(),
-        recaptchaToken: 'captcha-token',
-      });
+        await service.sendAdminOtp({
+          email: email.toUpperCase(),
+          recaptchaToken: 'captcha-token',
+        });
 
-      expect(recaptchaService.verify).toHaveBeenCalledWith(
-        'captcha-token',
-        'admin_login',
-      );
-      expect(prisma.otpCode.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ phone: email }),
-        }),
-      );
-    });
+        expect(recaptchaService.verify).toHaveBeenCalledWith(
+          'captcha-token',
+          'admin_login',
+        );
+        expect(prisma.otpCode.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({ phone: email }),
+          }),
+        );
+      },
+    );
 
     it('should reject an unapproved active ADMIN before creating an OTP', async () => {
       prisma.user.findUnique.mockResolvedValue({
@@ -253,13 +256,17 @@ describe('AuthService', () => {
         status: 200,
         text: jest
           .fn()
-          .mockResolvedValue(JSON.stringify({ Messages: [{ Status: 'success' }] })),
+          .mockResolvedValue(
+            JSON.stringify({ Messages: [{ Status: 'success' }] }),
+          ),
       } as Response);
 
-      await expect(service.sendAdminOtp({
-        email: 'suppadesh@hotmail.com',
-        recaptchaToken: 'captcha-token',
-      })).resolves.toEqual({
+      await expect(
+        service.sendAdminOtp({
+          email: 'suppadesh@hotmail.com',
+          recaptchaToken: 'captcha-token',
+        }),
+      ).resolves.toEqual({
         message: 'Admin OTP sent successfully',
         phone: 'suppadesh@hotmail.com',
       });
@@ -271,9 +278,11 @@ describe('AuthService', () => {
           body: expect.stringContaining('noreply@lblue.tech'),
         }),
       );
-      expect(fetchSpy.mock.calls[0][1]).toEqual(expect.objectContaining({
-        body: expect.stringContaining('blue AI'),
-      }));
+      expect(fetchSpy.mock.calls[0][1]).toEqual(
+        expect.objectContaining({
+          body: expect.stringContaining('blue AI'),
+        }),
+      );
       expect(fetchSpy).not.toHaveBeenCalledWith(
         expect.stringContaining('/v3/REST/sender'),
         expect.anything(),
@@ -305,7 +314,9 @@ describe('AuthService', () => {
           status: 200,
           text: jest
             .fn()
-            .mockResolvedValue(JSON.stringify({ Messages: [{ Status: 'queued' }] })),
+            .mockResolvedValue(
+              JSON.stringify({ Messages: [{ Status: 'queued' }] }),
+            ),
         } as Response)
         .mockResolvedValueOnce({
           ok: false,
@@ -365,7 +376,9 @@ describe('AuthService', () => {
           status: 200,
           text: jest
             .fn()
-            .mockResolvedValue(JSON.stringify({ Messages: [{ Status: 'success' }] })),
+            .mockResolvedValue(
+              JSON.stringify({ Messages: [{ Status: 'success' }] }),
+            ),
         } as Response);
 
       await expect(
@@ -461,13 +474,11 @@ describe('AuthService', () => {
         if (key === 'mailjet.fromEmail') return 'unverified@example.com';
         return undefined;
       });
-      const fetchSpy = jest
-        .spyOn(global, 'fetch')
-        .mockResolvedValueOnce({
-          ok: false,
-          status: 401,
-          text: jest.fn().mockResolvedValue('invalid credentials'),
-        } as Response);
+      const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        text: jest.fn().mockResolvedValue('invalid credentials'),
+      } as Response);
 
       await expect(
         service.sendAdminOtp({
@@ -481,7 +492,6 @@ describe('AuthService', () => {
       });
       fetchSpy.mockRestore();
     });
-
   });
 
   describe('verifyOtp', () => {
@@ -658,6 +668,14 @@ describe('AuthService', () => {
       expect(result.accessTokenExpiresAt).toEqual(expect.any(String));
       expect(result.refreshTokenExpiresAt).toEqual(expect.any(String));
       expect(result.tokenType).toBe('Bearer');
+    });
+
+    it('revokes the refresh-token family on logout', async () => {
+      await service.logout({ refreshToken: 'current-refresh-token' });
+      expect(refreshSessions.revokeFamily).toHaveBeenCalledWith(
+        'current-refresh-token',
+        'logout',
+      );
     });
   });
 });

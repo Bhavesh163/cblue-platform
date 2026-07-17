@@ -278,7 +278,14 @@ describe('BLUE workflow production contracts', () => {
       10,
       'active',
     ],
-    ['RATING', 'COMPLETED', 'customer-1', ['rate-partner', 'customer-cancel'], 11, 'active'],
+    [
+      'RATING',
+      'COMPLETED',
+      'customer-1',
+      ['rate-partner', 'customer-cancel'],
+      11,
+      'active',
+    ],
     ['RATING', 'COMPLETED', 'partner-1', ['rate-customer'], 11, 'active'],
     ['TERMINAL', 'CANCELLED', 'customer-1', [], 11, 'history'],
   ])(
@@ -441,6 +448,11 @@ describe('BLUE workflow production contracts', () => {
         currentStep: 6,
         status: 'IN_PROGRESS',
         chat: { enabled: false },
+        processingFee: {
+          amount: 100,
+          currency: 'THB',
+          displayLabel: '฿100',
+        },
       }),
     );
 

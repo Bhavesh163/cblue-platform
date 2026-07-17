@@ -1,7 +1,7 @@
 import { UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { generateKeyPairSync, createSign } from 'crypto';
-import { JwtService } from '@nestjs/jwt';
+
 import { PrismaService } from '../../prisma/prisma.service';
 import { OauthService } from './oauth.service';
 import { RefreshSessionService } from '../auth/refresh-session.service';
@@ -54,7 +54,6 @@ describe('OauthService', () => {
     user: Record<string, jest.Mock>;
     subscriber: Record<string, jest.Mock>;
   };
-  let jwtService: { signAsync: jest.Mock };
   let refreshSessions: { issue: jest.Mock; rotate: jest.Mock };
 
   beforeEach(() => {
@@ -67,9 +66,6 @@ describe('OauthService', () => {
       subscriber: {
         findUnique: jest.fn(),
       },
-    };
-    jwtService = {
-      signAsync: jest.fn().mockResolvedValue('refresh-token'),
     };
     refreshSessions = {
       issue: jest.fn().mockResolvedValue({
@@ -121,7 +117,6 @@ describe('OauthService', () => {
     service = new OauthService(
       prisma as unknown as PrismaService,
       configService,
-      jwtService as unknown as JwtService,
       refreshSessions as unknown as RefreshSessionService,
     );
   });
@@ -187,7 +182,19 @@ describe('OauthService', () => {
   });
 
   it('rejects a verified BLUE user that cannot be mapped locally', async () => {
-    expect(service.discovery().grant_types_supported).toContain('refresh_token');
+    prisma.user.findUnique.mockResolvedValue(null);
+    prisma.subscriber.findUnique.mockResolvedValue(null);
+
+    await expect(
+      service.exchangeToken({
+        grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
+        subject_token_type: 'urn:ietf:params:oauth:token-type:jwt',
+        subject_token: validBlueToken(),
+        audience: 'CBLUE',
+        client_id: 'blue-client',
+        client_secret: 'blue-secret',
+      }),
+    ).rejects.toThrow(UnauthorizedException);
   });
 
   it('persists an offline-access refresh token bound to BLUE client and audience', async () => {

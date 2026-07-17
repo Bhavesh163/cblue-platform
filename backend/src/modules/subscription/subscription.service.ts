@@ -32,7 +32,11 @@ type BridgeSubscriber = {
   company: string | null;
 };
 
-type ResetEmailDeliveryPath = 'mailjet_v31' | 'mailjet_v3' | 'mailjet_smtp' | 'none';
+type ResetEmailDeliveryPath =
+  | 'mailjet_v31'
+  | 'mailjet_v3'
+  | 'mailjet_smtp'
+  | 'none';
 
 type ResetEmailSendResult = {
   sent: boolean;
@@ -51,7 +55,6 @@ type ForgotPasswordServiceResponse = {
 
 @Injectable()
 export class SubscriptionService {
-
   private readonly logger = new Logger(SubscriptionService.name);
   private readonly SALT_ROUNDS = 12;
 
@@ -200,8 +203,9 @@ export class SubscriptionService {
     }
 
     const password = String(dto.password || '');
-    const passwordCandidates = Array.from(new Set([password, password.trim()]))
-      .filter(Boolean);
+    const passwordCandidates = Array.from(
+      new Set([password, password.trim()]),
+    ).filter(Boolean);
     const isValid = await passwordCandidates.reduce(
       async (matchedPromise, candidate) =>
         (await matchedPromise) ||
@@ -264,7 +268,6 @@ export class SubscriptionService {
       throw new UnauthorizedException('Session expired. Please log in again.');
     }
 
-
     const user = await this.resolveBridgedUserFromPayload(payload);
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Session expired. Please log in again.');
@@ -323,7 +326,9 @@ export class SubscriptionService {
     };
   }
 
-  async forgotPassword(dto: ForgotPasswordDto): Promise<ForgotPasswordServiceResponse> {
+  async forgotPassword(
+    dto: ForgotPasswordDto,
+  ): Promise<ForgotPasswordServiceResponse> {
     const traceId = crypto.randomUUID();
     const genericMessage = 'If the email exists, a reset link has been sent.';
     const normalizedEmail = this.normalizeEmail(dto.email);
@@ -576,7 +581,8 @@ export class SubscriptionService {
     const refresh = await this.refreshSessions.issue({
       userId,
       clientId:
-        this.configService.get<string>('auth.firstPartyClientId') || 'cblue-web',
+        this.configService.get<string>('auth.firstPartyClientId') ||
+        'cblue-web',
       audience:
         this.configService.get<string>('auth.firstPartyAudience') || 'CBLUE',
     });
@@ -844,9 +850,8 @@ export class SubscriptionService {
     const configuredFromEmail =
       this.configService.get<string>('mailjet.fromEmail') ||
       'noreply@lblue.tech';
-    const normalizedConfiguredFromEmail = normalizeConfigString(
-      configuredFromEmail,
-    );
+    const normalizedConfiguredFromEmail =
+      normalizeConfigString(configuredFromEmail);
     const fromCandidates = Array.from(
       new Set(
         [
@@ -1176,8 +1181,9 @@ export class SubscriptionService {
       }
     }
 
-
-    this.logger.error(`Password reset email could not be sent to ${normalizedRecipientEmail}`);
+    this.logger.error(
+      `Password reset email could not be sent to ${normalizedRecipientEmail}`,
+    );
     if (apiError) {
       this.logger.error(`Last Mailjet API error: ${apiError}`);
     }

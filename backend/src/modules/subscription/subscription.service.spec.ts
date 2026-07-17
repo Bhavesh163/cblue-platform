@@ -175,6 +175,9 @@ describe('SubscriptionService', () => {
       });
 
       expect(result).toHaveProperty('accessToken');
+      expect(result).toHaveProperty('refreshToken', 'test_refresh_token');
+      expect(result.accessTokenExpiresAt).toEqual(expect.any(String));
+      expect(result.refreshTokenExpiresAt).toEqual(expect.any(String));
       expect(result).toHaveProperty('subscriber');
     });
 
@@ -260,6 +263,7 @@ describe('SubscriptionService', () => {
       });
 
       expect(result).toHaveProperty('accessToken', 'test_token');
+      expect(result).toHaveProperty('refreshToken', 'test_refresh_token');
       expect(prismaService.user.create).toHaveBeenCalledTimes(2);
       expect(prismaService.user.create).toHaveBeenNthCalledWith(2, {
         data: {
@@ -273,7 +277,9 @@ describe('SubscriptionService', () => {
     });
 
     it('should recover login when subscriber email has stored whitespace and password input has surrounding whitespace', async () => {
-      (bcrypt.compare as jest.Mock).mockImplementation(async (password) => password === 'correct-password');
+      (bcrypt.compare as jest.Mock).mockImplementation(
+        async (password) => password === 'correct-password',
+      );
       prismaService.subscriber.findUnique.mockResolvedValue(null);
       prismaService.subscriber.findFirst
         .mockResolvedValueOnce(null)

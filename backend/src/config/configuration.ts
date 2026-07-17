@@ -82,6 +82,10 @@ export default () => ({
   blueBridge: {
     apiKey: process.env.CBLUE_BRIDGE_API_KEY || '',
   },
+  processingFee: {
+    amount: parseInt(process.env.CBLUE_PROCESSING_FEE_AMOUNT ?? '100', 10),
+    currency: process.env.CBLUE_PROCESSING_FEE_CURRENCY || 'THB',
+  },
   oauth: {
     issuer:
       process.env.CBLUE_OAUTH_ISSUER ||

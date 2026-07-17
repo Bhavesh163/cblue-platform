@@ -4,7 +4,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
+
 import {
   createHash,
   createHmac,
@@ -17,7 +17,7 @@ import {
   timingSafeEqual,
   type JsonWebKey as CryptoJsonWebKey,
 } from 'crypto';
-import ms from 'ms';
+
 import { UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TokenExchangeDto } from './dto/token-exchange.dto';
@@ -50,7 +50,7 @@ type OAuthUser = {
   email: string | null;
   phone: string | null;
   name: string | null;
-  role: UserRole | string;
+  role: UserRole;
   isActive: boolean;
   subscriberId: string | null;
   fixer?: {
@@ -70,7 +70,6 @@ export class OauthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
-    private readonly jwtService: JwtService,
     private readonly refreshSessions: RefreshSessionService,
   ) {}
 
@@ -133,7 +132,9 @@ export class OauthService {
       throw new UnauthorizedException('Invalid audience');
     }
 
-    const blueClaims = await this.verifyBlueSubjectToken(dto.subject_token || '');
+    const blueClaims = await this.verifyBlueSubjectToken(
+      dto.subject_token || '',
+    );
     const user = await this.mapBlueUser(blueClaims);
     const capabilities = this.capabilitiesFor(user);
     const expiresIn = this.accessTokenTtlSeconds();
@@ -147,7 +148,9 @@ export class OauthService {
       issued_token_type: ACCESS_TOKEN_TYPE,
       token_type: 'Bearer',
       expires_in: expiresIn,
-      access_token_expires_at: new Date(Date.now() + expiresIn * 1000).toISOString(),
+      access_token_expires_at: new Date(
+        Date.now() + expiresIn * 1000,
+      ).toISOString(),
       scope: capabilities.join(' '),
       subject_id: user.id,
       email: user.email,
@@ -163,7 +166,8 @@ export class OauthService {
         audience: dto.audience,
       });
       response.refresh_token = refresh.refreshToken;
-      response.refresh_token_expires_at = refresh.refreshTokenExpiresAt.toISOString();
+      response.refresh_token_expires_at =
+        refresh.refreshTokenExpiresAt.toISOString();
     }
 
     return response;
@@ -201,7 +205,9 @@ export class OauthService {
       refresh_token: rotated.refreshToken,
       token_type: 'Bearer',
       expires_in: expiresIn,
-      access_token_expires_at: new Date(Date.now() + expiresIn * 1000).toISOString(),
+      access_token_expires_at: new Date(
+        Date.now() + expiresIn * 1000,
+      ).toISOString(),
       refresh_token_expires_at: rotated.refreshTokenExpiresAt.toISOString(),
       scope: capabilities.join(' '),
       subject_id: user.id,
@@ -384,12 +390,12 @@ export class OauthService {
       'cblue:orders:self:read',
     ]);
 
-    if (user.role === UserRole.ADMIN || user.role === 'ADMIN') {
+    if (user.role === UserRole.ADMIN) {
       capabilities.add('cblue:admin:read');
       capabilities.add('cblue:admin:write');
     }
 
-    if (user.role === UserRole.FIXER || user.role === 'FIXER' || user.fixer) {
+    if (user.role === UserRole.FIXER || user.fixer) {
       capabilities.add('cblue:fixer:self:read');
       capabilities.add('cblue:fixer:workflow:write');
     }

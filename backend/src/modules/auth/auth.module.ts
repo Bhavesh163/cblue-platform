@@ -26,7 +26,12 @@ import { RefreshSessionService } from './refresh-session.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, RecaptchaService, RefreshSessionService],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    RecaptchaService,
+    RefreshSessionService,
+  ],
   exports: [AuthService, JwtModule, RefreshSessionService],
 })
 export class AuthModule {}

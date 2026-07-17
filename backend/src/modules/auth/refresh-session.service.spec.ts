@@ -33,9 +33,12 @@ describe('RefreshSessionService', () => {
         updateMany: jest.fn(({ where, data }) => {
           const matching = rows.filter((item) => {
             if (where.id && item.id !== where.id) return false;
-            if (where.familyId && item.familyId !== where.familyId) return false;
-            if (where.rotatedAt === null && item.rotatedAt !== null) return false;
-            if (where.revokedAt === null && item.revokedAt !== null) return false;
+            if (where.familyId && item.familyId !== where.familyId)
+              return false;
+            if (where.rotatedAt === null && item.rotatedAt !== null)
+              return false;
+            if (where.revokedAt === null && item.revokedAt !== null)
+              return false;
             return true;
           });
           matching.forEach((item) => Object.assign(item, data));
@@ -90,7 +93,9 @@ describe('RefreshSessionService', () => {
       }),
     ).rejects.toThrow(UnauthorizedException);
     expect(rows.every((row) => row.revokedAt instanceof Date)).toBe(true);
-    expect(rows.every((row) => row.revocationReason === 'token_reuse')).toBe(true);
+    expect(rows.every((row) => row.revocationReason === 'token_reuse')).toBe(
+      true,
+    );
   });
 
   it.each([
@@ -114,14 +119,29 @@ describe('RefreshSessionService', () => {
       audience: 'CBLUE',
     });
     rows[0].expiresAt = new Date(Date.now() - 1);
-    await expect(service.rotate({ refreshToken: issued.refreshToken })).rejects.toThrow(
-      UnauthorizedException,
-    );
+    await expect(
+      service.rotate({ refreshToken: issued.refreshToken }),
+    ).rejects.toThrow(UnauthorizedException);
     rows[0].expiresAt = new Date(Date.now() + 60_000);
     user.isActive = false;
-    await expect(service.rotate({ refreshToken: issued.refreshToken })).rejects.toThrow(
-      UnauthorizedException,
-    );
+    await expect(
+      service.rotate({ refreshToken: issued.refreshToken }),
+    ).rejects.toThrow(UnauthorizedException);
+  });
+
+  it('revokes the family after losing a concurrent rotation claim', async () => {
+    const issued = await service.issue({
+      userId: user.id,
+      clientId: 'blue-client',
+      audience: 'CBLUE',
+    });
+    const updateMany = prisma.refreshSession.updateMany as jest.Mock;
+    updateMany.mockResolvedValueOnce({ count: 0 });
+
+    await expect(
+      service.rotate({ refreshToken: issued.refreshToken }),
+    ).rejects.toThrow(UnauthorizedException);
+    expect(rows[0].revocationReason).toBe('token_reuse');
   });
 
   it('revokes logout idempotently', async () => {

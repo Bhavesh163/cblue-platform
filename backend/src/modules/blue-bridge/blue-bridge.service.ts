@@ -57,6 +57,11 @@ interface WorkflowAction {
   actionStep: number;
   feeMode?: 'payment' | 'free-pass';
 }
+interface ProcessingFee {
+  amount: number;
+  currency: string;
+  displayLabel: string;
+}
 interface OrderWorkflowSnapshot {
   poNumber: string;
   currentStep: number;
@@ -75,6 +80,7 @@ interface OrderWorkflowSnapshot {
   chat: {
     enabled: boolean;
   };
+  processingFee: ProcessingFee | null;
 }
 @Injectable()
 export class BlueBridgeService {
@@ -229,6 +235,7 @@ export class BlueBridgeService {
       customerUserId: order.userId,
       fixerUserId: order.fixer?.userId,
       viewerUserIds: linkedUserIds,
+      processingFee: this.processingFee(),
     });
     return {
       detailRows: [
@@ -383,6 +390,7 @@ export class BlueBridgeService {
       customerUserId: context.order.userId,
       fixerUserId: context.order.fixer?.userId,
       viewerUserIds: context.viewerUserIds,
+      processingFee: this.processingFee(),
     });
     if (!snapshot.chat.enabled || snapshot.activityBucket === 'history') {
       throw new BadRequestException('Chat is not available for this workflow');
@@ -493,6 +501,7 @@ export class BlueBridgeService {
       customerUserId: order.userId,
       fixerUserId: order.fixer?.userId,
       viewerUserIds: [],
+      processingFee: this.processingFee(),
     });
     return {
       ...lifecycle,
@@ -532,6 +541,7 @@ export class BlueBridgeService {
       customerUserId: order.userId,
       fixerUserId: order.fixer?.userId,
       viewerUserIds,
+      processingFee: this.processingFee(),
     });
     return {
       poNumber,
@@ -559,9 +569,26 @@ export class BlueBridgeService {
       nextActionLabel: workflow.nextActionLabel,
       nextActionOwner: workflow.nextActionOwner,
       nextActionStep: workflow.nextActionStep,
+      processingFee: workflow.processingFee,
       chat: workflow.chat,
       meeting: persistedMeeting(order.workflowActions),
       messageItems: (order.chatMessages || []).map(messageItem),
+    };
+  }
+
+  private processingFee(): ProcessingFee {
+    const configured = Number(this.config.get<number>('processingFee.amount'));
+    const amount =
+      Number.isFinite(configured) && configured >= 0 ? configured : 100;
+    const currency =
+      String(this.config.get<string>('processingFee.currency') || 'THB')
+        .trim()
+        .toUpperCase() || 'THB';
+    const symbol = currency === 'THB' ? '฿' : `${currency} `;
+    return {
+      amount,
+      currency,
+      displayLabel: `${symbol}${amount.toLocaleString('en-US')}`,
     };
   }
 
@@ -690,6 +717,7 @@ function resolveOrderWorkflowSnapshot({
   customerUserId,
   fixerUserId,
   viewerUserIds,
+  processingFee = { amount: 100, currency: 'THB', displayLabel: '฿100' },
 }: {
   poNumber: string;
   status?: string | null;
@@ -697,6 +725,7 @@ function resolveOrderWorkflowSnapshot({
   customerUserId?: string | null;
   fixerUserId?: string | null;
   viewerUserIds: string[];
+  processingFee?: ProcessingFee;
 }): OrderWorkflowSnapshot {
   const normalizedStatus =
     String(status || '')
@@ -793,6 +822,7 @@ function resolveOrderWorkflowSnapshot({
     poNumber,
     workflowVersion: 0,
     chat: { enabled: false },
+    processingFee: currentStep === 6 ? processingFee : null,
     currentStep,
     totalSteps: 11,
     status: normalizedStatus,
@@ -817,6 +847,7 @@ export function resolvePersistedFixerWorkflowSnapshot({
   ratedAt,
   fixerUserId,
   viewerUserIds,
+  processingFee = { amount: 100, currency: 'THB', displayLabel: '฿100' },
 }: {
   poNumber: string;
   status?: string | null;
@@ -829,6 +860,7 @@ export function resolvePersistedFixerWorkflowSnapshot({
   ratedAt?: Date | string | null;
   fixerUserId?: string | null;
   viewerUserIds: string[];
+  processingFee?: ProcessingFee;
 }): OrderWorkflowSnapshot {
   const normalizedStatus =
     String(status || '')
@@ -1044,6 +1076,7 @@ export function resolvePersistedFixerWorkflowSnapshot({
     chat: {
       enabled: state.bucket !== 'history' && chatEnabled === true,
     },
+    processingFee: state.step === 6 ? processingFee : null,
     actions,
     availableActions: actions.map((action) => action.key),
     actionOwner: nextAction?.owner || null,

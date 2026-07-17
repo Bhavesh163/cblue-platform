@@ -17,6 +17,8 @@ type RotateInput = {
   audience?: string;
 };
 
+class RefreshTokenReplayError extends Error {}
+
 @Injectable()
 export class RefreshSessionService {
   constructor(
@@ -47,31 +49,35 @@ export class RefreshSessionService {
       this.invalid();
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const now = new Date();
-      const claimed = await tx.refreshSession.updateMany({
-        where: { id: existing.id, rotatedAt: null, revokedAt: null },
-        data: { rotatedAt: now, lastUsedAt: now },
-      });
-      if (claimed.count !== 1) {
-        await tx.refreshSession.updateMany({
-          where: { familyId: existing.familyId, revokedAt: null },
-          data: { revokedAt: now, revocationReason: 'token_reuse' },
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const now = new Date();
+        const claimed = await tx.refreshSession.updateMany({
+          where: { id: existing.id, rotatedAt: null, revokedAt: null },
+          data: { rotatedAt: now, lastUsedAt: now },
         });
+        if (claimed.count !== 1) {
+          throw new RefreshTokenReplayError();
+        }
+        const next = await this.issueWithClient(tx, {
+          userId: existing.userId,
+          clientId: existing.clientId,
+          audience: existing.audience,
+          familyId: existing.familyId,
+        });
+        await tx.refreshSession.updateMany({
+          where: { id: existing.id },
+          data: { replacedById: next.session.id },
+        });
+        return { ...next, user: existing.user };
+      });
+    } catch (error) {
+      if (error instanceof RefreshTokenReplayError) {
+        await this.revokeFamilyById(existing.familyId, 'token_reuse');
         this.invalid();
       }
-      const next = await this.issueWithClient(tx, {
-        userId: existing.userId,
-        clientId: existing.clientId,
-        audience: existing.audience,
-        familyId: existing.familyId,
-      });
-      await tx.refreshSession.updateMany({
-        where: { id: existing.id },
-        data: { replacedById: next.session.id },
-      });
-      return { ...next, user: existing.user };
-    });
+      throw error;
+    }
   }
 
   async revokeFamily(refreshToken: string, reason: string): Promise<void> {

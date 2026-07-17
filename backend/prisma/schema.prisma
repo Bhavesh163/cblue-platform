@@ -119,26 +119,26 @@ enum DayOfWeek {
 // ==================== MODELS ====================
 
 model User {
-  id        String   @id @default(uuid())
-  phone     String?  @unique
-  email     String?  @unique
-  name      String?
-  company   String?
-  role      UserRole @default(USER)
-  isActive  Boolean  @default(true)
+  id       String   @id @default(uuid())
+  phone    String?  @unique
+  email    String?  @unique
+  name     String?
+  company  String?
+  role     UserRole @default(USER)
+  isActive Boolean  @default(true)
 
   subscriberId String? @unique
 
-  addresses     Address[]
-  fixer         Fixer?
-  orders        Order[]
-  reviews       Review[]
-  notifications Notification[]
-  properties    Property[]
-  chatMessages  OrderChatMessage[] @relation("OrderChatSender")
-  refreshSessions RefreshSession[]
-  customerInquiries PropertyInquiry[] @relation("CustomerInquiries")
-  listerInquiries   PropertyInquiry[] @relation("ListerInquiries")
+  addresses         Address[]
+  fixer             Fixer?
+  orders            Order[]
+  reviews           Review[]
+  notifications     Notification[]
+  properties        Property[]
+  chatMessages      OrderChatMessage[] @relation("OrderChatSender")
+  refreshSessions   RefreshSession[]
+  customerInquiries PropertyInquiry[]  @relation("CustomerInquiries")
+  listerInquiries   PropertyInquiry[]  @relation("ListerInquiries")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -147,10 +147,10 @@ model User {
 }
 
 model RefreshSession {
-  id               String   @id @default(uuid())
+  id               String    @id @default(uuid())
   userId           String
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash        String   @unique
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash        String    @unique
   familyId         String
   clientId         String
   audience         String
@@ -160,7 +160,7 @@ model RefreshSession {
   revokedAt        DateTime?
   revocationReason String?
   lastUsedAt       DateTime?
-  createdAt        DateTime @default(now())
+  createdAt        DateTime  @default(now())
 
   @@index([userId])
   @@index([familyId])
@@ -170,9 +170,9 @@ model RefreshSession {
 }
 
 model Address {
-  id          String  @id @default(uuid())
-  userId      String
-  user        User    @relation(fields: [userId], references: [id])
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
 
   label       String? // home, office
   province    String
@@ -184,11 +184,11 @@ model Address {
   unit        String?
   notes       String?
 
-  latitude    Float?
-  longitude   Float?
-  isDefault   Boolean @default(false)
+  latitude  Float?
+  longitude Float?
+  isDefault Boolean @default(false)
 
-  orders    Order[]
+  orders Order[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -199,35 +199,35 @@ model Address {
 }
 
 model Fixer {
-  id              String      @id @default(uuid())
-  userId          String      @unique
-  user            User        @relation(fields: [userId], references: [id])
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
 
-  tier            FixerTier   @default(ECONOMY)
-  status          FixerStatus @default(PENDING)
-  rating          Float       @default(5)
-  completedJobs   Int         @default(0)
-  responseTime    Int?        // average in minutes
-  verified        Boolean     @default(false)
-  travelRadius    Int         @default(10) // km
-  yearsExperience Int?
-  bio             String?
-  description     String?     // service description
-  pastExperience  String?     // narrative of past work
-  pastProjectType String?     // type of past projects
-  availableStartDate String?  // desired start date for service
-  companyAddress  Json?       // snapshot of company address
-  priceList       Json?       // [{service, unit, finalPrice}]
-  serviceProvince String?     // primary service area province
-  serviceDistrict String?     // primary service area district
-  servicePostalCode String?   // primary service area postal code
-  gpsLat          Float?
-  gpsLng          Float?
-  
-  aiScore         Int?
-  aiTier          String?
-  aiBreakdown     Json?
-  aiFlags         Json?
+  tier               FixerTier   @default(ECONOMY)
+  status             FixerStatus @default(PENDING)
+  rating             Float       @default(5)
+  completedJobs      Int         @default(0)
+  responseTime       Int? // average in minutes
+  verified           Boolean     @default(false)
+  travelRadius       Int         @default(10) // km
+  yearsExperience    Int?
+  bio                String?
+  description        String? // service description
+  pastExperience     String? // narrative of past work
+  pastProjectType    String? // type of past projects
+  availableStartDate String? // desired start date for service
+  companyAddress     Json? // snapshot of company address
+  priceList          Json? // [{service, unit, finalPrice}]
+  serviceProvince    String? // primary service area province
+  serviceDistrict    String? // primary service area district
+  servicePostalCode  String? // primary service area postal code
+  gpsLat             Float?
+  gpsLng             Float?
+
+  aiScore            Int?
+  aiTier             String?
+  aiBreakdown        Json?
+  aiFlags            Json?
   aiCredentialStatus String?
 
   skills       FixerSkill[]
@@ -243,9 +243,9 @@ model Fixer {
 }
 
 model FixerSkill {
-  id              String @id @default(uuid())
-  fixerId         String
-  fixer           Fixer  @relation(fields: [fixerId], references: [id])
+  id      String @id @default(uuid())
+  fixerId String
+  fixer   Fixer  @relation(fields: [fixerId], references: [id])
 
   category        String // e.g., "plumbing", "electrical", "aircon"
   name            String // e.g., "pipe repair", "wiring"
@@ -259,13 +259,13 @@ model FixerSkill {
 }
 
 model FixerAvailability {
-  id        String    @id @default(uuid())
-  fixerId   String
-  fixer     Fixer     @relation(fields: [fixerId], references: [id])
+  id      String @id @default(uuid())
+  fixerId String
+  fixer   Fixer  @relation(fields: [fixerId], references: [id])
 
   dayOfWeek DayOfWeek
-  startTime String    // "08:00"
-  endTime   String    // "18:00"
+  startTime String // "08:00"
+  endTime   String // "18:00"
   isActive  Boolean   @default(true)
 
   @@unique([fixerId, dayOfWeek])
@@ -273,35 +273,35 @@ model FixerAvailability {
 }
 
 model Order {
-  id              String      @id @default(uuid())
-  userId          String
-  user            User        @relation(fields: [userId], references: [id])
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
 
-  fixerId         String?
-  fixer           Fixer?      @relation(fields: [fixerId], references: [id])
+  fixerId String?
+  fixer   Fixer?  @relation(fields: [fixerId], references: [id])
 
-  addressId       String
-  address         Address     @relation(fields: [addressId], references: [id])
+  addressId String
+  address   Address @relation(fields: [addressId], references: [id])
 
-  status          OrderStatus @default(CREATED)
-  orderType       OrderType   @default(HOUSEHOLD)
-  serviceCategory String
-  description     String
-  isUrgent        Boolean     @default(false)
-  scheduledAt     DateTime?
-  estimatedPrice  Float?
-  finalPrice      Float?
-  budgetBreakdown Json?
-  workflowPhase  String?
-  chatEnabled    Boolean @default(false)
-  workflowRevision Int @default(0)
-  archivedAt      DateTime?
+  status           OrderStatus @default(CREATED)
+  orderType        OrderType   @default(HOUSEHOLD)
+  serviceCategory  String
+  description      String
+  isUrgent         Boolean     @default(false)
+  scheduledAt      DateTime?
+  estimatedPrice   Float?
+  finalPrice       Float?
+  budgetBreakdown  Json?
+  workflowPhase    String?
+  chatEnabled      Boolean     @default(false)
+  workflowRevision Int         @default(0)
+  archivedAt       DateTime?
 
-  statusHistory OrderStatusHistory[]
-  payment       Payment?
-  review        Review?
-  images        Image[]
-  chatMessages  OrderChatMessage[]
+  statusHistory   OrderStatusHistory[]
+  payment         Payment?
+  review          Review?
+  images          Image[]
+  chatMessages    OrderChatMessage[]
   workflowActions FixerWorkflowAction[]
 
   createdAt DateTime @default(now())
@@ -316,16 +316,16 @@ model Order {
 }
 
 model OrderChatMessage {
-  id           String   @id @default(uuid())
-  orderId      String
-  order        Order    @relation(fields: [orderId], references: [id])
+  id      String @id @default(uuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id])
 
   senderUserId String
-  senderUser   User     @relation("OrderChatSender", fields: [senderUserId], references: [id])
+  senderUser   User      @relation("OrderChatSender", fields: [senderUserId], references: [id])
   senderRole   UserRole?
 
-  text         String
-  createdAt    DateTime @default(now())
+  text      String
+  createdAt DateTime @default(now())
 
   @@index([orderId])
   @@index([senderUserId])
@@ -334,13 +334,13 @@ model OrderChatMessage {
 }
 
 model OrderStatusHistory {
-  id        String      @id @default(uuid())
-  orderId   String
-  order     Order       @relation(fields: [orderId], references: [id])
+  id      String @id @default(uuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id])
 
   status    OrderStatus
   note      String?
-  changedBy String?     // userId who changed the status
+  changedBy String? // userId who changed the status
 
   createdAt DateTime @default(now())
 
@@ -365,9 +365,9 @@ model FixerWorkflowAction {
 }
 
 model Payment {
-  id             String        @id @default(uuid())
-  orderId        String        @unique
-  order          Order         @relation(fields: [orderId], references: [id])
+  id      String @id @default(uuid())
+  orderId String @unique
+  order   Order  @relation(fields: [orderId], references: [id])
 
   amount         Float
   method         PaymentMethod @default(PROMPTPAY)
@@ -376,8 +376,8 @@ model Payment {
   qrCodeUrl      String?
 
   paidAt    DateTime?
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   @@index([status])
   @@map("payments")
@@ -388,13 +388,13 @@ model Review {
   orderId String @unique
   order   Order  @relation(fields: [orderId], references: [id])
 
-  userId  String
-  user    User   @relation(fields: [userId], references: [id])
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
 
   fixerId String
   fixer   Fixer  @relation(fields: [fixerId], references: [id])
 
-  rating  Int    // 1-5
+  rating  Int // 1-5
   comment String?
 
   createdAt DateTime @default(now())
@@ -405,15 +405,15 @@ model Review {
 }
 
 model Notification {
-  id     String             @id @default(uuid())
+  id     String @id @default(uuid())
   userId String
-  user   User               @relation(fields: [userId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
 
   type   NotificationType
   status NotificationStatus @default(PENDING)
   title  String
   body   String
-  data   Json?              // extra payload
+  data   Json? // extra payload
 
   sentAt DateTime?
   readAt DateTime?
@@ -426,16 +426,16 @@ model Notification {
 }
 
 model Image {
-  id      String @id @default(uuid())
+  id      String  @id @default(uuid())
   fixerId String?
-  fixer   Fixer? @relation(fields: [fixerId], references: [id])
+  fixer   Fixer?  @relation(fields: [fixerId], references: [id])
 
   orderId String?
   order   Order?  @relation(fields: [orderId], references: [id])
 
-  type    String  // "kyc", "portfolio", "order_photo"
-  url     String
-  key     String  // S3/Spaces key
+  type String // "kyc", "portfolio", "order_photo"
+  url  String
+  key  String // S3/Spaces key
 
   createdAt DateTime @default(now())
 
@@ -461,9 +461,9 @@ model OtpCode {
 // ==================== REAL ESTATE ====================
 
 model Property {
-  id          String         @id @default(uuid())
-  userId      String
-  user        User           @relation(fields: [userId], references: [id])
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
 
   propertyType PropertyType
   listingType  ListingType
@@ -473,11 +473,11 @@ model Property {
   title       String
   description String
 
-  price       Float
-  area        Float?        // sq.m.
-  bedrooms    Int?
-  bathrooms   Int?
-  floors      Int?
+  price     Float
+  area      Float? // sq.m.
+  bedrooms  Int?
+  bathrooms Int?
+  floors    Int?
 
   // Location
   province    String
@@ -494,11 +494,11 @@ model Property {
   contactEmail String?
 
   // Features
-  features    Json?         // amenities, parking, etc.
-  yearBuilt   Int?
+  features  Json? // amenities, parking, etc.
+  yearBuilt Int?
 
-  images      PropertyImage[]
-  inquiries   PropertyInquiry[]
+  images    PropertyImage[]
+  inquiries PropertyInquiry[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -517,10 +517,10 @@ model PropertyImage {
   propertyId String
   property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
-  url        String
-  key        String   // S3/Spaces key
-  sortOrder  Int      @default(0)
-  isPrimary  Boolean  @default(false)
+  url       String
+  key       String // S3/Spaces key
+  sortOrder Int     @default(0)
+  isPrimary Boolean @default(false)
 
   createdAt DateTime @default(now())
 
@@ -542,32 +542,32 @@ enum PropertyInquiryStatus {
 }
 
 model PropertyInquiry {
-  id           String                @id @default(uuid())
-  poNumber     String                @unique
-  propertyId   String
-  property     Property              @relation(fields: [propertyId], references: [id])
-  customerId   String
-  customer     User                  @relation("CustomerInquiries", fields: [customerId], references: [id])
-  listerUserId String
-  lister       User                  @relation("ListerInquiries", fields: [listerUserId], references: [id])
-  customerName  String
-  customerEmail String
-  listerName    String
-  status       PropertyInquiryStatus @default(NOTIFY_SENT)
-  step         Int                   @default(3)
-  meetingDate   String?
-  meetingTime   String?
-  meetingVenue  String?
-  requestDetails String?
-  customerRating   Int?
-  customerComment  String?
-  listerRating     Int?
-  listerComment    String?
-  reselectedOnce   Boolean           @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  attachments PropertyInquiryAttachment[]
-  workflowEvents PropertyInquiryWorkflowEvent[]
+  id              String                         @id @default(uuid())
+  poNumber        String                         @unique
+  propertyId      String
+  property        Property                       @relation(fields: [propertyId], references: [id])
+  customerId      String
+  customer        User                           @relation("CustomerInquiries", fields: [customerId], references: [id])
+  listerUserId    String
+  lister          User                           @relation("ListerInquiries", fields: [listerUserId], references: [id])
+  customerName    String
+  customerEmail   String
+  listerName      String
+  status          PropertyInquiryStatus          @default(NOTIFY_SENT)
+  step            Int                            @default(3)
+  meetingDate     String?
+  meetingTime     String?
+  meetingVenue    String?
+  requestDetails  String?
+  customerRating  Int?
+  customerComment String?
+  listerRating    Int?
+  listerComment   String?
+  reselectedOnce  Boolean                        @default(false)
+  createdAt       DateTime                       @default(now())
+  updatedAt       DateTime                       @updatedAt
+  attachments     PropertyInquiryAttachment[]
+  workflowEvents  PropertyInquiryWorkflowEvent[]
 
   @@index([customerId])
   @@index([listerUserId])
@@ -585,24 +585,24 @@ enum SubscriptionStatus {
 }
 
 model Subscriber {
-  id              String             @id @default(uuid())
-  email           String             @unique
-  passwordHash    String
-  name            String
-  phone           String
-  company         String?
-  status          SubscriptionStatus @default(PENDING)
+  id           String             @id @default(uuid())
+  email        String             @unique
+  passwordHash String
+  name         String
+  phone        String
+  company      String?
+  status       SubscriptionStatus @default(PENDING)
 
   // From professional search form
   serviceCategory String?
   description     String?
 
   // Password reset
-  resetToken      String?            @unique
+  resetToken       String?   @unique
   resetTokenExpiry DateTime?
 
   // PDPA compliance
-  pdpaConsentAt   DateTime?
+  pdpaConsentAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -613,30 +613,32 @@ model Subscriber {
 }
 
 model PropertyInquiryAttachment {
-  id String @id @default(uuid())
-  inquiryId String
-  inquiry PropertyInquiry @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+  id         String          @id @default(uuid())
+  inquiryId  String
+  inquiry    PropertyInquiry @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
   uploadedBy String
-  label String?
-  url String
-  key String
-  createdAt DateTime @default(now())
+  label      String?
+  url        String
+  key        String
+  createdAt  DateTime        @default(now())
+
   @@index([inquiryId])
   @@map("property_inquiry_attachments")
 }
 
 model PropertyInquiryWorkflowEvent {
-  id String @id @default(uuid())
+  id        String                @id @default(uuid())
   inquiryId String
-  inquiry PropertyInquiry @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
-  action String
-  status PropertyInquiryStatus
-  step Int
-  actorId String
-  isPrivate Boolean @default(false)
-  note String?
-  metadata Json?
-  createdAt DateTime @default(now())
+  inquiry   PropertyInquiry       @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+  action    String
+  status    PropertyInquiryStatus
+  step      Int
+  actorId   String
+  isPrivate Boolean               @default(false)
+  note      String?
+  metadata  Json?
+  createdAt DateTime              @default(now())
+
   @@index([inquiryId, createdAt])
   @@map("property_inquiry_workflow_events")
 }
