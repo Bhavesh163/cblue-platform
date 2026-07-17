@@ -155,6 +155,14 @@ export class FixerWorkflowBridgeService {
               ? { chatEnabled: true }
               : {}),
             workflowRevision: { increment: 1 },
+            ...(key === 'send-meeting-invitation'
+              ? {
+                  meetingDate: dto.meetingDate?.trim() || null,
+                  meetingTime: dto.meetingTime?.trim() || null,
+                  meetingVenue: dto.meetingVenue?.trim() || null,
+                  meetingNote: dto.note?.trim() || null,
+                }
+              : {}),
           },
         });
         if (update.count !== 1) {

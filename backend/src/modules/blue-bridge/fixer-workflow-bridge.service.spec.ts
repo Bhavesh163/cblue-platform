@@ -131,10 +131,72 @@ describe('FixerWorkflowBridgeService', () => {
             ? { chatEnabled: true }
             : {}),
           workflowRevision: { increment: 1 },
+          ...(action === 'send-meeting-invitation'
+            ? {
+                meetingDate: '2026-07-15',
+                meetingTime: '10:00',
+                meetingVenue: 'Office',
+                meetingNote: null,
+              }
+            : {}),
         },
       });
     },
   );
+  it('persists the meeting invitation snapshot with the Step 8 transition', async () => {
+    const { service, prisma } = createHarness();
+
+    await service.action(
+      'PO-2607-9001',
+      'customer-1',
+      'send-meeting-invitation',
+      {
+        workflowVersion: 0,
+        meetingDate: '2026-07-18',
+        meetingTime: '14:30',
+        meetingVenue: '13.794095, 100.609583',
+        note: 'Please bring the site drawings.',
+      },
+      'idempotency-1',
+    );
+
+    expect(prisma.order.updateMany).toHaveBeenCalledWith({
+      where: { id: 'order-1', workflowRevision: 0 },
+      data: {
+        status: OrderStatus.MEETING_REQUESTED,
+        workflowPhase: 'MEETING_CONFIRM',
+        meetingDate: '2026-07-18',
+        meetingTime: '14:30',
+        meetingVenue: '13.794095, 100.609583',
+        meetingNote: 'Please bring the site drawings.',
+        workflowRevision: { increment: 1 },
+      },
+    });
+  });
+
+  it('normalizes a whitespace-only meeting note to null', async () => {
+    const { service, prisma } = createHarness();
+
+    await service.action(
+      'PO-2607-9001',
+      'customer-1',
+      'send-meeting-invitation',
+      {
+        workflowVersion: 0,
+        meetingDate: '2026-07-18',
+        meetingTime: '14:30',
+        meetingVenue: '13.794095, 100.609583',
+        note: '   ',
+      },
+      'idempotency-1',
+    );
+
+    expect(prisma.order.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ meetingNote: null }),
+      }),
+    );
+  });
 
   it('rejects a stale workflow version without changing state', async () => {
     const { service, prisma } = createHarness('FEE', OrderStatus.CONFIRMED);

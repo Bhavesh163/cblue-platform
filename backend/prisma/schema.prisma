@@ -289,6 +289,10 @@ model Order {
   description      String
   isUrgent         Boolean     @default(false)
   scheduledAt      DateTime?
+  meetingDate      String?
+  meetingTime      String?
+  meetingVenue     String?
+  meetingNote      String?
   estimatedPrice   Float?
   finalPrice       Float?
   budgetBreakdown  Json?
