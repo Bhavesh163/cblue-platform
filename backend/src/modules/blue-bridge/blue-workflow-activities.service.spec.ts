@@ -137,6 +137,7 @@ describe('BlueBridgeService workflow activities', () => {
         },
         siteSubdistrict: 'Saphan Song',
         activityBucket: 'active',
+        actionNeeded: false,
         availableActions: ['customer-cancel'],
         nextActionKey: null,
         nextActionLabel: null,
@@ -167,6 +168,8 @@ describe('BlueBridgeService workflow activities', () => {
       expect.objectContaining({
         poNumber: 'PO-2607-8879',
         chat: { enabled: true },
+        activityBucket: 'request',
+        actionNeeded: true,
       }),
     ]);
     expect(result.activeJobs).toEqual([]);

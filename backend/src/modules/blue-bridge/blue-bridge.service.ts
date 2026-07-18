@@ -69,6 +69,7 @@ interface OrderWorkflowSnapshot {
   status: string;
   actions: WorkflowAction[];
   availableActions: string[];
+  actionNeeded: boolean;
   actionOwner: WorkflowAction['owner'] | null;
   nextActionKey: string | null;
   nextActionLabel: string | null;
@@ -565,6 +566,7 @@ export class BlueBridgeService {
       partner: identity(order.fixer?.user),
       actions: workflow.actions,
       availableActions: workflow.availableActions,
+      actionNeeded: workflow.actionNeeded,
       actionOwner: workflow.actionOwner,
       nextActionKey: workflow.nextActionKey,
       nextActionLabel: workflow.nextActionLabel,
@@ -865,6 +867,7 @@ function resolveOrderWorkflowSnapshot({
     status: normalizedStatus,
     actions: actorActions,
     availableActions: actorActions.map((action) => action.key),
+    actionNeeded: nextAction !== null,
     actionOwner: nextAction?.owner || null,
     nextActionKey: nextAction?.key || null,
     nextActionLabel: nextAction?.label || null,
@@ -1118,6 +1121,7 @@ export function resolvePersistedFixerWorkflowSnapshot({
     processingFee: state.step === 6 ? processingFee : null,
     actions,
     availableActions: actions.map((action) => action.key),
+    actionNeeded: nextAction !== null,
     actionOwner: nextAction?.owner || null,
     nextActionKey: nextAction?.key || null,
     nextActionLabel: nextAction?.label || null,
