@@ -23,6 +23,7 @@ import { fetchPartnerDashboardWithAuthRetry } from "../../../lib/partnerDashboar
 import { toggleWorkflowModalChromeLock } from "../../../lib/workflowModalChromeLock";
 import { clearSubscriberSession, ensureFreshSubscriberSession, refreshSubscriberSession } from "../../../lib/subscriberSession";
 import { getFixerMeetingSnapshot } from "../../../lib/fixerMeetingSnapshot";
+import { projectPartnerMeetingConfirmation } from "../../../lib/fixerWorkflowUiProjection";
 import {
   buildPartnerWorkflowScope,
   filterBlockedPartnerAdvancedItems,
@@ -3215,6 +3216,17 @@ export default function FixerProPage() {
       statusChangedAt: o.statusHistory?.[0]?.createdAt || o.updatedAt || o.createdAt,
       tier: desc.includes('TIER:') ? desc.split('TIER:')[1].split(' |')[0] : "Standard",
       status: normalizedStatus,
+      workflowPhase: o.workflowPhase,
+      meeting: {
+        date: o.meetingDate || '',
+        time: o.meetingTime || '',
+        venue: o.meetingVenue || '',
+        note: o.meetingNote || '',
+      },
+      meetingDate: o.meetingDate || '',
+      meetingTime: o.meetingTime || '',
+      meetingVenue: o.meetingVenue || '',
+      meetingNote: o.meetingNote || '',
       budgetBreakdown: normalizePersistedBudgetBreakdown(o.budgetBreakdown),
       progress: normalizedStatus === 'COMPLETED' ? 100 : (['IN_PROGRESS', 'CONFIRMED', 'ACCEPTED'].includes(normalizedStatus) ? 40 : 15),
       fee: o.estimatedPrice ? `฿${o.estimatedPrice.toLocaleString()}` : "0", 
@@ -4579,8 +4591,8 @@ export default function FixerProPage() {
     // MEETING_REQUESTED always shows for partner to confirm, regardless of mock step state
     const hasMeetingInviteSignal = (job: any) => {
       const status = String(job?.status || '').toUpperCase();
-      const note = `${job?.statusNote || ''} ${job?.description || ''}`;
-      return status === 'MEETING_REQUESTED' || (status === 'IN_PROGRESS' && /customer sent meeting invitation/i.test(note));
+      const workflowPhase = String(job?.workflowPhase || '').toUpperCase();
+      return status === 'MEETING_REQUESTED' && workflowPhase === 'MEETING_CONFIRM';
     };
     let incomingJobs = mappedOrders.filter(o =>
       !completedHistoryPos.has(o.po) &&
@@ -4592,10 +4604,10 @@ export default function FixerProPage() {
       )
     ).map((job: any) => {
       if (!hasMeetingInviteSignal(job)) return job;
-      const inviteDetails = parseMeetingInviteDetails(`${job.statusNote || ''} ${job.description || ''}`);
-      const meetingVenue = inviteDetails.meetingVenue || job.location || job.subdistrict || '';
+      const meetingDetails = projectPartnerMeetingConfirmation(job);
       return {
         ...job,
+        ...meetingDetails,
         id: `meeting-confirm-${job.po || job.id}`,
         type: 'meeting_confirm_partner',
         workflowType: 'meeting_confirm_partner',
@@ -4605,14 +4617,8 @@ export default function FixerProPage() {
         actionNeeded: true,
         description: 'Customer sent a site meeting invitation. Please review and confirm the meeting time.',
         projectDetails: pickProjectDetails(job.po, job.projectDetails, job.description, job.desc),
-        meetingDate: inviteDetails.meetingDateLabel || job.meetingDate || '',
-        meetingTime: inviteDetails.meetingTimeLabel || job.meetingTime || '',
-        meetingDateLabel: inviteDetails.meetingDateLabel || job.meetingDateLabel || '',
-        meetingTimeLabel: inviteDetails.meetingTimeLabel || job.meetingTimeLabel || '',
-        meetingVenue,
-        venue: meetingVenue,
-        location: job.location || meetingVenue,
-        subdistrict: job.subdistrict || job.location || meetingVenue,
+        location: job.location || meetingDetails.meetingVenue,
+        subdistrict: job.subdistrict || job.location || meetingDetails.meetingVenue,
       };
     });
 
@@ -4705,11 +4711,14 @@ export default function FixerProPage() {
         // Skip ALL reconstruction for completed jobs - prevents step 8 from reappearing after partner rates
         if (historyEntry) continue;
 
-        if (lower.includes('customer sent meeting invitation')) {
+        const isAuthoritativeMeetingConfirmation =
+          String(order.status || '').toUpperCase() === 'MEETING_REQUESTED' &&
+          String(order.workflowPhase || '').toUpperCase() === 'MEETING_CONFIRM';
+        if (isAuthoritativeMeetingConfirmation) {
           if (meetingAlreadyConfirmed || partnerAlreadyRated) {
             next = next.filter((x: any) => !(x.po === po && (x.type === 'meeting_confirm_partner' || x.workflowType === 'meeting_confirm_partner')));
           } else {
-          const inviteDetails = parseMeetingInviteDetails(String(chat.lastMsg || order.statusNote || ''));
+          const meetingDetails = projectPartnerMeetingConfirmation(order);
           const createdAt = chatEventAt;
           upsert({
             id: `meeting-confirm-${po}`,
@@ -4726,13 +4735,7 @@ export default function FixerProPage() {
             tier: order.tier,
             description: 'Customer sent a site meeting invitation. Please review and confirm the meeting time.',
             projectDetails: stripWorkflowPrefix(order.description || ''),
-            meetingMessage: String(chat.lastMsg || ''),
-            meetingDateLabel: inviteDetails.meetingDateLabel,
-            meetingTimeLabel: inviteDetails.meetingTimeLabel,
-            meetingVenue: inviteDetails.meetingVenue || order.subdistrict || '',
-            meetingDate: inviteDetails.meetingDateLabel,
-            meetingTime: inviteDetails.meetingTimeLabel,
-            venue: inviteDetails.meetingVenue || order.subdistrict || '',
+            ...meetingDetails,
             subdistrict: order.subdistrict || '',
             location: order.location || order.subdistrict || '',
             type: 'meeting_confirm_partner',
@@ -4977,11 +4980,11 @@ export default function FixerProPage() {
       return step === 8 && !existingMeetingRequest && !alreadyConfirmedOrAdvanced;
     })
     .map((job: any) => {
-      const inviteDetails = parseMeetingInviteDetails(`${job.statusNote || ''} ${job.meetingMessage || ''} ${job.description || ''}`);
-      const meetingVenue = inviteDetails.meetingVenue || job.meetingVenue || job.venue || job.location || job.subdistrict || '';
+      const meetingDetails = projectPartnerMeetingConfirmation(job);
       const createdAt = parseWorkflowSortTs(job.statusChangedAt || job.createdAt || job.date) || Date.now();
       return {
         ...job,
+        ...meetingDetails,
         id: `active-meeting-confirm-${job.po || job.id}`,
         type: 'meeting_confirm_partner',
         workflowType: 'meeting_confirm_partner',
@@ -4993,14 +4996,8 @@ export default function FixerProPage() {
         createdAt,
         description: 'Customer sent a site meeting invitation. Please review and confirm the meeting time.',
         projectDetails: pickProjectDetails(job.po, job.projectDetails, job.description, job.desc),
-        meetingDate: inviteDetails.meetingDateLabel || job.meetingDate || '',
-        meetingTime: inviteDetails.meetingTimeLabel || job.meetingTime || '',
-        meetingDateLabel: inviteDetails.meetingDateLabel || job.meetingDateLabel || job.meetingDate || '',
-        meetingTimeLabel: inviteDetails.meetingTimeLabel || job.meetingTimeLabel || job.meetingTime || '',
-        meetingVenue,
-        venue: meetingVenue,
-        location: job.location || meetingVenue,
-        subdistrict: job.subdistrict || job.location || meetingVenue,
+        location: job.location || meetingDetails.meetingVenue,
+        subdistrict: job.subdistrict || job.location || meetingDetails.meetingVenue,
       };
     });
 

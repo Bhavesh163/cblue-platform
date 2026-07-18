@@ -47,6 +47,11 @@ import {
   type BudgetBreakdownItem,
 } from "../../../lib/computeBudgetBreakdown";
 import { readStoredPoProjectDetails } from "../../../lib/po-project-details";
+import {
+  buildCustomerMeetingAwaitingPartnerAlert,
+  isCustomerFixerActionNeeded,
+  mergeAuthoritativeWorkflowAlerts,
+} from "../../../lib/fixerWorkflowUiProjection";
 
 interface SubscriberInfo {
   id: string;
@@ -3341,7 +3346,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
           return (m ? (m[1] ?? '').trim() : '') || o.address?.subdistrict || o.subdistrict || 'Unknown';
         })(),
         tier,
-        actionNeeded: [6, 8, 9, 10, 11].includes(step),
+        actionNeeded: isCustomerFixerActionNeeded(o, step),
         step,
         status: o.status,
         workflowPhase: o.workflowPhase,
@@ -3870,6 +3875,13 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       }];
     }
     if (status === 'IN_PROGRESS' || status === 'MEETING_REQUESTED') {
+      const meetingAwaitingPartnerAlert = buildCustomerMeetingAwaitingPartnerAlert(order);
+      if (meetingAwaitingPartnerAlert) {
+        return [{
+          ...meetingAwaitingPartnerAlert,
+          time: toDisplayDateTime(meetingAwaitingPartnerAlert.createdAt),
+        }];
+      }
       const note = getWorkflowStatusNote(order);
       const variationDesc = extractWorkflowVariationRequest(note);
       if (variationDesc && !isWorkflowPastVariation({ backendOrder: order, po, storage: typeof window !== 'undefined' ? localStorage : undefined })) {
@@ -3955,45 +3967,16 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   useEffect(() => {
     if (generatedAlerts.length === 0) return;
     setPersistedCustomerAlerts((prev) => {
-      const merged = Array.from(
-        [...prev, ...generatedAlerts]
-          .reduce((map: Map<string, any>, alert: any) => {
-            const createdAt = parseDateMs(alert.createdAt || alert.time);
-            if (!Number.isFinite(createdAt) || createdAt <= 0) return map;
-            const key = String(alert?.id || `${alert?.msg}-${createdAt}`).trim();
-            if (!key) return map;
-            const normalized = { ...alert, createdAt, time: alert.time || fmtDateTime(createdAt) };
-            const existing = map.get(key);
-            if (!existing || createdAt >= parseDateMs(existing.createdAt || existing.time)) {
-              map.set(key, normalized);
-            }
-            return map;
-          }, new Map<string, any>())
-          .values(),
-      )
-        .sort((a: any, b: any) => parseDateMs(b.createdAt || b.time) - parseDateMs(a.createdAt || a.time))
+      const merged = mergeAuthoritativeWorkflowAlerts([...prev, ...generatedAlerts])
+        .map((alert: any) => ({ ...alert, time: alert.time || fmtDateTime(Number(alert.createdAt)) }))
         .slice(0, 20);
       try { writeWorkflowStorage(customerAlertsStorageKey, merged); } catch {}
       return JSON.stringify(prev) === JSON.stringify(merged) ? prev : merged;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [generatedAlertSignature, customerAlertsStorageKey]);
-  const allAlerts = Array.from(
-    [...persistedCustomerAlerts, ...generatedAlerts]
-      .reduce((map: Map<string, any>, alert: any) => {
-        const createdAt = parseDateMs(alert.createdAt || alert.time);
-        if (!Number.isFinite(createdAt) || createdAt <= 0) return map;
-        const key = String(alert?.id || `${alert?.msg}-${createdAt}`).trim();
-        if (!key) return map;
-        const normalized = { ...alert, createdAt, time: alert.time || fmtDateTime(createdAt) };
-        const existing = map.get(key);
-        if (!existing || createdAt >= parseDateMs(existing.createdAt || existing.time)) {
-          map.set(key, normalized);
-        }
-        return map;
-      }, new Map<string, any>())
-      .values(),
-  ).sort((a: any, b: any) => parseDateMs(b.createdAt || b.time) - parseDateMs(a.createdAt || a.time));
+  const allAlerts = mergeAuthoritativeWorkflowAlerts([...persistedCustomerAlerts, ...generatedAlerts])
+    .map((alert: any) => ({ ...alert, time: alert.time || fmtDateTime(Number(alert.createdAt)) }));
   const alertsPageItems = allAlerts.slice(0, 20);
   const overviewAlerts = allAlerts.slice(0, 3);
   const overviewIncomingChats = chatFeed.filter((c: any) => c.hasIncoming).slice(0, 3);
