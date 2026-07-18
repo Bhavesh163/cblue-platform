@@ -6,7 +6,7 @@ describe('Property workflow terminal snapshots', () => {
   it('moves cancelled persisted inquiries to history and clears chat and alerts', async () => {
     const inquiry = {
       id: 'inquiry-1',
-      poNumber: 'PRE-2607-100001',
+      poNumber: 'PRE-2605-5354',
       customerId: 'customer-1',
       customerName: 'Customer',
       customerEmail: 'customer@example.com',
