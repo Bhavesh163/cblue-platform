@@ -6087,12 +6087,7 @@ export default function FixerProPage() {
                       const meetingSummary = [waitModalMeetingDetails.meetingDate, waitModalMeetingDetails.meetingTime].filter(Boolean).join(' ');
                       const confirmedMeetingDate = waitModalMeetingDetails.meetingDate;
                       const confirmedMeetingTime = waitModalMeetingDetails.meetingTime;
-                      const confirmedMeetingVenue = pickWorkflowMeetingVenue(
-                        waitModalMeetingDetails.meetingVenue,
-                        waitModalOrder.meetingVenue,
-                        waitModalOrder.venue,
-                        waitModalProjectLocation,
-                      );
+                      const confirmedMeetingVenue = waitModalMeetingDetails.meetingVenue;
                       const confirmedMeetingDateForMessage = /^\d{4}-\d{2}-\d{2}$/.test(String(confirmedMeetingDate || ''))
                         ? (() => { const [y, m, d] = String(confirmedMeetingDate).split('-'); return `${d}/${m}/${y}`; })()
                         : confirmedMeetingDate;
