@@ -123,7 +123,8 @@ describe('BlueBridgeService workflow activities', () => {
       bridgeKey: 'bridge-key',
     });
 
-    expect(result.requests).toEqual([
+    expect(result.requests).toEqual([]);
+    expect(result.activeJobs).toEqual([
       expect.objectContaining({
         poNumber: 'PO-2607-8879',
         workflowVersion: 5,
@@ -135,9 +136,14 @@ describe('BlueBridgeService workflow activities', () => {
           note: meeting.meetingNote,
         },
         siteSubdistrict: 'Saphan Song',
+        activityBucket: 'active',
+        availableActions: ['customer-cancel'],
+        nextActionKey: null,
+        nextActionLabel: null,
+        nextActionOwner: null,
+        nextActionStep: null,
       }),
     ]);
-    expect(result.activeJobs).toEqual([]);
     expect(result.chatRooms).toEqual([
       expect.objectContaining({
         poNumber: 'PO-2607-8879',
@@ -481,6 +487,38 @@ describe('BlueBridgeService workflow activities', () => {
       note: meeting.meetingNote,
     });
     expect(result.siteSubdistrict).toBe('Saphan Song');
+  });
+
+  it('does not fill a partial authoritative meeting snapshot from a legacy payload', async () => {
+    const { service } = createService(
+      ['partner-1'],
+      workflowOrder({
+        meetingVenue: meeting.meetingVenue,
+        meetingDate: null,
+        meetingTime: null,
+        meetingNote: null,
+        workflowActions: [
+          {
+            action: 'send-meeting-invitation',
+            payload: legacyMeeting,
+            createdAt: new Date('2026-07-16T00:00:00.000Z'),
+          },
+        ],
+      }),
+    );
+
+    const result = await service.workflowDetails({
+      poNumber: 'PO-2607-8879',
+      legacySubjectId: 'bhaveshfung@gmail.com',
+      bridgeKey: 'bridge-key',
+    });
+
+    expect(result.meeting).toEqual({
+      venue: meeting.meetingVenue,
+      date: '',
+      time: '',
+      note: '',
+    });
   });
 
   it('uses only the persisted invitation payload when a pre-migration order has no meeting snapshot', async () => {

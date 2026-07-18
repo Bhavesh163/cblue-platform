@@ -641,19 +641,23 @@ function persistedWorkflowReference(description: unknown): string | null {
   return match ? match[1].toUpperCase() : null;
 }
 
-function persistedMeeting(
-  order: {
-    meetingVenue?: unknown;
-    meetingDate?: unknown;
-    meetingTime?: unknown;
-    meetingNote?: unknown;
-    workflowActions?: Array<{ action?: string; payload?: unknown }>;
-  },
-): { venue: string; date: string; time: string; note: string } | null {
+function persistedMeeting(order: {
+  meetingVenue?: unknown;
+  meetingDate?: unknown;
+  meetingTime?: unknown;
+  meetingNote?: unknown;
+  workflowActions?: Array<{ action?: string; payload?: unknown }>;
+}): { venue: string; date: string; time: string; note: string } | null {
   const venue = stringValue(order.meetingVenue);
   const date = stringValue(order.meetingDate);
   const time = stringValue(order.meetingTime);
-  if (venue && date && time) {
+  const hasPersistedSnapshot = [
+    order.meetingVenue,
+    order.meetingDate,
+    order.meetingTime,
+    order.meetingNote,
+  ].some((value) => value !== null && value !== undefined);
+  if (hasPersistedSnapshot) {
     return {
       venue,
       date,
@@ -1097,17 +1101,19 @@ export function resolvePersistedFixerWorkflowSnapshot({
       ((action.owner === 'customer' && viewerIsCustomer) ||
         (action.owner === 'partner' && viewerIsPartner)),
   );
-  const nextAction = actions[0] || null;
+  const invitedCustomer = phase === 'MEETING_CONFIRM' && viewerIsCustomer;
+  const activityBucket = invitedCustomer ? 'active' : state.bucket;
+  const nextAction = invitedCustomer ? null : actions[0] || null;
   return {
     sourceVersion: 'cblue-fixer-workflow-v1',
     poNumber,
     currentStep: state.step,
     totalSteps: 11,
     status: normalizedStatus,
-    activityBucket: state.bucket,
+    activityBucket,
     workflowVersion: Number(workflowVersion || 0),
     chat: {
-      enabled: state.bucket !== 'history' && chatEnabled === true,
+      enabled: activityBucket !== 'history' && chatEnabled === true,
     },
     processingFee: state.step === 6 ? processingFee : null,
     actions,

@@ -1,6 +1,9 @@
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
-import { BlueBridgeService } from './blue-bridge.service';
+import {
+  BlueBridgeService,
+  resolvePersistedFixerWorkflowSnapshot,
+} from './blue-bridge.service';
 
 const address = {
   unit: null,
@@ -265,6 +268,31 @@ describe('BLUE workflow production contracts', () => {
         nextActionKey: 'confirm-meeting',
         nextActionOwner: 'partner',
         nextActionStep: 8,
+      }),
+    );
+  });
+
+  it('keeps an invited meeting active for the customer with cancel as a secondary capability', async () => {
+    const customer = resolvePersistedFixerWorkflowSnapshot({
+      poNumber: 'PO-2607-9001',
+      status: 'MEETING_REQUESTED',
+      workflowPhase: 'MEETING_CONFIRM',
+      workflowVersion: 3,
+      chatEnabled: true,
+      customerUserId: 'customer-1',
+      fixerUserId: 'partner-1',
+      viewerUserIds: ['customer-1'],
+    });
+
+    expect(customer).toEqual(
+      expect.objectContaining({
+        currentStep: 8,
+        activityBucket: 'active',
+        availableActions: ['customer-cancel'],
+        nextActionKey: null,
+        nextActionLabel: null,
+        nextActionOwner: null,
+        nextActionStep: null,
       }),
     );
   });
