@@ -28,6 +28,61 @@ function createService(order: Record<string, unknown>) {
 }
 
 describe('BLUE workflow production contracts', () => {
+  it('uses order meeting and subdistrict snapshots instead of description text, GPS, or legacy payload values', async () => {
+    const service = createService({
+      userId: 'customer-1',
+      fixer: { userId: 'partner-1' },
+      status: 'MEETING_REQUESTED',
+      workflowPhase: 'MEETING_CONFIRM',
+      statusHistory: [],
+      review: null,
+      description:
+        'PO-2607-8879 | 2025-01-01 00:00 at a description-derived venue must be ignored',
+      meetingDate: '2026-07-18',
+      meetingTime: '14:30',
+      meetingVenue: '13.794095, 100.609583',
+      meetingNote: 'Please bring the site drawings.',
+      workflowActions: [
+        {
+          action: 'send-meeting-invitation',
+          payload: {
+            meetingDate: '2025-01-01',
+            meetingTime: '00:00',
+            meetingVenue: '0.000000, 0.000000',
+            meetingNote: 'Legacy payload must not override the order snapshot.',
+          },
+        },
+      ],
+      budgetBreakdown: null,
+      user: { name: 'Customer', email: 'customer.com' },
+      address: {
+        ...address,
+        subdistrict: ' Saphan Song ',
+        latitude: 0,
+        longitude: 0,
+      },
+      images: [],
+    });
+
+    const result = await service.workflowDetails({
+      poNumber: 'PO-2607-8879',
+      legacySubjectId: 'customer-1',
+      bridgeKey: 'bridge-key',
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        meeting: {
+          date: '2026-07-18',
+          time: '14:30',
+          venue: '13.794095, 100.609583',
+          note: 'Please bring the site drawings.',
+        },
+        siteSubdistrict: 'Saphan Song',
+      }),
+    );
+  });
+
   it('returns the persisted Step-2 budget for PO-2607-8879', async () => {
     const service = createService({
       status: 'MATCHING',

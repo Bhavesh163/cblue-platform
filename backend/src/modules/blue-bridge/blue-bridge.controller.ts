@@ -133,5 +133,7 @@ export interface BlueWorkflowDetailResponse {
     venue: string;
     date: string;
     time: string;
+    note: string;
   } | null;
+  siteSubdistrict?: string;
 }

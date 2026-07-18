@@ -260,7 +260,8 @@ export class BlueBridgeService {
       })),
       ...lifecycle,
       ...workflow,
-      meeting: persistedMeeting(order.workflowActions),
+      meeting: persistedMeeting(order),
+      siteSubdistrict: persistedSubdistrict(order.address),
     };
   }
 
@@ -506,7 +507,7 @@ export class BlueBridgeService {
     return {
       ...lifecycle,
       ...workflow,
-      meeting: persistedMeeting(order.workflowActions),
+      meeting: persistedMeeting(order),
       chat: {
         enabled: workflow.chat.enabled,
         messageItems: (order.chatMessages || []).map(messageItem),
@@ -571,7 +572,8 @@ export class BlueBridgeService {
       nextActionStep: workflow.nextActionStep,
       processingFee: workflow.processingFee,
       chat: workflow.chat,
-      meeting: persistedMeeting(order.workflowActions),
+      meeting: persistedMeeting(order),
+      siteSubdistrict: persistedSubdistrict(order.address),
       messageItems: (order.chatMessages || []).map(messageItem),
     };
   }
@@ -640,16 +642,47 @@ function persistedWorkflowReference(description: unknown): string | null {
 }
 
 function persistedMeeting(
-  actions: Array<{ action?: string; payload?: unknown }> | undefined,
-): { venue: string; date: string; time: string } | null {
-  const action = [...(actions || [])]
+  order: {
+    meetingVenue?: unknown;
+    meetingDate?: unknown;
+    meetingTime?: unknown;
+    meetingNote?: unknown;
+    workflowActions?: Array<{ action?: string; payload?: unknown }>;
+  },
+): { venue: string; date: string; time: string; note: string } | null {
+  const venue = stringValue(order.meetingVenue);
+  const date = stringValue(order.meetingDate);
+  const time = stringValue(order.meetingTime);
+  if (venue && date && time) {
+    return {
+      venue,
+      date,
+      time,
+      note: stringValue(order.meetingNote),
+    };
+  }
+
+  const action = [...(order.workflowActions || [])]
     .reverse()
     .find((event) => event.action === 'send-meeting-invitation');
   if (!action || !isRecord(action.payload)) return null;
-  const venue = stringValue(action.payload.meetingVenue);
-  const date = stringValue(action.payload.meetingDate);
-  const time = stringValue(action.payload.meetingTime);
-  return venue && date && time ? { venue, date, time } : null;
+  const legacyVenue = stringValue(action.payload.meetingVenue);
+  const legacyDate = stringValue(action.payload.meetingDate);
+  const legacyTime = stringValue(action.payload.meetingTime);
+  return legacyVenue && legacyDate && legacyTime
+    ? {
+        venue: legacyVenue,
+        date: legacyDate,
+        time: legacyTime,
+        note: stringValue(action.payload.meetingNote),
+      }
+    : null;
+}
+
+function persistedSubdistrict(
+  address: { subdistrict?: unknown } | null | undefined,
+): string {
+  return stringValue(address?.subdistrict);
 }
 
 function identity(

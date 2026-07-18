@@ -4,20 +4,30 @@ import { BlueBridgeService } from './blue-bridge.service';
 
 const meeting = {
   meetingVenue: '13.794095, 100.609583',
-  meetingDate: '2026-07-16',
+  meetingDate: '2026-07-18',
   meetingTime: '14:30',
+  meetingNote: 'Please bring the site drawings.',
+};
+
+const legacyMeeting = {
+  meetingVenue: '0.000000, 0.000000',
+  meetingDate: '2025-01-01',
+  meetingTime: '00:00',
+  meetingNote: 'Legacy payload must not override the order snapshot.',
 };
 
 function workflowOrder(overrides: Record<string, unknown> = {}) {
   return {
     id: 'order-8879',
-    description: 'PO-2607-8879 | persisted workflow reference',
+    description:
+      'PO-2607-8879 | Meeting details in description must not become authoritative',
     userId: 'customer-1',
     fixerId: 'fixer-1',
     status: 'MEETING_REQUESTED',
     workflowPhase: 'MEETING_CONFIRM',
     chatEnabled: true,
     workflowRevision: 5,
+    ...meeting,
     budgetBreakdown: [],
     images: [],
     createdAt: new Date('2026-07-10T00:00:00.000Z'),
@@ -47,7 +57,7 @@ function workflowOrder(overrides: Record<string, unknown> = {}) {
     workflowActions: [
       {
         action: 'send-meeting-invitation',
-        payload: meeting,
+        payload: legacyMeeting,
         createdAt: new Date('2026-07-16T00:00:00.000Z'),
       },
     ],
@@ -104,7 +114,7 @@ function createService(
 }
 
 describe('BlueBridgeService workflow activities', () => {
-  it('returns PO-2607-8879 as an actor-visible chat-enabled activity with the exact persisted meeting values', async () => {
+  it('returns PO-2607-8879 with its authoritative meeting snapshot and site subdistrict', async () => {
     const { service } = createService(['customer-1']);
 
     const result = await (service as any).workflowActivities({
@@ -122,7 +132,9 @@ describe('BlueBridgeService workflow activities', () => {
           venue: meeting.meetingVenue,
           date: meeting.meetingDate,
           time: meeting.meetingTime,
+          note: meeting.meetingNote,
         },
+        siteSubdistrict: 'Saphan Song',
       }),
     ]);
     expect(result.activeJobs).toEqual([]);
@@ -453,7 +465,7 @@ describe('BlueBridgeService workflow activities', () => {
     );
   });
 
-  it('returns the same exact persisted meeting values from workflow detail for the selected partner', async () => {
+  it('returns the same authoritative meeting snapshot and site subdistrict from workflow detail', async () => {
     const { service } = createService(['partner-1']);
 
     const result = await service.workflowDetails({
@@ -466,7 +478,71 @@ describe('BlueBridgeService workflow activities', () => {
       venue: meeting.meetingVenue,
       date: meeting.meetingDate,
       time: meeting.meetingTime,
+      note: meeting.meetingNote,
     });
+    expect(result.siteSubdistrict).toBe('Saphan Song');
+  });
+
+  it('uses only the persisted invitation payload when a pre-migration order has no meeting snapshot', async () => {
+    const { service } = createService(
+      ['partner-1'],
+      workflowOrder({
+        meetingVenue: null,
+        meetingDate: null,
+        meetingTime: null,
+        meetingNote: null,
+        workflowActions: [
+          {
+            action: 'send-meeting-invitation',
+            payload: legacyMeeting,
+            createdAt: new Date('2026-07-16T00:00:00.000Z'),
+          },
+        ],
+      }),
+    );
+
+    const result = await service.workflowDetails({
+      poNumber: 'PO-2607-8879',
+      legacySubjectId: 'bhaveshfung.com',
+      bridgeKey: 'bridge-key',
+    });
+
+    expect(result.meeting).toEqual({
+      venue: legacyMeeting.meetingVenue,
+      date: legacyMeeting.meetingDate,
+      time: legacyMeeting.meetingTime,
+      note: legacyMeeting.meetingNote,
+    });
+  });
+
+  it('does not derive a missing meeting or subdistrict from description text or GPS coordinates', async () => {
+    const { service } = createService(
+      ['partner-1'],
+      workflowOrder({
+        description:
+          'PO-2607-8879 | 2026-07-18 14:30 at a description-derived venue',
+        meetingVenue: null,
+        meetingDate: null,
+        meetingTime: null,
+        meetingNote: null,
+        workflowActions: [],
+        address: {
+          ...workflowOrder().address,
+          subdistrict: null,
+          latitude: 13.794095,
+          longitude: 100.609583,
+        },
+      }),
+    );
+
+    const result = await service.workflowDetails({
+      poNumber: 'PO-2607-8879',
+      legacySubjectId: 'bhaveshfung@gmail.com',
+      bridgeKey: 'bridge-key',
+    });
+
+    expect(result.meeting).toBeNull();
+    expect(result.siteSubdistrict).toBe('');
   });
 
   it('lets the selected partner read the persisted customer chat message', async () => {
