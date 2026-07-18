@@ -22,6 +22,7 @@ import { readStoredPoProjectDetails, storePoProjectDetails } from "../../../lib/
 import { fetchPartnerDashboardWithAuthRetry } from "../../../lib/partnerDashboardAuth";
 import { toggleWorkflowModalChromeLock } from "../../../lib/workflowModalChromeLock";
 import { clearSubscriberSession, ensureFreshSubscriberSession, refreshSubscriberSession } from "../../../lib/subscriberSession";
+import { getFixerMeetingSnapshot } from "../../../lib/fixerMeetingSnapshot";
 import {
   buildPartnerWorkflowScope,
   filterBlockedPartnerAdvancedItems,
@@ -5594,13 +5595,7 @@ export default function FixerProPage() {
   const isMeetingConfirmation = waitModalOrder
     ? String(waitModalOrder?.workflowType || waitModalOrder?.type || '').toLowerCase() === 'meeting_confirm_partner' || String(waitModalOrder?.status || '').toUpperCase() === 'MEETING_REQUESTED'
     : false;
-  const parsedWaitModalMeeting = parseMeetingInviteDetails(String(waitModalOrder?.meetingMessage || waitModalOrder?.statusNote || waitModalOrder?.description || waitModalOrder?.desc || ''));
-  const waitModalMeetingDetails = {
-    meetingDateLabel: waitModalOrder?.meetingDateLabel || waitModalOrder?.meetingDate || parsedWaitModalMeeting.meetingDateLabel,
-    meetingTimeLabel: waitModalOrder?.meetingTimeLabel || waitModalOrder?.meetingTime || parsedWaitModalMeeting.meetingTimeLabel,
-    meetingVenue: pickWorkflowMeetingVenue(parsedWaitModalMeeting.meetingVenue, waitModalOrder?.meetingVenue, waitModalOrder?.venue, waitModalOrder?.location, waitModalOrder?.subdistrict) || 'Unknown',
-    meetingMessage: waitModalOrder?.meetingNote || parsedWaitModalMeeting.meetingNote || '',
-  };
+  const waitModalMeetingDetails = getFixerMeetingSnapshot(waitModalOrder);
   const waitModalServiceName = waitModalOrder?.serviceTh || waitModalOrder?.service || 'Project';
   const waitModalCounterpart = firstNameOnly(waitModalOrder?.customer || waitModalOrder?.customerAlias, 'Customer');
   const waitModalBudgetDisplay = waitModalOrder?.fee || (waitModalOrder?.budget ? `฿${String(waitModalOrder.budget).replace(/^฿/, '')}` : `฿${waitModalOrder?.estimatedPrice || waitModalOrder?.finalPrice || '0'}`);
@@ -6039,13 +6034,25 @@ export default function FixerProPage() {
               <div className="flex justify-between border-b pb-2"><span className="text-gray-500">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Project Location"}</span><span className="font-bold text-gray-800 text-right">{waitModalProjectLocation}</span></div>
               {isMeetingConfirmation && (
                 <>
-                  <div className="flex justify-between border-b pb-2"><span className="text-gray-500">{locale === "th" ? "วันที่เสนอ" : locale === "zh" ? "建议日期" : "Proposed Date"}</span><span className="font-bold text-gray-800">{waitModalMeetingDetails.meetingDateLabel || '-'}</span></div>
-                  <div className="flex justify-between border-b pb-2"><span className="text-gray-500">{locale === "th" ? "เวลาที่เสนอ" : locale === "zh" ? "建议时间" : "Proposed Time"}</span><span className="font-bold text-gray-800">{waitModalMeetingDetails.meetingTimeLabel || '-'}</span></div>
-                  <div className="flex justify-between border-b pb-2"><span className="text-gray-500">{locale === "th" ? "สถานที่" : locale === "zh" ? "地点" : "Venue"}</span><span className="font-bold text-gray-800 text-right">{waitModalMeetingDetails.meetingVenue}</span></div>
+                  <div className="grid w-full grid-cols-[minmax(7rem,auto)_minmax(0,1fr)] gap-x-4 border-b pb-2">
+                    <span className="text-gray-500">{locale === "th" ? "วันที่เสนอ" : locale === "zh" ? "建议日期" : "Proposed Date"}</span>
+                    <span className="min-w-0 break-words text-right font-bold text-gray-800">{waitModalMeetingDetails.meetingDate || '-'}</span>
+                  </div>
+                  <div className="grid w-full grid-cols-[minmax(7rem,auto)_minmax(0,1fr)] gap-x-4 border-b pb-2">
+                    <span className="text-gray-500">{locale === "th" ? "เวลาที่เสนอ" : locale === "zh" ? "建议时间" : "Proposed Time"}</span>
+                    <span className="min-w-0 break-words text-right font-bold text-gray-800">{waitModalMeetingDetails.meetingTime || '-'}</span>
+                  </div>
+                  <div className="grid w-full grid-cols-[minmax(7rem,auto)_minmax(0,1fr)] gap-x-4 border-b pb-2">
+                    <span className="text-gray-500">{locale === "th" ? "สถานที่" : locale === "zh" ? "地点" : "Venue"}</span>
+                    <span className="min-w-0 break-words text-right font-bold text-gray-800">{waitModalMeetingDetails.meetingVenue || '-'}</span>
+                  </div>
+                  <div className="grid w-full grid-cols-[minmax(7rem,auto)_minmax(0,1fr)] gap-x-4 border-b pb-2">
+                    <span className="text-gray-500">{locale === "th" ? "หมายเหตุจากลูกค้า" : locale === "zh" ? "客户备注" : "Customer Note"}</span>
+                    <span className="min-w-0 break-words font-bold text-gray-800">{waitModalMeetingDetails.meetingNote || '-'}</span>
+                  </div>
                 </>
               )}
               <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">{locale === "th" ? "รายละเอียดโครงการ" : locale === "zh" ? "项目详情" : "Project Details"}</span><span className="font-bold text-gray-800 bg-white p-2 rounded border border-gray-100">{waitModalProjectDetails}</span></div>
-              {isMeetingConfirmation && waitModalMeetingDetails.meetingMessage && <div className="flex flex-col gap-1 pb-2"><span className="text-gray-500">{locale === "th" ? "คำเชิญจากลูกค้า" : locale === "zh" ? "客户邀请" : "Customer Invitation"}</span><span className="text-gray-800 bg-white p-2 rounded border border-gray-100">{waitModalMeetingDetails.meetingMessage}</span></div>}
               <div className="flex justify-between items-center"><span className="text-gray-500">{locale === "th" ? "ไฟล์ที่อัปโหลด" : locale === "zh" ? "已上传文件" : "Uploaded Files"}</span><button type="button" className={`font-semibold ${waitModalAttachmentUrls.length > 0 ? 'text-sky-600 hover:underline' : 'text-gray-400 cursor-default'}`} onClick={() => {
                 if (waitModalAttachmentUrls.length === 0 && !loadingAttachments) {
                   alert(locale === "th" ? "ยังไม่พบไฟล์ที่ดาวน์โหลดได้" : locale === "zh" ? "当前没有可下载文件。" : 'No downloadable file found right now.');
@@ -6077,9 +6084,9 @@ export default function FixerProPage() {
                     } catch(e) {}
                     if (isMeetingConfirmation) {
                       const schedId = `meet-scheduled-${po}`;
-                      const meetingSummary = [waitModalMeetingDetails.meetingDateLabel, waitModalMeetingDetails.meetingTimeLabel].filter(Boolean).join(' ');
-                      const confirmedMeetingDate = waitModalOrder.meetingDate || waitModalMeetingDetails.meetingDateLabel || '';
-                      const confirmedMeetingTime = waitModalOrder.meetingTime || waitModalMeetingDetails.meetingTimeLabel || '';
+                      const meetingSummary = [waitModalMeetingDetails.meetingDate, waitModalMeetingDetails.meetingTime].filter(Boolean).join(' ');
+                      const confirmedMeetingDate = waitModalMeetingDetails.meetingDate;
+                      const confirmedMeetingTime = waitModalMeetingDetails.meetingTime;
                       const confirmedMeetingVenue = pickWorkflowMeetingVenue(
                         waitModalMeetingDetails.meetingVenue,
                         waitModalOrder.meetingVenue,
