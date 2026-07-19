@@ -398,18 +398,7 @@ export class BlueBridgeService {
         (left, right) =>
           Date.parse(right.createdAt || '') - Date.parse(left.createdAt || ''),
       ),
-      upcomingMeetings: activities
-        .filter(
-          (activity) =>
-            activity.activityBucket !== 'history' && activity.meeting,
-        )
-        .map((activity) => ({
-          poNumber: activity.poNumber,
-          title: activity.title,
-          meeting: activity.meeting,
-          customer: activity.customer,
-          partner: activity.partner,
-        })),
+      upcomingMeetings: confirmedUpcomingMeetings(activities),
     };
   }
 
@@ -1589,4 +1578,57 @@ function formatNumber(value: number): string {
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(
     value,
   );
+}
+
+function confirmedUpcomingMeetings(activities: any[], now = Date.now()) {
+  return activities
+    .flatMap((activity) => {
+      if (activity?.activityBucket === 'history' || !activity?.meeting) return [];
+      const confirmed = (Array.isArray(activity.workflowEvents)
+        ? activity.workflowEvents
+        : []
+      ).some(
+        (event: any) =>
+          String(event?.action || '').trim() === 'confirm-meeting' &&
+          String(event?.actorRole || '').trim() === 'partner' &&
+          Number.isFinite(Date.parse(String(event?.createdAt || ''))),
+      );
+      if (!confirmed) return [];
+      const meetingAt = persistedMeetingTimestamp(
+        activity.meeting.date,
+        activity.meeting.time,
+      );
+      if (!meetingAt || meetingAt <= now) return [];
+      return [{
+        poNumber: activity.poNumber,
+        title: activity.title,
+        meeting: activity.meeting,
+        customer: activity.customer,
+        partner: activity.partner,
+        meetingAt,
+      }];
+    })
+    .sort((left, right) => left.meetingAt - right.meetingAt)
+    .slice(0, 3)
+    .map(({ meetingAt: _meetingAt, ...meeting }) => meeting);
+}
+
+function persistedMeetingTimestamp(dateValue: unknown, timeValue: unknown) {
+  const date = String(dateValue || '').trim();
+  const time = String(timeValue || '').trim() || '00:00';
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  const localized = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(date);
+  const timeParts = /^(\d{1,2}):(\d{2})$/.exec(time);
+  if ((!iso && !localized) || !timeParts) return 0;
+  const [year, month, day] = iso
+    ? [Number(iso[1]), Number(iso[2]), Number(iso[3])]
+    : [Number(localized![3]), Number(localized![2]), Number(localized![1])];
+  const timestamp = Date.UTC(
+    year,
+    month - 1,
+    day,
+    Number(timeParts[1]) - 7,
+    Number(timeParts[2]),
+  );
+  return Number.isFinite(timestamp) ? timestamp : 0;
 }

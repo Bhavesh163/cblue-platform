@@ -124,6 +124,7 @@ test("partner meeting confirmation awaits the authoritative action snapshot", ()
 
 test("customer Step 9 stays active and uses persisted meetings/history", () => {
   assert.match(customerPage, /projectUpcomingFixerMeetings\(authoritativeWorkflowOrders\)/);
+  assert.match(partnerPage, /projectUpcomingFixerMeetings\(mappedOrders\)/);
   assert.match(customerPage, /projectWorkflowChatHistory\(entry\)/);
   assert.match(customerPage, /Array\.isArray\(backendItem\.actions\)/);
   assert.match(customerPage, /send-meeting-invitation/);

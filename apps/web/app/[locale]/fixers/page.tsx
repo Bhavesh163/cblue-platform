@@ -33,6 +33,7 @@ import {
   projectPartnerMeetingConfirmation,
   projectPartnerActiveWorkflow,
   projectPartnerWorkflowRequest,
+  projectUpcomingFixerMeetings,
   projectWorkflowChatHistory,
   reconcilePartnerMeetingRequest,
 } from "../../../lib/fixerWorkflowUiProjection";
@@ -4699,15 +4700,16 @@ export default function FixerProPage() {
     return 0;
   };
 
-  const scheduledMeetings = mockDynReqs
-    .filter((r: any) => !isHiddenTestPo(r.po))
-    .filter((r: any) => r.type === 'meeting_scheduled')
-    .filter((r: any) => isWorkflowMeetingVisible(r.meetingDate, r.meetingTime, r.date || r.createdAt))
-    .sort((a: any, b: any) => {
-      const aTs = parseMeetingDateTimeMs(a.meetingDate, a.meetingTime) || parseTs(a.date || a.createdAt);
-      const bTs = parseMeetingDateTimeMs(b.meetingDate, b.meetingTime) || parseTs(b.date || b.createdAt);
-      return aTs - bTs;
-    });
+  const scheduledMeetings = projectUpcomingFixerMeetings(mappedOrders).map((order: any) => ({
+    ...order,
+    id: `fixer-meeting-${order.po}`,
+    title: String(order.serviceCategory || order.service || order.title || 'Service').replace(/_/g, ' '),
+    customer: firstNameOnly(order.user?.name || order.customerName || order.customer, 'Customer'),
+    meetingDate: order.meetingDate || order.meeting?.date || '',
+    meetingTime: order.meetingTime || order.meeting?.time || '',
+    meetingVenue: order.meetingVenue || order.meeting?.venue || '',
+    meetingNote: order.meetingNote || order.meeting?.note || '',
+  }));
   const propScheduledMeetings = propInquiries
     .filter((p: PropInquiry) => p.status === "MEETING_CONFIRMED" && p.meetingDate)
     .filter((p: PropInquiry) => parseTs(`${p.meetingDate}T${p.meetingTime || '00:00'}`) >= Date.now())

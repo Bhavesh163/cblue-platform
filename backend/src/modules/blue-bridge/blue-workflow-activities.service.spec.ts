@@ -240,6 +240,49 @@ describe('BlueBridgeService workflow activities', () => {
     },
   );
 
+  it('returns only the three oldest future persisted confirmed meetings', async () => {
+    const makeConfirmedOrder = (
+      poNumber: string,
+      meetingDate: string,
+      confirmed = true,
+    ) => workflowOrder({
+      id: `order-${poNumber}`,
+      description: `${poNumber} | Authoritative service`,
+      status: 'IN_PROGRESS',
+      workflowPhase: 'VARIATION',
+      meetingDate,
+      meetingTime: '09:00',
+      workflowActions: confirmed
+        ? [{
+            action: 'confirm-meeting',
+            actorUserId: 'partner-1',
+            payload: {},
+            createdAt: new Date('2026-07-19T10:30:00.000Z'),
+          }]
+        : [],
+    });
+    const { service } = createService(['customer-1'], [
+      makeConfirmedOrder('PO-2099-0004', '2099-07-24'),
+      makeConfirmedOrder('PO-2099-0002', '2099-07-22'),
+      makeConfirmedOrder('PO-2020-0001', '2020-07-20'),
+      makeConfirmedOrder('PO-2099-0001', '2099-07-21'),
+      makeConfirmedOrder('PO-2099-0003', '2099-07-23'),
+      makeConfirmedOrder('PO-2099-9999', '2099-07-20', false),
+    ]);
+
+    const result = await (service as any).workflowActivities({
+      legacySubjectId: 'customer@example.com',
+      persona: 'customer',
+      bridgeKey: 'bridge-key',
+    });
+
+    expect(result.upcomingMeetings.map((item: any) => item.poNumber)).toEqual([
+      'PO-2099-0001',
+      'PO-2099-0002',
+      'PO-2099-0003',
+    ]);
+  });
+
   it.each(['customer-1', 'partner-1'])(
     'returns the persisted Step 9 event from workflow detail to %s',
     async (viewerId) => {
