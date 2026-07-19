@@ -23,6 +23,7 @@ import { fetchPartnerDashboardWithAuthRetry } from "../../../lib/partnerDashboar
 import { toggleWorkflowModalChromeLock } from "../../../lib/workflowModalChromeLock";
 import { clearSubscriberSession, ensureFreshSubscriberSession, refreshSubscriberSession } from "../../../lib/subscriberSession";
 import { getFixerMeetingSnapshot } from "../../../lib/fixerMeetingSnapshot";
+import { postFixerWorkflowAction } from "../../../lib/fixerWorkflowClient";
 import {
   mergeFixerWorkflowRecord,
   buildMeetingConfirmedWorkflowAlert,
@@ -30,6 +31,8 @@ import {
   projectFixerLocations,
   projectFixerChatRoom,
   projectPartnerMeetingConfirmation,
+  projectPartnerWorkflowRequest,
+  projectWorkflowChatHistory,
   reconcilePartnerMeetingRequest,
 } from "../../../lib/fixerWorkflowUiProjection";
 import {
@@ -2355,14 +2358,42 @@ export default function FixerProPage() {
       });
     return () => { active = false; };
   }, [propAcceptModal, propMeetingConfirmModal]);
-  const handleJobClick = (job: any) => {
+  const handleJobClick = async (job: any) => {
     const workflowType = String(job?.workflowType || job?.type || '').toLowerCase();
     const jobStatus = String(job?.status || '').toUpperCase();
     if (workflowType === 'meeting_confirm_partner' || workflowType === 'pending_accept' || ['MATCHING', 'CREATED', 'MEETING_REQUESTED'].includes(jobStatus)) {
       const jobPo = String(job?.po || job?.poNumber || job?.orderNumber || '').trim();
-      const authoritativeJob = mappedOrders.find((order: any) => String(order?.po || '').trim() === jobPo);
+      let authoritativeJob = mappedOrders.find((order: any) => String(order?.po || '').trim() === jobPo);
+      if (!authoritativeJob && jobPo) {
+        const token = getPartnerDashboardToken();
+        if (token) {
+          try {
+            const response = await fetch('/api/v1/orders/fixer', {
+              headers: { Authorization: `Bearer ${token}` },
+              signal: AbortSignal.timeout(8000),
+            });
+            if (response.ok) {
+              const latestOrders = await response.json();
+              if (Array.isArray(latestOrders)) {
+                setOrders(latestOrders);
+                const latestOrder = latestOrders.find((order: any) => extractPoCode(order) === jobPo);
+                authoritativeJob = latestOrder ? {
+                  ...latestOrder,
+                  po: jobPo,
+                  service: latestOrder.serviceCategory || latestOrder.service,
+                  customer: latestOrder.user?.name || latestOrder.customer,
+                  budget: latestOrder.estimatedPrice || latestOrder.budget,
+                } : undefined;
+              }
+            }
+          } catch {
+            // Keep the cached row visible; authoritative fields will reconcile on the next refresh.
+          }
+        }
+      }
       const hydratedJob = mergeFixerWorkflowRecord(job, authoritativeJob);
       setWaitModalOrder(hydratedJob);
+      if (!authoritativeJob?.sourceVersion) {
       // Write breakdown to localStorage so customer's dashboard Approve Variation can read it (same-browser demo)
       try {
         const po = job?.po;
@@ -2394,6 +2425,7 @@ export default function FixerProPage() {
           }
         }
       } catch { /* non-blocking */ }
+      }
     } else {
       const poFromDesc = extractPoCode(job);
       const chatId = job.po || poFromDesc || job.id;
@@ -4467,6 +4499,7 @@ export default function FixerProPage() {
         existing.description,
       );
       const statusNote = entry.statusNote || entry.statusHistory?.[0]?.note || existing.statusNote || '';
+      const persistedChatHistory = projectWorkflowChatHistory(entry)?.messageItems || [];
       const customerCancelled = String(entry.status || existing.status || '').toUpperCase() === 'CANCELLED' && (
         isCustomerCancellationText(statusNote) ||
         entry.statusName === 'Cancelled by Customer' ||
@@ -4503,7 +4536,7 @@ export default function FixerProPage() {
         subdistrict: entry.subdistrict || entry.location || existing.subdistrict || existing.location || '',
         projectDetails: description,
         description: description || existing.description || '',
-        chatHistory: getLocalChatHistory(po),
+        chatHistory: persistedChatHistory.length ? persistedChatHistory : getLocalChatHistory(po),
         partnerRating: entry.partnerRating ?? existing.partnerRating,
       });
       return map;
@@ -4609,38 +4642,25 @@ export default function FixerProPage() {
       ...mockActiveState.filter((x: any) => Number(x.step || 0) >= 6).map((x: any) => x.po),
       ...partnerDynReqs.filter((r: any) => r.type === 'accept_sent').map((r: any) => r.po),
     ]);
-    // MEETING_REQUESTED always shows for partner to confirm, regardless of mock step state
-    const hasMeetingInviteSignal = (job: any) => {
-      const status = String(job?.status || '').toUpperCase();
-      const workflowPhase = String(job?.workflowPhase || '').toUpperCase();
-      return status === 'MEETING_REQUESTED' && workflowPhase === 'MEETING_CONFIRM';
-    };
-    let incomingJobs = mappedOrders.filter(o =>
-      !completedHistoryPos.has(o.po) &&
-      !declinedPartnerPos.has(o.po) &&
-      !isClosedPartnerWorkflowPo(o.po) &&
-      (
-        (['CREATED', 'PENDING', 'MATCHING'].includes(o.status) && !acceptedPos.has(o.po)) ||
-        hasMeetingInviteSignal(o)
-      )
-    ).map((job: any) => {
-      if (!hasMeetingInviteSignal(job)) return job;
-      const meetingDetails = projectPartnerMeetingConfirmation(job);
-      return {
-        ...job,
-        ...meetingDetails,
-        id: `meeting-confirm-${job.po || job.id}`,
-        type: 'meeting_confirm_partner',
-        workflowType: 'meeting_confirm_partner',
-        status: 'MEETING_REQUESTED',
-        step: 8,
-        mockStep: 8,
-        actionNeeded: true,
-        description: 'Customer sent a site meeting invitation. Please review and confirm the meeting time.',
-        projectDetails: pickProjectDetails(job.po, job.projectDetails, job.description, job.desc),
-        location: job.location || meetingDetails.meetingVenue,
-        subdistrict: job.subdistrict || job.location || meetingDetails.meetingVenue,
-      };
+    let incomingJobs = mappedOrders.flatMap((job: any) => {
+      if (
+        completedHistoryPos.has(job.po) ||
+        declinedPartnerPos.has(job.po) ||
+        isClosedPartnerWorkflowPo(job.po)
+      ) return [];
+
+      const authoritativeRequest = projectPartnerWorkflowRequest(job);
+      if (authoritativeRequest) {
+        return [{
+          ...job,
+          ...authoritativeRequest,
+          projectDetails: pickProjectDetails(job.po, job.projectDetails, job.description, job.desc),
+        }];
+      }
+      if (['CREATED', 'PENDING', 'MATCHING'].includes(job.status) && !acceptedPos.has(job.po)) {
+        return [job];
+      }
+      return [];
     });
 
   const parseTs = (v: any) => {
@@ -4988,6 +5008,7 @@ export default function FixerProPage() {
     .filter((job: any) => {
       const po = String(job?.po || '').trim();
       if (!po || completedHistoryPos.has(po) || declinedPartnerPos.has(po) || isClosedPartnerWorkflowPo(po)) return false;
+      if (Array.isArray(job?.actions) && !projectPartnerWorkflowRequest(job)) return false;
       const step = parseWorkflowStep(job?.step || job?.mockStep);
       const existingMeetingRequest =
         partnerDynReqs.some((req: any) => req?.po === po && String(req?.workflowType || req?.type || '').toLowerCase() === 'meeting_confirm_partner') ||
@@ -5022,12 +5043,15 @@ export default function FixerProPage() {
       };
     });
 
-  const reconciledPartnerDynReqs = partnerDynReqs.map((request: any) => {
+  const reconciledPartnerDynReqs = partnerDynReqs.flatMap((request: any) => {
     const type = String(request?.workflowType || request?.type || '').toLowerCase();
-    if (type !== 'meeting_confirm_partner') return request;
+    if (type !== 'meeting_confirm_partner') return [request];
     const backendOrder = mappedOrders.find((order: any) => order?.po === request?.po);
-    return backendOrder ? reconcilePartnerMeetingRequest(request, backendOrder) : request;
+    if (!backendOrder) return [request];
+    const authoritativeRequest = projectPartnerWorkflowRequest(backendOrder);
+    return authoritativeRequest ? [authoritativeRequest] : [];
   });
+
   const partnerDynReqsForRequests = filterBlockedPartnerAdvancedItems(
     reconciledPartnerDynReqs.filter((r: any) => {
       const po = String(r?.po || '').trim();
@@ -6115,143 +6139,28 @@ export default function FixerProPage() {
                   const budgetLabel = waitModalOrder.fee || (waitModalOrder.budget ? `฿${String(waitModalOrder.budget).replace(/^฿/, '')}` : '฿0');
                   try {
                     const token = getPartnerDashboardToken();
-                    try {
-                      let wf = JSON.parse(localStorage.getItem("cblue_workflow") || "{}");
-                      if(wf) {
-                        wf.step = isMeetingConfirmation ? 8 : 6;
-                        localStorage.setItem("cblue_workflow", JSON.stringify(wf));
-                      }
-                    } catch(e) {}
                     if (isMeetingConfirmation) {
-                      const schedId = `meet-scheduled-${po}`;
-                      const meetingSummary = [waitModalMeetingDetails.meetingDate, waitModalMeetingDetails.meetingTime].filter(Boolean).join(' ');
-                      const confirmedMeetingDate = waitModalMeetingDetails.meetingDate;
-                      const confirmedMeetingTime = waitModalMeetingDetails.meetingTime;
-                      const confirmedMeetingVenue = waitModalMeetingDetails.meetingVenue;
-                      const confirmedMeetingDateForMessage = /^\d{4}-\d{2}-\d{2}$/.test(String(confirmedMeetingDate || ''))
-                        ? (() => { const [y, m, d] = String(confirmedMeetingDate).split('-'); return `${d}/${m}/${y}`; })()
-                        : confirmedMeetingDate;
-                      const confirmedMeetingBackendText = `Partner confirmed site meeting for ${po}: ${confirmedMeetingDateForMessage} ${confirmedMeetingTime} at ${confirmedMeetingVenue}. Next: Send variation if needed.`;
-                      const workflowAttachmentFields = {
-                        hasAttachment: Boolean(
-                          waitModalOrder.hasAttachment ||
-                          waitModalOrder.attachmentUrl ||
-                          (Array.isArray(waitModalOrder.images) && waitModalOrder.images.length > 0) ||
-                          (Array.isArray(waitModalOrder.attachments) && waitModalOrder.attachments.length > 0) ||
-                          (Array.isArray(waitModalOrder.imageUrls) && waitModalOrder.imageUrls.length > 0)
-                        ),
-                        images: Array.isArray(waitModalOrder.images) ? waitModalOrder.images : [],
-                        attachments: Array.isArray(waitModalOrder.attachments) ? waitModalOrder.attachments : [],
-                        imageUrls: Array.isArray(waitModalOrder.imageUrls) ? waitModalOrder.imageUrls : [],
-                        issueImage: waitModalOrder.issueImage || '',
-                        attachmentUrl: waitModalOrder.attachmentUrl || '',
-                        metadata: waitModalOrder.metadata,
-                      };
-                      // Use PO-based matching (not waitModalOrder.id) because mockDynReqs IDs are
-                      // 'meet-pending-{po}', not the backend UUID stored in waitModalOrder.id
-                      const confirmedAt = Date.now();
-                      const meetingCustNoticeId = `meeting-confirmed-notice-${po}`;
-                      const origMeetingItem = mockDynReqs.find((r: any) => r.po === po && r.type === 'meeting_pending_partner');
-                      const backendMeetingItem = mappedOrders.find((r: any) => r.po === po);
-                      const customerEmailForAlert = origMeetingItem?.customerEmail || waitModalOrder.customerEmail || backendMeetingItem?.customerEmail || '';
-                      const customerNameForAlert = origMeetingItem?.customerName || waitModalOrder.customerName || waitModalOrder.customer || backendMeetingItem?.customer || 'Customer';
-                      const nextReqs = [
-                        ...mockDynReqs.filter((r: any) => !(r.po === po && r.type === 'meeting_pending_partner') && r.id !== schedId && r.id !== meetingCustNoticeId),
-                        { id: schedId, po, title: waitModalOrder.service || serviceTitle, customer: customerNameForAlert, customerName: customerNameForAlert, customerEmail: customerEmailForAlert, date: now, createdAt: confirmedAt, budget: budgetLabel, tier: waitModalOrder.tier, type: 'meeting_scheduled', confirmedByPartner: true, step: 8, venue: confirmedMeetingVenue, meetingVenue: confirmedMeetingVenue, location: waitModalProjectLocation, subdistrict: waitModalProjectLocation, meetingDate: confirmedMeetingDate, meetingTime: confirmedMeetingTime, desc: `Meeting confirmed by partner${meetingSummary ? ` for ${meetingSummary}` : ''}${confirmedMeetingVenue ? ` at ${confirmedMeetingVenue}` : ''}. Proceed after the site meeting then mark variation.` },
-                        { title: `Meeting Confirmed - ${po}`, customer: customerNameForAlert, date: now, step: 8, desc: `${po} Meeting confirmed`, ...buildMeetingConfirmedAlert({ id: meetingCustNoticeId, po, audience: 'customer', createdAt: confirmedAt, time: now, customerEmail: customerEmailForAlert, customerName: customerNameForAlert }) },
-                      ];
-                      const existingActive = mockActiveState.find((x: any) => x.po === po);
-                      const activeSnapshot = {
-                        ...(existingActive || {}),
-                        id: existingActive?.id || backendOrderId || waitModalOrder.id || `active-${po}`,
-                        orderId: backendOrderId || waitModalOrder.orderId || existingActive?.orderId || undefined,
-                        po,
-                        service: existingActive?.service || waitModalOrder.service || serviceTitle,
-                        serviceTh: existingActive?.serviceTh || waitModalOrder.service || serviceTitle,
-                        serviceZh: existingActive?.serviceZh || waitModalOrder.service || serviceTitle,
-                        title: existingActive?.title || waitModalOrder.service || serviceTitle,
-                        customer: existingActive?.customer || customerNameForAlert,
-                        date: existingActive?.date || waitModalOrder.date || now,
-                        createdAt: existingActive?.createdAt || waitModalOrder.createdAt || confirmedAt,
-                        budget: existingActive?.budget || budgetLabel,
-                        fee: existingActive?.fee || budgetLabel,
-                        tier: existingActive?.tier || waitModalOrder.tier,
-                        description: existingActive?.description || waitModalOrder.description || '',
-                        customerEmail: existingActive?.customerEmail || customerEmailForAlert,
-                        customerName: existingActive?.customerName || customerNameForAlert,
-                        ...workflowAttachmentFields,
-                        location: existingActive?.location || waitModalProjectLocation,
-                        subdistrict: existingActive?.subdistrict || waitModalProjectLocation,
-                        meetingDate: existingActive?.meetingDate || confirmedMeetingDate,
-                        meetingTime: existingActive?.meetingTime || confirmedMeetingTime,
-                        meetingVenue: existingActive?.meetingVenue || confirmedMeetingVenue,
-                        venue: existingActive?.venue || confirmedMeetingVenue,
-                        step: 9,
-                        mockStep: 9,
-                        actionNeeded: false,
-                      };
-                      const nextActive = [
-                        ...mockActiveState.filter((x: any) => x.po !== po),
-                        activeSnapshot,
-                      ];
-                      const persistedNextReqs = persistWorkflowCacheItems("ghis_mock_dyn_req", nextReqs);
-                      const persistedNextActive = persistWorkflowCacheItems("ghis_mock_active", nextActive);
-                      const nextPartnerReqs = [
-                        ...partnerDynReqs.filter((r: any) => !(r.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(r.type))),
-                        { id: `variation-${po}`, orderId: backendOrderId || waitModalOrder.orderId || undefined, po, service: waitModalOrder.service || serviceTitle, serviceTh: waitModalOrder.service || serviceTitle, serviceZh: waitModalOrder.service || serviceTitle, customer: customerNameForAlert, customerName: customerNameForAlert, customerEmail: customerEmailForAlert, date: now, createdAt: confirmedAt, fee: budgetLabel, budget: String(budgetLabel).replace(/[^0-9]/g, ''), tier: waitModalOrder.tier, description: (mappedOrders as any[]).find((o: any) => o?.po === po)?.description || waitModalOrder?.description || 'Proceed to submit variation request if extra work or price adjustment is required.', ...workflowAttachmentFields, location: waitModalOrder?.location || waitModalOrder?.subdistrict || '', type: 'variation_partner', step: 9, meetingDate: confirmedMeetingDate, meetingTime: confirmedMeetingTime, meetingVenue: confirmedMeetingVenue, venue: confirmedMeetingVenue },
-                      ];
-                      const persistedPartnerReqs = persistWorkflowCacheItems("partner_mock_dyn_req", nextPartnerReqs);
-                      try {
-                        const alertId = `meeting-confirmed-${po}`;
-                        const existingAlerts = JSON.parse(localStorage.getItem('partner_alerts') || '[]');
-                        const nextAlerts = [
-                          buildMeetingConfirmedAlert({ id: alertId, po, audience: 'partner', createdAt: confirmedAt, time: now }),
-                          ...existingAlerts.filter((alert: any) => alert?.id !== alertId),
-                        ].slice(0, 20);
-                        writeWorkflowStorage('partner_alerts', nextAlerts);
-                        setPartnerPersistedAlerts(nextAlerts);
-                      } catch {}
-                      // Write customer alert to inform customer that partner confirmed the meeting
-                      try {
-                        const custEmailRaw = String(customerEmailForAlert).trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
-                        const custAlertsKey = custEmailRaw ? `cblue_customer_alerts_${custEmailRaw}` : 'cblue_customer_alerts';
-                        const existingCustAlerts = JSON.parse(localStorage.getItem(custAlertsKey) || '[]');
-                        const legacyCustAlerts = JSON.parse(localStorage.getItem('cblue_customer_alerts') || '[]');
-                        const custAlertId = `meeting-confirmed-cust-${po}`;
-                        const confirmedCustAlert = buildMeetingConfirmedAlert({
-                          id: custAlertId,
-                          po,
-                          audience: 'customer',
-                          createdAt: confirmedAt,
-                          time: now,
-                          customerEmail: customerEmailForAlert,
-                          customerName: customerNameForAlert,
-                        });
-                        const nextCustAlerts = [confirmedCustAlert, ...(Array.isArray(existingCustAlerts) ? existingCustAlerts.filter((a: any) => a?.id !== custAlertId) : [])].slice(0, 20);
-                        const nextLegacyCustAlerts = [confirmedCustAlert, ...(Array.isArray(legacyCustAlerts) ? legacyCustAlerts.filter((a: any) => a?.id !== custAlertId) : [])].slice(0, 20);
-                        writeWorkflowStorage(custAlertsKey, nextCustAlerts);
-                        writeWorkflowStorage('cblue_customer_alerts', nextLegacyCustAlerts);
-                      } catch {}
-                      setMockDynReqs(persistedNextReqs);
-                      setMockActiveState(persistedNextActive);
-                      setPartnerDynReqs(persistedPartnerReqs);
-                      window.dispatchEvent(new Event("storage"));
-                      // Update backend: MEETING_REQUESTED → IN_PROGRESS (meeting confirmed; customer page polls and auto-detects)
-                      if (backendOrderId && !waitModalOrder.mock && token) {
-                        if (String(waitModalOrder.status || '').toUpperCase() !== 'IN_PROGRESS') {
-                          fetch(`/api/v1/orders/${backendOrderId}/status`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                            body: JSON.stringify({ status: 'IN_PROGRESS', note: confirmedMeetingBackendText }),
-                          }).catch(() => {});
-                        }
-                        fetch(`/api/v1/orders/${backendOrderId}/chat`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                          body: JSON.stringify({ text: `[SYSTEM] ${confirmedMeetingBackendText}` }),
-                        }).catch(() => {});
-                      }
+                      const workflowSnapshot: any = await postFixerWorkflowAction({
+                        poNumber: po,
+                        action: "confirm-meeting",
+                        token,
+                        idempotencyKey: `${po}:confirm-meeting:${Number(waitModalOrder.workflowVersion || waitModalOrder.workflowRevision || 0)}`,
+                      });
+                      setOrders((previous) => previous.map((order: any) => {
+                        if (extractPoCode(order) !== po) return order;
+                        const meeting = workflowSnapshot?.meeting || {};
+                        return {
+                          ...order,
+                          ...workflowSnapshot,
+                          workflowRevision: workflowSnapshot?.workflowVersion ?? order.workflowRevision,
+                          meetingDate: meeting.date || order.meetingDate,
+                          meetingTime: meeting.time || order.meetingTime,
+                          meetingVenue: meeting.venue || order.meetingVenue,
+                          meetingNote: meeting.note || order.meetingNote,
+                        };
+                      }));
                       setWaitModalOrder(null);
+                      window.dispatchEvent(new Event("cblue-workflow-updated"));
                       return;
                     }
 

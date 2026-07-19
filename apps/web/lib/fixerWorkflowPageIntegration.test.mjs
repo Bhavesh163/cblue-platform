@@ -10,6 +10,10 @@ const customerPage = readFileSync(
   new URL("../app/[locale]/dashboard/page.tsx", import.meta.url),
   "utf8",
 );
+const customerChatPage = readFileSync(
+  new URL("../app/[locale]/chat/[id]/ClientChatPage.tsx", import.meta.url),
+  "utf8",
+);
 const projectionDeclaration = readFileSync(
   new URL("./fixerWorkflowUiProjection.d.ts", import.meta.url),
   "utf8",
@@ -89,4 +93,38 @@ test("customer and partner pages project persisted Step 9 and meeting events", (
     partnerPage,
     /existing\?\.authoritative !== true && createdAt >= parseTs/,
   );
+});
+
+test("partner meeting confirmation awaits the authoritative action snapshot", () => {
+  assert.match(partnerPage, /postFixerWorkflowAction/);
+  const branchStart = partnerPage.indexOf("if (isMeetingConfirmation) {");
+  const branchEnd = partnerPage.indexOf("let backendAcceptError", branchStart);
+  assert.ok(branchStart > 0 && branchEnd > branchStart);
+  const branch = partnerPage.slice(branchStart, branchEnd);
+
+  assert.match(branch, /await postFixerWorkflowAction\(\{/);
+  assert.match(branch, /action:\s*["']confirm-meeting["']/);
+  assert.match(branch, /setWaitModalOrder\(null\)/);
+  assert.doesNotMatch(branch, /Date\.now\(\)/);
+  assert.doesNotMatch(branch, /\/orders\/\$\{backendOrderId\}\/status/);
+  assert.doesNotMatch(branch, /\/orders\/\$\{backendOrderId\}\/chat/);
+  assert.doesNotMatch(branch, /meeting-confirmed-cust-/);
+  assert.doesNotMatch(branch, /partner_mock_dyn_req/);
+});
+
+test("customer Step 9 stays active and uses persisted meetings/history", () => {
+  assert.match(customerPage, /projectUpcomingFixerMeetings\(authoritativeWorkflowOrders\)/);
+  assert.match(customerPage, /projectWorkflowChatHistory\(entry\)/);
+  assert.match(customerPage, /Array\.isArray\(backendItem\.actions\)/);
+  assert.match(customerPage, /send-meeting-invitation/);
+  assert.match(partnerPage, /projectWorkflowChatHistory\(entry\)/);
+});
+
+test("direct fixer chat has no fabricated default room or PO parsing fallback", () => {
+  assert.doesNotMatch(customerChatPage, /defaultMessages/);
+  assert.doesNotMatch(customerChatPage, /ghis_mock_active/);
+  assert.doesNotMatch(customerChatPage, /poFromDesc/);
+  assert.doesNotMatch(customerChatPage, /po_to_order_/);
+  assert.match(customerChatPage, /applyAuthoritativeOrderMetadata/);
+  assert.match(customerChatPage, /serviceCategory \|\| order\?\.service \|\| order\?\.title/);
 });

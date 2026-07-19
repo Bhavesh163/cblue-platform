@@ -401,8 +401,21 @@ describe('OrderService', () => {
       const result = await service.findByUser('customer-1');
 
       expect(result[0]).toMatchObject({
+        sourceVersion: 'cblue-fixer-workflow-v1',
         currentStep: 9,
+        totalSteps: 11,
         workflowPhase: 'VARIATION',
+        activityBucket: 'active',
+        actions: [
+          expect.objectContaining({
+            key: 'customer-cancel',
+            owner: 'customer',
+            actionStep: 9,
+          }),
+        ],
+        actionNeeded: false,
+        nextActionKey: null,
+        nextActionOwner: null,
         workflowEvents: [{
           action: 'confirm-meeting',
           actorRole: 'partner',
@@ -483,13 +496,121 @@ describe('OrderService', () => {
       const result = await service.findMyFixerOrders('partner-user-1');
 
       expect(result[0]).toMatchObject({
+        sourceVersion: 'cblue-fixer-workflow-v1',
         currentStep: 9,
+        totalSteps: 11,
         workflowPhase: 'VARIATION',
+        activityBucket: 'active',
+        actions: [
+          expect.objectContaining({
+            key: 'send-variation',
+            owner: 'partner',
+            actionStep: 9,
+          }),
+          expect.objectContaining({
+            key: 'skip-variation',
+            owner: 'partner',
+            actionStep: 9,
+          }),
+        ],
+        actionNeeded: true,
+        nextActionKey: 'send-variation',
+        nextActionOwner: 'partner',
         workflowEvents: [{
           action: 'confirm-meeting',
           actorRole: 'partner',
           createdAt: '2026-07-19T10:30:00.000Z',
         }],
+      });
+    });
+
+    it('returns the persisted Step 8 meeting and partner confirmation action', async () => {
+      prisma.user.findUnique.mockResolvedValue({ fixer: { id: 'fixer-1' } });
+      prisma.order.findMany.mockResolvedValue([{
+        id: 'order-1',
+        userId: 'customer-1',
+        fixerId: 'fixer-1',
+        status: OrderStatus.MEETING_REQUESTED,
+        workflowPhase: 'MEETING_CONFIRM',
+        workflowRevision: 4,
+        chatEnabled: true,
+        meetingDate: '2026-07-21',
+        meetingTime: '14:30',
+        meetingVenue: '13.794095, 100.609583',
+        meetingNote: 'Please meet at the reception desk.',
+        description: 'PO-2607-9458 | Cladding roofing',
+        workflowActions: [{
+          action: 'send-meeting-invitation',
+          actorUserId: 'customer-1',
+          createdAt: new Date('2026-07-19T09:00:00.000Z'),
+        }],
+      }]);
+      prisma.user.findMany.mockResolvedValue([{
+        id: 'customer-1',
+        name: 'Customer',
+        email: 'customer@example.com',
+        role: UserRole.USER,
+      }]);
+
+      const result = await service.findMyFixerOrders('partner-user-1');
+
+      expect(result[0]).toMatchObject({
+        currentStep: 8,
+        totalSteps: 11,
+        activityBucket: 'request',
+        workflowVersion: 4,
+        chat: { enabled: true },
+        meetingDate: '2026-07-21',
+        meetingTime: '14:30',
+        meetingVenue: '13.794095, 100.609583',
+        meetingNote: 'Please meet at the reception desk.',
+        actions: [{
+          key: 'confirm-meeting',
+          owner: 'partner',
+          label: 'Confirm Meeting',
+          actionStep: 8,
+        }],
+        nextActionKey: 'confirm-meeting',
+        nextActionOwner: 'partner',
+      });
+    });
+
+    it('keeps terminal workflow messages in history without live chat actions', async () => {
+      prisma.user.findUnique.mockResolvedValue({ fixer: { id: 'fixer-1' } });
+      prisma.order.findMany.mockResolvedValue([{
+        id: 'order-1',
+        userId: 'customer-1',
+        fixerId: 'fixer-1',
+        status: OrderStatus.COMPLETED,
+        workflowPhase: 'TERMINAL',
+        chatEnabled: true,
+        archivedAt: new Date('2026-07-19T12:00:00.000Z'),
+        description: 'PO-2607-9458 | Cladding roofing',
+        workflowActions: [],
+        chatMessages: [{
+          id: 'message-1',
+          senderUserId: 'customer-1',
+          senderRole: UserRole.USER,
+          text: 'Thank you.',
+          createdAt: new Date('2026-07-19T11:30:00.000Z'),
+        }],
+      }]);
+      prisma.user.findMany.mockResolvedValue([
+        { id: 'customer-1', name: 'Customer', email: 'customer@example.com' },
+      ]);
+
+      const result = await service.findMyFixerOrders('partner-user-1');
+
+      expect(result[0]).toMatchObject({
+        currentStep: 11,
+        activityBucket: 'history',
+        chat: { enabled: false },
+        actions: [],
+        actionNeeded: false,
+        nextActionKey: null,
+        chatMessages: [
+          expect.objectContaining({ id: 'message-1', text: 'Thank you.' }),
+        ],
       });
     });
 

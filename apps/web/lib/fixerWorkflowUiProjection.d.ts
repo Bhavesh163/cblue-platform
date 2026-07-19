@@ -7,6 +7,15 @@ export interface FixerWorkflowUiOrder {
   status?: string | null;
   workflowPhase?: string | null;
   currentStep?: number | null;
+  activityBucket?: "request" | "active" | "history" | null;
+  actions?: Array<{
+    key?: string | null;
+    owner?: "customer" | "partner" | null;
+    label?: string | null;
+    actionStep?: number | null;
+    feeMode?: "payment" | "free-pass" | null;
+  }> | null;
+  chatMessages?: Array<Record<string, unknown>> | null;
   workflowEvents?: Array<{
     action?: string | null;
     createdAt?: string | number | null;
@@ -132,3 +141,37 @@ export interface WorkflowUiAlert {
 export function buildCustomerMeetingAwaitingPartnerAlert(order?: FixerWorkflowUiOrder | null): WorkflowUiAlert | null;
 export function buildMeetingConfirmedWorkflowAlert(order?: FixerWorkflowUiOrder | null): WorkflowUiAlert | null;
 export function mergeAuthoritativeWorkflowAlerts(alerts?: Array<WorkflowUiAlert | null | undefined>): WorkflowUiAlert[];
+
+export interface PartnerWorkflowRequest extends Record<string, unknown> {
+  po: string;
+  workflowType: "meeting_confirm_partner" | "variation_decision_partner";
+  type: "meeting_confirm_partner" | "variation_decision_partner";
+  step: number;
+  actionNeeded: true;
+  actionKey: string;
+  actionLabel: string;
+  availableActions: string[];
+}
+
+export function projectPartnerWorkflowRequest(
+  order?: FixerWorkflowUiOrder | null,
+): PartnerWorkflowRequest | null;
+
+export interface WorkflowChatHistoryProjection {
+  id: string;
+  po: string;
+  name: string;
+  service: string;
+  readOnly: true;
+  messageItems: unknown[];
+}
+
+export function projectWorkflowChatHistory(
+  order?: FixerWorkflowUiOrder | null,
+  messages?: unknown[],
+): WorkflowChatHistoryProjection | null;
+
+export function projectUpcomingFixerMeetings(
+  orders?: FixerWorkflowUiOrder[],
+  now?: number,
+): Array<FixerWorkflowUiOrder & PartnerMeetingProjection & { po: string; meetingAt: number }>;

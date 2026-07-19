@@ -1136,7 +1136,9 @@ export function resolvePersistedFixerWorkflowSnapshot({
   );
   const invitedCustomer = phase === 'MEETING_CONFIRM' && viewerIsCustomer;
   const activityBucket = invitedCustomer ? 'active' : state.bucket;
-  const nextAction = invitedCustomer ? null : actions[0] || null;
+  const nextAction = invitedCustomer
+    ? null
+    : actions.find((action) => action.key !== 'customer-cancel') || null;
   return {
     sourceVersion: 'cblue-fixer-workflow-v1',
     poNumber,

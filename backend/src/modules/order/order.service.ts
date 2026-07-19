@@ -14,6 +14,7 @@ import { CreateOrderChatMessageDto } from './dto/create-order-chat-message.dto';
 import { UploadOrderAttachmentDto } from './dto/upload-order-attachment.dto';
 import { UploadOrderAttachmentsBatchDto } from './dto/upload-order-attachments-batch.dto';
 import { UpdateOrderBudgetBreakdownDto } from './dto/update-order-budget-breakdown.dto';
+import { resolvePersistedFixerWorkflowSnapshot } from '../blue-bridge/blue-bridge.service';
 
 // Valid status transitions
 const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
@@ -72,23 +73,34 @@ const isHiddenTestOrder = (description?: string | null) =>
       .includes(po),
   );
 
-const FIXER_WORKFLOW_STEP_BY_PHASE: Record<string, number> = {
-  DRAFT: 3,
-  PARTNER_DECISION: 5,
-  FEE: 6,
-  CHAT: 7,
-  MEETING_CONFIRM: 8,
-  VARIATION: 9,
-  VARIATION_CONFIRM: 9,
-  COMPLETION: 10,
-  COMPLETION_CONFIRM: 10,
-  RATING: 11,
-  TERMINAL: 11,
-};
+function persistedOrderReference(description: unknown): string | null {
+  const match = /^\s*(PO-\d{4}-\d+)\s*(?:\||$)/i.exec(
+    String(description || ''),
+  );
+  return match ? match[1].toUpperCase() : null;
+}
 
-function projectOrderWorkflow(order: any, partnerUserId?: string | null) {
-  const phase = String(order.workflowPhase || '').trim().toUpperCase();
-  const currentStep = FIXER_WORKFLOW_STEP_BY_PHASE[phase] || null;
+function fullyRatedAtFromActions(order: any): Date | string | null {
+  const ratingEvents = (order.workflowActions || []).filter((event: any) =>
+    ['rate-partner', 'rate-customer'].includes(String(event?.action || '')),
+  );
+  const ratings = new Set(
+    ratingEvents.map((event: any) => String(event?.action || '')),
+  );
+  if (!ratings.has('rate-partner') || !ratings.has('rate-customer')) {
+    return null;
+  }
+  return (
+    [...ratingEvents].reverse().find((event: any) => event?.createdAt)
+      ?.createdAt || null
+  );
+}
+
+function projectOrderWorkflow(
+  order: any,
+  partnerUserId?: string | null,
+  viewerUserId?: string | null,
+) {
   const workflowEvents = (order.workflowActions || []).flatMap((event: any) => {
     const actorUserId = String(event?.actorUserId || '');
     const actorRole =
@@ -110,10 +122,28 @@ function projectOrderWorkflow(order: any, partnerUserId?: string | null) {
       },
     ];
   });
+  const poNumber = persistedOrderReference(order.description);
+  const workflowSnapshot = poNumber
+    ? resolvePersistedFixerWorkflowSnapshot({
+        poNumber,
+        status: order.status,
+        workflowPhase: order.workflowPhase,
+        archivedAt: order.archivedAt,
+        workflowVersion: order.workflowRevision,
+        chatEnabled: order.chatEnabled,
+        completedActionKeys: (order.workflowActions || []).map((event: any) =>
+          String(event?.action || ''),
+        ),
+        customerUserId: order.userId,
+        fixerUserId: partnerUserId,
+        viewerUserIds: viewerUserId ? [String(viewerUserId)] : [],
+        ratedAt: fullyRatedAtFromActions(order),
+      })
+    : {};
 
   return {
     ...order,
-    ...(currentStep ? { currentStep, totalSteps: 11 } : {}),
+    ...workflowSnapshot,
     workflowEvents,
   };
 }
@@ -273,6 +303,17 @@ export class OrderService {
             select: { action: true, actorUserId: true, createdAt: true },
             orderBy: { createdAt: 'asc' },
           },
+          chatMessages: {
+            select: {
+              id: true,
+              senderUserId: true,
+              senderRole: true,
+              text: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: 'asc' },
+            take: 100,
+          },
         },
         orderBy: { createdAt: 'desc' },
       });
@@ -338,7 +379,7 @@ export class OrderService {
             }
           : null,
         };
-        return projectOrderWorkflow(projectedOrder, partnerUserId);
+        return projectOrderWorkflow(projectedOrder, partnerUserId, userId);
       });
   }
 
@@ -414,6 +455,17 @@ export class OrderService {
             select: { action: true, actorUserId: true, createdAt: true },
             orderBy: { createdAt: 'asc' },
           },
+          chatMessages: {
+            select: {
+              id: true,
+              senderUserId: true,
+              senderRole: true,
+              text: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: 'asc' },
+            take: 100,
+          },
         },
         orderBy: { createdAt: 'desc' },
       });
@@ -459,6 +511,7 @@ export class OrderService {
       .map((order) =>
         projectOrderWorkflow(
           { ...order, user: customerMap.get(order.userId) || null },
+          partnerUserId,
           partnerUserId,
         ),
       );

@@ -104,28 +104,37 @@ function numericBudget(order) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function fixerChatIdentity(order) {
+  const po = explicitPo(order);
+  if (!po) return null;
+  const service =
+    normalizedText(order?.service) ||
+    normalizedText(order?.serviceCategory) ||
+    normalizedText(order?.title) ||
+    normalizedText(order?.serviceTh) ||
+    po;
+  const budget = numericBudget(order);
+  return {
+    po,
+    service,
+    name: `${service} - ${po} - ฿${budget.toLocaleString("en-US")}`,
+  };
+}
+
 export function projectFixerChatRoom(order = null, messages = []) {
   if (!order || isClosedWorkflowActivity(order)) return null;
   const chatEnabled = order?.chat?.enabled ?? order?.chatEnabled;
   if (chatEnabled !== true) return null;
 
-  const po = explicitPo(order);
-  if (!po) return null;
+  const identity = fixerChatIdentity(order);
+  if (!identity) return null;
   const messageItems = Array.isArray(messages) ? messages.filter(Boolean) : [];
   if (!messageItems.length) return null;
   const latest = messageItems[messageItems.length - 1] || {};
-  const service =
-    normalizedText(order?.service) ||
-    normalizedText(order?.title) ||
-    normalizedText(order?.serviceTh) ||
-    po;
-  const budget = numericBudget(order);
 
   return {
-    id: po,
-    po,
-    name: `${service} - ${po} - ฿${budget.toLocaleString("en-US")}`,
-    service,
+    id: identity.po,
+    ...identity,
     lastMsg: normalizedText(latest?.text),
     time: latest?.time || latest?.createdAt || "",
     messageItems,
@@ -210,6 +219,13 @@ export function buildMeetingConfirmedWorkflowAlert(order = null) {
 }
 
 export function isCustomerFixerActionNeeded(order = null, fallbackStep = 0) {
+  if (Array.isArray(order?.actions)) {
+    return order.actions.some(
+      (action) =>
+        normalizedText(action?.owner) === "customer" &&
+        normalizedText(action?.key) !== "customer-cancel",
+    );
+  }
   const phase = normalizedText(order?.workflowPhase).toUpperCase();
   const status = normalizedText(order?.status).toUpperCase();
 
@@ -291,4 +307,104 @@ export function mergeAuthoritativeWorkflowAlerts(alerts = []) {
     .sort(
       (left, right) => timestamp(right.createdAt || right.time) - timestamp(left.createdAt || left.time),
     );
+}
+
+export function projectPartnerWorkflowRequest(order = null) {
+  if (!order || isClosedWorkflowActivity(order)) return null;
+  const partnerActions = (Array.isArray(order?.actions) ? order.actions : []).filter(
+    (action) => normalizedText(action?.owner) === "partner",
+  );
+  const primaryAction = partnerActions.find(
+    (action) => normalizedText(action?.key) !== "customer-cancel",
+  );
+  if (!primaryAction) return null;
+
+  const key = normalizedText(primaryAction.key);
+  const step = Number(primaryAction.actionStep || order?.currentStep || 0);
+  if (key === "confirm-meeting") {
+    return {
+      ...reconcilePartnerMeetingRequest(null, order),
+      actionKey: key,
+      actionLabel: normalizedText(primaryAction.label),
+      availableActions: partnerActions.map((action) => normalizedText(action?.key)).filter(Boolean),
+    };
+  }
+  if (["send-variation", "skip-variation"].includes(key)) {
+    return {
+      ...mergeFixerWorkflowRecord(null, order),
+      workflowType: "variation_decision_partner",
+      type: "variation_decision_partner",
+      step,
+      mockStep: step,
+      actionNeeded: true,
+      actionKey: key,
+      actionLabel: normalizedText(primaryAction.label),
+      availableActions: partnerActions.map((action) => normalizedText(action?.key)).filter(Boolean),
+    };
+  }
+  return null;
+}
+
+export function projectWorkflowChatHistory(order = null, messages = undefined) {
+  if (!order || !isClosedWorkflowActivity(order)) return null;
+  const identity = fixerChatIdentity(order);
+  if (!identity) return null;
+  const sourceMessages = Array.isArray(messages)
+    ? messages
+    : Array.isArray(order?.chatMessages)
+      ? order.chatMessages
+      : [];
+  const messageItems = sourceMessages.filter(Boolean);
+  if (!messageItems.length) return null;
+  return {
+    id: identity.po,
+    ...identity,
+    readOnly: true,
+    messageItems,
+  };
+}
+
+function meetingTimestamp(dateValue, timeValue) {
+  const date = normalizedText(dateValue);
+  const time = normalizedText(timeValue) || "00:00";
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  const localized = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(date);
+  let parts = null;
+  if (iso) parts = [Number(iso[1]), Number(iso[2]), Number(iso[3])];
+  if (localized) parts = [Number(localized[3]), Number(localized[2]), Number(localized[1])];
+  const timeParts = /^(\d{1,2}):(\d{2})$/.exec(time);
+  if (!parts || !timeParts) return 0;
+  const value = new Date(
+    parts[0],
+    parts[1] - 1,
+    parts[2],
+    Number(timeParts[1]),
+    Number(timeParts[2]),
+  ).getTime();
+  return Number.isFinite(value) ? value : 0;
+}
+
+export function projectUpcomingFixerMeetings(orders = [], now = Date.now()) {
+  return (Array.isArray(orders) ? orders : [])
+    .flatMap((order) => {
+      if (!order || isClosedWorkflowActivity(order)) return [];
+      const confirmed = (Array.isArray(order?.workflowEvents) ? order.workflowEvents : []).some(
+        (event) =>
+          normalizedText(event?.action) === "confirm-meeting" &&
+          normalizedText(event?.actorRole) === "partner" &&
+          timestamp(event?.createdAt) > 0,
+      );
+      if (!confirmed) return [];
+      const meeting = projectPartnerMeetingConfirmation(order);
+      const meetingAt = meetingTimestamp(meeting.meetingDate, meeting.meetingTime);
+      if (!meetingAt || meetingAt <= Number(now || 0)) return [];
+      return [{
+        ...mergeFixerWorkflowRecord(null, order),
+        po: explicitPo(order),
+        meetingAt,
+        meeting,
+      }];
+    })
+    .sort((left, right) => left.meetingAt - right.meetingAt)
+    .slice(0, 3);
 }

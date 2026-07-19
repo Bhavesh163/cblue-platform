@@ -59,6 +59,22 @@ test("does not mark the customer as action owner while the partner must confirm 
     isCustomerFixerActionNeeded({ status: "IN_PROGRESS", workflowPhase: "CHAT" }, 7),
     true,
   );
+  assert.equal(
+    isCustomerFixerActionNeeded({
+      sourceVersion: "cblue-fixer-workflow-v1",
+      currentStep: 9,
+      actions: [{ key: "customer-cancel", owner: "customer", actionStep: 9 }],
+    }, 9),
+    false,
+  );
+  assert.equal(
+    isCustomerFixerActionNeeded({
+      sourceVersion: "cblue-fixer-workflow-v1",
+      currentStep: 6,
+      actions: [{ key: "fee-proceed", owner: "customer", actionStep: 6 }],
+    }, 6),
+    true,
+  );
 });
 
 test("builds the current customer alert from persisted state and event timestamp", () => {

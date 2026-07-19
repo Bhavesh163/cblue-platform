@@ -25,18 +25,8 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
   const router = useRouter();
   const isPropertyPoChat = /^PRE-/i.test(orderId);
   const [mounted, setMounted] = useState(false);
-  const [chatTitle, setChatTitle] = useState(`Chat - ${orderId}`);
-  const defaultMessages = useRef([
-    {
-      id: 1,
-      sender: "system",
-      text: "Dear Khun Ghis, Please inform us of your available time to meet at the jobsite. This chat room is now created for you to connect",
-      time: "Just now"
-    }
-  ]);
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    ...defaultMessages.current
-  ]);
+  const [chatTitle, setChatTitle] = useState(orderId);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState("");
   const [orderDbId, setOrderDbId] = useState("");
   const [isChatClosed, setIsChatClosed] = useState(false);
@@ -66,18 +56,6 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
       currentRoleRef.current = String(sub?.role || "").toUpperCase();
     } catch {}
 
-    // Load chat title
-    try {
-      const storedTitle = localStorage.getItem(`chat_title_${orderId}`);
-      if (storedTitle) {
-        setChatTitle(storedTitle);
-      } else {
-        // Try to construct from mock active items
-        const mockActive = JSON.parse(localStorage.getItem("ghis_mock_active") || "[]");
-        const found = mockActive.find((x: any) => x.po === orderId);
-        if (found) setChatTitle(`${found.title} - ${found.po} - ${found.budget}`);
-      }
-    } catch {}
 
     const token = localStorage.getItem("subscriber_token") || "";
 
@@ -90,20 +68,27 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
       time: m?.createdAt ? fmtDateTime(m.createdAt) : (m?.time || ""),
       createdAt: m?.createdAt ? new Date(m.createdAt).getTime() : Date.now(),
     });
-    const detectClosed = (items: any[]) => {
-      if (localStorage.getItem(`chat_closed_${orderId}`) === "1") return true;
-      return items.some((m: any) => {
-        const text = String(m?.text || "").toLowerCase();
-        return text.includes('chat room is now closed') || text.includes('customer confirmed job complete');
-      });
+    const detectClosed = (_items: any[]) => localStorage.getItem(`chat_closed_${orderId}`) === "1";
+
+    const applyAuthoritativeOrderMetadata = (order: any) => {
+      const po = String(order?.po || order?.orderNumber || order?.order?.poNumber || orderId).trim();
+      const service = String(order?.serviceCategory || order?.service || order?.title || '').replace(/_/g, ' ').trim();
+      if (service && po) {
+        const rawBudget = order?.estimatedPrice ?? order?.totalBudget ?? order?.budget;
+        const numericBudget = Number(rawBudget);
+        const budget = Number.isFinite(numericBudget)
+          ? `฿${numericBudget.toLocaleString('en-US')}`
+          : String(rawBudget || '฿0');
+        setChatTitle(`${service} - ${po} - ${budget}`);
+      }
+      if (String(order?.activityBucket || '').toLowerCase() === 'history') {
+        setIsChatClosed(true);
+      }
     };
 
     const resolveOrderDbId = async () => {
       if (isPropertyPoChat) return "";
       if (isUuid(orderId)) return orderId;
-      // Check cached PO→UUID mapping stored at booking time
-      const cached = localStorage.getItem(`po_to_order_${orderId}`);
-      if (cached) return cached;
       if (!token) return "";
 
       const endpoints = ["/api/v1/orders/my", "/api/v1/orders/fixer"];
@@ -116,11 +101,12 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
           const orders = await res.json();
           if (!Array.isArray(orders)) continue;
           const found = orders.find((o: any) => {
-            const desc = String(o?.description || "");
-            const poFromDesc = desc.match(/PO-[A-Za-z0-9-]+/)?.[0] || "";
-            return o?.id === orderId || poFromDesc === orderId || o?.po === orderId;
+            return o?.id === orderId || o?.po === orderId || o?.orderNumber === orderId || o?.poNumber === orderId;
           });
-          if (found?.id) return found.id;
+          if (found?.id) {
+            applyAuthoritativeOrderMetadata(found);
+            return found.id;
+          }
         } catch {
           // Ignore and continue to local fallback.
         }
@@ -139,9 +125,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
             setMessages(parsed);
             setIsChatClosed(detectClosed(parsed));
           }
-        else localStorage.setItem(key, JSON.stringify(defaultMessages.current));
       }
-      else localStorage.setItem(key, JSON.stringify(defaultMessages.current));
     } catch {}
 
     const syncFromApi = async () => {
@@ -168,7 +152,7 @@ export default function ClientChatPage({ orderId, locale }: { orderId: string, l
         const mapped = apiMessages.map((m: any) => toLocalMessage(m));
         if (mapped.length > 0) {
           setMessages(mapped);
-          setIsChatClosed(detectClosed(mapped));
+          setIsChatClosed((previous) => previous || detectClosed(mapped));
           localStorage.setItem(key, JSON.stringify(mapped));
           window.dispatchEvent(new CustomEvent("cblue-chat-updated", { detail: { orderId } }));
         }

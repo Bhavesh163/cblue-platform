@@ -140,6 +140,16 @@ function getTextFields(value) {
 }
 
 export function isCustomerMeetingInviteActionAvailable(value = {}) {
+  const authoritativeActions = Array.isArray(value?.actions) ? value.actions : null;
+  if (value?.sourceVersion === "cblue-fixer-workflow-v1" || authoritativeActions) {
+    return Boolean(
+      authoritativeActions?.some(
+        (action) =>
+          String(action?.key || "").trim() === "send-meeting-invitation" &&
+          String(action?.owner || "").trim() === "customer",
+      ),
+    );
+  }
   const status = String(value?.status || "").toUpperCase();
   if (!["IN_PROGRESS", "CHAT_READY"].includes(status)) return false;
   return !getTextFields(value).some((text) =>

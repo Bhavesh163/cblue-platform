@@ -404,6 +404,34 @@ test("derives customer meeting invitation action only from live server workflow 
     false,
   );
   assert.equal(isCustomerMeetingInviteActionAvailable({ status: "COMPLETED" }), false);
+  assert.equal(
+    isCustomerMeetingInviteActionAvailable({
+      sourceVersion: "cblue-fixer-workflow-v1",
+      status: "IN_PROGRESS",
+      workflowPhase: "CHAT",
+      currentStep: 7,
+      actions: [{
+        key: "send-meeting-invitation",
+        owner: "customer",
+        actionStep: 8,
+      }],
+    }),
+    true,
+  );
+  assert.equal(
+    isCustomerMeetingInviteActionAvailable({
+      sourceVersion: "cblue-fixer-workflow-v1",
+      status: "IN_PROGRESS",
+      workflowPhase: "VARIATION",
+      currentStep: 9,
+      actions: [{
+        key: "customer-cancel",
+        owner: "customer",
+        actionStep: 9,
+      }],
+    }),
+    false,
+  );
 });
 
 test("keeps partner workflow rows visible during transient empty backend PO refresh", () => {

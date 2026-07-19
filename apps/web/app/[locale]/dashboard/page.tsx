@@ -57,6 +57,8 @@ import {
   projectFixerChatRoom,
   projectFixerLocations,
   reconcileFixerCardLocations,
+  projectUpcomingFixerMeetings,
+  projectWorkflowChatHistory,
 } from "../../../lib/fixerWorkflowUiProjection";
 
 interface SubscriberInfo {
@@ -3378,6 +3380,12 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         workflowPhase: o.workflowPhase,
         currentStep: o.currentStep,
         workflowEvents: o.workflowEvents,
+        actions: o.actions,
+        availableActions: o.availableActions,
+        nextActionKey: o.nextActionKey,
+        nextActionLabel: o.nextActionLabel,
+        nextActionOwner: o.nextActionOwner,
+        nextActionStep: o.nextActionStep,
         chatEnabled: o.chatEnabled === true,
         description: o.description || '',
       };
@@ -3442,6 +3450,17 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     const po = String(request?.po || '').trim();
     if (!po) return request;
     const backendItem = combinedActive.find((item: any) => item.po === po);
+    if (
+      backendItem &&
+      Array.isArray(backendItem.actions) &&
+      !backendItem.actions.some(
+        (action: any) =>
+          String(action?.owner || '').toLowerCase() === 'customer' &&
+          String(action?.key || '') === 'send-meeting-invitation',
+      )
+    ) {
+      return null;
+    }
     return backendItem
       ? reconcileFixerCardLocations(request, backendItem)
       : request;
@@ -3772,16 +3791,19 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     const po = String(item?.po || '').trim();
     return Boolean(item?.confirmedByPartner) || confirmedMeetingAlertPos.has(po);
   };
-  const upcomingMeetings = visibleMockDynRequests
-    .filter((x: any) => x.type === "meeting_scheduled")
-    .filter((x: any) => !pendingMeetingPos.has(String(x.po || "").trim()))
-    .filter((x: any) => isConfirmedMeetingScheduled(x))
-    .filter((x: any) => isWorkflowMeetingVisible(x.meetingDate, x.meetingTime, x.createdAt || x.date))
-    .sort((a: any, b: any) => {
-      const aTs = parseWorkflowMeetingDateTimeMs(a.meetingDate, a.meetingTime, a.createdAt || a.date);
-      const bTs = parseWorkflowMeetingDateTimeMs(b.meetingDate, b.meetingTime, b.createdAt || b.date);
-      return aTs - bTs;
-    });
+  const upcomingMeetings = projectUpcomingFixerMeetings(authoritativeWorkflowOrders).map((order: any) => ({
+    ...order,
+    id: `fixer-meeting-${order.po}`,
+    title: String(order.serviceCategory || order.service || order.title || 'Service').replace(/_/g, ' '),
+    customer: firstNameOnly(
+      order.fixer?.user?.name || order.partnerName || order.fixerName,
+      'Partner',
+    ),
+    meetingDate: order.meetingDate || order.meeting?.date || '',
+    meetingTime: order.meetingTime || order.meeting?.time || '',
+    meetingVenue: order.meetingVenue || order.meeting?.venue || '',
+    meetingNote: order.meetingNote || order.meeting?.note || '',
+  }));
   const workflowAlerts = visibleMockDynRequests
     .filter((x: any) => {
       const po = String(x.po || "").trim();
@@ -4635,6 +4657,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       );
       const originalStatus = entry.status || existing.status;
       const statusNote = entry.statusNote || getWorkflowStatusNote(entry) || existing.statusNote || '';
+      const persistedChatHistory = projectWorkflowChatHistory(entry)?.messageItems || [];
       const cancelReason = entry.cancelReason || existing.cancelReason || String(statusNote).match(/Reason:\s*([^.]*)/i)?.[1]?.trim() || '';
       const customerCancelled = String(originalStatus || '').toUpperCase() === 'CANCELLED' && (
         entry.statusName === 'Cancelled by Customer' ||
@@ -4684,7 +4707,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         projectDetails,
         description: projectDetails,
         tier: entry.tier || existing.tier || 'Standard',
-        chatHistory: readStoredChatHistory(po),
+        chatHistory: persistedChatHistory.length ? persistedChatHistory : readStoredChatHistory(po),
       });
       return map;
     }, new Map<string, any>()).values(),
