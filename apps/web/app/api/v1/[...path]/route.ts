@@ -55,13 +55,16 @@ const shouldReturnEmptyListFallback = (method: string, routePath: string) => {
     routePath === "properties/my" ||
     routePath === "property-inquiries/customer" ||
     routePath === "property-inquiries/lister" ||
-    /^orders\/[^/]+\/chat$/.test(routePath)
+    /^orders\/[^/]+\/chat$/.test(routePath) ||
+    /^orders\/[^/]+\/attachments$/.test(routePath)
   );
 };
 const shouldReturnStatusFallback = (method: string, routePath: string) =>
   method === "PUT" && /^orders\/[^/]+\/status$/.test(routePath);
 const shouldReturnChatPostFallback = (method: string, routePath: string) =>
   method === "POST" && /^orders\/[^/]+\/chat$/.test(routePath);
+const shouldReturnFixerProfileFallback = (method: string, routePath: string) =>
+  method === "GET" && routePath === "fixers/me";
 const shouldReturnUserProfileFallback = (method: string, routePath: string) =>
   method === "GET" && routePath === "users/me";
 const shouldReturnPropertiesSearchFallback = (method: string, routePath: string) =>
@@ -270,6 +273,12 @@ async function handler(
         });
       }
     }
+    if (upstream.status >= 500 && shouldReturnFixerProfileFallback(method, routePath)) {
+      return Response.json(null, {
+        status: 200,
+        headers: { "cache-control": "no-store" },
+      });
+    }
 
     // Build response (strip hop-by-hop)
     const resHeaders = new Headers();
@@ -314,6 +323,12 @@ async function handler(
           headers: { "cache-control": "no-store" },
         });
       }
+    }
+    if (shouldReturnFixerProfileFallback(method, routePath)) {
+      return Response.json(null, {
+        status: 200,
+        headers: { "cache-control": "no-store" },
+      });
     }
     return Response.json(
       { error: "proxy_error", message: msg, backends: backendUrls },

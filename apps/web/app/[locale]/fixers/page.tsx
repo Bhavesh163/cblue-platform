@@ -24,7 +24,9 @@ import { toggleWorkflowModalChromeLock } from "../../../lib/workflowModalChromeL
 import { clearSubscriberSession, ensureFreshSubscriberSession, refreshSubscriberSession } from "../../../lib/subscriberSession";
 import { getFixerMeetingSnapshot } from "../../../lib/fixerMeetingSnapshot";
 import {
+  mergeFixerWorkflowRecord,
   projectFixerLocations,
+  projectFixerChatRoom,
   projectPartnerMeetingConfirmation,
   reconcilePartnerMeetingRequest,
 } from "../../../lib/fixerWorkflowUiProjection";
@@ -43,6 +45,7 @@ import {
   collectTerminalWorkflowPos,
   filterLiveWorkflowItems,
   isCompletedAwaitingWorkflowRating,
+  isClosedWorkflowActivity,
   isWorkflowMeetingCardVisible,
   isTerminalWorkflowStatus,
   normalizeWorkflowHistoryItems,
@@ -2354,7 +2357,10 @@ export default function FixerProPage() {
     const workflowType = String(job?.workflowType || job?.type || '').toLowerCase();
     const jobStatus = String(job?.status || '').toUpperCase();
     if (workflowType === 'meeting_confirm_partner' || workflowType === 'pending_accept' || ['MATCHING', 'CREATED', 'MEETING_REQUESTED'].includes(jobStatus)) {
-      setWaitModalOrder(job);
+      const jobPo = String(job?.po || job?.poNumber || job?.orderNumber || '').trim();
+      const authoritativeJob = mappedOrders.find((order: any) => String(order?.po || '').trim() === jobPo);
+      const hydratedJob = mergeFixerWorkflowRecord(job, authoritativeJob);
+      setWaitModalOrder(hydratedJob);
       // Write breakdown to localStorage so customer's dashboard Approve Variation can read it (same-browser demo)
       try {
         const po = job?.po;
@@ -3218,6 +3224,8 @@ export default function FixerProPage() {
       meetingTime: o.meetingTime || '',
       meetingVenue: o.meetingVenue || '',
       meetingNote: o.meetingNote || '',
+      chatEnabled: o.chatEnabled === true || o.chat?.enabled === true,
+      chat: { enabled: o.chatEnabled === true || o.chat?.enabled === true },
       budgetBreakdown: normalizePersistedBudgetBreakdown(o.budgetBreakdown),
       progress: normalizedStatus === 'COMPLETED' ? 100 : (['IN_PROGRESS', 'CONFIRMED', 'ACCEPTED'].includes(normalizedStatus) ? 40 : 15),
       fee: o.estimatedPrice ? `฿${o.estimatedPrice.toLocaleString()}` : "0", 
@@ -3383,14 +3391,18 @@ export default function FixerProPage() {
         }
         const historyEntry = mockHistory.find((h: any) => h.po === po);
         const partnerRated = historyEntry?.partnerRating != null;
-        if (completedPoSet.has(po)) {
-          localStorage.setItem(`chat_closed_${po}`, '1');
-          continue;
-        }
-        if (localStorage.getItem(`chat_closed_${po}`) && partnerRated) continue;
         const parsed = JSON.parse(localStorage.getItem(key) || "[]");
         if (!Array.isArray(parsed) || parsed.length === 0) continue;
-        if (hasCompletionChatMarker(parsed) && partnerRated) {
+        const authoritativeOrder = (mappedOrders as any[]).find((order: any) => order?.po === po);
+        const visibleMessages = parsed.filter((message: any) => isVisibleMessage(message));
+        const projectedRoom = projectFixerChatRoom(authoritativeOrder, visibleMessages);
+        if (!projectedRoom) {
+          if (isClosedWorkflowActivity(authoritativeOrder)) {
+            localStorage.setItem(`chat_closed_${po}`, '1');
+          }
+          continue;
+        }
+        if (completedPoSet.has(po) || (hasCompletionChatMarker(parsed) && partnerRated)) {
           localStorage.setItem(`chat_closed_${po}`, '1');
           continue;
         }
@@ -3398,12 +3410,8 @@ export default function FixerProPage() {
         const latestVisible = reversed.find((m: any) => isVisibleMessage(m));
         if (!latestVisible) continue;
         const latestIncoming = reversed.find((m: any) => isIncomingMessage(m));
-        const title = localStorage.getItem(`chat_title_${po}`) || `Chat - ${po}`;
         items.push({
-          id: po,
-          po,
-          name: title,
-          service: po,
+          ...projectedRoom,
           lastMsg: latestVisible.text,
           time: latestVisible.time || "",
           incomingMsg: latestIncoming?.text || "",
@@ -3568,15 +3576,20 @@ export default function FixerProPage() {
           if (text.startsWith('[system]')) return false;
           return String(m?.senderUserId || "") !== viewerUserId;
         });
-        const title =
-          localStorage.getItem(`chat_title_${po}`) ||
-          `${String(order?.serviceCategory || "Service").replace(/_/g, " ")} - ${po} - ${order?.estimatedPrice ? `฿${Number(order.estimatedPrice).toLocaleString()}` : "฿0"}`;
+        const projectedRoom = projectFixerChatRoom(
+          {
+            ...order,
+            po,
+            service: String(order?.serviceCategory || "Service").replace(/_/g, " "),
+            budget: order?.estimatedPrice || 0,
+            chatEnabled: order?.chatEnabled === true || order?.chat?.enabled === true,
+          },
+          visible,
+        );
+        if (!projectedRoom) return null;
 
         return {
-          id: po,
-          po,
-          name: title,
-          service: po,
+          ...projectedRoom,
           lastMsg: String(latestVisible?.text || ""),
           time: latestVisible?.createdAt ? fmtDateTime(latestVisible.createdAt) : "",
           incomingMsg: incoming ? String(incoming?.text || "") : "",
@@ -5042,10 +5055,13 @@ export default function FixerProPage() {
       const preservedSubdistrict = (item.subdistrict && item.subdistrict !== 'Unknown') ? item.subdistrict : (current.subdistrict && current.subdistrict !== 'Unknown') ? current.subdistrict : (item.subdistrict || '');
       // Preserve description (order text with qty/service details) from whichever source has it
       const preservedDescription = item.description || current.description || '';
-      map.set(key, { ...item, location: preservedLocation, subdistrict: preservedSubdistrict, ...(preservedDescription ? { description: preservedDescription } : {}) });
+      const authoritativeOrder = mappedOrders.find((order: any) => order?.po === key);
+      const mergedItem = { ...item, location: preservedLocation, subdistrict: preservedSubdistrict, ...(preservedDescription ? { description: preservedDescription } : {}) };
+      map.set(key, mergeFixerWorkflowRecord(mergedItem, authoritativeOrder));
     } else if (!current.description && item.description) {
       // Current wins on step; still carry description from incoming backend item if current lacks it
-      map.set(key, { ...current, description: item.description });
+      const authoritativeOrder = mappedOrders.find((order: any) => order?.po === key);
+      map.set(key, mergeFixerWorkflowRecord({ ...current, description: item.description }, authoritativeOrder));
     }
     return map;
   }, new Map<string, any>()).values())

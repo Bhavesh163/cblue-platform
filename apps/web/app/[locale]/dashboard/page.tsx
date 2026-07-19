@@ -50,7 +50,9 @@ import { readStoredPoProjectDetails } from "../../../lib/po-project-details";
 import {
   buildCustomerMeetingAwaitingPartnerAlert,
   isCustomerFixerActionNeeded,
+  mergeFixerWorkflowRecord,
   mergeAuthoritativeWorkflowAlerts,
+  projectFixerChatRoom,
   projectFixerLocations,
   reconcileFixerCardLocations,
 } from "../../../lib/fixerWorkflowUiProjection";
@@ -1936,6 +1938,23 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   };
   const isPoCode = (value: string) => isValidPoCode(value);
   const workflowOrders = (orders || []).filter((order: any) => !isHiddenTestPo(extractPo(order)));
+  const authoritativeWorkflowOrders = Array.from(
+    workflowOrders.reduce((map: Map<string, any>, order: any) => {
+      const po = extractPo(order);
+      if (!po || !isPoCode(po)) return map;
+      const current = map.get(po);
+      if (!current) {
+        map.set(po, mergeFixerWorkflowRecord(null, { ...order, po }));
+        return map;
+      }
+      const currentTs = parseDateMs(current.statusHistory?.[0]?.createdAt || current.statusChangedAt || current.updatedAt || current.createdAt);
+      const nextTs = parseDateMs(order.statusHistory?.[0]?.createdAt || order.statusChangedAt || order.updatedAt || order.createdAt);
+      const authoritativeOrder = nextTs >= currentTs ? { ...order, po } : current;
+      const cachedOrder = nextTs >= currentTs ? current : { ...order, po };
+      map.set(po, mergeFixerWorkflowRecord(cachedOrder, authoritativeOrder));
+      return map;
+    }, new Map<string, any>()).values(),
+  );
   const workflowScopeKey = String(subscriber?.id || subscriber?.email || '').trim().toLowerCase();
   const workflowKnownPoStorageKey = workflowScopeKey ? `cblue_live_workflow_pos_${workflowScopeKey}` : '';
 
@@ -2252,7 +2271,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     const keys = Object.keys(localStorage).filter((k) => k.startsWith("chat_messages_"));
     const items: any[] = [];
     const workflowOrderByPo = new Map(
-      workflowOrders
+      authoritativeWorkflowOrders
         .map((order: any) => [extractPo(order), order] as const)
         .filter(([po]) => isPoCode(po)),
     );
@@ -2281,6 +2300,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         }
         if (localStorage.getItem(`chat_closed_${po}`)) continue;
         const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+        const visibleMessages = Array.isArray(parsed) ? parsed.filter((message: any) => isVisibleMessage(message)) : [];
+        const projectedRoom = projectFixerChatRoom(workflowOrder, visibleMessages);
+        if (!projectedRoom) continue;
         if (!Array.isArray(parsed) || parsed.length === 0) continue;
         if (hasCompletionChatMarker(parsed)) {
           localStorage.setItem(`chat_closed_${po}`, '1');
@@ -2290,11 +2312,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         const latestVisible = reversed.find((m: any) => isVisibleMessage(m));
         if (!latestVisible) continue;
         const latestIncoming = reversed.find((m: any) => isIncomingMessage(m));
-        const title = localStorage.getItem(`chat_title_${po}`) || `Chat - ${po}`;
         items.push({
-          id: po,
-          po,
-          name: title,
+          ...projectedRoom,
           lastMsg: latestVisible.text,
           time: latestVisible.time || toDisplayDateTime(latestVisible.createdAt) || "",
           incomingMsg: latestIncoming?.text || "",
@@ -2380,7 +2399,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
 
     const viewerUserId = String(subscriber?.id || "");
     const items: any[] = [];
-    const openOrders = (orders || []).filter((order: any) => {
+    const openOrders = authoritativeWorkflowOrders.filter((order: any) => {
       const orderId = order?.id;
       if (!orderId) return false;
       const po = extractPo(order);
@@ -2448,14 +2467,20 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
           if (text.startsWith('[system]')) return false;
           return String(m?.senderUserId || "") !== viewerUserId;
         });
-        const title =
-          localStorage.getItem(`chat_title_${po}`) ||
-          `${String(order?.serviceCategory || "Service").replace(/_/g, " ")} - ${po} - ${order?.estimatedPrice ? `฿${Number(order.estimatedPrice).toLocaleString()}` : "฿0"}`;
+        const projectedRoom = projectFixerChatRoom(
+          {
+            ...order,
+            po,
+            service: String(order?.serviceCategory || order?.service || "Service").replace(/_/g, " "),
+            budget: order?.estimatedPrice || order?.budget || 0,
+            chatEnabled: order?.chatEnabled === true || order?.chat?.enabled === true,
+          },
+          visible,
+        );
+        if (!projectedRoom) return null;
 
         return {
-          id: po,
-          po,
-          name: title,
+          ...projectedRoom,
           lastMsg: String(latestVisible?.text || ""),
           time: toDisplayDateTime(latestVisible?.createdAt) || "",
           incomingMsg: incoming ? String(incoming?.text || "") : "",
@@ -3850,8 +3875,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       return null;
     })
     .filter(Boolean) as any[];
-  const workflowOrderStatusAlerts = workflowOrders.flatMap((order: any) => {
-    const po = extractPo(order);
+  const workflowOrderStatusAlerts = authoritativeWorkflowOrders.flatMap((authoritativeOrder: any) => {
+    const order = authoritativeOrder;
+    const po = extractPo(authoritativeOrder);
     if (!po || !isPoCode(po)) return [];
     const status = String(order?.status || "").toUpperCase();
     const service = String(order?.serviceCategory || order?.service || "your enquiry").replace(/_/g, " ");
@@ -3872,7 +3898,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       }];
     }
     if (status === 'IN_PROGRESS' || status === 'MEETING_REQUESTED') {
-      const meetingAwaitingPartnerAlert = buildCustomerMeetingAwaitingPartnerAlert(order);
+      const meetingAwaitingPartnerAlert = buildCustomerMeetingAwaitingPartnerAlert(authoritativeOrder);
       if (meetingAwaitingPartnerAlert) {
         return [{
           ...meetingAwaitingPartnerAlert,

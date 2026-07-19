@@ -5,7 +5,9 @@ import * as workflowProjection from "./fixerWorkflowUiProjection.js";
 import {
   buildCustomerMeetingAwaitingPartnerAlert,
   isCustomerFixerActionNeeded,
+  mergeFixerWorkflowRecord,
   mergeAuthoritativeWorkflowAlerts,
+  projectFixerChatRoom,
   projectPartnerMeetingConfirmation,
 } from "./fixerWorkflowUiProjection.js";
 
@@ -262,4 +264,79 @@ test("reconciles a cached customer request to authoritative card and modal locat
   assert.equal(reconciled.cardLocation, "Saphan Song");
   assert.equal(reconciled.location, "13.794095, 100.609583");
   assert.equal(reconciled.subdistrict, "Saphan Song");
+});
+
+test("merges a duplicate Step 8 request with authoritative meeting fields taking precedence", () => {
+  const merged = mergeFixerWorkflowRecord(
+    {
+      po: "PO-2607-9458",
+      status: "IN_PROGRESS",
+      meeting: { date: "", time: "", venue: "", note: "" },
+      meetingVenue: "",
+      customer: "Ghis",
+    },
+    {
+      ...productionMeetingOrder,
+      service: "CLADDING ROOFING",
+      budget: 30_700_000,
+    },
+  );
+
+  assert.equal(merged.status, "MEETING_REQUESTED");
+  assert.equal(merged.workflowPhase, "MEETING_CONFIRM");
+  assert.deepEqual(merged.meeting, {
+    date: "17/07/2026",
+    time: "19:34",
+    venue: "Siam paragon",
+    note: "Meet at the north entrance.",
+  });
+  assert.equal(merged.meetingVenue, "Siam paragon");
+  assert.equal(merged.service, "CLADDING ROOFING");
+  assert.equal(merged.customer, "Ghis");
+});
+
+test("projects an active partner chat title from the authoritative order", () => {
+  const room = projectFixerChatRoom(
+    {
+      ...productionMeetingOrder,
+      service: "CLADDING ROOFING",
+      budget: 30_700_000,
+      chat: { enabled: true },
+    },
+    [{ id: "m1", text: "Meeting details received", createdAt: "2026-07-17T11:36:00.000Z" }],
+  );
+
+  assert.equal(room?.po, "PO-2607-9458");
+  assert.equal(room?.name, "CLADDING ROOFING - PO-2607-9458 - ฿30,700,000");
+  assert.equal(room?.lastMsg, "Meeting details received");
+});
+
+test("never projects terminal fixer workflows into live chat", () => {
+  for (const terminal of [
+    { status: "COMPLETED" },
+    { status: "DECLINED" },
+    { status: "CANCELLED" },
+    { status: "RATED" },
+    { status: "IN_PROGRESS", workflowPhase: "TERMINAL" },
+  ]) {
+    assert.equal(
+      projectFixerChatRoom(
+        { ...productionMeetingOrder, ...terminal, chat: { enabled: true } },
+        [{ id: "m1", text: "Persisted history message" }],
+      ),
+      null,
+    );
+  }
+});
+
+test("builds the Step 8 waiting alert when persisted phase is MEETING_CONFIRM and status is IN_PROGRESS", () => {
+  const alert = buildCustomerMeetingAwaitingPartnerAlert({
+    ...productionMeetingOrder,
+    status: "IN_PROGRESS",
+    workflowPhase: "MEETING_CONFIRM",
+  });
+
+  assert.equal(alert?.id, "a-meeting-wait-PO-2607-9458");
+  assert.equal(alert?.workflowStage, 8);
+  assert.match(alert?.msg || "", /awaiting partner confirmation/i);
 });

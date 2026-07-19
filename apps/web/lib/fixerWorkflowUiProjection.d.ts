@@ -10,6 +10,12 @@ export interface FixerWorkflowUiOrder {
   serviceTh?: string | null;
   serviceZh?: string | null;
   customer?: string | null;
+  title?: string | null;
+  budget?: string | number | null;
+  totalBudget?: string | number | null;
+  fee?: string | number | null;
+  chat?: { enabled?: boolean | null } | null;
+  chatEnabled?: boolean | null;
   address?: {
     latitude?: string | number | null;
     longitude?: string | number | null;
@@ -74,6 +80,30 @@ export function reconcilePartnerMeetingRequest(
   mockStep: 8;
   actionNeeded: true;
 };
+
+export function mergeFixerWorkflowRecord(
+  cachedRecord?: Record<string, unknown> | null,
+  backendOrder?: FixerWorkflowUiOrder | null,
+): Record<string, unknown> & PartnerMeetingProjection & FixerWorkflowLocations & {
+  po: string;
+  location: string;
+  subdistrict: string;
+};
+
+export interface FixerChatRoomProjection {
+  id: string;
+  po: string;
+  name: string;
+  service: string;
+  lastMsg: string;
+  time: string | number;
+  messageItems: unknown[];
+}
+
+export function projectFixerChatRoom(
+  order?: FixerWorkflowUiOrder | null,
+  messages?: unknown[],
+): FixerChatRoomProjection | null;
 
 export function isCustomerFixerActionNeeded(order?: FixerWorkflowUiOrder | null, fallbackStep?: number): boolean;
 

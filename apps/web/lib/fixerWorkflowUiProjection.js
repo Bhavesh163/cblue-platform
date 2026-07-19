@@ -1,4 +1,5 @@
 import { getFixerMeetingSnapshot } from "./fixerMeetingSnapshot.js";
+import { isClosedWorkflowActivity } from "./workflowVisibility.js";
 
 function normalizedText(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -77,6 +78,60 @@ export function projectPartnerMeetingConfirmation(order = null) {
   };
 }
 
+export function mergeFixerWorkflowRecord(cachedRecord = null, backendOrder = null) {
+  if (!backendOrder) return cachedRecord || {};
+  const authoritativeFields = Object.fromEntries(
+    Object.entries(backendOrder).filter(([, value]) => value !== undefined && value !== null),
+  );
+  const meeting = projectPartnerMeetingConfirmation(backendOrder);
+  const locations = projectFixerLocations(backendOrder);
+
+  return {
+    ...(cachedRecord || {}),
+    ...authoritativeFields,
+    po: explicitPo(backendOrder) || explicitPo(cachedRecord),
+    ...locations,
+    location: locations.projectLocation,
+    subdistrict: locations.cardLocation,
+    ...meeting,
+  };
+}
+
+function numericBudget(order) {
+  const raw = order?.budget ?? order?.totalBudget ?? order?.fee ?? 0;
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  const parsed = Number(String(raw || "").replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function projectFixerChatRoom(order = null, messages = []) {
+  if (!order || isClosedWorkflowActivity(order)) return null;
+  const chatEnabled = order?.chat?.enabled ?? order?.chatEnabled;
+  if (chatEnabled !== true) return null;
+
+  const po = explicitPo(order);
+  if (!po) return null;
+  const messageItems = Array.isArray(messages) ? messages.filter(Boolean) : [];
+  if (!messageItems.length) return null;
+  const latest = messageItems[messageItems.length - 1] || {};
+  const service =
+    normalizedText(order?.service) ||
+    normalizedText(order?.title) ||
+    normalizedText(order?.serviceTh) ||
+    po;
+  const budget = numericBudget(order);
+
+  return {
+    id: po,
+    po,
+    name: `${service} - ${po} - ฿${budget.toLocaleString("en-US")}`,
+    service,
+    lastMsg: normalizedText(latest?.text),
+    time: latest?.time || latest?.createdAt || "",
+    messageItems,
+  };
+}
+
 export function reconcilePartnerMeetingRequest(cachedRequest = null, backendOrder = null) {
   const meeting = projectPartnerMeetingConfirmation(backendOrder);
   const locations = projectFixerLocations(backendOrder);
@@ -119,7 +174,7 @@ export function buildCustomerMeetingAwaitingPartnerAlert(order = null) {
   const phase = normalizedText(order?.workflowPhase).toUpperCase();
   const status = normalizedText(order?.status).toUpperCase();
   const po = explicitPo(order);
-  if (!po || phase !== "MEETING_CONFIRM" || status !== "MEETING_REQUESTED") return null;
+  if (!po || phase !== "MEETING_CONFIRM" || isClosedWorkflowActivity(order)) return null;
 
   const createdAt =
     timestamp(order?.statusHistory?.[0]?.createdAt) ||
