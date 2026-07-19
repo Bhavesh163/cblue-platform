@@ -31,6 +31,67 @@ function createService(order: Record<string, unknown>) {
 }
 
 describe('BLUE workflow production contracts', () => {
+  it.each(['customer-1', 'partner-1'])(
+    'returns the same persisted confirm-meeting event to participant %s',
+    async (viewerId) => {
+      const persistedCreatedAt = new Date('2026-07-19T10:30:00.000Z');
+      const service = createService({
+        userId: 'customer-1',
+        fixer: { userId: 'partner-1' },
+        status: 'IN_PROGRESS',
+        workflowPhase: 'VARIATION',
+        workflowRevision: 6,
+        statusHistory: [
+          {
+            status: 'IN_PROGRESS',
+            createdAt: new Date('2026-07-20T00:00:00.000Z'),
+          },
+        ],
+        review: null,
+        description:
+          'PO-2607-9458 | Description timestamps must not become workflow events',
+        workflowActions: [
+          {
+            action: 'confirm-meeting',
+            actorUserId: 'partner-1',
+            payload: {},
+            createdAt: persistedCreatedAt,
+          },
+        ],
+        createdAt: new Date('2026-07-10T00:00:00.000Z'),
+        updatedAt: new Date('2026-07-20T00:00:00.000Z'),
+        budgetBreakdown: null,
+        user: {
+          id: 'customer-1',
+          name: 'Customer',
+          email: 'customer@example.com',
+        },
+        address,
+        images: [],
+      });
+
+      const result = await service.workflowDetails({
+        poNumber: 'PO-2607-9458',
+        legacySubjectId: viewerId,
+        bridgeKey: 'bridge-key',
+      });
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          currentStep: 9,
+          workflowPhase: 'VARIATION',
+          workflowEvents: [
+            {
+              action: 'confirm-meeting',
+              createdAt: persistedCreatedAt.toISOString(),
+              actorRole: 'partner',
+            },
+          ],
+        }),
+      );
+    },
+  );
+
   it('uses order meeting and subdistrict snapshots instead of description text, GPS, or legacy payload values', async () => {
     const service = createService({
       userId: 'customer-1',
