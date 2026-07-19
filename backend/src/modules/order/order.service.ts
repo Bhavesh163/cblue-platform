@@ -72,6 +72,52 @@ const isHiddenTestOrder = (description?: string | null) =>
       .includes(po),
   );
 
+const FIXER_WORKFLOW_STEP_BY_PHASE: Record<string, number> = {
+  DRAFT: 3,
+  PARTNER_DECISION: 5,
+  FEE: 6,
+  CHAT: 7,
+  MEETING_CONFIRM: 8,
+  VARIATION: 9,
+  VARIATION_CONFIRM: 9,
+  COMPLETION: 10,
+  COMPLETION_CONFIRM: 10,
+  RATING: 11,
+  TERMINAL: 11,
+};
+
+function projectOrderWorkflow(order: any, partnerUserId?: string | null) {
+  const phase = String(order.workflowPhase || '').trim().toUpperCase();
+  const currentStep = FIXER_WORKFLOW_STEP_BY_PHASE[phase] || null;
+  const workflowEvents = (order.workflowActions || []).flatMap((event: any) => {
+    const actorUserId = String(event?.actorUserId || '');
+    const actorRole =
+      actorUserId && actorUserId === String(order.userId || '')
+        ? ('customer' as const)
+        : actorUserId && actorUserId === String(partnerUserId || '')
+          ? ('partner' as const)
+          : null;
+    const action = String(event?.action || '').trim();
+    const createdAtDate = new Date(event?.createdAt || 0);
+    if (!actorRole || !action || !Number.isFinite(createdAtDate.getTime())) {
+      return [];
+    }
+    return [
+      {
+        action,
+        actorRole,
+        createdAt: createdAtDate.toISOString(),
+      },
+    ];
+  });
+
+  return {
+    ...order,
+    ...(currentStep ? { currentStep, totalSteps: 11 } : {}),
+    workflowEvents,
+  };
+}
+
 @Injectable()
 export class OrderService {
   private readonly logger = new Logger(OrderService.name);
@@ -223,6 +269,10 @@ export class OrderService {
             take: 5,
           },
           statusHistory: { orderBy: { createdAt: 'desc' }, take: 1 },
+          workflowActions: {
+            select: { action: true, actorUserId: true, createdAt: true },
+            orderBy: { createdAt: 'asc' },
+          },
         },
         orderBy: { createdAt: 'desc' },
       });
@@ -275,17 +325,21 @@ export class OrderService {
 
     return orders
       .filter((order) => !isHiddenTestOrder(order.description))
-      .map((order) => ({
-        ...order,
-        fixer: order.fixer
+      .map((order) => {
+        const partnerUserId = String(order.fixer?.userId || '').trim();
+        const projectedOrder = {
+          ...order,
+          fixer: order.fixer
           ? {
               ...order.fixer,
               user:
-                fixerUserMap.get(String(order.fixer.userId || '').trim()) ||
+                fixerUserMap.get(partnerUserId) ||
                 null,
             }
           : null,
-      }));
+        };
+        return projectOrderWorkflow(projectedOrder, partnerUserId);
+      });
   }
 
   async findMyFixerOrders(userId: string) {
@@ -332,7 +386,7 @@ export class OrderService {
     }
 
     try {
-      return await this.findByFixer(fixerId);
+      return await this.findByFixer(fixerId, userId);
     } catch (error) {
       this.logger.warn(
         `Returning empty fixer order list after order query failed for user ${userId}: ${
@@ -343,7 +397,7 @@ export class OrderService {
     }
   }
 
-  async findByFixer(fixerId: string) {
+  async findByFixer(fixerId: string, partnerUserId?: string) {
     let orders: any[];
     try {
       orders = await this.prisma.order.findMany({
@@ -356,6 +410,10 @@ export class OrderService {
             take: 5,
           },
           statusHistory: { orderBy: { createdAt: 'desc' }, take: 1 },
+          workflowActions: {
+            select: { action: true, actorUserId: true, createdAt: true },
+            orderBy: { createdAt: 'asc' },
+          },
         },
         orderBy: { createdAt: 'desc' },
       });
@@ -398,10 +456,12 @@ export class OrderService {
 
     return orders
       .filter((order) => !isHiddenTestOrder(order.description))
-      .map((order) => ({
-        ...order,
-        user: customerMap.get(order.userId) || null,
-      }));
+      .map((order) =>
+        projectOrderWorkflow(
+          { ...order, user: customerMap.get(order.userId) || null },
+          partnerUserId,
+        ),
+      );
   }
 
   private async getOrderForParticipant(orderId: string, userId: string) {

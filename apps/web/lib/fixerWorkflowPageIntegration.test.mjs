@@ -69,3 +69,24 @@ test("partner feed hides disabled chat without permanently closing a live workfl
     /if \(!projectedRoom\) \{\s*if \(isClosedWorkflowActivity\(authoritativeOrder\)\)/s,
   );
 });
+
+test("customer and partner pages project persisted Step 9 and meeting events", () => {
+  for (const page of [customerPage, partnerPage]) {
+    assert.match(page, /projectAuthoritativeFixerStep/);
+    assert.match(page, /buildMeetingConfirmedWorkflowAlert/);
+    assert.match(page, /workflowEvents:\s*o\.workflowEvents/);
+  }
+
+  assert.match(
+    customerPage,
+    /buildMeetingConfirmedWorkflowAlert\(authoritativeOrder\)/,
+  );
+  assert.match(
+    partnerPage,
+    /buildMeetingConfirmedWorkflowAlert\(order\)/,
+  );
+  assert.match(
+    partnerPage,
+    /existing\?\.authoritative !== true && createdAt >= parseTs/,
+  );
+});

@@ -4,9 +4,11 @@ import test from "node:test";
 import * as workflowProjection from "./fixerWorkflowUiProjection.js";
 import {
   buildCustomerMeetingAwaitingPartnerAlert,
+  buildMeetingConfirmedWorkflowAlert,
   isCustomerFixerActionNeeded,
   mergeFixerWorkflowRecord,
   mergeAuthoritativeWorkflowAlerts,
+  projectAuthoritativeFixerStep,
   projectFixerChatRoom,
   projectPartnerMeetingConfirmation,
 } from "./fixerWorkflowUiProjection.js";
@@ -339,4 +341,52 @@ test("builds the Step 8 waiting alert when persisted phase is MEETING_CONFIRM an
   assert.equal(alert?.id, "a-meeting-wait-PO-2607-9458");
   assert.equal(alert?.workflowStage, 8);
   assert.match(alert?.msg || "", /awaiting partner confirmation/i);
+});
+
+test("projects persisted VARIATION as Step 9 for customer and partner", () => {
+  const order = {
+    poNumber: "PO-2607-9458",
+    status: "IN_PROGRESS",
+    workflowPhase: "VARIATION",
+    currentStep: 9,
+    workflowEvents: [
+      {
+        action: "confirm-meeting",
+        actorRole: "partner",
+        createdAt: "2026-07-19T10:30:00.000Z",
+      },
+    ],
+  };
+
+  assert.equal(projectAuthoritativeFixerStep(order), 9);
+  assert.equal(projectAuthoritativeFixerStep({ ...order, currentStep: 7 }), 9);
+});
+
+test("builds meeting-confirmed alert only from the persisted action event", () => {
+  const alert = buildMeetingConfirmedWorkflowAlert({
+    poNumber: "PO-2607-9458",
+    status: "IN_PROGRESS",
+    workflowPhase: "VARIATION",
+    workflowEvents: [
+      {
+        action: "confirm-meeting",
+        actorRole: "partner",
+        createdAt: "2026-07-19T10:30:00.000Z",
+      },
+    ],
+    statusHistory: [{ createdAt: "2026-07-20T00:00:00.000Z" }],
+    updatedAt: "2026-07-21T00:00:00.000Z",
+  });
+
+  assert.equal(alert?.msg, "PO-2607-9458 Meeting confirmed.");
+  assert.equal(alert?.createdAt, Date.parse("2026-07-19T10:30:00.000Z"));
+  assert.equal(alert?.workflowStage, 9);
+  assert.equal(
+    buildMeetingConfirmedWorkflowAlert({
+      poNumber: "PO-2607-9458",
+      workflowPhase: "VARIATION",
+      updatedAt: "2026-07-21T00:00:00.000Z",
+    }),
+    null,
+  );
 });

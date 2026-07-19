@@ -57,6 +57,7 @@ function workflowOrder(overrides: Record<string, unknown> = {}) {
     workflowActions: [
       {
         action: 'send-meeting-invitation',
+        actorUserId: 'customer-1',
         payload: legacyMeeting,
         createdAt: new Date('2026-07-16T00:00:00.000Z'),
       },
@@ -174,6 +175,103 @@ describe('BlueBridgeService workflow activities', () => {
     ]);
     expect(result.activeJobs).toEqual([]);
   });
+
+  it.each([
+    ['customer', 'customer-1'],
+    ['partner', 'partner-1'],
+  ] as const)(
+    'returns persisted Step 9 meeting confirmation events to the %s',
+    async (persona, viewerId) => {
+      const { service } = createService(
+        [viewerId],
+        workflowOrder({
+          status: 'IN_PROGRESS',
+          workflowPhase: 'VARIATION',
+          workflowRevision: 6,
+          workflowActions: [
+            {
+              action: 'send-meeting-invitation',
+              actorUserId: 'customer-1',
+              payload: meeting,
+              createdAt: new Date('2026-07-18T10:00:00.000Z'),
+            },
+            {
+              action: 'confirm-meeting',
+              actorUserId: 'partner-1',
+              payload: {},
+              createdAt: new Date('2026-07-19T10:30:00.000Z'),
+            },
+          ],
+        }),
+      );
+
+      const result = await (service as any).workflowActivities({
+        legacySubjectId: `${persona}@example.com`,
+        persona,
+        bridgeKey: 'bridge-key',
+      });
+      const activity = [...result.requests, ...result.activeJobs].find(
+        (item: any) => item.poNumber === 'PO-2607-8879',
+      );
+
+      expect(activity).toMatchObject({
+        currentStep: 9,
+        workflowPhase: 'VARIATION',
+        workflowEvents: [
+          {
+            action: 'send-meeting-invitation',
+            createdAt: '2026-07-18T10:00:00.000Z',
+            actorRole: 'customer',
+          },
+          {
+            action: 'confirm-meeting',
+            createdAt: '2026-07-19T10:30:00.000Z',
+            actorRole: 'partner',
+          },
+        ],
+      });
+    },
+  );
+
+  it.each(['customer-1', 'partner-1'])(
+    'returns the persisted Step 9 event from workflow detail to %s',
+    async (viewerId) => {
+      const { service } = createService(
+        [viewerId],
+        workflowOrder({
+          status: 'IN_PROGRESS',
+          workflowPhase: 'VARIATION',
+          workflowRevision: 6,
+          workflowActions: [
+            {
+              action: 'confirm-meeting',
+              actorUserId: 'partner-1',
+              payload: {},
+              createdAt: new Date('2026-07-19T10:30:00.000Z'),
+            },
+          ],
+        }),
+      );
+
+      const detail = await (service as any).workflowDetails({
+        poNumber: 'PO-2607-8879',
+        legacySubjectId: viewerId,
+        bridgeKey: 'bridge-key',
+      });
+
+      expect(detail).toMatchObject({
+        currentStep: 9,
+        workflowPhase: 'VARIATION',
+        workflowEvents: [
+          {
+            action: 'confirm-meeting',
+            createdAt: '2026-07-19T10:30:00.000Z',
+            actorRole: 'partner',
+          },
+        ],
+      });
+    },
+  );
 
   it('places terminal persisted workflows in history only', async () => {
     const { service } = createService(

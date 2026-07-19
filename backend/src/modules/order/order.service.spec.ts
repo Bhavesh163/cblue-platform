@@ -369,6 +369,49 @@ describe('OrderService', () => {
     });
   });
 
+  describe('findByUser workflow projection', () => {
+    it('returns persisted Step 9 meeting events to the customer collection', async () => {
+      prisma.order.findMany.mockResolvedValue([
+        {
+          id: 'order-1',
+          userId: 'customer-1',
+          fixerId: 'fixer-1',
+          fixer: { userId: 'partner-1' },
+          status: OrderStatus.IN_PROGRESS,
+          workflowPhase: 'VARIATION',
+          description: 'PO-2607-9458 | Cladding roofing',
+          workflowActions: [
+            {
+              action: 'confirm-meeting',
+              actorUserId: 'partner-1',
+              createdAt: new Date('2026-07-19T10:30:00.000Z'),
+            },
+          ],
+        },
+      ]);
+      prisma.user.findMany.mockResolvedValue([
+        {
+          id: 'partner-1',
+          name: 'Partner',
+          email: 'partner@example.com',
+          role: UserRole.FIXER,
+        },
+      ]);
+
+      const result = await service.findByUser('customer-1');
+
+      expect(result[0]).toMatchObject({
+        currentStep: 9,
+        workflowPhase: 'VARIATION',
+        workflowEvents: [{
+          action: 'confirm-meeting',
+          actorRole: 'partner',
+          createdAt: '2026-07-19T10:30:00.000Z',
+        }],
+      });
+    });
+  });
+
   describe('findMyFixerOrders', () => {
     it('should keep fixer orders visible when user-fixer relation lookup drifts', async () => {
       prisma.user.findUnique.mockRejectedValue(
@@ -405,6 +448,49 @@ describe('OrderService', () => {
           user: null,
         }),
       ]);
+    });
+
+    it('returns persisted Step 9 meeting events to the partner collection', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        fixer: { id: 'fixer-1' },
+      });
+      prisma.order.findMany.mockResolvedValue([
+        {
+          id: 'order-1',
+          userId: 'customer-1',
+          fixerId: 'fixer-1',
+          status: OrderStatus.IN_PROGRESS,
+          workflowPhase: 'VARIATION',
+          description: 'PO-2607-9458 | Cladding roofing',
+          workflowActions: [
+            {
+              action: 'confirm-meeting',
+              actorUserId: 'partner-user-1',
+              createdAt: new Date('2026-07-19T10:30:00.000Z'),
+            },
+          ],
+        },
+      ]);
+      prisma.user.findMany.mockResolvedValue([
+        {
+          id: 'customer-1',
+          name: 'Customer',
+          email: 'customer@example.com',
+          role: UserRole.USER,
+        },
+      ]);
+
+      const result = await service.findMyFixerOrders('partner-user-1');
+
+      expect(result[0]).toMatchObject({
+        currentStep: 9,
+        workflowPhase: 'VARIATION',
+        workflowEvents: [{
+          action: 'confirm-meeting',
+          actorRole: 'partner',
+          createdAt: '2026-07-19T10:30:00.000Z',
+        }],
+      });
     });
 
     it('excludes legacy orders whose collection rows cannot satisfy the workflow detail contract', async () => {

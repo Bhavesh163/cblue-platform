@@ -6,6 +6,12 @@ export interface FixerWorkflowUiOrder {
   orderNumber?: string | null;
   status?: string | null;
   workflowPhase?: string | null;
+  currentStep?: number | null;
+  workflowEvents?: Array<{
+    action?: string | null;
+    createdAt?: string | number | null;
+    actorRole?: "customer" | "partner" | null;
+  }> | null;
   service?: string | null;
   serviceTh?: string | null;
   serviceZh?: string | null;
@@ -106,6 +112,7 @@ export function projectFixerChatRoom(
 ): FixerChatRoomProjection | null;
 
 export function isCustomerFixerActionNeeded(order?: FixerWorkflowUiOrder | null, fallbackStep?: number): boolean;
+export function projectAuthoritativeFixerStep(order?: FixerWorkflowUiOrder | null): number;
 
 export interface WorkflowUiAlert {
   id: string;
@@ -123,4 +130,5 @@ export interface WorkflowUiAlert {
 }
 
 export function buildCustomerMeetingAwaitingPartnerAlert(order?: FixerWorkflowUiOrder | null): WorkflowUiAlert | null;
+export function buildMeetingConfirmedWorkflowAlert(order?: FixerWorkflowUiOrder | null): WorkflowUiAlert | null;
 export function mergeAuthoritativeWorkflowAlerts(alerts?: Array<WorkflowUiAlert | null | undefined>): WorkflowUiAlert[];

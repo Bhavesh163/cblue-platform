@@ -159,6 +159,56 @@ export function reconcilePartnerMeetingRequest(cachedRequest = null, backendOrde
   };
 }
 
+const FIXER_STEP_BY_PHASE = Object.freeze({
+  DRAFT: 3,
+  PARTNER_DECISION: 5,
+  FEE: 6,
+  CHAT: 7,
+  MEETING_CONFIRM: 8,
+  VARIATION: 9,
+  VARIATION_CONFIRM: 9,
+  COMPLETION: 10,
+  COMPLETION_CONFIRM: 10,
+  RATING: 11,
+  TERMINAL: 11,
+});
+
+export function projectAuthoritativeFixerStep(order = null) {
+  const phase = normalizedText(order?.workflowPhase).toUpperCase();
+  if (FIXER_STEP_BY_PHASE[phase]) return FIXER_STEP_BY_PHASE[phase];
+  const currentStep = Number(order?.currentStep || 0);
+  return Number.isInteger(currentStep) && currentStep >= 1 && currentStep <= 11
+    ? currentStep
+    : 0;
+}
+
+export function buildMeetingConfirmedWorkflowAlert(order = null) {
+  const po = explicitPo(order);
+  if (!po || projectAuthoritativeFixerStep(order) !== 9 || isClosedWorkflowActivity(order)) {
+    return null;
+  }
+  const event = (Array.isArray(order?.workflowEvents) ? order.workflowEvents : []).find(
+    (item) =>
+      normalizedText(item?.action) === "confirm-meeting" &&
+      normalizedText(item?.actorRole) === "partner" &&
+      timestamp(item?.createdAt) > 0,
+  );
+  if (!event) return null;
+
+  return {
+    id: `a-meeting-confirmed-${po}`,
+    po,
+    workflowStage: 9,
+    authoritative: true,
+    msg: `${po} Meeting confirmed.`,
+    msgTh: `${po} Meeting confirmed.`,
+    msgZh: `${po} Meeting confirmed.`,
+    createdAt: timestamp(event.createdAt),
+    dot: "bg-teal-500",
+    supersedesIds: [`a-pay-${po}`, `a-chat-${po}`, `a-meeting-wait-${po}`],
+  };
+}
+
 export function isCustomerFixerActionNeeded(order = null, fallbackStep = 0) {
   const phase = normalizedText(order?.workflowPhase).toUpperCase();
   const status = normalizedText(order?.status).toUpperCase();

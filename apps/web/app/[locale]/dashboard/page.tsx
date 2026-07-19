@@ -49,6 +49,8 @@ import {
 import { readStoredPoProjectDetails } from "../../../lib/po-project-details";
 import {
   buildCustomerMeetingAwaitingPartnerAlert,
+  buildMeetingConfirmedWorkflowAlert,
+  projectAuthoritativeFixerStep,
   isCustomerFixerActionNeeded,
   mergeFixerWorkflowRecord,
   mergeAuthoritativeWorkflowAlerts,
@@ -3350,7 +3352,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         COMPLETED: 11,
         RATING_PENDING: 11,
       };
-      const step = stepByStatus[status] || 5;
+      const step = projectAuthoritativeFixerStep(o) || stepByStatus[status] || 5;
       const fixerLocations = projectFixerLocations(o);
       return {
         id: o.id,
@@ -3374,6 +3376,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         step,
         status: o.status,
         workflowPhase: o.workflowPhase,
+        currentStep: o.currentStep,
+        workflowEvents: o.workflowEvents,
         chatEnabled: o.chatEnabled === true,
         description: o.description || '',
       };
@@ -3897,6 +3901,14 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         dot: "bg-blue-500",
       }];
     }
+      const meetingConfirmedAlert = buildMeetingConfirmedWorkflowAlert(authoritativeOrder);
+      if (meetingConfirmedAlert) {
+        return [{
+          ...meetingConfirmedAlert,
+          time: toDisplayDateTime(meetingConfirmedAlert.createdAt),
+        }];
+      }
+
     if (status === 'IN_PROGRESS' || status === 'MEETING_REQUESTED') {
       const meetingAwaitingPartnerAlert = buildCustomerMeetingAwaitingPartnerAlert(authoritativeOrder);
       if (meetingAwaitingPartnerAlert) {

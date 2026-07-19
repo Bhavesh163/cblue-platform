@@ -125,6 +125,12 @@ export interface BlueWorkflowDetailResponse {
   nextActionOwner?: 'customer' | 'partner' | null;
   nextActionStep?: number | null;
   sourceVersion?: 'cblue-fixer-workflow-v1';
+  workflowPhase?: string | null;
+  workflowEvents?: Array<{
+    action: string;
+    createdAt: string;
+    actorRole: 'customer' | 'partner';
+  }>;
   workflowVersion?: number;
   chat?: {
     enabled: boolean;

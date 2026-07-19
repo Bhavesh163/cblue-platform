@@ -135,7 +135,7 @@ export class BlueBridgeService {
         review: { select: { createdAt: true } },
         fixer: { select: { userId: true } },
         workflowActions: {
-          select: { action: true, payload: true, createdAt: true },
+          select: { action: true, actorUserId: true, payload: true, createdAt: true },
           orderBy: { createdAt: 'asc' },
         },
       },
@@ -261,6 +261,8 @@ export class BlueBridgeService {
       })),
       ...lifecycle,
       ...workflow,
+      workflowPhase: order.workflowPhase,
+      workflowEvents: persistedFixerWorkflowEvents(order),
       meeting: persistedMeeting(order),
       siteSubdistrict: persistedSubdistrict(order.address),
     };
@@ -295,7 +297,7 @@ export class BlueBridgeService {
         review: { select: { createdAt: true } },
         statusHistory: { orderBy: { createdAt: 'desc' } },
         workflowActions: {
-          select: { action: true, payload: true, createdAt: true },
+          select: { action: true, actorUserId: true, payload: true, createdAt: true },
           orderBy: { createdAt: 'asc' },
         },
         chatMessages: {
@@ -456,7 +458,7 @@ export class BlueBridgeService {
         },
         review: { select: { createdAt: true } },
         workflowActions: {
-          select: { action: true, payload: true, createdAt: true },
+          select: { action: true, actorUserId: true, payload: true, createdAt: true },
           orderBy: { createdAt: 'asc' },
         },
         chatMessages: {
@@ -550,6 +552,8 @@ export class BlueBridgeService {
       currentStep: workflow.currentStep,
       totalSteps: workflow.totalSteps,
       workflowVersion: workflow.workflowVersion,
+      workflowPhase: order.workflowPhase,
+      workflowEvents: persistedFixerWorkflowEvents(order),
       status: workflow.status,
       lifecycleStatus: lifecycle.lifecycleStatus,
       activityBucket: workflow.activityBucket,
@@ -689,6 +693,32 @@ function persistedSubdistrict(
   address: { subdistrict?: unknown } | null | undefined,
 ): string {
   return stringValue(address?.subdistrict);
+}
+
+function persistedFixerWorkflowEvents(order: any): Array<{
+  action: string;
+  createdAt: string;
+  actorRole: 'customer' | 'partner';
+}> {
+  return (order.workflowActions || []).flatMap((event: any) => {
+    const actorUserId = String(event?.actorUserId || '');
+    const actorRole =
+      actorUserId && actorUserId === String(order.userId || '')
+        ? ('customer' as const)
+        : actorUserId && actorUserId === String(order.fixer?.userId || '')
+          ? ('partner' as const)
+          : null;
+    const action = String(event?.action || '').trim();
+    const createdAt = toIsoTimestamp(event?.createdAt);
+    if (!actorRole || !action || !createdAt) return [];
+    return [
+      {
+        action,
+        createdAt,
+        actorRole,
+      },
+    ];
+  });
 }
 
 function identity(

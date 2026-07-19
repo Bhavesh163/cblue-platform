@@ -25,6 +25,8 @@ import { clearSubscriberSession, ensureFreshSubscriberSession, refreshSubscriber
 import { getFixerMeetingSnapshot } from "../../../lib/fixerMeetingSnapshot";
 import {
   mergeFixerWorkflowRecord,
+  buildMeetingConfirmedWorkflowAlert,
+  projectAuthoritativeFixerStep,
   projectFixerLocations,
   projectFixerChatRoom,
   projectPartnerMeetingConfirmation,
@@ -3214,6 +3216,8 @@ export default function FixerProPage() {
       tier: desc.includes('TIER:') ? desc.split('TIER:')[1].split(' |')[0] : "Standard",
       status: normalizedStatus,
       workflowPhase: o.workflowPhase,
+      currentStep: o.currentStep,
+      workflowEvents: o.workflowEvents,
       meeting: {
         date: o.meetingDate || '',
         time: o.meetingTime || '',
@@ -3230,7 +3234,7 @@ export default function FixerProPage() {
       progress: normalizedStatus === 'COMPLETED' ? 100 : (['IN_PROGRESS', 'CONFIRMED', 'ACCEPTED'].includes(normalizedStatus) ? 40 : 15),
       fee: o.estimatedPrice ? `฿${o.estimatedPrice.toLocaleString()}` : "0", 
       budget: o.estimatedPrice ? o.estimatedPrice.toLocaleString() : "0",
-      step: 5,
+      step: projectAuthoritativeFixerStep(o) || 5,
     };
   }).filter(Boolean) as any[];
 
@@ -5311,6 +5315,15 @@ export default function FixerProPage() {
     })
     .sort((a: any, b: any) => parseTs(b.createdAt || b.date) - parseTs(a.createdAt || a.date));
 
+  const authoritativeMeetingConfirmedNotifications = mappedOrders
+    .map((order: any) => buildMeetingConfirmedWorkflowAlert(order))
+    .filter(Boolean)
+    .map((alert: any) => ({
+      ...alert,
+      unread: true,
+      time: fmtDateTime(alert.createdAt),
+    }));
+
   const dynamicNotifications = mockDynReqs.map((r: any) => {
     const eventTs = parseTs(r.createdAt || r.date);
     const displayTime = eventTs > 0 ? fmtDateTime(eventTs) : "";
@@ -5582,7 +5595,7 @@ export default function FixerProPage() {
     return po && phase ? `${po}:${phase}` : String(notification?.id || `${po}:${msg}`).trim();
   };
   const displayNotifications = Array.from(
-    [...persistedAlertNotifications, ...orderAlerts, ...activeMeetingConfirmAlerts, ...dynamicNotifications, ...partnerWorkflowNotifications, ...propWorkflowNotifications]
+    [...persistedAlertNotifications, ...orderAlerts, ...activeMeetingConfirmAlerts, ...authoritativeMeetingConfirmedNotifications, ...dynamicNotifications, ...partnerWorkflowNotifications, ...propWorkflowNotifications]
       .filter((n: any) => n && parseTs(n.createdAt || n.time) > 0 && !String(n.time || '').includes('NaN'))
       .reduce((map: Map<string, any>, notification: any) => {
         const createdAt = parseTs(notification.createdAt || notification.time);
@@ -5594,7 +5607,11 @@ export default function FixerProPage() {
           time: notification.time || fmtDateTime(createdAt),
         };
         const existing = map.get(key);
-        if (!existing || createdAt >= parseTs(existing.createdAt || existing.time)) {
+        if (
+          !existing ||
+          normalized.authoritative === true ||
+          (existing?.authoritative !== true && createdAt >= parseTs(existing.createdAt || existing.time))
+        ) {
           map.set(key, normalized);
         }
         return map;
