@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import * as workflowProjection from "./fixerWorkflowUiProjection.js";
 import {
   buildCustomerMeetingAwaitingPartnerAlert,
   isCustomerFixerActionNeeded,
@@ -92,4 +93,173 @@ test("keeps unrelated persisted alerts that use localized timestamps", () => {
   assert.equal(merged.length, 1);
   assert.equal(merged[0].id, "localized");
   assert.equal(merged[0].createdAt, new Date(2026, 6, 17, 19, 34).getTime());
+});
+
+test("reconciles a stale cached Step 8 request from the authoritative backend order", () => {
+  assert.equal(typeof workflowProjection.reconcilePartnerMeetingRequest, "function");
+
+  const reconciled = workflowProjection.reconcilePartnerMeetingRequest(
+    {
+      id: "meeting-confirm-PO-2607-9458",
+      po: "PO-2607-9458",
+      workflowType: "meeting_confirm_partner",
+      status: "IN_PROGRESS",
+      meetingDate: "01/01/2025",
+      meetingTime: "00:00",
+      meetingVenue: "Browser-only venue",
+      meetingNote: "Browser-only note",
+      projectLocation: "0.000000, 0.000000",
+      siteSubdistrict: "Old District",
+      cardLocation: "0.000000, 0.000000",
+      location: "0.000000, 0.000000",
+      subdistrict: "0.000000, 0.000000",
+      actionNeeded: false,
+    },
+    {
+      ...productionMeetingOrder,
+      projectLocation: "13.794095, 100.609583",
+      siteSubdistrict: "Saphan Song",
+      cardLocation: "Saphan Song",
+      location: "13.794095, 100.609583",
+      subdistrict: "Saphan Song",
+    },
+  );
+
+  assert.deepEqual(reconciled.meeting, {
+    date: "17/07/2026",
+    time: "19:34",
+    venue: "Siam paragon",
+    note: "Meet at the north entrance.",
+  });
+  assert.equal(reconciled.meetingDate, "17/07/2026");
+  assert.equal(reconciled.meetingTime, "19:34");
+  assert.equal(reconciled.meetingVenue, "Siam paragon");
+  assert.equal(reconciled.meetingNote, "Meet at the north entrance.");
+  assert.equal(reconciled.projectLocation, "13.794095, 100.609583");
+  assert.equal(reconciled.cardLocation, "Saphan Song");
+  assert.equal(reconciled.location, "13.794095, 100.609583");
+  assert.equal(reconciled.subdistrict, "Saphan Song");
+  assert.equal(reconciled.status, "MEETING_REQUESTED");
+  assert.equal(reconciled.workflowType, "meeting_confirm_partner");
+  assert.equal(reconciled.actionNeeded, true);
+});
+
+test("higher authoritative workflow stage suppresses legacy same-PO alert IDs", () => {
+  const current = {
+    ...buildCustomerMeetingAwaitingPartnerAlert(productionMeetingOrder),
+    workflowStage: 8,
+  };
+  const merged = mergeAuthoritativeWorkflowAlerts([
+    {
+      id: "a-browser-payment-row",
+      po: "PO-2607-9458",
+      workflowStage: 6,
+      msg: "Partner accepted",
+      createdAt: Date.parse("2026-07-12T01:14:00.000Z"),
+    },
+    {
+      id: "a-browser-chat-row",
+      po: "PO-2607-9458",
+      workflowStage: 7,
+      msg: "Chat active",
+      createdAt: Date.parse("2026-07-14T15:02:00.000Z"),
+    },
+    current,
+  ]);
+
+  assert.deepEqual(merged.map((alert) => alert.id), [
+    "a-meeting-wait-PO-2607-9458",
+  ]);
+});
+
+test("projects GPS for modals and persisted subdistrict for summary cards", () => {
+  assert.equal(typeof workflowProjection.projectFixerLocations, "function");
+
+  assert.deepEqual(
+    workflowProjection.projectFixerLocations({
+      address: {
+        latitude: 13.794095,
+        longitude: 100.609583,
+        subdistrict: "Saphan Song",
+        district: "Wang Thonglang",
+        province: "Bangkok",
+      },
+    }),
+    {
+      projectLocation: "13.794095, 100.609583",
+      siteSubdistrict: "Saphan Song",
+      cardLocation: "Saphan Song",
+    },
+  );
+});
+
+test("authoritative server stage suppresses a falsely advanced browser alert", () => {
+  const current = buildCustomerMeetingAwaitingPartnerAlert(productionMeetingOrder);
+  const merged = mergeAuthoritativeWorkflowAlerts([
+    {
+      id: "a-stale-browser-variation",
+      po: "PO-2607-9458",
+      workflowStage: 9,
+      msg: "Stale browser variation",
+      createdAt: Date.parse("2026-07-18T00:00:00.000Z"),
+    },
+    current,
+  ]);
+
+  assert.equal(current?.authoritative, true);
+  assert.deepEqual(merged.map((alert) => alert.id), [
+    "a-meeting-wait-PO-2607-9458",
+  ]);
+});
+
+test("authoritative alerts preserve unrelated unstructured legacy alerts", () => {
+  const current = buildCustomerMeetingAwaitingPartnerAlert(productionMeetingOrder);
+  const merged = mergeAuthoritativeWorkflowAlerts([
+    {
+      id: "a-unrelated-legacy-notice",
+      msg: "Unrelated account notice",
+      createdAt: Date.parse("2026-07-17T11:35:45.745Z"),
+    },
+    current,
+  ]);
+
+  assert.deepEqual(merged.map((alert) => alert.id), [
+    "a-unrelated-legacy-notice",
+    "a-meeting-wait-PO-2607-9458",
+  ]);
+});
+
+test("uses an authoritative top-level subdistrict when address is not hydrated", () => {
+  const locations = workflowProjection.projectFixerLocations({
+    projectLocation: "13.794095, 100.609583",
+    subdistrict: "Saphan Song",
+  });
+
+  assert.deepEqual(locations, {
+    projectLocation: "13.794095, 100.609583",
+    siteSubdistrict: "Saphan Song",
+    cardLocation: "Saphan Song",
+  });
+});
+
+test("reconciles a cached customer request to authoritative card and modal locations", () => {
+  assert.equal(typeof workflowProjection.reconcileFixerCardLocations, "function");
+
+  const reconciled = workflowProjection.reconcileFixerCardLocations(
+    {
+      po: "PO-2607-9458",
+      cardLocation: "13.000000, 100.000000",
+      location: "13.000000, 100.000000",
+      subdistrict: "13.000000, 100.000000",
+    },
+    {
+      projectLocation: "13.794095, 100.609583",
+      siteSubdistrict: "Saphan Song",
+    },
+  );
+
+  assert.equal(reconciled.projectLocation, "13.794095, 100.609583");
+  assert.equal(reconciled.cardLocation, "Saphan Song");
+  assert.equal(reconciled.location, "13.794095, 100.609583");
+  assert.equal(reconciled.subdistrict, "Saphan Song");
 });

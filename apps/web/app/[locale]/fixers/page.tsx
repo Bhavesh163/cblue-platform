@@ -23,7 +23,11 @@ import { fetchPartnerDashboardWithAuthRetry } from "../../../lib/partnerDashboar
 import { toggleWorkflowModalChromeLock } from "../../../lib/workflowModalChromeLock";
 import { clearSubscriberSession, ensureFreshSubscriberSession, refreshSubscriberSession } from "../../../lib/subscriberSession";
 import { getFixerMeetingSnapshot } from "../../../lib/fixerMeetingSnapshot";
-import { projectPartnerMeetingConfirmation } from "../../../lib/fixerWorkflowUiProjection";
+import {
+  projectFixerLocations,
+  projectPartnerMeetingConfirmation,
+  reconcilePartnerMeetingRequest,
+} from "../../../lib/fixerWorkflowUiProjection";
 import {
   buildPartnerWorkflowScope,
   filterBlockedPartnerAdvancedItems,
@@ -3173,23 +3177,7 @@ export default function FixerProPage() {
           .filter(Boolean),
       ),
     );
-    const locFromDesc = (() => { const m = String(o.description || '').match(/\bLOC:([^|]+)/); return m ? (m[1] ?? '').trim() : ''; })();
-    const siteLocation = (() => {
-      const lat = Number(o?.address?.latitude);
-      const lng = Number(o?.address?.longitude);
-      if (Number.isFinite(lat) && Number.isFinite(lng) && !(Math.abs(lat) < 0.000001 && Math.abs(lng) < 0.000001)) {
-        return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-      }
-      return (locFromDesc && locFromDesc !== 'Unknown')
-        ? locFromDesc
-        : (
-            normalizeLocationText(o?.address?.subdistrict) ||
-            normalizeLocationText(o?.address?.district) ||
-            normalizeLocationText(o?.address?.province) ||
-            normalizeLocationText(o?.subdistrict) ||
-            ""
-          );
-    })();
+    const { projectLocation, siteSubdistrict, cardLocation } = projectFixerLocations(o);
     const workflowStatusNote = getWorkflowStatusNote(o);
     const normalizedStatus = String(o.status || '').toUpperCase();
     
@@ -3200,8 +3188,11 @@ export default function FixerProPage() {
       hasAttachment: attachmentUrls.length > 0,
       images: attachmentUrls,
       issueImage: attachmentUrls[0] || "",
-      subdistrict: siteLocation,
-      location: siteLocation,
+      projectLocation,
+      siteSubdistrict,
+      cardLocation,
+      subdistrict: cardLocation,
+      location: projectLocation,
       createdAt: o.createdAt,
       customer: o.user?.name || "Customer",
       customerEmail: o.user?.email || "",
@@ -4130,14 +4121,29 @@ export default function FixerProPage() {
       for (const job of meetingOrders) {
         const po = String(job?.po || "").trim();
         if (!po || completedHistoryPos.has(po) || declinedPartnerPos.has(po) || isClosedPartnerWorkflowPo(po)) continue;
-        const alreadyHas = partnerReqs.some((req: any) =>
+        const existingMeetingRequest = partnerReqs.find((req: any) =>
           req?.po === po && String(req?.workflowType || req?.type || "") === "meeting_confirm_partner",
         );
-        if (alreadyHas) continue;
-
-        const inviteDetails = parseMeetingInviteDetails(`${job.statusNote || ""} ${job.description || ""}`);
         const createdAt = parseTs(job.statusChangedAt || job.createdAt || job.date) || Date.now();
-        const meetingVenue = inviteDetails.meetingVenue || job.location || job.subdistrict || "";
+        if (existingMeetingRequest) {
+          const reconciled = {
+            ...reconcilePartnerMeetingRequest(existingMeetingRequest, job),
+            date: fmtDateTime(createdAt),
+            createdAt,
+            projectDetails: pickProjectDetails(po, job.projectDetails, job.description, job.desc),
+            projectLocation: job.projectLocation || job.location || "",
+            siteSubdistrict: job.siteSubdistrict || job.cardLocation || job.subdistrict || "",
+            cardLocation: job.cardLocation || job.siteSubdistrict || job.subdistrict || "",
+            location: job.projectLocation || job.location || "",
+            subdistrict: job.cardLocation || job.siteSubdistrict || job.subdistrict || "",
+          };
+          partnerReqs = partnerReqs.map((req: any) => req === existingMeetingRequest ? reconciled : req);
+          changed = true;
+          continue;
+        }
+
+        const authoritativeMeeting = projectPartnerMeetingConfirmation(job);
+        const meetingVenue = authoritativeMeeting.meetingVenue;
         partnerReqs = [
           ...partnerReqs.filter((req: any) => !(req?.po === po && ["meeting_confirm_partner", "meeting_pending_partner"].includes(String(req?.workflowType || req?.type || "")))),
           {
@@ -4155,14 +4161,12 @@ export default function FixerProPage() {
             tier: job.tier,
             description: "Customer sent a site meeting invitation. Please review and confirm the meeting time.",
             projectDetails: pickProjectDetails(po, job.projectDetails, job.description, job.desc),
-            meetingDate: inviteDetails.meetingDateLabel || job.meetingDate || "",
-            meetingTime: inviteDetails.meetingTimeLabel || job.meetingTime || "",
-            meetingDateLabel: inviteDetails.meetingDateLabel || job.meetingDateLabel || "",
-            meetingTimeLabel: inviteDetails.meetingTimeLabel || job.meetingTimeLabel || "",
-            meetingVenue,
-            venue: meetingVenue,
-            location: job.location || meetingVenue,
-            subdistrict: job.subdistrict || job.location || meetingVenue,
+            ...authoritativeMeeting,
+            projectLocation: job.projectLocation || job.location || "",
+            siteSubdistrict: job.siteSubdistrict || job.cardLocation || job.subdistrict || "",
+            cardLocation: job.cardLocation || job.siteSubdistrict || job.subdistrict || "",
+            location: job.projectLocation || job.location || "",
+            subdistrict: job.cardLocation || job.siteSubdistrict || job.subdistrict || "",
             type: "meeting_confirm_partner",
             workflowType: "meeting_confirm_partner",
             status: "MEETING_REQUESTED",
@@ -5001,8 +5005,14 @@ export default function FixerProPage() {
       };
     });
 
+  const reconciledPartnerDynReqs = partnerDynReqs.map((request: any) => {
+    const type = String(request?.workflowType || request?.type || '').toLowerCase();
+    if (type !== 'meeting_confirm_partner') return request;
+    const backendOrder = mappedOrders.find((order: any) => order?.po === request?.po);
+    return backendOrder ? reconcilePartnerMeetingRequest(request, backendOrder) : request;
+  });
   const partnerDynReqsForRequests = filterBlockedPartnerAdvancedItems(
-    partnerDynReqs.filter((r: any) => {
+    reconciledPartnerDynReqs.filter((r: any) => {
       const po = String(r?.po || '').trim();
       const type = String(r?.workflowType || r?.type || '');
       return !['accept_sent'].includes(String(r.type || '')) && !isClosedPartnerLiveItem(r);
@@ -5014,7 +5024,7 @@ export default function FixerProPage() {
     ...partnerDynReqsForRequests,
     ...backendCompletedAwaitingRatingRequests,
     ...activeMeetingConfirmRequestsForRequests,
-    ...incomingJobs.filter((job: any) => !(String(job.status || '').toUpperCase() === 'MEETING_REQUESTED' && partnerDynReqs.some((req: any) => req.po === job.po && req.workflowType === 'meeting_confirm_partner'))),
+    ...incomingJobs.filter((job: any) => !(String(job.status || '').toUpperCase() === 'MEETING_REQUESTED' && reconciledPartnerDynReqs.some((req: any) => req.po === job.po && req.workflowType === 'meeting_confirm_partner'))),
   ].reduce((map: Map<string, any>, item: any) => {
     const key = item.po || item.id;
     const current = map.get(key);
@@ -6988,7 +6998,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? req.serviceTh : locale === "zh" ? req.serviceZh : req.service}{(req.po || req.step) ? <span className="text-xs font-normal text-gray-400">{req.po ? ` · ${req.po}` : ''}{req.step ? ` · Step ${req.step} of ${isPropertyWorkflowJob(req) ? 8 : 11}` : ''}</span> : null}</p>
                 <p className="text-xs text-gray-500">{req.customer} &middot; {req.date} &middot; {getJobAmountPrefix(req, locale)}: {getJobAmountValue(req)}</p>
-                {(req.meetingVenue || req.subdistrict) && <p className="text-xs text-gray-500 mt-0.5">{[req.meetingVenue || req.subdistrict].filter(Boolean).join(' · ')}</p>}
+                {(req.cardLocation || req.siteSubdistrict || req.subdistrict) && <p className="text-xs text-gray-500 mt-0.5">{req.cardLocation || req.siteSubdistrict || req.subdistrict}</p>}
                 <p className="text-xs text-gray-500 mt-1" style={{ whiteSpace: "pre-wrap" }}>{stripWorkflowPrefix(req.description || req.desc || req.statusNote)}</p>
               </div>
               <div className="flex items-center gap-2">
@@ -7028,7 +7038,7 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
                     <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? job.serviceTh : locale === "zh" ? job.serviceZh : job.service}{job.po ? <span className="text-xs font-normal text-gray-400"> · {job.po}</span> : null}</p>
                     <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {getJobAmountPrefix(job, locale)}: {getJobAmountValue(job)}</p>
                     {getJobListingTypeLabel(job, locale) && <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getJobListingTypeLabel(job, locale)}</p>}
-                    {job.subdistrict && <p className="text-xs text-gray-500 mt-0.5">{job.subdistrict}</p>}
+                    {(job.cardLocation || job.siteSubdistrict || job.subdistrict) && <p className="text-xs text-gray-500 mt-0.5">{job.cardLocation || job.siteSubdistrict || job.subdistrict}</p>}
                   </div>
                   <div className="flex flex-col items-end gap-1 flex-shrink-0">
                     <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[job.tier] || "bg-gray-100 text-gray-600"}`}>{job.tier}</span>
@@ -7391,7 +7401,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                   <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? job.serviceTh : locale === "zh" ? job.serviceZh : job.service}{job.po ? <span className="text-xs font-normal text-gray-400"> · {job.po}</span> : null}</p>
                   <p className="text-xs text-gray-500">{job.customer} &middot; {job.date} &middot; {getJobAmountPrefix(job, locale)}: {getJobAmountValue(job)}</p>
                   {getJobListingTypeLabel(job, locale) && <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getJobListingTypeLabel(job, locale)}</p>}
-                  {job.subdistrict && <p className="text-xs text-gray-500 mt-0.5">{job.subdistrict}</p>}
+                  {(job.cardLocation || job.siteSubdistrict || job.subdistrict) && <p className="text-xs text-gray-500 mt-0.5">{job.cardLocation || job.siteSubdistrict || job.subdistrict}</p>}
                 </div>
                 <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
                   <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${TIER_STYLE[job.tier] || "bg-gray-100 text-gray-600"}`}>{job.tier}</span>
@@ -8137,7 +8147,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
               <p className="font-semibold text-gray-900 text-sm">{locale === "th" ? req.serviceTh : locale === "zh" ? req.serviceZh : req.service}{(req.po || req.step) ? <span className="text-xs font-normal text-gray-400">{req.po ? ` · ${req.po}` : ''}{req.step ? ` · Step ${req.step} of 11` : ''}</span> : null}</p>
               <p className="text-xs text-amber-600 font-semibold mt-0.5">{reqWorkflowType === 'variation_partner' ? (locale === "th" ? "โปรดตัดสินใจว่าจะส่งคำขอเปลี่ยนแปลงงานหรือไม่" : locale === "zh" ? "请决定是否提交变更请求。" : 'Please decide whether to submit a variation request.') : reqWorkflowType === 'complete_partner' ? (locale === "th" ? "โปรดส่งคำขอยืนยันงานเสร็จให้ลูกค้า" : locale === "zh" ? "请向客户发送项目完成请求。" : 'Please send project complete request to customer.') : reqWorkflowType === 'rate_partner' ? (locale === "th" ? "โปรดให้คะแนนลูกค้าเพื่อปิดงานนี้" : locale === "zh" ? "请评价客户以关闭此工作。" : 'Please rate the customer to close this job.') : String(req.status || '').toUpperCase() === 'MEETING_REQUESTED' ? (locale === "th" ? "โปรดตรวจสอบและยืนยันคำเชิญนัดหมายหน้างาน" : locale === "zh" ? "请查看并确认现场会议邀请。" : 'Please review and confirm the site meeting invitation.') : locale === "th" ? "โปรดพิจารณาและรับงานนี้เพื่อดำเนินการต่อ" : locale === "zh" ? "请审核并接受此工作以继续" : "Please review and accept this job to proceed"}</p>
               <p className="text-xs text-gray-500 mt-0.5">{req.customer} &middot; {req.date} &middot; {getJobAmountPrefix(req, locale)}: {getJobAmountValue(req)}</p>
-              {(req.meetingVenue || req.subdistrict) && <p className="text-xs text-gray-500 mt-0.5">{[req.meetingVenue || req.subdistrict].filter(Boolean).join(' · ')}</p>}
+              {(req.cardLocation || req.siteSubdistrict || req.subdistrict) && <p className="text-xs text-gray-500 mt-0.5">{req.cardLocation || req.siteSubdistrict || req.subdistrict}</p>}
               <p className="text-xs text-gray-500 mt-1" style={{ whiteSpace: "pre-wrap" }}>{stripWorkflowPrefix(req.description || req.desc || req.statusNote)}</p>
             </div>
             <div className="flex items-center gap-2">

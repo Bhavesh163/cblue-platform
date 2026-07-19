@@ -51,6 +51,8 @@ import {
   buildCustomerMeetingAwaitingPartnerAlert,
   isCustomerFixerActionNeeded,
   mergeAuthoritativeWorkflowAlerts,
+  projectFixerLocations,
+  reconcileFixerCardLocations,
 } from "../../../lib/fixerWorkflowUiProjection";
 
 interface SubscriberInfo {
@@ -3324,6 +3326,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         RATING_PENDING: 11,
       };
       const step = stepByStatus[status] || 5;
+      const fixerLocations = projectFixerLocations(o);
       return {
         id: o.id,
         orderId: o.id,
@@ -3336,15 +3339,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         date: toDisplayDateTime(o.createdAt),
         createdAt: parseDateMs(o.createdAt),
         budget: o.estimatedPrice ? `฿${Number(o.estimatedPrice).toLocaleString()}` : '฿0',
-        location: (() => {
-          const lat = Number(o?.address?.latitude);
-          const lng = Number(o?.address?.longitude);
-          if (Number.isFinite(lat) && Number.isFinite(lng) && !(Math.abs(lat) < 0.000001 && Math.abs(lng) < 0.000001)) {
-            return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-          }
-          const m = String(o.description || '').match(/\bLOC:([^|]+)/);
-          return (m ? (m[1] ?? '').trim() : '') || o.address?.subdistrict || o.subdistrict || 'Unknown';
-        })(),
+        projectLocation: fixerLocations.projectLocation,
+        siteSubdistrict: fixerLocations.siteSubdistrict,
+        cardLocation: fixerLocations.cardLocation,
+        location: fixerLocations.projectLocation || 'Unknown',
+        subdistrict: fixerLocations.siteSubdistrict || fixerLocations.projectLocation || 'Unknown',
         tier,
         actionNeeded: isCustomerFixerActionNeeded(o, step),
         step,
@@ -3403,11 +3402,23 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         date: fmtDateTime(createdAt),
         createdAt,
         step: 8,
-        location: activeItem?.location || activeItem?.subdistrict || '',
+        projectLocation: activeItem?.projectLocation || activeItem?.location || '',
+        siteSubdistrict: activeItem?.siteSubdistrict || activeItem?.subdistrict || '',
+        cardLocation: activeItem?.cardLocation || activeItem?.siteSubdistrict || activeItem?.subdistrict || '',
+        location: activeItem?.projectLocation || activeItem?.location || '',
+        subdistrict: activeItem?.cardLocation || activeItem?.siteSubdistrict || activeItem?.subdistrict || '',
       };
     });
+  const reconciledCustomerWorkflowRequests = visibleMockDynRequests.map((request: any) => {
+    const po = String(request?.po || '').trim();
+    if (!po) return request;
+    const backendItem = combinedActive.find((item: any) => item.po === po);
+    return backendItem
+      ? reconcileFixerCardLocations(request, backendItem)
+      : request;
+  });
   const dedupedRequestMap = new Map<string, any>();
-  for (const requestItem of [...visibleMockDynRequests, ...backendMeetingInviteRequests].filter(
+  for (const requestItem of [...reconciledCustomerWorkflowRequests, ...backendMeetingInviteRequests].filter(
     (m: any) => !mockPayments[m.id] && !['notice', 'meeting_scheduled', 'chat_ready', 'meeting_pending_partner'].includes(String(m.type || '')),
   )) {
     const requestType = String(requestItem.type || '');
@@ -3742,20 +3753,6 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       const bTs = parseWorkflowMeetingDateTimeMs(b.meetingDate, b.meetingTime, b.createdAt || b.date);
       return aTs - bTs;
     });
-  const workflowOrderByPo = new Map(
-    workflowOrders
-      .map((order: any) => [extractPo(order), order])
-      .filter(([po]) => po && isPoCode(String(po))) as [string, any][],
-  );
-  const getWorkflowOrderEventTs = (po: string, fallback: any) => {
-    const order = workflowOrderByPo.get(po);
-    return parseDateMs(
-      order?.statusHistory?.[0]?.createdAt ||
-      order?.statusChangedAt ||
-      order?.updatedAt ||
-      fallback,
-    );
-  };
   const workflowAlerts = visibleMockDynRequests
     .filter((x: any) => {
       const po = String(x.po || "").trim();
@@ -3765,17 +3762,14 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     })
     .map((x: any) => {
       const po = String(x.po || "").trim();
-      const rawCreatedAt = x.createdAt || parseDateMs(x.date);
-      const createdAt = x.type === "payment_pending" && po
-        ? getWorkflowOrderEventTs(po, rawCreatedAt)
-        : rawCreatedAt;
+      const createdAt = x.createdAt || parseDateMs(x.date);
       const stableTime = toDisplayDateTime(createdAt) || x.date || "";
-      if (x.type === "notice") return { id: `a-${x.id}`, msg: x.msg || x.desc || "Workflow updated.", msgTh: x.msgTh || x.descTh || "อัปเดตขั้นตอนการทำงาน", msgZh: x.msgZh || x.descZh || "工作流程已更新。", time: stableTime, createdAt, dot: "bg-indigo-400" };
-      if (x.type === "payment_pending") return { id: `a-${x.id}`, msg: `${x.po || "Order"}: Partner accepted your enquiry. Next: click Testing period - Free Pass in Requests to activate chat and continue.`, msgTh: `${x.po || "ออเดอร์"}: พาร์ทเนอร์ยอมรับคำขอแล้ว ขั้นตอนถัดไปคือกด Testing period - Free Pass ในหน้า Requests เพื่อเปิดแชทและไปต่อ`, msgZh: `${x.po || "订单"}: 合作伙伴已接受您的询价。下一步：在 Requests 中点击 Testing period - Free Pass 以启用聊天并继续。`, time: stableTime, createdAt, dot: "bg-blue-500" };
-      if (x.type === "chat_ready") return { id: `a-${x.id}`, msg: `${x.po || "Order"}: Chat room is active. Next: send your site meeting invitation when you are ready.`, msgTh: `${x.po || "ออเดอร์"}: ห้องแชทพร้อมใช้งานแล้ว ขั้นตอนถัดไปคือส่งคำเชิญนัดหมายหน้างานเมื่อพร้อม`, msgZh: `${x.po || "订单"}: 聊天室已开启。下一步：准备好后发送现场会议邀请。`, time: stableTime, createdAt, dot: "bg-sky-500" };
+      if (x.type === "notice") return { id: `a-${x.id}`, po, workflowStage: Number(x.step || 0), msg: x.msg || x.desc || "Workflow updated.", msgTh: x.msgTh || x.descTh || "อัปเดตขั้นตอนการทำงาน", msgZh: x.msgZh || x.descZh || "工作流程已更新。", time: stableTime, createdAt, dot: "bg-indigo-400" };
+      if (x.type === "payment_pending") return { id: `a-${x.id}`, po, workflowStage: 6, msg: `${x.po || "Order"}: Partner accepted your enquiry. Next: click Testing period - Free Pass in Requests to activate chat and continue.`, msgTh: `${x.po || "ออเดอร์"}: พาร์ทเนอร์ยอมรับคำขอแล้ว ขั้นตอนถัดไปคือกด Testing period - Free Pass ในหน้า Requests เพื่อเปิดแชทและไปต่อ`, msgZh: `${x.po || "订单"}: 合作伙伴已接受您的询价。下一步：在 Requests 中点击 Testing period - Free Pass 以启用聊天并继续。`, time: stableTime, createdAt, dot: "bg-blue-500" };
+      if (x.type === "chat_ready") return { id: `a-${x.id}`, po, workflowStage: 7, msg: `${x.po || "Order"}: Chat room is active. Next: send your site meeting invitation when you are ready.`, msgTh: `${x.po || "ออเดอร์"}: ห้องแชทพร้อมใช้งานแล้ว ขั้นตอนถัดไปคือส่งคำเชิญนัดหมายหน้างานเมื่อพร้อม`, msgZh: `${x.po || "订单"}: 聊天室已开启。下一步：准备好后发送现场会议邀请。`, time: stableTime, createdAt, dot: "bg-sky-500" };
       if (x.type === "meeting_pending_partner") {
         const meetingWhen = formatWorkflowMeetingLabel(x.meetingDate, x.meetingTime, x.createdAt);
-        return { id: `a-${x.id}`, msg: `${x.po || "Order"}: Waiting for site meeting confirmation${meetingWhen ? ` for ${meetingWhen}` : ""}. Next: partner will confirm the proposed date and venue.`, msgTh: `${x.po || "ออเดอร์"}: รอการยืนยันนัดหมายหน้างาน${meetingWhen ? ` วันที่ ${meetingWhen}` : ""} ขั้นตอนถัดไปคือรอพาร์ทเนอร์ยืนยันวันเวลาและสถานที่`, msgZh: `${x.po || "订单"}: 等待现场确认现场会议${meetingWhen ? `（${meetingWhen}）` : ""}。下一步：等待合作伙伴确认日期和地点。`, time: stableTime, createdAt, dot: "bg-amber-500" };
+        return { id: `a-${x.id}`, po, workflowStage: 8, msg: `${x.po || "Order"}: Waiting for site meeting confirmation${meetingWhen ? ` for ${meetingWhen}` : ""}. Next: partner will confirm the proposed date and venue.`, msgTh: `${x.po || "ออเดอร์"}: รอการยืนยันนัดหมายหน้างาน${meetingWhen ? ` วันที่ ${meetingWhen}` : ""} ขั้นตอนถัดไปคือรอพาร์ทเนอร์ยืนยันวันเวลาและสถานที่`, msgZh: `${x.po || "订单"}: 等待现场确认现场会议${meetingWhen ? `（${meetingWhen}）` : ""}。下一步：等待合作伙伴确认日期和地点。`, time: stableTime, createdAt, dot: "bg-amber-500" };
       }
       if (x.type === "meeting_scheduled") {
         return buildMeetingConfirmedAlert({
@@ -3788,9 +3782,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
           customerName: x.customerName || x.customer || subscriber?.name || "Customer",
         });
       }
-      if (x.type === "variation_pending") return { id: `a-${x.id}`, msg: `${x.po || "Order"}: Partner submitted a variation request. Next: review the revised scope and approve it to continue.`, msgTh: `${x.po || "ออเดอร์"}: พาร์ทเนอร์ส่งคำขอ variation แล้ว ขั้นตอนถัดไปคือพิจารณาขอบเขตงาน/ราคาใหม่และอนุมัติเพื่อดำเนินการต่อ`, msgZh: `${x.po || "订单"}: 合作伙伴已提交变更申请。下一步：查看调整后的范围并批准以继续。`, time: stableTime, createdAt, dot: "bg-purple-500" };
-      if (x.type === "complete_pending") return { id: `a-${x.id}`, msg: `${x.po || "Order"}: Partner submitted the project-complete request. Next: review the completion note and confirm if the work is finished.`, msgTh: `${x.po || "ออเดอร์"}: พาร์ทเนอร์ส่งคำของานเสร็จแล้ว ขั้นตอนถัดไปคืออ่านบันทึกสรุปและยืนยันเมื่อโครงการเสร็จจริง`, msgZh: `${x.po || "订单"}: 合作伙伴已提交完工申请。下一步：查看完工说明，并在工作确实完成后确认。`, time: stableTime, createdAt, dot: "bg-green-500" };
-      if (x.type === "rate_pending") return { id: `a-${x.id}`, msg: `${x.po || "Order"}: Project complete confirmed. Next: rate your partner to close this job and move it to history.`, msgTh: `${x.po || "ออเดอร์"}: ยืนยันงานเสร็จแล้ว ขั้นตอนถัดไปคือให้คะแนนพาร์ทเนอร์เพื่อปิดงานและย้ายไปประวัติ`, msgZh: `${x.po || "订单"}: 已确认完工。下一步：评价您的合作伙伴以关闭此工作并移入历史。`, time: stableTime, createdAt, dot: "bg-yellow-500" };
+      if (x.type === "variation_pending") return { id: `a-${x.id}`, po, workflowStage: 9, msg: `${x.po || "Order"}: Partner submitted a variation request. Next: review the revised scope and approve it to continue.`, msgTh: `${x.po || "ออเดอร์"}: พาร์ทเนอร์ส่งคำขอ variation แล้ว ขั้นตอนถัดไปคือพิจารณาขอบเขตงาน/ราคาใหม่และอนุมัติเพื่อดำเนินการต่อ`, msgZh: `${x.po || "订单"}: 合作伙伴已提交变更申请。下一步：查看调整后的范围并批准以继续。`, time: stableTime, createdAt, dot: "bg-purple-500" };
+      if (x.type === "complete_pending") return { id: `a-${x.id}`, po, workflowStage: 10, msg: `${x.po || "Order"}: Partner submitted the project-complete request. Next: review the completion note and confirm if the work is finished.`, msgTh: `${x.po || "ออเดอร์"}: พาร์ทเนอร์ส่งคำของานเสร็จแล้ว ขั้นตอนถัดไปคืออ่านบันทึกสรุปและยืนยันเมื่อโครงการเสร็จจริง`, msgZh: `${x.po || "订单"}: 合作伙伴已提交完工申请。下一步：查看完工说明，并在工作确实完成后确认。`, time: stableTime, createdAt, dot: "bg-green-500" };
+      if (x.type === "rate_pending") return { id: `a-${x.id}`, po, workflowStage: 11, msg: `${x.po || "Order"}: Project complete confirmed. Next: rate your partner to close this job and move it to history.`, msgTh: `${x.po || "ออเดอร์"}: ยืนยันงานเสร็จแล้ว ขั้นตอนถัดไปคือให้คะแนนพาร์ทเนอร์เพื่อปิดงานและย้ายไปประวัติ`, msgZh: `${x.po || "订单"}: 已确认完工。下一步：评价您的合作伙伴以关闭此工作并移入历史。`, time: stableTime, createdAt, dot: "bg-yellow-500" };
       return null;
     })
     .filter(Boolean) as any[];
@@ -3866,6 +3860,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     if (['ASSIGNED', 'DEPOSIT_PENDING', 'CONFIRMED', 'ACCEPTED'].includes(status)) {
       return [{
         id: `a-pay-${po}`,
+          po,
+          workflowStage: 6,
+          authoritative: true,
         msg: `${po}: Partner accepted your enquiry. Next: click Testing period - Free Pass in Requests to activate chat and continue.`,
         msgTh: `${po}: พาร์ทเนอร์ยอมรับคำขอแล้ว ขั้นตอนถัดไปคือกด Testing period - Free Pass ในหน้า Requests เพื่อเปิดแชทและไปต่อ`,
         msgZh: `${po}: 合作伙伴已接受您的询价。下一步：在 Requests 中点击 Testing period - Free Pass 以启用聊天并继续。`,
@@ -3887,6 +3884,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       if (variationDesc && !isWorkflowPastVariation({ backendOrder: order, po, storage: typeof window !== 'undefined' ? localStorage : undefined })) {
         return [{
           id: `a-var-${po}`,
+          po,
+          workflowStage: 9,
+          authoritative: true,
           msg: `${po}: Partner submitted a variation request. Next: review the revised scope and approve it in Requests.`,
           msgTh: `${po}: พาร์ทเนอร์ส่งคำขอ variation แล้ว ขั้นตอนถัดไปคือพิจารณาขอบเขตงาน/ราคาใหม่และอนุมัติใน Requests`,
           msgZh: `${po}: 合作伙伴已提交变更申请。下一步：在 Requests 中查看调整后的范围并批准。`,
@@ -3899,6 +3899,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       if (completeDesc && !isTerminalWorkflowStatus(status)) {
         return [{
           id: `a-compl-${po}`,
+          po,
+          workflowStage: 10,
+          authoritative: true,
           msg: `${po}: Partner submitted the project-complete request. Next: review and confirm completion in Requests.`,
           msgTh: `${po}: พาร์ทเนอร์ส่งคำของานเสร็จแล้ว ขั้นตอนถัดไปคืออ่านบันทึกสรุปและยืนยันใน Requests`,
           msgZh: `${po}: 合作伙伴已提交完工申请。下一步：在 Requests 中查看并确认完工。`,
@@ -3910,6 +3913,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       if (isCustomerMeetingInviteActionAvailable(order)) {
         return [{
           id: `a-chat-${po}`,
+          po,
+          workflowStage: 7,
+          authoritative: true,
           msg: `${po}: Chat room is active. Next: send your site meeting invitation when you are ready.`,
           msgTh: `${po}: Chat room is active. Next: send your site meeting invitation when you are ready.`,
           msgZh: `${po}: Chat room is active. Next: send your site meeting invitation when you are ready.`,
@@ -3927,6 +3933,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         const msg = `${po}: You cancelled ${service}${reason ? ` (${reason})` : ""}. This job has been moved to History.`;
         return [{
           id: `a-customer-cancelled-${po}`,
+          po,
+          workflowStage: 11,
+          authoritative: true,
           msg,
           msgTh: msg,
           msgZh: msg,
@@ -3937,6 +3946,9 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       }
       return [{
         id: `a-declined-${po}`,
+          po,
+          workflowStage: 11,
+          authoritative: true,
         msg: `${po}: The selected partner declined ${service}${reason ? ` (${reason})` : ""}. Next: choose another matched professional or create a new enquiry.`,
         msgTh: `${po}: พาร์ทเนอร์ที่เลือกปฏิเสธ ${service}${reason ? ` (${reason})` : ""} ขั้นตอนถัดไปคือเลือกมืออาชีพรายอื่นหรือสร้างคำขอใหม่`,
         msgZh: `${po}: 所选合作伙伴已拒绝 ${service}${reason ? `（${reason}）` : ""}。下一步：请选择其他匹配的专业人士或创建新询价。`,
@@ -4032,6 +4044,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
             <div>
               <h3 className="font-bold text-gray-900">{item.title} <span className="text-sm font-normal text-gray-500">· {item.po} · Step 7 of 11</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{item.customer} · {item.date}</p>
+              {(item.cardLocation || item.siteSubdistrict || item.subdistrict) && <p className="text-xs text-gray-500 mt-0.5">{item.cardLocation || item.siteSubdistrict || item.subdistrict}</p>}
               <p className="text-xs text-gray-500 mt-1">Chat room is now active. Connect with your partner via the Chat page.</p>
             </div>
           </div>
@@ -4057,6 +4070,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
             <div>
               <h3 className="font-bold text-gray-900">{item.title} <span className="text-sm font-normal text-gray-500">· {item.po} · Step 8 of 11</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{item.customer} · {item.date}</p>
+              {(item.cardLocation || item.siteSubdistrict || item.subdistrict) && <p className="text-xs text-gray-500 mt-0.5">{item.cardLocation || item.siteSubdistrict || item.subdistrict}</p>}
               <p className="text-xs text-gray-500 mt-1">Please send a meeting invitation to your partner with venue, date and time.</p>
             </div>
           </div>
@@ -4085,6 +4099,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
             <div>
               <h3 className="font-bold text-gray-900">{item.title} <span className="text-sm font-normal text-gray-500">· {item.po} · Step 8 of 11</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{item.customer} · {item.date}</p>
+              {(item.cardLocation || item.siteSubdistrict || item.subdistrict) && <p className="text-xs text-gray-500 mt-0.5">{item.cardLocation || item.siteSubdistrict || item.subdistrict}</p>}
               <p className="text-xs text-gray-500 mt-1">Waiting for partner to confirm meeting time...</p>
             </div>
           </div>
@@ -4108,6 +4123,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
             <div>
               <h3 className="font-bold text-gray-900">{item.title} <span className="text-sm font-normal text-gray-500">· {item.po} · Step 8 of 11</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{item.customer} · {item.date}</p>
+              {(item.cardLocation || item.siteSubdistrict || item.subdistrict) && <p className="text-xs text-gray-500 mt-0.5">{item.cardLocation || item.siteSubdistrict || item.subdistrict}</p>}
               <p className="text-xs text-gray-500 mt-1">{item.desc}</p>
             </div>
           </div>
@@ -4156,6 +4172,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
             <div>
               <h3 className="font-bold text-gray-900">{item.title} <span className="text-sm font-normal text-gray-500">· {item.po} · {getWorkflowStepBadgeLabel(9, 11, getWorkflowStepNameForLocale(9, locale), locale)}</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{item.customer} · {item.date}</p>
+              {(item.cardLocation || item.siteSubdistrict || item.subdistrict) && <p className="text-xs text-gray-500 mt-0.5">{item.cardLocation || item.siteSubdistrict || item.subdistrict}</p>}
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "พาร์ทเนอร์ส่งคำขอเปลี่ยนแปลงงาน กรุณาตรวจสอบและยืนยันเพื่อดำเนินการต่อ" : locale === "zh" ? "合作伙伴已提交变更请求，请查看并确认是否继续。" : item.desc}</p>
             </div>
           </div>
@@ -4181,6 +4198,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
             <div>
               <h3 className="font-bold text-gray-900">{item.title} <span className="text-sm font-normal text-gray-500">· {item.po} · {getWorkflowStepBadgeLabel(10, 11, getWorkflowStepNameForLocale(10, locale), locale)}</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{item.customer} · {item.date}</p>
+              {(item.cardLocation || item.siteSubdistrict || item.subdistrict) && <p className="text-xs text-gray-500 mt-0.5">{item.cardLocation || item.siteSubdistrict || item.subdistrict}</p>}
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "พาร์ทเนอร์ส่งคำขอยืนยันงานเสร็จ กรุณาตรวจสอบและยืนยันเมื่องานเสร็จจริง" : locale === "zh" ? "合作伙伴已发送完成请求，请在确认工作完成后批准。" : item.desc}</p>
             </div>
           </div>
@@ -4206,6 +4224,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
             <div>
               <h3 className="font-bold text-gray-900">{item.title} <span className="text-sm font-normal text-gray-500">· {item.po} · {getWorkflowStepBadgeLabel(11, 11, getWorkflowStepNameForLocale(11, locale), locale)}</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{item.customer} · {item.date}</p>
+              {(item.cardLocation || item.siteSubdistrict || item.subdistrict) && <p className="text-xs text-gray-500 mt-0.5">{item.cardLocation || item.siteSubdistrict || item.subdistrict}</p>}
               <p className="text-xs text-gray-500 mt-1">{item.desc}</p>
             </div>
           </div>
@@ -4232,6 +4251,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
             <div>
               <h3 className="font-bold text-gray-900">{item.title || item.po} <span className="text-sm font-normal text-gray-500">· {item.po} · Step 6 of 11 · Fee &amp; Proceed</span></h3>
               <p className="text-sm text-gray-600 mt-0.5">{item.customer} · {item.date}</p>
+              {(item.cardLocation || item.siteSubdistrict || item.subdistrict) && <p className="text-xs text-gray-500 mt-0.5">{item.cardLocation || item.siteSubdistrict || item.subdistrict}</p>}
               <p className="text-xs text-gray-500 mt-1">{item.desc || (locale === "th" ? "พาร์ทเนอร์ยอมรับออเดอร์แล้ว กรุณาชำระค่าธรรมเนียมและดำเนินการต่อ" : locale === "zh" ? "合作伙伴已接受订单，请支付处理费用以继续。" : "Partner accepted your Order. Please pay the processing fee to proceed.")}</p>
             </div>
           </div>
@@ -4256,6 +4276,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
            <div>
              <h3 className="font-bold text-gray-900">{item.title} <span className="text-sm font-normal text-gray-500">· {item.po}{item.step ? ` · Step ${item.step} of 11` : ''}</span></h3>
              <p className="text-sm text-gray-600 mt-0.5">{item.customer} · {item.date}</p>
+              {(item.cardLocation || item.siteSubdistrict || item.subdistrict) && <p className="text-xs text-gray-500 mt-0.5">{item.cardLocation || item.siteSubdistrict || item.subdistrict}</p>}
              <p className="text-xs text-gray-500 mt-1">{item.desc}</p>
            </div>
         </div>
@@ -4471,7 +4492,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       <div className="flex items-start gap-4 flex-1 min-w-0">
          <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold shrink-0 ${item.type === 'prop_waiting' ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-600'}`}>{(locale === "th" ? (item.titleTh || item.serviceTh || item.title || item.service || "C") : locale === "zh" ? (item.titleZh || item.serviceZh || item.title || item.service || "C") : (item.title || item.service || "C")).charAt(0)}</div>
          <div className="min-w-0">
-           <h3 className="font-bold text-gray-900 text-sm">{locale === "th" ? (item.titleTh || item.serviceTh || item.title || item.service) : locale === "zh" ? (item.titleZh || item.serviceZh || item.title || item.service) : (item.title || item.service)} <span className="text-xs font-normal text-gray-400">· {isPropertyCard ? getPropOrderLabel(item.po) : (item.po || `PO-${item.id?.slice(0,8) || '2605-8471'}`)} | {item.location || item.subdistrict || 'Unknown'}</span></h3>
+           <h3 className="font-bold text-gray-900 text-sm">{locale === "th" ? (item.titleTh || item.serviceTh || item.title || item.service) : locale === "zh" ? (item.titleZh || item.serviceZh || item.title || item.service) : (item.title || item.service)} <span className="text-xs font-normal text-gray-400">· {isPropertyCard ? getPropOrderLabel(item.po) : (item.po || `PO-${item.id?.slice(0,8) || '2605-8471'}`)} | {item.cardLocation || item.siteSubdistrict || item.subdistrict || item.location || 'Unknown'}</span></h3>
            <p className="text-xs text-gray-600 mt-0.5">{item.fixerAlias || item.partnerName || item.customer || "Customer"} · {item.date || toDisplayDateTime(item.createdAt || Date.now())} · {amountPrefix} {amountValue}</p>
            {isPropertyCard && (
              <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getPropListingTypeLabel(item?.propInquiry?.listingType || item?.listingType)}</p>
