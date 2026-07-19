@@ -248,4 +248,64 @@ describe('FixerWorkflowBridgeService', () => {
     );
     expect(result.workflowVersion).toBe(1);
   });
+
+  it('returns the persisted Step 9 confirm-meeting event from the action response', async () => {
+    const persistedCreatedAt = '2026-07-19T10:30:00.000Z';
+    const { service, prisma, bridge } = createHarness(
+      'MEETING_CONFIRM',
+      OrderStatus.MEETING_REQUESTED,
+    );
+    bridge.authenticatedWorkflowDetails.mockResolvedValue({
+      sourceVersion: 'cblue-fixer-workflow-v1',
+      poNumber: 'PO-2607-9001',
+      currentStep: 9,
+      totalSteps: 11,
+      status: 'IN_PROGRESS',
+      activityBucket: 'active',
+      workflowPhase: 'VARIATION',
+      workflowVersion: 1,
+      workflowEvents: [
+        {
+          action: 'confirm-meeting',
+          createdAt: persistedCreatedAt,
+          actorRole: 'partner',
+        },
+      ],
+      actions: [],
+      availableActions: [],
+      nextActionLabel: null,
+      nextActionOwner: null,
+    });
+
+    const result = await service.action(
+      'PO-2607-9001',
+      'partner-1',
+      'confirm-meeting',
+      { workflowVersion: 0 },
+      'confirm-meeting-1',
+    );
+
+    expect(prisma.fixerWorkflowAction.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        orderId: 'order-1',
+        actorUserId: 'partner-1',
+        action: 'confirm-meeting',
+      }),
+    });
+    expect(result).toMatchObject({
+      currentStep: 9,
+      workflowPhase: 'VARIATION',
+      workflowEvents: [
+        {
+          action: 'confirm-meeting',
+          createdAt: persistedCreatedAt,
+          actorRole: 'partner',
+        },
+      ],
+    });
+    expect(bridge.authenticatedWorkflowDetails).toHaveBeenCalledWith(
+      'PO-2607-9001',
+      'partner-1',
+    );
+  });
 });
