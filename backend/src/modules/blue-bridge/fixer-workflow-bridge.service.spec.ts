@@ -308,4 +308,33 @@ describe('FixerWorkflowBridgeService', () => {
       'partner-1',
     );
   });
+
+  it('persists structured Step 9 variation price-list items', async () => {
+    const { service, prisma } = createHarness(
+      'VARIATION',
+      OrderStatus.IN_PROGRESS,
+    );
+    const variationItems = [{
+      service: 'Additional cladding',
+      quantity: 12,
+      unit: 'sq.m.',
+      unitRate: 2500,
+      total: 30000,
+    }];
+
+    await service.action(
+      'PO-2607-9458',
+      'partner-1',
+      'send-variation',
+      { workflowVersion: 0, note: 'Additional approved scope', variationItems } as any,
+      'send-variation-1',
+    );
+
+    expect(prisma.fixerWorkflowAction.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: 'send-variation',
+        payload: expect.objectContaining({ variationItems }),
+      }),
+    });
+  });
 });

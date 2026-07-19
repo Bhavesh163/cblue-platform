@@ -95,6 +95,16 @@ test("customer and partner pages project persisted Step 9 and meeting events", (
   );
 });
 
+test("partner cards and requests preserve authoritative Step 9 actions", () => {
+  assert.match(partnerPage, /sourceVersion:\s*o\.sourceVersion/);
+  assert.match(partnerPage, /actions:\s*o\.actions/);
+  assert.match(partnerPage, /projectPartnerActiveWorkflow\(job/);
+  assert.doesNotMatch(
+    partnerPage,
+    /const step = Math\.max\(parseWorkflowStep\(blockedStepLookup\?\.step\), backendStep, partnerWorkflowStep, localSubmittedStep, waitingCustomerStep\)/,
+  );
+});
+
 test("partner meeting confirmation awaits the authoritative action snapshot", () => {
   assert.match(partnerPage, /postFixerWorkflowAction/);
   const branchStart = partnerPage.indexOf("if (isMeetingConfirmation) {");

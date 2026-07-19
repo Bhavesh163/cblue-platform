@@ -296,6 +296,37 @@ describe('BLUE workflow production contracts', () => {
       }),
     );
   });
+
+  it('returns the authoritative Step 9 variation price-list form contract', () => {
+    const partner = resolvePersistedFixerWorkflowSnapshot({
+      poNumber: 'PO-2607-9458',
+      status: 'IN_PROGRESS',
+      workflowPhase: 'VARIATION',
+      workflowVersion: 7,
+      chatEnabled: true,
+      customerUserId: 'customer-1',
+      fixerUserId: 'partner-1',
+      viewerUserIds: ['partner-1'],
+    });
+
+    expect(
+      partner.actions.find((action) => action.key === 'send-variation'),
+    ).toMatchObject({
+      owner: 'partner',
+      actionStep: 9,
+      form: {
+        kind: 'price-list',
+        maxItems: 30,
+        fields: expect.arrayContaining([
+          expect.objectContaining({ key: 'service', required: true }),
+          expect.objectContaining({ key: 'quantity', required: true }),
+          expect.objectContaining({ key: 'unit', required: true }),
+          expect.objectContaining({ key: 'unitRate', required: true }),
+          expect.objectContaining({ key: 'total', readOnly: true }),
+        ]),
+      },
+    });
+  });
   it.each([
     [
       'PARTNER_DECISION',

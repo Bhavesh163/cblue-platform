@@ -58,7 +58,8 @@ test("projects Step 9 variation for the partner and not for the customer", () =>
     ],
   });
 
-  assert.equal(request?.workflowType, "variation_decision_partner");
+  assert.equal(request?.workflowType, "variation_partner");
+  assert.equal(request?.type, "variation_partner");
   assert.equal(request?.actionKey, "send-variation");
   assert.equal(request?.step, 9);
   assert.equal(

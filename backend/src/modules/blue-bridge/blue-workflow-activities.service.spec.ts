@@ -230,6 +230,13 @@ describe('BlueBridgeService workflow activities', () => {
           },
         ],
       });
+      expect(result.alerts).toContainEqual(
+        expect.objectContaining({
+          action: 'confirm-meeting',
+          createdAt: '2026-07-19T10:30:00.000Z',
+          currentStep: 9,
+        }),
+      );
     },
   );
 

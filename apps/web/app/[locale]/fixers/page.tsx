@@ -31,6 +31,7 @@ import {
   projectFixerLocations,
   projectFixerChatRoom,
   projectPartnerMeetingConfirmation,
+  projectPartnerActiveWorkflow,
   projectPartnerWorkflowRequest,
   projectWorkflowChatHistory,
   reconcilePartnerMeetingRequest,
@@ -3246,8 +3247,20 @@ export default function FixerProPage() {
       statusNote: workflowStatusNote,
       statusChangedAt: o.statusHistory?.[0]?.createdAt || o.updatedAt || o.createdAt,
       tier: desc.includes('TIER:') ? desc.split('TIER:')[1].split(' |')[0] : "Standard",
+      sourceVersion: o.sourceVersion,
       status: normalizedStatus,
       workflowPhase: o.workflowPhase,
+      totalSteps: o.totalSteps,
+      workflowVersion: o.workflowVersion,
+      activityBucket: o.activityBucket,
+      actions: o.actions,
+      availableActions: o.availableActions,
+      actionNeeded: o.actionNeeded,
+      actionOwner: o.actionOwner,
+      nextActionKey: o.nextActionKey,
+      nextActionLabel: o.nextActionLabel,
+      nextActionOwner: o.nextActionOwner,
+      nextActionStep: o.nextActionStep,
       currentStep: o.currentStep,
       workflowEvents: o.workflowEvents,
       meeting: {
@@ -4092,6 +4105,9 @@ export default function FixerProPage() {
   };
   let activeJobs = mappedOrders.filter(o => !isClosedPartnerLiveItem(o));
   activeJobs = activeJobs.map(job => {
+      const authoritativeJob = projectPartnerActiveWorkflow(job);
+      if (authoritativeJob) return authoritativeJob;
+
       const stepLookup = mockActiveState.find((x: any) => x.po === job.po);
       const backendStep = getWorkflowStepFromStatus(job.status);
       const visiblePartnerDynReqs = filterBlockedPartnerAdvancedItems(
@@ -4104,9 +4120,9 @@ export default function FixerProPage() {
         completeWaitingCustomerPos.has(job.po) ? 10 :
         variationWaitingCustomerPos.has(job.po) ? 9 : 0;
       const blockedStepLookup = filterBlockedPartnerAdvancedItems(stepLookup ? [stepLookup] : [], [job])[0];
-      const step = Math.max(parseWorkflowStep(blockedStepLookup?.step), backendStep, partnerWorkflowStep, localSubmittedStep, waitingCustomerStep);
+      const legacyStep = Math.max(parseWorkflowStep(blockedStepLookup?.step), backendStep, partnerWorkflowStep, localSubmittedStep, waitingCustomerStep);
       const meetingConfirmPendingFromStep =
-        step === 8 &&
+        legacyStep === 8 &&
         !mockDynReqs.some((req: any) => req?.po === job.po && String(req?.type || req?.workflowType || '').toLowerCase() === 'meeting_scheduled') &&
         !partnerDynReqs.some((req: any) => req?.po === job.po && ['variation_partner', 'complete_partner', 'rate_partner'].includes(String(req?.workflowType || req?.type || '').toLowerCase())) &&
         !variationWaitingCustomerPos.has(job.po) &&
@@ -4119,7 +4135,7 @@ export default function FixerProPage() {
         String(job.status || '').toUpperCase() === 'MEETING_REQUESTED' ||
         backendStep === 5 ||
         meetingConfirmPendingFromStep;
-      return { ...job, step, mockStep: step, actionNeeded: partnerActionNeeded };
+      return { ...job, step: legacyStep, mockStep: legacyStep, actionNeeded: partnerActionNeeded };
   });
 
   useEffect(() => {

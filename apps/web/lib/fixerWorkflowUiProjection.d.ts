@@ -1,5 +1,6 @@
 export interface FixerWorkflowUiOrder {
   id?: string | null;
+  sourceVersion?: string | null;
   orderId?: string | null;
   po?: string | null;
   poNumber?: string | null;
@@ -144,8 +145,8 @@ export function mergeAuthoritativeWorkflowAlerts(alerts?: Array<WorkflowUiAlert 
 
 export interface PartnerWorkflowRequest extends Record<string, unknown> {
   po: string;
-  workflowType: "meeting_confirm_partner" | "variation_decision_partner";
-  type: "meeting_confirm_partner" | "variation_decision_partner";
+  workflowType: "meeting_confirm_partner" | "variation_partner";
+  type: "meeting_confirm_partner" | "variation_partner";
   step: number;
   actionNeeded: true;
   actionKey: string;
@@ -156,6 +157,14 @@ export interface PartnerWorkflowRequest extends Record<string, unknown> {
 export function projectPartnerWorkflowRequest(
   order?: FixerWorkflowUiOrder | null,
 ): PartnerWorkflowRequest | null;
+
+export function projectPartnerActiveWorkflow(
+  order?: FixerWorkflowUiOrder | null,
+): (FixerWorkflowUiOrder & {
+  step: number;
+  mockStep: number;
+  actionNeeded: boolean;
+}) | null;
 
 export interface WorkflowChatHistoryProjection {
   id: string;

@@ -50,12 +50,26 @@ interface WorkflowLifecycle {
   ratedAt: string | null;
 }
 
+interface WorkflowActionForm {
+  kind: 'price-list';
+  maxItems: number;
+  fields: Array<{
+    key: 'service' | 'quantity' | 'unit' | 'unitRate' | 'total';
+    label: string;
+    type: 'text' | 'number';
+    required?: boolean;
+    readOnly?: boolean;
+    min?: number;
+  }>;
+}
+
 interface WorkflowAction {
   key: string;
   owner: 'customer' | 'partner';
   label: string;
   actionStep: number;
   feeMode?: 'payment' | 'free-pass';
+  form?: WorkflowActionForm;
 }
 interface ProcessingFee {
   amount: number;
@@ -135,7 +149,12 @@ export class BlueBridgeService {
         review: { select: { createdAt: true } },
         fixer: { select: { userId: true } },
         workflowActions: {
-          select: { action: true, actorUserId: true, payload: true, createdAt: true },
+          select: {
+            action: true,
+            actorUserId: true,
+            payload: true,
+            createdAt: true,
+          },
           orderBy: { createdAt: 'asc' },
         },
       },
@@ -297,7 +316,12 @@ export class BlueBridgeService {
         review: { select: { createdAt: true } },
         statusHistory: { orderBy: { createdAt: 'desc' } },
         workflowActions: {
-          select: { action: true, actorUserId: true, payload: true, createdAt: true },
+          select: {
+            action: true,
+            actorUserId: true,
+            payload: true,
+            createdAt: true,
+          },
           orderBy: { createdAt: 'asc' },
         },
         chatMessages: {
@@ -319,6 +343,22 @@ export class BlueBridgeService {
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
+
+    const eventAlerts = activities.flatMap((activity) =>
+      (activity.workflowEvents || [])
+        .filter((event: any) => event.action === 'confirm-meeting')
+        .map((event: any) => ({
+          id: `workflow-event:${activity.poNumber}:${event.action}:${event.createdAt}`,
+          type: 'FIXER_WORKFLOW',
+          status: 'SENT',
+          title: `${activity.poNumber} Meeting confirmed`,
+          body: `${activity.poNumber}: Meeting confirmed. Step 9 variation is ready.`,
+          action: event.action,
+          currentStep: 9,
+          createdAt: event.createdAt,
+          readAt: null,
+        })),
+    );
 
     return {
       sourceVersion: 'cblue-fixer-workflow-activities-v1' as const,
@@ -343,15 +383,21 @@ export class BlueBridgeService {
           partner: activity.partner,
           messageItems: activity.messageItems,
         })),
-      alerts: notifications.map((notification) => ({
-        id: notification.id,
-        type: notification.type,
-        status: notification.status,
-        title: notification.title,
-        body: notification.body,
-        createdAt: toIsoTimestamp(notification.createdAt),
-        readAt: toIsoTimestamp(notification.readAt),
-      })),
+      alerts: [
+        ...eventAlerts,
+        ...notifications.map((notification) => ({
+          id: notification.id,
+          type: notification.type,
+          status: notification.status,
+          title: notification.title,
+          body: notification.body,
+          createdAt: toIsoTimestamp(notification.createdAt),
+          readAt: toIsoTimestamp(notification.readAt),
+        })),
+      ].sort(
+        (left, right) =>
+          Date.parse(right.createdAt || '') - Date.parse(left.createdAt || ''),
+      ),
       upcomingMeetings: activities
         .filter(
           (activity) =>
@@ -458,7 +504,12 @@ export class BlueBridgeService {
         },
         review: { select: { createdAt: true } },
         workflowActions: {
-          select: { action: true, actorUserId: true, payload: true, createdAt: true },
+          select: {
+            action: true,
+            actorUserId: true,
+            payload: true,
+            createdAt: true,
+          },
           orderBy: { createdAt: 'asc' },
         },
         chatMessages: {
@@ -1047,6 +1098,35 @@ export function resolvePersistedFixerWorkflowSnapshot({
           owner: 'partner',
           label: 'Send Variation',
           actionStep: 9,
+          form: {
+            kind: 'price-list',
+            maxItems: 30,
+            fields: [
+              { key: 'service', label: 'Item', type: 'text', required: true },
+              {
+                key: 'quantity',
+                label: 'Qty',
+                type: 'number',
+                required: true,
+                min: 0.000001,
+              },
+              { key: 'unit', label: 'Unit', type: 'text', required: true },
+              {
+                key: 'unitRate',
+                label: 'Rate (THB)',
+                type: 'number',
+                required: true,
+                min: 0,
+              },
+              {
+                key: 'total',
+                label: 'Amount (THB)',
+                type: 'number',
+                readOnly: true,
+                min: 0,
+              },
+            ],
+          },
         },
         {
           key: 'skip-variation',

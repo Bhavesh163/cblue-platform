@@ -332,8 +332,8 @@ export function projectPartnerWorkflowRequest(order = null) {
   if (["send-variation", "skip-variation"].includes(key)) {
     return {
       ...mergeFixerWorkflowRecord(null, order),
-      workflowType: "variation_decision_partner",
-      type: "variation_decision_partner",
+      workflowType: "variation_partner",
+      type: "variation_partner",
       step,
       mockStep: step,
       actionNeeded: true,
@@ -343,6 +343,27 @@ export function projectPartnerWorkflowRequest(order = null) {
     };
   }
   return null;
+}
+
+export function projectPartnerActiveWorkflow(order = null) {
+  if (!order || isClosedWorkflowActivity(order)) return null;
+  const isAuthoritative =
+    normalizedText(order?.sourceVersion) === "cblue-fixer-workflow-v1" ||
+    (normalizedText(order?.workflowPhase) && Number(order?.currentStep) > 0);
+  if (!isAuthoritative) return null;
+
+  const step = projectAuthoritativeFixerStep(order);
+  const partnerActions = (Array.isArray(order?.actions) ? order.actions : []).filter(
+    (action) =>
+      normalizedText(action?.owner) === "partner" &&
+      normalizedText(action?.key) !== "customer-cancel",
+  );
+  return {
+    ...order,
+    step,
+    mockStep: step,
+    actionNeeded: partnerActions.length > 0,
+  };
 }
 
 export function projectWorkflowChatHistory(order = null, messages = undefined) {

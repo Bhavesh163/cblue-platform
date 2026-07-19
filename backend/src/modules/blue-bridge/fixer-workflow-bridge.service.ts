@@ -130,10 +130,7 @@ export class FixerWorkflowBridgeService {
         }
 
         this.assertActionInput(key, dto);
-        const transition = this.transition(
-          key,
-          completedActionKeys,
-        );
+        const transition = this.transition(key, completedActionKeys);
 
         await tx.fixerWorkflowAction.create({
           data: {
@@ -250,7 +247,9 @@ export class FixerWorkflowBridgeService {
     }
     if (
       ['rate-partner', 'rate-customer'].includes(action) &&
-      (!Number.isInteger(dto.rating) || Number(dto.rating) < 1 || Number(dto.rating) > 5)
+      (!Number.isInteger(dto.rating) ||
+        Number(dto.rating) < 1 ||
+        Number(dto.rating) > 5)
     ) {
       throw new BadRequestException('A rating from 1 to 5 is required');
     }
@@ -316,6 +315,14 @@ export class FixerWorkflowBridgeService {
       meetingDate: dto.meetingDate || null,
       meetingTime: dto.meetingTime || null,
       meetingVenue: dto.meetingVenue || null,
+      variationItems:
+        dto.variationItems?.map((item) => ({
+          service: item.service,
+          quantity: item.quantity,
+          unit: item.unit,
+          unitRate: item.unitRate,
+          total: item.total,
+        })) || null,
     };
   }
 }
