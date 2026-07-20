@@ -6895,8 +6895,11 @@ function PartnerOverview({ locale, partner, activeJobs, incomingJobs, scheduledM
               {scheduledMeetings.slice(0, 3).map((meeting: any) => (
                 <div key={meeting.id} className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
                   <p className="text-sm font-bold text-gray-800">{meeting.title} ({meeting.po})</p>
-                  <p className="text-xs text-gray-500 mt-1">{formatMeetingDateTimeLabel(meeting.meetingDate || meeting.date, meeting.meetingTime)}</p>
+                  <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "เวลานัด:" : locale === "zh" ? "会议时间:" : "Meeting:"} {formatMeetingDateTimeLabel(meeting.meetingDate || meeting.date, meeting.meetingTime)}</p>
                   <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "สถานที่:" : locale === "zh" ? "地点:" : "Venue:"} {pickWorkflowMeetingVenue(meeting.meetingVenue, meeting.venue, meeting.location, meeting.subdistrict) || '-'} | {locale === "th" ? "ลูกค้า:" : locale === "zh" ? "客户:" : "Customer:"} {meeting.customer}</p>
+                  {meeting.meetingConfirmedAt && (
+                    <p className="text-[10px] text-gray-400 mt-1">{locale === "th" ? "ยืนยันเมื่อ:" : locale === "zh" ? "确认时间:" : "Confirmed at:"} {fmtDateTime(meeting.meetingConfirmedAt)}</p>
+                  )}
                 </div>
               ))}
             </div>

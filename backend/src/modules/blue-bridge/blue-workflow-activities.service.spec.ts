@@ -283,6 +283,43 @@ describe('BlueBridgeService workflow activities', () => {
     ]);
   });
 
+  it('keeps a BLUE-originated ISO meeting separate from its confirmation event time', async () => {
+    const confirmedAt = new Date('2026-07-19T10:30:00.000Z');
+    const { service } = createService(
+      ['customer-1'],
+      workflowOrder({
+        meetingDate: '2099-07-21T00:00:00.000Z',
+        meetingTime: '14:30:00',
+        workflowPhase: 'VARIATION',
+        workflowActions: [
+          {
+            action: 'confirm-meeting',
+            actorUserId: 'partner-1',
+            payload: {},
+            createdAt: confirmedAt,
+          },
+        ],
+      }),
+    );
+
+    const result = await (service as any).workflowActivities({
+      legacySubjectId: 'ghiscafe@gmail.com',
+      persona: 'customer',
+      bridgeKey: 'bridge-key',
+    });
+
+    expect(result.upcomingMeetings).toEqual([
+      expect.objectContaining({
+        poNumber: 'PO-2607-8879',
+        meeting: expect.objectContaining({
+          date: '2099-07-21',
+          time: '14:30',
+          confirmedAt: confirmedAt.toISOString(),
+        }),
+      }),
+    ]);
+  });
+
   it.each(['customer-1', 'partner-1'])(
     'returns the persisted Step 9 event from workflow detail to %s',
     async (viewerId) => {

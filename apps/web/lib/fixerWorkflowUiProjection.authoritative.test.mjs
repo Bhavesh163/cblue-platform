@@ -117,3 +117,28 @@ test("returns only the three oldest future persisted confirmed meetings", () => 
 
   assert.deepEqual(meetings.map((meeting) => meeting.po), ["PO-1", "PO-2", "PO-3"]);
 });
+
+test("uses the scheduled meeting time instead of the message creation time", () => {
+  const confirmedAt = "2026-07-19T10:30:00.000Z";
+  const meetings = projectUpcomingFixerMeetings([{
+    ...step8,
+    meeting: {
+      date: "2026-07-21T00:00:00.000Z",
+      time: "14:30:00",
+      venue: "Customer office",
+      note: "Meet at reception.",
+      scheduledAt: "2026-07-21T07:30:00.000Z",
+      confirmedAt,
+    },
+    workflowEvents: [{
+      action: "confirm-meeting",
+      actorRole: "partner",
+      createdAt: confirmedAt,
+    }],
+  }], Date.parse("2026-07-20T00:00:00.000Z"));
+
+  assert.equal(meetings.length, 1);
+  assert.equal(meetings[0].meetingScheduledAt, "2026-07-21T07:30:00.000Z");
+  assert.equal(meetings[0].meetingConfirmedAt, confirmedAt);
+  assert.notEqual(meetings[0].meetingScheduledAt, meetings[0].meetingConfirmedAt);
+});

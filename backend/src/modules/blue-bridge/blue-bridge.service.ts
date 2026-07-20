@@ -282,7 +282,7 @@ export class BlueBridgeService {
       ...workflow,
       workflowPhase: order.workflowPhase,
       workflowEvents: persistedFixerWorkflowEvents(order),
-      meeting: persistedMeeting(order),
+      meeting: projectPersistedFixerMeeting(order),
       siteSubdistrict: persistedSubdistrict(order.address),
     };
   }
@@ -550,7 +550,7 @@ export class BlueBridgeService {
     return {
       ...lifecycle,
       ...workflow,
-      meeting: persistedMeeting(order),
+      meeting: projectPersistedFixerMeeting(order),
       chat: {
         enabled: workflow.chat.enabled,
         messageItems: (order.chatMessages || []).map(messageItem),
@@ -618,7 +618,7 @@ export class BlueBridgeService {
       nextActionStep: workflow.nextActionStep,
       processingFee: workflow.processingFee,
       chat: workflow.chat,
-      meeting: persistedMeeting(order),
+      meeting: projectPersistedFixerMeeting(order),
       siteSubdistrict: persistedSubdistrict(order.address),
       messageItems: (order.chatMessages || []).map(messageItem),
     };
@@ -687,16 +687,47 @@ function persistedWorkflowReference(description: unknown): string | null {
   return match ? match[1].toUpperCase() : null;
 }
 
-function persistedMeeting(order: {
+function normalizedMeetingDate(value: unknown): string {
+  const date = stringValue(value);
+  const iso = /^(\d{4}-\d{2}-\d{2})(?:T|\s|$)/.exec(date);
+  if (iso) return iso[1];
+  return /^\d{2}\/\d{2}\/\d{4}$/.test(date) ? date : '';
+}
+
+function normalizedMeetingTime(value: unknown): string {
+  const time = stringValue(value);
+  const match = /^(\d{1,2}:\d{2})(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?$/.exec(time);
+  return match ? match[1] : '';
+}
+
+export function projectPersistedFixerMeeting(order: {
   meetingVenue?: unknown;
   meetingDate?: unknown;
   meetingTime?: unknown;
   meetingNote?: unknown;
-  workflowActions?: Array<{ action?: string; payload?: unknown }>;
-}): { venue: string; date: string; time: string; note: string } | null {
+  workflowActions?: Array<{
+    action?: string;
+    payload?: unknown;
+    createdAt?: unknown;
+  }>;
+}): {
+  venue: string;
+  date: string;
+  time: string;
+  note: string;
+  scheduledAt?: string | null;
+  confirmedAt?: string | null;
+} | null {
   const venue = stringValue(order.meetingVenue);
-  const date = stringValue(order.meetingDate);
-  const time = stringValue(order.meetingTime);
+  const date = normalizedMeetingDate(order.meetingDate);
+  const time = normalizedMeetingTime(order.meetingTime);
+  const confirmedAt = [...(order.workflowActions || [])]
+    .reverse()
+    .find((event) => event.action === 'confirm-meeting')?.createdAt;
+  const confirmedAtIso =
+    confirmedAt instanceof Date || typeof confirmedAt === 'string'
+      ? toIsoTimestamp(confirmedAt) || null
+      : null;
   const hasPersistedSnapshot = [
     order.meetingVenue,
     order.meetingDate,
@@ -704,11 +735,18 @@ function persistedMeeting(order: {
     order.meetingNote,
   ].some((value) => value !== null && value !== undefined);
   if (hasPersistedSnapshot) {
+    const scheduledTimestamp = persistedMeetingTimestamp(date, time);
     return {
       venue,
       date,
       time,
       note: stringValue(order.meetingNote),
+      ...(confirmedAtIso
+        ? {
+            scheduledAt: scheduledTimestamp ? new Date(scheduledTimestamp).toISOString() : null,
+            confirmedAt: confirmedAtIso,
+          }
+        : {}),
     };
   }
 
@@ -717,14 +755,24 @@ function persistedMeeting(order: {
     .find((event) => event.action === 'send-meeting-invitation');
   if (!action || !isRecord(action.payload)) return null;
   const legacyVenue = stringValue(action.payload.meetingVenue);
-  const legacyDate = stringValue(action.payload.meetingDate);
-  const legacyTime = stringValue(action.payload.meetingTime);
+  const legacyDate = normalizedMeetingDate(action.payload.meetingDate);
+  const legacyTime = normalizedMeetingTime(action.payload.meetingTime);
+  const scheduledTimestamp = persistedMeetingTimestamp(
+    legacyDate,
+    legacyTime,
+  );
   return legacyVenue && legacyDate && legacyTime
     ? {
         venue: legacyVenue,
         date: legacyDate,
         time: legacyTime,
         note: stringValue(action.payload.meetingNote),
+        ...(confirmedAtIso
+          ? {
+              scheduledAt: scheduledTimestamp ? new Date(scheduledTimestamp).toISOString() : null,
+              confirmedAt: confirmedAtIso,
+            }
+          : {}),
       }
     : null;
 }

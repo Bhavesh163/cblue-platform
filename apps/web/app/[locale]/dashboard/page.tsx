@@ -5234,9 +5234,12 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                           <div key={m.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
                             <div className="flex justify-between items-center mb-2">
                               <span className="text-xs text-gray-900 font-bold">{m.title} ({m.po})</span>
-                              <span className="bg-amber-100 text-amber-800 text-[10px] px-2 py-1 rounded-full font-bold">{formatWorkflowMeetingLabel(m.meetingDate, m.meetingTime, m.createdAt || m.date)}</span>
+                              <span className="bg-amber-100 text-amber-800 text-[10px] px-2 py-1 rounded-full font-bold">{locale === "th" ? "เวลานัด:" : locale === "zh" ? "会议时间:" : "Meeting:"} {formatWorkflowMeetingLabel(m.meetingDate, m.meetingTime, m.meetingScheduledAt)}</span>
                             </div>
                             <p className="text-[11px] text-gray-600">{locale === "th" ? "สถานที่:" : locale === "zh" ? "地点:" : "Venue:"} {pickWorkflowMeetingVenue(m.meetingVenue, m.venue, m.location, m.subdistrict) || 'TBD'} | {locale === "th" ? "ผู้ให้บริการ:" : locale === "zh" ? "服务提供商:" : "Provider:"} {m.customer}</p>
+                            {m.meetingConfirmedAt && (
+                              <p className="text-[10px] text-gray-400 mt-1">{locale === "th" ? "ยืนยันเมื่อ:" : locale === "zh" ? "确认时间:" : "Confirmed at:"} {fmtDateTime(m.meetingConfirmedAt)}</p>
+                            )}
                           </div>
                         ),
                       }));

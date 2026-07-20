@@ -47,6 +47,29 @@ test("returns empty values when the server has no persisted meeting", () => {
   });
 });
 
+test("normalizes a BLUE-originated ISO meeting while preserving separate timestamps", () => {
+  assert.deepEqual(
+    getFixerMeetingSnapshot({
+      meeting: {
+        date: "2026-07-21T00:00:00.000Z",
+        time: "14:30:00",
+        venue: "Customer office",
+        note: "Meet at reception.",
+        scheduledAt: "2026-07-21T07:30:00.000Z",
+        confirmedAt: "2026-07-19T10:30:00.000Z",
+      },
+    }),
+    {
+      meetingDate: "2026-07-21",
+      meetingTime: "14:30",
+      meetingVenue: "Customer office",
+      meetingNote: "Meet at reception.",
+      meetingScheduledAt: "2026-07-21T07:30:00.000Z",
+      meetingConfirmedAt: "2026-07-19T10:30:00.000Z",
+    },
+  );
+});
+
 test("never derives meeting details from descriptions or browser-like data", () => {
   assert.deepEqual(
     getFixerMeetingSnapshot({

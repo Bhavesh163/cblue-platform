@@ -417,7 +417,9 @@ export function projectUpcomingFixerMeetings(orders = [], now = Date.now()) {
       );
       if (!confirmed) return [];
       const meeting = projectPartnerMeetingConfirmation(order);
-      const meetingAt = meetingTimestamp(meeting.meetingDate, meeting.meetingTime);
+      const meetingAt =
+        timestamp(meeting.meetingScheduledAt) ||
+        meetingTimestamp(meeting.meetingDate, meeting.meetingTime);
       if (!meetingAt || meetingAt <= Number(now || 0)) return [];
       return [{
         ...mergeFixerWorkflowRecord(null, order),

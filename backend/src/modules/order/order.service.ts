@@ -14,7 +14,10 @@ import { CreateOrderChatMessageDto } from './dto/create-order-chat-message.dto';
 import { UploadOrderAttachmentDto } from './dto/upload-order-attachment.dto';
 import { UploadOrderAttachmentsBatchDto } from './dto/upload-order-attachments-batch.dto';
 import { UpdateOrderBudgetBreakdownDto } from './dto/update-order-budget-breakdown.dto';
-import { resolvePersistedFixerWorkflowSnapshot } from '../blue-bridge/blue-bridge.service';
+import {
+  projectPersistedFixerMeeting,
+  resolvePersistedFixerWorkflowSnapshot,
+} from '../blue-bridge/blue-bridge.service';
 
 // Valid status transitions
 const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
@@ -145,6 +148,7 @@ function projectOrderWorkflow(
     ...order,
     ...workflowSnapshot,
     workflowEvents,
+    meeting: projectPersistedFixerMeeting(order),
   };
 }
 
