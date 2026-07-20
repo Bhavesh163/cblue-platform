@@ -309,6 +309,28 @@ export function mergeAuthoritativeWorkflowAlerts(alerts = []) {
     );
 }
 
+function latestWorkflowEvent(order, actionKeys) {
+  const wanted = new Set(
+    (Array.isArray(actionKeys) ? actionKeys : [actionKeys]).map((key) => normalizedText(key)),
+  );
+  const events = (Array.isArray(order?.workflowEvents) ? order.workflowEvents : []).filter(
+    (event) => wanted.has(normalizedText(event?.action)),
+  );
+  // workflowEvents arrive in persisted creation order; the last match is the latest.
+  return events[events.length - 1] || null;
+}
+
+function latestWorkflowEventNote(order, actionKeys) {
+  const wanted = new Set(
+    (Array.isArray(actionKeys) ? actionKeys : [actionKeys]).map((key) => normalizedText(key)),
+  );
+  const events = (Array.isArray(order?.workflowEvents) ? order.workflowEvents : []).filter(
+    (event) => wanted.has(normalizedText(event?.action)) && normalizedText(event?.note),
+  );
+  const latest = events[events.length - 1];
+  return normalizedText(latest?.note);
+}
+
 export function projectPartnerWorkflowRequest(order = null) {
   if (!order || isClosedWorkflowActivity(order)) return null;
   const partnerActions = (Array.isArray(order?.actions) ? order.actions : []).filter(
@@ -342,6 +364,103 @@ export function projectPartnerWorkflowRequest(order = null) {
       availableActions: partnerActions.map((action) => normalizedText(action?.key)).filter(Boolean),
     };
   }
+  if (key === "send-completion") {
+    const variationNote = latestWorkflowEventNote(order, ["confirm-variation", "send-variation"]);
+    return {
+      ...mergeFixerWorkflowRecord(null, order),
+      workflowType: "complete_partner",
+      type: "complete_partner",
+      step,
+      mockStep: step,
+      actionNeeded: true,
+      actionKey: key,
+      actionLabel: normalizedText(primaryAction.label),
+      description: "Customer approved the variation. Please submit project complete for confirmation.",
+      ...(variationNote
+        ? { partnerRequest: variationNote, partnerNote: variationNote, variationRequest: variationNote }
+        : {}),
+      availableActions: partnerActions.map((action) => normalizedText(action?.key)).filter(Boolean),
+    };
+  }
+  if (key === "rate-customer") {
+    return {
+      ...mergeFixerWorkflowRecord(null, order),
+      workflowType: "rate_partner",
+      type: "rate_partner",
+      step,
+      mockStep: step,
+      actionNeeded: true,
+      actionKey: key,
+      actionLabel: normalizedText(primaryAction.label),
+      description: "Customer confirmed completion. Please rate the customer to close this job.",
+      availableActions: partnerActions.map((action) => normalizedText(action?.key)).filter(Boolean),
+    };
+  }
+  return null;
+}
+
+const CUSTOMER_VARIATION_CONFIRM_FALLBACK =
+  "Partner has submitted a variation for your approval. Please review and confirm to proceed.";
+const CUSTOMER_COMPLETION_CONFIRM_FALLBACK =
+  "Work is completed. Please review and mark as complete to close this project.";
+
+export function projectCustomerWorkflowRequest(order = null) {
+  if (!order || isClosedWorkflowActivity(order)) return null;
+  const customerActions = (Array.isArray(order?.actions) ? order.actions : []).filter(
+    (action) => normalizedText(action?.owner) === "customer",
+  );
+  const primaryAction = customerActions.find(
+    (action) => normalizedText(action?.key) !== "customer-cancel",
+  );
+  if (!primaryAction) return null;
+
+  const key = normalizedText(primaryAction.key);
+  const step = Number(primaryAction.actionStep || order?.currentStep || 0);
+  const base = {
+    ...mergeFixerWorkflowRecord(null, order),
+    authoritative: true,
+    actionNeeded: true,
+    step,
+    mockStep: step,
+    actionKey: key,
+    actionLabel: normalizedText(primaryAction.label),
+    availableActions: customerActions.map((action) => normalizedText(action?.key)).filter(Boolean),
+  };
+  if (key === "confirm-variation") {
+    const triggerEvent = latestWorkflowEvent(order, "send-variation");
+    return {
+      ...base,
+      id: `var-${explicitPo(order) || base.id}`,
+      workflowType: "variation_pending",
+      type: "variation_pending",
+      desc: latestWorkflowEventNote(order, "send-variation") || CUSTOMER_VARIATION_CONFIRM_FALLBACK,
+      ...(triggerEvent?.createdAt ? { eventCreatedAt: triggerEvent.createdAt } : {}),
+    };
+  }
+  if (key === "confirm-completion") {
+    const triggerEvent = latestWorkflowEvent(order, "send-completion");
+    return {
+      ...base,
+      id: `compl-${explicitPo(order) || base.id}`,
+      workflowType: "complete_pending",
+      type: "complete_pending",
+      desc: latestWorkflowEventNote(order, "send-completion") || CUSTOMER_COMPLETION_CONFIRM_FALLBACK,
+      ...(triggerEvent?.createdAt ? { eventCreatedAt: triggerEvent.createdAt } : {}),
+    };
+  }
+  if (key === "rate-partner") {
+    const triggerEvent = latestWorkflowEvent(order, "confirm-completion");
+    return {
+      ...base,
+      id: `rate-${explicitPo(order) || base.id}`,
+      workflowType: "rate_pending",
+      type: "rate_pending",
+      desc: "Project complete confirmed. Please rate your partner to close this job.",
+      ...(triggerEvent?.createdAt ? { eventCreatedAt: triggerEvent.createdAt } : {}),
+    };
+  }
+  // fee-proceed / free-pass and send-meeting-invitation requests are projected by
+  // dedicated dashboard paths; do not duplicate them here.
   return null;
 }
 
@@ -405,22 +524,44 @@ function meetingTimestamp(dateValue, timeValue) {
   return Number.isFinite(value) ? value : 0;
 }
 
+// A confirmed meeting stays in Upcoming Meetings until 3 days after its
+// scheduled time, and disappears as soon as the workflow finishes the next
+// step (variation decision, completion, or rating).
+const UPCOMING_MEETING_PAST_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
+const POST_MEETING_WORKFLOW_ACTIONS = new Set([
+  "send-variation",
+  "skip-variation",
+  "confirm-variation",
+  "send-completion",
+  "confirm-completion",
+  "rate-partner",
+  "rate-customer",
+  "customer-cancel",
+]);
+
 export function projectUpcomingFixerMeetings(orders = [], now = Date.now()) {
   return (Array.isArray(orders) ? orders : [])
     .flatMap((order) => {
       if (!order || isClosedWorkflowActivity(order)) return [];
-      const confirmed = (Array.isArray(order?.workflowEvents) ? order.workflowEvents : []).some(
+      const events = Array.isArray(order?.workflowEvents) ? order.workflowEvents : [];
+      const confirmed = events.some(
         (event) =>
           normalizedText(event?.action) === "confirm-meeting" &&
           normalizedText(event?.actorRole) === "partner" &&
           timestamp(event?.createdAt) > 0,
       );
       if (!confirmed) return [];
+      const advancedPastMeeting = events.some((event) =>
+        POST_MEETING_WORKFLOW_ACTIONS.has(normalizedText(event?.action)),
+      );
+      if (advancedPastMeeting) return [];
       const meeting = projectPartnerMeetingConfirmation(order);
       const meetingAt =
         timestamp(meeting.meetingScheduledAt) ||
         meetingTimestamp(meeting.meetingDate, meeting.meetingTime);
-      if (!meetingAt || meetingAt <= Number(now || 0)) return [];
+      if (!meetingAt) return [];
+      const nowTs = Number(now || 0);
+      if (Number.isFinite(nowTs) && nowTs > 0 && meetingAt <= nowTs - UPCOMING_MEETING_PAST_WINDOW_MS) return [];
       return [{
         ...mergeFixerWorkflowRecord(null, order),
         po: explicitPo(order),

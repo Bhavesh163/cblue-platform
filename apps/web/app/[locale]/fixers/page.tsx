@@ -3264,16 +3264,24 @@ export default function FixerProPage() {
       nextActionStep: o.nextActionStep,
       currentStep: o.currentStep,
       workflowEvents: o.workflowEvents,
+      // The backend projects the authoritative meeting snapshot as a nested
+      // `meeting` object (persisted columns, or the send-meeting-invitation
+      // action payload for orders created before the snapshot columns existed).
+      // Prefer it; the scalar order columns are only a legacy fallback.
       meeting: {
-        date: o.meetingDate || '',
-        time: o.meetingTime || '',
-        venue: o.meetingVenue || '',
-        note: o.meetingNote || '',
+        date: o.meeting?.date || o.meetingDate || '',
+        time: o.meeting?.time || o.meetingTime || '',
+        venue: o.meeting?.venue || o.meetingVenue || '',
+        note: o.meeting?.note || o.meetingNote || '',
+        ...(o.meeting?.scheduledAt ? { scheduledAt: o.meeting.scheduledAt } : {}),
+        ...(o.meeting?.confirmedAt ? { confirmedAt: o.meeting.confirmedAt } : {}),
       },
-      meetingDate: o.meetingDate || '',
-      meetingTime: o.meetingTime || '',
-      meetingVenue: o.meetingVenue || '',
-      meetingNote: o.meetingNote || '',
+      meetingDate: o.meeting?.date || o.meetingDate || '',
+      meetingTime: o.meeting?.time || o.meetingTime || '',
+      meetingVenue: o.meeting?.venue || o.meetingVenue || '',
+      meetingNote: o.meeting?.note || o.meetingNote || '',
+      meetingScheduledAt: o.meeting?.scheduledAt || '',
+      meetingConfirmedAt: o.meeting?.confirmedAt || '',
       chatEnabled: o.chatEnabled === true || o.chat?.enabled === true,
       chat: { enabled: o.chatEnabled === true || o.chat?.enabled === true },
       budgetBreakdown: normalizePersistedBudgetBreakdown(o.budgetBreakdown),
@@ -4098,10 +4106,17 @@ export default function FixerProPage() {
   const isClosedPartnerLiveItem = (item: any) => {
     const po = String(item?.po || item?.poNumber || item?.id || '').trim();
     const status = String(item?.status || '').toUpperCase();
+    // Authoritative lifecycle: a COMPLETED order stays live through the RATING
+    // phase and only closes at TERMINAL. Legacy orders without a persisted phase
+    // keep the text-marker fallback.
+    const phase = String(item?.workflowPhase || '').toUpperCase();
+    const completedIsClosed =
+      status === 'COMPLETED' &&
+      (phase ? phase === 'TERMINAL' : !isCompletedAwaitingWorkflowRating(item));
     return (
       (po && (completedHistoryPos.has(po) || declinedPartnerPos.has(po) || isClosedPartnerWorkflowPo(po) || partnerSideCompletedPropPos.has(po))) ||
       isTerminalWorkflowStatus(status) ||
-      (status === 'COMPLETED' && !isCompletedAwaitingWorkflowRating(item))
+      completedIsClosed
     );
   };
   let activeJobs = mappedOrders.filter(o => !isClosedPartnerLiveItem(o));
@@ -7211,7 +7226,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
       // non-blocking for local workflow repair
     }
   };
-  const handlePartnerAction = (job: any, action: 'variation' | 'complete' | 'rate', extraData?: string) => {
+  const handlePartnerAction = async (job: any, action: 'variation' | 'complete' | 'rate', extraData?: string) => {
     try {
       const po = job.po || job.id;
       const createdAt = Date.now();
@@ -7282,14 +7297,26 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
         window.dispatchEvent(new Event("cblue-workflow-updated"));
-        void persistPartnerVariationStatusNote({
-          chatText,
-          fetchFn: fetch,
-          po,
-          resolveOrderIdByPo,
-          storage: localStorage,
+        // Authoritative mutation first: persist send-variation through the
+        // workflow action endpoint so BLUE and CBLUE share the same persisted
+        // phase (VARIATION_CONFIRM) and the variation note. The legacy status
+        // note is only the fallback when the action endpoint is unavailable.
+        await postFixerWorkflowAction({
+          poNumber: po,
+          action: "send-variation",
           token,
-        });
+          payload: { note: varNote },
+          idempotencyKey: `${po}:send-variation:${Number(job.workflowVersion || job.workflowRevision || 0)}`,
+        }).catch(() =>
+          persistPartnerVariationStatusNote({
+            chatText,
+            fetchFn: fetch,
+            po,
+            resolveOrderIdByPo,
+            storage: localStorage,
+            token,
+          }),
+        );
         void postSystemMsg(chatText);
       } else if (action === 'complete') {
         const complId = `compl-${po}`;
@@ -7323,17 +7350,35 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['complete_partner', 'variation_partner', 'meeting_confirm_partner'].includes(x.type))));
       window.dispatchEvent(new Event("storage"));
       window.dispatchEvent(new Event("cblue-workflow-updated"));
-      void persistPartnerCompletionStatusNote({
-        chatText,
-        fetchFn: fetch,
-        po,
-        resolveOrderIdByPo,
-        storage: localStorage,
-        token: getPartnerDashboardToken(),
-      });
+      // Authoritative mutation first: persist send-completion through the
+      // workflow action endpoint (phase COMPLETION_CONFIRM). The legacy status
+      // note is only the fallback when the action endpoint is unavailable.
+      await postFixerWorkflowAction({
+        poNumber: po,
+        action: "send-completion",
+        token,
+        payload: { note: completeDesc },
+        idempotencyKey: `${po}:send-completion:${Number(job.workflowVersion || job.workflowRevision || 0)}`,
+      }).catch(() =>
+        persistPartnerCompletionStatusNote({
+          chatText,
+          fetchFn: fetch,
+          po,
+          resolveOrderIdByPo,
+          storage: localStorage,
+          token: getPartnerDashboardToken(),
+        }),
+      );
       void postSystemMsg(chatText);
       } else if (action === 'rate') {
         const rating = extraData || '5';
+        await postFixerWorkflowAction({
+          poNumber: po,
+          action: "rate-customer",
+          token,
+          payload: { rating: Number(rating) },
+          idempotencyKey: po + ":rate-customer:" + Number(job.workflowVersion || job.workflowRevision || 0),
+        });
         const { completionChatText } = finalizePartnerRatedWorkflow({
           po,
           job,
@@ -7880,7 +7925,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
     }
   };
 
-  const handlePartnerAction = (job: any, action: 'variation' | 'complete' | 'rate', extraData?: string) => {
+  const handlePartnerAction = async (job: any, action: 'variation' | 'complete' | 'rate', extraData?: string) => {
     try {
       const po = job.po || job.id;
       const createdAt = Date.now();
@@ -7927,14 +7972,26 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
         window.dispatchEvent(new Event("cblue-workflow-updated"));
-        void persistPartnerVariationStatusNote({
-          chatText,
-          fetchFn: fetch,
-          po,
-          resolveOrderIdByPo,
-          storage: localStorage,
+        // Authoritative mutation first: persist send-variation through the
+        // workflow action endpoint so BLUE and CBLUE share the same persisted
+        // phase (VARIATION_CONFIRM) and the variation note. The legacy status
+        // note is only the fallback when the action endpoint is unavailable.
+        await postFixerWorkflowAction({
+          poNumber: po,
+          action: "send-variation",
           token,
-        });
+          payload: { note: varNote },
+          idempotencyKey: `${po}:send-variation:${Number(job.workflowVersion || job.workflowRevision || 0)}`,
+        }).catch(() =>
+          persistPartnerVariationStatusNote({
+            chatText,
+            fetchFn: fetch,
+            po,
+            resolveOrderIdByPo,
+            storage: localStorage,
+            token,
+          }),
+        );
         void postSystemMsg(chatText);
       } else if (action === 'complete') {
         const complId = `compl-${po}`;
@@ -7968,17 +8025,32 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
         writePartnerReqs(prev => prev.filter((x: any) => !(x.po === po && ['complete_partner', 'variation_partner', 'meeting_confirm_partner'].includes(x.type))));
         window.dispatchEvent(new Event("storage"));
         window.dispatchEvent(new Event("cblue-workflow-updated"));
-        void persistPartnerCompletionStatusNote({
-          chatText,
-          fetchFn: fetch,
-          po,
-          resolveOrderIdByPo,
-          storage: localStorage,
-          token: getPartnerDashboardToken(),
-        });
+        await postFixerWorkflowAction({
+          poNumber: po,
+          action: "send-completion",
+          token,
+          payload: { note: completeDesc },
+          idempotencyKey: po + ":send-completion:" + Number(job.workflowVersion || job.workflowRevision || 0),
+        }).catch(() =>
+          persistPartnerCompletionStatusNote({
+            chatText,
+            fetchFn: fetch,
+            po,
+            resolveOrderIdByPo,
+            storage: localStorage,
+            token,
+          }),
+        );
         void postSystemMsg(chatText);
       } else if (action === 'rate') {
         const rating = extraData || '5';
+        await postFixerWorkflowAction({
+          poNumber: po,
+          action: "rate-customer",
+          token,
+          payload: { rating: Number(rating) },
+          idempotencyKey: po + ":rate-customer:" + Number(job.workflowVersion || job.workflowRevision || 0),
+        });
         const { completionChatText } = finalizePartnerRatedWorkflow({
           po,
           job,
@@ -8135,7 +8207,20 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
                         if (pl && pl.length > 0 && req?.po) localStorage.setItem(`cblue_partner_pricelist_${req.po}`, JSON.stringify(pl));
                       } catch {}
                     }} className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg transition">{locale === "th" ? "ใช่" : locale === "zh" ? "是" : "Yes"}</button>
-                  <button onClick={(e) => { e.stopPropagation(); try { localStorage.setItem(`partner_variation_sent_${req.po}`, '1'); } catch {} writePartnerReqs(prev => prev.filter((x: any) => !(x.po === req.po && String(x.workflowType || x.type || '') === 'variation_partner'))); }} className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">{locale === "th" ? "ไม่" : locale === "zh" ? "否" : "No"}</button>
+                  <button onClick={async (e) => {
+                    e.stopPropagation();
+                    const token = getPartnerDashboardToken();
+                    await postFixerWorkflowAction({
+                      poNumber: req.po,
+                      action: "skip-variation",
+                      token,
+                      idempotencyKey: String(req.po) + ":skip-variation:" + Number(req.workflowVersion || req.workflowRevision || 0),
+                    });
+                    try { localStorage.setItem(`partner_variation_sent_${req.po}`, '1'); } catch {}
+                    writePartnerReqs(prev => prev.filter((x: any) => !(x.po === req.po && String(x.workflowType || x.type || '') === 'variation_partner')));
+                    window.dispatchEvent(new Event("storage"));
+                    window.dispatchEvent(new Event("cblue-workflow-updated"));
+                  }} className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-lg transition">{locale === "th" ? "ไม่" : locale === "zh" ? "否" : "No"}</button>
                 </>
               ) : reqWorkflowType === 'complete_partner' ? (
                 <>

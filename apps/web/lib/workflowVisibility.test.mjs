@@ -349,7 +349,9 @@ test("filters terminal workflow requests without hiding completed jobs awaiting 
 });
 
 test("keeps completed and terminal-phase fixer jobs out of live activity surfaces", () => {
-  assert.equal(isClosedWorkflowActivity({ status: "COMPLETED", workflowPhase: "RATING" }), true);
+  assert.equal(isClosedWorkflowActivity({ status: "COMPLETED", workflowPhase: "RATING" }), false);
+  assert.equal(isClosedWorkflowActivity({ status: "COMPLETED", workflowPhase: "TERMINAL" }), true);
+  assert.equal(isClosedWorkflowActivity({ status: "COMPLETED" }), true);
   assert.equal(isClosedWorkflowActivity({ status: "IN_PROGRESS", workflowPhase: "TERMINAL" }), true);
   assert.equal(isClosedWorkflowActivity({ status: "CANCELLED" }), true);
   assert.equal(isClosedWorkflowActivity({ status: "DECLINED" }), true);

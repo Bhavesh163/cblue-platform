@@ -129,7 +129,9 @@ describe('FixerWorkflowBridgeService', () => {
           workflowPhase: expectedPhase,
           ...(action === 'fee-proceed' || action === 'free-pass'
             ? { chatEnabled: true }
-            : {}),
+            : action === 'confirm-completion'
+              ? { chatEnabled: false }
+              : {}),
           workflowRevision: { increment: 1 },
           ...(action === 'send-meeting-invitation'
             ? {
@@ -337,4 +339,38 @@ describe('FixerWorkflowBridgeService', () => {
       }),
     });
   });
+
+  it.each([
+    ['customer-1', 'rate-partner', 'rate-customer'],
+    ['partner-1', 'rate-customer', 'rate-partner'],
+  ])(
+    'closes the workflow only when %s submits the remaining participant rating',
+    async (userId, action, existingRatingAction) => {
+      const { service, prisma } = createHarness(
+        'RATING',
+        OrderStatus.COMPLETED,
+        [
+          { action: 'confirm-completion' },
+          { action: existingRatingAction },
+        ],
+      );
+
+      await service.action(
+        'PO-2607-9001',
+        userId,
+        action,
+        { workflowVersion: 0, rating: 5 },
+        `${action}-1`,
+      );
+
+      expect(prisma.order.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: OrderStatus.COMPLETED,
+            workflowPhase: 'TERMINAL',
+          }),
+        }),
+      );
+    },
+  );
 });

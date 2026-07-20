@@ -418,6 +418,99 @@ describe('BlueBridgeService workflow activities', () => {
     ]);
   });
 
+  it.each([
+    ['customer', 'customer-1'],
+    ['partner', 'partner-1'],
+  ] as const)(
+    'returns persisted Step 9-11 events and closed chat to the %s after completion confirmation',
+    async (persona, viewerId) => {
+      const eventRows = [
+        ['send-variation', 'partner-1', '2026-07-20T01:00:00.000Z'],
+        ['confirm-variation', 'customer-1', '2026-07-20T01:01:00.000Z'],
+        ['send-completion', 'partner-1', '2026-07-20T01:02:00.000Z'],
+        ['confirm-completion', 'customer-1', '2026-07-20T01:03:00.000Z'],
+        ['rate-partner', 'customer-1', '2026-07-20T01:04:00.000Z'],
+      ] as const;
+      const { service } = createService(
+        [viewerId],
+        workflowOrder({
+          status: 'COMPLETED',
+          workflowPhase: 'RATING',
+          workflowRevision: 10,
+          chatEnabled: false,
+          workflowActions: eventRows.map(([action, actorUserId, createdAt]) => ({
+            action,
+            actorUserId,
+            payload: {},
+            createdAt: new Date(createdAt),
+          })),
+        }),
+      );
+
+      const result = await (service as any).workflowActivities({
+        legacySubjectId: `${persona}@example.com`,
+        persona,
+        bridgeKey: 'bridge-key',
+      });
+      const activity = [...result.requests, ...result.activeJobs].find(
+        (item: any) => item.poNumber === 'PO-2607-8879',
+      );
+
+      expect(activity).toMatchObject({
+        currentStep: 11,
+        activityBucket: 'active',
+        chat: { enabled: false },
+        workflowEvents: eventRows.map(([action, actorUserId, createdAt]) => ({
+          action,
+          actorRole: actorUserId === 'customer-1' ? 'customer' : 'partner',
+          createdAt,
+        })),
+      });
+      expect(result.chatRooms).toEqual([]);
+    },
+  );
+
+  it.each([
+    ['send-variation', 'partner-1'],
+    ['skip-variation', 'partner-1'],
+    ['confirm-variation', 'customer-1'],
+    ['send-completion', 'partner-1'],
+    ['confirm-completion', 'customer-1'],
+    ['rate-partner', 'customer-1'],
+    ['rate-customer', 'partner-1'],
+  ] as const)(
+    'uses the persisted creation timestamp for the %s workflow event',
+    async (action, actorUserId) => {
+      const persistedAt = new Date('2026-07-20T02:03:04.567Z');
+      const { service } = createService(
+        ['customer-1'],
+        workflowOrder({
+          status: 'COMPLETED',
+          workflowPhase: 'RATING',
+          chatEnabled: false,
+          workflowActions: [{
+            action,
+            actorUserId,
+            payload: {},
+            createdAt: persistedAt,
+          }],
+        }),
+      );
+
+      const detail = await service.workflowDetails({
+        poNumber: 'PO-2607-8879',
+        legacySubjectId: 'customer-1',
+        bridgeKey: 'bridge-key',
+      });
+
+      expect(detail.workflowEvents).toContainEqual({
+        action,
+        actorRole: actorUserId === 'customer-1' ? 'customer' : 'partner',
+        createdAt: persistedAt.toISOString(),
+      });
+    },
+  );
+
   it('places legacy completed workflows without a persisted rating phase in history', async () => {
     const { service } = createService(
       ['partner-1'],

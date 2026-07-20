@@ -117,11 +117,28 @@ function projectOrderWorkflow(
     if (!actorRole || !action || !Number.isFinite(createdAtDate.getTime())) {
       return [];
     }
+    // Carry the persisted free-text detail (variation/completion note) and the
+    // persisted rating so web projections never parse them out of status notes
+    // or chat text.
+    const payload =
+      event?.payload && typeof event.payload === 'object' ? event.payload : {};
+    const note =
+      typeof payload.note === 'string' && payload.note.trim()
+        ? payload.note.trim()
+        : null;
+    const rating =
+      Number.isInteger(payload.rating) &&
+      Number(payload.rating) >= 1 &&
+      Number(payload.rating) <= 5
+        ? Number(payload.rating)
+        : null;
     return [
       {
         action,
         actorRole,
         createdAt: createdAtDate.toISOString(),
+        ...(note ? { note } : {}),
+        ...(rating ? { rating } : {}),
       },
     ];
   });
@@ -304,7 +321,7 @@ export class OrderService {
           },
           statusHistory: { orderBy: { createdAt: 'desc' }, take: 1 },
           workflowActions: {
-            select: { action: true, actorUserId: true, createdAt: true },
+            select: { action: true, actorUserId: true, payload: true, createdAt: true },
             orderBy: { createdAt: 'asc' },
           },
           chatMessages: {
@@ -456,7 +473,7 @@ export class OrderService {
           },
           statusHistory: { orderBy: { createdAt: 'desc' }, take: 1 },
           workflowActions: {
-            select: { action: true, actorUserId: true, createdAt: true },
+            select: { action: true, actorUserId: true, payload: true, createdAt: true },
             orderBy: { createdAt: 'asc' },
           },
           chatMessages: {

@@ -150,6 +150,8 @@ export class FixerWorkflowBridgeService {
             workflowPhase: transition.workflowPhase,
             ...(key === 'fee-proceed' || key === 'free-pass'
               ? { chatEnabled: true }
+              : key === 'confirm-completion'
+                ? { chatEnabled: false }
               : {}),
             workflowRevision: { increment: 1 },
             ...(key === 'send-meeting-invitation'

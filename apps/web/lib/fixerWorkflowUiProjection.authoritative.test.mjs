@@ -93,7 +93,7 @@ test("moves terminal chat messages to a read-only authoritative history projecti
   assert.equal(projectWorkflowChatHistory(step8), null);
 });
 
-test("returns only the three oldest future persisted confirmed meetings", () => {
+test("returns the three oldest confirmed meetings still inside the visible window", () => {
   const now = Date.parse("2026-07-19T00:00:00.000Z");
   const makeMeeting = (poNumber, date, time, confirmedAt) => ({
     ...step8,
@@ -112,10 +112,22 @@ test("returns only the three oldest future persisted confirmed meetings", () => 
     makeMeeting("PO-OLD", "2026-07-18", "09:00", "2026-07-18T01:00:00.000Z"),
     makeMeeting("PO-1", "2026-07-21", "09:00", "2026-07-19T01:00:00.000Z"),
     makeMeeting("PO-3", "2026-07-23", "09:00", "2026-07-19T03:00:00.000Z"),
+    // More than 3 days past the scheduled meeting time → no longer shown.
+    makeMeeting("PO-EXPIRED", "2026-07-15", "09:00", "2026-07-14T01:00:00.000Z"),
+    // Next workflow step already finished → meeting no longer shown.
+    {
+      ...makeMeeting("PO-ADVANCED", "2026-07-21", "09:00", "2026-07-19T01:30:00.000Z"),
+      workflowEvents: [
+        { action: "confirm-meeting", actorRole: "partner", createdAt: "2026-07-19T01:30:00.000Z" },
+        { action: "send-variation", actorRole: "partner", createdAt: "2026-07-19T02:30:00.000Z" },
+      ],
+    },
     { ...makeMeeting("PO-NO-EVENT", "2026-07-20", "09:00", ""), workflowEvents: [] },
   ], now);
 
-  assert.deepEqual(meetings.map((meeting) => meeting.po), ["PO-1", "PO-2", "PO-3"]);
+  // PO-OLD is less than 3 days past its scheduled time, so it stays visible
+  // and sorts first as the oldest meeting; only three cards are shown.
+  assert.deepEqual(meetings.map((meeting) => meeting.po), ["PO-OLD", "PO-1", "PO-2"]);
 });
 
 test("uses the scheduled meeting time instead of the message creation time", () => {

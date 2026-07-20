@@ -145,8 +145,8 @@ export function mergeAuthoritativeWorkflowAlerts(alerts?: Array<WorkflowUiAlert 
 
 export interface PartnerWorkflowRequest extends Record<string, unknown> {
   po: string;
-  workflowType: "meeting_confirm_partner" | "variation_partner";
-  type: "meeting_confirm_partner" | "variation_partner";
+  workflowType: "meeting_confirm_partner" | "variation_partner" | "complete_partner" | "rate_partner";
+  type: "meeting_confirm_partner" | "variation_partner" | "complete_partner" | "rate_partner";
   step: number;
   actionNeeded: true;
   actionKey: string;
@@ -157,6 +157,23 @@ export interface PartnerWorkflowRequest extends Record<string, unknown> {
 export function projectPartnerWorkflowRequest(
   order?: FixerWorkflowUiOrder | null,
 ): PartnerWorkflowRequest | null;
+
+export interface CustomerWorkflowRequest extends Record<string, unknown> {
+  po: string;
+  workflowType: "variation_pending" | "complete_pending" | "rate_pending";
+  type: "variation_pending" | "complete_pending" | "rate_pending";
+  authoritative: true;
+  step: number;
+  actionNeeded: true;
+  actionKey: string;
+  actionLabel: string;
+  availableActions: string[];
+  desc: string;
+}
+
+export function projectCustomerWorkflowRequest(
+  order?: FixerWorkflowUiOrder | null,
+): CustomerWorkflowRequest | null;
 
 export function projectPartnerActiveWorkflow(
   order?: FixerWorkflowUiOrder | null,

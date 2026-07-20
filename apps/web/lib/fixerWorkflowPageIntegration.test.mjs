@@ -131,6 +131,23 @@ test("customer Step 9 stays active and uses persisted meetings/history", () => {
   assert.match(partnerPage, /projectWorkflowChatHistory\(entry\)/);
 });
 
+test("customer and partner Steps 9-11 use authoritative workflow mutations", () => {
+  for (const action of ["confirm-variation", "confirm-completion", "rate-partner"]) {
+    assert.match(customerPage, new RegExp(`action:\\s*["']${action}["']`));
+  }
+  for (const action of ["send-variation", "skip-variation", "send-completion", "rate-customer"]) {
+    assert.match(partnerPage, new RegExp(`action:\\s*["']${action}["']`));
+  }
+  assert.match(customerPage, /projectCustomerWorkflowRequest/);
+  assert.match(partnerPage, /projectPartnerWorkflowRequest/);
+});
+
+test("partner orders preserve the normalized nested meeting snapshot", () => {
+  assert.match(partnerPage, /date:\s*o\.meeting\?\.date\s*\|\|\s*o\.meetingDate/);
+  assert.match(partnerPage, /scheduledAt:\s*o\.meeting\.scheduledAt/);
+  assert.match(partnerPage, /confirmedAt:\s*o\.meeting\.confirmedAt/);
+});
+
 test("direct fixer chat has no fabricated default room or PO parsing fallback", () => {
   assert.doesNotMatch(customerChatPage, /defaultMessages/);
   assert.doesNotMatch(customerChatPage, /ghis_mock_active/);

@@ -787,6 +787,8 @@ function persistedFixerWorkflowEvents(order: any): Array<{
   action: string;
   createdAt: string;
   actorRole: 'customer' | 'partner';
+  note?: string;
+  rating?: number;
 }> {
   return (order.workflowActions || []).flatMap((event: any) => {
     const actorUserId = String(event?.actorUserId || '');
@@ -799,11 +801,21 @@ function persistedFixerWorkflowEvents(order: any): Array<{
     const action = String(event?.action || '').trim();
     const createdAt = toIsoTimestamp(event?.createdAt);
     if (!actorRole || !action || !createdAt) return [];
+    const payload = isRecord(event?.payload) ? event.payload : {};
+    const note = stringValue(payload.note);
+    const rating =
+      Number.isInteger(payload.rating) &&
+      Number(payload.rating) >= 1 &&
+      Number(payload.rating) <= 5
+        ? Number(payload.rating)
+        : null;
     return [
       {
         action,
         createdAt,
         actorRole,
+        ...(note ? { note } : {}),
+        ...(rating ? { rating } : {}),
       },
     ];
   });

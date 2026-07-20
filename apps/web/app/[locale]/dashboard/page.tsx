@@ -47,6 +47,7 @@ import {
   type BudgetBreakdownItem,
 } from "../../../lib/computeBudgetBreakdown";
 import { readStoredPoProjectDetails } from "../../../lib/po-project-details";
+import { postFixerWorkflowAction } from "../../../lib/fixerWorkflowClient";
 import {
   buildCustomerMeetingAwaitingPartnerAlert,
   buildMeetingConfirmedWorkflowAlert,
@@ -57,6 +58,7 @@ import {
   projectFixerChatRoom,
   projectFixerLocations,
   reconcileFixerCardLocations,
+  projectCustomerWorkflowRequest,
   projectUpcomingFixerMeetings,
   projectWorkflowChatHistory,
 } from "../../../lib/fixerWorkflowUiProjection";
@@ -1053,7 +1055,13 @@ export default function DashboardPage() {
         
         {/* Main Content */}
         {subscriber && !loading && (
-          <CustomerDashboard locale={locale} subscriber={subscriber} prefix={prefix} orders={orders} hasFetchedOrders={hasFetchedOrders} onLogout={() => {
+          <CustomerDashboard locale={locale} subscriber={subscriber} prefix={prefix} orders={orders} hasFetchedOrders={hasFetchedOrders} onWorkflowSnapshot={(po, snapshot) => {
+            setOrders((previous) => previous.map((order) => (
+              extractPoCode(order) === po
+                ? { ...order, ...snapshot, workflowRevision: snapshot?.workflowVersion ?? order.workflowRevision }
+                : order
+            )));
+          }} onLogout={() => {
             clearSubscriberSession();
             localStorage.removeItem("pdpa_consent_customer"); 
             localStorage.removeItem("ghis_mock_payments");
@@ -1512,7 +1520,7 @@ function CustomerHistoryCard({ item, idx, compact = false, locale = "en" }: { it
 
 
 /* ===== DASHBOARD LOGGED IN STATE ===== */
-function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFetchedOrders }: { locale: string; subscriber: any; prefix: string; onLogout: () => void, orders: any[], hasFetchedOrders?: boolean }) {
+function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFetchedOrders, onWorkflowSnapshot }: { locale: string; subscriber: any; prefix: string; onLogout: () => void, orders: any[], hasFetchedOrders?: boolean; onWorkflowSnapshot?: (po: string, snapshot: any) => void }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"overview"|"requests"|"profile"|"active"|"properties"|"history"|"chat"|"alerts">("overview");
   const [waitModalOrder, setWaitModalOrder] = useState<any>(null);
@@ -3450,8 +3458,12 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     const po = String(request?.po || '').trim();
     if (!po) return request;
     const backendItem = combinedActive.find((item: any) => item.po === po);
+    // Only meeting-invitation requests become stale when the persisted phase no
+    // longer offers send-meeting-invitation. Other request types (payment,
+    // variation, completion, rating) must survive phase transitions.
     if (
       backendItem &&
+      ['meeting_invite', 'meeting_pending_partner', 'chat_ready'].includes(String(request?.type || '')) &&
       Array.isArray(backendItem.actions) &&
       !backendItem.actions.some(
         (action: any) =>
@@ -3465,8 +3477,42 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       ? reconcileFixerCardLocations(request, backendItem)
       : request;
   });
+  // Authoritative customer requests for Steps 9-11 projected from the persisted
+  // workflow phase/actions — covers actions performed in the BLUE app where no
+  // browser-local request row or status-note text exists.
+  const backendCustomerActionRequests = workflowOrders
+    .map((order: any) => {
+      const po = extractPo(order);
+      if (!po || !isPoCode(po)) return null;
+      const projection = projectCustomerWorkflowRequest(order);
+      if (!projection) return null;
+      const activeItem = combinedActive.find((item: any) => item.po === po);
+      const createdAt =
+        parseDateMs(projection.eventCreatedAt) ||
+        parseDateMs(
+          order.statusHistory?.[0]?.createdAt ||
+          order.statusChangedAt ||
+          order.updatedAt ||
+          order.createdAt,
+        ) ||
+        Date.now();
+      return {
+        ...activeItem,
+        ...projection,
+        po,
+        orderId: order.id,
+        title: activeItem?.title || String(order.serviceCategory || order.service || 'Service').replace(/_/g, ' '),
+        customer: activeItem?.fixerAlias || activeItem?.partnerName || order.fixer?.user?.name || order.fixerName || order.partnerName || 'Partner',
+        customerName: activeItem?.customerName || activeItem?.fixerAlias || activeItem?.partnerName || order.fixer?.user?.name || 'Partner',
+        budget: activeItem?.budget || (order.estimatedPrice ? `฿${Number(order.estimatedPrice).toLocaleString()}` : '฿0'),
+        tier: activeItem?.tier || String(order?.description || '').match(/TIER:([A-Za-z]+)/)?.[1] || 'Standard',
+        date: fmtDateTime(createdAt),
+        createdAt,
+      };
+    })
+    .filter(Boolean) as any[];
   const dedupedRequestMap = new Map<string, any>();
-  for (const requestItem of [...reconciledCustomerWorkflowRequests, ...backendMeetingInviteRequests].filter(
+  for (const requestItem of [...reconciledCustomerWorkflowRequests, ...backendMeetingInviteRequests, ...backendCustomerActionRequests].filter(
     (m: any) => !mockPayments[m.id] && !['notice', 'meeting_scheduled', 'chat_ready', 'meeting_pending_partner'].includes(String(m.type || '')),
   )) {
     const requestType = String(requestItem.type || '');
@@ -5578,7 +5624,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
               </div>
               <div className="flex gap-3 pt-1">
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     const po = rateModal.po;
                     const createdAt = Date.now();
                     const job = mockActiveItems.find((x: any) => x.po === po);
@@ -5612,15 +5658,37 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                     appendLocalWorkflowChat(po, ratingText, createdAt);
                     const backendOrder = workflowOrders.find((order: any) => extractPo(order) === po);
                     const token = getCustomerDashboardToken();
-                    void persistCustomerRatingStatusNote({
-                      fetchFn: fetch,
-                      po,
-                      rating: rateStars,
-                      resolveOrderIdByPo: async ({ fallbackOrderId }) =>
-                        fallbackOrderId || backendOrder?.id || '',
-                      storage: localStorage,
-                      token,
-                    });
+                    // Authoritative mutation: persist the customer rating through the workflow
+                    // action endpoint (writes the Review + the rate-partner action event, and
+                    // moves the phase to TERMINAL once both parties have rated). The legacy
+                    // status-note path remains only as a fallback.
+                    let rateSnapshot: any = null;
+                    if (token && backendOrder?.id) {
+                      try {
+                        rateSnapshot = await postFixerWorkflowAction({
+                          poNumber: po,
+                          action: "rate-partner",
+                          token,
+                          payload: { rating: rateStars },
+                          idempotencyKey: `${po}:rate-partner:${Number(backendOrder?.workflowVersion || backendOrder?.workflowRevision || 0)}`,
+                        });
+                      } catch {
+                        rateSnapshot = null;
+                      }
+                    }
+                    if (rateSnapshot) {
+                      onWorkflowSnapshot?.(po, rateSnapshot);
+                    } else {
+                      void persistCustomerRatingStatusNote({
+                        fetchFn: fetch,
+                        po,
+                        rating: rateStars,
+                        resolveOrderIdByPo: async ({ fallbackOrderId }) =>
+                          fallbackOrderId || backendOrder?.id || '',
+                        storage: localStorage,
+                        token,
+                      });
+                    }
                     void postBackendWorkflowMessage(po, ratingText);
                     setRateModal(null);
                     setActiveTab("history");
@@ -5886,7 +5954,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
               <button
                 disabled={!meetingDate || !meetingTime || !meetingVenue}
                 className="flex-1 py-3 bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold rounded-xl transition shadow-md"
-                onClick={() => {
+                onClick={async () => {
                   const createdAt = Date.now();
                   const dateLabel = meetingDate ? fmtDate(meetingDate + 'T' + (meetingTime || '09:00')) : '';
                   const pendingId = `meet-pending-${meetingModal.po}`;
@@ -6026,7 +6094,11 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                   } catch {}
                   setMockActiveItems(updatedMeetActive);
                   setMockDynRequests(updatedMeetReqs);
-                  // Notify backend: MEETING_REQUESTED (cross-browser: partner page polls and sees MEETING_REQUESTED status)
+                  // Persist the invitation through the authoritative workflow action endpoint so the
+                  // meeting snapshot (venue/date/time/note) lands in the persisted action ledger and
+                  // the order meeting columns — this is what powers upcoming meetings on both sides.
+                  // The legacy status/chat mutations remain only as a fallback when the action
+                  // endpoint is unavailable (e.g. order predates the workflow ledger).
                   try {
                     const token = getCustomerDashboardToken();
                     const storedOrderId = localStorage.getItem(`po_to_order_${meetingModal.po}`) || "";
@@ -6035,7 +6107,32 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                       (storedOrderId ? { id: storedOrderId, status: "" } : null);
                     if (token && backendOrder?.id) {
                       const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
-                      void (async () => {
+                      let workflowSnapshot: any = null;
+                      try {
+                        workflowSnapshot = await postFixerWorkflowAction({
+                          poNumber: meetingModal.po,
+                          action: "send-meeting-invitation",
+                          token,
+                          payload: {
+                            meetingDate,
+                            meetingTime,
+                            meetingVenue: finalMeetingVenue,
+                            ...(meetingNote.trim() ? { note: meetingNote.trim() } : {}),
+                          },
+                          idempotencyKey: `${meetingModal.po}:send-meeting-invitation:${meetingDate}T${meetingTime}`,
+                        });
+                      } catch {
+                        workflowSnapshot = null;
+                      }
+                      if (workflowSnapshot) {
+                        const snapshotMeeting = workflowSnapshot?.meeting || {};
+                        onWorkflowSnapshot?.(meetingModal.po, { ...workflowSnapshot, meetingDate: snapshotMeeting.date, meetingTime: snapshotMeeting.time, meetingVenue: snapshotMeeting.venue, meetingNote: snapshotMeeting.note });
+                        await fetch(`/api/v1/orders/${backendOrder.id}/chat`, {
+                          method: 'POST',
+                          headers,
+                          body: JSON.stringify({ text: chatText }),
+                        }).catch(() => null);
+                      } else {
                         const currentStatus = String(backendOrder.status || '').toUpperCase();
                         if (!['IN_PROGRESS', 'MEETING_REQUESTED'].includes(currentStatus)) {
                           await fetch(`/api/v1/orders/${backendOrder.id}/status`, {
@@ -6054,7 +6151,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                           headers,
                           body: JSON.stringify({ text: chatText }),
                         }).catch(() => null);
-                      })();
+                      }
                     }
                   } catch {}
                   appendLocalWorkflowChat(meetingModal.po, chatText, createdAt);
@@ -6180,7 +6277,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
               })()}
               <div className="flex gap-3 pt-1">
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     const createdAt = Date.now();
                     const po = variationApproveModal.po;
                     const meetingSnapshot = getWorkflowMeetingSnapshot(po, variationApproveModal);
@@ -6261,7 +6358,26 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                     setMockActiveItems(newActive);
                     setMockDynRequests(newReqs);
                     const token = getCustomerDashboardToken();
+                    // Authoritative mutation: persist confirm-variation through the workflow
+                    // action endpoint so both BLUE and CBLUE read the same phase (COMPLETION).
+                    // The legacy status PUT remains as a fallback only when the action
+                    // endpoint is unavailable for this order.
+                    let variationConfirmSnapshot: any = null;
                     if (token && workflowOrderForPo?.id) {
+                      try {
+                        variationConfirmSnapshot = await postFixerWorkflowAction({
+                          poNumber: po,
+                          action: "confirm-variation",
+                          token,
+                          idempotencyKey: `${po}:confirm-variation:${Number(workflowOrderForPo?.workflowVersion || workflowOrderForPo?.workflowRevision || 0)}`,
+                        });
+                      } catch {
+                        variationConfirmSnapshot = null;
+                      }
+                    }
+                    if (variationConfirmSnapshot) {
+                      onWorkflowSnapshot?.(po, variationConfirmSnapshot);
+                    } else if (token && workflowOrderForPo?.id) {
                       fetch(`/api/v1/orders/${workflowOrderForPo.id}/status`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -6370,7 +6486,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
               </div>
               <div className="flex gap-3 pt-1">
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     const createdAt = Date.now();
                     const po = completeApproveModal.po;
                     const meetingSnapshot = getWorkflowMeetingSnapshot(po, completeApproveModal);
@@ -6440,7 +6556,25 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                     window.dispatchEvent(new Event('cblue-workflow-updated'));
                     setMockActiveItems(newActive);
                     setMockDynRequests(newReqs);
+                    // Authoritative mutation: persist confirm-completion through the workflow
+                    // action endpoint so both BLUE and CBLUE read the same phase (RATING).
+                    // The legacy status PUT remains only as a fallback.
+                    let completionConfirmSnapshot: any = null;
                     if (token && backendOrder?.id) {
+                      try {
+                        completionConfirmSnapshot = await postFixerWorkflowAction({
+                          poNumber: po,
+                          action: "confirm-completion",
+                          token,
+                          idempotencyKey: `${po}:confirm-completion:${Number(backendOrder?.workflowVersion || backendOrder?.workflowRevision || 0)}`,
+                        });
+                      } catch {
+                        completionConfirmSnapshot = null;
+                      }
+                    }
+                    if (completionConfirmSnapshot) {
+                      onWorkflowSnapshot?.(po, completionConfirmSnapshot);
+                    } else if (token && backendOrder?.id) {
                       fetch(`/api/v1/orders/${backendOrder.id}/status`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },

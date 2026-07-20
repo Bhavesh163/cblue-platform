@@ -178,7 +178,17 @@ const CANCELLABLE_WORKFLOW_STATUSES = new Set([
 export function isClosedWorkflowActivity(value = {}) {
   const status = String(value?.status || "").toUpperCase();
   const workflowPhase = String(value?.workflowPhase || "").toUpperCase();
-  return workflowPhase === "TERMINAL" || status === "COMPLETED" || isTerminalWorkflowStatus(status);
+  if (workflowPhase === "TERMINAL") return true;
+  if (isTerminalWorkflowStatus(status)) return true;
+  if (status === "COMPLETED") {
+    // When the persisted workflow phase is known it owns the lifecycle: a
+    // COMPLETED order in the RATING phase is still live (ratings pending) and
+    // only closes at TERMINAL. Legacy completed orders without a phase stay
+    // closed.
+    if (workflowPhase === "RATING") return false;
+    return true;
+  }
+  return false;
 }
 
 export function isWorkflowOrderCancellable(value = {}) {
