@@ -25,6 +25,7 @@ import { clearSubscriberSession, ensureFreshSubscriberSession, refreshSubscriber
 import { getFixerMeetingSnapshot } from "../../../lib/fixerMeetingSnapshot";
 import { postFixerWorkflowAction } from "../../../lib/fixerWorkflowClient";
 import {
+  canPartnerPerformWorkflowAction,
   mergeFixerWorkflowRecord,
   buildMeetingConfirmedWorkflowAlert,
   projectAuthoritativeFixerStep,
@@ -3260,6 +3261,7 @@ export default function FixerProPage() {
       workflowVersion: o.workflowVersion,
       activityBucket: o.activityBucket,
       actions: o.actions,
+      variation: o.variation,
       availableActions: o.availableActions,
       actionNeeded: o.actionNeeded,
       actionOwner: o.actionOwner,
@@ -7430,7 +7432,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                   {job.actionNeeded && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-50 text-red-700">{locale === "th" ? "ต้องดำเนินการ" : locale === "zh" ? "需要操作" : "Action Needed"}</span>}
                   {job.earnings && <span className="text-xs font-bold text-gray-700">{job.earnings}</span>}
                   {getStatusLabel(job.status, locale) !== "" && <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_STYLE[job.status] || ""}`}>{getStatusLabel(job.status, locale)}</span>}
-                  {(job.mockStep === 9 || (job.step === 9)) && (
+                  {(job.mockStep === 9 || job.step === 9) && canPartnerPerformWorkflowAction(job, "send-variation") && (
                     <button onClick={() => {
                       setVariationModal(job); setVariationDesc("");
                       // Refresh breakdown so customer's Approve Variation reads correct multi-item data

@@ -22,6 +22,19 @@ export interface FixerWorkflowUiOrder {
     createdAt?: string | number | null;
     actorRole?: "customer" | "partner" | null;
   }> | null;
+  variation?: {
+    note?: string | null;
+    items?: Array<{
+      service?: string | null;
+      quantity?: number | null;
+      unit?: string | null;
+      unitRate?: number | null;
+      total?: number | null;
+    }> | null;
+    total?: number | null;
+    createdAt?: string | null;
+    actorRole?: "partner" | null;
+  } | null;
   service?: string | null;
   serviceTh?: string | null;
   serviceZh?: string | null;
@@ -174,6 +187,27 @@ export interface CustomerWorkflowRequest extends Record<string, unknown> {
 export function projectCustomerWorkflowRequest(
   order?: FixerWorkflowUiOrder | null,
 ): CustomerWorkflowRequest | null;
+
+export function canPartnerPerformWorkflowAction(
+  order?: FixerWorkflowUiOrder | null,
+  actionKey?: string,
+): boolean;
+
+export function projectCustomerVariationPresentation(
+  order?: FixerWorkflowUiOrder | null,
+): {
+  note: string;
+  items: Array<{
+    service: string;
+    quantity: number;
+    unit: string;
+    unitRate: number;
+    total: number;
+  }>;
+  total: number;
+  createdAt: string;
+  actorRole: "partner";
+} | null;
 
 export function projectPartnerActiveWorkflow(
   order?: FixerWorkflowUiOrder | null,

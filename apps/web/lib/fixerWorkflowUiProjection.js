@@ -331,6 +331,49 @@ function latestWorkflowEventNote(order, actionKeys) {
   return normalizedText(latest?.note);
 }
 
+export function canPartnerPerformWorkflowAction(order = null, actionKey = "") {
+  const wanted = normalizedText(actionKey);
+  return Boolean(
+    wanted &&
+    (Array.isArray(order?.actions) ? order.actions : []).some(
+      (action) =>
+        normalizedText(action?.owner) === "partner" &&
+        normalizedText(action?.key) === wanted,
+    ),
+  );
+}
+
+export function projectCustomerVariationPresentation(order = null) {
+  const variation = order?.variation;
+  if (!variation || typeof variation !== "object") return null;
+  const items = (Array.isArray(variation.items) ? variation.items : []).flatMap((item) => {
+    const service = normalizedText(item?.service);
+    const unit = normalizedText(item?.unit);
+    const quantity = Number(item?.quantity);
+    const unitRate = Number(item?.unitRate);
+    const total = Number(item?.total);
+    if (
+      !service ||
+      !unit ||
+      !Number.isFinite(quantity) ||
+      !Number.isFinite(unitRate) ||
+      !Number.isFinite(total)
+    ) {
+      return [];
+    }
+    return [{ service, quantity, unit, unitRate, total }];
+  });
+  return {
+    note: normalizedText(variation.note),
+    items,
+    total: Number.isFinite(Number(variation.total))
+      ? Number(variation.total)
+      : items.reduce((sum, item) => sum + item.total, 0),
+    createdAt: normalizedText(variation.createdAt),
+    actorRole: "partner",
+  };
+}
+
 export function projectPartnerWorkflowRequest(order = null) {
   if (!order || isClosedWorkflowActivity(order)) return null;
   const partnerActions = (Array.isArray(order?.actions) ? order.actions : []).filter(
@@ -428,12 +471,14 @@ export function projectCustomerWorkflowRequest(order = null) {
   };
   if (key === "confirm-variation") {
     const triggerEvent = latestWorkflowEvent(order, "send-variation");
+    const variation = projectCustomerVariationPresentation(order);
     return {
       ...base,
       id: `var-${explicitPo(order) || base.id}`,
       workflowType: "variation_pending",
       type: "variation_pending",
-      desc: latestWorkflowEventNote(order, "send-variation") || CUSTOMER_VARIATION_CONFIRM_FALLBACK,
+      desc: variation?.note || latestWorkflowEventNote(order, "send-variation") || CUSTOMER_VARIATION_CONFIRM_FALLBACK,
+      ...(variation ? { variation } : {}),
       ...(triggerEvent?.createdAt ? { eventCreatedAt: triggerEvent.createdAt } : {}),
     };
   }

@@ -59,6 +59,7 @@ import {
   projectFixerLocations,
   reconcileFixerCardLocations,
   projectCustomerWorkflowRequest,
+  projectCustomerVariationPresentation,
   projectUpcomingFixerMeetings,
   projectWorkflowChatHistory,
 } from "../../../lib/fixerWorkflowUiProjection";
@@ -3400,6 +3401,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         nextActionOwner: o.nextActionOwner,
         nextActionStep: o.nextActionStep,
         chatEnabled: o.chatEnabled === true,
+        variation: o.variation,
         description: o.description || '',
       };
     });
@@ -4947,7 +4949,6 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   const variationApproveOrder = variationApproveModal ? getWorkflowOrderSnapshot(variationApproveModal.po) : null;
   const completeApproveOrder = completeApproveModal ? getWorkflowOrderSnapshot(completeApproveModal.po) : null;
   const rateModalMeeting = rateModal ? getWorkflowMeetingSnapshot(rateModal.po, rateModal) : null;
-  const variationApproveMeeting = variationApproveModal ? getWorkflowMeetingSnapshot(variationApproveModal.po, variationApproveModal) : null;
   const completeApproveMeeting = completeApproveModal ? getWorkflowMeetingSnapshot(completeApproveModal.po, completeApproveModal) : null;
 
     return (
@@ -6197,83 +6198,25 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                 })()}
                 projectDetails={stripWorkflowPrefix(variationApproveOrder?.description || variationApproveModal.desc || variationApproveModal.title || '')}
               />
-              {(variationApproveMeeting?.when || variationApproveMeeting?.venue) && (
-                <div className="rounded-xl border border-purple-100 bg-purple-50 px-4 py-3 text-sm">
-                  <div className="font-bold text-purple-900">Confirmed Site Meeting</div>
-                  {variationApproveMeeting.when && <div className="text-purple-800">Time: {variationApproveMeeting.when}</div>}
-                  {variationApproveMeeting.venue && <div className="text-purple-800">Venue: {variationApproveMeeting.venue}</div>}
-                </div>
-              )}
               {(() => {
-                try {
-                  const brkPo = variationApproveModal.po;
-                  let bd: Array<{ service: string; qty: number; unit: string; unitRate: number; total: number }> = [];
-                  // 1. Embedded breakdown written by partner at variation submission
-                  if (Array.isArray((variationApproveModal as any).breakdown) && (variationApproveModal as any).breakdown.length > 0) bd = (variationApproveModal as any).breakdown;
-                  // 2. Compute fresh using priceList (most accurate, avoids phantom items)
-                  if (bd.length === 0) {
-                    const pl = resolvePartnerPriceList(brkPo);
-                    const desc = String(variationApproveOrder?.description || variationApproveModal.desc || '');
-                    if (pl.length > 0 && desc) {
-                      const computed = computeBudgetBreakdown(desc, pl);
-                      if (computed && computed.length > 0) {
-                        bd = computed;
-                        try { localStorage.setItem(`cblue_po_breakdown_${brkPo}`, JSON.stringify(bd)); } catch {}
-                      }
-                    }
-                  }
-                  // 3. Stored breakdown from localStorage
-                  if (bd.length === 0) { try { const _s = localStorage.getItem(`cblue_po_breakdown_${brkPo}`); if (_s) { const p = JSON.parse(_s); if (Array.isArray(p) && p.length > 0) bd = p; } } catch {} }
-                  if (bd.length >= 1) {
-                    const totalAmt = bd.reduce((s, it) => s + (it?.total ?? 0), 0);
-                    return (
-                      <div className="bg-sky-50 border border-sky-200 rounded-xl px-4 py-3">
-                        <div className="text-xs font-semibold text-gray-500 mb-1.5">Budget Breakdown</div>
-                        <div className="font-mono text-xs space-y-0.5">
-                          {bd.map((it, i) => (
-                            <div key={i} className="flex justify-between gap-2">
-                              <span className="text-gray-600">{i + 1}) {it.service} {it.qty.toLocaleString()} {it.unit} × ฿{it.unitRate.toLocaleString()}</span>
-                              <span className="font-semibold text-sky-700 shrink-0">= ฿{it.total.toLocaleString()}</span>
-                            </div>
-                          ))}
-                          <div className="flex justify-between gap-2 pt-1 border-t border-sky-200 font-bold text-sm">
-                            <span className="text-sky-900">Budget</span>
-                            <span className="text-sky-900">= ฿{totalAmt.toLocaleString()}</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  }
-                } catch { /* no breakdown stored */ }
-                return null;
-              })()}
-              {(() => {
-                const requestText = String(variationApproveModal.desc || '');
-                const variationItems = (() => {
-                  const stored = readStoredVariationPriceList(variationApproveModal.po);
-                  if (stored.length > 0) return stored;
-                  const parsed = parseVariationPriceList(requestText);
-                  if (parsed.length > 0) {
-                    storeVariationPriceList(variationApproveModal.po, parsed);
-                  }
-                  return parsed;
-                })();
-                const partnerRequest = stripVariationPriceList(
-                  requestText.replace(/^Partner variation request:\s*/i, '').trim(),
-                ) || requestText;
+                const variation = projectCustomerVariationPresentation(
+                  variationApproveOrder || variationApproveModal,
+                );
+                if (!variation) return null;
                 return (
                   <>
-                    <div>
+                    {variation.note && <div>
                       <label className="block text-xs font-semibold text-gray-600 mb-1">Partner Request</label>
-                      <p className="text-sm text-gray-700 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 whitespace-pre-wrap">{partnerRequest}</p>
-                    </div>
-                    {variationItems.length > 0 && (
+                      <p className="text-sm text-gray-700 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 whitespace-pre-wrap">{variation.note}</p>
+                    </div>}
+                    {variation.items.length > 0 && (
                       <div className="bg-purple-50 border border-purple-100 rounded-xl px-4 py-3">
                         <label className="block text-xs font-semibold text-gray-600 mb-1">Price List</label>
                         <div className="text-sm text-purple-900 space-y-1">
-                          {variationItems.map((item, index) => (
-                            <p key={`${item.item}-${index}`}>{formatVariationPriceListItem(item, index)}</p>
+                          {variation.items.map((item, index) => (
+                            <p key={`${item.service}-${index}`}>{index + 1}) {item.service} {item.quantity.toLocaleString()} {item.unit} × ฿{item.unitRate.toLocaleString()} = ฿{item.total.toLocaleString()}</p>
                           ))}
+                          <p className="border-t border-purple-200 pt-1 font-bold">Variation Total = ฿{variation.total.toLocaleString()}</p>
                         </div>
                       </div>
                     )}

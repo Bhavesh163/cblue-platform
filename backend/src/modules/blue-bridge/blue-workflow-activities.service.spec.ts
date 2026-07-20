@@ -894,4 +894,60 @@ describe('BlueBridgeService workflow activities', () => {
       }),
     ).rejects.toThrow('Workflow chat not found');
   });
+
+  it.each([
+    ['customer', 'customer-1', 'Variation approval required'],
+    ['partner', 'partner-1', 'Variation submitted'],
+  ] as const)(
+    'projects the persisted Step 9 variation and %s alert',
+    async (persona, viewerId, alertTitle) => {
+      const variationItems = [
+        { service: 'tile', quantity: 100, unit: 'sq', unitRate: 500, total: 50000 },
+        { service: 'car', quantity: 1, unit: 'ea', unitRate: 500000, total: 500000 },
+      ];
+      const createdAt = new Date('2026-07-20T12:00:00.000Z');
+      const { service } = createService(
+        [viewerId],
+        workflowOrder({
+          status: 'IN_PROGRESS',
+          workflowPhase: 'VARIATION_CONFIRM',
+          workflowRevision: 8,
+          serviceCategory: 'CLADDING_ROOFING',
+          workflowActions: [{
+            action: 'send-variation',
+            actorUserId: 'partner-1',
+            payload: { note: 'please approve', variationItems },
+            createdAt,
+          }],
+        }),
+      );
+
+      const result = await (service as any).workflowActivities({
+        legacySubjectId: `${persona}@example.com`,
+        persona,
+        bridgeKey: 'bridge-key',
+      });
+      const activity = [...result.requests, ...result.activeJobs].find(
+        (item: any) => item.poNumber === 'PO-2607-8879',
+      );
+
+      expect(activity.variation).toEqual({
+        note: 'please approve',
+        items: variationItems,
+        total: 550000,
+        createdAt: createdAt.toISOString(),
+        actorRole: 'partner',
+      });
+      expect(activity.workflowEvents).toContainEqual(
+        expect.objectContaining({ action: 'send-variation', variationItems }),
+      );
+      expect(result.alerts).toContainEqual(
+        expect.objectContaining({
+          action: 'send-variation',
+          title: expect.stringContaining(alertTitle),
+          createdAt: createdAt.toISOString(),
+        }),
+      );
+    },
+  );
 });

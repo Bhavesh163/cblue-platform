@@ -334,6 +334,12 @@ function HouseholdBookingContent() {
     setError("");
 
     try {
+      const resolvedSubmitAddress = form.locationType === "gps"
+        ? await normalizeGpsAddressForSubmit(gpsCoords, form)
+        : null;
+      if (resolvedSubmitAddress) {
+        setForm((prev) => ({ ...prev, ...resolvedSubmitAddress }));
+      }
       // In production, this would call the API with auth tokens
       // For now, log the submission
       const payload = {
@@ -351,10 +357,10 @@ function HouseholdBookingContent() {
         tier: form.tier,
         description: form.description,
         address: {
-          province: form.province,
-          district: form.district,
-          subdistrict: form.subdistrict,
-          postalCode: form.postalCode,
+          province: resolvedSubmitAddress?.province || form.province,
+          district: resolvedSubmitAddress?.district || form.district,
+          subdistrict: resolvedSubmitAddress?.subdistrict || form.subdistrict,
+          postalCode: resolvedSubmitAddress?.postalCode || form.postalCode,
           houseNumber: form.houseNumber || undefined,
           building: form.building || undefined,
           floor: form.floor || undefined,

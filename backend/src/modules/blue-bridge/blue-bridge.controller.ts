@@ -102,6 +102,12 @@ export interface BlueWorkflowDetailResponse {
   }>;
   uploadedFiles: Array<{ label: string; url: string }>;
   activityBucket: 'request' | 'active' | 'history';
+  title?: string;
+  serviceCategory?: string;
+  customer?: { id: string; displayName: string } | null;
+  partner?: { id: string; displayName: string } | null;
+  location?: string;
+  processingFee?: { amount: number; currency: string; displayLabel: string } | null;
   lifecycleStatus: string;
   archivedAt: string | null;
   cancelledAt: string | null;
@@ -130,6 +136,15 @@ export interface BlueWorkflowDetailResponse {
     action: string;
     createdAt: string;
     actorRole: 'customer' | 'partner';
+    note?: string;
+    rating?: number;
+    variationItems?: Array<{
+      service: string;
+      quantity: number;
+      unit: string;
+      unitRate: number;
+      total: number;
+    }>;
   }>;
   workflowVersion?: number;
   chat?: {
@@ -142,4 +157,17 @@ export interface BlueWorkflowDetailResponse {
     note: string;
   } | null;
   siteSubdistrict?: string;
+  variation?: {
+    note: string;
+    items: Array<{
+      service: string;
+      quantity: number;
+      unit: string;
+      unitRate: number;
+      total: number;
+    }>;
+    total: number;
+    createdAt: string;
+    actorRole: 'partner';
+  } | null;
 }

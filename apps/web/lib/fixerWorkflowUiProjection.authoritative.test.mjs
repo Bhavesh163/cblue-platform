@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  canPartnerPerformWorkflowAction,
+  projectCustomerVariationPresentation,
   projectPartnerWorkflowRequest,
   projectUpcomingFixerMeetings,
   projectWorkflowChatHistory,
@@ -70,6 +72,35 @@ test("projects Step 9 variation for the partner and not for the customer", () =>
       actions: [{ key: "customer-cancel", owner: "customer", actionStep: 9 }],
     }),
     null,
+  );
+});
+
+test("uses the structured Step 9 variation exactly once", () => {
+  const order = {
+    ...step8,
+    currentStep: 9,
+    workflowPhase: "VARIATION_CONFIRM",
+    variation: {
+      note: "please approve",
+      items: [
+        { service: "tile", quantity: 100, unit: "sq", unitRate: 500, total: 50000 },
+        { service: "car", quantity: 1, unit: "ea", unitRate: 500000, total: 500000 },
+      ],
+      total: 550000,
+      createdAt: "2026-07-20T12:00:00.000Z",
+      actorRole: "partner",
+    },
+    actions: [{ key: "confirm-variation", owner: "customer", actionStep: 9 }],
+  };
+
+  assert.deepEqual(projectCustomerVariationPresentation(order), order.variation);
+  assert.equal(canPartnerPerformWorkflowAction(order, "send-variation"), false);
+  assert.equal(
+    canPartnerPerformWorkflowAction(
+      { ...order, actions: [{ key: "send-variation", owner: "partner", actionStep: 9 }] },
+      "send-variation",
+    ),
+    true,
   );
 });
 

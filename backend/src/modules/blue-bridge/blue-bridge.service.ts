@@ -133,7 +133,12 @@ export class BlueBridgeService {
         },
         statusHistory: { orderBy: { createdAt: 'desc' } },
         review: { select: { createdAt: true } },
-        fixer: { select: { userId: true } },
+        fixer: {
+          select: {
+            userId: true,
+            user: { select: { id: true, name: true, email: true } },
+          },
+        },
         workflowActions: {
           select: {
             action: true,
@@ -184,7 +189,12 @@ export class BlueBridgeService {
         },
         statusHistory: { orderBy: { createdAt: 'desc' } },
         review: { select: { createdAt: true } },
-        fixer: { select: { userId: true } },
+        fixer: {
+          select: {
+            userId: true,
+            user: { select: { id: true, name: true, email: true } },
+          },
+        },
         workflowActions: {
           select: {
             action: true,
@@ -326,8 +336,14 @@ export class BlueBridgeService {
       ...workflow,
       workflowPhase: order.workflowPhase,
       workflowEvents: persistedFixerWorkflowEvents(order),
+      title: String(order.serviceCategory || '').replace(/_/g, ' ').trim(),
+      serviceCategory: order.serviceCategory,
+      customer: identity(order.user),
+      partner: identity(order.fixer?.user),
+      location: order.address ? formatLocation(order.address) : '',
       meeting: projectPersistedFixerMeeting(order),
       siteSubdistrict: persistedSubdistrict(order.address),
+      variation: projectPersistedFixerVariation(order),
     };
   }
 
@@ -390,19 +406,36 @@ export class BlueBridgeService {
     });
 
     const eventAlerts = activities.flatMap((activity) =>
-      (activity.workflowEvents || [])
-        .filter((event: any) => event.action === 'confirm-meeting')
-        .map((event: any) => ({
+      (activity.workflowEvents || []).flatMap((event: any) => {
+        const base = {
           id: `workflow-event:${activity.poNumber}:${event.action}:${event.createdAt}`,
           type: 'FIXER_WORKFLOW',
           status: 'SENT',
-          title: `${activity.poNumber} Meeting confirmed`,
-          body: `${activity.poNumber}: Meeting confirmed. Step 9 variation is ready.`,
           action: event.action,
           currentStep: 9,
           createdAt: event.createdAt,
           readAt: null,
-        })),
+        };
+        if (event.action === 'confirm-meeting') {
+          return [{
+            ...base,
+            title: `${activity.poNumber} Meeting confirmed`,
+            body: `${activity.poNumber}: Meeting confirmed. Step 9 variation is ready.`,
+          }];
+        }
+        if (event.action !== 'send-variation') return [];
+        return input.persona === 'customer'
+          ? [{
+              ...base,
+              title: `${activity.poNumber} Variation approval required`,
+              body: `${activity.poNumber}: Partner submitted a variation. Review and approve it in Requests.`,
+            }]
+          : [{
+              ...base,
+              title: `${activity.poNumber} Variation submitted`,
+              body: `${activity.poNumber}: Variation submitted. Waiting for customer approval.`,
+            }];
+      }),
     );
 
     return {
@@ -665,6 +698,7 @@ export class BlueBridgeService {
       chat: workflow.chat,
       meeting: projectPersistedFixerMeeting(order),
       siteSubdistrict: persistedSubdistrict(order.address),
+      variation: projectPersistedFixerVariation(order),
       messageItems: (order.chatMessages || []).map(messageItem),
     };
   }
@@ -828,12 +862,64 @@ function persistedSubdistrict(
   return stringValue(address?.subdistrict);
 }
 
+interface PersistedVariationItem {
+  service: string;
+  quantity: number;
+  unit: string;
+  unitRate: number;
+  total: number;
+}
+
+function persistedVariationItems(payload: unknown): PersistedVariationItem[] {
+  if (!isRecord(payload) || !Array.isArray(payload.variationItems)) return [];
+  return payload.variationItems.flatMap((item) => {
+    if (!isRecord(item)) return [];
+    const service = stringValue(item.service);
+    const unit = stringValue(item.unit);
+    const quantity = numberValue(item.quantity);
+    const unitRate = numberValue(item.unitRate);
+    const total = numberValue(item.total);
+    if (!service || !unit || quantity < 0 || unitRate < 0 || total < 0) return [];
+    return [{ service, quantity, unit, unitRate, total }];
+  });
+}
+
+export function projectPersistedFixerVariation(order: any): {
+  note: string;
+  items: PersistedVariationItem[];
+  total: number;
+  createdAt: string;
+  actorRole: 'partner';
+} | null {
+  const event = [...(order.workflowActions || [])]
+    .reverse()
+    .find((candidate: any) => candidate?.action === 'send-variation');
+  if (
+    !event ||
+    String(event.actorUserId || '') !== String(order.fixer?.userId || '')
+  ) {
+    return null;
+  }
+  const createdAt = toIsoTimestamp(event.createdAt);
+  if (!createdAt) return null;
+  const payload = isRecord(event.payload) ? event.payload : {};
+  const items = persistedVariationItems(payload);
+  return {
+    note: stringValue(payload.note),
+    items,
+    total: items.reduce((sum, item) => sum + item.total, 0),
+    createdAt,
+    actorRole: 'partner',
+  };
+}
+
 function persistedFixerWorkflowEvents(order: any): Array<{
   action: string;
   createdAt: string;
   actorRole: 'customer' | 'partner';
   note?: string;
   rating?: number;
+  variationItems?: PersistedVariationItem[];
 }> {
   return (order.workflowActions || []).flatMap((event: any) => {
     const actorUserId = String(event?.actorUserId || '');
@@ -861,6 +947,8 @@ function persistedFixerWorkflowEvents(order: any): Array<{
         actorRole,
         ...(note ? { note } : {}),
         ...(rating ? { rating } : {}),
+        ...(persistedVariationItems(payload).length
+          ? { variationItems: persistedVariationItems(payload) } : {}),
       },
     ];
   });

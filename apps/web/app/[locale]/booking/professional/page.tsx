@@ -341,6 +341,12 @@ function ProfessionalBookingContent() {
     setError("");
 
     try {
+      const resolvedSubmitAddress = form.locationType === "gps"
+        ? await normalizeGpsAddressForSubmit(gpsCoords, form)
+        : null;
+      if (resolvedSubmitAddress) {
+        setForm((prev) => ({ ...prev, ...resolvedSubmitAddress }));
+      }
       const payload = {
         orderType: "PROFESSIONAL",
         name: form.name,
@@ -355,10 +361,10 @@ function ProfessionalBookingContent() {
         description: form.description,
         tier: form.tier,
         address: {
-          province: form.province,
-          district: form.district,
-          subdistrict: form.subdistrict,
-          postalCode: form.postalCode,
+          province: resolvedSubmitAddress?.province || form.province,
+          district: resolvedSubmitAddress?.district || form.district,
+          subdistrict: resolvedSubmitAddress?.subdistrict || form.subdistrict,
+          postalCode: resolvedSubmitAddress?.postalCode || form.postalCode,
           houseNumber: form.houseNumber || undefined,
           building: form.building || undefined,
           floor: form.floor || undefined,

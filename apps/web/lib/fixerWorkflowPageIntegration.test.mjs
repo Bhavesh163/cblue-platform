@@ -105,6 +105,34 @@ test("partner cards and requests preserve authoritative Step 9 actions", () => {
   );
 });
 
+test("Step 9 uses structured variation data and exact action ownership", () => {
+  assert.match(partnerPage, /canPartnerPerformWorkflowAction\(job,\s*["']send-variation["']\)/);
+  assert.match(customerPage, /projectCustomerVariationPresentation\(/);
+
+  const modalStart = customerPage.indexOf("{variationApproveModal && (");
+  const modalEnd = customerPage.indexOf("{completeApproveModal && (", modalStart);
+  assert.ok(modalStart > 0 && modalEnd > modalStart);
+  const variationModal = customerPage.slice(modalStart, modalEnd);
+  assert.doesNotMatch(variationModal, /Confirmed Site Meeting/);
+  assert.doesNotMatch(variationModal, /readStoredVariationPriceList/);
+  assert.doesNotMatch(variationModal, /parseVariationPriceList/);
+});
+
+test("all three booking forms resolve GPS address fields during submit", () => {
+  for (const relativePath of [
+    "../app/[locale]/booking/household/page.tsx",
+    "../app/[locale]/booking/project/page.tsx",
+    "../app/[locale]/booking/professional/page.tsx",
+  ]) {
+    const page = readFileSync(new URL(relativePath, import.meta.url), "utf8");
+    const submitStart = page.indexOf("async function handleSubmit");
+    const successStart = page.indexOf("if (success)", submitStart);
+    const submitBody = page.slice(submitStart, successStart);
+    assert.match(submitBody, /await normalizeGpsAddressForSubmit\(gpsCoords/);
+    assert.match(submitBody, /resolvedSubmitAddress/);
+  }
+});
+
 test("partner meeting confirmation awaits the authoritative action snapshot", () => {
   assert.match(partnerPage, /postFixerWorkflowAction/);
   const branchStart = partnerPage.indexOf("if (isMeetingConfirmation) {");
