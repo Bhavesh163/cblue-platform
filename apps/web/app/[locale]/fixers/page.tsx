@@ -27,7 +27,9 @@ import { postFixerWorkflowAction } from "../../../lib/fixerWorkflowClient";
 import {
   canPartnerPerformWorkflowAction,
   mergeFixerWorkflowRecord,
+  mergeAuthoritativeWorkflowAlerts,
   buildMeetingConfirmedWorkflowAlert,
+  buildVariationConfirmedWorkflowAlert,
   buildVariationSubmittedWorkflowAlert,
   projectAuthoritativeFixerStep,
   projectFixerLocations,
@@ -5425,6 +5427,15 @@ export default function FixerProPage() {
       time: fmtDateTime(alert.createdAt),
     }));
 
+  const authoritativeVariationConfirmedNotifications = mappedOrders
+    .map((order: any) => buildVariationConfirmedWorkflowAlert(order, "partner"))
+    .filter(Boolean)
+    .map((alert: any) => ({
+      ...alert,
+      unread: true,
+      time: fmtDateTime(alert.createdAt),
+    }));
+
   const dynamicNotifications = mockDynReqs.map((r: any) => {
     const eventTs = parseTs(r.createdAt || r.date);
     const displayTime = eventTs > 0 ? fmtDateTime(eventTs) : "";
@@ -5696,7 +5707,7 @@ export default function FixerProPage() {
     return po && phase ? `${po}:${phase}` : String(notification?.id || `${po}:${msg}`).trim();
   };
   const displayNotifications = Array.from(
-    [...persistedAlertNotifications, ...orderAlerts, ...activeMeetingConfirmAlerts, ...authoritativeMeetingConfirmedNotifications, ...authoritativeVariationSubmittedNotifications, ...dynamicNotifications, ...partnerWorkflowNotifications, ...propWorkflowNotifications]
+    mergeAuthoritativeWorkflowAlerts([...persistedAlertNotifications, ...orderAlerts, ...activeMeetingConfirmAlerts, ...authoritativeMeetingConfirmedNotifications, ...authoritativeVariationSubmittedNotifications, ...authoritativeVariationConfirmedNotifications, ...dynamicNotifications, ...partnerWorkflowNotifications, ...propWorkflowNotifications])
       .filter((n: any) => n && parseTs(n.createdAt || n.time) > 0 && !String(n.time || '').includes('NaN'))
       .reduce((map: Map<string, any>, notification: any) => {
         const createdAt = parseTs(notification.createdAt || notification.time);

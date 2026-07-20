@@ -51,6 +51,7 @@ import { postFixerWorkflowAction } from "../../../lib/fixerWorkflowClient";
 import {
   buildCustomerMeetingAwaitingPartnerAlert,
   buildMeetingConfirmedWorkflowAlert,
+  buildVariationConfirmedWorkflowAlert,
   buildVariationSubmittedWorkflowAlert,
   projectAuthoritativeFixerStep,
   isCustomerFixerActionNeeded,
@@ -3977,6 +3978,13 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         dot: "bg-blue-500",
       }];
     }
+      const variationConfirmedAlert = buildVariationConfirmedWorkflowAlert(
+        authoritativeOrder,
+        "customer",
+      );
+      if (variationConfirmedAlert) {
+        return [{ ...variationConfirmedAlert, time: toDisplayDateTime(variationConfirmedAlert.createdAt) }];
+      }
       const variationSubmittedAlert = buildVariationSubmittedWorkflowAlert(
         authoritativeOrder,
         "customer",

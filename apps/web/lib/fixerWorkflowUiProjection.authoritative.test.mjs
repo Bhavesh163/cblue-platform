@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildVariationConfirmedWorkflowAlert,
   buildVariationSubmittedWorkflowAlert,
   canPartnerPerformWorkflowAction,
+  mergeAuthoritativeWorkflowAlerts,
   projectCustomerVariationPresentation,
   projectPartnerWorkflowRequest,
   projectUpcomingFixerMeetings,
@@ -205,4 +207,58 @@ test("builds customer and partner Step 9 alerts only from the persisted send-var
   assert.equal(partnerAlert?.createdAt, customerAlert?.createdAt);
   assert.match(partnerAlert?.msg || "", /waiting for customer approval/i);
   assert.equal(buildVariationSubmittedWorkflowAlert({ ...order, workflowEvents: [] }, "customer"), null);
+});
+
+test("builds customer and partner Step 10 alerts only from the persisted confirm-variation event", () => {
+  const createdAt = "2026-07-20T18:09:53.000Z";
+  const order = {
+    ...step8,
+    currentStep: 10,
+    workflowPhase: "COMPLETION",
+    workflowEvents: [
+      {
+        action: "send-variation",
+        actorRole: "partner",
+        createdAt: "2026-07-20T16:50:00.000Z",
+      },
+      {
+        action: "confirm-variation",
+        actorRole: "customer",
+        createdAt,
+      },
+    ],
+  };
+
+  const customerAlert = buildVariationConfirmedWorkflowAlert(order, "customer");
+  const partnerAlert = buildVariationConfirmedWorkflowAlert(order, "partner");
+  assert.equal(customerAlert?.createdAt, Date.parse(createdAt));
+  assert.match(customerAlert?.msg || "", /you approved/i);
+  assert.equal(partnerAlert?.createdAt, customerAlert?.createdAt);
+  assert.match(partnerAlert?.msg || "", /customer approved/i);
+  assert.equal(buildVariationConfirmedWorkflowAlert({ ...order, workflowEvents: [] }, "partner"), null);
+
+  const merged = mergeAuthoritativeWorkflowAlerts([
+    {
+      id: "a-chat-PO-2607-9458",
+      po: "PO-2607-9458",
+      workflowStage: 7,
+      authoritative: true,
+      msg: "Chat room is active.",
+      createdAt: Date.parse("2026-07-18T10:00:00.000Z"),
+    },
+    {
+      id: "a-variation-submitted-partner-PO-2607-9458",
+      po: "PO-2607-9458",
+      workflowStage: 9,
+      authoritative: true,
+      msg: "Waiting for approval.",
+      createdAt: Date.parse("2026-07-20T16:50:00.000Z"),
+    },
+    partnerAlert,
+  ]);
+
+  assert.deepEqual(
+    merged.map((alert) => alert.id),
+    ["a-variation-confirmed-partner-PO-2607-9458"],
+  );
 });

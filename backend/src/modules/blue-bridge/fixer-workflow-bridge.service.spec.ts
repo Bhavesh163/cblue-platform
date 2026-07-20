@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
 } from '@nestjs/common';
@@ -128,6 +129,15 @@ describe('FixerWorkflowBridgeService', () => {
           meetingTime: '10:00',
           meetingVenue: 'Office',
         });
+      }
+      if (action === 'send-variation') {
+        dto.variationItems = [{
+          service: 'Additional scope',
+          quantity: 1,
+          unit: 'item',
+          unitRate: 1000,
+          total: 1000,
+        }];
       }
       if (action === 'rate-partner' || action === 'rate-customer') {
         dto.rating = 5;
@@ -355,6 +365,25 @@ describe('FixerWorkflowBridgeService', () => {
         }),
       }),
     });
+  });
+
+  it('rejects send-variation without a structured price list', async () => {
+    const { service, prisma } = createHarness(
+      'VARIATION',
+      OrderStatus.IN_PROGRESS,
+    );
+
+    await expect(
+      service.action(
+        'PO-2607-9458',
+        'partner-1',
+        'send-variation',
+        { workflowVersion: 0, note: 'Formatted text is not authoritative.' },
+        'send-variation-missing-items',
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.fixerWorkflowAction.create).not.toHaveBeenCalled();
+    expect(prisma.order.updateMany).not.toHaveBeenCalled();
   });
 
   it.each([

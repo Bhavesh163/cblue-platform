@@ -258,6 +258,50 @@ export function buildVariationSubmittedWorkflowAlert(order = null, audience = "c
   };
 }
 
+export function buildVariationConfirmedWorkflowAlert(order = null, audience = "customer") {
+  const po = explicitPo(order);
+  if (
+    !po ||
+    projectAuthoritativeFixerStep(order) !== 10 ||
+    isClosedWorkflowActivity(order)
+  ) return null;
+  const event = [...(Array.isArray(order?.workflowEvents) ? order.workflowEvents : [])]
+    .reverse()
+    .find(
+      (item) =>
+        normalizedText(item?.action) === "confirm-variation" &&
+        normalizedText(item?.actorRole) === "customer" &&
+        timestamp(item?.createdAt) > 0,
+    );
+  if (!event) return null;
+  const partnerAudience = normalizedText(audience) === "partner";
+  return {
+    id: `a-variation-confirmed-${partnerAudience ? "partner" : "customer"}-${po}`,
+    po,
+    workflowStage: 10,
+    authoritative: true,
+    msg: partnerAudience
+      ? `${po}: Customer approved the variation. Submit project completion next.`
+      : `${po}: You approved the variation. The partner can now submit project completion.`,
+    msgTh: partnerAudience
+      ? `${po}: Customer approved the variation. Submit project completion next.`
+      : `${po}: You approved the variation. The partner can now submit project completion.`,
+    msgZh: partnerAudience
+      ? `${po}: Customer approved the variation. Submit project completion next.`
+      : `${po}: You approved the variation. The partner can now submit project completion.`,
+    createdAt: timestamp(event.createdAt),
+    dot: "bg-green-500",
+    supersedesIds: [
+      `a-variation-submitted-customer-${po}`,
+      `a-variation-submitted-partner-${po}`,
+      `a-meeting-confirmed-${po}`,
+      `a-meeting-wait-${po}`,
+      `a-pay-${po}`,
+      `a-chat-${po}`,
+    ],
+  };
+}
+
 export function isCustomerFixerActionNeeded(order = null, fallbackStep = 0) {
   if (Array.isArray(order?.actions)) {
     return order.actions.some(

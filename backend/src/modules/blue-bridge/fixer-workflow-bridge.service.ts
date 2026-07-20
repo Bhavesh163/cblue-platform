@@ -257,6 +257,14 @@ export class FixerWorkflowBridgeService {
       }
     }
     if (
+      action === 'send-variation' &&
+      (!Array.isArray(dto.variationItems) || dto.variationItems.length === 0)
+    ) {
+      throw new BadRequestException(
+        'send-variation requires at least one structured variation item',
+      );
+    }
+    if (
       ['rate-partner', 'rate-customer'].includes(action) &&
       (!Number.isInteger(dto.rating) ||
         Number(dto.rating) < 1 ||
