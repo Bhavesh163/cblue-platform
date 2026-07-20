@@ -28,6 +28,7 @@ import {
   canPartnerPerformWorkflowAction,
   mergeFixerWorkflowRecord,
   buildMeetingConfirmedWorkflowAlert,
+  buildVariationSubmittedWorkflowAlert,
   projectAuthoritativeFixerStep,
   projectFixerLocations,
   projectFixerChatRoom,
@@ -5415,6 +5416,15 @@ export default function FixerProPage() {
       time: fmtDateTime(alert.createdAt),
     }));
 
+  const authoritativeVariationSubmittedNotifications = mappedOrders
+    .map((order: any) => buildVariationSubmittedWorkflowAlert(order, "partner"))
+    .filter(Boolean)
+    .map((alert: any) => ({
+      ...alert,
+      unread: true,
+      time: fmtDateTime(alert.createdAt),
+    }));
+
   const dynamicNotifications = mockDynReqs.map((r: any) => {
     const eventTs = parseTs(r.createdAt || r.date);
     const displayTime = eventTs > 0 ? fmtDateTime(eventTs) : "";
@@ -5686,7 +5696,7 @@ export default function FixerProPage() {
     return po && phase ? `${po}:${phase}` : String(notification?.id || `${po}:${msg}`).trim();
   };
   const displayNotifications = Array.from(
-    [...persistedAlertNotifications, ...orderAlerts, ...activeMeetingConfirmAlerts, ...authoritativeMeetingConfirmedNotifications, ...dynamicNotifications, ...partnerWorkflowNotifications, ...propWorkflowNotifications]
+    [...persistedAlertNotifications, ...orderAlerts, ...activeMeetingConfirmAlerts, ...authoritativeMeetingConfirmedNotifications, ...authoritativeVariationSubmittedNotifications, ...dynamicNotifications, ...partnerWorkflowNotifications, ...propWorkflowNotifications]
       .filter((n: any) => n && parseTs(n.createdAt || n.time) > 0 && !String(n.time || '').includes('NaN'))
       .reduce((map: Map<string, any>, notification: any) => {
         const createdAt = parseTs(notification.createdAt || notification.time);

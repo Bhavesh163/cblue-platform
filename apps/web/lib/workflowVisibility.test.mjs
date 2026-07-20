@@ -505,3 +505,18 @@ test("preserves terminal customer history entries during storage synchronization
     "PO-2606-7001",
   ]);
 });
+
+test("authoritative history snapshots cannot be reopened by legacy rating text", () => {
+  const completedHistory = {
+    sourceVersion: "cblue-fixer-workflow-v1",
+    status: "COMPLETED",
+    workflowPhase: "RATING",
+    activityBucket: "history",
+    actions: [],
+    availableActions: [],
+    statusHistory: [{ note: "Customer confirmed project complete. Please rate your customer." }],
+  };
+
+  assert.equal(isClosedWorkflowActivity(completedHistory), true);
+  assert.equal(isCompletedAwaitingWorkflowRating(completedHistory), false);
+});

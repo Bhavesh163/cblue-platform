@@ -178,6 +178,7 @@ const CANCELLABLE_WORKFLOW_STATUSES = new Set([
 export function isClosedWorkflowActivity(value = {}) {
   const status = String(value?.status || "").toUpperCase();
   const workflowPhase = String(value?.workflowPhase || "").toUpperCase();
+  if (String(value?.activityBucket || "").toLowerCase() === "history") return true;
   if (workflowPhase === "TERMINAL") return true;
   if (isTerminalWorkflowStatus(status)) return true;
   if (status === "COMPLETED") {
@@ -222,6 +223,14 @@ function hasSubmittedWorkflowRating(value) {
 export function isCompletedAwaitingWorkflowRating(value) {
   if (!value || typeof value !== "object") return false;
   if (String(value.status || "").toUpperCase() !== "COMPLETED") return false;
+  if (String(value?.activityBucket || "").toLowerCase() === "history") return false;
+  if (value?.sourceVersion === "cblue-fixer-workflow-v1" || Array.isArray(value?.actions)) {
+    return (Array.isArray(value?.actions) ? value.actions : []).some((action) =>
+      ["rate-partner", "rate-customer"].includes(
+        String(action?.key || "").toLowerCase(),
+      ),
+    );
+  }
   if (hasWorkflowCompletionMarker(value) || hasSubmittedWorkflowRating(value)) return false;
   return getTextFields(value).some((text) => COMPLETED_AWAITING_RATING_PATTERN.test(text));
 }

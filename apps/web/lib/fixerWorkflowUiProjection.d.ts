@@ -154,6 +154,10 @@ export interface WorkflowUiAlert {
 
 export function buildCustomerMeetingAwaitingPartnerAlert(order?: FixerWorkflowUiOrder | null): WorkflowUiAlert | null;
 export function buildMeetingConfirmedWorkflowAlert(order?: FixerWorkflowUiOrder | null): WorkflowUiAlert | null;
+export function buildVariationSubmittedWorkflowAlert(
+  order?: FixerWorkflowUiOrder | null,
+  audience?: "customer" | "partner",
+): WorkflowUiAlert | null;
 export function mergeAuthoritativeWorkflowAlerts(alerts?: Array<WorkflowUiAlert | null | undefined>): WorkflowUiAlert[];
 
 export interface PartnerWorkflowRequest extends Record<string, unknown> {

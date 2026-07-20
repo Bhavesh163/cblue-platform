@@ -218,6 +218,46 @@ export function buildMeetingConfirmedWorkflowAlert(order = null) {
   };
 }
 
+export function buildVariationSubmittedWorkflowAlert(order = null, audience = "customer") {
+  const po = explicitPo(order);
+  if (
+    !po ||
+    projectAuthoritativeFixerStep(order) !== 9 ||
+    isClosedWorkflowActivity(order)
+  ) return null;
+  const event = [...(Array.isArray(order?.workflowEvents) ? order.workflowEvents : [])]
+    .reverse()
+    .find(
+      (item) =>
+        normalizedText(item?.action) === "send-variation" &&
+        normalizedText(item?.actorRole) === "partner" &&
+        timestamp(item?.createdAt) > 0,
+    );
+  if (!event) return null;
+  const partnerAudience = normalizedText(audience) === "partner";
+  return {
+    id: `a-variation-submitted-${partnerAudience ? "partner" : "customer"}-${po}`,
+    po,
+    workflowStage: 9,
+    authoritative: true,
+    msg: partnerAudience
+      ? `${po}: Variation submitted. Waiting for customer approval.`
+      : `${po}: Partner submitted a variation request. Review and approve it in Requests.`,
+    msgTh: partnerAudience
+      ? `${po}: ส่งคำขอ variation แล้ว กำลังรอลูกค้าอนุมัติ`
+      : `${po}: พาร์ทเนอร์ส่งคำขอ variation แล้ว กรุณาตรวจสอบและอนุมัติใน Requests`,
+    msgZh: partnerAudience
+      ? `${po}: 变更申请已提交，正在等待客户批准。`
+      : `${po}: 合作伙伴已提交变更申请。请在 Requests 中查看并批准。`,
+    createdAt: timestamp(event.createdAt),
+    dot: "bg-purple-500",
+    supersedesIds: [
+      `a-meeting-confirmed-${po}`,
+      `a-meeting-wait-${po}`,
+    ],
+  };
+}
+
 export function isCustomerFixerActionNeeded(order = null, fallbackStep = 0) {
   if (Array.isArray(order?.actions)) {
     return order.actions.some(

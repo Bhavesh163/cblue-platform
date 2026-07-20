@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildVariationSubmittedWorkflowAlert,
   canPartnerPerformWorkflowAction,
   projectCustomerVariationPresentation,
   projectPartnerWorkflowRequest,
@@ -182,4 +183,26 @@ test("uses the scheduled meeting time instead of the message creation time", () 
   assert.equal(meetings[0].meetingScheduledAt, "2026-07-21T07:30:00.000Z");
   assert.equal(meetings[0].meetingConfirmedAt, confirmedAt);
   assert.notEqual(meetings[0].meetingScheduledAt, meetings[0].meetingConfirmedAt);
+});
+
+test("builds customer and partner Step 9 alerts only from the persisted send-variation event", () => {
+  const order = {
+    ...step8,
+    currentStep: 9,
+    workflowPhase: "VARIATION_CONFIRM",
+    workflowEvents: [{
+      action: "send-variation",
+      actorRole: "partner",
+      createdAt: "2026-07-20T16:50:00.000Z",
+      note: "please approve",
+    }],
+  };
+
+  const customerAlert = buildVariationSubmittedWorkflowAlert(order, "customer");
+  const partnerAlert = buildVariationSubmittedWorkflowAlert(order, "partner");
+  assert.equal(customerAlert?.createdAt, Date.parse("2026-07-20T16:50:00.000Z"));
+  assert.match(customerAlert?.msg || "", /review and approve/i);
+  assert.equal(partnerAlert?.createdAt, customerAlert?.createdAt);
+  assert.match(partnerAlert?.msg || "", /waiting for customer approval/i);
+  assert.equal(buildVariationSubmittedWorkflowAlert({ ...order, workflowEvents: [] }, "customer"), null);
 });

@@ -668,6 +668,61 @@ describe('OrderService', () => {
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual(expect.objectContaining({ id: 'live-8879' }));
     });
+
+    it('returns the authoritative persisted Step 9 variation in the shared partner order contract', async () => {
+      prisma.user.findUnique.mockResolvedValue({ fixer: { id: 'fixer-1' } });
+      prisma.order.findMany.mockResolvedValue([{
+        id: 'order-1',
+        userId: 'customer-1',
+        fixerId: 'fixer-1',
+        status: OrderStatus.IN_PROGRESS,
+        workflowPhase: 'VARIATION_CONFIRM',
+        workflowRevision: 6,
+        description: 'PO-2607-9458 | Cladding roofing',
+        workflowActions: [{
+          action: 'send-variation',
+          actorUserId: 'partner-user-1',
+          payload: {
+            note: 'please approve',
+            variationItems: [
+              { service: 'tile', quantity: 100, unit: 'sq', unitRate: 500, total: 50000 },
+              { service: 'car', quantity: 1, unit: 'ea', unitRate: 500000, total: 500000 },
+            ],
+          },
+          createdAt: new Date('2026-07-20T16:50:00.000Z'),
+        }],
+      }]);
+      prisma.user.findMany.mockResolvedValue([{
+        id: 'customer-1',
+        name: 'Customer',
+        email: 'customer@example.com',
+        role: UserRole.USER,
+      }]);
+
+      const result = await service.findMyFixerOrders('partner-user-1');
+
+      expect(result[0]).toMatchObject({
+        currentStep: 9,
+        variation: {
+          note: 'please approve',
+          items: [
+            { service: 'tile', quantity: 100, unit: 'sq', unitRate: 500, total: 50000 },
+            { service: 'car', quantity: 1, unit: 'ea', unitRate: 500000, total: 500000 },
+          ],
+          total: 550000,
+        },
+        workflowEvents: [{
+          action: 'send-variation',
+          actorRole: 'partner',
+          createdAt: '2026-07-20T16:50:00.000Z',
+          note: 'please approve',
+          variationItems: [
+            { service: 'tile', quantity: 100, unit: 'sq', unitRate: 500, total: 50000 },
+            { service: 'car', quantity: 1, unit: 'ea', unitRate: 500000, total: 500000 },
+          ],
+        }],
+      });
+    });
   });
 
   describe('createOrderChatMessage', () => {

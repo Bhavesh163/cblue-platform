@@ -17,6 +17,7 @@ import { UploadOrderAttachmentsBatchDto } from './dto/upload-order-attachments-b
 import { UpdateOrderBudgetBreakdownDto } from './dto/update-order-budget-breakdown.dto';
 import {
   projectPersistedFixerMeeting,
+  projectPersistedFixerVariation,
   resolvePersistedFixerWorkflowSnapshot,
 } from '../blue-bridge/blue-bridge.service';
 
@@ -133,6 +134,24 @@ function projectOrderWorkflow(
       Number(payload.rating) <= 5
         ? Number(payload.rating)
         : null;
+    const variationItems =
+      action === 'send-variation' && Array.isArray(payload.variationItems)
+        ? payload.variationItems.flatMap((item: any) => {
+            const service = String(item?.service || '').trim();
+            const unit = String(item?.unit || '').trim();
+            const quantity = Number(item?.quantity);
+            const unitRate = Number(item?.unitRate);
+            const total = Number(item?.total);
+            if (
+              !service ||
+              !unit ||
+              ![quantity, unitRate, total].every(Number.isFinite)
+            ) {
+              return [];
+            }
+            return [{ service, quantity, unit, unitRate, total }];
+          })
+        : [];
     return [
       {
         action,
@@ -140,6 +159,7 @@ function projectOrderWorkflow(
         createdAt: createdAtDate.toISOString(),
         ...(note ? { note } : {}),
         ...(rating ? { rating } : {}),
+        ...(variationItems.length ? { variationItems } : {}),
       },
     ];
   });
@@ -167,6 +187,12 @@ function projectOrderWorkflow(
     ...workflowSnapshot,
     workflowEvents,
     meeting: projectPersistedFixerMeeting(order),
+    variation: projectPersistedFixerVariation({
+      ...order,
+      fixer:
+        order.fixer ||
+        (partnerUserId ? { userId: partnerUserId } : null),
+    }),
   };
 }
 
