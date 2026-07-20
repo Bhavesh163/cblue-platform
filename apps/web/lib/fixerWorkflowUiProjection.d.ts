@@ -205,8 +205,6 @@ export function projectCustomerVariationPresentation(
     total: number;
   }>;
   total: number;
-  createdAt: string;
-  actorRole: "partner";
 } | null;
 
 export function projectPartnerActiveWorkflow(

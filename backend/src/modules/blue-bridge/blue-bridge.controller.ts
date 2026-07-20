@@ -167,7 +167,5 @@ export interface BlueWorkflowDetailResponse {
       total: number;
     }>;
     total: number;
-    createdAt: string;
-    actorRole: 'partner';
   } | null;
 }

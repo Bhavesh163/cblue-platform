@@ -332,7 +332,8 @@ export class FixerWorkflowBridgeService {
           quantity: item.quantity,
           unit: item.unit,
           unitRate: item.unitRate,
-          total: item.total,
+          total:
+            Math.round(Number(item.quantity) * Number(item.unitRate) * 100) / 100,
         })) || null,
     };
   }

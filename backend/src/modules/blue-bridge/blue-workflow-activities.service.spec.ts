@@ -935,8 +935,6 @@ describe('BlueBridgeService workflow activities', () => {
         note: 'please approve',
         items: variationItems,
         total: 550000,
-        createdAt: createdAt.toISOString(),
-        actorRole: 'partner',
       });
       expect(activity.workflowEvents).toContainEqual(
         expect.objectContaining({ action: 'send-variation', variationItems }),
@@ -951,3 +949,84 @@ describe('BlueBridgeService workflow activities', () => {
     },
   );
 });
+  it('returns the customer Step 9 variation contract for PO-2607-9458 from the latest persisted send-variation action', async () => {
+    const olderVariationItems = [
+      { service: 'old scope', quantity: 1, unit: 'job', unitRate: 1, total: 1 },
+    ];
+    const variationItems = [
+      {
+        service: 'Additional cladding',
+        quantity: 12,
+        unit: 'sq.m.',
+        unitRate: 2500,
+        total: 30000,
+      },
+      {
+        service: 'Weatherproofing',
+        quantity: 4,
+        unit: 'job',
+        unitRate: 1250,
+        total: 5000,
+      },
+    ];
+    const createdAt = new Date('2026-07-20T12:00:00.000Z');
+    const { service } = createService(
+      ['customer-1'],
+      workflowOrder({
+        description: 'PO-2607-9458 | Persisted Step 9 variation order',
+        status: 'IN_PROGRESS',
+        workflowPhase: 'VARIATION_CONFIRM',
+        workflowRevision: 9,
+        workflowActions: [
+          {
+            action: 'send-variation',
+            actorUserId: 'partner-1',
+            payload: { note: 'old note', variationItems: olderVariationItems },
+            createdAt: new Date('2026-07-19T12:00:00.000Z'),
+          },
+          {
+            action: 'send-variation',
+            actorUserId: 'partner-1',
+            payload: { note: 'Please approve this scope.', variationItems },
+            createdAt,
+          },
+        ],
+      }),
+    );
+
+    const detail = await (service as any).workflowDetails({
+      poNumber: 'PO-2607-9458',
+      legacySubjectId: 'ghiscafe@gmail.com',
+      bridgeKey: 'bridge-key',
+    });
+    const activities = await (service as any).workflowActivities({
+      legacySubjectId: 'ghiscafe@gmail.com',
+      persona: 'customer',
+      bridgeKey: 'bridge-key',
+    });
+    const activity = [...activities.requests, ...activities.activeJobs].find(
+      (item: any) => item.poNumber === 'PO-2607-9458',
+    );
+    const expectedVariation = {
+      note: 'Please approve this scope.',
+      items: variationItems,
+      total: 35000,
+    };
+
+    expect(detail).toMatchObject({
+      poNumber: 'PO-2607-9458',
+      currentStep: 9,
+      totalSteps: 11,
+      workflowPhase: 'VARIATION_CONFIRM',
+      actions: expect.arrayContaining([
+        expect.objectContaining({
+          key: 'confirm-variation',
+          owner: 'customer',
+          actionStep: 9,
+        }),
+      ]),
+      variation: expectedVariation,
+    });
+    expect(detail.variation).toEqual(expectedVariation);
+    expect(activity.variation).toEqual(expectedVariation);
+  });

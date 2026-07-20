@@ -336,7 +336,7 @@ describe('FixerWorkflowBridgeService', () => {
       quantity: 12,
       unit: 'sq.m.',
       unitRate: 2500,
-      total: 30000,
+      total: 1,
     }];
 
     await service.action(
@@ -350,7 +350,9 @@ describe('FixerWorkflowBridgeService', () => {
     expect(prisma.fixerWorkflowAction.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         action: 'send-variation',
-        payload: expect.objectContaining({ variationItems }),
+        payload: expect.objectContaining({
+          variationItems: [{ ...variationItems[0], total: 30000 }],
+        }),
       }),
     });
   });

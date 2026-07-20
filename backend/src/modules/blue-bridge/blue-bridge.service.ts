@@ -888,8 +888,6 @@ export function projectPersistedFixerVariation(order: any): {
   note: string;
   items: PersistedVariationItem[];
   total: number;
-  createdAt: string;
-  actorRole: 'partner';
 } | null {
   const event = [...(order.workflowActions || [])]
     .reverse()
@@ -904,12 +902,11 @@ export function projectPersistedFixerVariation(order: any): {
   if (!createdAt) return null;
   const payload = isRecord(event.payload) ? event.payload : {};
   const items = persistedVariationItems(payload);
+  if (!items.length) return null;
   return {
     note: stringValue(payload.note),
     items,
     total: items.reduce((sum, item) => sum + item.total, 0),
-    createdAt,
-    actorRole: 'partner',
   };
 }
 

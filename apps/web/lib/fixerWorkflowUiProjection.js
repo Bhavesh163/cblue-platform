@@ -369,8 +369,6 @@ export function projectCustomerVariationPresentation(order = null) {
     total: Number.isFinite(Number(variation.total))
       ? Number(variation.total)
       : items.reduce((sum, item) => sum + item.total, 0),
-    createdAt: normalizedText(variation.createdAt),
-    actorRole: "partner",
   };
 }
 
