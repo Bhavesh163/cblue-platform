@@ -118,6 +118,15 @@ test("Step 9 uses structured variation data and exact action ownership", () => {
   assert.doesNotMatch(variationModal, /parseVariationPriceList/);
 });
 
+test("both partner Step 9 forms persist structured variation rows", () => {
+  assert.match(partnerPage, /const toFixerWorkflowVariationItems/);
+  assert.equal(
+    (partnerPage.match(/variationItems:\s*toFixerWorkflowVariationItems\(variationItems\)/g) || []).length,
+    2,
+  );
+  assert.equal((partnerPage.match(/priceListRows\);/g) || []).length >= 2, true);
+});
+
 test("all three booking forms resolve GPS address fields during submit", () => {
   for (const relativePath of [
     "../app/[locale]/booking/household/page.tsx",

@@ -1910,6 +1910,24 @@ const buildVariationPriceListRows = (
         amount: Number.isFinite(amount) && amount > 0 ? amount : null,
       };
     });
+const toFixerWorkflowVariationItems = (items: VariationPriceListItem[]) =>
+  items.flatMap((item) => {
+    const service = String(item.item || "").trim();
+    const unit = String(item.unit || "").trim();
+    const quantity = Number(item.qty);
+    const unitRate = Number(item.rate);
+    const statedTotal = Number(item.amount);
+    const total = Number.isFinite(statedTotal) && statedTotal > 0
+      ? statedTotal
+      : quantity * unitRate;
+    if (
+      !service || !unit || !Number.isFinite(quantity) || quantity <= 0 ||
+      !Number.isFinite(unitRate) || unitRate < 0 || !Number.isFinite(total) || total < 0
+    ) {
+      return [];
+    }
+    return [{ service, quantity, unit, unitRate, total }];
+  });
 const resolveVariationPriceListItems = (po?: string, description?: unknown) => {
   const stored = po ? readStoredVariationPriceList(po) : [];
   if (stored.length > 0) return stored;
@@ -7242,7 +7260,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
       // non-blocking for local workflow repair
     }
   };
-  const handlePartnerAction = async (job: any, action: 'variation' | 'complete' | 'rate', extraData?: string) => {
+  const handlePartnerAction = async (job: any, action: 'variation' | 'complete' | 'rate', extraData?: string, variationItems: VariationPriceListItem[] = []) => {
     try {
       const po = job.po || job.id;
       const createdAt = Date.now();
@@ -7321,7 +7339,10 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
           poNumber: po,
           action: "send-variation",
           token,
-          payload: { note: varNote },
+          payload: {
+            note: partnerRequest || normalizeVariationPartnerNote(varNote),
+            variationItems: toFixerWorkflowVariationItems(variationItems),
+          },
           idempotencyKey: `${po}:send-variation:${Number(job.workflowVersion || job.workflowRevision || 0)}`,
         }).catch(() =>
           persistPartnerVariationStatusNote({
@@ -7634,7 +7655,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                     storeVariationPriceList(variationModal.po, priceListRows);
                   }
                   const tableText = priceListRows.length > 0 ? `\n\nPrice List:\n${formatVariationPriceListText(priceListRows)}` : '';
-                  handlePartnerAction(variationModal, 'variation', `Partner variation request: ${variationDesc.trim()}${tableText}`);
+                  handlePartnerAction(variationModal, 'variation', `Partner variation request: ${variationDesc.trim()}${tableText}`, priceListRows);
                   setVariationRows(EMPTY_VAR_ROWS());
                   setVariationModal(null);
                 }}
@@ -7941,7 +7962,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
     }
   };
 
-  const handlePartnerAction = async (job: any, action: 'variation' | 'complete' | 'rate', extraData?: string) => {
+  const handlePartnerAction = async (job: any, action: 'variation' | 'complete' | 'rate', extraData?: string, variationItems: VariationPriceListItem[] = []) => {
     try {
       const po = job.po || job.id;
       const createdAt = Date.now();
@@ -7996,7 +8017,10 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
           poNumber: po,
           action: "send-variation",
           token,
-          payload: { note: varNote },
+          payload: {
+            note: partnerRequest || normalizeVariationPartnerNote(varNote),
+            variationItems: toFixerWorkflowVariationItems(variationItems),
+          },
           idempotencyKey: `${po}:send-variation:${Number(job.workflowVersion || job.workflowRevision || 0)}`,
         }).catch(() =>
           persistPartnerVariationStatusNote({
@@ -8378,7 +8402,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
               <textarea className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none" rows={3} placeholder={locale === "th" ? "อธิบายขอบเขตที่เปลี่ยนแปลง งานเพิ่มเติม หรือค่าใช้จ่ายที่เปลี่ยน..." : locale === "zh" ? "描述变更范围、额外工作或费用变化..." : "Describe the variation scope, extra work, or cost changes..."} value={variationDesc} onChange={e => setVariationDesc(e.target.value)} />
             </div>
             <div className="flex gap-3 pt-1">
-              <button onClick={() => { if (!variationDesc.trim()) return; const priceListRows = buildVariationPriceListRows(variationRows); if (variationModal?.po) { storeVariationPriceList(variationModal.po, priceListRows); } const tableText = priceListRows.length > 0 ? `\n\nPrice List:\n${formatVariationPriceListText(priceListRows)}` : ''; handlePartnerAction(variationModal, 'variation', `Partner variation request: ${variationDesc.trim()}${tableText}`); setVariationRows(EMPTY_VAR_ROWS()); setVariationModal(null); }} disabled={!variationDesc.trim()} className="flex-1 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition text-sm">{locale === "th" ? "ส่งคำขอเปลี่ยนแปลง" : locale === "zh" ? "提交变更" : "Submit Variation"}</button>
+              <button onClick={() => { if (!variationDesc.trim()) return; const priceListRows = buildVariationPriceListRows(variationRows); if (variationModal?.po) { storeVariationPriceList(variationModal.po, priceListRows); } const tableText = priceListRows.length > 0 ? `\n\nPrice List:\n${formatVariationPriceListText(priceListRows)}` : ''; handlePartnerAction(variationModal, 'variation', `Partner variation request: ${variationDesc.trim()}${tableText}`, priceListRows); setVariationRows(EMPTY_VAR_ROWS()); setVariationModal(null); }} disabled={!variationDesc.trim()} className="flex-1 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition text-sm">{locale === "th" ? "ส่งคำขอเปลี่ยนแปลง" : locale === "zh" ? "提交变更" : "Submit Variation"}</button>
               <button onClick={() => { setVariationRows(EMPTY_VAR_ROWS()); setVariationModal(null); }} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl transition text-sm">{locale === "th" ? "ยกเลิก" : locale === "zh" ? "取消" : "Cancel"}</button>
             </div>
           </div>
