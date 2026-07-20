@@ -2,7 +2,11 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { OrderService } from './order.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { OrderStatus, UserRole } from '@prisma/client';
 
 describe('OrderService', () => {
@@ -370,6 +374,15 @@ describe('OrderService', () => {
   });
 
   describe('findByUser workflow projection', () => {
+    it('fails closed instead of replacing customer activity with an empty list when both queries fail', async () => {
+      prisma.order.findMany
+        .mockRejectedValueOnce(new Error('relation query timed out'))
+        .mockRejectedValueOnce(new Error('scalar query timed out'));
+
+      await expect(service.findByUser('customer-1')).rejects.toBeInstanceOf(
+        ServiceUnavailableException,
+      );
+    });
     it('returns persisted Step 9 meeting events to the customer collection', async () => {
       prisma.order.findMany.mockResolvedValue([
         {
@@ -426,6 +439,14 @@ describe('OrderService', () => {
   });
 
   describe('findMyFixerOrders', () => {
+    it('fails closed instead of replacing partner activity with an empty list when identity lookup fails', async () => {
+      prisma.user.findUnique.mockRejectedValue(new Error('database timeout'));
+      prisma.fixer.findUnique.mockRejectedValue(new Error('database timeout'));
+
+      await expect(
+        service.findMyFixerOrders('partner-user-1'),
+      ).rejects.toBeInstanceOf(ServiceUnavailableException);
+    });
     it('should keep fixer orders visible when user-fixer relation lookup drifts', async () => {
       prisma.user.findUnique.mockRejectedValue(
         new Error(

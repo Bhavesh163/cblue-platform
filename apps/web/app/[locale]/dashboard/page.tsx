@@ -909,8 +909,11 @@ export default function DashboardPage() {
 
   useEffect(() => {
     let isMounted = true;
+    let refreshInFlight = false;
 
     const syncOrders = async () => {
+      if (refreshInFlight) return;
+      refreshInFlight = true;
       try {
         const token = getCustomerDashboardToken();
         if (!token) return;
@@ -920,13 +923,15 @@ export default function DashboardPage() {
         setOrders(await ordersRes.json());
       } catch {
         // Keep last known dashboard data if polling fails.
+      } finally {
+        refreshInFlight = false;
       }
     };
 
     void syncOrders();
     const timer = setInterval(() => {
       void syncOrders();
-    }, 5000);
+    }, 30000);
 
     return () => {
       isMounted = false;

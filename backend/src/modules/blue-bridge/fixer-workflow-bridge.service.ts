@@ -73,11 +73,13 @@ export class FixerWorkflowBridgeService {
     const idempotencyKey = String(
       headerIdempotencyKey || dto.idempotencyKey || '',
     ).trim();
+    let orderId: string | null = null;
 
     try {
       await this.prisma.$transaction(async (tx) => {
         const order = await this.findOrder(tx, poNumber);
         if (!order) throw new NotFoundException('Workflow detail not found');
+        orderId = order.id;
 
         if (idempotencyKey) {
           const existing = await tx.fixerWorkflowAction.findUnique({
@@ -202,6 +204,13 @@ export class FixerWorkflowBridgeService {
       }
     }
 
+    if (orderId) {
+      return this.bridge.authenticatedWorkflowDetailsByOrderId(
+        orderId,
+        poNumber,
+        userId,
+      );
+    }
     return this.bridge.authenticatedWorkflowDetails(poNumber, userId);
   }
 

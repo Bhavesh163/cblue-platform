@@ -2977,8 +2977,11 @@ export default function FixerProPage() {
 
   useEffect(() => {
     let isMounted = true;
+    let refreshInFlight = false;
 
     const syncPartnerData = async () => {
+      if (refreshInFlight) return;
+      refreshInFlight = true;
       try {
         const token = getPartnerDashboardToken();
         if (!token || !partnerAccessChecked || (!isFixer && !isLister)) return;
@@ -3008,13 +3011,15 @@ export default function FixerProPage() {
         }
       } catch {
         // Preserve last visible partner data during transient polling failures.
+      } finally {
+        refreshInFlight = false;
       }
     };
 
     void syncPartnerData();
     const timer = setInterval(() => {
       void syncPartnerData();
-    }, 5000);
+    }, 30000);
 
     return () => {
       isMounted = false;
@@ -3766,25 +3771,34 @@ export default function FixerProPage() {
 
   useEffect(() => {
     let isMounted = true;
+    let chatRefreshInFlight = false;
     const syncChats = async () => {
-      const localItems = isFixer ? buildChatFeed() : [];
-      const propChatItems = buildPropChatFeed();
-      const propBackendItems = await buildPropBackendChatFeed();
-      const backendItems = isFixer ? await buildBackendChatFeed() : [];
-      const merged = new Map<string, any>();
-      const upsertNewest = (item: any) => {
-        if (!item?.po) return;
-        const existing = merged.get(item.po);
-        if (!existing || Number(item.sort || 0) >= Number(existing.sort || 0)) {
-          merged.set(item.po, item);
-        }
-      };
-      for (const item of propChatItems) upsertNewest(item);
-      for (const item of localItems) upsertNewest(item);
-      for (const item of propBackendItems) upsertNewest(item);
-      for (const item of backendItems) upsertNewest(item);
-      const mergedList = Array.from(merged.values()).sort((a: any, b: any) => Number(b.sort || 0) - Number(a.sort || 0));
-      if (isMounted) setChatFeed(mergedList);
+      if (chatRefreshInFlight) return;
+      chatRefreshInFlight = true;
+      try {
+        const localItems = isFixer ? buildChatFeed() : [];
+        const propChatItems = buildPropChatFeed();
+        const propBackendItems = await buildPropBackendChatFeed();
+        const backendItems = isFixer ? await buildBackendChatFeed() : [];
+        const merged = new Map<string, any>();
+        const upsertNewest = (item: any) => {
+          if (!item?.po) return;
+          const existing = merged.get(item.po);
+          if (!existing || Number(item.sort || 0) >= Number(existing.sort || 0)) {
+            merged.set(item.po, item);
+          }
+        };
+        for (const item of propChatItems) upsertNewest(item);
+        for (const item of localItems) upsertNewest(item);
+        for (const item of propBackendItems) upsertNewest(item);
+        for (const item of backendItems) upsertNewest(item);
+        const mergedList = Array.from(merged.values()).sort((a: any, b: any) => Number(b.sort || 0) - Number(a.sort || 0));
+        if (isMounted) setChatFeed(mergedList);
+      } catch {
+        // Keep the last authoritative chat feed during transient backend failures.
+      } finally {
+        chatRefreshInFlight = false;
+      }
     };
 
     void syncChats();
@@ -3797,7 +3811,7 @@ export default function FixerProPage() {
     window.addEventListener("cblue-chat-updated", syncEvent as EventListener);
     const timer = setInterval(() => {
       void syncChats();
-    }, 5000);
+    }, 30000);
     return () => {
       isMounted = false;
       window.removeEventListener("storage", syncEvent);

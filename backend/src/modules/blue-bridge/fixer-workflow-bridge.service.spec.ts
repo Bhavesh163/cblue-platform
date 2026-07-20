@@ -77,6 +77,19 @@ describe('FixerWorkflowBridgeService', () => {
         nextActionOwner: null,
         workflowVersion: 1,
       }),
+      authenticatedWorkflowDetailsByOrderId: jest.fn().mockResolvedValue({
+        sourceVersion: 'cblue-fixer-workflow-v1',
+        poNumber: 'PO-2607-9001',
+        currentStep: 7,
+        totalSteps: 11,
+        status: 'IN_PROGRESS',
+        activityBucket: 'active',
+        actions: [],
+        availableActions: [],
+        nextActionLabel: null,
+        nextActionOwner: null,
+        workflowVersion: 1,
+      }),
     };
     return {
       prisma,
@@ -244,7 +257,8 @@ describe('FixerWorkflowBridgeService', () => {
     );
 
     expect(prisma.order.updateMany).not.toHaveBeenCalled();
-    expect(bridge.authenticatedWorkflowDetails).toHaveBeenCalledWith(
+    expect(bridge.authenticatedWorkflowDetailsByOrderId).toHaveBeenCalledWith(
+      'order-1',
       'PO-2607-9001',
       'customer-1',
     );
@@ -257,7 +271,7 @@ describe('FixerWorkflowBridgeService', () => {
       'MEETING_CONFIRM',
       OrderStatus.MEETING_REQUESTED,
     );
-    bridge.authenticatedWorkflowDetails.mockResolvedValue({
+    bridge.authenticatedWorkflowDetailsByOrderId.mockResolvedValue({
       sourceVersion: 'cblue-fixer-workflow-v1',
       poNumber: 'PO-2607-9001',
       currentStep: 9,
@@ -305,7 +319,8 @@ describe('FixerWorkflowBridgeService', () => {
         },
       ],
     });
-    expect(bridge.authenticatedWorkflowDetails).toHaveBeenCalledWith(
+    expect(bridge.authenticatedWorkflowDetailsByOrderId).toHaveBeenCalledWith(
+      'order-1',
       'PO-2607-9001',
       'partner-1',
     );

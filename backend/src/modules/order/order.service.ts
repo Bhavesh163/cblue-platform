@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Logger,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { OrderStatus, Prisma, UserRole } from '@prisma/client';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -357,7 +358,7 @@ export class OrderService {
               : String(fallbackError)
           }`,
         );
-        return [];
+        throw new ServiceUnavailableException('Order activity temporarily unavailable');
       }
     }
 
@@ -439,7 +440,7 @@ export class OrderService {
               : String(fallbackError)
           }`,
         );
-        return [];
+        throw new ServiceUnavailableException('Order activity temporarily unavailable');
       }
     }
 
@@ -455,7 +456,7 @@ export class OrderService {
           error instanceof Error ? error.message : String(error)
         }`,
       );
-      return [];
+      throw new ServiceUnavailableException('Order activity temporarily unavailable');
     }
   }
 

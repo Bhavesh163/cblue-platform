@@ -114,6 +114,43 @@ export class BlueBridgeService {
       bridgeKey: this.config.get<string>('blueBridge.apiKey'),
     });
   }
+  async authenticatedWorkflowDetailsByOrderId(
+    orderId: string,
+    poNumber: string,
+    userId: string,
+  ): Promise<BlueWorkflowDetailResponse> {
+    const order = await this.prisma.order.findFirst({
+      where: {
+        id: orderId,
+        OR: [{ userId }, { fixer: { userId } }],
+      },
+      include: {
+        user: { select: { name: true, email: true } },
+        address: true,
+        images: {
+          where: { type: { in: ['order_attachment', 'order_photo'] } },
+          orderBy: { createdAt: 'asc' },
+        },
+        statusHistory: { orderBy: { createdAt: 'desc' } },
+        review: { select: { createdAt: true } },
+        fixer: { select: { userId: true } },
+        workflowActions: {
+          select: {
+            action: true,
+            actorUserId: true,
+            payload: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+    if (!order) {
+      throw new NotFoundException('Workflow detail not found');
+    }
+    return this.projectFixerWorkflowDetails(order, [userId], poNumber);
+  }
+
 
   async workflowDetails(
     input: WorkflowDetailInput,
@@ -230,6 +267,13 @@ export class BlueBridgeService {
       };
     }
 
+    return this.projectFixerWorkflowDetails(order, linkedUserIds, poNumber);
+  }
+  private projectFixerWorkflowDetails(
+    order: any,
+    viewerUserIds: string[],
+    poNumber: string,
+  ): BlueWorkflowDetailResponse {
     const budgetItems = parseBudgetItems(order.budgetBreakdown);
     const lifecycle = resolveOrderLifecycle({
       status: order.status,
@@ -250,11 +294,11 @@ export class BlueBridgeService {
       workflowVersion: order.workflowRevision,
       chatEnabled: order.chatEnabled,
       completedActionKeys: (order.workflowActions || []).map(
-        (event) => event.action,
+        (event: any) => event.action,
       ),
       customerUserId: order.userId,
       fixerUserId: order.fixer?.userId,
-      viewerUserIds: linkedUserIds,
+      viewerUserIds,
       processingFee: this.processingFee(),
     });
     return {
@@ -274,7 +318,7 @@ export class BlueBridgeService {
       ].filter((row) => row.value.length > 0),
       budgetLines: formatBudgetLines(budgetItems),
       budgetBreakdown: budgetItems,
-      uploadedFiles: order.images.map((image, index) => ({
+      uploadedFiles: order.images.map((image: any, index: number) => ({
         label: `Uploaded file ${index + 1}`,
         url: image.url,
       })),
@@ -286,6 +330,7 @@ export class BlueBridgeService {
       siteSubdistrict: persistedSubdistrict(order.address),
     };
   }
+
 
   async workflowActivities(input: WorkflowActivitiesInput) {
     this.assertBridgeKey(input.bridgeKey);

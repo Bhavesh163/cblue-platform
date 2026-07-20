@@ -142,6 +142,13 @@ test("customer and partner Steps 9-11 use authoritative workflow mutations", () 
   assert.match(partnerPage, /projectPartnerWorkflowRequest/);
 });
 
+test("customer and partner dashboard refreshes are non-overlapping and not five-second database floods", () => {
+  for (const page of [customerPage, partnerPage]) {
+    assert.match(page, /refreshInFlight/);
+    assert.match(page, /if \(refreshInFlight\) return/);
+    assert.match(page, /}, 30000\)/);
+  }
+});
 test("partner orders preserve the normalized nested meeting snapshot", () => {
   assert.match(partnerPage, /date:\s*o\.meeting\?\.date\s*\|\|\s*o\.meetingDate/);
   assert.match(partnerPage, /scheduledAt:\s*o\.meeting\.scheduledAt/);
