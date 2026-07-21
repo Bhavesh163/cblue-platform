@@ -111,7 +111,7 @@ export class PropertyWorkflowBridgeService {
         listerName: property.user.name || property.contactName,
         requestDetails: String(dto.requestDetails || '').trim() || null,
         status: PropertyInquiryStatus.NOTIFY_SENT,
-        step: 3,
+        step: 4,
         ...(attachments.length > 0
           ? {
               attachments: {
@@ -402,8 +402,30 @@ export class PropertyWorkflowBridgeService {
         ['fee', 'fee-proceed', 'free-pass'].includes(event.action),
     );
     const currentStep = this.currentStep(inquiry.status, inquiry.step);
-    const actions = this.actions(inquiry.status, currentStep);
-    const nextAction = this.nextAction(inquiry.status, actor);
+    const actions = this.actions(
+      inquiry.status,
+      currentStep,
+      inquiry.customerRating,
+      inquiry.listerRating,
+    );
+    const nextAction = this.nextAction(
+      inquiry.status,
+      actor,
+      inquiry.customerRating,
+      inquiry.listerRating,
+    );
+    // Persona-aware activity placement: the participant who owns an outstanding
+    // primary action (excluding the customer's secondary cancel capability)
+    // sees the inquiry in "request"; the waiting participant sees "active". A
+    // participant who has already submitted their rating moves to "history"
+    // even while the other rating is still pending. Terminal inquiries are
+    // always "history".
+    const actorPrimaryActions = actions.filter(
+      (action) => action.owner === actor && action.key !== 'customer-cancel',
+    );
+    const actorAlreadyRated =
+      (actor === 'customer' && inquiry.customerRating != null) ||
+      (actor === 'lister' && inquiry.listerRating != null);
     return {
       reference: inquiry.poNumber,
       status: inquiry.status,
@@ -416,11 +438,12 @@ export class PropertyWorkflowBridgeService {
       nextActionStep: nextAction.step,
       nextActionLabel: nextAction.label,
       nextActionOwner: nextAction.owner,
-      activityBucket: terminal
-        ? 'history'
-        : currentStep <= 4
-          ? 'request'
-          : 'active',
+      activityBucket:
+        terminal || actorAlreadyRated
+          ? 'history'
+          : actorPrimaryActions.length > 0
+            ? 'request'
+            : 'active',
       terminalState: terminal ? inquiry.status : null,
       stepLabels: [
         'Match listing',
@@ -434,6 +457,11 @@ export class PropertyWorkflowBridgeService {
       ],
       sourceVersion: SOURCE_VERSION,
       listing: this.publicListing(inquiry.property, postFee),
+      locationPresentation: this.locationPresentation(inquiry.property),
+      uploadedFiles: this.combinedFiles(
+        inquiry.property?.images,
+        inquiry.attachments,
+      ),
       selectedLister: { id: inquiry.listerUserId, name: inquiry.listerName },
       customer: {
         id: inquiry.customerId,
@@ -508,14 +536,18 @@ export class PropertyWorkflowBridgeService {
     status: PropertyInquiryStatus,
     persistedStep: unknown,
   ): number {
+    // NOTIFY_SENT is a transitional audit state: Steps 1-3 are recorded as
+    // workflow events, but the actionable step the dashboards must render is
+    // Step 4 (lister accept/decline). Legacy records persisted at step 3 are
+    // normalized here without rewriting their audit history.
+    if (status === PropertyInquiryStatus.NOTIFY_SENT) return 4;
+
     const step = Number(persistedStep);
     if (Number.isInteger(step) && step >= 1 && step <= TOTAL_STEPS) {
       return step;
     }
 
     switch (status) {
-      case PropertyInquiryStatus.NOTIFY_SENT:
-        return 3;
       case PropertyInquiryStatus.ACCEPTED:
         return 4;
       case PropertyInquiryStatus.PAID:
@@ -544,6 +576,8 @@ export class PropertyWorkflowBridgeService {
   private nextAction(
     status: PropertyInquiryStatus,
     actor: 'customer' | 'lister' | 'admin',
+    customerRating: number | null,
+    listerRating: number | null,
   ): {
     step: number | null;
     label: string | null;
@@ -576,9 +610,17 @@ export class PropertyWorkflowBridgeService {
           owner: 'lister',
         };
       case PropertyInquiryStatus.MEETING_CONFIRMED:
-        return actor === 'customer'
-          ? { step: 8, label: 'Rate lister', owner: 'customer' }
-          : { step: 8, label: 'Rate customer', owner: 'lister' };
+        // The next responsible party is the participant who has not yet rated.
+        // This stays globally informative so a monitoring participant can still
+        // see who owns the outstanding rating; availableActions/activityBucket
+        // remain persona-specific.
+        if (customerRating == null) {
+          return { step: 8, label: 'Rate lister', owner: 'customer' };
+        }
+        if (listerRating == null) {
+          return { step: 8, label: 'Rate customer', owner: 'lister' };
+        }
+        return { step: null, label: null, owner: null };
       default:
         return { step: null, label: null, owner: null };
     }
@@ -587,6 +629,8 @@ export class PropertyWorkflowBridgeService {
   private actions(
     status: PropertyInquiryStatus,
     currentStep: number,
+    customerRating: number | null,
+    listerRating: number | null,
   ): Array<{
     key: PropertyWorkflowActionKey;
     owner: 'customer' | 'lister';
@@ -657,18 +701,29 @@ export class PropertyWorkflowBridgeService {
         ];
       case PropertyInquiryStatus.MEETING_CONFIRMED:
         return [
-          {
-            key: 'rate-partner',
-            owner: 'customer',
-            label: 'Rate lister',
-            actionStep: 8,
-          },
-          {
-            key: 'rate-customer',
-            owner: 'lister',
-            label: 'Rate customer',
-            actionStep: 8,
-          },
+          // Each rating action is only available to the participant who has
+          // not yet submitted their rating. A participant who has already rated
+          // has no outstanding primary action and moves to history.
+          ...(customerRating == null
+            ? [
+                {
+                  key: 'rate-partner' as const,
+                  owner: 'customer' as const,
+                  label: 'Rate lister',
+                  actionStep: 8,
+                },
+              ]
+            : []),
+          ...(listerRating == null
+            ? [
+                {
+                  key: 'rate-customer' as const,
+                  owner: 'lister' as const,
+                  label: 'Rate customer',
+                  actionStep: 8,
+                },
+              ]
+            : []),
         ];
       default:
         return [];
@@ -686,6 +741,83 @@ export class PropertyWorkflowBridgeService {
     return actions
       .filter((action) => action.owner === actor)
       .map((action) => action.key);
+  }
+
+  // Server-owned location presentation. When GPS coordinates are present the
+  // workflow action modals render the persisted coordinates; summary cards and
+  // request/active-job rows render the persisted subdistrict. When GPS is
+  // absent (or zero) both surfaces render the persisted subdistrict. This never
+  // inspects titles, descriptions, PRE numbers, modal text, or localStorage.
+  private locationPresentation(property: any) {
+    const latitude = Number(property?.latitude);
+    const longitude = Number(property?.longitude);
+    const hasGps =
+      Number.isFinite(latitude) &&
+      Number.isFinite(longitude) &&
+      !(Math.abs(latitude) < 0.000001 && Math.abs(longitude) < 0.000001);
+    const summaryDisplay = String(
+      property?.subdistrict ||
+        property?.district ||
+        property?.province ||
+        '',
+    ).trim();
+    return {
+      mode: hasGps ? 'gps' : 'administrative',
+      coordinates: hasGps ? { latitude, longitude } : null,
+      siteSubdistrict: String(property?.subdistrict || '').trim(),
+      postalCode: String(property?.postalCode || '').trim(),
+      province: String(property?.province || '').trim(),
+      modalDisplay: hasGps
+        ? `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+        : summaryDisplay,
+      summaryDisplay,
+    };
+  }
+
+  // Deduplicated combined file list: listing media first, inquiry attachments
+  // second. Deduplicates by id, then key, then url so BLUE can consume one
+  // authoritative list without guessing file sources. Never parses filenames or
+  // text to derive files.
+  private combinedFiles(listingImages: any, inquiryAttachments: any) {
+    const seen = new Set<string>();
+    const items: Array<{
+      id: string;
+      label: string;
+      url: string;
+      key: string;
+      source: 'listing' | 'inquiry';
+      createdAt: any;
+    }> = [];
+    const push = (source: 'listing' | 'inquiry', file: any) => {
+      if (!file) return;
+      const id = String(file.id || '').trim();
+      const key = String(file.key || '').trim();
+      const url = String(file.url || '').trim();
+      if (!url && !key && !id) return;
+      // A file is a duplicate if any of its authoritative identifiers (id, key,
+      // url) has already been seen. This collapses listing media and inquiry
+      // attachments that reference the same underlying asset.
+      const identifiers = [id, key, url].filter(Boolean);
+      if (identifiers.some((identifier) => seen.has(identifier))) return;
+      identifiers.forEach((identifier) => seen.add(identifier));
+      items.push({
+        id: id || key || url,
+        label:
+          String(file.label || '').trim() ||
+          (source === 'listing' ? 'Listing photo' : 'Uploaded file'),
+        url,
+        key,
+        source,
+        createdAt: file.createdAt,
+      });
+    };
+    (Array.isArray(listingImages) ? listingImages : []).forEach((image: any) =>
+      push('listing', image),
+    );
+    (Array.isArray(inquiryAttachments) ? inquiryAttachments : []).forEach(
+      (file: any) => push('inquiry', file),
+    );
+    return items;
   }
 
   private publicListing(property: any, includeContact = false) {
@@ -711,6 +843,7 @@ export class PropertyWorkflowBridgeService {
         key: image.key,
         sortOrder: image.sortOrder,
         isPrimary: image.isPrimary,
+        createdAt: image.createdAt,
       })),
       createdAt: property.createdAt,
       ...(includeContact

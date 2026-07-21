@@ -40,6 +40,59 @@ describe('PropertyInquiryService workflow guards', () => {
     service = new PropertyInquiryService(prisma as PrismaService);
   });
 
+  it('persists the actionable Step 4 after the Step 3 partner notification event', async () => {
+    const createPrisma = {
+      property: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'property-1',
+          userId: 'lister-1',
+          contactName: 'Lister',
+        }),
+      },
+      user: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValueOnce({ id: 'lister-1', name: 'Lister' })
+          .mockResolvedValueOnce({
+            id: 'customer-1',
+            name: 'Customer',
+            email: 'customer@example.com',
+            fixer: null,
+          }),
+      },
+      propertyInquiry: {
+        create: jest.fn().mockResolvedValue({
+          id: 'inquiry-1',
+          poNumber: 'PRE-2607-7944',
+        }),
+      },
+    } as unknown as PrismaService;
+    const createService = new PropertyInquiryService(createPrisma);
+
+    await createService.create('customer-1', {
+      poNumber: 'PRE-2607-7944',
+      propertyId: 'property-1',
+      customerName: 'Customer',
+      customerEmail: 'customer@example.com',
+      listerName: 'Lister',
+    });
+
+    expect(createPrisma.propertyInquiry.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: PropertyInquiryStatus.NOTIFY_SENT,
+          step: 4,
+          workflowEvents: {
+            create: expect.objectContaining({
+              action: 'partner-notified',
+              step: 3,
+            }),
+          },
+        }),
+      }),
+    );
+  });
+
   it('does not allow a lister to cancel a property inquiry', async () => {
     prisma.propertyInquiry.findUnique.mockResolvedValue(
       buildInquiry(PropertyInquiryStatus.ACCEPTED),
@@ -98,5 +151,59 @@ describe('PropertyInquiryService workflow guards', () => {
     await expect(
       service.sendChatByPo('customer-1', 'PRE-2607-100001', 'Hello'),
     ).rejects.toThrow(BadRequestException);
+  });
+
+  it('includes ordered inquiry attachments alongside property images in findByCustomer', async () => {
+    const listPrisma = {
+      propertyInquiry: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      user: { findMany: jest.fn().mockResolvedValue([]) },
+      subscriber: { findMany: jest.fn().mockResolvedValue([]) },
+    } as unknown as PrismaService;
+    const listService = new PropertyInquiryService(listPrisma);
+    jest
+      .spyOn(listService as any, 'resolveLinkedUserIds')
+      .mockResolvedValue(['customer-1']);
+    jest
+      .spyOn(listService as any, 'resolveLinkedEmails')
+      .mockResolvedValue(['customer@example.com']);
+
+    await listService.findByCustomer('customer-1');
+
+    expect(listPrisma.propertyInquiry.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: expect.objectContaining({
+          attachments: { orderBy: { createdAt: 'asc' } },
+        }),
+      }),
+    );
+  });
+
+  it('includes ordered inquiry attachments alongside property images in findByLister', async () => {
+    const listPrisma = {
+      propertyInquiry: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      user: { findMany: jest.fn().mockResolvedValue([]) },
+      subscriber: { findMany: jest.fn().mockResolvedValue([]) },
+    } as unknown as PrismaService;
+    const listService = new PropertyInquiryService(listPrisma);
+    jest
+      .spyOn(listService as any, 'resolveLinkedUserIds')
+      .mockResolvedValue(['lister-1']);
+    jest
+      .spyOn(listService as any, 'resolveLinkedEmails')
+      .mockResolvedValue(['lister@example.com']);
+
+    await listService.findByLister('lister-1');
+
+    expect(listPrisma.propertyInquiry.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: expect.objectContaining({
+          attachments: { orderBy: { createdAt: 'asc' } },
+        }),
+      }),
+    );
   });
 });

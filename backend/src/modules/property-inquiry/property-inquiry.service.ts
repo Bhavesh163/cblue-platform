@@ -390,7 +390,7 @@ export class PropertyInquiryService {
         customerEmail: this.normalizeEmail(dto.customerEmail || customer.email),
         listerName: dto.listerName || lister.name || property.contactName || '',
         status: PropertyInquiryStatus.NOTIFY_SENT,
-        step: 3,
+        step: 4,
         workflowEvents: {
           create: {
             action: 'partner-notified',
@@ -425,6 +425,7 @@ export class PropertyInquiryService {
       return await this.prisma.propertyInquiry.findMany({
         where,
         include: {
+          attachments: { orderBy: { createdAt: 'asc' } },
           property: {
             select: {
               id: true,
@@ -460,7 +461,7 @@ export class PropertyInquiryService {
       try {
         const rows = await this.prisma.propertyInquiry.findMany({
           where,
-          include: { property: true },
+          include: { property: true, attachments: { orderBy: { createdAt: 'asc' } } },
           orderBy: { updatedAt: 'desc' },
         });
         return rows.map((row) => ({
@@ -513,6 +514,7 @@ export class PropertyInquiryService {
       return await this.prisma.propertyInquiry.findMany({
         where,
         include: {
+          attachments: { orderBy: { createdAt: 'asc' } },
           property: {
             select: {
               id: true,
@@ -548,7 +550,7 @@ export class PropertyInquiryService {
       try {
         const rows = await this.prisma.propertyInquiry.findMany({
           where,
-          include: { property: true },
+          include: { property: true, attachments: { orderBy: { createdAt: 'asc' } } },
           orderBy: { updatedAt: 'desc' },
         });
         return rows.map((row) => ({

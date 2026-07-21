@@ -162,13 +162,14 @@ describe('PropertyWorkflowBridgeService', () => {
           customerId: 'customer-1',
           listerUserId: 'lister-1',
           status: PropertyInquiryStatus.NOTIFY_SENT,
-          step: 3,
+          step: 4,
         }),
       }),
     );
     expectAuthoritativeSnapshot(customerSnapshot);
     expectAuthoritativeSnapshot(listerSnapshot);
-    expect(customerSnapshot.currentStep).toBe(3);
+    expect(customerSnapshot.currentStep).toBe(4);
+    expect(listerSnapshot.currentStep).toBe(4);
     const createData = (prisma.propertyInquiry.create as jest.Mock).mock.calls[0][0].data;
     expect(createData.workflowEvents.create).toEqual(
       expect.arrayContaining([
@@ -182,6 +183,26 @@ describe('PropertyWorkflowBridgeService', () => {
     expect(customerSnapshot.history).toHaveLength(1);
     expect(listerSnapshot.history).toHaveLength(2);
     expect(customerSnapshot.listing).not.toHaveProperty('contact');
+  });
+
+  it('projects legacy notified Step 3 records at the actionable Step 4 without changing audit history', async () => {
+    const stored = inquiry(PropertyInquiryStatus.NOTIFY_SENT);
+    const prisma = {
+      propertyInquiry: { findUnique: jest.fn().mockResolvedValue(stored) },
+    } as unknown as PrismaService;
+    const service = new PropertyWorkflowBridgeService(prisma, {
+      search: jest.fn(),
+    } as unknown as PropertyService);
+
+    const snapshot = await service.snapshot(stored.poNumber, 'customer-1');
+
+    expect(stored.step).toBe(3);
+    expect(snapshot.currentStep).toBe(4);
+    expect(snapshot.history).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ action: 'inquiry-created', step: 3 }),
+      ]),
+    );
   });
 
   it('persists lister acceptance and returns the updated Step 4 snapshot', async () => {
@@ -481,7 +502,7 @@ describe('PropertyWorkflowBridgeService', () => {
     const snapshot = await service.snapshot(stored.poNumber, 'customer-1');
 
     expectAuthoritativeSnapshot(snapshot);
-    expect(snapshot.currentStep).toBe(3);
+    expect(snapshot.currentStep).toBe(4);
   });
   it.each([
     [
@@ -668,5 +689,231 @@ describe('PropertyWorkflowBridgeService', () => {
         }),
       ]),
     );
+  });
+
+  it.each([
+    [PropertyInquiryStatus.NOTIFY_SENT, 3, 'customer-1', 'active', [], 'lister'],
+    [PropertyInquiryStatus.NOTIFY_SENT, 3, 'lister-1', 'request', ['partner-accept', 'partner-decline'], 'lister'],
+    [PropertyInquiryStatus.ACCEPTED, 4, 'customer-1', 'request', ['fee-proceed', 'free-pass'], 'customer'],
+    [PropertyInquiryStatus.ACCEPTED, 4, 'lister-1', 'active', [], 'customer'],
+    [PropertyInquiryStatus.PAID, 5, 'customer-1', 'request', ['viewing-invite'], 'customer'],
+    [PropertyInquiryStatus.PAID, 5, 'lister-1', 'active', [], 'customer'],
+    [PropertyInquiryStatus.MEETING_SENT, 7, 'customer-1', 'active', [], 'lister'],
+    [PropertyInquiryStatus.MEETING_SENT, 7, 'lister-1', 'request', ['viewing-confirm'], 'lister'],
+  ])(
+    'projects %s activity for %s from the primary action owner',
+    async (status, step, userId, bucket, expectedPrimaryActions, nextOwner) => {
+      const stored = {
+        ...inquiry(status as PropertyInquiryStatus),
+        status: status as PropertyInquiryStatus,
+        step: step as number,
+      };
+      const prisma = {
+        propertyInquiry: { findUnique: jest.fn().mockResolvedValue(stored) },
+      } as unknown as PrismaService;
+      const service = new PropertyWorkflowBridgeService(prisma, {
+        search: jest.fn(),
+      } as unknown as PropertyService);
+      const snapshot = await service.snapshot(stored.poNumber, userId as string);
+      const primaryActions = snapshot.availableActions.filter(
+        (key: string) => key !== 'customer-cancel',
+      );
+      expect(snapshot.activityBucket).toBe(bucket);
+      expect(primaryActions).toEqual(expectedPrimaryActions);
+      expect(snapshot.nextActionOwner).toBe(nextOwner);
+    },
+  );
+
+  it.each([
+    ['customer-1', 5, null, 'lister-1', 'rate-partner', 'rate-customer', 'lister', 'Rate customer'],
+    ['lister-1', null, 4, 'customer-1', 'rate-customer', 'rate-partner', 'customer', 'Rate lister'],
+  ])(
+    'removes the submitted rating action and assigns the remaining rating',
+    async (ratedUserId, customerRating, listerRating, pendingUserId, completedAction, pendingAction, pendingOwner, pendingLabel) => {
+      const stored = {
+        ...inquiry(PropertyInquiryStatus.MEETING_CONFIRMED),
+        status: PropertyInquiryStatus.MEETING_CONFIRMED,
+        step: 8,
+        customerRating,
+        listerRating,
+      };
+      const prisma = {
+        propertyInquiry: { findUnique: jest.fn().mockResolvedValue(stored) },
+      } as unknown as PrismaService;
+      const service = new PropertyWorkflowBridgeService(prisma, {
+        search: jest.fn(),
+      } as unknown as PropertyService);
+      const ratedSnapshot = await service.snapshot(stored.poNumber, ratedUserId as string);
+      const pendingSnapshot = await service.snapshot(stored.poNumber, pendingUserId as string);
+      expect(ratedSnapshot.availableActions).not.toContain(completedAction);
+      expect(ratedSnapshot.activityBucket).toBe('history');
+      expect(ratedSnapshot.nextActionOwner).toBe(pendingOwner);
+      expect(ratedSnapshot.nextActionLabel).toBe(pendingLabel);
+      expect(pendingSnapshot.availableActions).toContain(pendingAction);
+      expect(pendingSnapshot.activityBucket).toBe('request');
+    },
+  );
+
+  it('projects persisted GPS coordinates as the authoritative location presentation', async () => {
+    const stored = inquiry();
+    const prisma = {
+      propertyInquiry: { findUnique: jest.fn().mockResolvedValue(stored) },
+    } as unknown as PrismaService;
+    const service = new PropertyWorkflowBridgeService(prisma, {
+      search: jest.fn(),
+    } as unknown as PropertyService);
+
+    const snapshot = await service.snapshot(stored.poNumber, 'customer-1');
+
+    expect(snapshot.locationPresentation).toEqual({
+      mode: 'gps',
+      coordinates: { latitude: 13.79, longitude: 100.61 },
+      siteSubdistrict: 'Saphansong',
+      postalCode: '10310',
+      province: 'Bangkok',
+      modalDisplay: '13.790000, 100.610000',
+      summaryDisplay: 'Saphansong',
+    });
+  });
+
+  it.each([
+    ['null coordinates', null, null],
+    ['zero coordinates', 0, 0],
+  ])(
+    'falls back to administrative location presentation for %s',
+    async (_label, latitude, longitude) => {
+      const stored = {
+        ...inquiry(),
+        property: {
+          ...property,
+          latitude,
+          longitude,
+          subdistrict: 'Saphan Song',
+        },
+      };
+      const prisma = {
+        propertyInquiry: { findUnique: jest.fn().mockResolvedValue(stored) },
+      } as unknown as PrismaService;
+      const service = new PropertyWorkflowBridgeService(prisma, {
+        search: jest.fn(),
+      } as unknown as PropertyService);
+
+      const snapshot = await service.snapshot(stored.poNumber, 'customer-1');
+
+      expect(snapshot.locationPresentation).toEqual({
+        mode: 'administrative',
+        coordinates: null,
+        siteSubdistrict: 'Saphan Song',
+        postalCode: '10310',
+        province: 'Bangkok',
+        modalDisplay: 'Saphan Song',
+        summaryDisplay: 'Saphan Song',
+      });
+    },
+  );
+
+  it('combines listing media and inquiry attachments into uploadedFiles and preserves legacy fields', async () => {
+    const stored = {
+      ...inquiry(),
+      property: {
+        ...property,
+        images: [
+          {
+            id: 'image-1',
+            url: 'https://files.example/listing.jpg',
+            key: 'listing.jpg',
+            sortOrder: 0,
+            isPrimary: true,
+          },
+        ],
+      },
+      attachments: [
+        {
+          id: 'file-1',
+          label: 'Floor plan',
+          url: 'https://files.example/floor.pdf',
+          key: 'floor.pdf',
+          createdAt: new Date('2026-07-12T00:00:00.000Z'),
+        },
+      ],
+    };
+    const prisma = {
+      propertyInquiry: { findUnique: jest.fn().mockResolvedValue(stored) },
+    } as unknown as PrismaService;
+    const service = new PropertyWorkflowBridgeService(prisma, {
+      search: jest.fn(),
+    } as unknown as PropertyService);
+
+    const snapshot = await service.snapshot(stored.poNumber, 'customer-1');
+
+    expect(snapshot.uploadedFiles).toEqual([
+      expect.objectContaining({
+        source: 'listing',
+        key: 'listing.jpg',
+        url: 'https://files.example/listing.jpg',
+      }),
+      expect.objectContaining({
+        source: 'inquiry',
+        key: 'floor.pdf',
+        url: 'https://files.example/floor.pdf',
+      }),
+    ]);
+    expect(snapshot.listing.attachments).toHaveLength(1);
+    expect(snapshot.attachments).toHaveLength(1);
+    // Pre-fee inquiries must not expose lister contact information.
+    expect(snapshot.listing).not.toHaveProperty('contact');
+  });
+
+  it('deduplicates uploaded files by url and returns an empty list without persisted files', async () => {
+    const dupUrl = 'https://files.example/shared.jpg';
+    const stored = {
+      ...inquiry(),
+      property: {
+        ...property,
+        images: [
+          {
+            id: 'image-shared',
+            url: dupUrl,
+            key: 'shared.jpg',
+            sortOrder: 0,
+            isPrimary: true,
+          },
+        ],
+      },
+      attachments: [
+        {
+          id: 'file-shared',
+          label: 'Shared',
+          url: dupUrl,
+          key: 'shared.jpg',
+          createdAt: new Date('2026-07-12T00:00:00.000Z'),
+        },
+      ],
+    };
+    const prisma = {
+      propertyInquiry: { findUnique: jest.fn().mockResolvedValue(stored) },
+    } as unknown as PrismaService;
+    const service = new PropertyWorkflowBridgeService(prisma, {
+      search: jest.fn(),
+    } as unknown as PropertyService);
+
+    const snapshot = await service.snapshot(stored.poNumber, 'customer-1');
+
+    expect(snapshot.uploadedFiles).toHaveLength(1);
+    expect(snapshot.uploadedFiles[0].url).toBe(dupUrl);
+
+    const empty = {
+      ...inquiry(),
+      property: { ...property, images: [] },
+      attachments: [],
+    };
+    const emptyPrisma = {
+      propertyInquiry: { findUnique: jest.fn().mockResolvedValue(empty) },
+    } as unknown as PrismaService;
+    const emptyService = new PropertyWorkflowBridgeService(emptyPrisma, {
+      search: jest.fn(),
+    } as unknown as PropertyService);
+    const emptySnapshot = await emptyService.snapshot(empty.poNumber, 'customer-1');
+    expect(emptySnapshot.uploadedFiles).toEqual([]);
   });
 });
