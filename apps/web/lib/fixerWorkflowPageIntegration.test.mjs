@@ -18,6 +18,10 @@ const projectionDeclaration = readFileSync(
   new URL("./fixerWorkflowUiProjection.d.ts", import.meta.url),
   "utf8",
 );
+const propertyProjectionDeclaration = readFileSync(
+  new URL("./propertyWorkflowProjection.d.ts", import.meta.url),
+  "utf8",
+);
 
 test("partner Step 8 requests reconcile cached rows from authoritative orders", () => {
   assert.match(partnerPage, /reconcilePartnerMeetingRequest/);
@@ -199,4 +203,30 @@ test("direct fixer chat has no fabricated default room or PO parsing fallback", 
   assert.doesNotMatch(customerChatPage, /po_to_order_/);
   assert.match(customerChatPage, /applyAuthoritativeOrderMetadata/);
   assert.match(customerChatPage, /serviceCategory \|\| order\?\.service \|\| order\?\.title/);
+});
+
+test("property workflow projection declarations expose location and file helpers", () => {
+  assert.match(propertyProjectionDeclaration, /propertyModalLocation/);
+  assert.match(propertyProjectionDeclaration, /propertySummaryLocation/);
+  assert.match(propertyProjectionDeclaration, /propertyFileUrls/);
+});
+
+test("customer and partner pages consume the property location/file projection", () => {
+  // Summary surfaces (cards, requests, active jobs, chat titles) delegate to
+  // propertySummaryLocation; action modals delegate to propertyModalLocation.
+  assert.match(customerPage, /propertySummaryLocation/);
+  assert.match(customerPage, /propertyModalLocation/);
+  assert.match(partnerPage, /propertySummaryLocation/);
+  assert.match(partnerPage, /propertyModalLocation/);
+  assert.match(partnerPage, /propertyFileUrls\(/);
+  assert.match(customerPage, /propertyFileUrls\(/);
+});
+
+test("property pages no longer define a page-local GPS-first site location helper", () => {
+  // The old helpers computed GPS-first strings inline. The new wrappers delegate
+  // to the shared projection helper and contain no toFixed(6) GPS formatting.
+  assert.doesNotMatch(customerPage, /const getPropSiteLocation = \(p: Partial<PropInquiry>\) => \{/);
+  assert.doesNotMatch(partnerPage, /const getPropSiteLocation = \(p: \{/);
+  assert.doesNotMatch(customerPage, /lat\.toFixed\(6\), \$\{lng\.toFixed\(6\)\}/);
+  assert.doesNotMatch(partnerPage, /lat\.toFixed\(6\), \$\{lng\.toFixed\(6\)\}/);
 });

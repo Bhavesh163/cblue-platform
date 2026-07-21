@@ -65,6 +65,11 @@ import {
   projectUpcomingFixerMeetings,
   projectWorkflowChatHistory,
 } from "../../../lib/fixerWorkflowUiProjection";
+import {
+  propertyModalLocation,
+  propertySummaryLocation,
+  propertyFileUrls,
+} from "../../../lib/propertyWorkflowProjection";
 
 interface SubscriberInfo {
   id: string;
@@ -1558,6 +1563,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   const [propRateModal, setPropRateModal] = useState<PropInquiry | null>(null);
   const [propRateStars, setPropRateStars] = useState(0);
   const [propRateComment, setPropRateComment] = useState("");
+  const [propViewFilesModal, setPropViewFilesModal] = useState<PropInquiry | null>(null);
   const workflowModalOpen = Boolean(
     waitModalOrder ||
     meetingModal ||
@@ -1845,24 +1851,13 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     ) || parseDateMs(fallback) || Date.now();
   const isCustomerCancellationNote = (value: any) =>
     /\bcustomer\s+(?:cancelled|canceled|cancel)\b|\bcancelled\s+by\s+customer\b|\bcanceled\s+by\s+customer\b/i.test(String(value || ''));
-  const normalizePropLocationPart = (value: any) => {
-    const text = String(value || '').trim();
-    if (!text || /^--\s*select/i.test(text)) return '';
-    return text;
-  };
-  const getPropSiteLocation = (p: Partial<PropInquiry>) => {
-    const lat = Number(p.latitude);
-    const lng = Number(p.longitude);
-    if (Number.isFinite(lat) && Number.isFinite(lng) && !(Math.abs(lat) < 0.000001 && Math.abs(lng) < 0.000001)) {
-      return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-    }
-    return [
-      normalizePropLocationPart(p.addressLine),
-      normalizePropLocationPart(p.subdistrict),
-      normalizePropLocationPart(p.district),
-      normalizePropLocationPart(p.province),
-    ].filter(Boolean).join(', ') || normalizePropLocationPart(p.province) || 'Unknown';
-  };
+  // Property workflow location is server-owned: GPS coordinates render only in
+  // action modals; summary surfaces (cards, requests, active jobs, chat
+  // titles) render the persisted subdistrict. See propertyWorkflowProjection.
+  const getPropModalLocation = (p: Partial<PropInquiry> | null | undefined) =>
+    propertyModalLocation(p as any);
+  const getPropSummaryLocation = (p: Partial<PropInquiry> | null | undefined) =>
+    propertySummaryLocation(p as any);
   const getPropOrderLabel = (poNumber: string | null | undefined) => {
     const value = String(poNumber || '-');
     if (locale === 'th') return `ออเดอร์: ${value}`;
@@ -1886,7 +1881,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
           ? '出租'
           : 'Rent'
         : listingType || '-';
-    return `${title} · ${listingLabel} · ${getPropSiteLocation(p)} · ${toCurrencyLabel(p.propertyPrice)}`;
+    return `${title} · ${listingLabel} · ${getPropSummaryLocation(p)} · ${toCurrencyLabel(p.propertyPrice)}`;
   };
   const getPropListingTypeLabel = (listingType: string | null | undefined) => {
     const upper = String(listingType || '').toUpperCase();
@@ -3579,7 +3574,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     })
     .map((p: PropInquiry) => {
       const status = String(p.status || "").toUpperCase();
-      const siteLocation = getPropSiteLocation(p);
+      const siteLocation = getPropSummaryLocation(p);
       const cardTs = Number(p.updatedAt || p.createdAt || Date.now());
       const step = getPropInquiryDisplayStep(status, p.step);
       const pendingCustomerRating = canShowCustomerPropRateRequest(p);
@@ -4484,7 +4479,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
             <div className="w-10 h-10 rounded-lg bg-gray-50 text-gray-500 flex items-center justify-center font-bold text-lg">⏳</div>
             <div>
               <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {getPropOrderLabel(p.poNumber)} · Step 3 of 8</span></h3>
-              <p className="text-sm text-gray-600 mt-0.5">{getPropSiteLocation(p)}</p>
+              <p className="text-sm text-gray-600 mt-0.5">{getPropSummaryLocation(p)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getPropListingTypeLabel(p.listingType)} · {locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "สร้างเมื่อ" : locale === "zh" ? "创建时间" : "Created"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "รอผู้ลงประกาศยืนยัน — หากไม่ตอบสนองสามารถเลือกใหม่ได้" : locale === "zh" ? "等待房源方确认 — 如无响应可重新选择" : "Waiting for lister to accept — you may reselect if no response"}</p>
@@ -4534,7 +4529,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
             <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-lg">🏠</div>
             <div>
               <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {getPropOrderLabel(p.poNumber)} · Step 5 of 8</span></h3>
-              <p className="text-sm text-gray-600 mt-0.5">{firstNameOnly(p.listerName, 'Lister')} · {getPropSiteLocation(p)}</p>
+              <p className="text-sm text-gray-600 mt-0.5">{firstNameOnly(p.listerName, 'Lister')} · {getPropSummaryLocation(p)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getPropListingTypeLabel(p.listingType)} · {locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "อัปเดตเมื่อ" : locale === "zh" ? "更新时间" : "Updated"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "ผู้ลงประกาศยืนยันแล้ว — ชำระค่าดำเนินการเพื่อรับข้อมูลติดต่อ" : locale === "zh" ? "房源方已确认 — 支付处理费以获取联系方式" : "Lister accepted — pay the processing fee to get contact info"}</p>
@@ -4562,7 +4557,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
             <div className="w-10 h-10 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center font-bold text-lg">📅</div>
             <div>
               <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {getPropOrderLabel(p.poNumber)} · Step 7 of 8</span></h3>
-              <p className="text-sm text-gray-600 mt-0.5">{firstNameOnly(p.listerName, 'Lister')} · {getPropSiteLocation(p)}</p>
+              <p className="text-sm text-gray-600 mt-0.5">{firstNameOnly(p.listerName, 'Lister')} · {getPropSummaryLocation(p)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getPropListingTypeLabel(p.listingType)} · {locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "อัปเดตเมื่อ" : locale === "zh" ? "更新时间" : "Updated"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "ชำระแล้ว — ส่งคำเชิญนัดหมายเพื่อเยี่ยมชมทรัพย์สิน" : locale === "zh" ? "已付款 — 发送会议邀请以预约参观" : "Fee paid — send a meeting invitation to schedule a property viewing"}</p>
@@ -4587,7 +4582,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
             <div className="w-10 h-10 rounded-lg bg-yellow-50 text-yellow-600 flex items-center justify-center font-bold text-lg">⭐</div>
             <div>
               <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {getPropOrderLabel(p.poNumber)} · Step 8 of 8</span></h3>
-              <p className="text-sm text-gray-600 mt-0.5">{firstNameOnly(p.listerName, 'Lister')} · {getPropSiteLocation(p)}</p>
+              <p className="text-sm text-gray-600 mt-0.5">{firstNameOnly(p.listerName, 'Lister')} · {getPropSummaryLocation(p)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getPropListingTypeLabel(p.listingType)} · {locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "อัปเดตเมื่อ" : locale === "zh" ? "更新时间" : "Updated"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "นัดหมายยืนยันแล้ว — ให้คะแนนเพื่อปิดงาน" : locale === "zh" ? "会议已确认 — 评分以结案" : "Meeting confirmed — rate to close this inquiry"}</p>
@@ -4654,6 +4649,18 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       </div>
       <div className="flex flex-col items-end gap-1 flex-shrink-0">
         <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${item.tier === 'ECONOMY' || item.tier === 'Economy' ? 'bg-green-50 text-green-700' : item.tier === 'Standard' || item.tier === 'STANDARD' ? 'bg-blue-50 text-blue-700' : item.tier === 'Corporate' ? 'bg-purple-50 text-purple-700' : item.tier === 'Specialist' ? 'bg-amber-50 text-amber-700' : item.tier === 'Expert' ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-600'}`}>{item.tier || 'Standard'}</span>
+        {isPropertyCard && propertyFileUrls(item?.propInquiry).length > 0 && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setPropViewFilesModal(item?.propInquiry);
+            }}
+            className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100 transition"
+          >
+            {locale === 'th' ? 'ดูไฟล์' : locale === 'zh' ? '查看文件' : 'View Files'}
+          </button>
+        )}
         {(item.actionNeeded || actionableRequestPos.has(item.po)) && item.type !== 'prop_waiting' && <span className="text-xs px-2.5 py-1 rounded-full font-bold bg-red-50 text-red-700">{locale === "th" ? "ต้องดำเนินการ" : locale === "zh" ? "需要操作" : "Action Needed"}</span>}
         {item.type !== 'prop_waiting' && isWorkflowOrderCancellable(item) && <button
           onClick={(e) => {
@@ -4678,7 +4685,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       const isDeclined = status === 'DECLINED';
       const isCancelled = status === 'CANCELLED';
       const completedAt = p.updatedAt || p.createdAt || Date.now();
-      const siteLocation = getPropSiteLocation(p);
+      const siteLocation = getPropSummaryLocation(p);
       return {
         id: `prop-completed-${p.id}`,
         po: p.poNumber,
@@ -5062,7 +5069,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                 const complianceHints = getPropertyComplianceHints(p);
                 const media = Array.isArray(p.propertyImages) ? p.propertyImages.map((url) => normalizeImageUrl(url)).filter(Boolean) : [];
                 const listerFirstName = firstNameOnly(p.listerName, 'Lister');
-                const siteLocation = getPropSiteLocation(p);
+                const siteLocation = getPropSummaryLocation(p);
                 const updatedAt = p.updatedAt || p.createdAt || Date.now();
 
                 return (
@@ -5436,7 +5443,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}</span><span className="font-semibold">{getPropListingTypeLabel(propPayModal.listingType)}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}</span><span className="font-semibold">{toCurrencyLabel(propPayModal.propertyPrice)}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "จังหวัด" : "Province"}</span><span className="font-semibold">{propPayModal.province}</span></div>
-                <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}</span><span className="font-semibold text-right max-w-[60%] break-words">{getPropSiteLocation(propPayModal)}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}</span><span className="font-semibold text-right max-w-[60%] break-words">{getPropModalLocation(propPayModal)}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ผู้ลงประกาศ" : "Lister"}</span><span className="font-semibold">{firstNameOnly(propPayModal.listerName, 'Lister')}</span></div>
                 <div className="flex justify-between border-t border-gray-100 pt-2">
                   <span className="text-gray-700 font-semibold">{locale === "th" ? "ค่าดำเนินการ" : "Processing Fee"}</span>
@@ -5506,7 +5513,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
               <p className="text-xs font-semibold text-teal-700 uppercase">{locale === "th" ? "ระดับบริการ" : locale === "zh" ? "服务等级" : "Tier"}: {propMeetingModal.propertyTier || "STANDARD"}</p>
               <p className="text-xs text-gray-500">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getPropListingTypeLabel(propMeetingModal.listingType)}</p>
               <p className="text-xs text-gray-500">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(propMeetingModal.propertyPrice)}</p>
-              <p className="text-xs text-gray-500">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}: {getPropSiteLocation(propMeetingModal)}</p>
+              <p className="text-xs text-gray-500">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}: {getPropModalLocation(propMeetingModal)}</p>
               <div className="space-y-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">{locale === "th" ? "วันที่" : "Date"}</label>
@@ -5557,7 +5564,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
               <p className="text-xs font-semibold text-yellow-700 uppercase">{locale === "th" ? "ระดับบริการ" : locale === "zh" ? "服务等级" : "Tier"}: {propRateModal.propertyTier || "STANDARD"}</p>
               <p className="text-xs text-gray-500">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getPropListingTypeLabel(propRateModal.listingType)}</p>
               <p className="text-xs text-gray-500">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(propRateModal.propertyPrice)}</p>
-              <p className="text-xs text-gray-500">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}: {getPropSiteLocation(propRateModal)}</p>
+              <p className="text-xs text-gray-500">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}: {getPropModalLocation(propRateModal)}</p>
               <div>
                 <p className="text-xs font-semibold text-gray-600 mb-2">{locale === "th" ? "คะแนน" : "Rating"}</p>
                 <div className="flex gap-2 justify-center">
@@ -5607,6 +5614,46 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
           </div>
         </div>
       )}
+
+      {/* Property View Files Modal — mirrors the 11-step fixer attachment viewer */}
+      {propViewFilesModal && (() => {
+        const files = propertyFileUrls(propViewFilesModal).map(normalizeImageUrl).filter(Boolean);
+        return (
+          <div className="fixed inset-0 z-[9999] flex items-start justify-center pt-6 bg-gray-950/80 backdrop-blur-sm p-4 overflow-y-auto">
+            <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-y-auto max-h-[calc(100dvh-6rem)] mx-auto">
+              <div className="bg-gradient-to-r from-sky-500 to-blue-500 px-6 py-4 flex justify-between items-center">
+                <div>
+                  <h3 className="text-white font-bold text-lg">{locale === 'th' ? 'ดูไฟล์' : locale === 'zh' ? '查看文件' : 'View Files'}</h3>
+                  <p className="text-sky-100 text-sm mt-1">{propViewFilesModal.poNumber} · {propViewFilesModal.propertyTitle || (locale === 'th' ? 'อสังหาริมทรัพย์' : locale === 'zh' ? '房产' : 'Property')}</p>
+                </div>
+                <button onClick={() => setPropViewFilesModal(null)} className="text-white/90 hover:text-white text-xl leading-none" aria-label="Close">&times;</button>
+              </div>
+              <div className="px-6 py-5 space-y-3">
+                {files.length > 0 ? (
+                  <>
+                    <div className="flex flex-wrap gap-2">
+                      {files.map((url, i) => (
+                        <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-sky-700 bg-sky-50 border border-sky-200 rounded-full px-3 py-1 hover:bg-sky-100 transition">
+                          {locale === 'th' ? `ไฟล์ ${i + 1}` : locale === 'zh' ? `文件 ${i + 1}` : `File ${i + 1}`} ↗
+                        </a>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      className="text-xs font-semibold text-sky-700 hover:text-sky-800"
+                      onClick={() => { void downloadImageUrls(files, `property-${propViewFilesModal.poNumber}`); }}
+                    >
+                      {locale === 'th' ? 'ดาวน์โหลดทั้งหมด' : locale === 'zh' ? '下载全部' : 'Download all'}
+                    </button>
+                  </>
+                ) : (
+                  <p className="text-sm text-gray-500">{locale === 'th' ? 'ยังไม่มีไฟล์แนบ' : locale === 'zh' ? '暂无附件' : 'No files uploaded yet.'}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Rate & Close Modal */}
       {rateModal && (
