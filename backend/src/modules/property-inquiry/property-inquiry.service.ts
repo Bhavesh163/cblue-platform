@@ -12,6 +12,7 @@ import {
   CreatePropertyInquiryDto,
   UpdatePropertyInquiryDto,
 } from './dto/property-inquiry.dto';
+import { propertyInquiryNotifiedMetadata } from './property-workflow-notification';
 
 @Injectable()
 export class PropertyInquiryService {
@@ -350,6 +351,7 @@ export class PropertyInquiryService {
       select: {
         id: true,
         userId: true,
+        title: true,
         contactName: true,
       },
     });
@@ -397,6 +399,10 @@ export class PropertyInquiryService {
             status: PropertyInquiryStatus.NOTIFY_SENT,
             step: 3,
             actorId: customerId,
+            metadata: propertyInquiryNotifiedMetadata(
+              property.title,
+              dto.poNumber,
+            ),
           },
         },
       },
@@ -426,6 +432,7 @@ export class PropertyInquiryService {
         where,
         include: {
           attachments: { orderBy: { createdAt: 'asc' } },
+          workflowEvents: { orderBy: { createdAt: 'asc' } },
           property: {
             select: {
               id: true,
@@ -461,7 +468,11 @@ export class PropertyInquiryService {
       try {
         const rows = await this.prisma.propertyInquiry.findMany({
           where,
-          include: { property: true, attachments: { orderBy: { createdAt: 'asc' } } },
+          include: {
+            property: true,
+            attachments: { orderBy: { createdAt: 'asc' } },
+            workflowEvents: { orderBy: { createdAt: 'asc' } },
+          },
           orderBy: { updatedAt: 'desc' },
         });
         return rows.map((row) => ({
@@ -515,6 +526,7 @@ export class PropertyInquiryService {
         where,
         include: {
           attachments: { orderBy: { createdAt: 'asc' } },
+          workflowEvents: { orderBy: { createdAt: 'asc' } },
           property: {
             select: {
               id: true,
@@ -550,7 +562,11 @@ export class PropertyInquiryService {
       try {
         const rows = await this.prisma.propertyInquiry.findMany({
           where,
-          include: { property: true, attachments: { orderBy: { createdAt: 'asc' } } },
+          include: {
+            property: true,
+            attachments: { orderBy: { createdAt: 'asc' } },
+            workflowEvents: { orderBy: { createdAt: 'asc' } },
+          },
           orderBy: { updatedAt: 'desc' },
         });
         return rows.map((row) => ({

@@ -175,7 +175,19 @@ describe('PropertyWorkflowBridgeService', () => {
       expect.arrayContaining([
         expect.objectContaining({ action: 'match-selected', step: 1 }),
         expect.objectContaining({ action: 'listing-selected', step: 2 }),
-        expect.objectContaining({ action: 'partner-notified', step: 3 }),
+        expect.objectContaining({
+          action: 'partner-notified',
+          step: 3,
+          metadata: expect.objectContaining({
+            audience: ['customer', 'lister'],
+            notifications: {
+              customer: expect.stringMatching(
+                /^Bangkok Office Â· Order: PRE-\d{4}-\d{6}: Please wait for the selected lister to accept the inquiry\.$/,
+              ),
+              lister: expect.any(String),
+            },
+          }),
+        }),
       ]),
     );
     expect(customerSnapshot.reference).toBe(stored.poNumber);
@@ -183,6 +195,54 @@ describe('PropertyWorkflowBridgeService', () => {
     expect(customerSnapshot.history).toHaveLength(1);
     expect(listerSnapshot.history).toHaveLength(2);
     expect(customerSnapshot.listing).not.toHaveProperty('contact');
+  });
+
+  it('returns the persisted Step 3 notification event to both participants', async () => {
+    const stored = inquiry(PropertyInquiryStatus.NOTIFY_SENT);
+    const createdAt = new Date('2026-07-22T03:04:05.000Z');
+    stored.workflowEvents = [
+      {
+        action: 'partner-notified',
+        status: PropertyInquiryStatus.NOTIFY_SENT,
+        step: 3,
+        actorId: 'customer-1',
+        isPrivate: false,
+        note: null,
+        metadata: {
+          sourceVersion: 'cblue-property-workflow-v1',
+          audience: ['customer', 'lister'],
+          notifications: {
+            customer:
+              'Bangkok Office · Order: PRE-2607-7944: Please wait for the selected lister to accept the inquiry.',
+            lister:
+              'Bangkok Office · Order: PRE-2607-7944: A customer selected your listing. Please accept or decline the inquiry.',
+          },
+        },
+        createdAt,
+      },
+    ];
+    const prisma = {
+      propertyInquiry: { findUnique: jest.fn().mockResolvedValue(stored) },
+    } as unknown as PrismaService;
+    const service = new PropertyWorkflowBridgeService(prisma, {
+      search: jest.fn(),
+    } as unknown as PropertyService);
+
+    const customer = await service.snapshot(stored.poNumber, 'customer-1');
+    const lister = await service.snapshot(stored.poNumber, 'lister-1');
+
+    expect(customer.workflowEvents).toEqual([
+      expect.objectContaining({
+        action: 'partner-notified',
+        audience: ['customer', 'lister'],
+        message:
+          'Bangkok Office · Order: PRE-2607-7944: Please wait for the selected lister to accept the inquiry.',
+        createdAt,
+      }),
+    ]);
+    expect(lister.workflowEvents[0].message).toContain(
+      'Please accept or decline the inquiry.',
+    );
   });
 
   it('projects legacy notified Step 3 records at the actionable Step 4 without changing audit history', async () => {

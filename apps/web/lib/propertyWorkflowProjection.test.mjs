@@ -5,6 +5,7 @@ import {
   propertyModalLocation,
   propertySummaryLocation,
   propertyFileUrls,
+  latestPropertyWorkflowAlert,
 } from "./propertyWorkflowProjection.js";
 
 test("uses GPS only in property workflow modals and subdistrict on summary surfaces", () => {
@@ -130,4 +131,72 @@ test("returns an empty list without persisted files and ignores text fields", ()
   };
   assert.deepEqual(propertyFileUrls(item), []);
   assert.deepEqual(propertyFileUrls(null), []);
+});
+
+test("projects the latest persisted Step 3 notification for its audience", () => {
+  const alert = latestPropertyWorkflowAlert(
+    {
+      poNumber: "PRE-2607-7944",
+      workflowEvents: [
+        {
+          action: "partner-notified",
+          createdAt: "2026-07-22T03:04:05.000Z",
+          metadata: {
+            audience: ["customer", "lister"],
+            notifications: {
+              customer:
+                "House · Order: PRE-2607-7944: Please wait for the selected lister to accept the inquiry.",
+              lister:
+                "House · Order: PRE-2607-7944: A customer selected your listing. Please accept or decline the inquiry.",
+            },
+          },
+        },
+      ],
+    },
+    "customer",
+  );
+
+  assert.deepEqual(alert, {
+    id: "property-workflow-partner-notified-PRE-2607-7944-2026-07-22T03:04:05.000Z",
+    action: "partner-notified",
+    message:
+      "House · Order: PRE-2607-7944: Please wait for the selected lister to accept the inquiry.",
+    createdAt: "2026-07-22T03:04:05.000Z",
+  });
+});
+
+test("does not invent a property workflow alert from status or display fields", () => {
+  assert.equal(
+    latestPropertyWorkflowAlert(
+      {
+        poNumber: "PRE-2607-7944",
+        status: "NOTIFY_SENT",
+        title: "House",
+        description: "Please wait for the selected lister.",
+      },
+      "customer",
+    ),
+    null,
+  );
+});
+
+test("does not expose a persisted workflow notification outside its audience", () => {
+  assert.equal(
+    latestPropertyWorkflowAlert(
+      {
+        workflowEvents: [
+          {
+            action: "partner-notified",
+            createdAt: "2026-07-22T03:04:05.000Z",
+            metadata: {
+              audience: ["lister"],
+              notifications: { lister: "Lister message" },
+            },
+          },
+        ],
+      },
+      "customer",
+    ),
+    null,
+  );
 });

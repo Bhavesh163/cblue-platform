@@ -40,3 +40,25 @@ export declare function propertyFileUrls(item: {
   listing?: { attachments?: Array<{ url?: string } | string> };
   propertyImages?: Array<string | { url?: string }>;
 } | null | undefined): string[];
+
+export declare function latestPropertyWorkflowAlert(
+  item: {
+    poNumber?: string;
+    workflowEvents?: Array<{
+      action?: string;
+      createdAt?: string | number | Date;
+      audience?: string[];
+      message?: string | null;
+      metadata?: {
+        audience?: string[];
+        notifications?: Record<string, string>;
+      };
+    }>;
+  } | null | undefined,
+  persona: 'customer' | 'lister',
+): {
+  id: string;
+  action: string;
+  message: string;
+  createdAt: string | number | Date;
+} | null;

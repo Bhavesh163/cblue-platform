@@ -163,3 +163,60 @@ export function propertyFileUrls(item) {
   }
   return urls;
 }
+
+/**
+ * Returns the latest persisted, audience-specific property workflow
+ * notification. It never reconstructs notification copy from status, listing
+ * fields, PRE references, or browser state.
+ *
+ * @param {{
+ *   poNumber?: string;
+ *   workflowEvents?: Array<{
+ *     action?: string;
+ *     createdAt?: string | number | Date;
+ *     audience?: string[];
+ *     message?: string | null;
+ *     metadata?: {
+ *       audience?: string[];
+ *       notifications?: Record<string, string>;
+ *     };
+ *   }>;
+ * } | null | undefined} item
+ * @param {'customer' | 'lister'} persona
+ * @returns {{ id: string; action: string; message: string; createdAt: string | number | Date } | null}
+ */
+export function latestPropertyWorkflowAlert(item, persona) {
+  if (!item || !Array.isArray(item.workflowEvents)) return null;
+  const candidates = item.workflowEvents
+    .map((event) => {
+      if (!event || typeof event !== 'object') return null;
+      const metadata =
+        event.metadata && typeof event.metadata === 'object' ? event.metadata : {};
+      const audience = Array.isArray(event.audience)
+        ? event.audience
+        : Array.isArray(metadata.audience)
+          ? metadata.audience
+          : [];
+      if (!audience.includes(persona)) return null;
+      const message = String(
+        event.message || metadata.notifications?.[persona] || '',
+      ).trim();
+      const action = String(event.action || '').trim();
+      const createdAt = event.createdAt;
+      const timestamp = new Date(createdAt || 0).getTime();
+      if (!message || !action || !Number.isFinite(timestamp) || timestamp <= 0) {
+        return null;
+      }
+      return { action, message, createdAt, timestamp };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.timestamp - a.timestamp);
+  const latest = candidates[0];
+  if (!latest) return null;
+  return {
+    id: `property-workflow-${latest.action}-${String(item.poNumber || '')}-${String(latest.createdAt)}`,
+    action: latest.action,
+    message: latest.message,
+    createdAt: latest.createdAt,
+  };
+}

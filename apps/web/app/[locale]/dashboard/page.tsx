@@ -69,6 +69,7 @@ import {
   propertyModalLocation,
   propertySummaryLocation,
   propertyFileUrls,
+  latestPropertyWorkflowAlert,
 } from "../../../lib/propertyWorkflowProjection";
 
 interface SubscriberInfo {
@@ -1552,6 +1553,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   const [persistedCustomerAlerts, setPersistedCustomerAlerts] = useState<any[]>([]);
   // Property inquiry workflow state (cblue_prop_inquiries — not ghis-gated)
   interface PropInquiry { id: string; poNumber: string; propertyId: string; propertyTitle: string; propertyTier: string; propertyFee: number; propertyType: string; listingType: string; propertyPrice: number; province: string; district: string; subdistrict?: string; addressLine?: string; latitude?: number | null; longitude?: number | null; area?: number | null; bedrooms?: number | null; bathrooms?: number | null; propertyImages?: string[]; customerEmail: string; customerName: string; listerName: string; status: string; step: number; createdAt: number; updatedAt: number; meetingDate?: string; meetingTime?: string; meetingVenue?: string; customerRating?: number | null; customerComment?: string; listerRating?: number | null; listerComment?: string; reselectedOnce?: boolean; }
+  interface PropInquiry { workflowEvents?: any[]; }
   const [propInquiries, setPropInquiries] = useState<PropInquiry[]>([]);
   const lastKnownBackendOrderPosRef = useRef<Set<string>>(new Set());
   const [propPayModal, setPropPayModal] = useState<PropInquiry | null>(null);
@@ -2198,6 +2200,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         meetingDate: api.meetingDate, meetingTime: api.meetingTime, meetingVenue: api.meetingVenue,
         customerRating: api.customerRating, customerComment: api.customerComment,
         listerRating: api.listerRating, listerComment: api.listerComment, reselectedOnce: api.reselectedOnce,
+        workflowEvents: Array.isArray(api?.workflowEvents) ? api.workflowEvents : [],
       };
     }
     async function loadPropInquiries() {
@@ -3893,6 +3896,21 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     .map((p: PropInquiry) => {
       const createdAt = Number(p.updatedAt || p.createdAt || Date.now());
       const time = toDisplayDateTime(createdAt);
+      if (p.status === "NOTIFY_SENT") {
+        const persistedAlert = latestPropertyWorkflowAlert(p, "customer");
+        if (!persistedAlert) return null;
+        const eventCreatedAt = new Date(persistedAlert.createdAt).getTime();
+        return {
+          id: persistedAlert.id,
+          msg: persistedAlert.message,
+          msgTh: persistedAlert.message,
+          msgZh: persistedAlert.message,
+          time: toDisplayDateTime(eventCreatedAt),
+          createdAt: eventCreatedAt,
+          dot: "bg-sky-500",
+          authoritative: true,
+        };
+      }
       if (p.status === "ACCEPTED") {
         return {
           id: `prop-alert-accepted-${p.poNumber}`,

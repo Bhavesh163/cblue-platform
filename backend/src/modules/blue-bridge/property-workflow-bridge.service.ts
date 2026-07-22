@@ -7,6 +7,10 @@ import {
 import { PropertyInquiryStatus, Prisma, UserRole } from '@prisma/client';
 import { randomInt } from 'crypto';
 import { PropertyInquiryService } from '../property-inquiry/property-inquiry.service';
+import {
+  PROPERTY_WORKFLOW_SOURCE_VERSION,
+  propertyInquiryNotifiedMetadata,
+} from '../property-inquiry/property-workflow-notification';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PropertyService } from '../property/property.service';
 import {
@@ -16,7 +20,7 @@ import {
 } from './dto/property-workflow.dto';
 
 const TOTAL_STEPS = 8;
-const SOURCE_VERSION = 'cblue-property-workflow-v1';
+const SOURCE_VERSION = PROPERTY_WORKFLOW_SOURCE_VERSION;
 
 type PropertyWorkflowActionKey =
   | 'partner-accept'
@@ -145,7 +149,10 @@ export class PropertyWorkflowBridgeService {
               status: PropertyInquiryStatus.NOTIFY_SENT,
               step: 3,
               actorId: customer.id,
-              metadata: { sourceVersion: SOURCE_VERSION },
+              metadata: propertyInquiryNotifiedMetadata(
+                property.title,
+                reference,
+              ),
             },
           ],
         },
@@ -426,6 +433,42 @@ export class PropertyWorkflowBridgeService {
     const actorAlreadyRated =
       (actor === 'customer' && inquiry.customerRating != null) ||
       (actor === 'lister' && inquiry.listerRating != null);
+    const workflowEvents = events.map((event: any) => {
+      const metadata =
+        event.metadata && typeof event.metadata === 'object'
+          ? event.metadata
+          : {};
+      const audience = Array.isArray(metadata.audience)
+        ? metadata.audience.filter(
+            (role: unknown) => role === 'customer' || role === 'lister',
+          )
+        : [];
+      const notifications =
+        metadata.notifications && typeof metadata.notifications === 'object'
+          ? metadata.notifications
+          : {};
+      const message =
+        actor === 'customer' || actor === 'lister'
+          ? audience.includes(actor)
+            ? String(notifications[actor] || '').trim() || null
+            : null
+          : null;
+
+      return {
+        action: event.action,
+        status: event.status,
+        step: event.step,
+        actorRole:
+          event.actorId === inquiry.customerId
+            ? 'customer'
+            : event.actorId === inquiry.listerUserId
+              ? 'lister'
+              : null,
+        audience,
+        message,
+        createdAt: event.createdAt,
+      };
+    });
     return {
       reference: inquiry.poNumber,
       status: inquiry.status,
@@ -509,6 +552,7 @@ export class PropertyWorkflowBridgeService {
         private: event.isPrivate,
         createdAt: event.createdAt,
       })),
+      workflowEvents,
       timestamps: {
         createdAt: inquiry.createdAt,
         updatedAt: inquiry.updatedAt,

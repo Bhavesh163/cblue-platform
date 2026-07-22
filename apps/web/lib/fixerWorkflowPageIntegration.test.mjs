@@ -55,6 +55,16 @@ test("TypeScript declarations expose the authoritative projection helpers", () =
   assert.match(projectionDeclaration, /projectFixerChatRoom/);
 });
 
+test("customer property alerts consume persisted audience-specific workflow events", () => {
+  assert.match(propertyProjectionDeclaration, /latestPropertyWorkflowAlert/);
+  assert.match(customerPage, /latestPropertyWorkflowAlert\(p,\s*["']customer["']\)/);
+  assert.match(customerPage, /workflowEvents:\s*Array\.isArray\(api\?\.workflowEvents\)/);
+  assert.doesNotMatch(
+    customerPage,
+    /Please wait for the selected lister to accept the inquiry/,
+  );
+});
+
 test("partner modal clicks rehydrate the selected PO from current backend orders", () => {
   assert.match(partnerPage, /mergeFixerWorkflowRecord\(job,\s*authoritativeJob\)/);
   assert.match(partnerPage, /setWaitModalOrder\(hydratedJob\)/);

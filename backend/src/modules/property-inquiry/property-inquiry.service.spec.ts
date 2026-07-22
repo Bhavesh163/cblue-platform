@@ -47,6 +47,7 @@ describe('PropertyInquiryService workflow guards', () => {
           id: 'property-1',
           userId: 'lister-1',
           contactName: 'Lister',
+          title: 'House',
         }),
       },
       user: {
@@ -86,6 +87,16 @@ describe('PropertyInquiryService workflow guards', () => {
             create: expect.objectContaining({
               action: 'partner-notified',
               step: 3,
+              metadata: {
+                sourceVersion: 'cblue-property-workflow-v1',
+                audience: ['customer', 'lister'],
+                notifications: {
+                  customer:
+                    'House \u00b7 Order: PRE-2607-7944: Please wait for the selected lister to accept the inquiry.',
+                  lister:
+                    'House \u00b7 Order: PRE-2607-7944: A customer selected your listing. Please accept or decline the inquiry.',
+                },
+              },
             }),
           },
         }),
@@ -175,6 +186,7 @@ describe('PropertyInquiryService workflow guards', () => {
       expect.objectContaining({
         include: expect.objectContaining({
           attachments: { orderBy: { createdAt: 'asc' } },
+          workflowEvents: { orderBy: { createdAt: 'asc' } },
         }),
       }),
     );
@@ -202,6 +214,7 @@ describe('PropertyInquiryService workflow guards', () => {
       expect.objectContaining({
         include: expect.objectContaining({
           attachments: { orderBy: { createdAt: 'asc' } },
+          workflowEvents: { orderBy: { createdAt: 'asc' } },
         }),
       }),
     );
