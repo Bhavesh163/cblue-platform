@@ -21,6 +21,7 @@ import { SubscriptionModule } from './modules/subscription/subscription.module';
 import { QueueModule } from './queue/queue.module';
 import { BlueBridgeModule } from './modules/blue-bridge/blue-bridge.module';
 import { OauthModule } from './modules/oauth/oauth.module';
+import { QualificationModule } from './modules/qualification/qualification.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -61,6 +62,7 @@ import configuration from './config/configuration';
     SubscriptionModule,
     BlueBridgeModule,
     OauthModule,
+    QualificationModule,
   ],
   controllers: [AppController],
   providers: [
