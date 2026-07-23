@@ -165,6 +165,38 @@ test("projects the latest persisted Step 3 notification for its audience", () =>
   });
 });
 
+test("projects the newest persisted participant event instead of a stale earlier alert", () => {
+  const alert = latestPropertyWorkflowAlert(
+    {
+      poNumber: "PRE-2607-7944",
+      workflowEvents: [
+        {
+          action: "partner-notified",
+          createdAt: "2026-07-22T03:04:05.000Z",
+          audience: ["customer", "lister"],
+          message: "Please wait for the selected lister.",
+        },
+        {
+          action: "viewing-confirm",
+          createdAt: "2026-07-22T05:06:07.000Z",
+          audience: ["customer", "lister"],
+          message:
+            "The selected lister confirmed the meeting. You may now rate the lister.",
+        },
+      ],
+    },
+    "customer",
+  );
+
+  assert.deepEqual(alert, {
+    id: "property-workflow-viewing-confirm-PRE-2607-7944-2026-07-22T05:06:07.000Z",
+    action: "viewing-confirm",
+    message:
+      "The selected lister confirmed the meeting. You may now rate the lister.",
+    createdAt: "2026-07-22T05:06:07.000Z",
+  });
+});
+
 test("does not invent a property workflow alert from status or display fields", () => {
   assert.equal(
     latestPropertyWorkflowAlert(

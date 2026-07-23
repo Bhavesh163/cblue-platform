@@ -2264,7 +2264,7 @@ export default function FixerProPage() {
   const [meetingDeclineInfoOpen, setMeetingDeclineInfoOpen] = useState(false);
   const [declineComment, setDeclineComment] = useState('');
   // Property inquiry state for lister/fixer — polls cblue_prop_inquiries every 1000ms
-  interface PropInquiry { id: string; poNumber: string; propertyId: string; propertyTitle: string; propertyTier: string; propertyFee: number; propertyType: string; listingType: string; propertyPrice: number; province: string; district: string; subdistrict?: string; addressLine?: string; latitude?: number | null; longitude?: number | null; area?: number | null; bedrooms?: number | null; bathrooms?: number | null; propertyImages?: string[]; customerEmail: string; customerName: string; listerName: string; status: string; step: number; createdAt: number; updatedAt: number; meetingDate?: string; meetingTime?: string; meetingVenue?: string; customerRating?: number | null; customerComment?: string; listerRating?: number | null; listerComment?: string; reselectedOnce?: boolean; }
+  interface PropInquiry { id: string; poNumber: string; propertyId: string; propertyTitle: string; propertyTier: string; propertyFee: number; propertyType: string; listingType: string; propertyPrice: number; province: string; district: string; subdistrict?: string; addressLine?: string; latitude?: number | null; longitude?: number | null; area?: number | null; bedrooms?: number | null; bathrooms?: number | null; propertyImages?: string[]; customerEmail: string; customerName: string; listerName: string; status: string; step: number; createdAt: number; updatedAt: number; meetingDate?: string; meetingTime?: string; meetingVenue?: string; meetingNote?: string; customerRating?: number | null; customerComment?: string; listerRating?: number | null; listerComment?: string; reselectedOnce?: boolean; }
   const [propInquiries, setPropInquiries] = useState<PropInquiry[]>([]);
   const [propAcceptModal, setPropAcceptModal] = useState<PropInquiry | null>(null);
   const [propDeclineModal, setPropDeclineModal] = useState<PropInquiry | null>(null);
@@ -3106,7 +3106,7 @@ export default function FixerProPage() {
         customerName: api.customerName, listerName: api.listerName, status: api.status, step: api.step,
         createdAt,
         updatedAt,
-        meetingDate: api.meetingDate, meetingTime: api.meetingTime, meetingVenue: api.meetingVenue,
+        meetingDate: api.meetingDate, meetingTime: api.meetingTime, meetingVenue: api.meetingVenue, meetingNote: api.meetingNote,
         customerRating: api.customerRating, customerComment: api.customerComment,
         listerRating: api.listerRating, listerComment: api.listerComment, reselectedOnce: api.reselectedOnce,
       };
@@ -6027,6 +6027,7 @@ export default function FixerProPage() {
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "วันที่" : "Date"}</span><span className="font-semibold">{propMeetingConfirmModal.meetingDate || 'TBD'}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "เวลา" : "Time"}</span><span className="font-semibold">{propMeetingConfirmModal.meetingTime || 'TBD'}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "สถานที่" : "Venue"}</span><span className="font-semibold">{propMeetingConfirmModal.meetingVenue || 'TBD'}</span></div>
+                <div className="flex justify-between gap-4"><span className="text-gray-500">{locale === "th" ? "หมายเหตุ" : locale === "zh" ? "备注" : "Note"}</span><span className="font-semibold text-right break-words">{propMeetingConfirmModal.meetingNote || '-'}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}</span><span className="font-semibold text-right max-w-[60%] break-words">{getPropModalLocation(propMeetingConfirmModal)}</span></div>
               </div>
               <div className="flex gap-3">

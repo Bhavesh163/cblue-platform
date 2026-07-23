@@ -65,6 +65,12 @@ test("customer property alerts consume persisted audience-specific workflow even
   );
 });
 
+test("property meeting notes map from CBLUE and render in the lister confirmation modal", () => {
+  assert.match(customerPage, /meetingNote:\s*api\.meetingNote/);
+  assert.match(partnerPage, /meetingNote:\s*api\.meetingNote/);
+  assert.match(partnerPage, /propMeetingConfirmModal\.meetingNote/);
+});
+
 test("partner modal clicks rehydrate the selected PO from current backend orders", () => {
   assert.match(partnerPage, /mergeFixerWorkflowRecord\(job,\s*authoritativeJob\)/);
   assert.match(partnerPage, /setWaitModalOrder\(hydratedJob\)/);

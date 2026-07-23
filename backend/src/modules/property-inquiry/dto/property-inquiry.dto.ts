@@ -51,6 +51,10 @@ export class UpdatePropertyInquiryDto {
   meetingVenue?: string;
 
   @IsOptional()
+  @IsString()
+  meetingNote?: string;
+
+  @IsOptional()
   @IsInt()
   @Min(1)
   @Max(5)

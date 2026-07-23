@@ -12,7 +12,10 @@ import {
   CreatePropertyInquiryDto,
   UpdatePropertyInquiryDto,
 } from './dto/property-inquiry.dto';
-import { propertyInquiryNotifiedMetadata } from './property-workflow-notification';
+import {
+  propertyInquiryNotifiedMetadata,
+  propertyWorkflowActionMetadata,
+} from './property-workflow-notification';
 
 @Injectable()
 export class PropertyInquiryService {
@@ -595,6 +598,7 @@ export class PropertyInquiryService {
         lister: { select: { email: true } },
         property: {
           select: {
+            title: true,
             user: { select: { email: true } },
           },
         },
@@ -647,6 +651,7 @@ export class PropertyInquiryService {
     let meetingDate = inquiry.meetingDate;
     let meetingTime = inquiry.meetingTime;
     let meetingVenue = inquiry.meetingVenue;
+    let meetingNote = inquiry.meetingNote;
     let reselectedOnce = inquiry.reselectedOnce;
 
     if (dto.status === PropertyInquiryStatus.ACCEPTED) {
@@ -680,6 +685,7 @@ export class PropertyInquiryService {
       meetingDate = dto.meetingDate;
       meetingTime = dto.meetingTime;
       meetingVenue = dto.meetingVenue;
+      meetingNote = String(dto.meetingNote || '').trim() || null;
     } else if (dto.status === PropertyInquiryStatus.MEETING_CONFIRMED) {
       requireLister();
       requireStatus(PropertyInquiryStatus.MEETING_SENT);
@@ -729,6 +735,7 @@ export class PropertyInquiryService {
         meetingDate,
         meetingTime,
         meetingVenue,
+        meetingNote,
         customerRating,
         customerComment,
         listerRating,
@@ -742,6 +749,11 @@ export class PropertyInquiryService {
             actorId: userId,
             isPrivate: action === 'partner-decline',
             note: privateNote,
+            metadata: propertyWorkflowActionMetadata(
+              action,
+              inquiry.property?.title,
+              inquiry.poNumber,
+            ),
           },
         },
       },

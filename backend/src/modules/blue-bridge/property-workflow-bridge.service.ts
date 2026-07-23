@@ -9,6 +9,7 @@ import { randomInt } from 'crypto';
 import { PropertyInquiryService } from '../property-inquiry/property-inquiry.service';
 import {
   PROPERTY_WORKFLOW_SOURCE_VERSION,
+  propertyWorkflowActionMetadata,
   propertyInquiryNotifiedMetadata,
 } from '../property-inquiry/property-workflow-notification';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -207,6 +208,9 @@ export class PropertyWorkflowBridgeService {
         ...(transition.meetingVenue !== undefined && {
           meetingVenue: transition.meetingVenue,
         }),
+        ...(transition.meetingNote !== undefined && {
+          meetingNote: transition.meetingNote,
+        }),
         ...(transition.customerRating !== undefined && {
           customerRating: transition.customerRating,
         }),
@@ -227,7 +231,14 @@ export class PropertyWorkflowBridgeService {
             actorId: userId,
             isPrivate: action === 'decline',
             note: String(dto.note || '').trim() || null,
-            metadata: transition.metadata as Prisma.InputJsonValue,
+            metadata: {
+              ...transition.metadata,
+              ...propertyWorkflowActionMetadata(
+                action,
+                inquiry.property?.title,
+                inquiry.poNumber,
+              ),
+            } as Prisma.InputJsonValue,
           },
         },
       },
@@ -327,6 +338,7 @@ export class PropertyWorkflowBridgeService {
           meetingDate: dto.meetingDate,
           meetingTime: dto.meetingTime,
           meetingVenue: dto.meetingVenue,
+          meetingNote: String(dto.note || '').trim() || null,
           metadata: {},
         };
       case 'viewing-confirmation':
@@ -495,7 +507,7 @@ export class PropertyWorkflowBridgeService {
         'Lister decision',
         'Fee or free pass',
         'Chat',
-        'Viewing invitation and confirmation',
+        'Meeting invitation and confirmation',
         'Ratings',
       ],
       sourceVersion: SOURCE_VERSION,
@@ -506,17 +518,21 @@ export class PropertyWorkflowBridgeService {
         inquiry.attachments,
       ),
       selectedLister: { id: inquiry.listerUserId, name: inquiry.listerName },
-      customer: {
-        id: inquiry.customerId,
-        name: inquiry.customerName,
-        email: inquiry.customerEmail,
-      },
+      customer:
+        actor === 'lister' && !postFee
+          ? { id: null, name: 'Anonymous', email: null }
+          : {
+              id: inquiry.customerId,
+              name: inquiry.customerName,
+              email: inquiry.customerEmail,
+            },
       requestDetails: inquiry.requestDetails || '',
       feeState: {
         required: inquiry.status === PropertyInquiryStatus.ACCEPTED,
         paid: postFee,
         freePass: Boolean((feeEvent?.metadata as any)?.freePass),
       },
+      processingFee: this.processingFee(inquiry.property?.tier),
       attachments: inquiry.attachments.map((file: any) => ({
         id: file.id,
         label: file.label || 'Uploaded file',
@@ -528,11 +544,13 @@ export class PropertyWorkflowBridgeService {
         date: inquiry.meetingDate,
         time: inquiry.meetingTime,
         venue: inquiry.meetingVenue,
+        note: inquiry.meetingNote,
       },
       chat: {
         reference: inquiry.poNumber,
         enabled: postFee && !terminal,
         state: terminal ? 'closed' : postFee ? 'available' : 'locked',
+        activatedAt: feeEvent?.createdAt ?? null,
         messages: terminal ? [] : messages,
       },
       chatHistory: terminal ? messages : [],
@@ -559,18 +577,18 @@ export class PropertyWorkflowBridgeService {
       },
       alerts: terminal || actor === 'admin'
         ? []
-        : events
-            .filter(
-              (event: any) =>
-                event.actorId !==
-                (actor === 'customer'
-                  ? inquiry.customerId
-                  : inquiry.listerUserId),
+        : workflowEvents
+            .filter((event: any) => Boolean(event.message))
+            .sort(
+              (left: any, right: any) =>
+                new Date(right.createdAt).getTime() -
+                new Date(left.createdAt).getTime(),
             )
             .map((event: any) => ({
               action: event.action,
               status: event.status,
               step: event.step,
+              message: event.message,
               createdAt: event.createdAt,
             })),
     };
@@ -644,13 +662,13 @@ export class PropertyWorkflowBridgeService {
       case PropertyInquiryStatus.PAID:
         return {
           step: 7,
-          label: 'Send viewing invitation',
+          label: 'Send meeting invitation',
           owner: 'customer',
         };
       case PropertyInquiryStatus.MEETING_SENT:
         return {
           step: 7,
-          label: 'Confirm viewing invitation',
+          label: 'Confirm meeting',
           owner: 'lister',
         };
       case PropertyInquiryStatus.MEETING_CONFIRMED:
@@ -717,7 +735,7 @@ export class PropertyWorkflowBridgeService {
           {
             key: 'free-pass',
             owner: 'customer',
-            label: 'Continue with free pass',
+            label: 'Free Pass',
             actionStep: 5,
             feeMode: 'free-pass',
           },
@@ -728,7 +746,7 @@ export class PropertyWorkflowBridgeService {
           {
             key: 'viewing-invite',
             owner: 'customer',
-            label: 'Send viewing invitation',
+            label: 'Send meeting invitation',
             actionStep: 7,
           },
           cancel,
@@ -738,7 +756,7 @@ export class PropertyWorkflowBridgeService {
           {
             key: 'viewing-confirm',
             owner: 'lister',
-            label: 'Confirm viewing invitation',
+            label: 'Confirm meeting',
             actionStep: 7,
           },
           cancel,
@@ -785,6 +803,23 @@ export class PropertyWorkflowBridgeService {
     return actions
       .filter((action) => action.owner === actor)
       .map((action) => action.key);
+  }
+
+  private processingFee(tier: unknown) {
+    const fees: Record<string, number> = {
+      ECONOMY: 100,
+      STANDARD: 400,
+      UPPER: 600,
+      LUXURY: 800,
+      GRANDEUR: 1000,
+    };
+    const normalizedTier = String(tier || 'ECONOMY').trim().toUpperCase();
+    const amount = fees[normalizedTier] ?? fees.ECONOMY;
+    return {
+      amount,
+      currency: 'THB',
+      displayLabel: `\u0e3f${amount.toLocaleString('en-US')}`,
+    };
   }
 
   // Server-owned location presentation. When GPS coordinates are present the

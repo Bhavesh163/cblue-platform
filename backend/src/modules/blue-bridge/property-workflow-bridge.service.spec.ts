@@ -50,6 +50,7 @@ function inquiry(status = PropertyInquiryStatus.NOTIFY_SENT) {
     meetingDate: null,
     meetingTime: null,
     meetingVenue: null,
+    meetingNote: null,
     customerRating: null,
     customerComment: null,
     listerRating: null,
@@ -195,6 +196,24 @@ describe('PropertyWorkflowBridgeService', () => {
     expect(customerSnapshot.history).toHaveLength(1);
     expect(listerSnapshot.history).toHaveLength(2);
     expect(customerSnapshot.listing).not.toHaveProperty('contact');
+  });
+
+  it('keeps the interested customer anonymous to the lister before fee completion', async () => {
+    const stored = inquiry(PropertyInquiryStatus.NOTIFY_SENT);
+    const prisma = {
+      propertyInquiry: { findUnique: jest.fn().mockResolvedValue(stored) },
+    } as unknown as PrismaService;
+    const service = new PropertyWorkflowBridgeService(prisma, {
+      search: jest.fn(),
+    } as unknown as PropertyService);
+
+    const snapshot = await service.snapshot(stored.poNumber, 'lister-1');
+
+    expect(snapshot.customer).toEqual({
+      id: null,
+      name: 'Anonymous',
+      email: null,
+    });
   });
 
   it('returns the persisted Step 3 notification event to both participants', async () => {
@@ -361,7 +380,7 @@ describe('PropertyWorkflowBridgeService', () => {
       'https://files.example/listing.jpg',
     );
   });
-  it('keeps the meeting invitation and confirmation on Step 7', async () => {
+  it('persists the meeting invitation note and keeps meeting actions on Step 7', async () => {
     const before = {
       ...inquiry(PropertyInquiryStatus.PAID),
       status: PropertyInquiryStatus.PAID,
@@ -371,6 +390,10 @@ describe('PropertyWorkflowBridgeService', () => {
       ...before,
       status: PropertyInquiryStatus.MEETING_SENT,
       step: 7,
+      meetingDate: '2026-07-20',
+      meetingTime: '14:00',
+      meetingVenue: 'Saphan Song',
+      meetingNote: 'Please meet at the main lobby.',
     };
     const prisma = {
       propertyInquiry: {
@@ -393,24 +416,35 @@ describe('PropertyWorkflowBridgeService', () => {
         meetingDate: '2026-07-20',
         meetingTime: '14:00',
         meetingVenue: 'Saphan Song',
+        note: 'Please meet at the main lobby.',
       },
     );
 
     expect(prisma.propertyInquiry.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ step: 7 }),
+        data: expect.objectContaining({
+          step: 7,
+          meetingNote: 'Please meet at the main lobby.',
+        }),
       }),
     );
     expect(result.currentStep).toBe(7);
     expect(result).toEqual(
       expect.objectContaining({
         nextActionStep: 7,
-        nextActionLabel: 'Confirm viewing invitation',
+        nextActionLabel: 'Confirm meeting',
         nextActionOwner: 'lister',
+        meeting: {
+          date: '2026-07-20',
+          time: '14:00',
+          venue: 'Saphan Song',
+          note: 'Please meet at the main lobby.',
+        },
         actions: expect.arrayContaining([
           expect.objectContaining({
             key: 'viewing-confirm',
             owner: 'lister',
+            label: 'Confirm meeting',
             actionStep: 7,
           }),
         ]),
@@ -446,7 +480,7 @@ describe('PropertyWorkflowBridgeService', () => {
       PropertyInquiryStatus.PAID,
       'customer-1',
       7,
-      'Send viewing invitation',
+      'Send meeting invitation',
       'customer',
     ],
     [
@@ -725,6 +759,21 @@ describe('PropertyWorkflowBridgeService', () => {
       ...inquiry(PropertyInquiryStatus.PAID),
       status: PropertyInquiryStatus.PAID,
       step: 5,
+      workflowEvents: [
+        {
+          action: 'free-pass',
+          status: PropertyInquiryStatus.PAID,
+          step: 5,
+          actorId: 'customer-1',
+          isPrivate: false,
+          note: null,
+          metadata: {
+            freePass: true,
+            audience: ['customer', 'lister'],
+          },
+          createdAt: new Date('2026-07-12T02:00:00.000Z'),
+        },
+      ],
     };
     const prisma = {
       propertyInquiry: { findUnique: jest.fn().mockResolvedValue(stored) },
@@ -738,7 +787,11 @@ describe('PropertyWorkflowBridgeService', () => {
     expectAuthoritativeSnapshot(snapshot);
     expect(snapshot.stepLabels[5]).toBe('Chat');
     expect(snapshot.chat).toEqual(
-      expect.objectContaining({ enabled: true, state: 'available' }),
+      expect.objectContaining({
+        enabled: true,
+        state: 'available',
+        activatedAt: expect.any(Date),
+      }),
     );
     expect(snapshot.actions).toEqual(
       expect.arrayContaining([
@@ -748,6 +801,148 @@ describe('PropertyWorkflowBridgeService', () => {
           actionStep: 7,
         }),
       ]),
+    );
+  });
+
+  it('returns the authoritative tier fee and Free Pass action at Step 5', async () => {
+    const stored = {
+      ...inquiry(PropertyInquiryStatus.ACCEPTED),
+      status: PropertyInquiryStatus.ACCEPTED,
+      step: 4,
+      property: { ...property, tier: 'ECONOMY' },
+    };
+    const prisma = {
+      propertyInquiry: { findUnique: jest.fn().mockResolvedValue(stored) },
+    } as unknown as PrismaService;
+    const service = new PropertyWorkflowBridgeService(prisma, {
+      search: jest.fn(),
+    } as unknown as PropertyService);
+
+    const snapshot = await service.snapshot(stored.poNumber, 'customer-1');
+
+    expect(snapshot.processingFee).toEqual(
+      expect.objectContaining({
+        amount: 100,
+        currency: 'THB',
+        displayLabel: expect.stringContaining('100'),
+      }),
+    );
+    expect(snapshot.actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: 'free-pass',
+          label: 'Free Pass',
+          feeMode: 'free-pass',
+        }),
+      ]),
+    );
+  });
+
+  it.each([
+    [
+      PropertyInquiryStatus.NOTIFY_SENT,
+      'lister-1',
+      'partner-accept',
+      {},
+    ],
+    [
+      PropertyInquiryStatus.MEETING_SENT,
+      'lister-1',
+      'viewing-confirm',
+      {},
+    ],
+  ])(
+    'persists participant notifications for %s via %s',
+    async (beforeStatus, userId, action, dto) => {
+      const before = inquiry(beforeStatus as PropertyInquiryStatus);
+      const after = {
+        ...before,
+        status:
+          action === 'partner-accept'
+            ? PropertyInquiryStatus.ACCEPTED
+            : PropertyInquiryStatus.MEETING_CONFIRMED,
+        step: action === 'partner-accept' ? 4 : 7,
+      };
+      const prisma = {
+        propertyInquiry: {
+          findUnique: jest
+            .fn()
+            .mockResolvedValueOnce(before)
+            .mockResolvedValueOnce(after),
+          update: jest.fn().mockResolvedValue({ poNumber: before.poNumber }),
+        },
+      } as unknown as PrismaService;
+      const service = new PropertyWorkflowBridgeService(prisma, {
+        search: jest.fn(),
+      } as unknown as PropertyService);
+
+      await service.action(
+        before.poNumber,
+        userId as string,
+        action as any,
+        dto,
+      );
+
+      expect(prisma.propertyInquiry.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            workflowEvents: {
+              create: expect.objectContaining({
+                metadata: expect.objectContaining({
+                  sourceVersion: 'cblue-property-workflow-v1',
+                  audience: ['customer', 'lister'],
+                  notifications: {
+                    customer: expect.any(String),
+                    lister: expect.any(String),
+                  },
+                }),
+              }),
+            },
+          }),
+        }),
+      );
+    },
+  );
+
+  it('returns persisted participant alerts newest-first with their messages', async () => {
+    const acceptedAt = new Date('2026-07-22T04:05:06.000Z');
+    const stored = {
+      ...inquiry(PropertyInquiryStatus.ACCEPTED),
+      status: PropertyInquiryStatus.ACCEPTED,
+      workflowEvents: [
+        {
+          action: 'partner-accept',
+          status: PropertyInquiryStatus.ACCEPTED,
+          step: 4,
+          actorId: 'lister-1',
+          isPrivate: false,
+          note: null,
+          metadata: {
+            audience: ['customer', 'lister'],
+            notifications: {
+              customer: 'The selected lister accepted your inquiry.',
+              lister: 'You accepted the property inquiry.',
+            },
+          },
+          createdAt: acceptedAt,
+        },
+      ],
+    };
+    const prisma = {
+      propertyInquiry: { findUnique: jest.fn().mockResolvedValue(stored) },
+    } as unknown as PrismaService;
+    const service = new PropertyWorkflowBridgeService(prisma, {
+      search: jest.fn(),
+    } as unknown as PropertyService);
+
+    const snapshot = await service.snapshot(stored.poNumber, 'customer-1');
+
+    expect(snapshot.alerts[0]).toEqual(
+      expect.objectContaining({
+        action: 'partner-accept',
+        createdAt: acceptedAt,
+        message: 'The selected lister accepted your inquiry.',
+      }),
     );
   });
 

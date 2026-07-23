@@ -562,6 +562,7 @@ model PropertyInquiry {
   meetingDate     String?
   meetingTime     String?
   meetingVenue    String?
+  meetingNote     String?
   requestDetails  String?
   customerRating  Int?
   customerComment String?
