@@ -51,6 +51,56 @@ export class QualificationService {
     return this.createSubmission(fixer.id, new Date(), consentVersion);
   }
 
+  async getStatusForUser(userId: string) {
+    const fixer = await this.prisma.fixer.findUnique({
+      where: { userId },
+      select: {
+        id: true, tier: true, status: true, verified: true, aiScore: true,
+        aiTier: true, aiCredentialStatus: true, updatedAt: true,
+        qualificationSubmissions: {
+          orderBy: { version: 'desc' },
+          take: 1,
+          select: {
+            id: true, version: true, status: true, policyVersion: true,
+            submittedAt: true, reviewedAt: true, decisionReason: true,
+            evaluations: {
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+              select: {
+                provider: true, status: true, risk: true, recommendedTier: true,
+                confidence: true, deterministicScore: true, aiScore: true,
+                completedAt: true, createdAt: true,
+              },
+            },
+            reviewTasks: {
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+              select: { status: true, decision: true, createdAt: true, decidedAt: true },
+            },
+          },
+        },
+        tierQualifications: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { approvedTier: true, recommendedTier: true, source: true, policyVersion: true, reason: true, effectiveAt: true, expiresAt: true, createdAt: true },
+        },
+      },
+    });
+    if (!fixer) throw new NotFoundException('Fixer profile not found');
+    const submission = fixer.qualificationSubmissions[0] ?? null;
+    const evaluation = submission?.evaluations[0] ?? null;
+    const reviewTask = submission?.reviewTasks[0] ?? null;
+    const tierQualification = fixer.tierQualifications[0] ?? null;
+    return {
+      sourceVersion: QUALIFICATION_POLICY_VERSION,
+      fixer: { id: fixer.id, tier: fixer.tier, status: fixer.status, verified: fixer.verified, updatedAt: fixer.updatedAt },
+      ai: { score: fixer.aiScore, tier: fixer.aiTier, credentialStatus: fixer.aiCredentialStatus },
+      submission: submission ? { id: submission.id, version: submission.version, status: submission.status, policyVersion: submission.policyVersion, submittedAt: submission.submittedAt, reviewedAt: submission.reviewedAt, decisionReason: submission.decisionReason } : null,
+      evaluation,
+      reviewTask,
+      tierQualification,
+    };
+  }
   async getSubmissionForUser(userId: string, submissionId: string) {
     const submission = await this.prisma.kycSubmission.findFirst({
       where: { id: submissionId, fixer: { userId } },

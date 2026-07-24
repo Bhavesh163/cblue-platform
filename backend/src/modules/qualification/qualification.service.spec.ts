@@ -37,6 +37,29 @@ describe('QualificationService', () => {
     }));
   });
 
+  it('returns only the authenticated fixer qualification status', async () => {
+    const updatedAt = new Date('2026-07-24T00:00:00.000Z');
+    prisma.fixer.findUnique.mockResolvedValue({
+      id: 'fixer-1', tier: 'STANDARD', status: 'APPROVED', verified: true,
+      aiScore: 78, aiTier: 'STANDARD', aiCredentialStatus: 'verified', updatedAt,
+      qualificationSubmissions: [{
+        id: 'submission-1', version: 2, status: 'APPROVED',
+        policyVersion: 'cblue-fixer-qualification-v1', submittedAt: updatedAt,
+        reviewedAt: updatedAt, decisionReason: 'Verified by admin',
+        evaluations: [{ provider: 'deterministic', status: 'COMPLETED', risk: 'LOW', recommendedTier: 'STANDARD', confidence: 92, deterministicScore: 78, aiScore: null, completedAt: updatedAt, createdAt: updatedAt }],
+        reviewTasks: [{ status: 'DECIDED', decision: 'APPROVE', createdAt: updatedAt, decidedAt: updatedAt }],
+      }],
+      tierQualifications: [{ approvedTier: 'STANDARD', recommendedTier: 'STANDARD', source: 'HUMAN', policyVersion: 'cblue-fixer-qualification-v1', reason: 'Verified by admin', effectiveAt: updatedAt, expiresAt: null, createdAt: updatedAt }],
+    });
+
+    await expect(service.getStatusForUser('user-1')).resolves.toEqual(expect.objectContaining({
+      sourceVersion: 'cblue-fixer-qualification-v1',
+      fixer: expect.objectContaining({ id: 'fixer-1', tier: 'STANDARD', status: 'APPROVED' }),
+      submission: expect.objectContaining({ id: 'submission-1', status: 'APPROVED' }),
+      reviewTask: expect.objectContaining({ status: 'DECIDED', decision: 'APPROVE' }),
+      tierQualification: expect.objectContaining({ approvedTier: 'STANDARD', source: 'HUMAN' }),
+    }));
+  });
   it('rejects a submission request without a fixer profile', async () => {
     prisma.fixer.findUnique.mockResolvedValue(null);
     await expect(service.createSubmissionForUser('user-unknown', 'pdpa-v1'))

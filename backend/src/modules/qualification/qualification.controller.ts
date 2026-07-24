@@ -45,6 +45,10 @@ export class QualificationController {
     );
   }
 
+  @Get('status')
+  getStatus(@CurrentUser('id') userId: string) {
+    return this.qualification.getStatusForUser(userId);
+  }
   @Get('submissions/:submissionId')
   getSubmission(
     @CurrentUser('id') userId: string,
