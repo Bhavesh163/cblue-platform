@@ -18,11 +18,15 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { CreateQualificationSubmissionDto } from './dto/create-qualification-submission.dto';
 import { UploadQualificationDocumentDto } from './dto/upload-qualification-document.dto';
 import { QualificationService } from './qualification.service';
+import { QualificationEvaluationService } from './qualification-evaluation.service';
 
 @Controller('qualification')
 @UseGuards(JwtAuthGuard)
 export class QualificationController {
-  constructor(private readonly qualification: QualificationService) {}
+  constructor(
+    private readonly qualification: QualificationService,
+    private readonly evaluations: QualificationEvaluationService,
+  ) {}
 
   @Post('submissions')
   createSubmission(
@@ -59,6 +63,22 @@ export class QualificationController {
     );
   }
 
+  @Post('submissions/:submissionId/evaluate')
+  evaluateSubmission(
+    @CurrentUser('id') userId: string,
+    @Param('submissionId') submissionId: string,
+  ) {
+    return this.evaluations.evaluateSubmissionForUser(userId, submissionId);
+  }
+
+  @Get('submissions/:submissionId/evaluations')
+  getEvaluations(
+    @CurrentUser('id') userId: string,
+    @Param('submissionId') submissionId: string,
+  ) {
+    return this.evaluations.getLatestForUser(userId, submissionId);
+  }
+
   @Get('admin/submissions')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -79,5 +99,12 @@ export class QualificationController {
       submissionId,
       documentId,
     );
+  }
+
+  @Get('admin/submissions/:submissionId/evaluations')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  getAdminEvaluations(@Param('submissionId') submissionId: string) {
+    return this.evaluations.getLatestForAdmin(submissionId);
   }
 }
