@@ -43,8 +43,20 @@ export class QualificationEvaluationService {
   ) {}
 
   async evaluateSubmissionForUser(userId: string, submissionId: string) {
+    return this.evaluateSubmission(submissionId, userId, userId);
+  }
+
+  async evaluateSubmissionForAdmin(adminId: string, submissionId: string) {
+    return this.evaluateSubmission(submissionId, undefined, adminId);
+  }
+
+  private async evaluateSubmission(
+    submissionId: string,
+    ownerUserId?: string,
+    actorId?: string,
+  ) {
     const submission = await this.prisma.kycSubmission.findFirst({
-      where: { id: submissionId, fixer: { userId } },
+      where: ownerUserId ? { id: submissionId, fixer: { userId: ownerUserId } } : { id: submissionId },
       include: {
         fixer: {
           select: { id: true, yearsExperience: true },
@@ -139,6 +151,17 @@ export class QualificationEvaluationService {
         });
       }
 
+      await tx.qualificationAuditLog.create({
+        data: {
+          submissionId,
+          actorId: actorId || null,
+          action: 'QUALIFICATION_EVALUATED',
+          entityType: 'KycSubmission',
+          entityId: submissionId,
+          reason: 'Qualification evaluation requested',
+          afterHash: inputHash,
+        },
+      });
       await tx.kycSubmission.update({
         where: { id: submissionId },
         data: { status: reviewRequired ? 'NEEDS_REVIEW' : 'PROCESSING' },

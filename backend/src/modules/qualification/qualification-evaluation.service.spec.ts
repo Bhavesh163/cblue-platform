@@ -5,6 +5,7 @@ describe('QualificationEvaluationService', () => {
   const tx = {
     qualificationEvaluation: { create: jest.fn() },
     qualificationReviewTask: { create: jest.fn() },
+    qualificationAuditLog: { create: jest.fn() },
     kycSubmission: { update: jest.fn() },
   } as any;
   const prisma = {
@@ -19,6 +20,7 @@ describe('QualificationEvaluationService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     tx.qualificationEvaluation.create.mockResolvedValue({ id: 'evaluation-1' });
+    tx.qualificationAuditLog.create.mockResolvedValue({ id: 'audit-1' });
     tx.kycSubmission.update.mockResolvedValue({ id: 'submission-1' });
   });
 
@@ -60,6 +62,30 @@ describe('QualificationEvaluationService', () => {
     });
   });
 
+  it('allows an admin re-evaluation and records the admin actor', async () => {
+    prisma.kycSubmission.findFirst.mockResolvedValue({
+      id: 'submission-admin',
+      fixer: { id: 'fixer-admin', yearsExperience: 4 },
+      documents: [
+        { id: 'front', documentType: 'id-front', evidenceStatus: 'VALIDATED' },
+        { id: 'back', documentType: 'id-back', evidenceStatus: 'VALIDATED' },
+      ],
+    });
+    policy.evaluate.mockReturnValue({
+      policyVersion: 'cblue-fixer-qualification-v1', recommendedTier: 'STANDARD',
+      eligibleTiers: ['ECONOMY', 'STANDARD'], humanReviewRequired: false,
+      publicPromotionAllowed: true, reasons: [],
+    });
+
+    await expect(service.evaluateSubmissionForAdmin('admin-1', 'submission-admin'))
+      .resolves.toEqual(expect.objectContaining({ submissionId: 'submission-admin' }));
+    expect(prisma.kycSubmission.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'submission-admin' },
+    }));
+    expect(tx.qualificationAuditLog.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ actorId: 'admin-1', action: 'QUALIFICATION_EVALUATED' }),
+    }));
+  });
   it('fails closed for a submission owned by another user', async () => {
     prisma.kycSubmission.findFirst.mockResolvedValue(null);
     await expect(service.evaluateSubmissionForUser('other-user', 'submission-1'))

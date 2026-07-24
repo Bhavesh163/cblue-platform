@@ -98,6 +98,15 @@ export class QualificationController {
   ) {
     return this.qualification.listAdminAuditLogs(Number(limit), submissionId);
   }
+  @Post('admin/submissions/:submissionId/re-evaluate')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  evaluateAdminSubmission(
+    @CurrentUser('id') adminId: string,
+    @Param('submissionId') submissionId: string,
+  ) {
+    return this.evaluations.evaluateSubmissionForAdmin(adminId, submissionId);
+  }
   @Get('admin/submissions')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
