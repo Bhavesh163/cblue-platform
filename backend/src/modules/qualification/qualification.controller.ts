@@ -89,6 +89,15 @@ export class QualificationController {
     return this.evaluations.getLatestForUser(userId, submissionId);
   }
 
+  @Get('admin/audit')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  listAdminAudit(
+    @Query('limit') limit?: string,
+    @Query('submissionId') submissionId?: string,
+  ) {
+    return this.qualification.listAdminAuditLogs(Number(limit), submissionId);
+  }
   @Get('admin/submissions')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)

@@ -10,7 +10,7 @@ describe('QualificationService', () => {
       findMany: jest.fn(),
     },
     kycDocument: { create: jest.fn(), findFirst: jest.fn() },
-    qualificationAuditLog: { create: jest.fn() },
+    qualificationAuditLog: { create: jest.fn(), findMany: jest.fn() },
   } as any;
   const policy = { evaluate: jest.fn() } as any;
   const storage = {
@@ -21,6 +21,23 @@ describe('QualificationService', () => {
 
   beforeEach(() => jest.clearAllMocks());
 
+  it('returns a capped, sanitized admin audit feed', async () => {
+    const createdAt = new Date('2026-07-24T00:00:00.000Z');
+    prisma.qualificationAuditLog.findMany.mockResolvedValue([{
+      id: 'audit-1', submissionId: 'submission-1', actorId: 'admin-1',
+      action: 'QUALIFICATION_DECIDED', entityType: 'TierQualification',
+      entityId: 'tier-1', reason: 'Approved after review', beforeHash: 'before',
+      afterHash: 'after', createdAt,
+    }]);
+
+    await expect(service.listAdminAuditLogs(500, 'submission-1')).resolves.toHaveLength(1);
+    expect(prisma.qualificationAuditLog.findMany).toHaveBeenCalledWith({
+      where: { submissionId: 'submission-1' },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      select: expect.objectContaining({ action: true, beforeHash: true, afterHash: true }),
+    });
+  });
   it('creates a submission for the authenticated fixer profile', async () => {
     prisma.fixer.findUnique.mockResolvedValue({ id: 'fixer-1' });
     prisma.kycSubmission.findFirst.mockResolvedValue(null);

@@ -193,6 +193,19 @@ export class QualificationService {
     });
   }
 
+  async listAdminAuditLogs(limit = 50, submissionId?: string) {
+    const safeLimit = Math.min(100, Math.max(1, Math.trunc(limit) || 50));
+    return this.prisma.qualificationAuditLog.findMany({
+      where: submissionId ? { submissionId } : undefined,
+      orderBy: { createdAt: 'desc' },
+      take: safeLimit,
+      select: {
+        id: true, submissionId: true, actorId: true, action: true,
+        entityType: true, entityId: true, reason: true, beforeHash: true,
+        afterHash: true, createdAt: true,
+      },
+    });
+  }
   async listAdminSubmissions(status?: string) {
     let normalizedStatus: QualificationSubmissionStatus | undefined;
     if (status) {
