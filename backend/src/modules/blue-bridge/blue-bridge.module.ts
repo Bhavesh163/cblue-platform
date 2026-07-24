@@ -6,10 +6,21 @@ import { BlueBridgeService } from './blue-bridge.service';
 import { FixerWorkflowBridgeService } from './fixer-workflow-bridge.service';
 import { PropertyWorkflowBridgeController } from './property-workflow-bridge.controller';
 import { PropertyWorkflowBridgeService } from './property-workflow-bridge.service';
+import { QualificationBridgeController } from './qualification-bridge.controller';
+import { QualificationBridgeService } from './qualification-bridge.service';
 
 @Module({
   imports: [PropertyModule, PropertyInquiryModule],
-  controllers: [BlueBridgeController, PropertyWorkflowBridgeController],
-  providers: [BlueBridgeService, FixerWorkflowBridgeService, PropertyWorkflowBridgeService],
+  controllers: [
+    BlueBridgeController,
+    PropertyWorkflowBridgeController,
+    QualificationBridgeController,
+  ],
+  providers: [
+    BlueBridgeService,
+    FixerWorkflowBridgeService,
+    PropertyWorkflowBridgeService,
+    QualificationBridgeService,
+  ],
 })
 export class BlueBridgeModule {}
