@@ -10,15 +10,20 @@ import {
   Body,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { UserRole } from '@prisma/client';
+import {
+  QualificationReviewStatus,
+  UserRole,
+} from '@prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CreateQualificationSubmissionDto } from './dto/create-qualification-submission.dto';
+import { QualificationReviewDecisionDto } from './dto/qualification-review-decision.dto';
 import { UploadQualificationDocumentDto } from './dto/upload-qualification-document.dto';
-import { QualificationService } from './qualification.service';
 import { QualificationEvaluationService } from './qualification-evaluation.service';
+import { QualificationReviewService } from './qualification-review.service';
+import { QualificationService } from './qualification.service';
 
 @Controller('qualification')
 @UseGuards(JwtAuthGuard)
@@ -26,6 +31,7 @@ export class QualificationController {
   constructor(
     private readonly qualification: QualificationService,
     private readonly evaluations: QualificationEvaluationService,
+    private readonly reviews: QualificationReviewService,
   ) {}
 
   @Post('submissions')
@@ -106,5 +112,33 @@ export class QualificationController {
   @Roles(UserRole.ADMIN)
   getAdminEvaluations(@Param('submissionId') submissionId: string) {
     return this.evaluations.getLatestForAdmin(submissionId);
+  }
+
+  @Get('admin/review-tasks')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  listReviewTasks(@Query('status') status?: QualificationReviewStatus) {
+    return this.reviews.listTasks(status);
+  }
+
+  @Post('admin/review-tasks/:taskId/assign')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  assignReviewTask(
+    @CurrentUser('id') adminId: string,
+    @Param('taskId') taskId: string,
+  ) {
+    return this.reviews.assignTask(adminId, taskId);
+  }
+
+  @Post('admin/review-tasks/:taskId/decision')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  decideReviewTask(
+    @CurrentUser('id') adminId: string,
+    @Param('taskId') taskId: string,
+    @Body() dto: QualificationReviewDecisionDto,
+  ) {
+    return this.reviews.decideTask(adminId, taskId, dto);
   }
 }
