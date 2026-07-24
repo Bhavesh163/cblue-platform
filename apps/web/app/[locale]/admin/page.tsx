@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import ReCaptcha from "../components/ReCaptcha";
 import { getApiUrl } from "../lib/api";
+import QualificationReviewPanel from "../components/QualificationReviewPanel";
 
 const ADMIN_TOKEN_KEY = "cblue_admin_token";
 const ADMIN_USER_KEY = "cblue_admin_user";
@@ -507,6 +508,8 @@ export default function AdminPage() {
             </button>
           </div>
         </header>
+
+        <QualificationReviewPanel token={token} />
 
         {consoleError && (
           <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
