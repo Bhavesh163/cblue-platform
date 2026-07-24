@@ -44,6 +44,20 @@ export class QualificationStorageService {
     );
   }
 
+  async getPrivateObject(key: string) {
+    const client = this.requireClient();
+    const output = await client.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
+    if (!output.Body) {
+      throw new ServiceUnavailableException(
+        'Qualification document could not be read',
+      );
+    }
+    const bytes = await output.Body.transformToByteArray();
+    return Buffer.from(bytes);
+  }
+
   async createReadUrl(key: string, expiresInSeconds = 300) {
     const client = this.requireClient();
 

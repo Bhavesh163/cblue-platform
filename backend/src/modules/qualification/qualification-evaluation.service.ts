@@ -5,8 +5,10 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  FixerStatus,
   FixerTier,
   Prisma,
+  QualificationDecisionSource,
   QualificationEvidenceStatus,
   QualificationEvaluationStatus,
   QualificationRisk,
@@ -66,6 +68,7 @@ export class QualificationEvaluationService {
             id: true,
             documentType: true,
             evidenceStatus: true,
+            extractedFields: true,
           },
         },
       },
@@ -94,7 +97,8 @@ export class QualificationEvaluationService {
     const reviewRequired =
       deterministic.humanReviewRequired ||
       deterministicRisk !== QualificationRisk.LOW ||
-      Boolean(advisory);
+      Boolean(advisory) ||
+      deterministic.recommendedTier !== FixerTier.ECONOMY;
 
     const created = await this.prisma.$transaction(async (tx) => {
       const evaluation = await tx.qualificationEvaluation.create({
@@ -138,7 +142,14 @@ export class QualificationEvaluationService {
       }
 
       if (reviewRequired) {
-        await tx.qualificationReviewTask.create({
+        const existingReviewTask = await tx.qualificationReviewTask.findFirst({
+          where: {
+            submissionId,
+            status: { in: ['OPEN', 'ASSIGNED'] },
+          },
+          select: { id: true },
+        });
+        if (!existingReviewTask) await tx.qualificationReviewTask.create({
           data: {
             submissionId,
             status: 'OPEN',
@@ -147,6 +158,38 @@ export class QualificationEvaluationService {
               policyReasons: deterministic.reasons,
               typhoonAdvisory: Boolean(advisory),
             }),
+          },
+        });
+      } else {
+        const effectiveAt = new Date();
+        const existingQualification = await tx.tierQualification.findFirst({
+          where: {
+            submissionId,
+            source: QualificationDecisionSource.DETERMINISTIC,
+            approvedTier: FixerTier.ECONOMY,
+          },
+          select: { id: true },
+        });
+        if (!existingQualification) {
+          await tx.tierQualification.create({
+            data: {
+              fixerId: submission.fixer.id,
+              submissionId,
+              recommendedTier: FixerTier.ECONOMY,
+              approvedTier: FixerTier.ECONOMY,
+              source: QualificationDecisionSource.DETERMINISTIC,
+              policyVersion: deterministic.policyVersion,
+              reason: 'Validated KYC qualifies the partner for Economy tier.',
+              effectiveAt,
+            },
+          });
+        }
+        await tx.fixer.update({
+          where: { id: submission.fixer.id },
+          data: {
+            tier: FixerTier.ECONOMY,
+            status: FixerStatus.APPROVED,
+            verified: true,
           },
         });
       }
@@ -164,7 +207,14 @@ export class QualificationEvaluationService {
       });
       await tx.kycSubmission.update({
         where: { id: submissionId },
-        data: { status: reviewRequired ? 'NEEDS_REVIEW' : 'PROCESSING' },
+        data: reviewRequired
+          ? { status: 'NEEDS_REVIEW' }
+          : {
+              status: 'APPROVED',
+              reviewedAt: new Date(),
+              reviewerId: null,
+              decisionReason: 'Validated KYC qualifies for Economy tier.',
+            },
       });
 
       return evaluation;
@@ -177,7 +227,7 @@ export class QualificationEvaluationService {
       deterministic,
       advisory,
       reviewRequired,
-      status: reviewRequired ? 'NEEDS_REVIEW' : 'PROCESSING',
+      status: reviewRequired ? 'NEEDS_REVIEW' : 'APPROVED',
     };
   }
 
@@ -242,6 +292,7 @@ export class QualificationEvaluationService {
       id: string;
       documentType: string;
       evidenceStatus: QualificationEvidenceStatus;
+      extractedFields: Prisma.JsonValue | null;
     }>;
   }): QualificationEvidenceInput {
     const documents = submission.documents;
@@ -249,27 +300,45 @@ export class QualificationEvaluationService {
       (document) => document.documentType === type &&
         document.evidenceStatus === QualificationEvidenceStatus.VALIDATED,
     ).length;
-    const count = (type: string) => documents.filter(
-      (document) => document.documentType === type,
-    ).length;
+    const extracted = (document: typeof documents[number]) => {
+      if (!document.extractedFields || typeof document.extractedFields !== 'object' || Array.isArray(document.extractedFields)) {
+        return {} as Record<string, unknown>;
+      }
+      const root = document.extractedFields as Record<string, unknown>;
+      return root.fields && typeof root.fields === 'object' && !Array.isArray(root.fields)
+        ? root.fields as Record<string, unknown>
+        : root;
+    };
+    const validatedDocuments = documents.filter(
+      (document) => document.evidenceStatus === QualificationEvidenceStatus.VALIDATED,
+    );
     const idVerified = verified('id-front') > 0 && verified('id-back') > 0;
     const corporateVerified =
       verified('corporate-certificate') > 0 ||
       verified('project-completion-certificate') >= 2;
+    const millionBahtProjects = validatedDocuments.filter((document) =>
+      document.documentType === 'project-completion-certificate' &&
+      Number(extracted(document).projectValue || 0) >= 1_000_000,
+    ).length;
+    const hasEligibleDegree = validatedDocuments.some((document) => {
+      if (document.documentType !== 'education-certificate') return false;
+      const level = String(extracted(document).credentialLevel || '').toLowerCase();
+      return level.includes('master') || level.includes('doctor');
+    });
 
     return {
       kycApproved: idVerified,
       yearsExperience: submission.fixer.yearsExperience || 0,
       relatedCertificateCount:
-        count('education-certificate') + count('professional-certificate'),
-      corporateCertificateCount: count('corporate-certificate'),
+        verified('education-certificate') + verified('professional-certificate'),
+      corporateCertificateCount: verified('corporate-certificate'),
       corporateEndorsedCompletionCertificateCount: verified(
         'project-completion-certificate',
       ),
-      projectCompletionCertificateCount: count('project-completion-certificate'),
-      millionBahtCompletionCertificateCount: 0,
-      hasEligibleMastersOrDoctorate: false,
-      hasInternationalAward: count('international-award') > 0,
+      projectCompletionCertificateCount: verified('project-completion-certificate'),
+      millionBahtCompletionCertificateCount: millionBahtProjects,
+      hasEligibleMastersOrDoctorate: hasEligibleDegree,
+      hasInternationalAward: verified('international-award') > 0,
       corporateEvidenceVerified: corporateVerified,
     };
   }

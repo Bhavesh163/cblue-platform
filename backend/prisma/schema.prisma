@@ -330,6 +330,12 @@ model KycDocument {
   encrypted         Boolean                     @default(true)
   evidenceStatus    QualificationEvidenceStatus @default(UNCHECKED)
   extractedFields   Json?
+  extractionProvider String?
+  extractionModel    String?
+  extractedAt        DateTime?
+  extractionErrorCode String?
+  credentialVerification Json?
+  credentialVerifiedAt DateTime?
   expiresAt         DateTime?
   retentionDeleteAt DateTime?
   createdAt         DateTime                    @default(now())
@@ -433,6 +439,14 @@ model QualificationReviewTask {
   assignedAt   DateTime?
   decidedAt    DateTime?
   decision     String?
+  proposedDecision String?
+  proposedTier     FixerTier?
+  proposedReason   String?
+  proposedBy       String?
+  proposedAt       DateTime?
+  checkedBy        String?
+  checkedAt        DateTime?
+  checkReason      String?
   createdAt    DateTime                  @default(now())
   updatedAt    DateTime                  @updatedAt
 

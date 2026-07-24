@@ -510,7 +510,7 @@ export default function AdminPage() {
           </div>
         </header>
 
-        <QualificationReviewPanel token={token} />
+        <QualificationReviewPanel token={token} adminId={adminUser?.id || ""} />
 
         <QualificationAuditPanel token={token} />
 

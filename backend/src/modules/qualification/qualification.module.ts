@@ -5,6 +5,7 @@ import { QualificationService } from './qualification.service';
 import { QualificationStorageService } from './qualification-storage.service';
 import { QualificationEvaluationService } from './qualification-evaluation.service';
 import { QualificationReviewService } from './qualification-review.service';
+import { QualificationVerificationService } from './qualification-verification.service';
 
 @Module({
   controllers: [QualificationController],
@@ -14,6 +15,7 @@ import { QualificationReviewService } from './qualification-review.service';
     QualificationStorageService,
     QualificationEvaluationService,
     QualificationReviewService,
+    QualificationVerificationService,
   ],
   exports: [
     QualificationPolicyService,
@@ -21,6 +23,7 @@ import { QualificationReviewService } from './qualification-review.service';
     QualificationStorageService,
     QualificationEvaluationService,
     QualificationReviewService,
+    QualificationVerificationService,
   ],
 })
 export class QualificationModule {}

@@ -35,6 +35,8 @@ export class QualificationBridgeService {
                 contentType: true,
                 sizeBytes: true,
                 evidenceStatus: true,
+                extractedAt: true,
+                credentialVerifiedAt: true,
                 expiresAt: true,
                 retentionDeleteAt: true,
                 createdAt: true,
@@ -68,6 +70,10 @@ export class QualificationBridgeService {
                 status: true,
                 priority: true,
                 assignedAt: true,
+                proposedDecision: true,
+                proposedTier: true,
+                proposedAt: true,
+                checkedAt: true,
                 decidedAt: true,
                 createdAt: true,
               },
@@ -95,6 +101,7 @@ export class QualificationBridgeService {
     if (!fixer) throw new NotFoundException('Qualification not found');
     const submission = fixer.qualificationSubmissions[0] || null;
     const tierQualification = fixer.tierQualifications[0] || null;
+    const evidenceStatuses = submission?.documents.map((document) => document.evidenceStatus) || [];
 
     return {
       sourceVersion: 'cblue-fixer-qualification-v1',
@@ -122,6 +129,16 @@ export class QualificationBridgeService {
           }
         : null,
       tierQualification,
+      verification: {
+        documentCount: evidenceStatuses.length,
+        validatedCount: evidenceStatuses.filter((status) => status === 'VALIDATED').length,
+        contradictedCount: evidenceStatuses.filter((status) => status === 'CONTRADICTED').length,
+        insufficientCount: evidenceStatuses.filter((status) => status === 'INSUFFICIENT').length,
+        uncheckedCount: evidenceStatuses.filter((status) => status === 'UNCHECKED').length,
+        makerCheckerStatus: submission?.reviewTasks[0]?.proposedAt
+          ? 'AWAITING_CHECKER'
+          : submission?.reviewTasks[0]?.status || null,
+      },
     };
   }
 

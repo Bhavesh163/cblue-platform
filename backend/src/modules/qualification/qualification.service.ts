@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -13,6 +14,7 @@ import {
 } from './qualification-policy.service';
 import { QualificationStorageService } from './qualification-storage.service';
 import { QUALIFICATION_DOCUMENT_TYPES } from './dto/upload-qualification-document.dto';
+import { QualificationEvidenceDecisionDto } from './dto/qualification-evidence-decision.dto';
 
 @Injectable()
 export class QualificationService {
@@ -75,7 +77,7 @@ export class QualificationService {
             reviewTasks: {
               orderBy: { createdAt: 'desc' },
               take: 1,
-              select: { status: true, decision: true, createdAt: true, decidedAt: true },
+              select: { status: true, decision: true, proposedDecision: true, proposedTier: true, proposedAt: true, checkedAt: true, createdAt: true, decidedAt: true },
             },
           },
         },
@@ -193,6 +195,56 @@ export class QualificationService {
     });
   }
 
+  async reviewDocumentEvidence(
+    adminId: string,
+    submissionId: string,
+    documentId: string,
+    dto: QualificationEvidenceDecisionDto,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const reviewTask = await tx.qualificationReviewTask.findFirst({
+        where: { submissionId, status: 'ASSIGNED', assignedTo: adminId, proposedAt: null },
+        select: { id: true },
+      });
+      if (!reviewTask) {
+        throw new ConflictException(
+          'Qualification evidence may only be decided by the assigned admin',
+        );
+      }
+      const reason = dto.reason.trim();
+      if (reason.length < 10) {
+        throw new BadRequestException('Evidence decision reason is too short');
+      }
+      const document = await tx.kycDocument.findFirst({
+        where: { id: documentId, submissionId },
+        select: { id: true, documentType: true, checksumSha256: true, evidenceStatus: true },
+      });
+      if (!document) throw new NotFoundException('Qualification document not found');
+
+      const updated = await tx.kycDocument.update({
+        where: { id: document.id },
+        data: { evidenceStatus: dto.evidenceStatus },
+        select: {
+          id: true, documentType: true, contentType: true, sizeBytes: true,
+          evidenceStatus: true, expiresAt: true, createdAt: true,
+        },
+      });
+      await tx.qualificationAuditLog.create({
+        data: {
+          submissionId,
+          actorId: adminId,
+          action: 'EVIDENCE_STATUS_DECIDED',
+          entityType: 'KycDocument',
+          entityId: document.id,
+          reason,
+          beforeHash: createHash('sha256').update(document.evidenceStatus).digest('hex'),
+          afterHash: createHash('sha256').update(dto.evidenceStatus).digest('hex'),
+          metadata: { documentType: document.documentType },
+        },
+      });
+      return updated;
+    });
+  }
   async listAdminAuditLogs(limit = 50, submissionId?: string) {
     const safeLimit = Math.min(100, Math.max(1, Math.trunc(limit) || 50));
     return this.prisma.qualificationAuditLog.findMany({
@@ -254,7 +306,21 @@ export class QualificationService {
     documentId: string,
   ) {
     const document = await this.prisma.kycDocument.findFirst({
-      where: { id: documentId, submissionId },
+      where: {
+        id: documentId,
+        submissionId,
+        submission: {
+          reviewTasks: {
+            some: {
+              status: 'ASSIGNED',
+              OR: [
+                { assignedTo: adminId, proposedAt: null },
+                { proposedAt: { not: null }, proposedBy: { not: adminId } },
+              ],
+            },
+          },
+        },
+      },
       select: { id: true, storageKey: true, documentType: true },
     });
     if (!document) throw new NotFoundException('Qualification document not found');

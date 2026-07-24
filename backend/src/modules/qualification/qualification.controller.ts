@@ -20,10 +20,13 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CreateQualificationSubmissionDto } from './dto/create-qualification-submission.dto';
 import { QualificationReviewDecisionDto } from './dto/qualification-review-decision.dto';
+import { QualificationEvidenceDecisionDto } from './dto/qualification-evidence-decision.dto';
+import { QualificationReviewCheckDto } from './dto/qualification-review-check.dto';
 import { UploadQualificationDocumentDto } from './dto/upload-qualification-document.dto';
 import { QualificationEvaluationService } from './qualification-evaluation.service';
 import { QualificationReviewService } from './qualification-review.service';
 import { QualificationService } from './qualification.service';
+import { QualificationVerificationService } from './qualification-verification.service';
 
 @Controller('qualification')
 @UseGuards(JwtAuthGuard)
@@ -32,6 +35,7 @@ export class QualificationController {
     private readonly qualification: QualificationService,
     private readonly evaluations: QualificationEvaluationService,
     private readonly reviews: QualificationReviewService,
+    private readonly verification: QualificationVerificationService,
   ) {}
 
   @Post('submissions')
@@ -114,6 +118,30 @@ export class QualificationController {
     return this.qualification.listAdminSubmissions(status);
   }
 
+  @Post('admin/submissions/:submissionId/documents/:documentId/evidence')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  reviewEvidence(
+    @CurrentUser('id') adminId: string,
+    @Param('submissionId') submissionId: string,
+    @Param('documentId') documentId: string,
+    @Body() dto: QualificationEvidenceDecisionDto,
+  ) {
+    return this.qualification.reviewDocumentEvidence(
+      adminId, submissionId, documentId, dto,
+    );
+  }
+  @Post('admin/submissions/:submissionId/documents/:documentId/verify')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  verifyDocument(
+    @CurrentUser('id') adminId: string,
+    @Param('submissionId') submissionId: string,
+    @Param('documentId') documentId: string,
+  ) {
+    return this.verification.verifyDocument(adminId, submissionId, documentId);
+  }
+
   @Get('admin/submissions/:submissionId/documents/:documentId/url')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -151,6 +179,17 @@ export class QualificationController {
     @Param('taskId') taskId: string,
   ) {
     return this.reviews.assignTask(adminId, taskId);
+  }
+
+  @Post('admin/review-tasks/:taskId/check')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  checkReviewTask(
+    @CurrentUser('id') adminId: string,
+    @Param('taskId') taskId: string,
+    @Body() dto: QualificationReviewCheckDto,
+  ) {
+    return this.reviews.checkTask(adminId, taskId, dto);
   }
 
   @Post('admin/review-tasks/:taskId/decision')

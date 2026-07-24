@@ -36,6 +36,7 @@ export default () => ({
     key: process.env.SPACES_KEY,
     secret: process.env.SPACES_SECRET,
     bucket: process.env.SPACES_BUCKET,
+    region: process.env.SPACES_REGION || 'us-east-1',
   },
   mailjet: {
     apiKey:
@@ -116,6 +117,10 @@ export default () => ({
   },
   visionService: {
     url: process.env.VISION_SERVICE_URL || 'http://localhost:8010',
+  },
+  qualificationVerification: {
+    credentialUrl: process.env.QUALIFICATION_CREDENTIAL_VERIFIER_URL || '',
+    credentialApiKey: process.env.QUALIFICATION_CREDENTIAL_VERIFIER_API_KEY || '',
   },
   typhoon: {
     apiKey: process.env.TYPHOON_API_KEY || '',

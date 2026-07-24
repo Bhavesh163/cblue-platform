@@ -47,6 +47,8 @@ describe('QualificationBridgeService', () => {
           contentType: 'image/jpeg',
           sizeBytes: 10,
           evidenceStatus: 'VALIDATED',
+          extractedAt: new Date('2026-07-24T00:00:00.000Z'),
+          credentialVerifiedAt: null,
           expiresAt: null,
           retentionDeleteAt: new Date('2029-07-24T00:00:00.000Z'),
           createdAt: new Date('2026-07-24T00:00:00.000Z'),
@@ -60,7 +62,9 @@ describe('QualificationBridgeService', () => {
           createdAt: new Date('2026-07-24T00:00:00.000Z'),
         }],
         reviewTasks: [{
-          id: 'task-1', status: 'OPEN', priority: 10, assignedAt: null,
+          id: 'task-1', status: 'ASSIGNED', priority: 10, assignedAt: new Date('2026-07-24T00:00:00.000Z'),
+          proposedDecision: 'APPROVE', proposedTier: 'STANDARD',
+          proposedAt: new Date('2026-07-24T01:00:00.000Z'), checkedAt: null,
           decidedAt: null, createdAt: new Date('2026-07-24T00:00:00.000Z'),
         }],
       }],
@@ -76,7 +80,12 @@ describe('QualificationBridgeService', () => {
 
     expect(result.sourceVersion).toBe('cblue-fixer-qualification-v1');
     expect(result.fixer.tier).toBe('STANDARD');
-    expect(result.submission?.reviewTask?.status).toBe('OPEN');
+    expect(result.submission?.reviewTask?.status).toBe('ASSIGNED');
+    expect(result.verification).toEqual(expect.objectContaining({
+      documentCount: 1,
+      validatedCount: 1,
+      makerCheckerStatus: 'AWAITING_CHECKER',
+    }));
     expect(result.submission?.documents[0]).not.toHaveProperty('storageKey');
     expect(result.submission?.evaluations[0].provider).toBe('DETERMINISTIC_POLICY');
   });
