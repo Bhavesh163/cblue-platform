@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
@@ -58,7 +59,9 @@ export class QualificationEvaluationService {
     actorId?: string,
   ) {
     const submission = await this.prisma.kycSubmission.findFirst({
-      where: ownerUserId ? { id: submissionId, fixer: { userId: ownerUserId } } : { id: submissionId },
+      where: ownerUserId
+        ? { id: submissionId, fixer: { userId: ownerUserId } }
+        : { id: submissionId },
       include: {
         fixer: {
           select: { id: true, yearsExperience: true },
@@ -75,6 +78,11 @@ export class QualificationEvaluationService {
     });
     if (!submission) {
       throw new NotFoundException('Qualification submission not found');
+    }
+    if (ownerUserId && submission.status !== 'SUBMITTED') {
+      throw new ConflictException(
+        'Qualification must be finalized before evaluation',
+      );
     }
 
     const evidence = this.buildEvidenceInput(submission);
@@ -149,17 +157,19 @@ export class QualificationEvaluationService {
           },
           select: { id: true },
         });
-        if (!existingReviewTask) await tx.qualificationReviewTask.create({
-          data: {
-            submissionId,
-            status: 'OPEN',
-            priority: deterministic.recommendedTier === FixerTier.ECONOMY ? 0 : 10,
-            reasonCodes: this.json({
-              policyReasons: deterministic.reasons,
-              typhoonAdvisory: Boolean(advisory),
-            }),
-          },
-        });
+        if (!existingReviewTask)
+          await tx.qualificationReviewTask.create({
+            data: {
+              submissionId,
+              status: 'OPEN',
+              priority:
+                deterministic.recommendedTier === FixerTier.ECONOMY ? 0 : 10,
+              reasonCodes: this.json({
+                policyReasons: deterministic.reasons,
+                typhoonAdvisory: Boolean(advisory),
+              }),
+            },
+          });
       } else {
         const effectiveAt = new Date();
         const existingQualification = await tx.tierQualification.findFirst({
@@ -296,33 +306,45 @@ export class QualificationEvaluationService {
     }>;
   }): QualificationEvidenceInput {
     const documents = submission.documents;
-    const verified = (type: string) => documents.filter(
-      (document) => document.documentType === type &&
-        document.evidenceStatus === QualificationEvidenceStatus.VALIDATED,
-    ).length;
-    const extracted = (document: typeof documents[number]) => {
-      if (!document.extractedFields || typeof document.extractedFields !== 'object' || Array.isArray(document.extractedFields)) {
+    const verified = (type: string) =>
+      documents.filter(
+        (document) =>
+          document.documentType === type &&
+          document.evidenceStatus === QualificationEvidenceStatus.VALIDATED,
+      ).length;
+    const extracted = (document: (typeof documents)[number]) => {
+      if (
+        !document.extractedFields ||
+        typeof document.extractedFields !== 'object' ||
+        Array.isArray(document.extractedFields)
+      ) {
         return {} as Record<string, unknown>;
       }
       const root = document.extractedFields as Record<string, unknown>;
-      return root.fields && typeof root.fields === 'object' && !Array.isArray(root.fields)
-        ? root.fields as Record<string, unknown>
+      return root.fields &&
+        typeof root.fields === 'object' &&
+        !Array.isArray(root.fields)
+        ? (root.fields as Record<string, unknown>)
         : root;
     };
     const validatedDocuments = documents.filter(
-      (document) => document.evidenceStatus === QualificationEvidenceStatus.VALIDATED,
+      (document) =>
+        document.evidenceStatus === QualificationEvidenceStatus.VALIDATED,
     );
     const idVerified = verified('id-front') > 0 && verified('id-back') > 0;
     const corporateVerified =
       verified('corporate-certificate') > 0 ||
       verified('project-completion-certificate') >= 2;
-    const millionBahtProjects = validatedDocuments.filter((document) =>
-      document.documentType === 'project-completion-certificate' &&
-      Number(extracted(document).projectValue || 0) >= 1_000_000,
+    const millionBahtProjects = validatedDocuments.filter(
+      (document) =>
+        document.documentType === 'project-completion-certificate' &&
+        Number(extracted(document).projectValue || 0) >= 1_000_000,
     ).length;
     const hasEligibleDegree = validatedDocuments.some((document) => {
       if (document.documentType !== 'education-certificate') return false;
-      const level = String(extracted(document).credentialLevel || '').toLowerCase();
+      const level = String(
+        extracted(document).credentialLevel || '',
+      ).toLowerCase();
       return level.includes('master') || level.includes('doctor');
     });
 
@@ -330,12 +352,15 @@ export class QualificationEvaluationService {
       kycApproved: idVerified,
       yearsExperience: submission.fixer.yearsExperience || 0,
       relatedCertificateCount:
-        verified('education-certificate') + verified('professional-certificate'),
+        verified('education-certificate') +
+        verified('professional-certificate'),
       corporateCertificateCount: verified('corporate-certificate'),
       corporateEndorsedCompletionCertificateCount: verified(
         'project-completion-certificate',
       ),
-      projectCompletionCertificateCount: verified('project-completion-certificate'),
+      projectCompletionCertificateCount: verified(
+        'project-completion-certificate',
+      ),
       millionBahtCompletionCertificateCount: millionBahtProjects,
       hasEligibleMastersOrDoctorate: hasEligibleDegree,
       hasInternationalAward: verified('international-award') > 0,
@@ -370,61 +395,76 @@ export class QualificationEvaluationService {
     evidence: QualificationEvidenceInput,
     deterministic: QualificationPolicyResult,
   ): Promise<AdvisoryResult | null> {
-    const apiKey = this.config.get<string>('typhoon.apiKey') || process.env.TYPHOON_API_KEY;
+    const apiKey =
+      this.config.get<string>('typhoon.apiKey') || process.env.TYPHOON_API_KEY;
     if (!apiKey) return null;
 
-    const baseUrl = this.config.get<string>('typhoon.baseUrl') ||
-      process.env.TYPHOON_BASE_URL || 'https://api.opentyphoon.ai/v1';
-    const model = this.config.get<string>('typhoon.model') ||
-      process.env.TYPHOON_MODEL || 'typhoon-v2.5-30b-a3b-instruct';
+    const baseUrl =
+      this.config.get<string>('typhoon.baseUrl') ||
+      process.env.TYPHOON_BASE_URL ||
+      'https://api.opentyphoon.ai/v1';
+    const model =
+      this.config.get<string>('typhoon.model') ||
+      process.env.TYPHOON_MODEL ||
+      'typhoon-v2.5-30b-a3b-instruct';
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
 
     try {
-      const response = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
+      const response = await fetch(
+        `${baseUrl.replace(/\/$/, '')}/chat/completions`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+          body: JSON.stringify({
+            model,
+            temperature: 0,
+            response_format: { type: 'json_object' },
+            messages: [
+              {
+                role: 'system',
+                content:
+                  'Return JSON only. You are an advisory fraud and credential reviewer. Never approve a tier. The deterministic policy and human admin remain authoritative.',
+              },
+              {
+                role: 'user',
+                content: JSON.stringify({
+                  submissionId,
+                  evidence,
+                  deterministicRecommendation: deterministic.recommendedTier,
+                  schema: {
+                    recommendedTier:
+                      'ECONOMY|STANDARD|CORPORATE|SPECIALIST|EXPERT',
+                    risk: 'LOW|MEDIUM|HIGH',
+                    confidence: 'integer 0..100',
+                    findings: 'string[]',
+                  },
+                }),
+              },
+            ],
+          }),
         },
-        signal: controller.signal,
-        body: JSON.stringify({
-          model,
-          temperature: 0,
-          response_format: { type: 'json_object' },
-          messages: [
-            {
-              role: 'system',
-              content:
-                'Return JSON only. You are an advisory fraud and credential reviewer. Never approve a tier. The deterministic policy and human admin remain authoritative.',
-            },
-            {
-              role: 'user',
-              content: JSON.stringify({
-                submissionId,
-                evidence,
-                deterministicRecommendation: deterministic.recommendedTier,
-                schema: {
-                  recommendedTier: 'ECONOMY|STANDARD|CORPORATE|SPECIALIST|EXPERT',
-                  risk: 'LOW|MEDIUM|HIGH',
-                  confidence: 'integer 0..100',
-                  findings: 'string[]',
-                },
-              }),
-            },
-          ],
-        }),
-      });
+      );
       if (!response.ok) return null;
-      const payload = await response.json() as {
+      const payload = (await response.json()) as {
         choices?: Array<{ message?: { content?: string } }>;
       };
       const content = payload.choices?.[0]?.message?.content;
       if (!content) return null;
       const parsed = JSON.parse(content) as Partial<AdvisoryResult>;
-      if (!this.isTier(parsed.recommendedTier) || !this.isRisk(parsed.risk)) return null;
+      if (!this.isTier(parsed.recommendedTier) || !this.isRisk(parsed.risk))
+        return null;
       const confidence = parsed.confidence;
-      if (typeof confidence !== 'number' || !Number.isInteger(confidence) || confidence < 0 || confidence > 100) {
+      if (
+        typeof confidence !== 'number' ||
+        !Number.isInteger(confidence) ||
+        confidence < 0 ||
+        confidence > 100
+      ) {
         return null;
       }
       return {
@@ -432,7 +472,9 @@ export class QualificationEvaluationService {
         risk: parsed.risk,
         confidence,
         findings: Array.isArray(parsed.findings)
-          ? parsed.findings.filter((item): item is string => typeof item === 'string').slice(0, 20)
+          ? parsed.findings
+              .filter((item): item is string => typeof item === 'string')
+              .slice(0, 20)
           : [],
       };
     } catch {
@@ -447,9 +489,11 @@ export class QualificationEvaluationService {
   }
 
   private isRisk(value: unknown): value is QualificationRisk {
-    return value === QualificationRisk.LOW ||
+    return (
+      value === QualificationRisk.LOW ||
       value === QualificationRisk.MEDIUM ||
-      value === QualificationRisk.HIGH;
+      value === QualificationRisk.HIGH
+    );
   }
 
   private json(value: unknown) {

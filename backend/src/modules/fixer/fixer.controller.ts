@@ -46,36 +46,18 @@ export class FixerController {
   @Throttle({ default: { ttl: 60000, limit: 5 } })
   @UseInterceptors(FilesInterceptor('files', 10))
   async digestPortfolio(@UploadedFiles() files: Express.Multer.File[]) {
-    const ALLOWED_MIMES = [
-      'image/jpeg',
+    const allowedMimes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+    const maximumBytes = 300 * 1024;
 
-      'image/png',
-
-      'image/webp',
-
-      'application/pdf',
-
-      'application/msword',
-
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-
-      'application/vnd.ms-excel',
-
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    ];
-
-    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
-
-    for (const file of files) {
-      if (file.mimetype && !ALLOWED_MIMES.includes(file.mimetype)) {
+    for (const file of files || []) {
+      if (!allowedMimes.has(file.mimetype)) {
         throw new BadRequestException(
-          `Unsupported file type: ${file.originalname}`,
+          'Portfolio evidence must contain images only',
         );
       }
-
-      if (file.size > MAX_FILE_SIZE) {
+      if (file.size > maximumBytes) {
         throw new BadRequestException(
-          `File too large: ${file.originalname} (max 50MB)`,
+          'Every portfolio image must be no larger than 0.3 MB',
         );
       }
     }

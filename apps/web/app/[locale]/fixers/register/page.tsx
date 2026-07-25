@@ -28,6 +28,11 @@ import GpsDetectButton from "../../components/GpsDetectButton";
 import GpsResolvedLocation from "../../components/GpsResolvedLocation";
 import Link from "next/link";
 import DatePickerInput from "../../components/DatePickerInput";
+import {
+  compressPortfolioImage,
+  PORTFOLIO_MAX_FILES,
+  PORTFOLIO_MAX_FILE_BYTES,
+} from "../../lib/portfolio-image-compression";
 
 interface PriceRow {
   service: string;
@@ -145,6 +150,13 @@ function FixerRegisterContent() {
   const [form, setForm] = useState<FormData>(initialForm);
   const [kycImages, setKycImages] = useState<File[]>([]);
   const [portfolioImages, setPortfolioImages] = useState<File[]>([]);
+  const [portfolioProcessing, setPortfolioProcessing] = useState(false);
+  const [qualificationOutcome, setQualificationOutcome] = useState<{
+    submissionId: string;
+    status: string;
+    reviewRequired: boolean;
+    recommendedTier: string;
+  } | null>(null);
   const [showCamera, setShowCamera] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -176,23 +188,6 @@ function FixerRegisterContent() {
 
   const prefix = `/${locale}`;
 
-  // AI Portfolio Digest state
-  const [digestResult, setDigestResult] = useState<{
-    results: {
-      file_id: string;
-      filename: string;
-      raw_text: string;
-      text_length: number;
-      has_content: boolean;
-      verification_hints: string[];
-      extraction_method: string;
-    }[];
-    total_files: number;
-    total_text_length: number;
-    content_score: number;
-    fallback?: boolean;
-  } | null>(null);
-  const [digesting, setDigesting] = useState(false);
   const [scheduledDateInput, setScheduledDateInput] = useState("");
 
   const populateFixerForm = useCallback((user: any, fixer: any) => {
@@ -324,70 +319,46 @@ function FixerRegisterContent() {
           return;
         }
 
-        let userFallback = null;
-        try {
-          const subStr = localStorage.getItem("subscriber");
-          if (subStr) userFallback = JSON.parse(subStr);
-        } catch {
-          /* ignore */
-        }
-
         const res = await fetch("/api/v1/users/me", {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: "Bearer " + token },
         });
-
-        if (!res.ok && !userFallback) {
+        if (!res.ok) {
+          setError(
+            locale === "th"
+              ? "เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง"
+              : locale === "zh"
+                ? "会话已过期，请重新登录。"
+                : "Your session has expired. Please sign in again.",
+          );
           setCheckingStatus(false);
           return;
         }
-
-        let data = userFallback;
-        if (res.ok) {
-          data = await res.json();
-        }
-
-        if (!data?.fixer && !isEditMode) {
-          // If not in edit mode and no fixer found, stop but keep user data mapped
-          populateFixerForm(data, null);
-          setCheckingStatus(false);
-          return;
-        }
-
-        setIsAlreadyFixer(true);
-        setIsRegisteredFixer(true);
+        const data = await res.json();
 
         const fixerRes = await fetch("/api/v1/fixers/me", {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: "Bearer " + token },
         });
 
         let fixerProfile = null;
-        const cacheKey = `fixer_profile_cache_${data?.email || ""}`;
         if (fixerRes.ok) {
           fixerProfile = await fixerRes.json();
-          try {
-            if (data?.email)
-              localStorage.setItem(cacheKey, JSON.stringify(fixerProfile));
-            localStorage.setItem(
-              "fixer_profile_cache",
-              JSON.stringify(fixerProfile),
-            );
-          } catch {}
-        } else {
-          console.warn(
-            "Failed to fetch fixer profile (e.g. 502/404). Falling back to user data.",
+        } else if (data?.fixer) {
+          fixerProfile = data.fixer;
+        } else if (fixerRes.status !== 404) {
+          setError(
+            locale === "th"
+              ? "ไม่สามารถตรวจสอบสถานะพาร์ทเนอร์ได้ กรุณาลองใหม่"
+              : locale === "zh"
+                ? "无法验证合作伙伴状态，请重试。"
+                : "Unable to verify partner registration status. Please retry.",
           );
-          if (data?.fixer) {
-            fixerProfile = data.fixer;
-          } else {
-            try {
-              let cached = localStorage.getItem(cacheKey);
-              if (!cached) cached = localStorage.getItem("fixer_profile_cache");
-              if (cached) fixerProfile = JSON.parse(cached);
-            } catch {}
-          }
+          setCheckingStatus(false);
+          return;
         }
 
-        // Always populate form, even if fixerProfile is null (will use user data)
+        const registered = Boolean(fixerProfile?.id);
+        setIsAlreadyFixer(registered);
+        setIsRegisteredFixer(registered);
         populateFixerForm(data, fixerProfile);
       } catch {
         // ignore
@@ -395,67 +366,48 @@ function FixerRegisterContent() {
       setCheckingStatus(false);
     }
     checkFixer();
-  }, [populateFixerForm]);
+  }, [locale, populateFixerForm]);
 
-  // Send portfolio files to AI vision service for OCR/text extraction
-  const digestPortfolioFiles = useCallback(async (files: File[]) => {
-    if (files.length === 0) return;
-    setDigesting(true);
-    try {
-      const fd = new globalThis.FormData();
-      for (const f of files) fd.append("files", f);
-      const res = await fetch("/api/v1/fixers/portfolio-digest", {
-        method: "POST",
-        body: fd,
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setDigestResult(data);
-      } else {
-        // AI OCR fallback on error from backend
-        setDigestResult({
-          results: files.map((f) => ({
-            file_id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            filename: f.name,
-            raw_text: "",
-            text_length: 0,
-            has_content: false,
-            verification_hints: [
-              "Vision service unavailable — analysis deferred",
-            ],
-            extraction_method: "none_vision_service_unavailable",
-          })),
-          total_files: files.length,
-          total_text_length: 0,
-          content_score: 0,
-          fallback: true,
-        });
+  const addPortfolioImages = useCallback(
+    async (incoming: File[]) => {
+      if (incoming.length === 0) return;
+      const remaining = PORTFOLIO_MAX_FILES - portfolioImages.length;
+      if (remaining <= 0) {
+        setError("Maximum 10 portfolio images allowed");
+        return;
       }
-    } catch {
-      // Vision service unavailable — non-blocking fallback
-      setDigestResult({
-        results: files.map((f) => ({
-          file_id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          filename: f.name,
-          raw_text: "",
-          text_length: 0,
-          has_content: false,
-          verification_hints: [
-            "Vision service unavailable — analysis deferred",
-          ],
-          extraction_method: "none_vision_service_unavailable",
-        })),
-        total_files: files.length,
-        total_text_length: 0,
-        content_score: 0,
-        fallback: true,
-      });
-    } finally {
-      setDigesting(false);
-    }
-  }, []);
+      setPortfolioProcessing(true);
+      setError("");
+      try {
+        const selected = incoming.slice(0, remaining);
+        if (incoming.length > remaining) {
+          setError(
+            "Only " + remaining + " more portfolio image(s) can be added",
+          );
+        }
+        const compressed: File[] = [];
+        for (const file of selected) {
+          compressed.push(await compressPortfolioImage(file));
+        }
+        const merged = [...portfolioImages, ...compressed].slice(
+          0,
+          PORTFOLIO_MAX_FILES,
+        );
+        setPortfolioImages(merged);
+      } catch (cause) {
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "Unable to prepare portfolio images",
+        );
+      } finally {
+        setPortfolioProcessing(false);
+      }
+    },
+    [portfolioImages],
+  );
 
-  /* KYC AI Image Validation — checks if uploaded photo matches expected document type */
+  /* Browser preflight only. Authoritative KYC decisions are made server-side. */
   const [kycSlotStatus, setKycSlotStatus] = useState<
     ("pending" | "valid" | "rejected")[]
   >([]);
@@ -464,235 +416,41 @@ function FixerRegisterContent() {
   const validateKycImage = useCallback(
     async (
       file: File,
-      slotIndex: number,
+      _slotIndex: number,
     ): Promise<{ valid: boolean; reason?: string }> => {
+      if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+        return {
+          valid: false,
+          reason:
+            locale === "th"
+              ? "รองรับเฉพาะรูป JPEG, PNG หรือ WebP"
+              : locale === "zh"
+                ? "仅支持 JPEG、PNG 或 WebP 图片"
+                : "Only JPEG, PNG, or WebP images are supported",
+        };
+      }
+
       return new Promise((resolve) => {
-        const img = new window.Image();
-        img.onload = () => {
-          const w = img.naturalWidth;
-          const h = img.naturalHeight;
-          const aspect = w / h;
-
-          // ── 1. MINIMUM SIZE: readable ID ──
-          if (w < 200 || h < 150) {
+        const url = URL.createObjectURL(file);
+        const image = new window.Image();
+        image.onload = () => {
+          URL.revokeObjectURL(url);
+          if (image.naturalWidth < 200 || image.naturalHeight < 150) {
             resolve({
               valid: false,
               reason:
                 locale === "th"
-                  ? "รูปภาพเล็กเกินไป — ต้องมีความละเอียดอย่างน้อย 200x150 พิกเซล"
+                  ? "รูปภาพเล็กเกินไป ต้องมีความละเอียดอย่างน้อย 200x150 พิกเซล"
                   : locale === "zh"
-                    ? "图片太小 — 最低分辨率 200x150 像素"
-                    : "Image too small — minimum 200×150 pixels required",
+                    ? "图片太小，最低分辨率为 200x150 像素"
+                    : "Image too small; minimum resolution is 200x150 pixels",
             });
             return;
           }
-
-          // ── CANVAS ANALYSIS ──
-          const canvas = document.createElement("canvas");
-          const sz = 64; // Downsample for perf
-          canvas.width = sz;
-          canvas.height = sz;
-          const ctx = canvas.getContext("2d");
-          if (!ctx) {
-            resolve({ valid: true });
-            return;
-          }
-          ctx.drawImage(img, 0, 0, sz, sz);
-          const data = ctx.getImageData(0, 0, sz, sz).data;
-          const total = sz * sz;
-
-          // ── 2. COLOR VARIANCE — reject solid/blank images ──
-          let sumR = 0,
-            sumG = 0,
-            sumB = 0;
-          for (let i = 0; i < data.length; i += 4) {
-            sumR += data[i]!;
-            sumG += data[i + 1]!;
-            sumB += data[i + 2]!;
-          }
-          const avgR = sumR / total,
-            avgG = sumG / total,
-            avgB = sumB / total;
-          let variance = 0;
-          for (let i = 0; i < data.length; i += 4) {
-            variance +=
-              (data[i]! - avgR) ** 2 +
-              (data[i + 1]! - avgG) ** 2 +
-              (data[i + 2]! - avgB) ** 2;
-          }
-          variance /= total;
-
-          if (variance < 50) {
-            resolve({
-              valid: false,
-              reason:
-                locale === "th"
-                  ? "รูปภาพดูเหมือนว่างเปล่าหรือเป็นสีเดียว — กรุณาอัพโหลดรูปบัตรประชาชนจริง"
-                  : locale === "zh"
-                    ? "图片看起来是空白或纯色 — 请上传真实身份证照片"
-                    : "Image appears blank or solid color — please upload actual ID card photo",
-            });
-            return;
-          }
-
-          // ── 3. EDGE DETECTION — Sobel gradient for text/features ──
-          let edgeSum = 0;
-          for (let y = 1; y < sz - 1; y++) {
-            for (let x = 1; x < sz - 1; x++) {
-              const left = data[(y * sz + (x - 1)) * 4]!;
-              const right = data[(y * sz + (x + 1)) * 4]!;
-              const top = data[((y - 1) * sz + x) * 4]!;
-              const bottom = data[((y + 1) * sz + x) * 4]!;
-              edgeSum += Math.abs(right - left) + Math.abs(bottom - top);
-            }
-          }
-          const edgeDensity = edgeSum / ((sz - 2) * (sz - 2));
-
-          // ── 4. SKIN TONE DETECTION — for selfie verification ──
-          let skinPixels = 0;
-          for (let i = 0; i < data.length; i += 4) {
-            const r = data[i]!,
-              g = data[i + 1]!,
-              b = data[i + 2]!;
-            // YCbCr-based skin detection (works across skin tones)
-            const y2 = 0.299 * r + 0.587 * g + 0.114 * b;
-            const cb = 128 - 0.169 * r - 0.331 * g + 0.5 * b;
-            const cr = 128 + 0.5 * r - 0.419 * g - 0.081 * b;
-            if (y2 > 50 && cb > 77 && cb < 127 && cr > 133 && cr < 173)
-              skinPixels++;
-          }
-          const skinRatio = skinPixels / total;
-
-          // ── 5. TEXT-LIKE REGION DENSITY — structured text areas ──
-          let horizontalEdgeRows = 0;
-          for (let y = 1; y < sz - 1; y++) {
-            let rowEdge = 0;
-            for (let x = 1; x < sz - 1; x++) {
-              const left = data[(y * sz + (x - 1)) * 4]!;
-              const right = data[(y * sz + (x + 1)) * 4]!;
-              if (Math.abs(right - left) > 20) rowEdge++;
-            }
-            if (rowEdge > sz * 0.25) horizontalEdgeRows++;
-          }
-          const textDensity = horizontalEdgeRows / (sz - 2);
-
-          // ───── SLOT 0 & 1: ID CARD FRONT / BACK ─────
-          if (slotIndex < 2) {
-            // ID cards are landscape (~1.4-1.8 aspect ratio for Thai ID)
-            if (aspect < 0.7 && edgeDensity < 8) {
-              resolve({
-                valid: false,
-                reason:
-                  locale === "th"
-                    ? "AI ตรวจพบว่ารูปนี้ไม่ใช่บัตรประชาชน — บัตรประชาชนควรเป็นรูปแนวนอน"
-                    : locale === "zh"
-                      ? "AI检测到此图不是身份证 — 身份证应为横向照片"
-                      : "AI detected this is not an ID card — ID cards should be landscape orientation",
-              });
-              return;
-            }
-            // Need sufficient text/features for a document
-            if (edgeDensity < 5) {
-              resolve({
-                valid: false,
-                reason:
-                  locale === "th"
-                    ? "AI ตรวจพบว่ารูปนี้อาจไม่ใช่เอกสาร — กรุณาอัพโหลดรูปบัตรประชาชนที่ชัดเจน"
-                    : locale === "zh"
-                      ? "AI检测到此图可能不是文件 — 请上传清晰的身份证照片"
-                      : "AI detected this may not be a document — please upload a clear ID card photo",
-              });
-              return;
-            }
-            // ID card should have text regions (at least 15% rows with text-like edges)
-            if (textDensity < 0.12 && edgeDensity < 10) {
-              resolve({
-                valid: false,
-                reason:
-                  locale === "th"
-                    ? "AI ไม่พบข้อความบนเอกสาร — กรุณาอัพโหลดรูปบัตรประชาชนที่ชัดเจน"
-                    : locale === "zh"
-                      ? "AI未检测到文件上的文字 — 请上传清晰的身份证照片"
-                      : "AI did not detect text on this document — please upload a clear ID card photo",
-              });
-              return;
-            }
-            // Too much skin in ID card slot = probably a selfie, not an ID card
-            if (skinRatio > 0.45) {
-              resolve({
-                valid: false,
-                reason:
-                  locale === "th"
-                    ? "AI ตรวจพบว่ารูปนี้อาจเป็นเซลฟี่ — กรุณาอัพโหลดรูปบัตรประชาชน" +
-                      (slotIndex === 0 ? "ด้านหน้า" : "ด้านหลัง")
-                    : locale === "zh"
-                      ? "AI检测到这可能是自拍照 — 请上传身份证" +
-                        (slotIndex === 0 ? "正面" : "背面") +
-                        "照片"
-                      : `AI detected this may be a selfie — please upload ID card ${slotIndex === 0 ? "front" : "back"} photo`,
-              });
-              return;
-            }
-            // FRONT slot additional: should have moderate skin (face photo area ~10-40%)
-            if (slotIndex === 0 && skinRatio < 0.02 && edgeDensity < 12) {
-              resolve({
-                valid: false,
-                reason:
-                  locale === "th"
-                    ? "AI ไม่พบรูปถ่ายบนบัตร — กรุณาอัพโหลดบัตรประชาชน ด้านหน้า ที่มีรูปถ่าย"
-                    : locale === "zh"
-                      ? "AI未在卡上检测到照片 — 请上传带照片的身份证正面"
-                      : "AI did not detect a photo on the card — please upload the ID card front with photo",
-              });
-              return;
-            }
-          }
-
-          // ───── SLOT 2: SELFIE WITH ID CARD ─────
-          if (slotIndex === 2) {
-            if (edgeDensity < 4) {
-              resolve({
-                valid: false,
-                reason:
-                  locale === "th"
-                    ? "AI ตรวจพบว่ารูปนี้ไม่ใช่เซลฟี่ — กรุณาถ่ายเซลฟี่คู่กับบัตรประชาชน"
-                    : locale === "zh"
-                      ? "AI检测到此图不是自拍 — 请拍摄手持身份证自拍照"
-                      : "AI detected this is not a selfie — please take a selfie holding your ID card",
-              });
-              return;
-            }
-            // Selfie MUST have skin tone (face visible) — at least 8%
-            if (skinRatio < 0.06) {
-              resolve({
-                valid: false,
-                reason:
-                  locale === "th"
-                    ? "AI ไม่พบใบหน้าในรูป — กรุณาถ่ายเซลฟี่ที่เห็นหน้าชัดเจนพร้อมบัตรประชาชน"
-                    : locale === "zh"
-                      ? "AI未检测到人脸 — 请拍摄面部清晰可见的自拍照并持身份证"
-                      : "AI did not detect a face — please take a selfie with your face clearly visible, holding your ID card",
-              });
-              return;
-            }
-            // Selfie should NOT be pure landscape (too wide = not a selfie)
-            if (aspect > 2.5 && skinRatio < 0.12) {
-              resolve({
-                valid: false,
-                reason:
-                  locale === "th"
-                    ? "รูปภาพกว้างเกินไปสำหรับเซลฟี่ — กรุณาถ่ายรูปแนวตั้งหรือสี่เหลี่ยม"
-                    : locale === "zh"
-                      ? "图片太宽，不像自拍 — 请拍摄竖版或方形照片"
-                      : "Image too wide for a selfie — please take a portrait or square photo",
-              });
-              return;
-            }
-          }
-
           resolve({ valid: true });
         };
-        img.onerror = () =>
+        image.onerror = () => {
+          URL.revokeObjectURL(url);
           resolve({
             valid: false,
             reason:
@@ -702,7 +460,8 @@ function FixerRegisterContent() {
                   ? "无法读取图片文件"
                   : "Cannot read image file",
           });
-        img.src = URL.createObjectURL(file);
+        };
+        image.src = url;
       });
     },
     [locale],
@@ -720,72 +479,32 @@ function FixerRegisterContent() {
       ];
 
       for (
-        let i = 0;
-        i < files.length && currentCount + newFiles.length < 3;
-        i++
+        let index = 0;
+        index < files.length && currentCount + newFiles.length < 3;
+        index += 1
       ) {
-        const slotIdx = currentCount + newFiles.length;
-        const file = files[i]!;
-        const result = await validateKycImage(file, slotIdx);
-
-        if (result.valid) {
-          // Backend AI Validation
-          try {
-            const fd = new globalThis.FormData();
-            fd.append("file", file);
-            const res = await fetch("/api/v1/fixers/kyc-digest", {
-              method: "POST",
-              body: fd,
-            });
-            if (res.ok) {
-              const aiData = await res.json();
-              // If it's ID Front (slot 0) or ID Back (slot 1), verify text was found
-              if (
-                slotIdx < 2 &&
-                (!aiData.has_content || aiData.text_length < 20) &&
-                !aiData.fallback // Skip validation if Python AI is down
-              ) {
-                newStatuses[slotIdx] = "rejected";
-                setError(
-                  locale === "th"
-                    ? "AI ไม่พบข้อความในเอกสาร — กรุณาถ่ายให้ชัดเจน"
-                    : locale === "zh"
-                      ? "AI未检测到文件上的文字 — 请拍摄清晰照片"
-                      : "AI did not detect text — please take a clearer photo",
-                );
-                return;
-              }
-            } else {
-              // Graceful degradation when the endpoint throws a 502/400
-              console.warn("KYC digest failed, bypassing strict OCR check");
-            }
-          } catch (e) {
-            // Service fully offline
-            console.warn(
-              "KYC digest unreachable, bypassing strict OCR check",
-              e,
-            );
-          }
-
-          newFiles.push(file);
-          newStatuses[slotIdx] = "valid";
-        } else {
-          newStatuses[slotIdx] = "rejected";
+        const slotIndex = currentCount + newFiles.length;
+        const file = files[index]!;
+        const result = await validateKycImage(file, slotIndex);
+        if (!result.valid) {
+          newStatuses[slotIndex] = "rejected";
+          setKycSlotStatus(newStatuses);
           setError(result.reason || "Image rejected");
           setKycValidating(false);
-          return; // Stop on first rejection to show user the error
+          return;
         }
+        newFiles.push(file);
+        newStatuses[slotIndex] = "valid";
       }
 
       if (newFiles.length > 0) {
-        setKycImages((prev) => [...prev, ...newFiles].slice(0, 3));
+        setKycImages((current) => [...current, ...newFiles].slice(0, 3));
         setKycSlotStatus(newStatuses);
       }
       setKycValidating(false);
     },
     [kycImages.length, kycSlotStatus, validateKycImage],
   );
-
   /* Camera helpers for KYC */
   const startCamera = async () => {
     setError("");
@@ -1228,6 +947,10 @@ function FixerRegisterContent() {
       );
       return;
     }
+    if (portfolioProcessing) {
+      setError("Please wait for portfolio image compression to finish");
+      return;
+    }
     setSubmitting(true);
     setError("");
 
@@ -1288,7 +1011,6 @@ function FixerRegisterContent() {
         recaptchaToken,
         kycImageCount: kycImages.length,
         portfolioImageCount: portfolioImages.length,
-        portfolioDigest: digestResult || undefined,
       };
 
       const fixerEndpoint = isRegisteredFixer
@@ -1339,452 +1061,106 @@ function FixerRegisterContent() {
         return;
       }
 
+      setIsRegisteredFixer(true);
+      setIsAlreadyFixer(true);
+
+      const createQualification = await fetch(
+        "/api/v1/qualification/submissions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            consentVersion: "cblue-fixer-qualification-v1",
+          }),
+        },
+      );
+      if (!createQualification.ok) {
+        const detail = await createQualification.json().catch(() => ({}));
+        throw new Error(
+          detail.message || "Unable to create qualification submission",
+        );
+      }
+      const qualification = await createQualification.json();
+      const uploadEvidence = async (documentType: string, file: File) => {
+        const body = new globalThis.FormData();
+        body.append("documentType", documentType);
+        body.append("file", file);
+        const response = await fetch(
+          `/api/v1/qualification/submissions/${qualification.id}/documents`,
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+            body,
+          },
+        );
+        if (!response.ok) {
+          const detail = await response.json().catch(() => ({}));
+          throw new Error(
+            detail.message || `Unable to store ${documentType} evidence`,
+          );
+        }
+      };
+
+      const kycTypes = ["id-front", "id-back", "selfie-with-id"];
+      for (let index = 0; index < kycTypes.length; index += 1) {
+        await uploadEvidence(kycTypes[index]!, kycImages[index]!);
+      }
+      for (const portfolioImage of portfolioImages) {
+        await uploadEvidence("portfolio", portfolioImage);
+      }
+
+      const finalizeQualification = await fetch(
+        `/api/v1/qualification/submissions/${qualification.id}/submit`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      if (!finalizeQualification.ok) {
+        const detail = await finalizeQualification.json().catch(() => ({}));
+        throw new Error(
+          detail.message || "Unable to finalize qualification submission",
+        );
+      }
+
+      const evaluationResponse = await fetch(
+        `/api/v1/qualification/submissions/${qualification.id}/evaluate`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      if (!evaluationResponse.ok) {
+        const detail = await evaluationResponse.json().catch(() => ({}));
+        throw new Error(
+          detail.message || "Unable to evaluate qualification submission",
+        );
+      }
+      const evaluation = await evaluationResponse.json();
+      setQualificationOutcome({
+        submissionId: qualification.id,
+        status: evaluation.status,
+        reviewRequired: Boolean(evaluation.reviewRequired),
+        recommendedTier: evaluation.deterministic?.recommendedTier || "ECONOMY",
+      });
       setSuccess(true);
-    } catch {
+    } catch (cause) {
       setError(
-        locale === "th"
-          ? "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้"
-          : locale === "zh"
-            ? "无法连接服务器"
-            : "Cannot connect to server",
+        cause instanceof Error
+          ? cause.message
+          : locale === "th"
+            ? "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้"
+            : locale === "zh"
+              ? "无法连接服务器"
+              : "Cannot connect to server",
       );
     } finally {
       setSubmitting(false);
     }
   }
-
-  // AI Evaluation logic — Enhanced with credential verification, fraud detection, internet checks
-  const [aiStep, setAiStep] = useState<"evaluating" | "verified" | null>(null);
-  const [aiProgress, setAiProgress] = useState(0);
-  const [aiPhase, setAiPhase] = useState(0); // 0-7 phases
-  const [aiTier, setAiTier] = useState<{
-    tier: string;
-    score: number;
-    breakdown: { label: string; score: number; max: number }[];
-    flags: { type: "pass" | "warn" | "fail"; message: string }[];
-    credentialStatus: "verified" | "partial" | "unverified";
-  } | null>(null);
-
-  // AI Evaluation runs once when form submission succeeds
-  useEffect(() => {
-    if (!success || aiStep) return;
-    setAiStep("evaluating");
-    setAiProgress(0);
-    setAiPhase(0);
-
-    // Phase progression: each phase takes ~600ms
-    const phases = 9;
-    let currentPhase = 0;
-    const phaseInterval = setInterval(() => {
-      currentPhase++;
-      setAiPhase(currentPhase);
-      setAiProgress(Math.min(Math.round((currentPhase / phases) * 100), 100));
-      if (currentPhase >= phases) {
-        clearInterval(phaseInterval);
-
-        // ──────── ENHANCED AI SCORING ALGORITHM ────────
-        const yrs = parseInt(form.yearsExperience || "0");
-        const skillCount = form.selectedSkills.length;
-        const hasKyc = kycImages.length > 0;
-        const kycMultiple = kycImages.length >= 2; // front + back ID
-        const hasPortfolio = portfolioImages.length > 0;
-        const portfolioCount = portfolioImages.length;
-        const descLength = (form.pastExperience || "").length;
-        const hasDescription = descLength > 20;
-        const hasDetailedDesc = descLength > 100;
-        const priceRowCount = priceRows.filter(
-          (r) => r.service && r.finalPrice,
-        ).length;
-        const hasBio = (form.bio || "").length > 30;
-        const hasCompanyAddress = !!(
-          form.companyProvince &&
-          form.companyDistrict &&
-          form.companyHouseNumber
-        );
-        const hasServiceArea = !!(form.province && form.district);
-        const nameWords = (form.name || "").trim().split(/\s+/).length;
-        const hasFullName = nameWords >= 2;
-        const hasPhone = (form.phone || "").length >= 9;
-        const hasEmail = (form.email || "").includes("@");
-        const hasCompany = (form.company || "").length > 2;
-        const hasPastProjectType = form.pastProjectType !== "none";
-
-        // ── 1. Experience Score (max 25) ──
-        const expScore = Math.min(yrs * 4, 25);
-
-        // ── 2. Skills Breadth (max 15) ──
-        const skillScore = Math.min(skillCount * 3, 15);
-
-        // ── 3. KYC Verification (max 15) ──
-        const kycScore = kycMultiple ? 15 : hasKyc ? 10 : 0;
-
-        // ── 4. Portfolio & Evidence (max 15) ──
-        // Base score from image count + bonus from AI document analysis
-        let portfolioScore =
-          portfolioCount >= 5
-            ? 12
-            : portfolioCount >= 3
-              ? 9
-              : hasPortfolio
-                ? 6
-                : 0;
-        if (digestResult && !digestResult.fallback) {
-          // Bonus up to 3 pts from OCR content quality
-          if (digestResult.content_score >= 70)
-            portfolioScore = Math.min(portfolioScore + 3, 15);
-          else if (digestResult.content_score >= 40)
-            portfolioScore = Math.min(portfolioScore + 2, 15);
-          else if (digestResult.total_text_length > 50)
-            portfolioScore = Math.min(portfolioScore + 1, 15);
-        }
-
-        // ── 5. Profile Completeness (max 10) ──
-        const profileScore =
-          (hasBio ? 3 : 0) +
-          (hasFullName ? 2 : 0) +
-          (hasCompanyAddress ? 3 : 0) +
-          (hasServiceArea ? 2 : 0);
-
-        // ── 6. Price List & Professionalism (max 10) ──
-        const priceScore = priceRowCount >= 3 ? 10 : priceRowCount >= 1 ? 6 : 0;
-
-        // ── 7. Credential Verification (AI internet check simulation) (max 10) ──
-        // Simulates AI cross-referencing company name, experience claims, project types
-        let credentialScore = 0;
-        let credentialStatus: "verified" | "partial" | "unverified" =
-          "unverified";
-        const flags: { type: "pass" | "warn" | "fail"; message: string }[] = [];
-
-        // Company verification
-        if (hasCompany && hasCompanyAddress) {
-          credentialScore += 3;
-          flags.push({
-            type: "pass",
-            message:
-              locale === "th"
-                ? "ตรวจสอบที่อยู่บริษัท: ผ่าน"
-                : locale === "zh"
-                  ? "公司地址验证：通过"
-                  : "Company address verified",
-          });
-        } else if (hasCompany) {
-          credentialScore += 1;
-          flags.push({
-            type: "warn",
-            message:
-              locale === "th"
-                ? "ที่อยู่บริษัทไม่ครบถ้วน"
-                : locale === "zh"
-                  ? "公司地址不完整"
-                  : "Incomplete company address",
-          });
-        } else {
-          flags.push({
-            type: "fail",
-            message:
-              locale === "th"
-                ? "ไม่พบข้อมูลบริษัท"
-                : locale === "zh"
-                  ? "未找到公司信息"
-                  : "No company info provided",
-          });
-        }
-
-        // Experience consistency check — AI detects if claimed years vs project type makes sense
-        if (yrs > 0 && hasPastProjectType) {
-          if (form.pastProjectType === "luxury" && yrs < 3) {
-            credentialScore += 1;
-            flags.push({
-              type: "warn",
-              message:
-                locale === "th"
-                  ? "ประสบการณ์น้อยสำหรับโครงการระดับ Luxury — ต้องตรวจสอบเพิ่ม"
-                  : locale === "zh"
-                    ? "经验不足以胜任豪华项目 — 需进一步验证"
-                    : "Limited experience for luxury projects — requires further verification",
-            });
-          } else {
-            credentialScore += 3;
-            flags.push({
-              type: "pass",
-              message:
-                locale === "th"
-                  ? "ประสบการณ์สอดคล้องกับประเภทโครงการ"
-                  : locale === "zh"
-                    ? "经验与项目类型一致"
-                    : "Experience consistent with project type",
-            });
-          }
-        } else if (yrs > 0) {
-          credentialScore += 2;
-          flags.push({
-            type: "pass",
-            message:
-              locale === "th"
-                ? "ตรวจสอบประสบการณ์: ยืนยัน"
-                : locale === "zh"
-                  ? "经验验证：已确认"
-                  : "Experience claim acknowledged",
-          });
-        }
-
-        // Description analysis — AI checks for generic/copied vs detailed descriptions
-        if (hasDetailedDesc) {
-          credentialScore += 3;
-          flags.push({
-            type: "pass",
-            message:
-              locale === "th"
-                ? "คำอธิบายมีรายละเอียดครบถ้วน"
-                : locale === "zh"
-                  ? "描述详细完整"
-                  : "Detailed work description provided",
-          });
-        } else if (hasDescription) {
-          credentialScore += 1;
-          flags.push({
-            type: "warn",
-            message:
-              locale === "th"
-                ? "คำอธิบายสั้นเกินไป — แนะนำให้เพิ่มรายละเอียด"
-                : locale === "zh"
-                  ? "描述过于简短 — 建议添加更多细节"
-                  : "Description too brief — more detail recommended",
-          });
-        } else {
-          flags.push({
-            type: "fail",
-            message:
-              locale === "th"
-                ? "ไม่มีคำอธิบายผลงาน"
-                : locale === "zh"
-                  ? "无工作描述"
-                  : "No work description provided",
-          });
-        }
-
-        // KYC document check
-        if (kycMultiple) {
-          credentialScore += 1;
-          flags.push({
-            type: "pass",
-            message:
-              locale === "th"
-                ? "เอกสาร KYC ครบถ้วน (หน้า-หลัง)"
-                : locale === "zh"
-                  ? "KYC文件完整（正反面）"
-                  : "KYC documents complete (front & back)",
-          });
-        } else if (hasKyc) {
-          flags.push({
-            type: "warn",
-            message:
-              locale === "th"
-                ? "แนะนำอัปโหลด KYC ทั้งด้านหน้าและด้านหลัง"
-                : locale === "zh"
-                  ? "建议上传KYC正反面"
-                  : "Recommend uploading both front & back KYC",
-          });
-        }
-
-        // Portfolio document AI analysis (OCR results from vision service)
-        if (digestResult && !digestResult.fallback) {
-          const allHints = digestResult.results.flatMap(
-            (r) => r.verification_hints,
-          );
-          const hasLicense = allHints.some((h) =>
-            /license|ใบอนุญาต|许可/i.test(h),
-          );
-          const hasCert = allHints.some((h) =>
-            /certificate|ใบรับรอง|证书/i.test(h),
-          );
-          if (hasLicense || hasCert) {
-            credentialScore = Math.min(credentialScore + 2, 10);
-            flags.push({
-              type: "pass",
-              message:
-                locale === "th"
-                  ? "📄 AI ตรวจพบใบรับรอง/ใบอนุญาตในเอกสาร"
-                  : locale === "zh"
-                    ? "📄 AI在文档中检测到证书/许可证"
-                    : "📄 AI detected license/certificate in documents",
-            });
-          } else if (allHints.length > 0) {
-            credentialScore = Math.min(credentialScore + 1, 10);
-            flags.push({
-              type: "pass",
-              message:
-                locale === "th"
-                  ? "📄 AI วิเคราะห์เอกสารผลงานแล้ว"
-                  : locale === "zh"
-                    ? "📄 AI已分析作品文档"
-                    : "📄 AI analyzed portfolio documents",
-            });
-          }
-        }
-
-        // Fraud detection signals
-        if (!hasFullName) {
-          flags.push({
-            type: "warn",
-            message:
-              locale === "th"
-                ? " ชื่อไม่ครบถ้วน — กรุณาใช้ชื่อ-นามสกุลจริง"
-                : locale === "zh"
-                  ? " 姓名不完整 — 请使用全名"
-                  : " Incomplete name — please use full legal name",
-          });
-        }
-        if (!hasPhone || !hasEmail) {
-          flags.push({
-            type: "warn",
-            message:
-              locale === "th"
-                ? " ข้อมูลติดต่อไม่ครบถ้วน"
-                : locale === "zh"
-                  ? " 联系信息不完整"
-                  : " Incomplete contact information",
-          });
-        }
-
-        // Determine credential status
-        credentialStatus =
-          credentialScore >= 8
-            ? "verified"
-            : credentialScore >= 4
-              ? "partial"
-              : "unverified";
-
-        const total =
-          expScore +
-          skillScore +
-          kycScore +
-          portfolioScore +
-          profileScore +
-          priceScore +
-          credentialScore;
-
-        let tier = "Economy";
-        if (total >= 80) tier = "Expert";
-        else if (total >= 65) tier = "Specialist";
-        else if (total >= 50) tier = "Corporate";
-        else if (total >= 35) tier = "Standard";
-
-        setAiTier({
-          tier,
-          score: total,
-          credentialStatus,
-          flags,
-          breakdown: [
-            {
-              label:
-                locale === "th"
-                  ? "ประสบการณ์"
-                  : locale === "zh"
-                    ? "经验"
-                    : "Experience",
-              score: expScore,
-              max: 25,
-            },
-            {
-              label:
-                locale === "th"
-                  ? "ทักษะ"
-                  : locale === "zh"
-                    ? "技能"
-                    : "Skills Breadth",
-              score: skillScore,
-              max: 15,
-            },
-            {
-              label:
-                locale === "th"
-                  ? "ยืนยันตัวตน (KYC)"
-                  : locale === "zh"
-                    ? "身份验证"
-                    : "KYC Verification",
-              score: kycScore,
-              max: 15,
-            },
-            {
-              label:
-                locale === "th"
-                  ? "ผลงาน/หลักฐาน"
-                  : locale === "zh"
-                    ? "作品集/证据"
-                    : "Portfolio & Evidence",
-              score: portfolioScore,
-              max: 15,
-            },
-            {
-              label:
-                locale === "th"
-                  ? "โปรไฟล์"
-                  : locale === "zh"
-                    ? "个人资料"
-                    : "Profile Completeness",
-              score: profileScore,
-              max: 10,
-            },
-            {
-              label:
-                locale === "th"
-                  ? "ตารางราคา"
-                  : locale === "zh"
-                    ? "价格表"
-                    : "Price List",
-              score: priceScore,
-              max: 10,
-            },
-            {
-              label:
-                locale === "th"
-                  ? "ตรวจสอบข้อมูลรับรอง"
-                  : locale === "zh"
-                    ? "资质验证"
-                    : "Credential Verification",
-              score: credentialScore,
-              max: 10,
-            },
-          ],
-        });
-        setAiStep("verified");
-      }
-    }, 600);
-    return () => clearInterval(phaseInterval);
-  }, [success]);
-
-  // Persist AI tier to backend when calculated
-  useEffect(() => {
-    if (!aiTier || !success) return;
-    const token = localStorage.getItem("subscriber_token");
-    if (!token) return;
-    fetch("/api/v1/fixers/me/tier", {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        kycImageCount: kycImages.length,
-        portfolioImageCount: portfolioImages.length,
-        portfolioDigest: digestResult || undefined,
-      }),
-    })
-      .then(() => {
-        try {
-          const cacheKey = `fixer_profile_cache_${form.email}`;
-          const cached = localStorage.getItem(cacheKey);
-          if (cached) {
-            const profile = JSON.parse(cached);
-            profile.tier = aiTier.tier.toUpperCase();
-            profile.score = aiTier.score;
-            localStorage.setItem(cacheKey, JSON.stringify(profile));
-          }
-        } catch (e) {}
-      })
-      .catch(() => {}); // Non-blocking
-  }, [aiTier, success, kycImages.length, portfolioImages.length, digestResult]);
 
   if (!mounted || checkingStatus)
     return (
@@ -1829,209 +1205,73 @@ function FixerRegisterContent() {
     );
   }
   if (success) {
-    const tierLabel = aiTier?.tier ?? "Economy";
-    const score = aiTier?.score ?? 0;
-    const breakdown = aiTier?.breakdown ?? [];
-    const flags = aiTier?.flags ?? [];
-    const credentialStatus = aiTier?.credentialStatus ?? "unverified";
-
-    const statusConfig = {
-      verified: {
-        bg: "bg-green-50",
-        border: "border-green-100",
-        icon: "",
-        title: locale === "th" ? "ยืนยันโดย AI แล้ว" : "Fully Verified by AI",
-        color: "text-green-900",
-      },
-      partial: {
-        bg: "bg-green-50",
-        border: "border-green-100",
-        icon: "",
-        title:
-          locale === "th"
-            ? "ยืนยันโดย AI แล้ว — เพิ่มข้อมูลเพื่ออัพเกรดคะแนน"
-            : "Fully Verified by AI — Complete profile to improve score",
-        color: "text-green-900",
-      },
-      unverified: {
-        bg: "bg-green-50",
-        border: "border-green-100",
-        icon: "",
-        title:
-          locale === "th"
-            ? "ยืนยันโดย AI แล้ว — เพิ่มข้อมูลเพื่ออัพเกรดคะแนน"
-            : "Fully Verified by AI — Complete profile to improve score",
-        color: "text-green-900",
-      },
-    };
-    const statusStyle = statusConfig[credentialStatus];
-
+    const isApproved = qualificationOutcome?.status === "APPROVED";
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden max-w-2xl w-full">
-          {/* Header */}
-          <div className="text-center max-w-md mx-auto mb-8">
-            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 animate-bounce">
-              <span className="text-3xl"></span>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-w-2xl w-full">
+          <h2 className="text-2xl font-bold text-gray-900 mb-3">
+            {isApproved
+              ? locale === "th"
+                ? "การยืนยันคุณสมบัติสำเร็จ"
+                : locale === "zh"
+                  ? "资格验证已完成"
+                  : "Qualification Approved"
+              : locale === "th"
+                ? "ส่งข้อมูลเพื่อพิจารณาแล้ว"
+                : locale === "zh"
+                  ? "资料已提交审核"
+                  : "Qualification Submitted"}
+          </h2>
+          <p className="text-sm text-gray-600 leading-6">
+            {isApproved
+              ? locale === "th"
+                ? "KYC ที่ผ่านการตรวจสอบทำให้โปรไฟล์ได้รับระดับ Economy และพร้อมรับงาน"
+                : locale === "zh"
+                  ? "经验证的KYC已使您的资料获得Economy等级并可接收工作。"
+                  : "Validated KYC has qualified the profile for Economy tier and it is ready to receive work."
+              : locale === "th"
+                ? "CBLUE ได้จัดเก็บเอกสาร KYC และรูปผลงานในพื้นที่ส่วนตัวแล้ว ผู้ดูแลระบบจะตรวจสอบหลักฐานก่อนอนุมัติระดับ Economy หรือเสนอระดับที่สูงขึ้น"
+                : locale === "zh"
+                  ? "CBLUE已将KYC文件和作品图片存入私有存储。管理员将在批准Economy等级或建议更高等级前审核证据。"
+                  : "CBLUE has stored the KYC documents and portfolio images privately. Administrators will review the evidence before approving Economy tier or proposing a higher tier."}
+          </p>
+          <dl className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-lg border border-gray-200 p-4">
+              <dt className="text-gray-500">Submission status</dt>
+              <dd className="font-semibold text-gray-900 mt-1">
+                {qualificationOutcome?.status || "NEEDS_REVIEW"}
+              </dd>
             </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              {locale === "th"
-                ? "ลงทะเบียนสำเร็จ!"
-                : locale === "zh"
-                  ? "注册成功!"
-                  : "Registration Successful!"}
-            </h2>
-            <p className="text-gray-500 text-sm">
-              {locale === "th"
-                ? "ข้อมูลและ KYC ของคุณได้รับการตรวจสอบทันทีโดย CBLUE AI โปรไฟล์ของคุณเปิดใช้งานแล้ว"
-                : locale === "zh"
-                  ? "您的信息和 KYC 文件已由 CBLUE AI 立即验证。您的个人资料已启用。"
-                  : "Your information and KYC documents have been instantly verified by CBLUE AI. Your profile is active and ready to accept bookings."}
+            <div className="rounded-lg border border-gray-200 p-4">
+              <dt className="text-gray-500">Policy recommendation</dt>
+              <dd className="font-semibold text-gray-900 mt-1">
+                {qualificationOutcome?.recommendedTier || "ECONOMY"}
+              </dd>
+            </div>
+            <div className="rounded-lg border border-gray-200 p-4 sm:col-span-2">
+              <dt className="text-gray-500">Evidence stored</dt>
+              <dd className="font-semibold text-gray-900 mt-1">
+                3 KYC images and {portfolioImages.length} portfolio image(s)
+              </dd>
+            </div>
+          </dl>
+          {!isApproved && (
+            <p className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              The profile remains pending until KYC evidence is validated.
+              Upper-tier approval requires independent maker-checker review.
             </p>
-          </div>
-
-          {/* AI Assessment Card */}
-          <div className="bg-gradient-to-r from-slate-50 to-white px-8 py-5 border-b border-gray-100 flex justify-between items-center">
-            <h3 className="font-bold text-gray-900 flex items-center gap-2">
-              CBLUE AI Tier Assessment
-            </h3>
-            <span className="text-xs text-gray-500 px-2 py-1 bg-white rounded border border-gray-200">
-              Overall Score:{" "}
-              <strong className="text-gray-900">{score}/100</strong>
-            </span>
-          </div>
-
-          <div className="p-8 space-y-8">
-            <div
-              className={`flex items-center gap-3 p-4 ${statusStyle.bg} rounded-xl border ${statusStyle.border}`}
+          )}
+          <div className="mt-7">
+            <Link
+              href={prefix + "/fixers"}
+              className="inline-flex px-6 py-3 bg-green-700 hover:bg-green-800 text-white rounded-lg font-semibold transition"
             >
-              <span className="text-2xl">{statusStyle.icon}</span>
-              <div className="flex-1">
-                <h4 className={`font-bold ${statusStyle.color} text-sm`}>
-                  {statusStyle.title} — {tierLabel}
-                </h4>
-                <p className="text-xs text-gray-600 mt-1">
-                  {locale === "th"
-                    ? "เพิ่มประสบการณ์ อัปโหลดผลงาน อัปเดตใบรับรอง และรักษารีวิวที่ดี — CBLUE AI จะประเมินและอัปเกรดระดับของคุณโดยอัตโนมัติเมื่อแก้ไขโปรไฟล์หรือสะสมประวัติงาน"
-                    : locale === "zh"
-                      ? "积累经验，上传作品，更新认证，保持良好评价 — CBLUE AI将在您编辑个人资料或积累工作历史时自动重新评估并升级您的等级。"
-                      : "Gain more experience, upload portfolio work, update certifications, and maintain good reviews — CBLUE AI will automatically re-evaluate and upgrade your tier when you edit your profile or accumulate work history."}
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Evaluation Breakdown */}
-              <div>
-                <h4 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wider">
-                  {locale === "th"
-                    ? "รายละเอียดคะแนน"
-                    : locale === "zh"
-                      ? "评分详情"
-                      : "Evaluation Breakdown"}
-                </h4>
-                <div className="space-y-4">
-                  {breakdown.length > 0 ? (
-                    breakdown.map((item) => {
-                      const pct =
-                        item.max > 0 ? (item.score / item.max) * 100 : 0;
-                      const color =
-                        pct >= 80
-                          ? "bg-green-500"
-                          : pct >= 50
-                            ? "bg-amber-400"
-                            : "bg-red-400";
-                      return (
-                        <div key={item.label}>
-                          <div className="flex justify-between text-xs mb-1">
-                            <span className="font-medium text-gray-700">
-                              {item.label}
-                            </span>
-                            <span className="text-gray-500 font-bold">
-                              {item.score}/{item.max}
-                            </span>
-                          </div>
-                          <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full ${color}`}
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <p className="text-sm text-gray-500">
-                      {locale === "th"
-                        ? "กำลังประเมิน..."
-                        : locale === "zh"
-                          ? "正在评估..."
-                          : "Evaluating..."}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* AI Verification Results */}
-              <div>
-                <h4 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wider">
-                  {locale === "th"
-                    ? "ผลการตรวจสอบ AI"
-                    : locale === "zh"
-                      ? "AI验证结果"
-                      : "AI Verification Results"}
-                </h4>
-                <ul className="space-y-3 text-sm">
-                  {flags.length > 0 ? (
-                    flags.map((f, idx) => (
-                      <li
-                        key={idx}
-                        className="flex items-start gap-2 text-gray-600"
-                      >
-                        <span
-                          className={`mt-0.5 ${f.type === "pass" ? "text-green-500" : f.type === "warn" ? "text-amber-500" : "text-red-500"}`}
-                        >
-                          {f.type === "pass" ? "" : f.type === "warn" ? "" : ""}
-                        </span>
-                        <span>{f.message}</span>
-                      </li>
-                    ))
-                  ) : (
-                    <li className="text-gray-500">
-                      {locale === "th"
-                        ? "รอการวิเคราะห์..."
-                        : locale === "zh"
-                          ? "等待分析..."
-                          : "Pending analysis..."}
-                    </li>
-                  )}
-                </ul>
-              </div>
-            </div>
-
-            <div className="p-4 bg-gray-50 rounded-xl text-xs text-gray-500 border border-gray-100 flex items-start gap-3">
-              <span className="text-lg"></span>
-              <p>
-                {locale === "th"
-                  ? "ความปลอดภัย: ข้อมูลของคุณถูกเข้ารหัสและปกป้องตาม PDPA ข้อมูลรับรองถูกตรวจสอบเพื่อรักษาความสมบูรณ์ของแพลตฟอร์ม"
-                  : locale === "zh"
-                    ? "安全：您的数据根据PDPA加密和保护。凭证经过验证以维护平台完整性。"
-                    : "Security: Your data is encrypted and protected under PDPA. Credentials are verified to maintain platform integrity."}
-              </p>
-            </div>
-
-            <div className="text-center pt-4 border-t border-gray-100">
-              <Link
-                href={`${prefix}/fixers`}
-                className="inline-block px-8 py-3 bg-sky-600 hover:bg-sky-700 text-white rounded-xl font-bold shadow transition"
-              >
-                {locale === "th"
-                  ? "ไปที่แดชบอร์ดของคุณ"
-                  : locale === "zh"
-                    ? "前往您的仪表板"
-                    : "Go to your Dashboard"}
-              </Link>
-            </div>
+              {locale === "th"
+                ? "ไปที่หน้าพาร์ทเนอร์"
+                : locale === "zh"
+                  ? "前往合作伙伴页面"
+                  : "Go to Partner Page"}
+            </Link>
           </div>
         </div>
       </div>
@@ -2681,10 +1921,10 @@ function FixerRegisterContent() {
                 <p className="text-xs text-sky-600 mb-2">
                   {" "}
                   {locale === "th"
-                    ? "ระบบ AI จะตรวจสอบว่ารูปภาพเป็นบัตรประชาชนจริงหรือไม่ รูปที่ไม่ถูกต้องจะถูกปฏิเสธ"
+                    ? "เอกสาร KYC จะผ่านการตรวจสอบความครบถ้วนอย่างปลอดภัย และรอการยืนยันจากผู้ดูแลระบบ"
                     : locale === "zh"
-                      ? "AI系统将验证照片是否为真实身份证 — 不正确的照片将被拒绝"
-                      : "AI system will verify photos are real ID cards — incorrect photos will be rejected"}
+                      ? "KYC资料将接受安全的完整性检查，并等待管理员最终确认"
+                      : "KYC evidence is securely checked for completeness and awaits final administrator verification"}
                 </p>
 
                 {/* Validating indicator */}
@@ -2805,54 +2045,65 @@ function FixerRegisterContent() {
               </label>
               <p className="text-xs text-gray-500 mb-2">
                 {locale === "th"
-                  ? "แสดงตัวอย่างผลงาน รูปภาพ PDF หรือเอกสาร สูงสุด 10 ไฟล์"
+                  ? "อัปโหลดเฉพาะรูปผลงาน สูงสุด 10 รูป ระบบจะบีบอัดแต่ละรูปไม่เกิน 0.3 MB"
                   : locale === "zh"
-                    ? "展示过往作品，图片、PDF或文档，最多10个文件"
-                    : "Show your past work — images, PDFs or documents, up to 10 files"}
+                    ? "仅上传作品图片，最多10张。每张图片将压缩至不超过0.3 MB。"
+                    : "Upload portfolio images only, up to 10. Each image is compressed to no more than 0.3 MB."}
               </p>
               <input
                 id="portfolioImages"
                 name="portfolioImages"
                 type="file"
-                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
+                accept="image/jpeg,image/png,image/webp"
                 multiple
-                onChange={(e) => {
-                  if (e.target.files) {
-                    const files = Array.from(e.target.files).slice(0, 10);
-                    setPortfolioImages(files);
-                    digestPortfolioFiles(files);
-                  }
+                disabled={
+                  portfolioProcessing ||
+                  portfolioImages.length >= PORTFOLIO_MAX_FILES
+                }
+                onChange={async (event) => {
+                  const files = event.target.files
+                    ? Array.from(event.target.files)
+                    : [];
+                  event.target.value = "";
+                  await addPortfolioImages(files);
                 }}
-                className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-800 hover:file:bg-green-100 disabled:opacity-50"
               />
+              <p className="mt-2 text-xs text-gray-500">
+                {portfolioImages.length}/{PORTFOLIO_MAX_FILES} images, maximum{" "}
+                {Math.round(PORTFOLIO_MAX_FILE_BYTES / 1024)} KiB each
+              </p>
+              {portfolioProcessing && (
+                <p className="mt-2 text-xs text-green-700">
+                  Compressing selected images...
+                </p>
+              )}
               {portfolioImages.length > 0 && (
-                <p className="mt-2 text-xs text-green-600">
-                  {portfolioImages.length}{" "}
-                  {locale === "th"
-                    ? "ไฟล์ที่เลือก"
-                    : locale === "zh"
-                      ? "个文件已选择"
-                      : "file(s) selected"}
-                </p>
-              )}
-              {digesting && (
-                <p className="mt-1 text-xs text-sky-600 flex items-center gap-1">
-                  <span className="inline-block w-3 h-3 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
-                  {locale === "th"
-                    ? "AI กำลังวิเคราะห์เอกสาร..."
-                    : locale === "zh"
-                      ? "AI正在分析文档..."
-                      : "AI analyzing documents..."}
-                </p>
-              )}
-              {digestResult && !digesting && (
-                <p className="mt-1 text-xs text-indigo-600">
-                  {locale === "th"
-                    ? `AI วิเคราะห์เอกสารเสร็จสิ้น — คะแนนเนื้อหา: ${digestResult.content_score}/100`
-                    : locale === "zh"
-                      ? `AI文档分析完成 — 内容评分: ${digestResult.content_score}/100`
-                      : `AI document analysis complete — content score: ${digestResult.content_score}/100`}
-                </p>
+                <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {portfolioImages.map((file, index) => (
+                    <li
+                      key={file.name + "-" + file.lastModified + "-" + index}
+                      className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-gray-200 px-3 py-2 text-xs"
+                    >
+                      <span className="min-w-0 truncate text-gray-700">
+                        {file.name} ({Math.ceil(file.size / 1024)} KiB)
+                      </span>
+                      <button
+                        type="button"
+                        className="shrink-0 font-semibold text-red-700 hover:text-red-800"
+                        onClick={() =>
+                          setPortfolioImages((current) =>
+                            current.filter(
+                              (_, itemIndex) => itemIndex !== index,
+                            ),
+                          )
+                        }
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
           </fieldset>

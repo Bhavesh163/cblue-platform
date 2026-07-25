@@ -10,10 +10,7 @@ import {
   Body,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import {
-  QualificationReviewStatus,
-  UserRole,
-} from '@prisma/client';
+import { QualificationReviewStatus, UserRole } from '@prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -77,6 +74,14 @@ export class QualificationController {
     );
   }
 
+  @Post('submissions/:submissionId/submit')
+  submitQualification(
+    @CurrentUser('id') userId: string,
+    @Param('submissionId') submissionId: string,
+  ) {
+    return this.qualification.submitForUser(userId, submissionId);
+  }
+
   @Post('submissions/:submissionId/evaluate')
   evaluateSubmission(
     @CurrentUser('id') userId: string,
@@ -128,7 +133,10 @@ export class QualificationController {
     @Body() dto: QualificationEvidenceDecisionDto,
   ) {
     return this.qualification.reviewDocumentEvidence(
-      adminId, submissionId, documentId, dto,
+      adminId,
+      submissionId,
+      documentId,
+      dto,
     );
   }
   @Post('admin/submissions/:submissionId/documents/:documentId/verify')

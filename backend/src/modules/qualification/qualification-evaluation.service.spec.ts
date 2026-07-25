@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { QualificationEvaluationService } from './qualification-evaluation.service';
 
 describe('QualificationEvaluationService', () => {
@@ -13,7 +13,9 @@ describe('QualificationEvaluationService', () => {
   const prisma = {
     kycSubmission: { findFirst: jest.fn(), findUnique: jest.fn() },
     qualificationEvaluation: { findMany: jest.fn() },
-    $transaction: jest.fn(async (callback: (client: any) => unknown) => callback(tx)),
+    $transaction: jest.fn(async (callback: (client: any) => unknown) =>
+      callback(tx),
+    ),
   } as any;
   const policy = { evaluate: jest.fn() } as any;
   const config = { get: jest.fn().mockReturnValue(undefined) } as any;
@@ -33,46 +35,70 @@ describe('QualificationEvaluationService', () => {
   it('counts only validated evidence and auto-approves Economy without Typhoon', async () => {
     prisma.kycSubmission.findFirst.mockResolvedValue({
       id: 'submission-1',
+      status: 'SUBMITTED',
       fixer: { id: 'fixer-1', yearsExperience: 4 },
       documents: [
         { id: 'front', documentType: 'id-front', evidenceStatus: 'VALIDATED' },
         { id: 'back', documentType: 'id-back', evidenceStatus: 'VALIDATED' },
-        { id: 'cert', documentType: 'education-certificate', evidenceStatus: 'UNCHECKED' },
+        {
+          id: 'cert',
+          documentType: 'education-certificate',
+          evidenceStatus: 'UNCHECKED',
+        },
       ],
     });
     policy.evaluate.mockImplementation((input: any) => ({
       policyVersion: 'cblue-fixer-qualification-v1',
-      recommendedTier: input.relatedCertificateCount > 0 ? 'STANDARD' : 'ECONOMY',
+      recommendedTier:
+        input.relatedCertificateCount > 0 ? 'STANDARD' : 'ECONOMY',
       eligibleTiers: ['ECONOMY', 'STANDARD'],
       humanReviewRequired: false,
       publicPromotionAllowed: true,
       reasons: [],
     }));
 
-    const result = await service.evaluateSubmissionForUser('user-1', 'submission-1');
+    const result = await service.evaluateSubmissionForUser(
+      'user-1',
+      'submission-1',
+    );
 
     expect(result.advisory).toBeNull();
     expect(result.reviewRequired).toBe(false);
     expect(result.status).toBe('APPROVED');
-    expect(tx.qualificationEvaluation.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
-        provider: 'DETERMINISTIC_POLICY',
-        status: 'COMPLETED',
-        recommendedTier: 'ECONOMY',
-        inputHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+    expect(tx.qualificationEvaluation.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          provider: 'DETERMINISTIC_POLICY',
+          status: 'COMPLETED',
+          recommendedTier: 'ECONOMY',
+          inputHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+        }),
       }),
-    }));
+    );
     expect(tx.qualificationReviewTask.create).not.toHaveBeenCalled();
-    expect(tx.tierQualification.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ approvedTier: 'ECONOMY', source: 'DETERMINISTIC' }),
-    }));
-    expect(tx.fixer.update).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ tier: 'ECONOMY', status: 'APPROVED', verified: true }),
-    }));
-    expect(tx.kycSubmission.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'submission-1' },
-      data: expect.objectContaining({ status: 'APPROVED' }),
-    }));
+    expect(tx.tierQualification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          approvedTier: 'ECONOMY',
+          source: 'DETERMINISTIC',
+        }),
+      }),
+    );
+    expect(tx.fixer.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tier: 'ECONOMY',
+          status: 'APPROVED',
+          verified: true,
+        }),
+      }),
+    );
+    expect(tx.kycSubmission.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'submission-1' },
+        data: expect.objectContaining({ status: 'APPROVED' }),
+      }),
+    );
   });
 
   it('allows an admin re-evaluation and records the admin actor', async () => {
@@ -85,23 +111,37 @@ describe('QualificationEvaluationService', () => {
       ],
     });
     policy.evaluate.mockReturnValue({
-      policyVersion: 'cblue-fixer-qualification-v1', recommendedTier: 'STANDARD',
-      eligibleTiers: ['ECONOMY', 'STANDARD'], humanReviewRequired: false,
-      publicPromotionAllowed: true, reasons: [],
+      policyVersion: 'cblue-fixer-qualification-v1',
+      recommendedTier: 'STANDARD',
+      eligibleTiers: ['ECONOMY', 'STANDARD'],
+      humanReviewRequired: false,
+      publicPromotionAllowed: true,
+      reasons: [],
     });
 
-    await expect(service.evaluateSubmissionForAdmin('admin-1', 'submission-admin'))
-      .resolves.toEqual(expect.objectContaining({ submissionId: 'submission-admin' }));
-    expect(prisma.kycSubmission.findFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'submission-admin' },
-    }));
-    expect(tx.qualificationAuditLog.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ actorId: 'admin-1', action: 'QUALIFICATION_EVALUATED' }),
-    }));
+    await expect(
+      service.evaluateSubmissionForAdmin('admin-1', 'submission-admin'),
+    ).resolves.toEqual(
+      expect.objectContaining({ submissionId: 'submission-admin' }),
+    );
+    expect(prisma.kycSubmission.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'submission-admin' },
+      }),
+    );
+    expect(tx.qualificationAuditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          actorId: 'admin-1',
+          action: 'QUALIFICATION_EVALUATED',
+        }),
+      }),
+    );
   });
   it('does not duplicate an existing deterministic Economy qualification', async () => {
     prisma.kycSubmission.findFirst.mockResolvedValue({
       id: 'submission-1',
+      status: 'SUBMITTED',
       fixer: { id: 'fixer-1', yearsExperience: 1 },
       documents: [
         { id: 'front', documentType: 'id-front', evidenceStatus: 'VALIDATED' },
@@ -109,11 +149,16 @@ describe('QualificationEvaluationService', () => {
       ],
     });
     policy.evaluate.mockReturnValue({
-      policyVersion: 'cblue-fixer-qualification-v1', recommendedTier: 'ECONOMY',
-      eligibleTiers: ['ECONOMY'], humanReviewRequired: false,
-      publicPromotionAllowed: true, reasons: [],
+      policyVersion: 'cblue-fixer-qualification-v1',
+      recommendedTier: 'ECONOMY',
+      eligibleTiers: ['ECONOMY'],
+      humanReviewRequired: false,
+      publicPromotionAllowed: true,
+      reasons: [],
     });
-    tx.tierQualification.findFirst.mockResolvedValue({ id: 'existing-qualification' });
+    tx.tierQualification.findFirst.mockResolvedValue({
+      id: 'existing-qualification',
+    });
 
     await service.evaluateSubmissionForUser('user-1', 'submission-1');
 
@@ -126,8 +171,18 @@ describe('QualificationEvaluationService', () => {
       id: 'submission-evidence',
       fixer: { id: 'fixer-evidence', yearsExperience: 6 },
       documents: [
-        { id: 'front', documentType: 'id-front', evidenceStatus: 'VALIDATED', extractedFields: null },
-        { id: 'back', documentType: 'id-back', evidenceStatus: 'VALIDATED', extractedFields: null },
+        {
+          id: 'front',
+          documentType: 'id-front',
+          evidenceStatus: 'VALIDATED',
+          extractedFields: null,
+        },
+        {
+          id: 'back',
+          documentType: 'id-back',
+          evidenceStatus: 'VALIDATED',
+          extractedFields: null,
+        },
         {
           id: 'degree',
           documentType: 'education-certificate',
@@ -159,28 +214,50 @@ describe('QualificationEvaluationService', () => {
 
     await service.evaluateSubmissionForAdmin('admin-1', 'submission-evidence');
 
-    expect(policy.evaluate).toHaveBeenCalledWith(expect.objectContaining({
-      hasEligibleMastersOrDoctorate: true,
-      millionBahtCompletionCertificateCount: 1,
-      projectCompletionCertificateCount: 1,
-    }));
+    expect(policy.evaluate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        hasEligibleMastersOrDoctorate: true,
+        millionBahtCompletionCertificateCount: 1,
+        projectCompletionCertificateCount: 1,
+      }),
+    );
+  });
+
+  it('rejects evaluation of an incomplete draft submission', async () => {
+    prisma.kycSubmission.findFirst.mockResolvedValue({
+      id: 'submission-draft',
+      status: 'DRAFT',
+      fixer: { id: 'fixer-1', yearsExperience: 1 },
+      documents: [],
+    });
+
+    await expect(
+      service.evaluateSubmissionForUser('user-1', 'submission-draft'),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('fails closed for a submission owned by another user', async () => {
     prisma.kycSubmission.findFirst.mockResolvedValue(null);
-    await expect(service.evaluateSubmissionForUser('other-user', 'submission-1'))
-      .rejects.toBeInstanceOf(NotFoundException);
+    await expect(
+      service.evaluateSubmissionForUser('other-user', 'submission-1'),
+    ).rejects.toBeInstanceOf(NotFoundException);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('creates a review task when evidence is incomplete or an upper tier is recommended', async () => {
     prisma.kycSubmission.findFirst.mockResolvedValue({
       id: 'submission-2',
+      status: 'SUBMITTED',
       fixer: { id: 'fixer-2', yearsExperience: 12 },
       documents: [
         { id: 'front', documentType: 'id-front', evidenceStatus: 'UNCHECKED' },
         { id: 'back', documentType: 'id-back', evidenceStatus: 'UNCHECKED' },
-        { id: 'award', documentType: 'international-award', evidenceStatus: 'VALIDATED' },
+        {
+          id: 'award',
+          documentType: 'international-award',
+          evidenceStatus: 'VALIDATED',
+        },
       ],
     });
     policy.evaluate.mockReturnValue({
@@ -192,16 +269,21 @@ describe('QualificationEvaluationService', () => {
       reasons: ['Human review required'],
     });
 
-    const result = await service.evaluateSubmissionForUser('user-2', 'submission-2');
+    const result = await service.evaluateSubmissionForUser(
+      'user-2',
+      'submission-2',
+    );
 
     expect(result.reviewRequired).toBe(true);
-    expect(tx.qualificationReviewTask.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
-        submissionId: 'submission-2',
-        status: 'OPEN',
-        priority: 10,
+    expect(tx.qualificationReviewTask.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          submissionId: 'submission-2',
+          status: 'OPEN',
+          priority: 10,
+        }),
       }),
-    }));
+    );
     expect(tx.kycSubmission.update).toHaveBeenCalledWith({
       where: { id: 'submission-2' },
       data: { status: 'NEEDS_REVIEW' },
@@ -210,14 +292,21 @@ describe('QualificationEvaluationService', () => {
 
   it('reuses an existing open review task during re-evaluation', async () => {
     prisma.kycSubmission.findFirst.mockResolvedValue({
-      id: 'submission-2', fixer: { id: 'fixer-2', yearsExperience: 0 }, documents: [],
+      id: 'submission-2',
+      fixer: { id: 'fixer-2', yearsExperience: 0 },
+      documents: [],
     });
     policy.evaluate.mockReturnValue({
-      policyVersion: 'cblue-fixer-qualification-v1', recommendedTier: 'ECONOMY',
-      eligibleTiers: ['ECONOMY'], humanReviewRequired: true,
-      publicPromotionAllowed: false, reasons: ['KYC review required'],
+      policyVersion: 'cblue-fixer-qualification-v1',
+      recommendedTier: 'ECONOMY',
+      eligibleTiers: ['ECONOMY'],
+      humanReviewRequired: true,
+      publicPromotionAllowed: false,
+      reasons: ['KYC review required'],
     });
-    tx.qualificationReviewTask.findFirst.mockResolvedValue({ id: 'existing-task' });
+    tx.qualificationReviewTask.findFirst.mockResolvedValue({
+      id: 'existing-task',
+    });
 
     await service.evaluateSubmissionForAdmin('admin-1', 'submission-2');
 

@@ -1043,8 +1043,8 @@ export class FixerService {
     const fixer = await this.prisma.fixer.create({
       data: {
         userId,
-        tier: tierEvaluation.prismaTier,
-        status: 'APPROVED', // Auto-approved via AI for seamless booking access
+        tier: 'ECONOMY',
+        status: 'PENDING',
         pastProjectType: dto.pastProjectType,
         yearsExperience: dto.yearsExperience,
         travelRadius: dto.travelRadius,
@@ -1194,7 +1194,6 @@ export class FixerService {
     return this.prisma.fixer.update({
       where: { id: fixer.id },
       data: {
-        tier: tierEvaluation.prismaTier,
         aiScore: tierEvaluation.score,
         aiTier: tierEvaluation.tier,
         aiBreakdown: JSON.parse(
@@ -1239,7 +1238,6 @@ export class FixerService {
     const updatedFixer = await this.prisma.fixer.update({
       where: { id: fixer.id },
       data: {
-        tier: tierEvaluation.prismaTier,
         bio: dto.bio,
         description: dto.description,
         pastExperience: dto.pastExperience,

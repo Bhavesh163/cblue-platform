@@ -213,7 +213,8 @@ describe('FixerService', () => {
     expect(prisma.fixer.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          tier: 'STANDARD',
+          tier: 'ECONOMY',
+          status: 'PENDING',
           aiTier: 'Standard',
           aiScore: expect.any(Number),
           aiCredentialStatus: expect.stringMatching(/partial|verified/),
@@ -400,7 +401,8 @@ describe('FixerService', () => {
     expect(prisma.fixer.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          tier: 'SPECIALIST',
+          tier: 'ECONOMY',
+          status: 'PENDING',
           aiTier: 'Specialist',
           aiCredentialStatus: 'verified',
           aiFlags: expect.arrayContaining([
@@ -567,7 +569,8 @@ describe('FixerService', () => {
     expect(prisma.fixer.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          tier: 'STANDARD',
+          tier: 'ECONOMY',
+          status: 'PENDING',
           aiTier: 'Standard',
           aiCredentialStatus: 'unverified',
           aiFlags: expect.arrayContaining([
@@ -648,7 +651,8 @@ describe('FixerService', () => {
     expect(prisma.fixer.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          tier: 'STANDARD',
+          tier: 'ECONOMY',
+          status: 'PENDING',
           aiTier: 'Standard',
           aiCredentialStatus: 'partial',
           aiFlags: expect.not.arrayContaining([
