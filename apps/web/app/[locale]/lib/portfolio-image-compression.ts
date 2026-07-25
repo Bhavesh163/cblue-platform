@@ -1,11 +1,12 @@
 export const PORTFOLIO_MAX_FILES = 10;
 export const PORTFOLIO_MAX_FILE_BYTES = 300 * 1024;
 
-const ALLOWED_PORTFOLIO_TYPES = new Set([
+const ALLOWED_PORTFOLIO_IMAGE_TYPES = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
 ]);
+const PORTFOLIO_PDF_TYPE = "application/pdf";
 
 function loadImage(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -36,9 +37,15 @@ function canvasBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
   });
 }
 
-export async function compressPortfolioImage(file: File): Promise<File> {
-  if (!ALLOWED_PORTFOLIO_TYPES.has(file.type)) {
-    throw new Error(`${file.name} is not a supported portfolio image`);
+export async function preparePortfolioFile(file: File): Promise<File> {
+  if (file.type === PORTFOLIO_PDF_TYPE) {
+    if (file.size > PORTFOLIO_MAX_FILE_BYTES) {
+      throw new Error(`${file.name} PDF must be no larger than 0.3 MB`);
+    }
+    return file;
+  }
+  if (!ALLOWED_PORTFOLIO_IMAGE_TYPES.has(file.type)) {
+    throw new Error(`${file.name} is not a supported portfolio file`);
   }
   if (file.size <= PORTFOLIO_MAX_FILE_BYTES) {
     return file;

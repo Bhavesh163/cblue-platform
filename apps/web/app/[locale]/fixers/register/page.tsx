@@ -29,7 +29,7 @@ import GpsResolvedLocation from "../../components/GpsResolvedLocation";
 import Link from "next/link";
 import DatePickerInput from "../../components/DatePickerInput";
 import {
-  compressPortfolioImage,
+  preparePortfolioFile,
   PORTFOLIO_MAX_FILES,
   PORTFOLIO_MAX_FILE_BYTES,
 } from "../../lib/portfolio-image-compression";
@@ -387,7 +387,7 @@ function FixerRegisterContent() {
         }
         const compressed: File[] = [];
         for (const file of selected) {
-          compressed.push(await compressPortfolioImage(file));
+          compressed.push(await preparePortfolioFile(file));
         }
         const merged = [...portfolioImages, ...compressed].slice(
           0,
@@ -1251,7 +1251,7 @@ function FixerRegisterContent() {
             <div className="rounded-lg border border-gray-200 p-4 sm:col-span-2">
               <dt className="text-gray-500">Evidence stored</dt>
               <dd className="font-semibold text-gray-900 mt-1">
-                3 KYC images and {portfolioImages.length} portfolio image(s)
+                3 KYC images and {portfolioImages.length} portfolio file(s)
               </dd>
             </div>
           </dl>
@@ -2045,16 +2045,16 @@ function FixerRegisterContent() {
               </label>
               <p className="text-xs text-gray-500 mb-2">
                 {locale === "th"
-                  ? "อัปโหลดเฉพาะรูปผลงาน สูงสุด 10 รูป ระบบจะบีบอัดแต่ละรูปไม่เกิน 0.3 MB"
+                  ? "อัปโหลดรูปผลงานหรือไฟล์ PDF ได้สูงสุด 10 ไฟล์ รูปภาพจะถูกบีบอัดไม่เกิน 0.3 MB และ PDF ต้องมีขนาดไม่เกิน 0.3 MB"
                   : locale === "zh"
-                    ? "仅上传作品图片，最多10张。每张图片将压缩至不超过0.3 MB。"
-                    : "Upload portfolio images only, up to 10. Each image is compressed to no more than 0.3 MB."}
+                    ? "最多上传10个作品图片或PDF文件。图片将压缩至不超过0.3 MB，PDF文件必须不超过0.3 MB。"
+                    : "Upload up to 10 portfolio images or PDF files. Images are compressed to no more than 0.3 MB; PDFs must already be no larger than 0.3 MB."}
               </p>
               <input
                 id="portfolioImages"
                 name="portfolioImages"
                 type="file"
-                accept="image/jpeg,image/png,image/webp"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
                 multiple
                 disabled={
                   portfolioProcessing ||
@@ -2070,12 +2070,12 @@ function FixerRegisterContent() {
                 className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-800 hover:file:bg-green-100 disabled:opacity-50"
               />
               <p className="mt-2 text-xs text-gray-500">
-                {portfolioImages.length}/{PORTFOLIO_MAX_FILES} images, maximum{" "}
+                {portfolioImages.length}/{PORTFOLIO_MAX_FILES} files, maximum{" "}
                 {Math.round(PORTFOLIO_MAX_FILE_BYTES / 1024)} KiB each
               </p>
               {portfolioProcessing && (
                 <p className="mt-2 text-xs text-green-700">
-                  Compressing selected images...
+                  Preparing selected portfolio files...
                 </p>
               )}
               {portfolioImages.length > 0 && (

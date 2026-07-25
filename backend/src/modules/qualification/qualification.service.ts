@@ -267,12 +267,14 @@ export class QualificationService {
     const isKyc = KYC_DOCUMENT_TYPES.includes(
       documentType as (typeof KYC_DOCUMENT_TYPES)[number],
     );
-    if (isPortfolio && !imageContentTypes.has(file.mimetype)) {
-      throw new BadRequestException('Portfolio evidence must be an image');
+    if (isPortfolio && !qualificationContentTypes.has(file.mimetype)) {
+      throw new BadRequestException(
+        'Portfolio evidence must be a PDF, JPEG, PNG, or WebP file',
+      );
     }
     if (isPortfolio && fileSize > PORTFOLIO_MAX_FILE_BYTES) {
       throw new BadRequestException(
-        'Portfolio image exceeds 0.3 MB after compression',
+        'Portfolio file exceeds 0.3 MB; images must be compressed before upload',
       );
     }
     if (isKyc && !imageContentTypes.has(file.mimetype)) {
@@ -341,7 +343,7 @@ export class QualificationService {
       if (existingCount >= maximum) {
         throw new ConflictException(
           isPortfolio
-            ? 'Maximum 10 portfolio images allowed'
+            ? 'Maximum 10 portfolio files allowed'
             : 'Only one ' + documentType + ' document is allowed',
         );
       }
@@ -420,17 +422,18 @@ export class QualificationService {
         (document) => document.documentType === 'portfolio',
       );
       if (portfolio.length > PORTFOLIO_MAX_FILES) {
-        throw new BadRequestException('Maximum 10 portfolio images allowed');
+        throw new BadRequestException('Maximum 10 portfolio files allowed');
       }
       if (
         portfolio.some(
           (document) =>
             document.sizeBytes > PORTFOLIO_MAX_FILE_BYTES ||
-            !document.contentType.startsWith('image/'),
+            (!document.contentType.startsWith('image/') &&
+              document.contentType !== 'application/pdf'),
         )
       ) {
         throw new BadRequestException(
-          'Every portfolio item must be an image no larger than 0.3 MB',
+          'Every portfolio item must be a PDF or image no larger than 0.3 MB',
         );
       }
 
@@ -464,7 +467,10 @@ export class QualificationService {
           reason: 'Partner finalized required KYC evidence',
           metadata: {
             kycDocumentCount: KYC_DOCUMENT_TYPES.length,
-            portfolioImageCount: portfolio.length,
+            portfolioFileCount: portfolio.length,
+            portfolioImageCount: portfolio.filter((document) =>
+              document.contentType.startsWith('image/'),
+            ).length,
           },
         },
       });

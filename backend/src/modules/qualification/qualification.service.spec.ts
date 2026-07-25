@@ -287,6 +287,43 @@ describe('QualificationService', () => {
     expect(result.id).toBe('document-1');
   });
 
+  it('stores a size-limited portfolio PDF as private evidence', async () => {
+    prisma.kycSubmission.findFirst.mockResolvedValue({
+      id: 'submission-1',
+      fixerId: 'fixer-1',
+      status: 'DRAFT',
+    });
+    tx.kycDocument.create.mockImplementation(async ({ data }: any) => ({
+      id: 'portfolio-pdf-1',
+      documentType: data.documentType,
+      contentType: data.contentType,
+      sizeBytes: data.sizeBytes,
+      evidenceStatus: 'UNCHECKED',
+      expiresAt: null,
+      createdAt: new Date('2026-07-24T00:00:00.000Z'),
+    }));
+    const pdf = Buffer.from('%PDF-1.4\nportfolio');
+
+    await expect(
+      service.uploadDocumentForUser('user-1', 'submission-1', 'portfolio', {
+        originalname: 'portfolio.pdf',
+        mimetype: 'application/pdf',
+        size: pdf.length,
+        buffer: pdf,
+      } as Express.Multer.File),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        id: 'portfolio-pdf-1',
+        contentType: 'application/pdf',
+      }),
+    );
+    expect(storage.putPrivateObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: pdf,
+        contentType: 'application/pdf',
+      }),
+    );
+  });
   it('rejects a spoofed image MIME type before private storage', async () => {
     await expect(
       service.uploadDocumentForUser('user-1', 'submission-1', 'portfolio', {
@@ -311,7 +348,7 @@ describe('QualificationService', () => {
     expect(storage.putPrivateObject).not.toHaveBeenCalled();
   });
 
-  it('rejects portfolio images above 0.3 MB before private storage', async () => {
+  it('rejects portfolio files above 0.3 MB before private storage', async () => {
     await expect(
       service.uploadDocumentForUser('user-1', 'submission-1', 'portfolio', {
         originalname: 'large.jpg',
@@ -323,7 +360,7 @@ describe('QualificationService', () => {
     expect(storage.putPrivateObject).not.toHaveBeenCalled();
   });
 
-  it('enforces the ten-image portfolio limit under a serialized upload lock', async () => {
+  it('enforces the ten-file portfolio limit under a serialized upload lock', async () => {
     prisma.kycSubmission.findFirst.mockResolvedValue({
       id: 'submission-1',
       fixerId: 'fixer-1',
@@ -379,6 +416,11 @@ describe('QualificationService', () => {
           sizeBytes: 250 * 1024,
           contentType: 'image/jpeg',
         },
+        {
+          documentType: 'portfolio',
+          sizeBytes: 200 * 1024,
+          contentType: 'application/pdf',
+        },
       ],
     });
     tx.kycSubmission.updateMany.mockResolvedValue({ count: 1 });
@@ -402,6 +444,7 @@ describe('QualificationService', () => {
         actorId: 'user-1',
         metadata: {
           kycDocumentCount: 3,
+          portfolioFileCount: 2,
           portfolioImageCount: 1,
         },
       }),
