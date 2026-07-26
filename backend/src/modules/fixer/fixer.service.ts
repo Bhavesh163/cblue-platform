@@ -17,6 +17,8 @@ import { UploadKycDto } from './dto/upload-kyc.dto';
 import { firstValueFrom } from 'rxjs';
 import FormData from 'form-data';
 import { normalizeThaiGpsLocation } from '../../common/thai-gps-location';
+import { canonicalizeServiceText } from './service-intent-registry';
+import { parseRequestedServices } from './multilingual-service-request-parser';
 
 export interface SelectedFixer {
   id: string;
@@ -2326,7 +2328,21 @@ export class FixerService {
       if (pool.length === 0) return [];
 
       const customerQty = this.extractQuantityFromDescription(description);
-      const serviceQtyPairs = this.extractAllServiceQtyPairs(description);
+      const parsedRequestedServices = parseRequestedServices(description || '');
+      const serviceQtyPairs =
+        parsedRequestedServices.length > 0
+          ? parsedRequestedServices.map((item) => ({
+              qty: item.quantity,
+              contextTerms: [item.canonicalKey],
+              canonicalKey: item.canonicalKey,
+            }))
+          : this.extractAllServiceQtyPairs(description).map((item) => ({
+              ...item,
+              canonicalKey: undefined as string | undefined,
+            }));
+      const requestedCanonicalKeys = new Set(
+        parsedRequestedServices.map((item) => item.canonicalKey),
+      );
       const searchTerms = this.buildSearchTerms(service, description);
 
       const formattedPool = pool.map((f): RankedFixer => {
@@ -2358,7 +2374,16 @@ export class FixerService {
           const rankedList = list
             .map((item) => ({
               item,
-              score: this.scorePriceListItem(item, searchTerms),
+              score:
+                requestedCanonicalKeys.size > 0
+                  ? requestedCanonicalKeys.has(
+                      canonicalizeServiceText(
+                        typeof item.service === 'string' ? item.service : '',
+                      )?.key || '',
+                    )
+                    ? 100
+                    : 0
+                  : this.scorePriceListItem(item, searchTerms),
             }))
             .sort((a, b) => {
               if (b.score !== a.score) return b.score - a.score;
@@ -2387,7 +2412,7 @@ export class FixerService {
               let multiTotal = 0;
               for (const [
                 pairIndex,
-                { qty, contextTerms },
+                { qty, contextTerms, canonicalKey },
               ] of serviceQtyPairs.entries()) {
                 if (contextTerms.length === 0) {
                   const lineTotal = Math.round(pricePerUnit * qty);
@@ -2416,7 +2441,13 @@ export class FixerService {
                 const bestForContext = list
                   .map((item) => ({
                     item,
-                    score: this.scorePriceListItem(item, contextTerms),
+                    score: canonicalKey
+                      ? canonicalizeServiceText(
+                          typeof item.service === 'string' ? item.service : '',
+                        )?.key === canonicalKey
+                        ? 100
+                        : 0
+                      : this.scorePriceListItem(item, contextTerms),
                   }))
                   .sort((a, b) => {
                     if (b.score !== a.score) return b.score - a.score;

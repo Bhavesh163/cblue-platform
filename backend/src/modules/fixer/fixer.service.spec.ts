@@ -3046,5 +3046,175 @@ describe('FixerService', () => {
         },
       ]);
     });
+
+    it.each([
+      [
+        'Thai household',
+        'household',
+        'ต้องการทีมงานสำหรับดำเนินการออกแบบและตกแต่งภายในสำนักงานขนาด 1,000 ตร.ม., งานรื้อถอนและปรับสภาพพื้นที่เดิมขนาด 100 ตร.ม., งานก่อสร้างอาคารสำนักงานขนาด 100 ตร.ม., งานพัฒนาเว็บไซต์จำนวน 10 หน้า และงานพัฒนาแชตบอตตอบคำถามถาม-ตอบ (FAQ) จำนวน 100 ข้อ',
+      ],
+      [
+        'Thai project',
+        'project',
+        'ต้องการทีมงานสำหรับดำเนินการออกแบบและตกแต่งภายในสำนักงานขนาด 1,000 ตร.ม., งานรื้อถอนและปรับสภาพพื้นที่เดิมขนาด 100 ตร.ม., งานก่อสร้างอาคารสำนักงานขนาด 100 ตร.ม., งานพัฒนาเว็บไซต์จำนวน 10 หน้า และงานพัฒนาแชตบอตตอบคำถามถาม-ตอบ (FAQ) จำนวน 100 ข้อ',
+      ],
+      [
+        'Thai professional',
+        'professional',
+        'ต้องการทีมงานสำหรับดำเนินการออกแบบและตกแต่งภายในสำนักงานขนาด 1,000 ตร.ม., งานรื้อถอนและปรับสภาพพื้นที่เดิมขนาด 100 ตร.ม., งานก่อสร้างอาคารสำนักงานขนาด 100 ตร.ม., งานพัฒนาเว็บไซต์จำนวน 10 หน้า และงานพัฒนาแชตบอตตอบคำถามถาม-ตอบ (FAQ) จำนวน 100 ข้อ',
+      ],
+      [
+        'Simplified Chinese',
+        'project',
+        '办公室装修1000平方米、场地恢复100平方米、办公楼建设100平方米、网站开发10页以及FAQ机器人开发100问答',
+      ],
+      [
+        'Traditional Chinese',
+        'project',
+        '辦公室裝修1000平方米、場地復原100平方米、辦公樓建設100平方米、網站開發10頁以及FAQ機器人開發100問答',
+      ],
+    ])(
+      'matches a multilingual multi-service %s request to exact price-list rows',
+      async (_language, bookingType, description) => {
+        prisma.fixer.findMany.mockResolvedValue([
+          {
+            id: 'bhavesh',
+            tier: 'ECONOMY',
+            rating: 5,
+            completedJobs: 0,
+            yearsExperience: 8,
+            description:
+              'Office fitout, reinstatement, construction, website, and chatbot',
+            pastProjectType:
+              'fitout reinstatement construction website chatbot',
+            bio: 'Commercial build and digital delivery team',
+            serviceProvince: 'Bangkok',
+            serviceDistrict: 'Pathum Wan',
+            priceList: [
+              {
+                service: 'Fit-out',
+                quantity: '1',
+                unit: 'sq.m.',
+                finalPrice: '30000',
+              },
+              {
+                service: 'Reinstatement',
+                quantity: '1',
+                unit: 'sq.m.',
+                finalPrice: '10000',
+              },
+              {
+                service: 'Construction',
+                quantity: '1',
+                unit: 'sq.m.',
+                finalPrice: '20000',
+              },
+              {
+                service: 'Website development',
+                quantity: '1',
+                unit: 'page',
+                finalPrice: '1000',
+              },
+              {
+                service: 'Chatbot',
+                quantity: '1',
+                unit: 'FAQ',
+                finalPrice: '100',
+              },
+            ],
+            user: {
+              name: 'Bhavesh Fungprasertsuk',
+              company: 'Bhavesh Fungprasertsuk',
+            },
+            skills: [
+              { category: 'project', name: 'fitout' },
+              { category: 'project', name: 'construction' },
+              { category: 'project', name: 'website development' },
+              { category: 'project', name: 'chatbot' },
+            ],
+          },
+          {
+            id: 'cafe',
+            tier: 'ECONOMY',
+            rating: 5,
+            completedJobs: 0,
+            yearsExperience: 2,
+            description: 'Coffee cafe image ads',
+            pastProjectType: 'digital marketing',
+            bio: 'Cafe and image advertising',
+            serviceProvince: 'Bangkok',
+            serviceDistrict: 'Pathum Wan',
+            priceList: [
+              {
+                service: 'Image ads',
+                quantity: '1',
+                unit: 'image',
+                finalPrice: '2000',
+              },
+            ],
+            user: { name: 'Cafe', company: 'Cafe' },
+            skills: [{ category: 'marketing', name: 'image ads' }],
+          },
+        ]);
+
+        const result = await service.matchFixers(
+          'project',
+          'Pathum Wan',
+          'Bangkok',
+          description,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          bookingType,
+        );
+
+        expect(result.map((candidate: { id: string }) => candidate.id)).toEqual(
+          ['bhavesh'],
+        );
+        expect(result[0]).toEqual(
+          expect.objectContaining({
+            estimatedTotal: 33020000,
+            estimatedBreakdown: [
+              {
+                service: 'Fit-out',
+                qty: 1000,
+                unit: 'sq.m.',
+                unitRate: 30000,
+                total: 30000000,
+              },
+              {
+                service: 'Reinstatement',
+                qty: 100,
+                unit: 'sq.m.',
+                unitRate: 10000,
+                total: 1000000,
+              },
+              {
+                service: 'Construction',
+                qty: 100,
+                unit: 'sq.m.',
+                unitRate: 20000,
+                total: 2000000,
+              },
+              {
+                service: 'Website development',
+                qty: 10,
+                unit: 'page',
+                unitRate: 1000,
+                total: 10000,
+              },
+              {
+                service: 'Chatbot',
+                qty: 100,
+                unit: 'FAQ',
+                unitRate: 100,
+                total: 10000,
+              },
+            ],
+          }),
+        );
+      },
+    );
   });
 });
