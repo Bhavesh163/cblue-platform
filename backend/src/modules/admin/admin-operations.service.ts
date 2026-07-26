@@ -219,7 +219,7 @@ export class AdminOperationsService {
   private readReason(value: Prisma.JsonValue | null): string | null {
     if (!value || typeof value !== 'object' || Array.isArray(value))
       return null;
-    const record = value as Prisma.JsonObject;
+    const record = value;
     for (const key of ['reason', 'note', 'privateNote']) {
       const candidate = record[key];
       if (typeof candidate === 'string' && candidate.trim())
