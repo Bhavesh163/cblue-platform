@@ -21,6 +21,7 @@ type ReviewTask = {
     id?: string;
     status?: string;
     fixer?: {
+      priceList?: Array<{ service?: string; unit?: string; finalPrice?: number | string }> | null;
       user?: { name?: string | null; email?: string | null } | null;
     } | null;
     documents?: Array<{ id: string; documentType: string; evidenceStatus: string }>;
@@ -203,7 +204,7 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1120px] text-left text-sm">
             <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-              <tr><th className="py-2 pr-4">Partner</th><th className="py-2 pr-4">Recommendation</th><th className="py-2 pr-4">Evidence</th><th className="py-2 pr-4">Action</th></tr>
+              <tr><th className="py-2 pr-4">Partner</th><th className="py-2 pr-4">Recommendation</th><th className="py-2 pr-4">Proposed price list</th><th className="py-2 pr-4">Evidence</th><th className="py-2 pr-4">Action</th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {tasks.map((task) => {
@@ -220,6 +221,11 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                       ) : (
                         <span>{task.submission?.documents?.length ?? 0} document(s). Claim this task to review evidence.</span>
                       )}
+                    <td className="min-w-72 py-3 pr-4 align-top text-slate-700">
+                      {Array.isArray(task.submission?.fixer?.priceList) && task.submission.fixer.priceList.length ? (
+                        <div className="space-y-1.5">{task.submission.fixer.priceList.slice(0, 30).map((row, index) => <div key={`${row.service || "service"}-${index}`} className="flex justify-between gap-4 rounded bg-slate-50 px-2.5 py-1.5"><span>{row.service || "Service"}{row.unit ? ` / ${row.unit}` : ""}</span><span className="whitespace-nowrap font-semibold">{Number(row.finalPrice || 0).toLocaleString("th-TH", { style: "currency", currency: "THB", maximumFractionDigits: 0 })}</span></div>)}</div>
+                      ) : <span className="text-slate-500">No price list recorded</span>}
+                    </td>
                     </td>
                     <td className="min-w-72 py-3 pr-4 align-top">
                       {task.status === "OPEN" && (

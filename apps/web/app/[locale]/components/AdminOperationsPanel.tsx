@@ -1,0 +1,468 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { getApiUrl } from "../lib/api";
+
+type DemandGap = {
+  id: string;
+  service: string;
+  bookingType?: string | null;
+  requestText?: string | null;
+  requestedServices?: Array<{
+    canonicalKey?: string;
+    quantity?: number;
+    unit?: string;
+  }> | null;
+  district?: string | null;
+  province?: string | null;
+  postalCode?: string | null;
+  status: string;
+  occurrenceCount: number;
+  lastSeenAt: string;
+  resolutionNote?: string | null;
+};
+type Incident = {
+  id: string;
+  reference: string;
+  workflowType: string;
+  eventType: string;
+  actorName: string;
+  reason?: string | null;
+  createdAt: string;
+};
+type Risk = {
+  actorId: string;
+  actorName: string;
+  count: number;
+  partnerDeclines: number;
+  customerCancellations: number;
+  reviewLevel: string;
+  recommendation: string;
+  lastOccurredAt?: string | null;
+};
+type RevenuePoint = { period: string; amount: number; count: number };
+type RevenueDetail = {
+  id: string;
+  orderId: string;
+  sourceLabel: string;
+  amount: number;
+  currency: string;
+  method: string;
+  customer?: string | null;
+  partner?: string | null;
+  paidAt: string;
+};
+type Overview = {
+  generatedAt: string;
+  windowDays: number;
+  demandGaps: DemandGap[];
+  incidents: Incident[];
+  repeatRisk: Risk[];
+  revenue: {
+    currency: string;
+    total: number;
+    daily: RevenuePoint[];
+    weekly: RevenuePoint[];
+    monthly: RevenuePoint[];
+    details: RevenueDetail[];
+  };
+};
+
+const money = new Intl.NumberFormat("th-TH", {
+  style: "currency",
+  currency: "THB",
+  maximumFractionDigits: 0,
+});
+const dateTime = new Intl.DateTimeFormat("en-GB", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
+export default function AdminOperationsPanel({ token }: { token: string }) {
+  const [overview, setOverview] = useState<Overview | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [grain, setGrain] = useState<"daily" | "weekly" | "monthly">("daily");
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [updating, setUpdating] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch(
+        getApiUrl("/admin/operations/overview?days=90"),
+        { cache: "no-store", headers: { Authorization: "Bearer " + token } },
+      );
+      if (!response.ok)
+        throw new Error("Unable to load operational analytics.");
+      setOverview((await response.json()) as Overview);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Unable to load operational analytics.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const series = overview?.revenue[grain] || [];
+  const maxAmount = useMemo(
+    () => Math.max(1, ...series.map((point) => point.amount)),
+    [series],
+  );
+
+  async function updateGap(gap: DemandGap, status: string) {
+    const note = notes[gap.id]?.trim() || "";
+    if (["RESOLVED", "DISMISSED"].includes(status) && note.length < 5) {
+      setError("Enter a short resolution note before closing a demand gap.");
+      return;
+    }
+    setUpdating(gap.id);
+    setError("");
+    try {
+      const response = await fetch(getApiUrl("/admin/demand-gaps/" + gap.id), {
+        method: "PUT",
+        headers: {
+          Authorization: "Bearer " + token,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status, ...(note ? { note } : {}) }),
+      });
+      if (!response.ok) throw new Error("Unable to update the demand gap.");
+      await load();
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Unable to update the demand gap.",
+      );
+    } finally {
+      setUpdating("");
+    }
+  }
+
+  return (
+    <section className="w-full space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold text-slate-950">
+            Operations and revenue
+          </h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Persisted payments, unmatched demand, declines, and cancellations
+            from CBLUE.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void load()}
+          disabled={loading}
+          className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+        >
+          {loading ? "Loading..." : "Refresh operations"}
+        </button>
+      </div>
+      {error && (
+        <p
+          role="alert"
+          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+        >
+          {error}
+        </p>
+      )}
+
+      <div className="rounded-lg border border-slate-200 bg-white p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="font-bold text-slate-950">Recognized revenue</h3>
+            <p className="text-sm text-slate-600">
+              Completed payment records only. Free passes are excluded.
+            </p>
+          </div>
+          <div className="flex rounded-lg border border-slate-300 p-1">
+            {(["daily", "weekly", "monthly"] as const).map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setGrain(item)}
+                className={
+                  (grain === item
+                    ? "bg-emerald-700 text-white"
+                    : "text-slate-700 hover:bg-slate-50") +
+                  " rounded-md px-3 py-1.5 text-xs font-semibold capitalize"
+                }
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+        </div>
+        <p className="mt-4 text-2xl font-bold text-slate-950">
+          {money.format(overview?.revenue.total || 0)}
+        </p>
+        <div
+          className="mt-5 flex min-h-44 items-end gap-2 overflow-x-auto border-b border-slate-200 pb-2"
+          aria-label={`${grain} revenue chart`}
+        >
+          {series.length ? (
+            series.map((point) => (
+              <div
+                key={point.period}
+                className="flex min-w-16 flex-1 flex-col items-center justify-end gap-2"
+              >
+                <span className="text-xs font-semibold text-slate-700">
+                  {money.format(point.amount)}
+                </span>
+                <div
+                  className="w-full max-w-20 rounded-t bg-emerald-600"
+                  style={{
+                    height: Math.max(
+                      4,
+                      Math.round((point.amount / maxAmount) * 110),
+                    ),
+                  }}
+                />
+                <span className="text-[11px] text-slate-600">
+                  {point.period}
+                </span>
+              </div>
+            ))
+          ) : (
+            <p className="self-center text-sm text-slate-500">
+              No completed payments in this reporting window.
+            </p>
+          )}
+        </div>
+        {!!overview?.revenue.details.length && (
+          <div className="mt-5 overflow-x-auto">
+            <table className="min-w-[980px] w-full text-left text-sm">
+              <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="py-2 pr-4">Paid at</th>
+                  <th className="py-2 pr-4">Source</th>
+                  <th className="py-2 pr-4">Customer</th>
+                  <th className="py-2 pr-4">Partner</th>
+                  <th className="py-2 text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {overview.revenue.details.slice(0, 25).map((row) => (
+                  <tr key={row.id}>
+                    <td className="whitespace-nowrap py-3 pr-4 text-slate-600">
+                      {dateTime.format(new Date(row.paidAt))}
+                    </td>
+                    <td className="py-3 pr-4 font-semibold text-slate-900">
+                      {row.sourceLabel}
+                      <p className="text-xs font-normal text-slate-500">
+                        {row.orderId} / {row.method}
+                      </p>
+                    </td>
+                    <td className="py-3 pr-4 text-slate-700">
+                      {row.customer || "-"}
+                    </td>
+                    <td className="py-3 pr-4 text-slate-700">
+                      {row.partner || "-"}
+                    </td>
+                    <td className="py-3 text-right font-semibold text-slate-900">
+                      {money.format(row.amount)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-white p-5">
+        <div className="mb-4">
+          <h3 className="font-bold text-slate-950">Unmatched service demand</h3>
+          <p className="text-sm text-slate-600">
+            Zero-result requests recorded by the authoritative CBLUE matcher,
+            grouped by exact request and location.
+          </p>
+        </div>
+        {overview?.demandGaps.length ? (
+          <div className="overflow-x-auto">
+            <table className="min-w-[1180px] w-full text-left text-sm">
+              <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="py-2 pr-4">Request</th>
+                  <th className="py-2 pr-4">Location</th>
+                  <th className="py-2 pr-4">Demand</th>
+                  <th className="py-2 pr-4">Last seen</th>
+                  <th className="py-2">Operations action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {overview.demandGaps.map((gap) => (
+                  <tr key={gap.id}>
+                    <td className="max-w-xl py-3 pr-4 align-top">
+                      <p className="font-semibold text-slate-900">
+                        {gap.service}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-600">
+                        {gap.requestText || "No request detail supplied"}
+                      </p>
+                    </td>
+                    <td className="py-3 pr-4 align-top text-slate-700">
+                      {[gap.district, gap.province, gap.postalCode]
+                        .filter(Boolean)
+                        .join(", ") || "Not supplied"}
+                    </td>
+                    <td className="py-3 pr-4 align-top">
+                      <span className="font-semibold text-slate-900">
+                        {gap.occurrenceCount}
+                      </span>
+                      <p className="text-xs text-slate-500">
+                        {gap.status.replaceAll("_", " ")}
+                      </p>
+                    </td>
+                    <td className="whitespace-nowrap py-3 pr-4 align-top text-slate-600">
+                      {dateTime.format(new Date(gap.lastSeenAt))}
+                    </td>
+                    <td className="min-w-80 py-3 align-top">
+                      <input
+                        value={notes[gap.id] || ""}
+                        onChange={(event) =>
+                          setNotes((current) => ({
+                            ...current,
+                            [gap.id]: event.target.value,
+                          }))
+                        }
+                        placeholder="Assignment or resolution note"
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                      />
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          disabled={updating === gap.id}
+                          onClick={() => void updateGap(gap, "IN_PROGRESS")}
+                          className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700"
+                        >
+                          Assign review
+                        </button>
+                        <button
+                          type="button"
+                          disabled={updating === gap.id}
+                          onClick={() => void updateGap(gap, "RESOLVED")}
+                          className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white"
+                        >
+                          Resolve
+                        </button>
+                        <button
+                          type="button"
+                          disabled={updating === gap.id}
+                          onClick={() => void updateGap(gap, "DISMISSED")}
+                          className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600"
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="rounded-lg bg-slate-50 px-4 py-6 text-center text-sm text-slate-600">
+            No unmatched service demand is currently open.
+          </p>
+        )}
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+        <div className="rounded-lg border border-slate-200 bg-white p-5">
+          <h3 className="font-bold text-slate-950">Repeat-pattern review</h3>
+          <p className="mb-4 text-sm text-slate-600">
+            Operational review guidance only. No account is restricted
+            automatically.
+          </p>
+          {overview?.repeatRisk.length ? (
+            <div className="space-y-3">
+              {overview.repeatRisk.slice(0, 12).map((risk) => (
+                <div key={risk.actorId} className="rounded-lg bg-slate-50 p-3">
+                  <div className="flex justify-between gap-3">
+                    <p className="font-semibold text-slate-900">
+                      {risk.actorName}
+                    </p>
+                    <span className="text-xs font-bold text-slate-600">
+                      {risk.reviewLevel}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-600">
+                    {risk.partnerDeclines} partner declines /{" "}
+                    {risk.customerCancellations} customer cancellations
+                  </p>
+                  <p className="mt-2 text-sm text-slate-700">
+                    {risk.recommendation}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-4 text-sm text-slate-500">
+              No repeat patterns in this reporting window.
+            </p>
+          )}
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-white p-5">
+          <h3 className="font-bold text-slate-950">
+            Decline and cancellation ledger
+          </h3>
+          <p className="mb-4 text-sm text-slate-600">
+            Persisted participant action, reason when supplied, and server
+            timestamp.
+          </p>
+          {overview?.incidents.length ? (
+            <div className="max-h-[520px] overflow-auto">
+              <table className="min-w-[760px] w-full text-left text-sm">
+                <thead className="sticky top-0 border-b border-slate-200 bg-white text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="py-2 pr-4">Time</th>
+                    <th className="py-2 pr-4">Actor</th>
+                    <th className="py-2 pr-4">Event</th>
+                    <th className="py-2">Reason</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {overview.incidents.map((row) => (
+                    <tr key={row.id}>
+                      <td className="whitespace-nowrap py-3 pr-4 text-slate-600">
+                        {dateTime.format(new Date(row.createdAt))}
+                      </td>
+                      <td className="py-3 pr-4 font-semibold text-slate-900">
+                        {row.actorName}
+                        <p className="text-xs font-normal text-slate-500">
+                          {row.reference}
+                        </p>
+                      </td>
+                      <td className="py-3 pr-4 text-slate-700">
+                        {row.eventType.replaceAll("_", " ")}
+                      </td>
+                      <td className="py-3 text-slate-700">
+                        {row.reason || "No reason recorded"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">
+              No decline or cancellation events in this reporting window.
+            </p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}

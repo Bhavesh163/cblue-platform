@@ -9,6 +9,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
+import { AdminOperationsService } from './admin-operations.service';
+import { UpdateDemandGapDto } from './dto/update-demand-gap.dto';
 import { ApproveFixerDto } from './dto/approve-fixer.dto';
 import { ManualAssignDto } from './dto/manual-assign.dto';
 import { SuspendFixerDto } from './dto/suspend-fixer.dto';
@@ -23,7 +25,10 @@ import { UserRole } from '@prisma/client';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN)
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly operationsService: AdminOperationsService,
+  ) {}
 
   @Get('dashboard')
   getDashboardStats() {
@@ -31,6 +36,20 @@ export class AdminController {
   }
 
   // ── Fixer management ──
+
+  @Get('operations/overview')
+  getOperationsOverview(@Query('days') days?: string) {
+    return this.operationsService.getOverview(Number(days) || 90);
+  }
+
+  @Put('demand-gaps/:gapId')
+  updateDemandGap(
+    @Param('gapId') gapId: string,
+    @CurrentUser('id') adminId: string,
+    @Body() dto: UpdateDemandGapDto,
+  ) {
+    return this.operationsService.updateDemandGap(gapId, adminId, dto);
+  }
 
   @Get('fixers/pending')
   getPendingFixers(@Query() pagination: PaginationDto) {

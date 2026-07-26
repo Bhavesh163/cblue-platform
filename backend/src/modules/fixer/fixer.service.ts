@@ -9,7 +9,8 @@ import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
-import { FixerTier, Prisma } from '@prisma/client';
+import { DemandGapStatus, FixerTier, Prisma } from '@prisma/client';
+import { createHash } from 'crypto';
 import { RegisterFixerDto } from './dto/register-fixer.dto';
 import { AddSkillDto } from './dto/add-skill.dto';
 import { SetAvailabilityDto } from './dto/set-availability.dto';
@@ -2268,6 +2269,85 @@ export class FixerService {
     );
   }
 
+  private async persistMatchDemand(
+    input: {
+      service: string;
+      district: string;
+      province: string;
+      description?: string;
+      postalCode?: string;
+      latitude?: number | string;
+      longitude?: number | string;
+      bookingType?: string;
+    },
+    matchCount: number,
+  ) {
+    const demandStore = this.prisma.unmatchedServiceDemand;
+    if (!demandStore) return;
+
+    const normalized = [
+      input.service,
+      input.bookingType,
+      input.district,
+      input.province,
+      input.postalCode,
+      input.description,
+    ]
+      .map((value) => this.normalizeSearchText(String(value || '')))
+      .join('|');
+    const fingerprint = createHash('sha256').update(normalized).digest('hex');
+
+    if (matchCount > 0) {
+      await demandStore.updateMany({
+        where: {
+          fingerprint,
+          status: { in: [DemandGapStatus.OPEN, DemandGapStatus.IN_PROGRESS] },
+        },
+        data: {
+          status: DemandGapStatus.RESOLVED,
+          resolvedAt: new Date(),
+          resolutionNote: 'Resolved automatically after eligible providers became available',
+        },
+      });
+      return;
+    }
+
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 180 * 24 * 60 * 60 * 1000);
+    await demandStore.updateMany({
+      where: {
+        fingerprint,
+        status: { in: [DemandGapStatus.RESOLVED, DemandGapStatus.DISMISSED] },
+      },
+      data: {
+        status: DemandGapStatus.OPEN,
+        resolvedAt: null,
+        resolutionNote: null,
+      },
+    });
+    await demandStore.upsert({
+      where: { fingerprint },
+      create: {
+        fingerprint,
+        service: String(input.service || '').trim().slice(0, 200) || 'Unspecified service',
+        bookingType: String(input.bookingType || '').trim().slice(0, 50) || null,
+        requestText: String(input.description || '').trim().slice(0, 2000) || null,
+        requestedServices: parseRequestedServices(input.description || '') as unknown as Prisma.InputJsonValue,
+        district: String(input.district || '').trim().slice(0, 120) || null,
+        province: String(input.province || '').trim().slice(0, 120) || null,
+        postalCode: String(input.postalCode || '').trim().slice(0, 20) || null,
+        latitude: this.toFiniteCoordinate(input.latitude),
+        longitude: this.toFiniteCoordinate(input.longitude),
+        expiresAt,
+      },
+      update: {
+        occurrenceCount: { increment: 1 },
+        lastSeenAt: now,
+        expiresAt,
+      },
+    });
+  }
+
   async matchFixers(
     service: string,
     district: string,
@@ -2325,7 +2405,22 @@ export class FixerService {
         `[matchFixers] After ${hasCustomerGps ? `${matchRadiusKm}km radius` : 'matchServiceArea'}, pool length = ${pool.length}`,
       );
 
-      if (pool.length === 0) return [];
+      if (pool.length === 0) {
+        await this.persistMatchDemand(
+          {
+            service,
+            district,
+            province,
+            description,
+            postalCode,
+            latitude,
+            longitude,
+            bookingType,
+          },
+          0,
+        );
+        return [];
+      }
 
       const customerQty = this.extractQuantityFromDescription(description);
       const parsedRequestedServices = parseRequestedServices(description || '');
@@ -2635,7 +2730,22 @@ export class FixerService {
           : serviceIntentTerms.length > 0
             ? []
             : formattedPool;
-      if (rankingPool.length === 0) return [];
+      if (rankingPool.length === 0) {
+        await this.persistMatchDemand(
+          {
+            service,
+            district,
+            province,
+            description,
+            postalCode,
+            latitude,
+            longitude,
+            bookingType,
+          },
+          0,
+        );
+        return [];
+      }
       const maxImportantMatchedCount = Math.max(
         0,
         ...rankingPool.map((partner) => partner.importantMatchedCount || 0),
@@ -2771,6 +2881,20 @@ export class FixerService {
           typhoonNotes[candidate.id],
         );
       }
+
+      await this.persistMatchDemand(
+        {
+          service,
+          district,
+          province,
+          description,
+          postalCode,
+          latitude,
+          longitude,
+          bookingType,
+        },
+        finalTop8.length,
+      );
 
       return finalTop8.map((candidate) => {
         const {

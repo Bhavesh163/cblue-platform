@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import ReCaptcha from "../components/ReCaptcha";
 import { getApiUrl } from "../lib/api";
 import QualificationReviewPanel from "../components/QualificationReviewPanel";
+import AdminOperationsPanel from "../components/AdminOperationsPanel";
 import QualificationAuditPanel from "../components/QualificationAuditPanel";
 
 const ADMIN_TOKEN_KEY = "cblue_admin_token";
@@ -482,7 +483,7 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl space-y-6">
+      <div className="mx-auto max-w-[1600px] space-y-6">
         <header className="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-sky-700">CBLUE.co.th + BLUE service operations</p>
@@ -513,6 +514,8 @@ export default function AdminPage() {
         <QualificationReviewPanel token={token} adminId={adminUser?.id || ""} />
 
         <QualificationAuditPanel token={token} />
+
+        <AdminOperationsPanel token={token} />
 
         {consoleError && (
           <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">

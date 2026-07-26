@@ -92,6 +92,13 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum DemandGapStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  DISMISSED
+}
+
 enum PaymentMethod {
   PROMPTPAY
   BANK_TRANSFER
@@ -617,6 +624,33 @@ model Payment {
 
   @@index([status])
   @@map("payments")
+}
+
+model UnmatchedServiceDemand {
+  id                String          @id @default(uuid())
+  fingerprint       String          @unique
+  service           String
+  bookingType       String?
+  requestText       String?
+  requestedServices Json?
+  district          String?
+  province          String?
+  postalCode        String?
+  latitude          Float?
+  longitude         Float?
+  status            DemandGapStatus @default(OPEN)
+  occurrenceCount   Int             @default(1)
+  firstSeenAt       DateTime        @default(now())
+  lastSeenAt        DateTime        @default(now())
+  assignedAdminId   String?
+  resolutionNote    String?
+  resolvedAt        DateTime?
+  expiresAt         DateTime
+
+  @@index([status, lastSeenAt])
+  @@index([province, district])
+  @@index([expiresAt])
+  @@map("unmatched_service_demands")
 }
 
 model Review {
