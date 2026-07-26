@@ -121,6 +121,11 @@ function getPartnerDashboardToken() {
   if (typeof window === "undefined") return "";
   const shared = localStorage.getItem("subscriber_token") || "";
   const scoped = sessionStorage.getItem(PARTNER_DASHBOARD_TOKEN_KEY) || "";
+  if (!shared) {
+    sessionStorage.removeItem(PARTNER_DASHBOARD_TOKEN_KEY);
+    sessionStorage.removeItem(PARTNER_DASHBOARD_SUBSCRIBER_KEY);
+    return "";
+  }
   if (shared && shared !== scoped) {
     sessionStorage.setItem(PARTNER_DASHBOARD_TOKEN_KEY, shared);
     return shared;
@@ -6633,7 +6638,12 @@ export default function FixerProPage() {
                   <p className="text-purple-200 text-xs">{partner.email}</p>
                 </div>
                 <button
-                  onClick={() => { clearSubscriberSession(); localStorage.removeItem("pdpa_consent_partner"); router.push(prefix); }}
+                  onClick={() => {
+                    clearSubscriberSession();
+                    localStorage.removeItem("pdpa_consent_partner");
+                    router.replace(prefix);
+                    router.refresh();
+                  }}
                   className="ml-2 px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold rounded-lg transition"
                 >
                   {locale === "th" ? "ออกจากระบบ" : locale === "zh" ? "退出登录" : "Logout"}

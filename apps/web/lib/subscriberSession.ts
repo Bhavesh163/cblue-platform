@@ -1,3 +1,9 @@
+import {
+  captureSubscriberRefresh,
+  invalidateSubscriberSession,
+  isSubscriberRefreshCurrent,
+} from './subscriberSessionLifecycle.js';
+
 // Per-page scoped session caches (sessionStorage). getXDashboardToken() reads
 // these before the shared localStorage token, so they MUST be kept in sync with
 // the shared token — otherwise a stale scoped token keeps 401ing after refresh.
@@ -40,6 +46,7 @@ function clearScopedSessionTokens() {
 
 export function clearSubscriberSession() {
   if (typeof window === 'undefined') return;
+  invalidateSubscriberSession(localStorage);
   localStorage.removeItem('subscriber_token');
   localStorage.removeItem('subscriber');
   try {
@@ -60,6 +67,7 @@ export async function refreshSubscriberSession(
   if (!token) return null;
 
   if (refreshInFlight) return refreshInFlight;
+  const refreshSnapshot = captureSubscriberRefresh(localStorage, token);
 
   const refresh = async (): Promise<string | null> => {
     try {
@@ -76,6 +84,7 @@ export async function refreshSubscriberSession(
     const data = await res.json().catch(() => null);
     const nextToken = typeof data?.accessToken === 'string' ? data.accessToken : null;
     if (!nextToken) return null;
+    if (!isSubscriberRefreshCurrent(localStorage, refreshSnapshot)) return null;
 
     localStorage.setItem('subscriber_token', nextToken);
     if (data?.subscriber) {
