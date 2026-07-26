@@ -149,7 +149,14 @@ export const SERVICE_INTENT_REGISTRY: CanonicalServiceDefinition[] = [
       '绿色施工',
       '綠色施工',
     ],
-    typoAliases: ['constuction', 'construcion', 'constrution'],
+    typoAliases: [
+      'constuction',
+      'constrcion',
+      'constrction',
+      'construcion',
+      'constructionn',
+      'constrution',
+    ],
   },
   {
     key: 'website',

@@ -91,6 +91,39 @@ describe('parseRequestedServices', () => {
     expect(parseRequestedServices('coffee catering 100 guests')).toEqual([]);
   });
 
+  it('extracts every line from a multi-service request with common English typos', () => {
+    expect(
+      parseRequestedServices(
+        'office fitotu 1000 m2, reinstatment 100 m2, office building constrction 100 m2, website devlopment 10 pages, chat bot developmnt 100 FAQs',
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        canonicalKey: 'fitout',
+        quantity: 1000,
+        unit: 'sqm',
+      }),
+      expect.objectContaining({
+        canonicalKey: 'reinstatement',
+        quantity: 100,
+        unit: 'sqm',
+      }),
+      expect.objectContaining({
+        canonicalKey: 'construction',
+        quantity: 100,
+        unit: 'sqm',
+      }),
+      expect.objectContaining({
+        canonicalKey: 'website',
+        quantity: 10,
+        unit: 'page',
+      }),
+      expect.objectContaining({
+        canonicalKey: 'chatbot',
+        quantity: 100,
+        unit: 'faq',
+      }),
+    ]);
+  });
   it('recovers unlisted but unambiguous service typos near quantities', () => {
     expect(parseRequestedServices('fitotu 1000 m2, 網站開収 10 頁')).toEqual([
       expect.objectContaining({
