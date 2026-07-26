@@ -1,6 +1,8 @@
 export const PORTFOLIO_MAX_FILES = 10;
 export const PORTFOLIO_MAX_FILE_BYTES = 300 * 1024;
 
+const PORTFOLIO_PDF_TARGET_BYTES = 292 * 1024;
+const PORTFOLIO_PDF_MAX_PAGES = 50;
 const ALLOWED_PORTFOLIO_IMAGE_TYPES = new Set([
   "image/jpeg",
   "image/png",
@@ -30,19 +32,119 @@ function canvasBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
       (blob) =>
         blob
           ? resolve(blob)
-          : reject(new Error("Unable to compress portfolio image")),
+          : reject(new Error("Unable to compress portfolio file")),
       "image/jpeg",
       quality,
     );
   });
 }
 
+async function compressPdfFile(file: File): Promise<File> {
+  const [{ PDFDocument }, pdfjs] = await Promise.all([
+    import("pdf-lib"),
+    import("pdfjs-dist"),
+  ]);
+
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+    "pdfjs-dist/build/pdf.worker.min.mjs",
+    import.meta.url,
+  ).toString();
+
+  const loadingTask = pdfjs.getDocument({
+    data: new Uint8Array(await file.arrayBuffer()),
+    isEvalSupported: false,
+  });
+
+  try {
+    const source = await loadingTask.promise;
+    if (source.numPages > PORTFOLIO_PDF_MAX_PAGES) {
+      throw new Error(
+        `${file.name} has more than ${PORTFOLIO_PDF_MAX_PAGES} pages`,
+      );
+    }
+
+    const attempts = [
+      { scale: 1.4, quality: 0.82 },
+      { scale: 1.2, quality: 0.72 },
+      { scale: 1, quality: 0.62 },
+      { scale: 0.84, quality: 0.52 },
+      { scale: 0.68, quality: 0.42 },
+      { scale: 0.54, quality: 0.32 },
+      { scale: 0.42, quality: 0.24 },
+      { scale: 0.32, quality: 0.18 },
+    ];
+
+    for (const attempt of attempts) {
+      const output = await PDFDocument.create();
+
+      for (let pageNumber = 1; pageNumber <= source.numPages; pageNumber += 1) {
+        const sourcePage = await source.getPage(pageNumber);
+        const outputViewport = sourcePage.getViewport({ scale: 1 });
+        const renderViewport = sourcePage.getViewport({
+          scale: attempt.scale,
+        });
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.ceil(renderViewport.width));
+        canvas.height = Math.max(1, Math.ceil(renderViewport.height));
+        const context = canvas.getContext("2d", { alpha: false });
+        if (!context) throw new Error("PDF compression is unavailable");
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        await sourcePage.render({
+          canvasContext: context,
+          viewport: renderViewport,
+        }).promise;
+
+        const jpeg = await canvasBlob(canvas, attempt.quality);
+        const embedded = await output.embedJpg(await jpeg.arrayBuffer());
+        const outputPage = output.addPage([
+          outputViewport.width,
+          outputViewport.height,
+        ]);
+        outputPage.drawImage(embedded, {
+          x: 0,
+          y: 0,
+          width: outputViewport.width,
+          height: outputViewport.height,
+        });
+        canvas.width = 1;
+        canvas.height = 1;
+      }
+
+      const bytes = await output.save({
+        addDefaultPage: false,
+        useObjectStreams: true,
+      });
+      if (bytes.byteLength <= PORTFOLIO_PDF_TARGET_BYTES) {
+        return new File([Uint8Array.from(bytes)], file.name, {
+          type: PORTFOLIO_PDF_TYPE,
+          lastModified: file.lastModified,
+        });
+      }
+    }
+  } catch (cause) {
+    if (
+      cause instanceof Error &&
+      (cause.message.includes("pages") ||
+        cause.message.includes("compression is unavailable"))
+    ) {
+      throw cause;
+    }
+    throw new Error(
+      `${file.name} could not be compressed. Check that it is a valid, unlocked PDF.`,
+    );
+  } finally {
+    await loadingTask.destroy();
+  }
+
+  throw new Error(`${file.name} cannot be compressed below 0.3 MB`);
+}
+
 export async function preparePortfolioFile(file: File): Promise<File> {
   if (file.type === PORTFOLIO_PDF_TYPE) {
-    if (file.size > PORTFOLIO_MAX_FILE_BYTES) {
-      throw new Error(`${file.name} PDF must be no larger than 0.3 MB`);
-    }
-    return file;
+    return file.size <= PORTFOLIO_MAX_FILE_BYTES
+      ? file
+      : compressPdfFile(file);
   }
   if (!ALLOWED_PORTFOLIO_IMAGE_TYPES.has(file.type)) {
     throw new Error(`${file.name} is not a supported portfolio file`);

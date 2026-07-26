@@ -2045,10 +2045,10 @@ function FixerRegisterContent() {
               </label>
               <p className="text-xs text-gray-500 mb-2">
                 {locale === "th"
-                  ? "อัปโหลดรูปผลงานหรือไฟล์ PDF ได้สูงสุด 10 ไฟล์ รูปภาพจะถูกบีบอัดไม่เกิน 0.3 MB และ PDF ต้องมีขนาดไม่เกิน 0.3 MB"
+                  ? "อัปโหลดรูปผลงานหรือไฟล์ PDF ได้สูงสุด 10 ไฟล์ ระบบจะบีบอัดแต่ละไฟล์โดยอัตโนมัติให้มีขนาดไม่เกิน 0.3 MB"
                   : locale === "zh"
-                    ? "最多上传10个作品图片或PDF文件。图片将压缩至不超过0.3 MB，PDF文件必须不超过0.3 MB。"
-                    : "Upload up to 10 portfolio images or PDF files. Images are compressed to no more than 0.3 MB; PDFs must already be no larger than 0.3 MB."}
+                    ? "最多上传10个作品图片或PDF文件。系统会自动将每个文件压缩至不超过0.3 MB。"
+                    : "Upload up to 10 portfolio images or PDF files. Images and PDFs are compressed automatically to no more than 0.3 MB each."}
               </p>
               <input
                 id="portfolioImages"
