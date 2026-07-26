@@ -46,6 +46,7 @@ import {
   stripVariationPriceList,
   type BudgetBreakdownItem,
 } from "../../../lib/computeBudgetBreakdown";
+import { localizeBudgetBreakdown } from "../../../lib/budgetLineLocalization";
 import { readStoredPoProjectDetails } from "../../../lib/po-project-details";
 import { postFixerWorkflowAction } from "../../../lib/fixerWorkflowClient";
 import {
@@ -5839,7 +5840,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                       if (bd && bd.length >= 1) {
                         return (
                           <div className="font-mono text-xs space-y-0.5 text-right">
-                            {bd.map((it, i) => (
+                            {localizeBudgetBreakdown(bd, locale).map((it, i) => (
                               <div key={i} className="flex justify-between gap-2">
                                 <span className="text-gray-600">{i+1}) {it.service} {it.qty.toLocaleString()} {it.unit} × ฿{it.unitRate.toLocaleString()}</span>
                                 <span className="font-semibold text-sky-700 shrink-0">= ฿{it.total.toLocaleString()}</span>
@@ -6294,7 +6295,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                       <div className="bg-purple-50 border border-purple-100 rounded-xl px-4 py-3">
                         <label className="block text-xs font-semibold text-gray-600 mb-1">Price List</label>
                         <div className="text-sm text-purple-900 space-y-1">
-                          {variation.items.map((item, index) => (
+                          {localizeBudgetBreakdown(variation.items, locale).map((item, index) => (
                             <p key={`${item.service}-${index}`}>{index + 1}) {item.service} {item.quantity.toLocaleString()} {item.unit} × ฿{item.unitRate.toLocaleString()} = ฿{item.total.toLocaleString()}</p>
                           ))}
                           <p className="border-t border-purple-200 pt-1 font-bold">Variation Total = ฿{variation.total.toLocaleString()}</p>
@@ -6481,7 +6482,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                   <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3">
                     <div className="text-xs font-semibold text-gray-500 mb-1.5">Budget Breakdown</div>
                     <div className="font-mono text-xs space-y-0.5">
-                      {bd.map((it, i) => (
+                      {localizeBudgetBreakdown(bd, locale).map((it, i) => (
                         <div key={i} className="flex justify-between gap-2">
                           <span className="text-gray-600">{i+1}) {it.service} {it.qty.toLocaleString()} {it.unit} × ฿{it.unitRate.toLocaleString()}</span>
                           <span className="font-semibold text-green-700 shrink-0">= ฿{it.total.toLocaleString()}</span>

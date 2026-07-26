@@ -3051,27 +3051,27 @@ describe('FixerService', () => {
       [
         'Thai household',
         'household',
-        'ต้องการทีมงานสำหรับดำเนินการออกแบบและตกแต่งภายในสำนักงานขนาด 1,000 ตร.ม., งานรื้อถอนและปรับสภาพพื้นที่เดิมขนาด 100 ตร.ม., งานก่อสร้างอาคารสำนักงานขนาด 100 ตร.ม., งานพัฒนาเว็บไซต์จำนวน 10 หน้า และงานพัฒนาแชตบอตตอบคำถามถาม-ตอบ (FAQ) จำนวน 100 ข้อ',
+        'ต้องการทีมงานสำหรับดำเนินการออกแบบและตกแต่งภายในสำนักงานขนาด 1,000 ตร.ม., งานรื้อถอนและปรับสภาพพื้นที่เดิมขนาด 100 ตร.ม., งานก่อสร้างอาคารสำนักงานขนาด 100 ตร.ม., งานพัฒนาเว็บไซต์จำนวน 10 หน้า และงานพัฒนาแชตบอตตอบคำถามถาม-ตอบ (FAQ) จำนวน 100 ข้อ งานเขียนซอฟต์แวร์ 1 งาน',
       ],
       [
         'Thai project',
         'project',
-        'ต้องการทีมงานสำหรับดำเนินการออกแบบและตกแต่งภายในสำนักงานขนาด 1,000 ตร.ม., งานรื้อถอนและปรับสภาพพื้นที่เดิมขนาด 100 ตร.ม., งานก่อสร้างอาคารสำนักงานขนาด 100 ตร.ม., งานพัฒนาเว็บไซต์จำนวน 10 หน้า และงานพัฒนาแชตบอตตอบคำถามถาม-ตอบ (FAQ) จำนวน 100 ข้อ',
+        'ต้องการทีมงานสำหรับดำเนินการออกแบบและตกแต่งภายในสำนักงานขนาด 1,000 ตร.ม., งานรื้อถอนและปรับสภาพพื้นที่เดิมขนาด 100 ตร.ม., งานก่อสร้างอาคารสำนักงานขนาด 100 ตร.ม., งานพัฒนาเว็บไซต์จำนวน 10 หน้า และงานพัฒนาแชตบอตตอบคำถามถาม-ตอบ (FAQ) จำนวน 100 ข้อ งานเขียนซอฟต์แวร์ 1 งาน',
       ],
       [
         'Thai professional',
         'professional',
-        'ต้องการทีมงานสำหรับดำเนินการออกแบบและตกแต่งภายในสำนักงานขนาด 1,000 ตร.ม., งานรื้อถอนและปรับสภาพพื้นที่เดิมขนาด 100 ตร.ม., งานก่อสร้างอาคารสำนักงานขนาด 100 ตร.ม., งานพัฒนาเว็บไซต์จำนวน 10 หน้า และงานพัฒนาแชตบอตตอบคำถามถาม-ตอบ (FAQ) จำนวน 100 ข้อ',
+        'ต้องการทีมงานสำหรับดำเนินการออกแบบและตกแต่งภายในสำนักงานขนาด 1,000 ตร.ม., งานรื้อถอนและปรับสภาพพื้นที่เดิมขนาด 100 ตร.ม., งานก่อสร้างอาคารสำนักงานขนาด 100 ตร.ม., งานพัฒนาเว็บไซต์จำนวน 10 หน้า และงานพัฒนาแชตบอตตอบคำถามถาม-ตอบ (FAQ) จำนวน 100 ข้อ งานเขียนซอฟต์แวร์ 1 งาน',
       ],
       [
         'Simplified Chinese',
         'project',
-        '办公室装修1000平方米、场地恢复100平方米、办公楼建设100平方米、网站开发10页以及FAQ机器人开发100问答',
+        '办公室装修1000平方米、场地恢复100平方米、办公楼建设100平方米、网站开发10页、FAQ机器人开发100问答以及软件开发1项',
       ],
       [
         'Traditional Chinese',
         'project',
-        '辦公室裝修1000平方米、場地復原100平方米、辦公樓建設100平方米、網站開發10頁以及FAQ機器人開發100問答',
+        '辦公室裝修1000平方米、場地復原100平方米、辦公樓建設100平方米、網站開發10頁、FAQ機器人開發100問答以及軟體開發1項',
       ],
     ])(
       'matches a multilingual multi-service %s request to exact price-list rows',
@@ -3084,9 +3084,9 @@ describe('FixerService', () => {
             completedJobs: 0,
             yearsExperience: 8,
             description:
-              'Office fitout, reinstatement, construction, website, and chatbot',
+              'Office fitout, reinstatement, construction, website, chatbot, and software development',
             pastProjectType:
-              'fitout reinstatement construction website chatbot',
+              'fitout reinstatement construction website chatbot software development',
             bio: 'Commercial build and digital delivery team',
             serviceProvince: 'Bangkok',
             serviceDistrict: 'Pathum Wan',
@@ -3121,6 +3121,12 @@ describe('FixerService', () => {
                 unit: 'FAQ',
                 finalPrice: '100',
               },
+              {
+                service: 'Software development',
+                quantity: '1',
+                unit: 'job',
+                finalPrice: '10000',
+              },
             ],
             user: {
               name: 'Bhavesh Fungprasertsuk',
@@ -3131,6 +3137,7 @@ describe('FixerService', () => {
               { category: 'project', name: 'construction' },
               { category: 'project', name: 'website development' },
               { category: 'project', name: 'chatbot' },
+              { category: 'project', name: 'software development' },
             ],
           },
           {
@@ -3174,7 +3181,7 @@ describe('FixerService', () => {
         );
         expect(result[0]).toEqual(
           expect.objectContaining({
-            estimatedTotal: 33020000,
+            estimatedTotal: 33030000,
             estimatedBreakdown: [
               {
                 service: 'Fit-out',
@@ -3209,6 +3216,13 @@ describe('FixerService', () => {
                 qty: 100,
                 unit: 'FAQ',
                 unitRate: 100,
+                total: 10000,
+              },
+              {
+                service: 'Software development',
+                qty: 1,
+                unit: 'job',
+                unitRate: 10000,
                 total: 10000,
               },
             ],

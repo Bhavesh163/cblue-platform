@@ -113,8 +113,10 @@ describe('OrderService', () => {
         budgetBreakdown: [
           {
             service: 'Fit-out',
+            serviceKey: 'fitout',
             qty: 20,
             unit: 'sq.m.',
+            unitKey: 'area',
             unitRate: 30000,
             total: 600000,
           },
@@ -132,8 +134,10 @@ describe('OrderService', () => {
         budgetBreakdown: [
           {
             service: 'Fit-out',
+            serviceKey: 'fitout',
             qty: 20,
             unit: 'sq.m.',
+            unitKey: 'area',
             unitRate: 30000,
             total: 600000,
           },
@@ -146,8 +150,10 @@ describe('OrderService', () => {
             budgetBreakdown: [
               {
                 service: 'Fit-out',
+                serviceKey: 'fitout',
                 qty: 20,
                 unit: 'sq.m.',
+                unitKey: 'area',
                 unitRate: 30000,
                 total: 600000,
               },

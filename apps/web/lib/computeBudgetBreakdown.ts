@@ -9,8 +9,10 @@ import { normalizeBudgetServiceText } from "./budgetSynonyms";
 
 export type BudgetBreakdownItem = {
   service: string;
+  serviceKey?: string;
   qty: number;
   unit: string;
+  unitKey?: string;
   unitRate: number;
   total: number;
 };

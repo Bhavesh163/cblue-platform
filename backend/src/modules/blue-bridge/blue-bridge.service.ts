@@ -29,8 +29,10 @@ interface WorkflowChatInput {
 
 interface BudgetItem {
   service: string;
+  serviceKey?: string;
   qty: number;
   unit: string;
+  unitKey?: string;
   unitRate: number;
   total: number;
 }
@@ -1615,7 +1617,9 @@ function parseBudgetItems(value: Prisma.JsonValue | null): BudgetItem[] {
       'name',
       'label',
     ]);
+    const serviceKey = firstStringValue(item, ['serviceKey']);
     const unit = firstStringValue(item, ['unit', 'unitLabel', 'uom']);
+    const unitKey = firstStringValue(item, ['unitKey']);
     const qty = firstNumberValue(item, ['qty', 'quantity', 'count']);
     const storedUnitRate = firstNumberValue(item, [
       'unitRate',
@@ -1642,7 +1646,15 @@ function parseBudgetItems(value: Prisma.JsonValue | null): BudgetItem[] {
           ? Math.round(qty * unitRate)
           : -1;
     if (!service || !unit || qty < 0 || unitRate < 0 || total < 0) return [];
-    return [{ service, qty, unit, unitRate, total }];
+    return [{
+      service,
+      ...(serviceKey ? { serviceKey } : {}),
+      qty,
+      unit,
+      ...(unitKey ? { unitKey } : {}),
+      unitRate,
+      total,
+    }];
   });
 }
 

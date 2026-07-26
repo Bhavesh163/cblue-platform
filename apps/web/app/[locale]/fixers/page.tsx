@@ -18,6 +18,7 @@ import {
   type VariationPriceListItem,
 } from "../../../lib/computeBudgetBreakdown";
 import { chooseAuthoritativeBudgetBreakdown } from "../../../lib/bookingBudgetBreakdown";
+import { localizeBudgetBreakdown } from "../../../lib/budgetLineLocalization";
 import { readStoredPoProjectDetails, storePoProjectDetails } from "../../../lib/po-project-details";
 import { fetchPartnerDashboardWithAuthRetry } from "../../../lib/partnerDashboardAuth";
 import { toggleWorkflowModalChromeLock } from "../../../lib/workflowModalChromeLock";
@@ -240,8 +241,14 @@ const normalizePersistedBudgetBreakdown = (
   const items = rows
     .map((row: any) => ({
       service: String(row?.service || "").trim(),
+      ...(typeof row?.serviceKey === "string" && row.serviceKey.trim()
+        ? { serviceKey: row.serviceKey.trim() }
+        : {}),
       qty: Number(row?.qty),
       unit: String(row?.unit || "").trim(),
+      ...(typeof row?.unitKey === "string" && row.unitKey.trim()
+        ? { unitKey: row.unitKey.trim() }
+        : {}),
       unitRate: Number(row?.unitRate),
       total: Number(row?.total),
     }))
@@ -6168,7 +6175,7 @@ export default function FixerProPage() {
                   if (bd && bd.length >= 1) {
                     return (
                       <div className="font-mono text-xs space-y-0.5">
-                        {bd.map((it, i) => (
+                        {localizeBudgetBreakdown(bd, locale).map((it, i) => (
                           <div key={i} className="flex justify-between gap-2">
                             <span className="text-gray-600">{i + 1}) {it!.service} {it.qty.toLocaleString()} {it.unit} × ฿{it.unitRate.toLocaleString()}</span>
                             <span className="font-semibold text-amber-700 shrink-0">= ฿{it!.total.toLocaleString()}</span>
@@ -7626,7 +7633,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                   if (bd && bd.length >= 1) {
                     return (
                       <div className="font-mono text-xs space-y-0.5">
-                        {bd.map((it, i) => (
+                        {localizeBudgetBreakdown(bd, locale).map((it, i) => (
                           <div key={i} className="flex justify-between gap-2">
                             <span className="text-gray-600">{i + 1}) {it!.service} {it.qty.toLocaleString()} {it.unit} × ฿{it.unitRate.toLocaleString()}</span>
                             <span className="font-semibold text-amber-700 shrink-0">= ฿{it!.total.toLocaleString()}</span>
@@ -7800,7 +7807,7 @@ function PartnerJobs({ locale, activeJobs, onJobClick, priceList }: { locale: st
                 <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3">
                   <span className="text-gray-500 text-xs block mb-1">{locale === "th" ? "รายละเอียดงบประมาณ" : locale === "zh" ? "预算明细" : "Budget Breakdown"}</span>
                   <div className="font-mono text-xs space-y-0.5">
-                    {bd.map((it, i) => (
+                    {localizeBudgetBreakdown(bd, locale).map((it, i) => (
                       <div key={i} className="flex justify-between gap-2">
                         <span className="text-gray-600">{i + 1}) {it!.service} {it.qty.toLocaleString()} {it.unit} × ฿{it.unitRate.toLocaleString()}</span>
                         <span className="font-semibold text-green-700 shrink-0">= ฿{it!.total.toLocaleString()}</span>
@@ -8387,7 +8394,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
                   if (bd && bd.length >= 1) {
                     return (
                       <div className="font-mono text-xs space-y-0.5">
-                        {bd.map((it, i) => (
+                        {localizeBudgetBreakdown(bd, locale).map((it, i) => (
                           <div key={i} className="flex justify-between gap-2">
                             <span className="text-gray-600">{i + 1}) {it!.service} {it.qty.toLocaleString()} {it.unit} × ฿{it.unitRate.toLocaleString()}</span>
                             <span className="font-semibold text-amber-700 shrink-0">= ฿{it!.total.toLocaleString()}</span>
@@ -8496,7 +8503,7 @@ function PartnerRequests({ locale, incomingJobs, onJobClick, onDeclineJob, price
                 <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3">
                   <span className="text-gray-500 text-xs block mb-1">{locale === "th" ? "รายละเอียดงบประมาณ" : locale === "zh" ? "预算明细" : "Budget Breakdown"}</span>
                   <div className="font-mono text-xs space-y-0.5">
-                    {bd.map((it, i) => (
+                    {localizeBudgetBreakdown(bd, locale).map((it, i) => (
                       <div key={i} className="flex justify-between gap-2">
                         <span className="text-gray-600">{i + 1}) {it!.service} {it.qty.toLocaleString()} {it.unit} × ฿{it.unitRate.toLocaleString()}</span>
                         <span className="font-semibold text-green-700 shrink-0">= ฿{it!.total.toLocaleString()}</span>

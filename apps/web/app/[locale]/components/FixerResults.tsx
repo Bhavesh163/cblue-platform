@@ -9,6 +9,7 @@ import {
   type BudgetBreakdownItem,
 } from "../../../lib/computeBudgetBreakdown";
 import { chooseAuthoritativeBudgetBreakdown } from "../../../lib/bookingBudgetBreakdown";
+import { enrichBudgetBreakdown, localizeBudgetBreakdown, localizeBudgetServiceList } from "../../../lib/budgetLineLocalization";
 import { storePoProjectDetails } from "../../../lib/po-project-details";
 import { refreshSubscriberSession } from "../../../lib/subscriberSession";
 import { normalizeGpsAddressForSubmit } from "../lib/gps-location-normalization";
@@ -1052,7 +1053,7 @@ export default function FixerResults({
 
     // Store budget breakdown for customer's own modal (step 9 variation approve)
     try {
-      const bd = (selectedFixer as any)?.estimatedBreakdown;
+      const bd = enrichBudgetBreakdown((selectedFixer as any)?.estimatedBreakdown);
       if (bd && Array.isArray(bd) && bd.length > 0 && poNumber) {
         localStorage.setItem(`cblue_po_breakdown_${poNumber}`, JSON.stringify(bd));
       }
@@ -1092,17 +1093,18 @@ export default function FixerResults({
           key: `order/${poNumber}/attachment-${idx + 1}`,
         }));
 
+        const authoritativeBudget = enrichBudgetBreakdown(
+          Array.isArray((selectedFixer as any)?.estimatedBreakdown)
+            ? (selectedFixer as any).estimatedBreakdown
+            : [],
+        );
         const orderPayloadBase = {
           orderType: bookingType === "household" ? "HOUSEHOLD" : "PROJECT",
-          serviceCategory: service,
+          serviceCategory: localizeBudgetServiceList(authoritativeBudget, "en") || service,
           description: `${poNumber} | TIER:${typeof selectedFixer?.tier === "string" ? selectedFixer.tier.toUpperCase() : "STANDARD"} | LOC:${bookingLocation} | ${description}`,
           fixerId: selectedFixer.id,
           estimatedPrice: estPrice,
-          budgetBreakdown: Array.isArray(
-            (selectedFixer as any)?.estimatedBreakdown,
-          )
-            ? (selectedFixer as any).estimatedBreakdown
-            : [],
+          budgetBreakdown: authoritativeBudget,
           ...(attachmentPayload.length > 0 ? { attachments: attachmentPayload } : {}),
         };
 
@@ -2297,7 +2299,7 @@ export default function FixerResults({
             </div>
             <div className="flex justify-between">
               <span className="text-gray-500">{t("poService")}</span>
-              <span className="text-gray-800">{service || bookingType}</span>
+              <span className="text-gray-800 text-right">{localizeBudgetServiceList((selectedFixer as any)?.estimatedBreakdown, locale) || service || bookingType}</span>
             </div>
             {description && (
               <div>
@@ -2322,6 +2324,7 @@ export default function FixerResults({
                   priceList: partnerPriceList,
                   computeBudgetBreakdown,
                 }) as BudgetBreakdownItem[] | null;
+                bd = enrichBudgetBreakdown(bd) as BudgetBreakdownItem[];
                 if (bd && bd.length > 0) {
                   try { localStorage.setItem(`cblue_po_breakdown_${poNumber}`, JSON.stringify(bd)); } catch {}
                 }
@@ -2329,7 +2332,7 @@ export default function FixerResults({
                   const bdTotal = bd.reduce((s, it) => s + (it?.total ?? 0), 0);
                   return (
                     <div className="font-mono text-xs space-y-0.5">
-                      {bd.map((item, i) => (
+                      {localizeBudgetBreakdown(bd, locale).map((item, i) => (
                         <div key={i} className="flex justify-between gap-2">
                           <span className="text-gray-600">{i + 1}) {item!.service} {item.qty.toLocaleString()} {item.unit} × ฿{item.unitRate.toLocaleString()}</span>
                           <span className="font-semibold text-sky-700 shrink-0">= ฿{item!.total.toLocaleString()}</span>

@@ -10,6 +10,8 @@ import {
   ArrayMaxSize,
   Min,
   ValidateNested,
+  Matches,
+  MaxLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { UploadOrderAttachmentDto } from './upload-order-attachment.dto';
@@ -19,6 +21,12 @@ export class OrderBudgetBreakdownItemDto {
   @IsNotEmpty()
   service!: string;
 
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  @Matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+  serviceKey?: string;
+
   @IsNumber()
   @Min(0)
   qty!: number;
@@ -26,6 +34,12 @@ export class OrderBudgetBreakdownItemDto {
   @IsString()
   @IsNotEmpty()
   unit!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  @Matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+  unitKey?: string;
 
   @IsNumber()
   @Min(0)

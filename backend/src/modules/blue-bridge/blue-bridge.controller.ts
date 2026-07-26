@@ -95,8 +95,10 @@ export interface BlueWorkflowDetailResponse {
   budgetLines: string[];
   budgetBreakdown: Array<{
     service: string;
+    serviceKey?: string;
     qty: number;
     unit: string;
+    unitKey?: string;
     unitRate: number;
     total: number;
   }>;
