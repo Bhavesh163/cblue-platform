@@ -1,7 +1,4 @@
-import {
-  ConflictException,
-  ServiceUnavailableException,
-} from '@nestjs/common';
+import { ConflictException, ServiceUnavailableException } from '@nestjs/common';
 import { QualificationVerificationService } from './qualification-verification.service';
 
 describe('QualificationVerificationService', () => {
@@ -12,7 +9,9 @@ describe('QualificationVerificationService', () => {
   } as any;
   const prisma = {
     kycDocument: { findFirst: jest.fn() },
-    $transaction: jest.fn(async (callback: (client: any) => unknown) => callback(tx)),
+    $transaction: jest.fn(async (callback: (client: any) => unknown) =>
+      callback(tx),
+    ),
   } as any;
   const storage = { getPrivateObject: jest.fn() } as any;
   const configValues: Record<string, string> = {
@@ -60,105 +59,6 @@ describe('QualificationVerificationService', () => {
     jest.restoreAllMocks();
   });
 
-  it('validates identity evidence only after OCR name matching', async () => {
-    const fetchMock = jest.spyOn(global, 'fetch')
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        results: [{ message: { choices: [{ message: { content: JSON.stringify({
-          natural_text: 'Name Suppadesh Fungprasertsuk',
-        }) } }] } }],
-      }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        choices: [{ message: { content: JSON.stringify({
-          documentName: 'Suppadesh Fungprasertsuk',
-          issuerName: 'Government Authority',
-          credentialNumber: 'ID-1',
-          projectName: null,
-          projectLocation: null,
-          issuedAt: '2025-01-01',
-          expiresAt: '2035-01-01',
-          confidence: 96,
-        }) } }],
-      }), { status: 200 }));
-
-    const result = await service.verifyDocument(
-      'maker-1',
-      'submission-1',
-      'document-1',
-    );
-
-    expect(result.document.evidenceStatus).toBe('VALIDATED');
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(tx.kycDocument.update).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
-        extractionProvider: 'TYPHOON_OCR',
-        evidenceStatus: 'VALIDATED',
-      }),
-    }));
-    const output = tx.qualificationEvaluation.create.mock.calls[0][0].data.output;
-    expect(output).not.toHaveProperty('rawText');
-    expect(output.rawTextHash).toMatch(/^[a-f0-9]{64}$/);
-  });
-
-  it('requires an authoritative credential provider before validating a certificate', async () => {
-    prisma.kycDocument.findFirst.mockResolvedValue(context('professional-certificate'));
-    jest.spyOn(global, 'fetch')
-      .mockResolvedValueOnce(new Response(JSON.stringify({ text: 'Professional certificate' }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        choices: [{ message: { content: JSON.stringify({
-          documentName: 'Suppadesh Fungprasertsuk',
-          issuerName: 'Professional Council',
-          credentialNumber: 'LIC-1',
-          projectName: null,
-          projectLocation: null,
-          issuedAt: '2025-01-01',
-          expiresAt: null,
-          confidence: 93,
-        }) } }],
-      }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        status: 'VERIFIED',
-        confidence: 98,
-        sourceRefs: ['registry:professional-council:LIC-1'],
-      }), { status: 200 }));
-
-    const result = await service.verifyDocument(
-      'maker-1',
-      'submission-1',
-      'document-1',
-    );
-
-    expect(result.document.evidenceStatus).toBe('VALIDATED');
-    expect(result.document.credentialVerification).toEqual(expect.objectContaining({
-      status: 'VERIFIED',
-      confidence: 98,
-    }));
-  });
-
-  it('marks a conflicting registered name as contradicted', async () => {
-    jest.spyOn(global, 'fetch')
-      .mockResolvedValueOnce(new Response(JSON.stringify({ text: 'Different Person' }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        choices: [{ message: { content: JSON.stringify({
-          documentName: 'Different Person',
-          issuerName: null,
-          credentialNumber: null,
-          projectName: null,
-          projectLocation: null,
-          issuedAt: null,
-          expiresAt: null,
-          confidence: 90,
-        }) } }],
-      }), { status: 200 }));
-
-    const result = await service.verifyDocument(
-      'maker-1',
-      'submission-1',
-      'document-1',
-    );
-
-    expect(result.document.evidenceStatus).toBe('CONTRADICTED');
-  });
-
   it('rejects verification when the admin does not own the maker task', async () => {
     prisma.kycDocument.findFirst.mockResolvedValue({
       ...context(),
@@ -168,29 +68,114 @@ describe('QualificationVerificationService', () => {
       },
     });
 
-    await expect(service.verifyDocument(
-      'other-admin',
-      'submission-1',
-      'document-1',
-    )).rejects.toBeInstanceOf(ConflictException);
+    await expect(
+      service.verifyDocument('other-admin', 'submission-1', 'document-1'),
+    ).rejects.toBeInstanceOf(ConflictException);
     expect(storage.getPrivateObject).not.toHaveBeenCalled();
   });
 
-  it('fails closed when the OCR provider is not configured', async () => {
-    config.get.mockImplementation((key: string) =>
-      key === 'typhoon.apiKey' ? '' : configValues[key],
+  describe('assessStoredDocument', () => {
+    const assess = () =>
+      service.assessStoredDocument({
+        submissionId: 'submission-1',
+        documentId: 'document-1',
+        registeredName: 'Suppadesh Fungprasertsuk',
+      });
+    const respond = (fields: Record<string, unknown>) =>
+      jest
+        .spyOn(global, 'fetch')
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ text: 'document text' }), {
+            status: 200,
+          }),
+        )
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              choices: [
+                {
+                  message: {
+                    content: JSON.stringify({
+                      documentName: 'Suppadesh Fungprasertsuk',
+                      detectedDocumentType: 'id-front',
+                      expiresAt: '2035-01-01',
+                      confidence: 96,
+                      ...fields,
+                    }),
+                  },
+                },
+              ],
+            }),
+            { status: 200 },
+          ),
+        );
+
+    it.each([
+      [
+        { detectedDocumentType: 'id-back' },
+        'INSUFFICIENT',
+        'WRONG_DOCUMENT_TYPE',
+      ],
+      [
+        { documentName: null, confidence: 20 },
+        'INSUFFICIENT',
+        'UNREADABLE_DOCUMENT',
+      ],
+      [{ expiresAt: '2020-01-01' }, 'EXPIRED', 'EXPIRED_ID'],
+      [
+        { documentName: 'Different Person' },
+        'CONTRADICTED',
+        'IDENTITY_CONTRADICTION',
+      ],
+    ])(
+      'classifies unsafe evidence without approval',
+      async (fields, status, reason) => {
+        respond(fields as Record<string, unknown>);
+        await expect(assess()).resolves.toMatchObject({
+          evidenceStatus: status,
+          reasonCodes: expect.arrayContaining([reason]),
+        });
+      },
     );
-    const previous = process.env.TYPHOON_API_KEY;
-    delete process.env.TYPHOON_API_KEY;
-    try {
-      await expect(service.verifyDocument(
-        'maker-1',
-        'submission-1',
-        'document-1',
-      )).rejects.toBeInstanceOf(ServiceUnavailableException);
-    } finally {
-      process.env.TYPHOON_API_KEY = previous;
-      config.get.mockImplementation((key: string) => configValues[key]);
-    }
+
+    it.each(['timeout', 'invalid output'])(
+      'fails closed on provider %s',
+      async (kind) => {
+        if (kind === 'timeout')
+          jest.spyOn(global, 'fetch').mockRejectedValue(new Error('timeout'));
+        else
+          jest
+            .spyOn(global, 'fetch')
+            .mockResolvedValueOnce(
+              new Response(JSON.stringify({ text: 'text' }), { status: 200 }),
+            )
+            .mockResolvedValueOnce(
+              new Response(
+                JSON.stringify({
+                  choices: [
+                    { message: { content: '{\"confidence\":\"invented\"}' } },
+                  ],
+                }),
+                { status: 200 },
+              ),
+            );
+        await expect(assess()).resolves.toMatchObject({
+          evidenceStatus: 'UNCHECKED',
+          route: 'NEEDS_REVIEW',
+          reasonCodes: ['PROVIDER_UNAVAILABLE', 'HUMAN_REVIEW_REQUIRED'],
+        });
+      },
+    );
+
+    it('does not fabricate identity, authenticity, face, or liveness confidence', async () => {
+      respond({});
+      await expect(assess()).resolves.toMatchObject({
+        route: 'NEEDS_REVIEW',
+        identityConfidence: null,
+        documentAuthenticityConfidence: null,
+        faceMatchConfidence: null,
+        livenessConfidence: null,
+      });
+    });
   });
 });

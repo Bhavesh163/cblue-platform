@@ -15,8 +15,10 @@ import { createHash } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { QualificationStorageService } from './qualification-storage.service';
 import { QUALIFICATION_POLICY_VERSION } from './qualification-policy.service';
+import { QualificationDocumentAssessment } from './qualification-assessment.types';
 
 type ExtractedCredentialFields = {
+  detectedDocumentType: string | null;
   documentName: string | null;
   issuerName: string | null;
   credentialNumber: string | null;
@@ -53,21 +55,129 @@ export class QualificationVerificationService {
     private readonly storage: QualificationStorageService,
   ) {}
 
+  async assessStoredDocument(input: {
+    submissionId: string;
+    documentId: string;
+    registeredName: string;
+  }): Promise<QualificationDocumentAssessment> {
+    const document = await this.prisma.kycDocument.findFirst({
+      where: { id: input.documentId, submissionId: input.submissionId },
+      select: { documentType: true, storageKey: true, contentType: true },
+    });
+    if (!document)
+      throw new NotFoundException('Qualification document not found');
+
+    const assessedAt = new Date();
+    const provider = 'TYPHOON_OCR';
+    const model =
+      this.config.get<string>('typhoon.model') ||
+      process.env.TYPHOON_MODEL ||
+      'typhoon-v2.5-30b-a3b-instruct';
+    const unavailable = (): QualificationDocumentAssessment => ({
+      evidenceStatus: 'UNCHECKED',
+      route: 'NEEDS_REVIEW',
+      confidence: null,
+      identityConfidence: null,
+      documentAuthenticityConfidence: null,
+      faceMatchConfidence: null,
+      livenessConfidence: null,
+      reasonCodes: ['PROVIDER_UNAVAILABLE', 'HUMAN_REVIEW_REQUIRED'],
+      provider,
+      model,
+      assessedAt,
+    });
+
+    try {
+      const apiKey =
+        this.config.get<string>('typhoon.apiKey') ||
+        process.env.TYPHOON_API_KEY ||
+        '';
+      if (!apiKey) return unavailable();
+      const file = await this.storage.getPrivateObject(document.storageKey);
+      const ocrText = await this.extractText(
+        file,
+        document.contentType,
+        document.documentType,
+        apiKey,
+      );
+      const fields = await this.extractFields(
+        ocrText,
+        document.documentType,
+        apiKey,
+      );
+      const base = {
+        confidence: fields.confidence,
+        identityConfidence: null,
+        documentAuthenticityConfidence: null,
+        faceMatchConfidence: null,
+        livenessConfidence: null,
+        provider,
+        model,
+        assessedAt,
+      };
+      if (
+        IDENTITY_TYPES.has(document.documentType) &&
+        fields.detectedDocumentType &&
+        fields.detectedDocumentType !== document.documentType
+      ) {
+        return {
+          ...base,
+          evidenceStatus: 'INSUFFICIENT',
+          route: 'NEEDS_RESUBMISSION',
+          reasonCodes: ['WRONG_DOCUMENT_TYPE'],
+        };
+      }
+      if (fields.confidence < 70 || !fields.documentName) {
+        return {
+          ...base,
+          evidenceStatus: 'INSUFFICIENT',
+          route: 'NEEDS_RESUBMISSION',
+          reasonCodes: ['UNREADABLE_DOCUMENT'],
+        };
+      }
+      const expiresAt = fields.expiresAt ? new Date(fields.expiresAt) : null;
+      if (
+        expiresAt &&
+        !Number.isNaN(expiresAt.getTime()) &&
+        expiresAt < assessedAt
+      ) {
+        return {
+          ...base,
+          evidenceStatus: 'EXPIRED',
+          route: 'NEEDS_RESUBMISSION',
+          reasonCodes: ['EXPIRED_ID'],
+        };
+      }
+      if (!this.namesMatch(input.registeredName, fields.documentName)) {
+        return {
+          ...base,
+          evidenceStatus: 'CONTRADICTED',
+          route: 'NEEDS_REVIEW',
+          reasonCodes: ['IDENTITY_CONTRADICTION', 'HUMAN_REVIEW_REQUIRED'],
+        };
+      }
+      return {
+        ...base,
+        evidenceStatus: 'VALIDATED',
+        route: 'NEEDS_REVIEW',
+        reasonCodes: ['DOCUMENT_VALID', 'HUMAN_REVIEW_REQUIRED'],
+      };
+    } catch {
+      return unavailable();
+    }
+  }
+
   async verifyDocument(
     adminId: string,
     submissionId: string,
     documentId: string,
-  ) {
+  ): Promise<QualificationDocumentAssessment> {
     const context = await this.prisma.kycDocument.findFirst({
       where: { id: documentId, submissionId },
       include: {
         submission: {
           include: {
-            fixer: {
-              include: {
-                user: { select: { name: true } },
-              },
-            },
+            fixer: { include: { user: { select: { name: true } } } },
             reviewTasks: {
               where: {
                 status: 'ASSIGNED',
@@ -81,152 +191,17 @@ export class QualificationVerificationService {
         },
       },
     });
-    if (!context) {
+    if (!context)
       throw new NotFoundException('Qualification document not found');
-    }
     if (!context.submission.reviewTasks.length) {
       throw new ConflictException(
         'Qualification document verification requires the assigned maker',
       );
     }
-
-    const apiKey =
-      this.config.get<string>('typhoon.apiKey') ||
-      process.env.TYPHOON_API_KEY ||
-      '';
-    if (!apiKey) {
-      throw new ServiceUnavailableException(
-        'Qualification OCR provider is not configured',
-      );
-    }
-
-    const file = await this.storage.getPrivateObject(context.storageKey);
-    const ocrText = await this.extractText(
-      file,
-      context.contentType,
-      context.documentType,
-      apiKey,
-    );
-    const extracted = await this.extractFields(
-      ocrText,
-      context.documentType,
-      apiKey,
-    );
-    const registeredName = context.submission.fixer.user.name || '';
-    const nameMatch = this.namesMatch(registeredName, extracted.documentName);
-    const rawTextHash = createHash('sha256').update(ocrText).digest('hex');
-    const credential = EXTERNAL_CREDENTIAL_TYPES.has(context.documentType)
-      ? await this.verifyCredential(context.documentType, extracted, registeredName)
-      : null;
-    const evidenceStatus = this.evidenceStatus(
-      context.documentType,
-      extracted,
-      nameMatch,
-      credential,
-    );
-    const completedAt = new Date();
-    const output = this.json({
-      fields: extracted,
-      registeredNameMatched: nameMatch,
-      rawTextHash,
-      credential,
-    });
-
-    return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.kycDocument.update({
-        where: { id: context.id },
-        data: {
-          extractedFields: output,
-          extractionProvider: 'TYPHOON_OCR',
-          extractionModel:
-            this.config.get<string>('typhoon.model') ||
-            process.env.TYPHOON_MODEL ||
-            'typhoon-v2.5-30b-a3b-instruct',
-          extractedAt: completedAt,
-          extractionErrorCode: null,
-          evidenceStatus,
-          credentialVerification: credential
-            ? this.json(credential)
-            : Prisma.JsonNull,
-          credentialVerifiedAt:
-            credential?.status === 'VERIFIED' ? completedAt : null,
-        },
-        select: {
-          id: true,
-          documentType: true,
-          evidenceStatus: true,
-          extractedFields: true,
-          extractionProvider: true,
-          extractionModel: true,
-          extractedAt: true,
-          credentialVerification: true,
-          credentialVerifiedAt: true,
-        },
-      });
-      const evaluation = await tx.qualificationEvaluation.create({
-        data: {
-          submissionId,
-          provider: 'TYPHOON_OCR',
-          model: updated.extractionModel,
-          promptVersion: 'cblue-qualification-document-extraction-v1',
-          policyVersion: QUALIFICATION_POLICY_VERSION,
-          status: QualificationEvaluationStatus.COMPLETED,
-          risk:
-            evidenceStatus === QualificationEvidenceStatus.CONTRADICTED
-              ? QualificationRisk.HIGH
-              : evidenceStatus === QualificationEvidenceStatus.VALIDATED
-                ? QualificationRisk.LOW
-                : QualificationRisk.MEDIUM,
-          confidence: extracted.confidence,
-          inputHash: context.checksumSha256,
-          output,
-          completedAt,
-          findings: {
-            create: [{
-              documentId: context.id,
-              code: nameMatch ? 'REGISTERED_NAME_MATCH' : 'REGISTERED_NAME_MISMATCH',
-              severity: nameMatch ? 'INFO' : 'HIGH',
-              claim: 'The document name matches the registered partner name.',
-              result: nameMatch
-                ? QualificationEvidenceStatus.VALIDATED
-                : QualificationEvidenceStatus.CONTRADICTED,
-              confidence: extracted.confidence,
-              sourceRef: credential?.sourceRefs[0] || null,
-              details: this.json({
-                documentType: context.documentType,
-                credentialStatus: credential?.status || null,
-              }),
-            }],
-          },
-        },
-        select: { id: true, completedAt: true },
-      });
-      await tx.qualificationAuditLog.create({
-        data: {
-          submissionId,
-          actorId: adminId,
-          action: 'DOCUMENT_VERIFICATION_COMPLETED',
-          entityType: 'KycDocument',
-          entityId: context.id,
-          reason: 'Server-owned OCR and credential verification completed',
-          beforeHash: context.checksumSha256,
-          afterHash: createHash('sha256')
-            .update(JSON.stringify(output))
-            .digest('hex'),
-          metadata: this.json({
-            evaluationId: evaluation.id,
-            evidenceStatus,
-            nameMatch,
-            credentialStatus: credential?.status || null,
-          }),
-        },
-      });
-      return {
-        sourceVersion: 'cblue-qualification-document-verification-v1',
-        document: updated,
-        evaluationId: evaluation.id,
-        completedAt: evaluation.completedAt,
-      };
+    return this.assessStoredDocument({
+      submissionId,
+      documentId,
+      registeredName: context.submission.fixer.user.name || '',
     });
   }
 
@@ -253,12 +228,16 @@ export class QualificationVerificationService {
       body: form,
     });
     if (!response.ok) {
-      throw new ServiceUnavailableException('Qualification OCR provider rejected the document');
+      throw new ServiceUnavailableException(
+        'Qualification OCR provider rejected the document',
+      );
     }
-    const payload = await response.json() as unknown;
+    const payload = (await response.json()) as unknown;
     const text = this.findText(payload).trim();
     if (!text || text.startsWith('[Typhoon OCR error:')) {
-      throw new ServiceUnavailableException('Qualification OCR returned no usable text');
+      throw new ServiceUnavailableException(
+        'Qualification OCR returned no usable text',
+      );
     }
     return text.slice(0, 20000);
   }
@@ -277,48 +256,55 @@ export class QualificationVerificationService {
       this.config.get<string>('typhoon.model') ||
       process.env.TYPHOON_MODEL ||
       'typhoon-v2.5-30b-a3b-instruct';
-    const response = await this.fetchWithTimeout(baseUrl + '/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: 'Bearer ' + apiKey,
-        'Content-Type': 'application/json',
+    const response = await this.fetchWithTimeout(
+      baseUrl + '/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer ' + apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          temperature: 0,
+          response_format: { type: 'json_object' },
+          messages: [
+            {
+              role: 'system',
+              content:
+                'Extract only facts explicitly present in OCR text. Return JSON only. Never invent names, issuers, credential numbers, projects, places, or dates.',
+            },
+            {
+              role: 'user',
+              content: JSON.stringify({
+                documentType,
+                ocrText,
+                schema: {
+                  detectedDocumentType: 'string|null',
+                  documentName: 'string|null',
+                  issuerName: 'string|null',
+                  credentialNumber: 'string|null',
+                  projectName: 'string|null',
+                  projectLocation: 'string|null',
+                  issuedAt: 'ISO date|string|null',
+                  expiresAt: 'ISO date|string|null',
+                  credentialLevel:
+                    'bachelor|master|doctorate|professional|string|null',
+                  projectValue: 'number|null',
+                  confidence: 'integer 0..100',
+                },
+              }),
+            },
+          ],
+        }),
       },
-      body: JSON.stringify({
-        model,
-        temperature: 0,
-        response_format: { type: 'json_object' },
-        messages: [
-          {
-            role: 'system',
-            content:
-              'Extract only facts explicitly present in OCR text. Return JSON only. Never invent names, issuers, credential numbers, projects, places, or dates.',
-          },
-          {
-            role: 'user',
-            content: JSON.stringify({
-              documentType,
-              ocrText,
-              schema: {
-                documentName: 'string|null',
-                issuerName: 'string|null',
-                credentialNumber: 'string|null',
-                projectName: 'string|null',
-                projectLocation: 'string|null',
-                issuedAt: 'ISO date|string|null',
-                expiresAt: 'ISO date|string|null',
-                credentialLevel: 'bachelor|master|doctorate|professional|string|null',
-                projectValue: 'number|null',
-                confidence: 'integer 0..100',
-              },
-            }),
-          },
-        ],
-      }),
-    });
+    );
     if (!response.ok) {
-      throw new ServiceUnavailableException('Qualification extraction provider failed');
+      throw new ServiceUnavailableException(
+        'Qualification extraction provider failed',
+      );
     }
-    const payload = await response.json() as {
+    const payload = (await response.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
     };
     const raw = payload.choices?.[0]?.message?.content || '';
@@ -326,17 +312,22 @@ export class QualificationVerificationService {
     try {
       parsed = JSON.parse(raw.replace(/^\`\`\`json\s*|\s*\`\`\`$/g, ''));
     } catch {
-      throw new ServiceUnavailableException('Qualification extraction returned invalid data');
+      throw new ServiceUnavailableException(
+        'Qualification extraction returned invalid data',
+      );
     }
     const confidence = Number(parsed.confidence);
     if (!Number.isInteger(confidence) || confidence < 0 || confidence > 100) {
-      throw new ServiceUnavailableException('Qualification extraction confidence is invalid');
+      throw new ServiceUnavailableException(
+        'Qualification extraction confidence is invalid',
+      );
     }
     const value = (key: string) =>
       typeof parsed[key] === 'string' && String(parsed[key]).trim()
         ? String(parsed[key]).trim().slice(0, 500)
         : null;
     return {
+      detectedDocumentType: value('detectedDocumentType'),
       documentName: value('documentName'),
       issuerName: value('issuerName'),
       credentialNumber: value('credentialNumber'),
@@ -345,9 +336,12 @@ export class QualificationVerificationService {
       issuedAt: value('issuedAt'),
       expiresAt: value('expiresAt'),
       credentialLevel: value('credentialLevel'),
-      projectValue: typeof parsed.projectValue === 'number' && Number.isFinite(parsed.projectValue) && parsed.projectValue >= 0
-        ? parsed.projectValue
-        : null,
+      projectValue:
+        typeof parsed.projectValue === 'number' &&
+        Number.isFinite(parsed.projectValue) &&
+        parsed.projectValue >= 0
+          ? parsed.projectValue
+          : null,
       confidence,
     };
   }
@@ -376,19 +370,25 @@ export class QualificationVerificationService {
       body: JSON.stringify({ documentType, fields, registeredName }),
     });
     if (!response.ok) {
-      throw new ServiceUnavailableException('Credential verification provider failed');
+      throw new ServiceUnavailableException(
+        'Credential verification provider failed',
+      );
     }
-    const payload = await response.json() as Record<string, unknown>;
+    const payload = (await response.json()) as Record<string, unknown>;
     if (
       payload.status !== 'VERIFIED' &&
       payload.status !== 'NOT_FOUND' &&
       payload.status !== 'CONTRADICTED'
     ) {
-      throw new ServiceUnavailableException('Credential verifier returned an invalid status');
+      throw new ServiceUnavailableException(
+        'Credential verifier returned an invalid status',
+      );
     }
     const confidence = Number(payload.confidence);
     if (!Number.isInteger(confidence) || confidence < 0 || confidence > 100) {
-      throw new ServiceUnavailableException('Credential verifier confidence is invalid');
+      throw new ServiceUnavailableException(
+        'Credential verifier confidence is invalid',
+      );
     }
     return {
       status: payload.status,
@@ -433,9 +433,11 @@ export class QualificationVerificationService {
     const registered = this.normalizeName(registeredName);
     const documented = this.normalizeName(documentName || '');
     if (registered.length < 3 || documented.length < 3) return false;
-    return registered === documented ||
+    return (
+      registered === documented ||
       registered.includes(documented) ||
-      documented.includes(registered);
+      documented.includes(registered)
+    );
   }
 
   private normalizeName(value: string) {
@@ -449,7 +451,10 @@ export class QualificationVerificationService {
   private findText(value: unknown): string {
     if (typeof value === 'string') return value;
     if (Array.isArray(value)) {
-      return value.map((item) => this.findText(item)).filter(Boolean).join('\n');
+      return value
+        .map((item) => this.findText(item))
+        .filter(Boolean)
+        .join('\n');
     }
     if (!value || typeof value !== 'object') return '';
     const record = value as Record<string, unknown>;
@@ -466,7 +471,9 @@ export class QualificationVerificationService {
     try {
       return await fetch(url, { ...init, signal: controller.signal });
     } catch {
-      throw new ServiceUnavailableException('Qualification verification provider unavailable');
+      throw new ServiceUnavailableException(
+        'Qualification verification provider unavailable',
+      );
     } finally {
       clearTimeout(timeout);
     }
