@@ -1,181 +1,170 @@
-import { ConflictException, ServiceUnavailableException } from '@nestjs/common';
 import { QualificationVerificationService } from './qualification-verification.service';
 
 describe('QualificationVerificationService', () => {
-  const tx = {
-    kycDocument: { update: jest.fn() },
-    qualificationEvaluation: { create: jest.fn() },
-    qualificationAuditLog: { create: jest.fn() },
-  } as any;
-  const prisma = {
-    kycDocument: { findFirst: jest.fn() },
-    $transaction: jest.fn(async (callback: (client: any) => unknown) =>
-      callback(tx),
-    ),
-  } as any;
+  const prisma = { kycDocument: { findFirst: jest.fn() } } as any;
   const storage = { getPrivateObject: jest.fn() } as any;
   const configValues: Record<string, string> = {
     'typhoon.apiKey': 'private-typhoon-key',
     'typhoon.baseUrl': 'https://typhoon.example/v1',
     'typhoon.model': 'typhoon-model',
-    'qualificationVerification.credentialUrl': 'https://verifier.example/check',
-    'qualificationVerification.credentialApiKey': 'private-verifier-key',
   };
   const config = {
     get: jest.fn((key: string) => configValues[key]),
   } as any;
   const service = new QualificationVerificationService(prisma, config, storage);
 
-  const context = (documentType = 'id-front') => ({
-    id: 'document-1',
-    submissionId: 'submission-1',
-    documentType,
-    storageKey: 'qualification/private/document',
-    checksumSha256: 'checksum-1',
-    contentType: 'image/jpeg',
-    submission: {
-      fixer: { user: { name: 'Suppadesh Fungprasertsuk' } },
-      reviewTasks: [{ id: 'task-1' }],
-    },
-  });
+  const validFields = {
+    detectedDocumentType: 'id-front',
+    documentName: 'Suppadesh Fungprasertsuk',
+    issuerName: null,
+    credentialNumber: null,
+    projectName: null,
+    projectLocation: null,
+    issuedAt: null,
+    expiresAt: '2035-01-01',
+    credentialLevel: null,
+    projectValue: null,
+    confidence: 96,
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
-    prisma.kycDocument.findFirst.mockResolvedValue(context());
-    storage.getPrivateObject.mockResolvedValue(Buffer.from('private-document'));
-    tx.kycDocument.update.mockImplementation(async ({ data }: any) => ({
-      id: 'document-1',
-      documentType: 'id-front',
-      ...data,
-    }));
-    tx.qualificationEvaluation.create.mockResolvedValue({
-      id: 'evaluation-1',
-      completedAt: new Date('2026-07-25T00:00:00.000Z'),
-    });
-    tx.qualificationAuditLog.create.mockResolvedValue({ id: 'audit-1' });
-  });
-
-  afterEach(() => {
-    jest.restoreAllMocks();
-  });
-
-  it('rejects verification when the admin does not own the maker task', async () => {
     prisma.kycDocument.findFirst.mockResolvedValue({
-      ...context(),
-      submission: {
-        ...context().submission,
-        reviewTasks: [],
-      },
+      documentType: 'id-front',
+      storageKey: 'qualification/private/document',
+      contentType: 'image/jpeg',
     });
-
-    await expect(
-      service.verifyDocument('other-admin', 'submission-1', 'document-1'),
-    ).rejects.toBeInstanceOf(ConflictException);
-    expect(storage.getPrivateObject).not.toHaveBeenCalled();
+    storage.getPrivateObject.mockResolvedValue(Buffer.from('private-document'));
   });
 
-  describe('assessStoredDocument', () => {
-    const assess = () =>
-      service.assessStoredDocument({
-        submissionId: 'submission-1',
-        documentId: 'document-1',
-        registeredName: 'Suppadesh Fungprasertsuk',
-      });
-    const respond = (fields: Record<string, unknown>) =>
-      jest
-        .spyOn(global, 'fetch')
-        .mockResolvedValueOnce(
-          new Response(JSON.stringify({ text: 'document text' }), {
-            status: 200,
+  afterEach(() => jest.restoreAllMocks());
+
+  const assess = () =>
+    service.assessStoredDocument({
+      submissionId: 'submission-1',
+      documentId: 'document-1',
+      registeredName: 'Suppadesh Fungprasertsuk',
+    });
+
+  const respond = (fields: Record<string, unknown>) =>
+    jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ text: 'document text' }), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { content: JSON.stringify(fields) } }],
           }),
-        )
-        .mockResolvedValueOnce(
-          new Response(
-            JSON.stringify({
-              choices: [
-                {
-                  message: {
-                    content: JSON.stringify({
-                      documentName: 'Suppadesh Fungprasertsuk',
-                      detectedDocumentType: 'id-front',
-                      expiresAt: '2035-01-01',
-                      confidence: 96,
-                      ...fields,
-                    }),
-                  },
-                },
-              ],
-            }),
-            { status: 200 },
-          ),
-        );
+          { status: 200 },
+        ),
+      );
 
-    it.each([
-      [
-        { detectedDocumentType: 'id-back' },
-        'INSUFFICIENT',
-        'WRONG_DOCUMENT_TYPE',
-      ],
-      [
-        { documentName: null, confidence: 20 },
-        'INSUFFICIENT',
-        'UNREADABLE_DOCUMENT',
-      ],
-      [{ expiresAt: '2020-01-01' }, 'EXPIRED', 'EXPIRED_ID'],
-      [
-        { documentName: 'Different Person' },
-        'CONTRADICTED',
-        'IDENTITY_CONTRADICTION',
-      ],
-    ])(
-      'classifies unsafe evidence without approval',
-      async (fields, status, reason) => {
-        respond(fields as Record<string, unknown>);
-        await expect(assess()).resolves.toMatchObject({
-          evidenceStatus: status,
-          reasonCodes: expect.arrayContaining([reason]),
-        });
-      },
-    );
-
-    it.each(['timeout', 'invalid output'])(
-      'fails closed on provider %s',
-      async (kind) => {
-        if (kind === 'timeout')
-          jest.spyOn(global, 'fetch').mockRejectedValue(new Error('timeout'));
-        else
-          jest
-            .spyOn(global, 'fetch')
-            .mockResolvedValueOnce(
-              new Response(JSON.stringify({ text: 'text' }), { status: 200 }),
-            )
-            .mockResolvedValueOnce(
-              new Response(
-                JSON.stringify({
-                  choices: [
-                    { message: { content: '{\"confidence\":\"invented\"}' } },
-                  ],
-                }),
-                { status: 200 },
-              ),
-            );
-        await expect(assess()).resolves.toMatchObject({
-          evidenceStatus: 'UNCHECKED',
-          route: 'NEEDS_REVIEW',
-          reasonCodes: ['PROVIDER_UNAVAILABLE', 'HUMAN_REVIEW_REQUIRED'],
-        });
-      },
-    );
-
-    it('does not fabricate identity, authenticity, face, or liveness confidence', async () => {
-      respond({});
+  it.each([
+    [
+      { ...validFields, detectedDocumentType: 'id-back' },
+      'INSUFFICIENT',
+      'WRONG_DOCUMENT_TYPE',
+    ],
+    [
+      { ...validFields, detectedDocumentType: null },
+      'INSUFFICIENT',
+      'UNREADABLE_DOCUMENT',
+    ],
+    [
+      { ...validFields, documentName: null, confidence: 20 },
+      'INSUFFICIENT',
+      'UNREADABLE_DOCUMENT',
+    ],
+    [{ ...validFields, expiresAt: '2020-01-01' }, 'EXPIRED', 'EXPIRED_ID'],
+    [
+      { ...validFields, documentName: 'Different Person' },
+      'CONTRADICTED',
+      'IDENTITY_CONTRADICTION',
+    ],
+  ])(
+    'classifies unsafe evidence without approval',
+    async (fields, status, reason) => {
+      respond(fields as Record<string, unknown>);
       await expect(assess()).resolves.toMatchObject({
-        route: 'NEEDS_REVIEW',
-        identityConfidence: null,
-        documentAuthenticityConfidence: null,
-        faceMatchConfidence: null,
-        livenessConfidence: null,
+        evidenceStatus: status,
+        reasonCodes: expect.arrayContaining([reason]),
       });
+    },
+  );
+
+  it('keeps a model-readable identity document non-authoritative', async () => {
+    respond(validFields);
+
+    await expect(assess()).resolves.toMatchObject({
+      evidenceStatus: 'INSUFFICIENT',
+      route: 'NEEDS_REVIEW',
+      identityConfidence: null,
+      documentAuthenticityConfidence: null,
+      faceMatchConfidence: null,
+      livenessConfidence: null,
+      reasonCodes: ['DOCUMENT_VALID', 'HUMAN_REVIEW_REQUIRED'],
     });
   });
+
+  it.each([
+    [
+      'unknown document enum',
+      { ...validFields, detectedDocumentType: 'passport' },
+    ],
+    ['wrong nullable string type', { ...validFields, issuerName: 42 }],
+    [
+      'missing field',
+      Object.fromEntries(
+        Object.entries(validFields).filter(
+          ([key]) => key !== 'credentialNumber',
+        ),
+      ),
+    ],
+    ['unknown field', { ...validFields, approval: true }],
+    ['wrong nullable number type', { ...validFields, projectValue: '1000' }],
+    ['malformed date', { ...validFields, expiresAt: 'tomorrow' }],
+    ['coerced confidence', { ...validFields, confidence: '96' }],
+  ])('fails closed on malformed provider field: %s', async (_name, fields) => {
+    respond(fields as Record<string, unknown>);
+
+    await expect(assess()).resolves.toMatchObject({
+      evidenceStatus: 'UNCHECKED',
+      route: 'NEEDS_REVIEW',
+      confidence: null,
+      reasonCodes: ['PROVIDER_UNAVAILABLE', 'HUMAN_REVIEW_REQUIRED'],
+    });
+  });
+
+  it.each(['timeout', 'invalid JSON'])(
+    'fails closed on provider %s',
+    async (kind) => {
+      if (kind === 'timeout') {
+        jest.spyOn(global, 'fetch').mockRejectedValue(new Error('timeout'));
+      } else {
+        jest
+          .spyOn(global, 'fetch')
+          .mockResolvedValueOnce(
+            new Response(JSON.stringify({ text: 'text' }), { status: 200 }),
+          )
+          .mockResolvedValueOnce(
+            new Response(
+              JSON.stringify({
+                choices: [{ message: { content: '{invalid' } }],
+              }),
+              { status: 200 },
+            ),
+          );
+      }
+
+      await expect(assess()).resolves.toMatchObject({
+        evidenceStatus: 'UNCHECKED',
+        route: 'NEEDS_REVIEW',
+        reasonCodes: ['PROVIDER_UNAVAILABLE', 'HUMAN_REVIEW_REQUIRED'],
+      });
+    },
+  );
 });

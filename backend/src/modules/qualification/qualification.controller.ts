@@ -23,7 +23,6 @@ import { UploadQualificationDocumentDto } from './dto/upload-qualification-docum
 import { QualificationEvaluationService } from './qualification-evaluation.service';
 import { QualificationReviewService } from './qualification-review.service';
 import { QualificationService } from './qualification.service';
-import { QualificationVerificationService } from './qualification-verification.service';
 
 @Controller('qualification')
 @UseGuards(JwtAuthGuard)
@@ -32,7 +31,6 @@ export class QualificationController {
     private readonly qualification: QualificationService,
     private readonly evaluations: QualificationEvaluationService,
     private readonly reviews: QualificationReviewService,
-    private readonly verification: QualificationVerificationService,
   ) {}
 
   @Post('submissions')
@@ -147,7 +145,11 @@ export class QualificationController {
     @Param('submissionId') submissionId: string,
     @Param('documentId') documentId: string,
   ) {
-    return this.verification.verifyDocument(adminId, submissionId, documentId);
+    return this.qualification.verifyDocumentForAdmin(
+      adminId,
+      submissionId,
+      documentId,
+    );
   }
 
   @Get('admin/submissions/:submissionId/documents/:documentId/url')

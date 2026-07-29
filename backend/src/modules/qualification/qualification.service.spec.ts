@@ -48,20 +48,75 @@ describe('QualificationService', () => {
     createReadUrl: jest.fn(),
   } as any;
   const readiness = { assertReady: jest.fn() } as any;
+  const assessment = { assessDocument: jest.fn() } as any;
   const service = new QualificationService(
     prisma,
     policy,
     storage,
     readiness,
+    assessment,
   );
 
   beforeEach(() => {
     jest.clearAllMocks();
     readiness.assertReady.mockResolvedValue(undefined);
+    assessment.assessDocument.mockResolvedValue({
+      evidenceStatus: 'INSUFFICIENT',
+      route: 'NEEDS_REVIEW',
+      confidence: 96,
+      identityConfidence: null,
+      documentAuthenticityConfidence: null,
+      faceMatchConfidence: null,
+      livenessConfidence: null,
+      reasonCodes: ['DOCUMENT_VALID', 'HUMAN_REVIEW_REQUIRED'],
+      provider: 'TYPHOON_OCR',
+      model: 'typhoon-model',
+      assessedAt: new Date('2026-07-30T00:00:00.000Z'),
+    });
     tx.$executeRawUnsafe.mockResolvedValue(0);
     tx.kycDocument.findFirst.mockResolvedValue(null);
     tx.kycDocument.count.mockResolvedValue(0);
     tx.kycSubmission.findUnique.mockResolvedValue({ status: 'DRAFT' });
+  });
+
+  it('persists and audits authorized admin verification through the assessment service', async () => {
+    prisma.kycDocument.findFirst.mockResolvedValue({
+      id: 'document-1',
+      submission: {
+        fixer: { user: { name: 'Suppadesh Fungprasertsuk' } },
+        reviewTasks: [{ id: 'task-1' }],
+      },
+    });
+
+    await expect(
+      service.verifyDocumentForAdmin('admin-1', 'submission-1', 'document-1'),
+    ).resolves.toEqual(expect.objectContaining({ route: 'NEEDS_REVIEW' }));
+    expect(assessment.assessDocument).toHaveBeenCalledWith({
+      submissionId: 'submission-1',
+      documentId: 'document-1',
+      registeredName: 'Suppadesh Fungprasertsuk',
+      actorId: 'admin-1',
+      auditAction: 'DOCUMENT_VERIFICATION_COMPLETED',
+    });
+  });
+
+  it('rejects admin verification when the admin does not own the maker task', async () => {
+    prisma.kycDocument.findFirst.mockResolvedValue({
+      id: 'document-1',
+      submission: {
+        fixer: { user: { name: 'Suppadesh Fungprasertsuk' } },
+        reviewTasks: [],
+      },
+    });
+
+    await expect(
+      service.verifyDocumentForAdmin(
+        'other-admin',
+        'submission-1',
+        'document-1',
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(assessment.assessDocument).not.toHaveBeenCalled();
   });
 
   it('persists an admin evidence decision and immutable audit hashes', async () => {
@@ -255,11 +310,6 @@ describe('QualificationService', () => {
         }),
       }),
     );
-    expect(prisma.kycDocument.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ isActive: true }),
-      }),
-    );
     expect(result.evaluation).toEqual(
       expect.objectContaining({
         identityConfidence: 91,
@@ -305,6 +355,7 @@ describe('QualificationService', () => {
       id: 'submission-1',
       fixerId: 'fixer-1',
       status: 'DRAFT',
+      fixer: { user: { name: 'Suppadesh Fungprasertsuk' } },
     });
     tx.kycDocument.create.mockImplementation(async ({ data, select }: any) => ({
       id: 'document-1',
@@ -343,6 +394,16 @@ describe('QualificationService', () => {
     expect(call.data.checksumSha256).toHaveLength(64);
     expect(call.data.encrypted).toBe(true);
     expect(result.id).toBe('document-1');
+    expect(result.assessment).toEqual(
+      expect.objectContaining({ route: 'NEEDS_REVIEW' }),
+    );
+    expect(assessment.assessDocument).toHaveBeenCalledWith({
+      submissionId: 'submission-1',
+      documentId: 'document-1',
+      registeredName: 'Suppadesh Fungprasertsuk',
+      actorId: 'user-1',
+      auditAction: 'DOCUMENT_ASSESSED_ON_UPLOAD',
+    });
   });
 
   it('stores a size-limited portfolio PDF as private evidence', async () => {

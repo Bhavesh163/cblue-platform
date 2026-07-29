@@ -16,6 +16,7 @@ import { QualificationStorageService } from './qualification-storage.service';
 import { QUALIFICATION_DOCUMENT_TYPES } from './dto/upload-qualification-document.dto';
 import { QualificationStorageReadinessService } from './qualification-storage-readiness.service';
 import { QualificationEvidenceDecisionDto } from './dto/qualification-evidence-decision.dto';
+import { QualificationAssessmentService } from './qualification-assessment.service';
 
 const PORTFOLIO_MAX_FILES = 10;
 const PORTFOLIO_MAX_FILE_BYTES = 300 * 1024;
@@ -61,6 +62,7 @@ export class QualificationService {
     private readonly policy: QualificationPolicyService,
     private readonly storage: QualificationStorageService,
     private readonly readiness: QualificationStorageReadinessService,
+    private readonly assessment: QualificationAssessmentService,
   ) {}
 
   async createSubmission(
@@ -129,6 +131,13 @@ export class QualificationService {
                 confidence: true,
                 deterministicScore: true,
                 aiScore: true,
+                identityConfidence: true,
+                documentAuthenticityConfidence: true,
+                faceMatchConfidence: true,
+                livenessConfidence: true,
+                credentialConfidence: true,
+                tierEligibilityScore: true,
+                humanReviewRequired: true,
                 completedAt: true,
                 createdAt: true,
               },
@@ -293,7 +302,12 @@ export class QualificationService {
 
     const submission = await this.prisma.kycSubmission.findFirst({
       where: { id: submissionId, fixer: { userId } },
-      select: { id: true, fixerId: true, status: true },
+      select: {
+        id: true,
+        fixerId: true,
+        status: true,
+        fixer: { select: { user: { select: { name: true } } } },
+      },
     });
     if (!submission) {
       throw new NotFoundException('Qualification submission not found');
@@ -317,7 +331,7 @@ export class QualificationService {
       .update(file.buffer)
       .digest('hex');
 
-    return this.prisma.$transaction(async (tx) => {
+    const document = await this.prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe(
         'SELECT pg_advisory_xact_lock(hashtext($1))',
         submission.id,
@@ -379,6 +393,56 @@ export class QualificationService {
           createdAt: true,
         },
       });
+    });
+    const assessment = await this.assessment.assessDocument({
+      submissionId: submission.id,
+      documentId: document.id,
+      registeredName: submission.fixer?.user.name || '',
+      actorId: userId,
+      auditAction: 'DOCUMENT_ASSESSED_ON_UPLOAD',
+    });
+    return { ...document, assessment };
+  }
+
+  async verifyDocumentForAdmin(
+    adminId: string,
+    submissionId: string,
+    documentId: string,
+  ) {
+    const context = await this.prisma.kycDocument.findFirst({
+      where: { id: documentId, submissionId },
+      select: {
+        id: true,
+        submission: {
+          select: {
+            fixer: { select: { user: { select: { name: true } } } },
+            reviewTasks: {
+              where: {
+                status: 'ASSIGNED',
+                assignedTo: adminId,
+                proposedAt: null,
+              },
+              select: { id: true },
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+    if (!context) {
+      throw new NotFoundException('Qualification document not found');
+    }
+    if (!context.submission.reviewTasks.length) {
+      throw new ConflictException(
+        'Qualification document verification requires the assigned maker',
+      );
+    }
+    return this.assessment.assessDocument({
+      submissionId,
+      documentId,
+      registeredName: context.submission.fixer.user.name || '',
+      actorId: adminId,
+      auditAction: 'DOCUMENT_VERIFICATION_COMPLETED',
     });
   }
 

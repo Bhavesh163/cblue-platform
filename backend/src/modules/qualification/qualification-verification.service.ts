@@ -1,21 +1,13 @@
 import {
-  ConflictException,
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  Prisma,
-  QualificationEvidenceStatus,
-  QualificationEvaluationStatus,
-  QualificationRisk,
-} from '@prisma/client';
-import { createHash } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
-import { QualificationStorageService } from './qualification-storage.service';
-import { QUALIFICATION_POLICY_VERSION } from './qualification-policy.service';
+import { QUALIFICATION_DOCUMENT_TYPES } from './dto/upload-qualification-document.dto';
 import { QualificationDocumentAssessment } from './qualification-assessment.types';
+import { QualificationStorageService } from './qualification-storage.service';
 
 type ExtractedCredentialFields = {
   detectedDocumentType: string | null;
@@ -31,21 +23,21 @@ type ExtractedCredentialFields = {
   confidence: number;
 };
 
-type CredentialProviderResult = {
-  status: 'VERIFIED' | 'NOT_FOUND' | 'CONTRADICTED';
-  confidence: number;
-  sourceRefs: string[];
-  checkedAt: string;
-};
-
-const IDENTITY_TYPES = new Set(['id-front', 'id-back']);
-const EXTERNAL_CREDENTIAL_TYPES = new Set([
-  'education-certificate',
-  'professional-certificate',
-  'corporate-certificate',
-  'project-completion-certificate',
-  'international-award',
+const EXTRACTION_KEYS = new Set<keyof ExtractedCredentialFields>([
+  'detectedDocumentType',
+  'documentName',
+  'issuerName',
+  'credentialNumber',
+  'projectName',
+  'projectLocation',
+  'issuedAt',
+  'expiresAt',
+  'credentialLevel',
+  'projectValue',
+  'confidence',
 ]);
+const IDENTITY_TYPES = new Set(['id-front', 'id-back']);
+const DOCUMENT_TYPES = new Set<string>(QUALIFICATION_DOCUMENT_TYPES);
 
 @Injectable()
 export class QualificationVerificationService {
@@ -64,28 +56,37 @@ export class QualificationVerificationService {
       where: { id: input.documentId, submissionId: input.submissionId },
       select: { documentType: true, storageKey: true, contentType: true },
     });
-    if (!document)
+    if (!document) {
       throw new NotFoundException('Qualification document not found');
+    }
 
-    const assessedAt = new Date();
     const provider = 'TYPHOON_OCR';
     const model =
       this.config.get<string>('typhoon.model') ||
       process.env.TYPHOON_MODEL ||
       'typhoon-v2.5-30b-a3b-instruct';
-    const unavailable = (): QualificationDocumentAssessment => ({
-      evidenceStatus: 'UNCHECKED',
-      route: 'NEEDS_REVIEW',
-      confidence: null,
+    const result = (
+      values: Pick<
+        QualificationDocumentAssessment,
+        'evidenceStatus' | 'route' | 'confidence' | 'reasonCodes'
+      >,
+    ): QualificationDocumentAssessment => ({
+      ...values,
       identityConfidence: null,
       documentAuthenticityConfidence: null,
       faceMatchConfidence: null,
       livenessConfidence: null,
-      reasonCodes: ['PROVIDER_UNAVAILABLE', 'HUMAN_REVIEW_REQUIRED'],
       provider,
       model,
-      assessedAt,
+      assessedAt: new Date(),
     });
+    const unavailable = () =>
+      result({
+        evidenceStatus: 'UNCHECKED',
+        route: 'NEEDS_REVIEW',
+        confidence: null,
+        reasonCodes: ['PROVIDER_UNAVAILABLE', 'HUMAN_REVIEW_REQUIRED'],
+      });
 
     try {
       const apiKey =
@@ -105,104 +106,65 @@ export class QualificationVerificationService {
         document.documentType,
         apiKey,
       );
-      const base = {
-        confidence: fields.confidence,
-        identityConfidence: null,
-        documentAuthenticityConfidence: null,
-        faceMatchConfidence: null,
-        livenessConfidence: null,
-        provider,
-        model,
-        assessedAt,
-      };
+
       if (
         IDENTITY_TYPES.has(document.documentType) &&
-        fields.detectedDocumentType &&
+        fields.detectedDocumentType !== null &&
         fields.detectedDocumentType !== document.documentType
       ) {
-        return {
-          ...base,
+        return result({
           evidenceStatus: 'INSUFFICIENT',
           route: 'NEEDS_RESUBMISSION',
+          confidence: fields.confidence,
           reasonCodes: ['WRONG_DOCUMENT_TYPE'],
-        };
+        });
       }
-      if (fields.confidence < 70 || !fields.documentName) {
-        return {
-          ...base,
+      if (
+        fields.confidence < 70 ||
+        !fields.documentName ||
+        (IDENTITY_TYPES.has(document.documentType) &&
+          fields.detectedDocumentType === null)
+      ) {
+        return result({
           evidenceStatus: 'INSUFFICIENT',
           route: 'NEEDS_RESUBMISSION',
+          confidence: fields.confidence,
           reasonCodes: ['UNREADABLE_DOCUMENT'],
-        };
+        });
       }
-      const expiresAt = fields.expiresAt ? new Date(fields.expiresAt) : null;
+      const expiresAt = fields.expiresAt
+        ? new Date(`${fields.expiresAt}T00:00:00.000Z`)
+        : null;
       if (
+        IDENTITY_TYPES.has(document.documentType) &&
         expiresAt &&
-        !Number.isNaN(expiresAt.getTime()) &&
-        expiresAt < assessedAt
+        expiresAt < new Date()
       ) {
-        return {
-          ...base,
+        return result({
           evidenceStatus: 'EXPIRED',
           route: 'NEEDS_RESUBMISSION',
+          confidence: fields.confidence,
           reasonCodes: ['EXPIRED_ID'],
-        };
+        });
       }
       if (!this.namesMatch(input.registeredName, fields.documentName)) {
-        return {
-          ...base,
+        return result({
           evidenceStatus: 'CONTRADICTED',
           route: 'NEEDS_REVIEW',
+          confidence: fields.confidence,
           reasonCodes: ['IDENTITY_CONTRADICTION', 'HUMAN_REVIEW_REQUIRED'],
-        };
+        });
       }
-      return {
-        ...base,
-        evidenceStatus: 'VALIDATED',
+
+      return result({
+        evidenceStatus: 'INSUFFICIENT',
         route: 'NEEDS_REVIEW',
+        confidence: fields.confidence,
         reasonCodes: ['DOCUMENT_VALID', 'HUMAN_REVIEW_REQUIRED'],
-      };
+      });
     } catch {
       return unavailable();
     }
-  }
-
-  async verifyDocument(
-    adminId: string,
-    submissionId: string,
-    documentId: string,
-  ): Promise<QualificationDocumentAssessment> {
-    const context = await this.prisma.kycDocument.findFirst({
-      where: { id: documentId, submissionId },
-      include: {
-        submission: {
-          include: {
-            fixer: { include: { user: { select: { name: true } } } },
-            reviewTasks: {
-              where: {
-                status: 'ASSIGNED',
-                assignedTo: adminId,
-                proposedAt: null,
-              },
-              select: { id: true },
-              take: 1,
-            },
-          },
-        },
-      },
-    });
-    if (!context)
-      throw new NotFoundException('Qualification document not found');
-    if (!context.submission.reviewTasks.length) {
-      throw new ConflictException(
-        'Qualification document verification requires the assigned maker',
-      );
-    }
-    return this.assessStoredDocument({
-      submissionId,
-      documentId,
-      registeredName: context.submission.fixer.user.name || '',
-    });
   }
 
   private async extractText(
@@ -272,7 +234,7 @@ export class QualificationVerificationService {
             {
               role: 'system',
               content:
-                'Extract only facts explicitly present in OCR text. Return JSON only. Never invent names, issuers, credential numbers, projects, places, or dates.',
+                'Extract only facts explicitly present in OCR text. Return every schema key as strict JSON. Never invent identity, authenticity, face, or liveness results.',
             },
             {
               role: 'user',
@@ -280,16 +242,15 @@ export class QualificationVerificationService {
                 documentType,
                 ocrText,
                 schema: {
-                  detectedDocumentType: 'string|null',
+                  detectedDocumentType: 'qualification document type|null',
                   documentName: 'string|null',
                   issuerName: 'string|null',
                   credentialNumber: 'string|null',
                   projectName: 'string|null',
                   projectLocation: 'string|null',
-                  issuedAt: 'ISO date|string|null',
-                  expiresAt: 'ISO date|string|null',
-                  credentialLevel:
-                    'bachelor|master|doctorate|professional|string|null',
+                  issuedAt: 'YYYY-MM-DD|null',
+                  expiresAt: 'YYYY-MM-DD|null',
+                  credentialLevel: 'string|null',
                   projectValue: 'number|null',
                   confidence: 'integer 0..100',
                 },
@@ -307,8 +268,14 @@ export class QualificationVerificationService {
     const payload = (await response.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
     };
-    const raw = payload.choices?.[0]?.message?.content || '';
-    let parsed: Record<string, unknown>;
+    const raw = payload.choices?.[0]?.message?.content;
+    if (typeof raw !== 'string' || !raw.trim()) {
+      throw new ServiceUnavailableException(
+        'Qualification extraction returned invalid data',
+      );
+    }
+
+    let parsed: unknown;
     try {
       parsed = JSON.parse(raw.replace(/^\`\`\`json\s*|\s*\`\`\`$/g, ''));
     } catch {
@@ -316,117 +283,107 @@ export class QualificationVerificationService {
         'Qualification extraction returned invalid data',
       );
     }
-    const confidence = Number(parsed.confidence);
-    if (!Number.isInteger(confidence) || confidence < 0 || confidence > 100) {
+    return this.validateExtractedFields(parsed);
+  }
+
+  private validateExtractedFields(value: unknown): ExtractedCredentialFields {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new ServiceUnavailableException(
+        'Qualification extraction returned invalid fields',
+      );
+    }
+    const parsed = value as Record<string, unknown>;
+    const keys = Object.keys(parsed);
+    if (
+      keys.length !== EXTRACTION_KEYS.size ||
+      keys.some(
+        (key) => !EXTRACTION_KEYS.has(key as keyof ExtractedCredentialFields),
+      )
+    ) {
+      throw new ServiceUnavailableException(
+        'Qualification extraction returned an invalid field set',
+      );
+    }
+
+    const nullableString = (key: keyof ExtractedCredentialFields) => {
+      const field = parsed[key];
+      if (field === null) return null;
+      if (
+        typeof field !== 'string' ||
+        field.trim().length === 0 ||
+        field.length > 500
+      ) {
+        throw new ServiceUnavailableException(
+          `Qualification extraction field ${key} is invalid`,
+        );
+      }
+      return field.trim();
+    };
+    const date = (key: 'issuedAt' | 'expiresAt') => {
+      const field = nullableString(key);
+      if (field === null) return null;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(field)) {
+        throw new ServiceUnavailableException(
+          `Qualification extraction field ${key} is invalid`,
+        );
+      }
+      const parsedDate = new Date(`${field}T00:00:00.000Z`);
+      if (
+        Number.isNaN(parsedDate.getTime()) ||
+        parsedDate.toISOString().slice(0, 10) !== field
+      ) {
+        throw new ServiceUnavailableException(
+          `Qualification extraction field ${key} is invalid`,
+        );
+      }
+      return field;
+    };
+
+    const detectedDocumentType = nullableString('detectedDocumentType');
+    if (
+      detectedDocumentType !== null &&
+      !DOCUMENT_TYPES.has(detectedDocumentType)
+    ) {
+      throw new ServiceUnavailableException(
+        'Qualification extraction document type is invalid',
+      );
+    }
+    const projectValue = parsed.projectValue;
+    if (
+      projectValue !== null &&
+      (typeof projectValue !== 'number' ||
+        !Number.isFinite(projectValue) ||
+        projectValue < 0)
+    ) {
+      throw new ServiceUnavailableException(
+        'Qualification extraction project value is invalid',
+      );
+    }
+    const confidence = parsed.confidence;
+    if (
+      typeof confidence !== 'number' ||
+      !Number.isInteger(confidence) ||
+      confidence < 0 ||
+      confidence > 100
+    ) {
       throw new ServiceUnavailableException(
         'Qualification extraction confidence is invalid',
       );
     }
-    const value = (key: string) =>
-      typeof parsed[key] === 'string' && String(parsed[key]).trim()
-        ? String(parsed[key]).trim().slice(0, 500)
-        : null;
+
     return {
-      detectedDocumentType: value('detectedDocumentType'),
-      documentName: value('documentName'),
-      issuerName: value('issuerName'),
-      credentialNumber: value('credentialNumber'),
-      projectName: value('projectName'),
-      projectLocation: value('projectLocation'),
-      issuedAt: value('issuedAt'),
-      expiresAt: value('expiresAt'),
-      credentialLevel: value('credentialLevel'),
-      projectValue:
-        typeof parsed.projectValue === 'number' &&
-        Number.isFinite(parsed.projectValue) &&
-        parsed.projectValue >= 0
-          ? parsed.projectValue
-          : null,
+      detectedDocumentType,
+      documentName: nullableString('documentName'),
+      issuerName: nullableString('issuerName'),
+      credentialNumber: nullableString('credentialNumber'),
+      projectName: nullableString('projectName'),
+      projectLocation: nullableString('projectLocation'),
+      issuedAt: date('issuedAt'),
+      expiresAt: date('expiresAt'),
+      credentialLevel: nullableString('credentialLevel'),
+      projectValue,
       confidence,
     };
-  }
-
-  private async verifyCredential(
-    documentType: string,
-    fields: ExtractedCredentialFields,
-    registeredName: string,
-  ): Promise<CredentialProviderResult | null> {
-    const url =
-      this.config.get<string>('qualificationVerification.credentialUrl') ||
-      process.env.QUALIFICATION_CREDENTIAL_VERIFIER_URL ||
-      '';
-    const apiKey =
-      this.config.get<string>('qualificationVerification.credentialApiKey') ||
-      process.env.QUALIFICATION_CREDENTIAL_VERIFIER_API_KEY ||
-      '';
-    if (!url || !apiKey) return null;
-
-    const response = await this.fetchWithTimeout(url, {
-      method: 'POST',
-      headers: {
-        Authorization: 'Bearer ' + apiKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ documentType, fields, registeredName }),
-    });
-    if (!response.ok) {
-      throw new ServiceUnavailableException(
-        'Credential verification provider failed',
-      );
-    }
-    const payload = (await response.json()) as Record<string, unknown>;
-    if (
-      payload.status !== 'VERIFIED' &&
-      payload.status !== 'NOT_FOUND' &&
-      payload.status !== 'CONTRADICTED'
-    ) {
-      throw new ServiceUnavailableException(
-        'Credential verifier returned an invalid status',
-      );
-    }
-    const confidence = Number(payload.confidence);
-    if (!Number.isInteger(confidence) || confidence < 0 || confidence > 100) {
-      throw new ServiceUnavailableException(
-        'Credential verifier confidence is invalid',
-      );
-    }
-    return {
-      status: payload.status,
-      confidence,
-      sourceRefs: Array.isArray(payload.sourceRefs)
-        ? payload.sourceRefs
-            .filter((item): item is string => typeof item === 'string')
-            .slice(0, 10)
-        : [],
-      checkedAt: new Date().toISOString(),
-    };
-  }
-
-  private evidenceStatus(
-    documentType: string,
-    fields: ExtractedCredentialFields,
-    nameMatch: boolean,
-    credential: CredentialProviderResult | null,
-  ) {
-    if (!nameMatch && fields.documentName) {
-      return QualificationEvidenceStatus.CONTRADICTED;
-    }
-    if (fields.confidence < 70 || !nameMatch) {
-      return QualificationEvidenceStatus.INSUFFICIENT;
-    }
-    if (IDENTITY_TYPES.has(documentType)) {
-      return QualificationEvidenceStatus.VALIDATED;
-    }
-    if (EXTERNAL_CREDENTIAL_TYPES.has(documentType)) {
-      if (credential?.status === 'VERIFIED') {
-        return QualificationEvidenceStatus.VALIDATED;
-      }
-      if (credential?.status === 'CONTRADICTED') {
-        return QualificationEvidenceStatus.CONTRADICTED;
-      }
-      return QualificationEvidenceStatus.INSUFFICIENT;
-    }
-    return QualificationEvidenceStatus.INSUFFICIENT;
   }
 
   private namesMatch(registeredName: string, documentName: string | null) {
@@ -444,7 +401,7 @@ export class QualificationVerificationService {
     return value
       .normalize('NFKC')
       .toLocaleLowerCase('en-US')
-      .replace(/^(mr|mrs|ms|miss|dr|2"|2|2*2'|#)\.?\s*/u, '')
+      .replace(/^(mr|mrs|ms|miss|dr)\.?\s*/u, '')
       .replace(/[^\p{L}\p{N}]/gu, '');
   }
 
@@ -477,9 +434,5 @@ export class QualificationVerificationService {
     } finally {
       clearTimeout(timeout);
     }
-  }
-
-  private json(value: unknown) {
-    return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
   }
 }

@@ -1,13 +1,68 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   Prisma,
   QualificationEvaluationStatus,
   QualificationRisk,
 } from '@prisma/client';
+import { createHash } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { QUALIFICATION_POLICY_VERSION } from './qualification-policy.service';
 import { QualificationVerificationService } from './qualification-verification.service';
-import { QualificationDocumentAssessment } from './qualification-assessment.types';
+import {
+  QualificationDocumentAssessment,
+  QualificationReasonCode,
+} from './qualification-assessment.types';
+
+const EVIDENCE_STATUSES = new Set([
+  'VALIDATED',
+  'CONTRADICTED',
+  'EXPIRED',
+  'INSUFFICIENT',
+  'UNCHECKED',
+]);
+const ROUTES = new Set([
+  'NEEDS_RESUBMISSION',
+  'NEEDS_MORE_EVIDENCE',
+  'NEEDS_REVIEW',
+  'AI_PRECLEARED',
+]);
+const REASON_CODES = new Set<QualificationReasonCode>([
+  'DOCUMENT_VALID',
+  'WRONG_DOCUMENT_TYPE',
+  'UNREADABLE_DOCUMENT',
+  'EXPIRED_ID',
+  'IDENTITY_CONTRADICTION',
+  'LIVENESS_FAILED',
+  'PROVIDER_UNAVAILABLE',
+  'HUMAN_REVIEW_REQUIRED',
+]);
+const ASSESSMENT_KEYS = new Set([
+  'evidenceStatus',
+  'route',
+  'confidence',
+  'identityConfidence',
+  'documentAuthenticityConfidence',
+  'faceMatchConfidence',
+  'livenessConfidence',
+  'reasonCodes',
+  'provider',
+  'model',
+  'assessedAt',
+]);
+
+type AssessmentInput = {
+  submissionId: string;
+  documentId: string;
+  registeredName: string;
+  actorId: string;
+  auditAction:
+    | 'DOCUMENT_ASSESSED_ON_UPLOAD'
+    | 'DOCUMENT_VERIFICATION_COMPLETED';
+};
 
 @Injectable()
 export class QualificationAssessmentService {
@@ -16,64 +71,203 @@ export class QualificationAssessmentService {
     private readonly verification: QualificationVerificationService,
   ) {}
 
-  async assessDocument(input: {
-    submissionId: string;
-    documentId: string;
-    registeredName: string;
-  }): Promise<QualificationDocumentAssessment> {
+  async assessDocument(
+    input: AssessmentInput,
+  ): Promise<QualificationDocumentAssessment> {
     const document = await this.prisma.kycDocument.findFirst({
       where: { id: input.documentId, submissionId: input.submissionId },
-      select: { id: true, checksumSha256: true },
+      select: {
+        id: true,
+        checksumSha256: true,
+        evidenceStatus: true,
+        updatedAt: true,
+      },
     });
     if (!document) {
       throw new NotFoundException('Qualification document not found');
     }
 
-    const assessment = await this.verification.assessStoredDocument(input);
+    let candidate: QualificationDocumentAssessment;
+    try {
+      const providerResult =
+        await this.verification.assessStoredDocument(input);
+      candidate = this.isAssessment(providerResult)
+        ? this.requireHumanReview(providerResult)
+        : this.unavailableAssessment();
+    } catch {
+      candidate = this.unavailableAssessment();
+    }
+
+    let persistedAssessment!: QualificationDocumentAssessment;
     await this.prisma.$transaction(async (tx) => {
-      await tx.kycDocument.update({
-        where: { id: document.id },
+      const completedAt = new Date();
+      persistedAssessment = { ...candidate, assessedAt: completedAt };
+      const updated = await tx.kycDocument.updateMany({
+        where: {
+          id: document.id,
+          evidenceStatus: document.evidenceStatus,
+          updatedAt: document.updatedAt,
+        },
         data: {
-          evidenceStatus: assessment.evidenceStatus,
-          assessmentReasonCodes: assessment.reasonCodes,
-          assessedAt: assessment.assessedAt,
-          extractionProvider: assessment.provider,
-          extractionModel: assessment.model,
-          extractedAt: assessment.assessedAt,
-          extractionErrorCode: assessment.reasonCodes.includes(
+          evidenceStatus: persistedAssessment.evidenceStatus,
+          assessmentReasonCodes: persistedAssessment.reasonCodes,
+          assessedAt: completedAt,
+          extractionProvider: persistedAssessment.provider,
+          extractionModel: persistedAssessment.model,
+          extractedAt: completedAt,
+          extractionErrorCode: persistedAssessment.reasonCodes.includes(
             'PROVIDER_UNAVAILABLE',
           )
             ? 'PROVIDER_UNAVAILABLE'
             : null,
         },
       });
-      await tx.qualificationEvaluation.create({
+      if (updated.count !== 1) {
+        throw new ConflictException(
+          'Qualification document changed while assessment was running',
+        );
+      }
+
+      const output = this.json({
+        evidenceStatus: persistedAssessment.evidenceStatus,
+        route: persistedAssessment.route,
+        reasonCodes: persistedAssessment.reasonCodes,
+      });
+      const evaluation = await tx.qualificationEvaluation.create({
         data: {
           submissionId: input.submissionId,
-          provider: assessment.provider,
-          model: assessment.model,
+          provider: persistedAssessment.provider,
+          model: persistedAssessment.model,
           promptVersion: 'cblue-qualification-document-assessment-v1',
           policyVersion: QUALIFICATION_POLICY_VERSION,
           status: QualificationEvaluationStatus.COMPLETED,
-          risk: this.riskFor(assessment),
-          confidence: assessment.confidence,
-          identityConfidence: assessment.identityConfidence,
+          risk: this.riskFor(persistedAssessment),
+          confidence: persistedAssessment.confidence,
+          identityConfidence: persistedAssessment.identityConfidence,
           documentAuthenticityConfidence:
-            assessment.documentAuthenticityConfidence,
-          faceMatchConfidence: assessment.faceMatchConfidence,
-          livenessConfidence: assessment.livenessConfidence,
-          humanReviewRequired: assessment.route !== 'AI_PRECLEARED',
+            persistedAssessment.documentAuthenticityConfidence,
+          faceMatchConfidence: persistedAssessment.faceMatchConfidence,
+          livenessConfidence: persistedAssessment.livenessConfidence,
+          humanReviewRequired: true,
           inputHash: document.checksumSha256,
-          output: this.json({
-            evidenceStatus: assessment.evidenceStatus,
-            route: assessment.route,
-            reasonCodes: assessment.reasonCodes,
+          output,
+          completedAt,
+        },
+        select: { id: true },
+      });
+      await tx.qualificationAuditLog.create({
+        data: {
+          submissionId: input.submissionId,
+          actorId: input.actorId,
+          action: input.auditAction,
+          entityType: 'KycDocument',
+          entityId: document.id,
+          reason:
+            input.auditAction === 'DOCUMENT_VERIFICATION_COMPLETED'
+              ? 'Assigned admin requested persisted document assessment'
+              : 'Document assessed immediately after authenticated upload',
+          beforeHash: document.checksumSha256,
+          afterHash: createHash('sha256')
+            .update(JSON.stringify(output))
+            .digest('hex'),
+          metadata: this.json({
+            evaluationId: evaluation.id,
+            route: persistedAssessment.route,
+            reasonCodes: persistedAssessment.reasonCodes,
+            humanReviewRequired: true,
           }),
-          completedAt: assessment.assessedAt,
         },
       });
     });
-    return assessment;
+
+    return persistedAssessment;
+  }
+
+  private requireHumanReview(
+    assessment: QualificationDocumentAssessment,
+  ): QualificationDocumentAssessment {
+    if (
+      assessment.evidenceStatus !== 'VALIDATED' &&
+      assessment.route !== 'AI_PRECLEARED'
+    ) {
+      return assessment;
+    }
+    return {
+      ...assessment,
+      evidenceStatus: 'INSUFFICIENT',
+      route: 'NEEDS_REVIEW',
+      reasonCodes: assessment.reasonCodes.includes('HUMAN_REVIEW_REQUIRED')
+        ? assessment.reasonCodes
+        : [...assessment.reasonCodes, 'HUMAN_REVIEW_REQUIRED'],
+    };
+  }
+
+  private unavailableAssessment(): QualificationDocumentAssessment {
+    return {
+      evidenceStatus: 'UNCHECKED',
+      route: 'NEEDS_REVIEW',
+      confidence: null,
+      identityConfidence: null,
+      documentAuthenticityConfidence: null,
+      faceMatchConfidence: null,
+      livenessConfidence: null,
+      reasonCodes: ['PROVIDER_UNAVAILABLE', 'HUMAN_REVIEW_REQUIRED'],
+      provider: 'TYPHOON_OCR',
+      model: null,
+      assessedAt: new Date(),
+    };
+  }
+
+  private isAssessment(
+    value: unknown,
+  ): value is QualificationDocumentAssessment {
+    if (!value || typeof value !== 'object' || Array.isArray(value))
+      return false;
+    const assessment = value as Record<string, unknown>;
+    const keys = Object.keys(assessment);
+    if (
+      keys.length !== ASSESSMENT_KEYS.size ||
+      keys.some((key) => !ASSESSMENT_KEYS.has(key))
+    ) {
+      return false;
+    }
+    const scores = [
+      assessment.confidence,
+      assessment.identityConfidence,
+      assessment.documentAuthenticityConfidence,
+      assessment.faceMatchConfidence,
+      assessment.livenessConfidence,
+    ];
+    const validScore = (score: unknown) =>
+      score === null ||
+      (typeof score === 'number' &&
+        Number.isInteger(score) &&
+        score >= 0 &&
+        score <= 100);
+    return (
+      typeof assessment.evidenceStatus === 'string' &&
+      EVIDENCE_STATUSES.has(assessment.evidenceStatus) &&
+      typeof assessment.route === 'string' &&
+      ROUTES.has(assessment.route) &&
+      scores.every(validScore) &&
+      Array.isArray(assessment.reasonCodes) &&
+      assessment.reasonCodes.length > 0 &&
+      new Set(assessment.reasonCodes).size === assessment.reasonCodes.length &&
+      assessment.reasonCodes.every(
+        (reason) =>
+          typeof reason === 'string' &&
+          REASON_CODES.has(reason as QualificationReasonCode),
+      ) &&
+      typeof assessment.provider === 'string' &&
+      assessment.provider.length > 0 &&
+      assessment.provider.length <= 100 &&
+      (assessment.model === null ||
+        (typeof assessment.model === 'string' &&
+          assessment.model.length > 0 &&
+          assessment.model.length <= 200)) &&
+      assessment.assessedAt instanceof Date &&
+      !Number.isNaN(assessment.assessedAt.getTime())
+    );
   }
 
   private riskFor(assessment: QualificationDocumentAssessment) {
