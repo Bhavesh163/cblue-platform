@@ -31,7 +31,11 @@ describe('QualificationService', () => {
       create: jest.fn(),
       findMany: jest.fn(),
     },
-    kycDocument: { create: jest.fn(), findFirst: jest.fn() },
+    kycDocument: {
+      create: jest.fn(),
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+    },
     qualificationAuditLog: { create: jest.fn(), findMany: jest.fn() },
     $transaction: jest.fn(async (callback: (client: any) => unknown) =>
       callback(tx),
@@ -184,6 +188,13 @@ describe('QualificationService', () => {
               confidence: 92,
               deterministicScore: 78,
               aiScore: null,
+              identityConfidence: 91,
+              documentAuthenticityConfidence: 88,
+              faceMatchConfidence: null,
+              livenessConfidence: null,
+              credentialConfidence: null,
+              tierEligibilityScore: null,
+              humanReviewRequired: true,
               completedAt: updatedAt,
               createdAt: updatedAt,
             },
@@ -212,7 +223,9 @@ describe('QualificationService', () => {
       ],
     });
 
-    await expect(service.getStatusForUser('user-1')).resolves.toEqual(
+    const result = await service.getStatusForUser('user-1');
+
+    expect(result).toEqual(
       expect.objectContaining({
         sourceVersion: 'cblue-fixer-qualification-v1',
         fixer: expect.objectContaining({
@@ -231,6 +244,43 @@ describe('QualificationService', () => {
         tierQualification: expect.objectContaining({
           approvedTier: 'STANDARD',
           source: 'HUMAN',
+        }),
+      }),
+    );
+    expect(prisma.kycDocument.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ isActive: true }),
+      }),
+    );
+    expect(result.evaluation).toEqual(
+      expect.objectContaining({
+        identityConfidence: 91,
+        documentAuthenticityConfidence: 88,
+        faceMatchConfidence: null,
+        livenessConfidence: null,
+        credentialConfidence: null,
+        tierEligibilityScore: null,
+        humanReviewRequired: true,
+      }),
+    );
+    expect(prisma.fixer.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({
+          qualificationSubmissions: expect.objectContaining({
+            select: expect.objectContaining({
+              evaluations: expect.objectContaining({
+                select: expect.objectContaining({
+                  identityConfidence: true,
+                  documentAuthenticityConfidence: true,
+                  faceMatchConfidence: true,
+                  livenessConfidence: true,
+                  credentialConfidence: true,
+                  tierEligibilityScore: true,
+                  humanReviewRequired: true,
+                }),
+              }),
+            }),
+          }),
         }),
       }),
     );
