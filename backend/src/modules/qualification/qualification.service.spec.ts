@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { QualificationService } from './qualification.service';
 
@@ -46,10 +47,17 @@ describe('QualificationService', () => {
     putPrivateObject: jest.fn(),
     createReadUrl: jest.fn(),
   } as any;
-  const service = new QualificationService(prisma, policy, storage);
+  const readiness = { assertReady: jest.fn() } as any;
+  const service = new QualificationService(
+    prisma,
+    policy,
+    storage,
+    readiness,
+  );
 
   beforeEach(() => {
     jest.clearAllMocks();
+    readiness.assertReady.mockResolvedValue(undefined);
     tx.$executeRawUnsafe.mockResolvedValue(0);
     tx.kycDocument.findFirst.mockResolvedValue(null);
     tx.kycDocument.count.mockResolvedValue(0);
@@ -449,6 +457,20 @@ describe('QualificationService', () => {
     expect(tx.kycSubmission.update).not.toHaveBeenCalled();
   });
 
+  it('rejects submission before persistence when evidence storage is unavailable', async () => {
+    readiness.assertReady.mockRejectedValueOnce(
+      new ServiceUnavailableException(
+        'Qualification evidence storage is unavailable',
+      ),
+    );
+
+    await expect(
+      service.submitForUser('user-1', 'submission-1'),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(tx.kycSubmission.updateMany).not.toHaveBeenCalled();
+  });
   it('finalizes complete KYC and portfolio evidence with an audit record', async () => {
     tx.kycSubmission.findFirst.mockResolvedValue({
       id: 'submission-1',
@@ -482,6 +504,7 @@ describe('QualificationService', () => {
     await expect(
       service.submitForUser('user-1', 'submission-1'),
     ).resolves.toEqual(expect.objectContaining({ status: 'SUBMITTED' }));
+    expect(readiness.assertReady).toHaveBeenCalledTimes(1);
     expect(tx.kycSubmission.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'submission-1', status: 'DRAFT' },

@@ -14,6 +14,7 @@ import {
 } from './qualification-policy.service';
 import { QualificationStorageService } from './qualification-storage.service';
 import { QUALIFICATION_DOCUMENT_TYPES } from './dto/upload-qualification-document.dto';
+import { QualificationStorageReadinessService } from './qualification-storage-readiness.service';
 import { QualificationEvidenceDecisionDto } from './dto/qualification-evidence-decision.dto';
 
 const PORTFOLIO_MAX_FILES = 10;
@@ -59,6 +60,7 @@ export class QualificationService {
     private readonly prisma: PrismaService,
     private readonly policy: QualificationPolicyService,
     private readonly storage: QualificationStorageService,
+    private readonly readiness: QualificationStorageReadinessService,
   ) {}
 
   async createSubmission(
@@ -381,6 +383,7 @@ export class QualificationService {
   }
 
   async submitForUser(userId: string, submissionId: string) {
+    await this.readiness.assertReady();
     return this.prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe(
         'SELECT pg_advisory_xact_lock(hashtext($1))',
