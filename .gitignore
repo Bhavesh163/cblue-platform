@@ -38,3 +38,6 @@ yarn-error.log*
 *.pem
 
 /generated/prisma
+
+# Isolated Codex implementation workspaces
+.worktrees/
