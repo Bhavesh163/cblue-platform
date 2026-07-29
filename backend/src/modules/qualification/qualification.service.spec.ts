@@ -1,17 +1,27 @@
 import {
   BadRequestException,
   ConflictException,
+  Logger,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { QualificationService } from './qualification.service';
 
 describe('QualificationService', () => {
+  beforeAll(() => {
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+  });
+
+  afterAll(() => {
+    jest.restoreAllMocks();
+  });
+
   const tx = {
     qualificationReviewTask: { findFirst: jest.fn() },
     kycDocument: {
       findFirst: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
       count: jest.fn(),
       create: jest.fn(),
     },
@@ -34,27 +44,29 @@ describe('QualificationService', () => {
     },
     kycDocument: {
       create: jest.fn(),
+      deleteMany: jest.fn(),
       findFirst: jest.fn(),
       findMany: jest.fn(),
     },
     qualificationAuditLog: { create: jest.fn(), findMany: jest.fn() },
-    $transaction: jest.fn(async (callback: (client: any) => unknown) =>
-      callback(tx),
-    ),
+    $transaction: jest.fn((callback: (client: any) => unknown) => callback(tx)),
   } as any;
   const policy = { evaluate: jest.fn() } as any;
   const storage = {
     putPrivateObject: jest.fn(),
+    deletePrivateObject: jest.fn(),
     createReadUrl: jest.fn(),
   } as any;
   const readiness = { assertReady: jest.fn() } as any;
   const assessment = { assessDocument: jest.fn() } as any;
+  const routing = { routeSubmission: jest.fn() } as any;
   const service = new QualificationService(
     prisma,
     policy,
     storage,
     readiness,
     assessment,
+    routing,
   );
 
   beforeEach(() => {
@@ -76,7 +88,17 @@ describe('QualificationService', () => {
     tx.$executeRawUnsafe.mockResolvedValue(0);
     tx.kycDocument.findFirst.mockResolvedValue(null);
     tx.kycDocument.count.mockResolvedValue(0);
+    tx.kycDocument.updateMany.mockResolvedValue({ count: 1 });
     tx.kycSubmission.findUnique.mockResolvedValue({ status: 'DRAFT' });
+    prisma.kycDocument.deleteMany.mockResolvedValue({ count: 1 });
+    storage.deletePrivateObject.mockResolvedValue(undefined);
+    routing.routeSubmission.mockResolvedValue({
+      status: 'NEEDS_REVIEW',
+      confidence: 80,
+      reasonCodes: ['DOCUMENT_VALID', 'HUMAN_REVIEW_REQUIRED'],
+      humanReviewRequired: true,
+      lockedUntil: null,
+    });
   });
 
   it('persists and audits authorized admin verification through the assessment service', async () => {
@@ -357,7 +379,7 @@ describe('QualificationService', () => {
       status: 'DRAFT',
       fixer: { user: { name: 'Suppadesh Fungprasertsuk' } },
     });
-    tx.kycDocument.create.mockImplementation(async ({ data, select }: any) => ({
+    tx.kycDocument.create.mockImplementation(({ data, select }: any) => ({
       id: 'document-1',
       documentType: data.documentType,
       contentType: data.contentType,
@@ -393,6 +415,7 @@ describe('QualificationService', () => {
     expect(call.data.storageKey).not.toContain('../../');
     expect(call.data.checksumSha256).toHaveLength(64);
     expect(call.data.encrypted).toBe(true);
+    expect(call.data.isActive).toBe(false);
     expect(result.id).toBe('document-1');
     expect(result.assessment).toEqual(
       expect.objectContaining({ route: 'NEEDS_REVIEW' }),
@@ -404,15 +427,182 @@ describe('QualificationService', () => {
       actorId: 'user-1',
       auditAction: 'DOCUMENT_ASSESSED_ON_UPLOAD',
     });
+    expect(tx.kycDocument.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'document-1',
+        submissionId: 'submission-1',
+        isActive: false,
+      },
+      data: { isActive: true },
+    });
   });
 
+  it('promotes a fully assessed KYC replacement and supersedes the prior active evidence atomically', async () => {
+    prisma.kycSubmission.findFirst.mockResolvedValue({
+      id: 'submission-1',
+      fixerId: 'fixer-1',
+      status: 'NEEDS_RESUBMISSION',
+      failedAttempts: 2,
+      lockedUntil: null,
+      fixer: { user: { name: 'Suppadesh Fungprasertsuk' } },
+    });
+    tx.kycSubmission.findUnique.mockResolvedValue({
+      status: 'NEEDS_RESUBMISSION',
+      failedAttempts: 2,
+      lockedUntil: null,
+    });
+    tx.kycDocument.findFirst.mockImplementation(({ where }: any) =>
+      where.checksumSha256
+        ? null
+        : {
+            id: 'old-id-front',
+            documentType: 'id-front',
+            isActive: true,
+          },
+    );
+    tx.kycDocument.create.mockImplementation(({ data }: any) => ({
+      id: 'new-id-front',
+      documentType: data.documentType,
+      contentType: data.contentType,
+      sizeBytes: data.sizeBytes,
+      evidenceStatus: 'UNCHECKED',
+      expiresAt: null,
+      createdAt: new Date('2026-07-30T00:00:00.000Z'),
+    }));
+
+    await expect(
+      service.uploadDocumentForUser('user-1', 'submission-1', 'id-front', {
+        originalname: 'replacement.jpg',
+        mimetype: 'image/jpeg',
+        size: 4,
+        buffer: Buffer.from([0xff, 0xd8, 0xff, 0x01]),
+      } as Express.Multer.File),
+    ).resolves.toEqual(expect.objectContaining({ id: 'new-id-front' }));
+
+    expect(tx.kycDocument.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ isActive: false }),
+      }),
+    );
+    expect(tx.kycDocument.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'old-id-front',
+        submissionId: 'submission-1',
+        isActive: true,
+      },
+      data: {
+        isActive: false,
+        supersededAt: expect.any(Date),
+        supersededById: 'new-id-front',
+      },
+    });
+    expect(tx.kycDocument.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'new-id-front',
+        submissionId: 'submission-1',
+        isActive: false,
+      },
+      data: { isActive: true },
+    });
+    expect(tx.kycSubmission.update).toHaveBeenCalledWith({
+      where: { id: 'submission-1' },
+      data: {
+        status: 'DRAFT',
+        failedAttempts: 0,
+        lockedUntil: null,
+      },
+    });
+    expect(tx.qualificationAuditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: 'KYC_DOCUMENT_SUPERSEDED',
+        actorId: 'user-1',
+        entityId: 'new-id-front',
+        metadata: {
+          documentType: 'id-front',
+          supersededDocumentId: 'old-id-front',
+        },
+      }),
+    });
+  });
+
+  it('deletes staged persistence and the Spaces object when assessment fails', async () => {
+    prisma.kycSubmission.findFirst.mockResolvedValue({
+      id: 'submission-1',
+      fixerId: 'fixer-1',
+      status: 'DRAFT',
+      failedAttempts: 0,
+      lockedUntil: null,
+      fixer: { user: { name: 'Suppadesh Fungprasertsuk' } },
+    });
+    tx.kycDocument.create.mockImplementation(({ data }: any) => ({
+      id: 'staged-id-front',
+      documentType: data.documentType,
+      contentType: data.contentType,
+      sizeBytes: data.sizeBytes,
+      evidenceStatus: 'UNCHECKED',
+      expiresAt: null,
+      createdAt: new Date('2026-07-30T00:00:00.000Z'),
+    }));
+    assessment.assessDocument.mockRejectedValueOnce(
+      new Error('assessment persistence failed'),
+    );
+
+    await expect(
+      service.uploadDocumentForUser('user-1', 'submission-1', 'id-front', {
+        originalname: 'replacement.jpg',
+        mimetype: 'image/jpeg',
+        size: 4,
+        buffer: Buffer.from([0xff, 0xd8, 0xff, 0x02]),
+      } as Express.Multer.File),
+    ).rejects.toThrow('assessment persistence failed');
+
+    expect(storage.deletePrivateObject).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /^qualification\/fixer-1\/submission-1\/[a-f0-9-]+-replacement\.jpg$/,
+      ),
+    );
+    expect(prisma.kycDocument.deleteMany).toHaveBeenCalledWith({
+      where: {
+        id: 'staged-id-front',
+        submissionId: 'submission-1',
+        isActive: false,
+      },
+    });
+    expect(tx.kycDocument.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('deletes the Spaces object when document persistence fails after upload', async () => {
+    prisma.kycSubmission.findFirst.mockResolvedValue({
+      id: 'submission-1',
+      fixerId: 'fixer-1',
+      status: 'DRAFT',
+      failedAttempts: 0,
+      lockedUntil: null,
+      fixer: { user: { name: 'Suppadesh Fungprasertsuk' } },
+    });
+    tx.kycDocument.create.mockRejectedValueOnce(
+      new Error('document persistence failed'),
+    );
+
+    await expect(
+      service.uploadDocumentForUser('user-1', 'submission-1', 'id-front', {
+        originalname: 'replacement.jpg',
+        mimetype: 'image/jpeg',
+        size: 4,
+        buffer: Buffer.from([0xff, 0xd8, 0xff, 0x03]),
+      } as Express.Multer.File),
+    ).rejects.toThrow('document persistence failed');
+
+    expect(storage.deletePrivateObject).toHaveBeenCalledTimes(1);
+    expect(assessment.assessDocument).not.toHaveBeenCalled();
+  });
   it('stores a size-limited portfolio PDF as private evidence', async () => {
     prisma.kycSubmission.findFirst.mockResolvedValue({
       id: 'submission-1',
       fixerId: 'fixer-1',
       status: 'DRAFT',
     });
-    tx.kycDocument.create.mockImplementation(async ({ data }: any) => ({
+    tx.kycDocument.create.mockImplementation(({ data }: any) => ({
       id: 'portfolio-pdf-1',
       documentType: data.documentType,
       contentType: data.contentType,
@@ -502,20 +692,36 @@ describe('QualificationService', () => {
     expect(storage.putPrivateObject).not.toHaveBeenCalled();
   });
 
-  it('does not finalize a qualification submission without all three KYC types', async () => {
+  it('does not route a qualification submission without all three active KYC types', async () => {
     tx.kycSubmission.findFirst.mockResolvedValue({
       id: 'submission-1',
       status: 'DRAFT',
       documents: [
-        { documentType: 'id-front', sizeBytes: 100, contentType: 'image/jpeg' },
-        { documentType: 'id-back', sizeBytes: 100, contentType: 'image/jpeg' },
+        {
+          documentType: 'id-front',
+          sizeBytes: 100,
+          contentType: 'image/jpeg',
+          isActive: true,
+        },
+        {
+          documentType: 'id-back',
+          sizeBytes: 100,
+          contentType: 'image/jpeg',
+          isActive: true,
+        },
+        {
+          documentType: 'selfie-with-id',
+          sizeBytes: 100,
+          contentType: 'image/jpeg',
+          isActive: false,
+        },
       ],
     });
 
     await expect(
       service.submitForUser('user-1', 'submission-1'),
     ).rejects.toBeInstanceOf(BadRequestException);
-    expect(tx.kycSubmission.update).not.toHaveBeenCalled();
+    expect(routing.routeSubmission).not.toHaveBeenCalled();
   });
 
   it('rejects submission before persistence when evidence storage is unavailable', async () => {
@@ -530,61 +736,57 @@ describe('QualificationService', () => {
     ).rejects.toBeInstanceOf(ServiceUnavailableException);
 
     expect(prisma.$transaction).not.toHaveBeenCalled();
-    expect(tx.kycSubmission.updateMany).not.toHaveBeenCalled();
+    expect(routing.routeSubmission).not.toHaveBeenCalled();
   });
-  it('finalizes complete KYC and portfolio evidence with an audit record', async () => {
+
+  it('routes complete active KYC evidence without invoking tier evaluation', async () => {
     tx.kycSubmission.findFirst.mockResolvedValue({
       id: 'submission-1',
       status: 'DRAFT',
       documents: [
-        { documentType: 'id-front', sizeBytes: 100, contentType: 'image/jpeg' },
-        { documentType: 'id-back', sizeBytes: 100, contentType: 'image/jpeg' },
+        {
+          documentType: 'id-front',
+          sizeBytes: 100,
+          contentType: 'image/jpeg',
+          isActive: true,
+        },
+        {
+          documentType: 'id-back',
+          sizeBytes: 100,
+          contentType: 'image/jpeg',
+          isActive: true,
+        },
         {
           documentType: 'selfie-with-id',
           sizeBytes: 100,
           contentType: 'image/jpeg',
+          isActive: true,
         },
         {
           documentType: 'portfolio',
           sizeBytes: 250 * 1024,
           contentType: 'image/jpeg',
+          isActive: true,
         },
         {
           documentType: 'portfolio',
           sizeBytes: 200 * 1024,
           contentType: 'application/pdf',
+          isActive: true,
         },
       ],
-    });
-    tx.kycSubmission.updateMany.mockResolvedValue({ count: 1 });
-    tx.kycSubmission.findUniqueOrThrow.mockResolvedValue({
-      id: 'submission-1',
-      status: 'SUBMITTED',
     });
 
     await expect(
       service.submitForUser('user-1', 'submission-1'),
-    ).resolves.toEqual(expect.objectContaining({ status: 'SUBMITTED' }));
+    ).resolves.toEqual(expect.objectContaining({ status: 'NEEDS_REVIEW' }));
     expect(readiness.assertReady).toHaveBeenCalledTimes(1);
-    expect(tx.kycSubmission.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'submission-1', status: 'DRAFT' },
-        data: expect.objectContaining({ status: 'SUBMITTED' }),
-      }),
+    expect(routing.routeSubmission).toHaveBeenCalledWith(
+      'submission-1',
+      'user-1',
     );
-    expect(tx.qualificationAuditLog.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        action: 'QUALIFICATION_SUBMITTED',
-        actorId: 'user-1',
-        metadata: {
-          kycDocumentCount: 3,
-          portfolioFileCount: 2,
-          portfolioImageCount: 1,
-        },
-      }),
-    });
+    expect(policy.evaluate).not.toHaveBeenCalled();
   });
-
   it('creates a short-lived admin review URL and audit record', async () => {
     prisma.kycDocument.findFirst.mockResolvedValue({
       id: 'document-1',

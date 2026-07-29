@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { QualificationSubmissionStatus } from '@prisma/client';
@@ -17,10 +18,16 @@ import { QUALIFICATION_DOCUMENT_TYPES } from './dto/upload-qualification-documen
 import { QualificationStorageReadinessService } from './qualification-storage-readiness.service';
 import { QualificationEvidenceDecisionDto } from './dto/qualification-evidence-decision.dto';
 import { QualificationAssessmentService } from './qualification-assessment.service';
+import { QualificationRoutingService } from './qualification-routing.service';
 
 const PORTFOLIO_MAX_FILES = 10;
 const PORTFOLIO_MAX_FILE_BYTES = 300 * 1024;
 const KYC_DOCUMENT_TYPES = ['id-front', 'id-back', 'selfie-with-id'] as const;
+const UPLOADABLE_SUBMISSION_STATUSES = new Set([
+  'DRAFT',
+  'NEEDS_RESUBMISSION',
+  'NEEDS_MORE_EVIDENCE',
+]);
 
 function detectQualificationContentType(buffer: Buffer): string | null {
   if (
@@ -57,12 +64,15 @@ function detectQualificationContentType(buffer: Buffer): string | null {
 
 @Injectable()
 export class QualificationService {
+  private readonly logger = new Logger(QualificationService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly policy: QualificationPolicyService,
     private readonly storage: QualificationStorageService,
     private readonly readiness: QualificationStorageReadinessService,
     private readonly assessment: QualificationAssessmentService,
+    private readonly routing: QualificationRoutingService,
   ) {}
 
   async createSubmission(
@@ -306,17 +316,15 @@ export class QualificationService {
         id: true,
         fixerId: true,
         status: true,
+        failedAttempts: true,
+        lockedUntil: true,
         fixer: { select: { user: { select: { name: true } } } },
       },
     });
     if (!submission) {
       throw new NotFoundException('Qualification submission not found');
     }
-    if (submission.status !== 'DRAFT') {
-      throw new ConflictException(
-        'Documents can only be added before qualification submission',
-      );
-    }
+    this.assertUploadableSubmission(submission.status, submission.lockedUntil);
 
     const safeName = (file.originalname || 'document')
       .replace(/[^a-zA-Z0-9._-]/g, '_')
@@ -330,80 +338,268 @@ export class QualificationService {
     const checksumSha256 = createHash('sha256')
       .update(file.buffer)
       .digest('hex');
+    let storageWriteAttempted = false;
+    let stagedDocumentId: string | null = null;
 
-    const document = await this.prisma.$transaction(async (tx) => {
-      await tx.$executeRawUnsafe(
-        'SELECT pg_advisory_xact_lock(hashtext($1))',
-        submission.id,
-      );
-      const liveSubmission = await tx.kycSubmission.findUnique({
-        where: { id: submission.id },
-        select: { status: true },
-      });
-      if (liveSubmission?.status !== 'DRAFT') {
-        throw new ConflictException(
-          'Documents can only be added before qualification submission',
+    try {
+      const document = await this.prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(
+          'SELECT pg_advisory_xact_lock(hashtext($1))',
+          submission.id,
         );
-      }
-      const duplicate = await tx.kycDocument.findFirst({
-        where: { submissionId: submission.id, checksumSha256 },
-        select: { id: true },
-      });
-      if (duplicate) {
-        throw new ConflictException('This evidence file was already uploaded');
-      }
-      const existingCount = await tx.kycDocument.count({
-        where: { submissionId: submission.id, documentType },
-      });
-      const maximum = isPortfolio ? PORTFOLIO_MAX_FILES : 1;
-      if (existingCount >= maximum) {
-        throw new ConflictException(
-          isPortfolio
-            ? 'Maximum 10 portfolio files allowed'
-            : 'Only one ' + documentType + ' document is allowed',
+        const liveSubmission = await tx.kycSubmission.findUnique({
+          where: { id: submission.id },
+          select: {
+            status: true,
+            failedAttempts: true,
+            lockedUntil: true,
+          },
+        });
+        if (!liveSubmission) {
+          throw new NotFoundException('Qualification submission not found');
+        }
+        this.assertUploadableSubmission(
+          liveSubmission.status,
+          liveSubmission.lockedUntil,
         );
-      }
+        const duplicate = await tx.kycDocument.findFirst({
+          where: { submissionId: submission.id, checksumSha256 },
+          select: { id: true },
+        });
+        if (duplicate) {
+          throw new ConflictException(
+            'This evidence file was already uploaded',
+          );
+        }
+        if (isPortfolio) {
+          const existingCount = await tx.kycDocument.count({
+            where: {
+              submissionId: submission.id,
+              documentType,
+              isActive: true,
+            },
+          });
+          if (existingCount >= PORTFOLIO_MAX_FILES) {
+            throw new ConflictException('Maximum 10 portfolio files allowed');
+          }
+        } else if (!isKyc) {
+          const existingCount = await tx.kycDocument.count({
+            where: {
+              submissionId: submission.id,
+              documentType,
+              isActive: true,
+            },
+          });
+          if (existingCount >= 1) {
+            throw new ConflictException(
+              'Only one ' + documentType + ' document is allowed',
+            );
+          }
+        }
 
-      await this.storage.putPrivateObject({
-        key: storageKey,
-        body: file.buffer,
-        contentType: file.mimetype,
-      });
-
-      return tx.kycDocument.create({
-        data: {
-          submissionId: submission.id,
-          documentType,
-          storageKey,
-          checksumSha256,
+        storageWriteAttempted = true;
+        await this.storage.putPrivateObject({
+          key: storageKey,
+          body: file.buffer,
           contentType: file.mimetype,
-          sizeBytes: fileSize,
-          encrypted: true,
-          retentionDeleteAt: new Date(
-            Date.now() + 3 * 365 * 24 * 60 * 60 * 1000,
-          ),
-        },
-        select: {
-          id: true,
-          documentType: true,
-          contentType: true,
-          sizeBytes: true,
-          evidenceStatus: true,
-          expiresAt: true,
-          createdAt: true,
-        },
+        });
+
+        return tx.kycDocument.create({
+          data: {
+            submissionId: submission.id,
+            documentType,
+            storageKey,
+            checksumSha256,
+            contentType: file.mimetype,
+            sizeBytes: fileSize,
+            encrypted: true,
+            isActive: !isKyc,
+            retentionDeleteAt: new Date(
+              Date.now() + 3 * 365 * 24 * 60 * 60 * 1000,
+            ),
+          },
+          select: {
+            id: true,
+            documentType: true,
+            contentType: true,
+            sizeBytes: true,
+            evidenceStatus: true,
+            expiresAt: true,
+            createdAt: true,
+          },
+        });
       });
-    });
-    const assessment = await this.assessment.assessDocument({
-      submissionId: submission.id,
-      documentId: document.id,
-      registeredName: submission.fixer?.user.name || '',
-      actorId: userId,
-      auditAction: 'DOCUMENT_ASSESSED_ON_UPLOAD',
-    });
-    return { ...document, assessment };
+      stagedDocumentId = document.id;
+
+      const assessment = await this.assessment.assessDocument({
+        submissionId: submission.id,
+        documentId: document.id,
+        registeredName: submission.fixer?.user.name || '',
+        actorId: userId,
+        auditAction: 'DOCUMENT_ASSESSED_ON_UPLOAD',
+      });
+
+      if (isKyc) {
+        await this.prisma.$transaction(async (tx) => {
+          await tx.$executeRawUnsafe(
+            'SELECT pg_advisory_xact_lock(hashtext($1))',
+            submission.id,
+          );
+          const liveSubmission = await tx.kycSubmission.findUnique({
+            where: { id: submission.id },
+            select: {
+              status: true,
+              failedAttempts: true,
+              lockedUntil: true,
+            },
+          });
+          if (!liveSubmission) {
+            throw new NotFoundException('Qualification submission not found');
+          }
+          this.assertUploadableSubmission(
+            liveSubmission.status,
+            liveSubmission.lockedUntil,
+          );
+          const previousActive = await tx.kycDocument.findFirst({
+            where: {
+              submissionId: submission.id,
+              documentType,
+              isActive: true,
+              id: { not: document.id },
+            },
+            select: { id: true },
+          });
+          const supersededAt = new Date();
+          if (previousActive) {
+            const superseded = await tx.kycDocument.updateMany({
+              where: {
+                id: previousActive.id,
+                submissionId: submission.id,
+                isActive: true,
+              },
+              data: {
+                isActive: false,
+                supersededAt,
+                supersededById: document.id,
+              },
+            });
+            if (superseded.count !== 1) {
+              throw new ConflictException(
+                'Active KYC evidence changed during replacement',
+              );
+            }
+          }
+          const promoted = await tx.kycDocument.updateMany({
+            where: {
+              id: document.id,
+              submissionId: submission.id,
+              isActive: false,
+            },
+            data: { isActive: true },
+          });
+          if (promoted.count !== 1) {
+            throw new ConflictException(
+              'Replacement KYC evidence could not be activated',
+            );
+          }
+          if (previousActive) {
+            await tx.kycSubmission.update({
+              where: { id: submission.id },
+              data:
+                assessment.route === 'NEEDS_RESUBMISSION'
+                  ? { status: 'DRAFT', lockedUntil: null }
+                  : {
+                      status: 'DRAFT',
+                      failedAttempts: 0,
+                      lockedUntil: null,
+                    },
+            });
+            await tx.qualificationAuditLog.create({
+              data: {
+                submissionId: submission.id,
+                actorId: userId,
+                action: 'KYC_DOCUMENT_SUPERSEDED',
+                entityType: 'KycDocument',
+                entityId: document.id,
+                reason: 'Assessed KYC replacement activated',
+                metadata: {
+                  documentType,
+                  supersededDocumentId: previousActive.id,
+                },
+              },
+            });
+          }
+        });
+      }
+
+      return { ...document, assessment };
+    } catch (error) {
+      if (storageWriteAttempted) {
+        await this.cleanupFailedUpload({
+          submissionId: submission.id,
+          documentId: stagedDocumentId,
+          storageKey,
+          stagedInactive: isKyc,
+        });
+      }
+      this.logger.error(
+        `Failed to persist qualification evidence for ${submission.id}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      throw error;
+    }
+  }
+  private assertUploadableSubmission(
+    status: string,
+    lockedUntil: Date | null,
+  ): void {
+    if (!UPLOADABLE_SUBMISSION_STATUSES.has(status)) {
+      throw new ConflictException(
+        'Documents can only be added before qualification review',
+      );
+    }
+    if (lockedUntil && lockedUntil.getTime() > Date.now()) {
+      throw new ConflictException(
+        'Qualification evidence replacement is temporarily locked',
+      );
+    }
   }
 
+  private async cleanupFailedUpload(input: {
+    submissionId: string;
+    documentId: string | null;
+    storageKey: string;
+    stagedInactive: boolean;
+  }): Promise<void> {
+    let storageDeleted = false;
+    for (let attempt = 1; attempt <= 2 && !storageDeleted; attempt += 1) {
+      try {
+        await this.storage.deletePrivateObject(input.storageKey);
+        storageDeleted = true;
+      } catch (error) {
+        this.logger.error(
+          `Failed Spaces compensation attempt ${attempt} for ${input.storageKey}`,
+          error instanceof Error ? error.stack : String(error),
+        );
+      }
+    }
+    if (!storageDeleted || !input.documentId) return;
+
+    try {
+      await this.prisma.kycDocument.deleteMany({
+        where: {
+          id: input.documentId,
+          submissionId: input.submissionId,
+          ...(input.stagedInactive ? { isActive: false } : {}),
+        },
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to remove compensated qualification document ${input.documentId}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
+  }
   async verifyDocumentForAdmin(
     adminId: string,
     submissionId: string,
@@ -447,104 +643,78 @@ export class QualificationService {
   }
 
   async submitForUser(userId: string, submissionId: string) {
-    await this.readiness.assertReady();
-    return this.prisma.$transaction(async (tx) => {
-      await tx.$executeRawUnsafe(
-        'SELECT pg_advisory_xact_lock(hashtext($1))',
-        submissionId,
-      );
-      const submission = await tx.kycSubmission.findFirst({
-        where: { id: submissionId, fixer: { userId } },
-        include: {
-          documents: {
-            select: {
-              documentType: true,
-              sizeBytes: true,
-              contentType: true,
+    try {
+      await this.readiness.assertReady();
+      await this.prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(
+          'SELECT pg_advisory_xact_lock(hashtext($1))',
+          submissionId,
+        );
+        const submission = await tx.kycSubmission.findFirst({
+          where: { id: submissionId, fixer: { userId } },
+          include: {
+            documents: {
+              select: {
+                documentType: true,
+                sizeBytes: true,
+                contentType: true,
+                isActive: true,
+              },
             },
           },
-        },
-      });
-      if (!submission) {
-        throw new NotFoundException('Qualification submission not found');
-      }
-      if (submission.status !== 'DRAFT') {
-        throw new ConflictException(
-          'Qualification submission is already final',
-        );
-      }
+        });
+        if (!submission) {
+          throw new NotFoundException('Qualification submission not found');
+        }
+        if (submission.status !== 'DRAFT') {
+          throw new ConflictException(
+            'Qualification submission is already final',
+          );
+        }
 
-      const documentTypes = new Set(
-        submission.documents.map((document) => document.documentType),
-      );
-      const missingKyc = KYC_DOCUMENT_TYPES.filter(
-        (documentType) => !documentTypes.has(documentType),
-      );
-      if (missingKyc.length > 0) {
-        throw new BadRequestException(
-          'Missing required KYC evidence: ' + missingKyc.join(', '),
+        const activeDocuments = submission.documents.filter(
+          (document) => document.isActive,
         );
-      }
-      const portfolio = submission.documents.filter(
-        (document) => document.documentType === 'portfolio',
-      );
-      if (portfolio.length > PORTFOLIO_MAX_FILES) {
-        throw new BadRequestException('Maximum 10 portfolio files allowed');
-      }
-      if (
-        portfolio.some(
-          (document) =>
-            document.sizeBytes > PORTFOLIO_MAX_FILE_BYTES ||
-            (!document.contentType.startsWith('image/') &&
-              document.contentType !== 'application/pdf'),
-        )
-      ) {
-        throw new BadRequestException(
-          'Every portfolio item must be a PDF or image no larger than 0.3 MB',
+        const documentTypes = new Set(
+          activeDocuments.map((document) => document.documentType),
         );
-      }
+        const missingKyc = KYC_DOCUMENT_TYPES.filter(
+          (documentType) => !documentTypes.has(documentType),
+        );
+        if (missingKyc.length > 0) {
+          throw new BadRequestException(
+            'Missing required KYC evidence: ' + missingKyc.join(', '),
+          );
+        }
+        const portfolio = activeDocuments.filter(
+          (document) => document.documentType === 'portfolio',
+        );
+        if (portfolio.length > PORTFOLIO_MAX_FILES) {
+          throw new BadRequestException('Maximum 10 portfolio files allowed');
+        }
+        if (
+          portfolio.some(
+            (document) =>
+              document.sizeBytes > PORTFOLIO_MAX_FILE_BYTES ||
+              (!document.contentType.startsWith('image/') &&
+                document.contentType !== 'application/pdf'),
+          )
+        ) {
+          throw new BadRequestException(
+            'Every portfolio item must be a PDF or image no larger than 0.3 MB',
+          );
+        }
+      });
 
-      const submittedAt = new Date();
-      const finalized = await tx.kycSubmission.updateMany({
-        where: { id: submission.id, status: 'DRAFT' },
-        data: { status: 'SUBMITTED', submittedAt },
-      });
-      if (finalized.count !== 1) {
-        throw new ConflictException(
-          'Qualification submission is already final',
-        );
-      }
-      const updated = await tx.kycSubmission.findUniqueOrThrow({
-        where: { id: submission.id },
-        select: {
-          id: true,
-          version: true,
-          status: true,
-          policyVersion: true,
-          submittedAt: true,
-        },
-      });
-      await tx.qualificationAuditLog.create({
-        data: {
-          submissionId: submission.id,
-          actorId: userId,
-          action: 'QUALIFICATION_SUBMITTED',
-          entityType: 'KycSubmission',
-          entityId: submission.id,
-          reason: 'Partner finalized required KYC evidence',
-          metadata: {
-            kycDocumentCount: KYC_DOCUMENT_TYPES.length,
-            portfolioFileCount: portfolio.length,
-            portfolioImageCount: portfolio.filter((document) =>
-              document.contentType.startsWith('image/'),
-            ).length,
-          },
-        },
-      });
-      return updated;
-    });
+      return await this.routing.routeSubmission(submissionId, userId);
+    } catch (error) {
+      this.logger.error(
+        `Failed to submit qualification ${submissionId} for routing`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      throw error;
+    }
   }
-
   async reviewDocumentEvidence(
     adminId: string,
     submissionId: string,
