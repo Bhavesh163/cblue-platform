@@ -537,6 +537,12 @@ jobs:
             docker restart "$BACKEND_CONTAINER" 2>/dev/null || true
             sleep 10
 
+            # Verify private qualification evidence storage before cutover.
+            echo "Verifying qualification evidence storage..."
+            if ! docker exec "$BACKEND_CONTAINER" node dist/src/scripts/qualification-storage-probe.js; then
+              echo "Qualification storage readiness failed; keeping existing backend untouched"
+              exit 1
+            fi
             # ── Verify candidate backend readiness on 3003 (do not use curl -f; 4xx can still mean app is up) ──
             CANDIDATE_READY="false"
             CANDIDATE_HEALTH_CODE="000"

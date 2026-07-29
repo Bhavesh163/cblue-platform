@@ -1,15 +1,23 @@
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { GetObjectCommand } from '@aws-sdk/client-s3';
+import { QualificationStorageReadinessService } from './qualification-storage-readiness.service';
 
 @Injectable()
 export class QualificationStorageService {
   private readonly client?: S3Client;
   private readonly bucket?: string;
 
-  constructor(config: ConfigService) {
+  constructor(
+    config: ConfigService,
+    private readonly readiness: QualificationStorageReadinessService,
+  ) {
     const endpoint = config.get<string>('spaces.endpoint');
     const accessKeyId = config.get<string>('spaces.key');
     const secretAccessKey = config.get<string>('spaces.secret');
@@ -30,6 +38,7 @@ export class QualificationStorageService {
     body: Buffer;
     contentType: string;
   }) {
+    await this.readiness.assertReady();
     const client = this.requireClient();
 
     await client.send(
@@ -45,6 +54,7 @@ export class QualificationStorageService {
   }
 
   async getPrivateObject(key: string) {
+    await this.readiness.assertReady();
     const client = this.requireClient();
     const output = await client.send(
       new GetObjectCommand({ Bucket: this.bucket, Key: key }),
@@ -58,7 +68,17 @@ export class QualificationStorageService {
     return Buffer.from(bytes);
   }
 
+  async deletePrivateObject(key: string): Promise<void> {
+    await this.readiness.assertReady();
+    const client = this.requireClient();
+
+    await client.send(
+      new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
+  }
+
   async createReadUrl(key: string, expiresInSeconds = 300) {
+    await this.readiness.assertReady();
     const client = this.requireClient();
 
     return getSignedUrl(
