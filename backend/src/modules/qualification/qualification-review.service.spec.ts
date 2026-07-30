@@ -16,6 +16,7 @@ describe('QualificationReviewService', () => {
     fixer: { update: jest.fn() },
     kycSubmission: { update: jest.fn() },
     qualificationAuditLog: { create: jest.fn() },
+    qualificationHandoff: { upsert: jest.fn() },
   } as any;
   const prisma = {
     qualificationReviewTask: {
@@ -23,12 +24,20 @@ describe('QualificationReviewService', () => {
       findUnique: jest.fn(),
       updateMany: jest.fn(),
     },
-    $transaction: jest.fn(async (callback: (client: any) => unknown) => callback(tx)),
+    qualificationHandoff: {
+      findUnique: jest.fn(),
+      updateMany: jest.fn(),
+      update: jest.fn(),
+    },
+    $transaction: jest.fn(async (callback: (client: any) => unknown) =>
+      callback(tx),
+    ),
   } as any;
   const tierEvaluation = { evaluateTier: jest.fn() } as any;
   const service = new QualificationReviewService(prisma, tierEvaluation);
 
   const submission = {
+    status: 'APPROVED',
     fixerId: 'fixer-1',
     policyVersion: 'policy-v1',
     fixer: {},
@@ -39,16 +48,37 @@ describe('QualificationReviewService', () => {
     jest.clearAllMocks();
     prisma.qualificationReviewTask.updateMany.mockResolvedValue({ count: 1 });
     tx.qualificationReviewTask.updateMany.mockResolvedValue({ count: 1 });
-    tx.qualificationReviewTask.update.mockImplementation(async ({ data }: any) => ({
-      id: 'task-1',
-      ...data,
-    }));
-    tx.tierQualification.create.mockResolvedValue({ id: 'tier-qualification-1' });
+    tx.qualificationReviewTask.update.mockImplementation(
+      async ({ data }: any) => ({
+        id: 'task-1',
+        submissionId: 'submission-1',
+        ...data,
+      }),
+    );
+    tx.tierQualification.create.mockResolvedValue({
+      id: 'tier-qualification-1',
+    });
     tx.fixer.update.mockResolvedValue({
-      id: 'fixer-1', status: 'APPROVED', tier: 'SPECIALIST', verified: true,
+      id: 'fixer-1',
+      status: 'APPROVED',
+      tier: 'SPECIALIST',
+      verified: true,
     });
     tx.kycSubmission.update.mockResolvedValue({ id: 'submission-1' });
     tx.qualificationAuditLog.create.mockResolvedValue({ id: 'audit-1' });
+    tx.qualificationHandoff.upsert.mockResolvedValue({
+      id: 'handoff-1',
+      status: 'PENDING',
+    });
+    prisma.qualificationHandoff.findUnique.mockResolvedValue({
+      id: 'handoff-1',
+      status: 'PENDING',
+    });
+    prisma.qualificationHandoff.updateMany.mockResolvedValue({ count: 1 });
+    prisma.qualificationHandoff.update.mockResolvedValue({
+      id: 'handoff-1',
+      status: 'COMPLETED',
+    });
     tierEvaluation.evaluateTier.mockResolvedValue({
       maximumTier: 'ECONOMY',
     });
@@ -56,7 +86,9 @@ describe('QualificationReviewService', () => {
 
   it('atomically assigns only an open task to the maker', async () => {
     prisma.qualificationReviewTask.findUnique.mockResolvedValue({
-      id: 'task-1', status: 'ASSIGNED', assignedTo: 'maker-1',
+      id: 'task-1',
+      status: 'ASSIGNED',
+      assignedTo: 'maker-1',
     });
 
     await expect(service.assignTask('maker-1', 'task-1')).resolves.toEqual(
@@ -64,16 +96,22 @@ describe('QualificationReviewService', () => {
     );
     expect(prisma.qualificationReviewTask.updateMany).toHaveBeenCalledWith({
       where: { id: 'task-1', status: 'OPEN', proposedAt: null },
-      data: expect.objectContaining({ status: 'ASSIGNED', assignedTo: 'maker-1' }),
+      data: expect.objectContaining({
+        status: 'ASSIGNED',
+        assignedTo: 'maker-1',
+      }),
     });
   });
 
   it('rejects a concurrent maker claim', async () => {
     prisma.qualificationReviewTask.updateMany.mockResolvedValue({ count: 0 });
-    prisma.qualificationReviewTask.findUnique.mockResolvedValue({ id: 'task-1' });
+    prisma.qualificationReviewTask.findUnique.mockResolvedValue({
+      id: 'task-1',
+    });
 
-    await expect(service.assignTask('maker-2', 'task-1'))
-      .rejects.toBeInstanceOf(ConflictException);
+    await expect(
+      service.assignTask('maker-2', 'task-1'),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('persists a maker proposal without changing the operational tier', async () => {
@@ -93,22 +131,30 @@ describe('QualificationReviewService', () => {
 
     const result = await service.decideTask('maker-1', 'task-1', dto);
 
-    expect(result).toEqual(expect.objectContaining({
-      requiresIndependentCheck: true,
-      applied: false,
-    }));
-    expect(tx.qualificationReviewTask.updateMany).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
-        proposedDecision: 'APPROVE',
-        proposedTier: 'SPECIALIST',
-        proposedBy: 'maker-1',
+    expect(result).toEqual(
+      expect.objectContaining({
+        requiresIndependentCheck: true,
+        applied: false,
       }),
-    }));
+    );
+    expect(tx.qualificationReviewTask.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          proposedDecision: 'APPROVE',
+          proposedTier: 'SPECIALIST',
+          proposedBy: 'maker-1',
+        }),
+      }),
+    );
     expect(tx.tierQualification.create).not.toHaveBeenCalled();
     expect(tx.fixer.update).not.toHaveBeenCalled();
-    expect(tx.qualificationAuditLog.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ action: 'QUALIFICATION_DECISION_PROPOSED' }),
-    }));
+    expect(tx.qualificationAuditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: 'QUALIFICATION_DECISION_PROPOSED',
+        }),
+      }),
+    );
   });
 
   it('rejects a duplicate maker proposal atomically', async () => {
@@ -122,11 +168,13 @@ describe('QualificationReviewService', () => {
     });
     tx.qualificationReviewTask.updateMany.mockResolvedValue({ count: 0 });
 
-    await expect(service.decideTask('maker-1', 'task-1', {
-      decision: QualificationReviewDecision.APPROVE,
-      approvedTier: 'STANDARD',
-      reason: 'Evidence supports the standard tier proposal.',
-    })).rejects.toBeInstanceOf(ConflictException);
+    await expect(
+      service.decideTask('maker-1', 'task-1', {
+        decision: QualificationReviewDecision.APPROVE,
+        approvedTier: 'STANDARD',
+        reason: 'Evidence supports the standard tier proposal.',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('prevents the maker from checking their own proposal', async () => {
@@ -143,10 +191,12 @@ describe('QualificationReviewService', () => {
       submission,
     });
 
-    await expect(service.checkTask('maker-1', 'task-1', {
-      acceptProposal: true,
-      reason: 'Independent check completed successfully.',
-    })).rejects.toBeInstanceOf(ConflictException);
+    await expect(
+      service.checkTask('maker-1', 'task-1', {
+        acceptProposal: true,
+        reason: 'Independent check completed successfully.',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
     expect(tx.fixer.update).not.toHaveBeenCalled();
   });
 
@@ -222,23 +272,29 @@ describe('QualificationReviewService', () => {
     });
 
     expect(result).toEqual(expect.objectContaining({ applied: true }));
-    expect(tx.tierQualification.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
-        source: 'HUMAN',
-        approvedBy: 'checker-2',
-        approvedTier: 'SPECIALIST',
+    expect(tx.tierQualification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          source: 'HUMAN',
+          approvedBy: 'checker-2',
+          approvedTier: 'SPECIALIST',
+        }),
       }),
-    }));
-    expect(tx.fixer.update).toHaveBeenCalledWith(expect.objectContaining({
-      data: { tier: 'SPECIALIST' },
-    }));
-    expect(tx.qualificationAuditLog.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
-        action: 'QUALIFICATION_DECISION_CHECKED',
-        actorId: 'checker-2',
-        metadata: expect.objectContaining({ makerId: 'maker-1' }),
+    );
+    expect(tx.fixer.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { tier: 'SPECIALIST' },
       }),
-    }));
+    );
+    expect(tx.qualificationAuditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: 'QUALIFICATION_DECISION_CHECKED',
+          actorId: 'checker-2',
+          metadata: expect.objectContaining({ makerId: 'maker-1' }),
+        }),
+      }),
+    );
   });
 
   it('routes a rejected KYC review to resubmission without rejecting the fixer account', async () => {
@@ -269,10 +325,12 @@ describe('QualificationReviewService', () => {
       reason: 'The KYC evidence requires a new submission.',
     });
 
-    expect(result).toEqual(expect.objectContaining({
-      applied: true,
-      requiresIndependentCheck: false,
-    }));
+    expect(result).toEqual(
+      expect.objectContaining({
+        applied: true,
+        requiresIndependentCheck: false,
+      }),
+    );
     expect(tx.kycSubmission.update).toHaveBeenCalledWith({
       where: { id: 'submission-1' },
       data: expect.objectContaining({
@@ -300,10 +358,12 @@ describe('QualificationReviewService', () => {
     });
     tx.qualificationReviewTask.updateMany.mockResolvedValue({ count: 0 });
 
-    await expect(service.checkTask('checker-3', 'task-1', {
-      acceptProposal: true,
-      reason: 'Second concurrent checker attempt.',
-    })).rejects.toBeInstanceOf(ConflictException);
+    await expect(
+      service.checkTask('checker-3', 'task-1', {
+        acceptProposal: true,
+        reason: 'Second concurrent checker attempt.',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
     expect(tx.fixer.update).not.toHaveBeenCalled();
   });
 
@@ -327,14 +387,16 @@ describe('QualificationReviewService', () => {
     });
 
     expect(result).toEqual(expect.objectContaining({ applied: false }));
-    expect(tx.qualificationReviewTask.update).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
-        status: 'OPEN',
-        assignedTo: null,
-        proposedBy: null,
-        checkedBy: 'checker-2',
+    expect(tx.qualificationReviewTask.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'OPEN',
+          assignedTo: null,
+          proposedBy: null,
+          checkedBy: 'checker-2',
+        }),
       }),
-    }));
+    );
     expect(tx.fixer.update).not.toHaveBeenCalled();
   });
 
@@ -356,8 +418,9 @@ describe('QualificationReviewService', () => {
       reason: 'Attempted approval above the evidence ceiling.',
     } as QualificationReviewDecisionDto;
 
-    await expect(service.decideTask('maker-1', 'task-1', dto))
-      .rejects.toBeInstanceOf(ConflictException);
+    await expect(
+      service.decideTask('maker-1', 'task-1', dto),
+    ).rejects.toBeInstanceOf(ConflictException);
     expect(tx.qualificationReviewTask.update).not.toHaveBeenCalled();
   });
 
@@ -367,8 +430,121 @@ describe('QualificationReviewService', () => {
       reason: 'Insufficient evidence for approval.',
     } as QualificationReviewDecisionDto;
 
-    await expect(service.decideTask('maker-1', 'task-1', dto))
-      .rejects.toBeInstanceOf(ConflictException);
+    await expect(
+      service.decideTask('maker-1', 'task-1', dto),
+    ).rejects.toBeInstanceOf(ConflictException);
     expect(prisma.$transaction).toHaveBeenCalled();
+  });
+  it('processes the KYC handoff only after commit, with the submission id, and only once', async () => {
+    let committed = false;
+    prisma['$transaction'].mockImplementationOnce(
+      async (callback: (client: any) => unknown) => {
+        const result = await callback(tx);
+        committed = true;
+        return result;
+      },
+    );
+    prisma.qualificationHandoff.findUnique
+      .mockResolvedValueOnce({ id: 'handoff-1', status: 'PENDING' })
+      .mockResolvedValueOnce({ id: 'handoff-1', status: 'COMPLETED' });
+    tierEvaluation.evaluateTier.mockImplementation(
+      async (submissionId: string) => {
+        expect(committed).toBe(true);
+        expect(submissionId).toBe('submission-1');
+        return { maximumTier: 'ECONOMY' };
+      },
+    );
+    tx.qualificationReviewTask.findUnique.mockResolvedValue({
+      id: 'task-kyc-1',
+      kind: 'KYC',
+      status: 'ASSIGNED',
+      assignedTo: 'maker-1',
+      proposedAt: new Date('2026-07-25T00:00:00.000Z'),
+      proposedDecision: 'APPROVE',
+      proposedTier: null,
+      proposedReason: 'Identity evidence is verified and complete.',
+      proposedBy: 'maker-1',
+      submissionId: 'submission-1',
+      submission: { ...submission, evaluations: [] },
+    });
+
+    await service.checkTask('checker-2', 'task-kyc-1', {
+      acceptProposal: true,
+      reason: 'Independent identity check confirms the proposal.',
+    });
+    await service.retryTierEvaluationHandoff('submission-1', 'checker-2');
+
+    expect(tx.qualificationHandoff.upsert).toHaveBeenCalledWith({
+      where: {
+        submissionId_kind: { submissionId: 'submission-1', kind: 'TIER' },
+      },
+      create: {
+        submissionId: 'submission-1',
+        kind: 'TIER',
+        status: 'PENDING',
+      },
+      update: {},
+    });
+    expect(tierEvaluation.evaluateTier).toHaveBeenCalledTimes(1);
+    expect(tierEvaluation.evaluateTier).toHaveBeenCalledWith(
+      'submission-1',
+      'checker-2',
+    );
+    expect(prisma.qualificationHandoff.updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps KYC approval committed when handoff processing fails and retries it', async () => {
+    prisma.qualificationHandoff.findUnique
+      .mockResolvedValueOnce({ id: 'handoff-1', status: 'PENDING' })
+      .mockResolvedValueOnce({ id: 'handoff-1', status: 'FAILED' });
+    tierEvaluation.evaluateTier
+      .mockRejectedValueOnce(new Error('tier evaluation unavailable'))
+      .mockResolvedValueOnce({ maximumTier: 'ECONOMY' });
+    tx.qualificationReviewTask.findUnique.mockResolvedValue({
+      id: 'task-kyc-2',
+      kind: 'KYC',
+      status: 'ASSIGNED',
+      assignedTo: 'maker-1',
+      proposedAt: new Date('2026-07-25T00:00:00.000Z'),
+      proposedDecision: 'APPROVE',
+      proposedTier: null,
+      proposedReason: 'Identity evidence is verified and complete.',
+      proposedBy: 'maker-1',
+      submissionId: 'submission-1',
+      submission: { ...submission, evaluations: [] },
+    });
+
+    await expect(
+      service.checkTask('checker-2', 'task-kyc-2', {
+        acceptProposal: true,
+        reason: 'Independent identity check confirms the proposal.',
+      }),
+    ).resolves.toEqual(expect.objectContaining({ handoffStatus: 'FAILED' }));
+
+    expect(tx.kycSubmission.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'submission-1' },
+        data: expect.objectContaining({ status: 'APPROVED' }),
+      }),
+    );
+    expect(tx.fixer.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'APPROVED',
+          verified: true,
+          tier: 'ECONOMY',
+        }),
+      }),
+    );
+    expect(prisma.qualificationHandoff.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'FAILED' }),
+      }),
+    );
+
+    await expect(
+      service.retryTierEvaluationHandoff('submission-1', 'checker-2'),
+    ).resolves.toBe('COMPLETED');
+    expect(tierEvaluation.evaluateTier).toHaveBeenCalledTimes(2);
   });
 });

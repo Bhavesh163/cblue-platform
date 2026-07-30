@@ -53,14 +53,13 @@ export class QualificationEvaluationService {
   }
 
   async evaluateTier(submissionId: string, actorId?: string) {
-    return this.evaluateSubmission(submissionId, undefined, actorId, true);
+    return this.evaluateSubmission(submissionId, undefined, actorId);
   }
 
   private async evaluateSubmission(
     submissionId: string,
     ownerUserId?: string,
     actorId?: string,
-    requireKycApproval = false,
   ) {
     const submission = await this.prisma.kycSubmission.findFirst({
       where: ownerUserId
@@ -88,17 +87,9 @@ export class QualificationEvaluationService {
     if (!submission) {
       throw new NotFoundException('Qualification submission not found');
     }
-    if (
-      (requireKycApproval &&
-        submission.status !== QualificationSubmissionStatus.APPROVED) ||
-      (!requireKycApproval &&
-        ownerUserId &&
-        submission.status !== 'SUBMITTED')
-    ) {
+    if (submission.status !== QualificationSubmissionStatus.APPROVED) {
       throw new ConflictException(
-        requireKycApproval
-          ? 'KYC approval is required before tier evaluation'
-          : 'Qualification must be finalized before evaluation',
+        'KYC approval is required before tier evaluation',
       );
     }
 

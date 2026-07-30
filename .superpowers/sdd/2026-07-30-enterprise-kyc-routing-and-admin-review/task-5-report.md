@@ -12,10 +12,12 @@ Task 5 separates KYC approval from tier qualification.
 
 ## Verification
 
-- Focused Jest specs: 3 suites passed, 27 tests passed.
-- Backend build: passed.
+- Focused Jest specs: 2 suites passed, 24 tests passed.
+- Prisma schema validation: passed.
+- Repository TypeScript check: still reports unrelated pre-existing errors outside Task 5.
 - git diff --check: passed.
 
 ## Concerns
 
-- The existing compatibility evaluate policy method remains for the pre-existing qualification service entry point; new tier routing uses calculateTierCeiling.
+- Legacy user/admin evaluation endpoints now require APPROVED KYC before tier evaluation; approved submissions remain compatible.
+- The post-approval tier handoff is persisted and retryable; a failed handoff does not roll back KYC approval.

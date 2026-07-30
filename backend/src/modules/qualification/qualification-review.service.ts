@@ -7,7 +7,10 @@ import {
   FixerStatus,
   FixerTier,
   QualificationDecisionSource,
+  QualificationHandoffStatus,
+  QualificationReviewKind,
   QualificationReviewStatus,
+  QualificationSubmissionStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -16,6 +19,7 @@ import {
 } from './dto/qualification-review-decision.dto';
 import { QualificationReviewCheckDto } from './dto/qualification-review-check.dto';
 import { QualificationEvaluationService } from './qualification-evaluation.service';
+const HANDOFF_LEASE_MS = 5 * 60 * 1000;
 
 const tierRank: Record<FixerTier, number> = {
   ECONOMY: 0,
@@ -328,6 +332,15 @@ export class QualificationReviewService {
       const approved =
         task.proposedDecision === QualificationReviewDecision.APPROVE;
       const approvedTier = approved ? task.proposedTier : null;
+      if (
+        approved &&
+        task.kind === QualificationReviewKind.TIER &&
+        task.submission.status !== QualificationSubmissionStatus.APPROVED
+      ) {
+        throw new ConflictException(
+          'KYC approval is required before tier qualification',
+        );
+      }
       const recommendedTier = task.submission.evaluations[0]?.recommendedTier;
       if (
         approved &&
@@ -399,7 +412,20 @@ export class QualificationReviewService {
             },
           },
         });
-        await this.tierEvaluation.evaluateTier(task.submissionId, checkerId);
+        await tx.qualificationHandoff.upsert({
+          where: {
+            submissionId_kind: {
+              submissionId: task.submissionId,
+              kind: QualificationReviewKind.TIER,
+            },
+          },
+          create: {
+            submissionId: task.submissionId,
+            kind: QualificationReviewKind.TIER,
+            status: QualificationHandoffStatus.PENDING,
+          },
+          update: {},
+        });
         return {
           task: updatedTask,
           tierQualification,
@@ -543,10 +569,134 @@ export class QualificationReviewService {
       };
     });
 
+    let handoffStatus: QualificationHandoffStatus | undefined;
     if (result.startTierEvaluation) {
-      await this.tierEvaluation.evaluateTier(taskId, checkerId);
+      handoffStatus = await this.processTierEvaluationHandoff(
+        result.task.submissionId,
+        checkerId,
+      );
     }
     const { startTierEvaluation, ...response } = result;
-    return response;
+    return handoffStatus ? { ...response, handoffStatus } : response;
+  }
+  async retryTierEvaluationHandoff(
+    submissionId: string,
+    actorId: string,
+  ): Promise<QualificationHandoffStatus | undefined> {
+    return this.processTierEvaluationHandoff(submissionId, actorId);
+  }
+
+  async retryDueTierEvaluationHandoffs(
+    actorId: string,
+    limit = 20,
+  ): Promise<number> {
+    const staleBefore = new Date(Date.now() - HANDOFF_LEASE_MS);
+    const handoffs = await this.prisma.qualificationHandoff.findMany({
+      where: {
+        kind: QualificationReviewKind.TIER,
+        OR: [
+          {
+            status: {
+              in: [
+                QualificationHandoffStatus.PENDING,
+                QualificationHandoffStatus.FAILED,
+              ],
+            },
+          },
+          {
+            status: QualificationHandoffStatus.RUNNING,
+            claimedAt: { lt: staleBefore },
+          },
+        ],
+      },
+      select: { submissionId: true },
+      orderBy: { createdAt: 'asc' },
+      take: limit,
+    });
+    let processed = 0;
+    for (const handoff of handoffs) {
+      await this.processTierEvaluationHandoff(handoff.submissionId, actorId);
+      processed += 1;
+    }
+    return processed;
+  }
+
+  private async processTierEvaluationHandoff(
+    submissionId: string,
+    actorId: string,
+  ): Promise<QualificationHandoffStatus | undefined> {
+    const handoff = await this.prisma.qualificationHandoff.findUnique({
+      where: {
+        submissionId_kind: {
+          submissionId,
+          kind: QualificationReviewKind.TIER,
+        },
+      },
+    });
+    if (!handoff) {
+      return undefined;
+    }
+    if (handoff.status === QualificationHandoffStatus.COMPLETED)
+      return handoff.status;
+    if (
+      handoff.status === QualificationHandoffStatus.RUNNING &&
+      handoff.claimedAt &&
+      handoff.claimedAt.getTime() >= Date.now() - HANDOFF_LEASE_MS
+    )
+      return handoff.status;
+    const claimed = await this.prisma.qualificationHandoff.updateMany({
+      where: {
+        id: handoff.id,
+        OR: [
+          {
+            status: {
+              in: [
+                QualificationHandoffStatus.PENDING,
+                QualificationHandoffStatus.FAILED,
+              ],
+            },
+          },
+          {
+            status: QualificationHandoffStatus.RUNNING,
+            claimedAt: { lt: new Date(Date.now() - HANDOFF_LEASE_MS) },
+          },
+        ],
+      },
+      data: {
+        status: QualificationHandoffStatus.RUNNING,
+        attempts: { increment: 1 },
+        claimedAt: new Date(),
+        lastError: null,
+      },
+    });
+    if (claimed.count !== 1) {
+      const current = await this.prisma.qualificationHandoff.findUnique({
+        where: { id: handoff.id },
+        select: { status: true },
+      });
+      return current?.status || QualificationHandoffStatus.RUNNING;
+    }
+    try {
+      await this.tierEvaluation.evaluateTier(submissionId, actorId);
+      await this.prisma.qualificationHandoff.update({
+        where: { id: handoff.id },
+        data: {
+          status: QualificationHandoffStatus.COMPLETED,
+          completedAt: new Date(),
+          lastError: null,
+        },
+      });
+      return QualificationHandoffStatus.COMPLETED;
+    } catch (error: unknown) {
+      await this.prisma.qualificationHandoff.update({
+        where: { id: handoff.id },
+        data: {
+          status: QualificationHandoffStatus.FAILED,
+          claimedAt: null,
+          lastError: error instanceof Error ? error.message : String(error),
+        },
+      });
+      return QualificationHandoffStatus.FAILED;
+    }
   }
 }

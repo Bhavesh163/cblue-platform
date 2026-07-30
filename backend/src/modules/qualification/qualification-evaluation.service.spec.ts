@@ -18,20 +18,13 @@ describe('QualificationEvaluationService', () => {
       callback(tx),
     ),
   } as any;
-  const policy = { evaluate: jest.fn(), calculateTierCeiling: jest.fn() } as any;
+  const policy = { calculateTierCeiling: jest.fn() } as any;
   const config = { get: jest.fn().mockReturnValue(undefined) } as any;
   const service = new QualificationEvaluationService(prisma, policy, config);
 
   beforeEach(() => {
     jest.clearAllMocks();
-    policy.calculateTierCeiling.mockImplementation((input: any) => {
-      const result = policy.evaluate(input);
-      return {
-        maximumTier: result.recommendedTier,
-        eligibilityScore: 0,
-        reasonCodes: result.reasons || [],
-      };
-    });
+
     tx.$executeRawUnsafe.mockResolvedValue(0);
     tx.qualificationEvaluation.create.mockResolvedValue({ id: 'evaluation-1' });
     tx.qualificationReviewTask.findFirst.mockResolvedValue(null);
@@ -45,7 +38,7 @@ describe('QualificationEvaluationService', () => {
   it('counts only validated evidence and auto-approves Economy without Typhoon', async () => {
     prisma.kycSubmission.findFirst.mockResolvedValue({
       id: 'submission-1',
-      status: 'SUBMITTED',
+      status: 'APPROVED',
       fixer: { id: 'fixer-1', yearsExperience: 4 },
       documents: [
         { id: 'front', documentType: 'id-front', evidenceStatus: 'VALIDATED' },
@@ -57,14 +50,10 @@ describe('QualificationEvaluationService', () => {
         },
       ],
     });
-    policy.evaluate.mockImplementation((input: any) => ({
-      policyVersion: 'cblue-fixer-qualification-v1',
-      recommendedTier:
-        input.relatedCertificateCount > 0 ? 'STANDARD' : 'ECONOMY',
-      eligibleTiers: ['ECONOMY', 'STANDARD'],
-      humanReviewRequired: false,
-      publicPromotionAllowed: true,
-      reasons: [],
+    policy.calculateTierCeiling.mockImplementation((input: any) => ({
+      maximumTier: input.relatedCertificateCount > 0 ? 'STANDARD' : 'ECONOMY',
+      eligibilityScore: 50,
+      reasonCodes: [],
     }));
 
     const result = await service.evaluateSubmissionForUser(
@@ -94,19 +83,17 @@ describe('QualificationEvaluationService', () => {
   it('allows an admin re-evaluation and records the admin actor', async () => {
     prisma.kycSubmission.findFirst.mockResolvedValue({
       id: 'submission-admin',
+      status: 'APPROVED',
       fixer: { id: 'fixer-admin', yearsExperience: 4 },
       documents: [
         { id: 'front', documentType: 'id-front', evidenceStatus: 'VALIDATED' },
         { id: 'back', documentType: 'id-back', evidenceStatus: 'VALIDATED' },
       ],
     });
-    policy.evaluate.mockReturnValue({
-      policyVersion: 'cblue-fixer-qualification-v1',
-      recommendedTier: 'STANDARD',
-      eligibleTiers: ['ECONOMY', 'STANDARD'],
-      humanReviewRequired: false,
-      publicPromotionAllowed: true,
-      reasons: [],
+    policy.calculateTierCeiling.mockReturnValue({
+      maximumTier: 'STANDARD',
+      eligibilityScore: 50,
+      reasonCodes: [],
     });
 
     await expect(
@@ -131,20 +118,17 @@ describe('QualificationEvaluationService', () => {
   it('does not duplicate an existing deterministic Economy qualification', async () => {
     prisma.kycSubmission.findFirst.mockResolvedValue({
       id: 'submission-1',
-      status: 'SUBMITTED',
+      status: 'APPROVED',
       fixer: { id: 'fixer-1', yearsExperience: 1 },
       documents: [
         { id: 'front', documentType: 'id-front', evidenceStatus: 'VALIDATED' },
         { id: 'back', documentType: 'id-back', evidenceStatus: 'VALIDATED' },
       ],
     });
-    policy.evaluate.mockReturnValue({
-      policyVersion: 'cblue-fixer-qualification-v1',
-      recommendedTier: 'ECONOMY',
-      eligibleTiers: ['ECONOMY'],
-      humanReviewRequired: false,
-      publicPromotionAllowed: true,
-      reasons: [],
+    policy.calculateTierCeiling.mockReturnValue({
+      maximumTier: 'ECONOMY',
+      eligibilityScore: 50,
+      reasonCodes: [],
     });
     tx.tierQualification.findFirst.mockResolvedValue({
       id: 'existing-qualification',
@@ -159,6 +143,7 @@ describe('QualificationEvaluationService', () => {
   it('uses only validated extracted degree and project-value evidence in tier inputs', async () => {
     prisma.kycSubmission.findFirst.mockResolvedValue({
       id: 'submission-evidence',
+      status: 'APPROVED',
       fixer: { id: 'fixer-evidence', yearsExperience: 6 },
       documents: [
         {
@@ -193,18 +178,15 @@ describe('QualificationEvaluationService', () => {
         },
       ],
     });
-    policy.evaluate.mockReturnValue({
-      policyVersion: 'cblue-fixer-qualification-v1',
-      recommendedTier: 'ECONOMY',
-      eligibleTiers: ['ECONOMY'],
-      humanReviewRequired: false,
-      publicPromotionAllowed: true,
-      reasons: [],
+    policy.calculateTierCeiling.mockReturnValue({
+      maximumTier: 'ECONOMY',
+      eligibilityScore: 50,
+      reasonCodes: [],
     });
 
     await service.evaluateSubmissionForAdmin('admin-1', 'submission-evidence');
 
-    expect(policy.evaluate).toHaveBeenCalledWith(
+    expect(policy.calculateTierCeiling).toHaveBeenCalledWith(
       expect.objectContaining({
         hasEligibleMastersOrDoctorate: true,
         millionBahtCompletionCertificateCount: 1,
@@ -243,17 +225,17 @@ describe('QualificationEvaluationService', () => {
       documents: [],
     });
 
-    await expect(
-      service.evaluateTier('submission-unapproved'),
-    ).rejects.toThrow('KYC approval is required before tier evaluation');
-    expect(policy.evaluate).not.toHaveBeenCalled();
+    await expect(service.evaluateTier('submission-unapproved')).rejects.toThrow(
+      'KYC approval is required before tier evaluation',
+    );
+    expect(policy.calculateTierCeiling).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('creates a review task when evidence is incomplete or an upper tier is recommended', async () => {
     prisma.kycSubmission.findFirst.mockResolvedValue({
       id: 'submission-2',
-      status: 'SUBMITTED',
+      status: 'APPROVED',
       fixer: { id: 'fixer-2', yearsExperience: 12 },
       documents: [
         { id: 'front', documentType: 'id-front', evidenceStatus: 'UNCHECKED' },
@@ -265,13 +247,10 @@ describe('QualificationEvaluationService', () => {
         },
       ],
     });
-    policy.evaluate.mockReturnValue({
-      policyVersion: 'cblue-fixer-qualification-v1',
-      recommendedTier: 'EXPERT',
-      eligibleTiers: ['ECONOMY', 'EXPERT'],
-      humanReviewRequired: true,
-      publicPromotionAllowed: false,
-      reasons: ['Human review required'],
+    policy.calculateTierCeiling.mockReturnValue({
+      maximumTier: 'EXPERT',
+      eligibilityScore: 50,
+      reasonCodes: [],
     });
 
     const result = await service.evaluateSubmissionForUser(
@@ -300,16 +279,14 @@ describe('QualificationEvaluationService', () => {
   it('reuses an existing open review task during re-evaluation', async () => {
     prisma.kycSubmission.findFirst.mockResolvedValue({
       id: 'submission-2',
+      status: 'APPROVED',
       fixer: { id: 'fixer-2', yearsExperience: 0 },
       documents: [],
     });
-    policy.evaluate.mockReturnValue({
-      policyVersion: 'cblue-fixer-qualification-v1',
-      recommendedTier: 'ECONOMY',
-      eligibleTiers: ['ECONOMY'],
-      humanReviewRequired: true,
-      publicPromotionAllowed: false,
-      reasons: ['KYC review required'],
+    policy.calculateTierCeiling.mockReturnValue({
+      maximumTier: 'ECONOMY',
+      eligibilityScore: 50,
+      reasonCodes: [],
     });
     tx.qualificationReviewTask.findFirst.mockResolvedValue({
       id: 'existing-task',
@@ -317,6 +294,35 @@ describe('QualificationEvaluationService', () => {
 
     await service.evaluateSubmissionForAdmin('admin-1', 'submission-2');
 
+    expect(tx.qualificationReviewTask.create).not.toHaveBeenCalled();
+  });
+  it('rejects legacy evaluation endpoints until KYC approval is committed', async () => {
+    prisma.kycSubmission.findFirst
+      .mockResolvedValueOnce({
+        id: 'submission-user-unapproved',
+        status: 'SUBMITTED',
+        fixer: { id: 'fixer-1', yearsExperience: 1 },
+        documents: [],
+      })
+      .mockResolvedValueOnce({
+        id: 'submission-admin-unapproved',
+        status: 'NEEDS_REVIEW',
+        fixer: { id: 'fixer-1', yearsExperience: 1 },
+        documents: [],
+      });
+
+    await expect(
+      service.evaluateSubmissionForUser('user-1', 'submission-user-unapproved'),
+    ).rejects.toThrow('KYC approval is required before tier evaluation');
+    await expect(
+      service.evaluateSubmissionForAdmin(
+        'admin-1',
+        'submission-admin-unapproved',
+      ),
+    ).rejects.toThrow('KYC approval is required before tier evaluation');
+
+    expect(policy.calculateTierCeiling).not.toHaveBeenCalled();
+    expect(prisma['$transaction']).not.toHaveBeenCalled();
     expect(tx.qualificationReviewTask.create).not.toHaveBeenCalled();
   });
 });
