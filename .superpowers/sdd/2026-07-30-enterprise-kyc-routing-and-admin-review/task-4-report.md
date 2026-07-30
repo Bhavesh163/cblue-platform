@@ -419,3 +419,104 @@ submission and document rows have been cascade-deleted.
   covered with deterministic failure injection.
 - The AWS SDK warns that releases after early January 2027 will require Node 22;
   the current Node 20.20.1 environment passes all requested gates.
+
+---
+
+## Fix Round 4/5
+
+### Status
+
+Complete. Every Spaces write now has a cascade-independent cleanup obligation
+that is durably reserved before the network request begins.
+
+### Pre-Upload Cleanup Reservation
+
+- The service generates the opaque storage key, cleanup ID, and reservation
+  token before staging or uploading.
+- It persists the independent cleanup intent as `PENDING`, claimed by the
+  upload reservation, before creating the staged document or calling Spaces.
+- An authoritative reread must confirm the exact cleanup ID, `PENDING` status,
+  and reservation token. Intent creation, acknowledgement, or ownership
+  failure prevents the upload.
+- The unique storage-key index keeps reservation creation idempotent. A
+  duplicate intent cannot authorize upload unless the same reservation owns
+  it.
+- A process crash leaves the claimed intent durable. The existing stale-claim
+  lease makes it eligible for worker recovery without depending on the
+  submission or document row.
+
+### Atomic Activation and Worker Safety
+
+- Promotion changes the assessed document to active `READY` and removes the
+  matching cleanup intent in the same database transaction.
+- Intent removal is conditional on the upload reservation token and occurs
+  after the active lifecycle update and supersession audit writes.
+- If a cleanup worker has reclaimed the intent, intent removal fails and the
+  entire activation transaction rolls back, so ownership cannot commit while
+  deletion is authorized.
+- After claiming an intent, cleanup performs an authoritative active-`READY`
+  ownership read by opaque key before calling Spaces.
+- A committed owner resolves the claimed intent without object deletion.
+  A missing owner permits idempotent deletion, including when upload never
+  happened.
+
+### Failure Reconciliation
+
+- Every failed upload phase releases its reservation into immediately due
+  cleanup and attempts inline deletion without discarding the durable intent.
+- A release or retry database failure leaves the original claimed intent
+  recoverable through stale-claim processing.
+- Uploaded objects are cleaned from the pre-existing intent after assessment,
+  lifecycle, or promotion persistence failures.
+- Cascade deletion of the submission and staged document cannot remove the
+  independent obligation.
+- Confirmed object deletion terminalizes any surviving inactive document row,
+  so a duplicate checksum retry is not blocked by stale staging state.
+- Existing document-level `DELETE_PENDING` cleanup remains available for
+  legacy rows.
+
+### Failure-Injection Coverage
+
+- Intent-create failure prevents both document staging and Spaces upload.
+- A stale reservation after a crash before upload is reclaimed and deletion of
+  the never-created object is terminal and idempotent.
+- Upload success followed by assessment/database failure deletes by the exact
+  pre-reserved key and retains retry state on deletion failure.
+- Successful active `READY` promotion removes the intent; a later worker retry
+  sees no work and cannot delete the owned object.
+- A worker holding a legacy/racing intent resolves it without deletion when an
+  authoritative active `READY` owner exists.
+- Submission/document cascade deletion still leaves the pre-upload intent
+  retryable.
+- Duplicate intent creation returns the authoritative row without exposing the
+  private storage key.
+
+### Final Verification
+
+- Focused qualification suites
+  - 6/6 suites passed.
+  - 73/73 tests passed.
+- `npm run test:e2e -- qualification-routing.concurrent.e2e-spec.ts --runInBand`
+  - 1/1 suite guarded and skipped.
+  - 1/1 test skipped because `TEST_DATABASE_URL` was not set.
+- `npx prisma validate`
+  - Passed under Node 20.20.1.
+- `npx prisma generate`
+  - Passed; Prisma Client v7.7.0 generated.
+- Scoped ESLint on the two implementation/test files with `--quiet`
+  - Passed with zero errors.
+- `npm run build`
+  - Passed under Node 20.20.1.
+- `git diff --check`
+  - Passed.
+
+### Concerns
+
+- The PostgreSQL integration spec remains guarded because
+  `TEST_DATABASE_URL` is absent in this environment.
+- No live external Spaces service was used; storage ordering, ownership races,
+  deletion retries, and absent-object deletion are covered with deterministic
+  failure injection.
+- Prisma 7 does not run with the default Node 18 executable in this shell, so
+  Prisma and build gates used the installed Node 20.20.1 runtime. The AWS SDK
+  warns that releases after early January 2027 will require Node 22.

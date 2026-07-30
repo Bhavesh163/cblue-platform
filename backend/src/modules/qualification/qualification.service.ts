@@ -345,13 +345,19 @@ export class QualificationService {
     const checksumSha256 = createHash('sha256')
       .update(file.buffer)
       .digest('hex');
+    const cleanupId = randomUUID();
+    const cleanupReservation = randomUUID();
     let phase:
+      | 'RESERVE_CLEANUP'
       | 'STAGE'
       | 'UPLOAD'
       | 'MARK_UPLOADED'
       | 'ASSESSMENT'
-      | 'PROMOTION' = 'STAGE';
-    let uploadAttempted = false;
+      | 'PROMOTION' = 'RESERVE_CLEANUP';
+    let cleanupIntent: {
+      id: string;
+      status: QualificationStorageCleanupStatus;
+    } | null = null;
     let document: {
       id: string;
       documentType: string;
@@ -366,6 +372,14 @@ export class QualificationService {
     > | null = null;
 
     try {
+      cleanupIntent = await this.reserveStorageCleanupIntent(
+        storageKey,
+        cleanupId,
+        cleanupReservation,
+      );
+      const reservedCleanupIntent = cleanupIntent;
+
+      phase = 'STAGE';
       document = await this.prisma.$transaction(async (tx) => {
         await tx.$executeRawUnsafe(
           'SELECT pg_advisory_xact_lock(hashtext($1))',
@@ -460,7 +474,6 @@ export class QualificationService {
       });
 
       phase = 'UPLOAD';
-      uploadAttempted = true;
       await this.storage.putPrivateObject({
         key: storageKey,
         body: file.buffer,
@@ -610,6 +623,20 @@ export class QualificationService {
             },
           });
         }
+        const resolvedCleanupIntent =
+          await tx.qualificationStorageCleanupIntent.deleteMany({
+            where: {
+              id: reservedCleanupIntent.id,
+              storageKey,
+              status: 'PENDING',
+              claimedBy: cleanupReservation,
+            },
+          });
+        if (resolvedCleanupIntent.count !== 1) {
+          throw new ConflictException(
+            'Qualification storage ownership changed during promotion',
+          );
+        }
       });
 
       return { ...document, assessment: persistedAssessment };
@@ -622,7 +649,6 @@ export class QualificationService {
         isActive: boolean;
         lifecycleState: string;
       } | null = null;
-      let cleanupId: string | null = null;
       try {
         authoritative = await this.prisma.kycDocument.findUnique({
           where: { id: documentId },
@@ -641,14 +667,6 @@ export class QualificationService {
         );
       }
 
-      if (!authoritative && uploadAttempted) {
-        cleanupId = randomUUID();
-        authoritative = await this.reconcileMissingCleanupIntent(
-          storageKey,
-          cleanupId,
-        );
-      }
-
       if (
         authoritative?.isActive &&
         authoritative.lifecycleState === 'READY' &&
@@ -658,27 +676,38 @@ export class QualificationService {
         return { ...document, assessment: persistedAssessment };
       }
 
-      if (authoritative && !authoritative.isActive) {
-        if (uploadAttempted) {
-          await this.markDeletePending(authoritative.id, errorCode);
-          await this.retryPendingDocumentCleanup(authoritative.id);
-        } else {
-          await this.prisma.kycDocument.updateMany({
-            where: {
-              id: documentId,
-              isActive: false,
-              lifecycleState: { not: 'READY' },
-            },
-            data: {
-              lifecycleState: 'FAILED',
-              cleanupErrorCode: errorCode,
-            },
-          });
+      if (cleanupIntent) {
+        await this.releaseStorageCleanupReservation(
+          cleanupIntent.id,
+          cleanupReservation,
+          errorCode,
+        );
+        try {
+          await this.retryStorageCleanupIntent(cleanupIntent.id);
+        } catch (cleanupError) {
+          this.logger.error(
+            `Qualification storage cleanup retry failed cleanup=${cleanupIntent.id} code=CLEANUP_RETRY_FAILED`,
+            cleanupError instanceof Error ? cleanupError.name : 'UnknownError',
+          );
         }
       }
+
+      if (authoritative && !authoritative.isActive) {
+        await this.prisma.kycDocument.updateMany({
+          where: {
+            id: documentId,
+            isActive: false,
+            lifecycleState: { not: 'READY' },
+          },
+          data: {
+            lifecycleState: 'FAILED',
+            cleanupErrorCode: errorCode,
+          },
+        });
+      }
       this.logger.error(
-        cleanupId
-          ? `Qualification upload failed cleanup=${cleanupId} code=${errorCode}`
+        cleanupIntent
+          ? `Qualification upload failed cleanup=${cleanupIntent.id} code=${errorCode}`
           : `Qualification upload failed document=${documentId} submission=${submission.id} code=${errorCode}`,
         error instanceof Error ? error.name : 'UnknownError',
       );
@@ -735,74 +764,79 @@ export class QualificationService {
     );
   }
 
-  private async markDeletePending(
-    documentId: string,
+  private async releaseStorageCleanupReservation(
+    cleanupId: string,
+    cleanupReservation: string,
     errorCode: string,
   ): Promise<void> {
     try {
-      await this.prisma.kycDocument.updateMany({
+      await this.prisma.qualificationStorageCleanupIntent.updateMany({
         where: {
-          id: documentId,
-          isActive: false,
-          lifecycleState: { not: 'READY' },
+          id: cleanupId,
+          status: 'PENDING',
+          claimedBy: cleanupReservation,
         },
         data: {
-          lifecycleState: 'DELETE_PENDING',
-          cleanupErrorCode: errorCode,
-          cleanupNextAttemptAt: new Date(),
-          cleanupClaimedAt: null,
-          cleanupClaimedBy: null,
+          errorCode,
+          nextAttemptAt: new Date(),
+          claimedAt: null,
+          claimedBy: null,
         },
       });
     } catch (error) {
       this.logger.error(
-        `Qualification cleanup intent uncertain document=${documentId} code=CLEANUP_INTENT_UNCERTAIN`,
+        `Qualification cleanup reservation release failed cleanup=${cleanupId} code=CLEANUP_RESERVATION_RELEASE_FAILED`,
         error instanceof Error ? error.name : 'UnknownError',
       );
     }
   }
 
-  private async reconcileMissingCleanupIntent(
+  private async reserveStorageCleanupIntent(
     storageKey: string,
     cleanupId: string,
+    cleanupReservation: string,
   ): Promise<{
     id: string;
-    submissionId: string;
-    storageKey: string;
-    isActive: boolean;
-    lifecycleState: QualificationDocumentLifecycleState;
-  } | null> {
-    const select = {
-      id: true,
-      submissionId: true,
-      storageKey: true,
-      isActive: true,
-      lifecycleState: true,
-    } as const;
+    status: QualificationStorageCleanupStatus;
+  }> {
+    const intent = await this.ensureStorageCleanupIntent(
+      storageKey,
+      cleanupId,
+      cleanupReservation,
+    );
+    let persistenceError: unknown;
     try {
-      const owner = await this.prisma.kycDocument.findFirst({
-        where: { storageKey },
-        select,
-      });
-      if (owner) return owner;
+      const authoritative =
+        await this.prisma.qualificationStorageCleanupIntent.findUnique({
+          where: { storageKey },
+          select: { id: true, status: true, claimedBy: true },
+        });
+      if (
+        authoritative?.id === intent.id &&
+        authoritative.status === 'PENDING' &&
+        authoritative.claimedBy === cleanupReservation
+      ) {
+        return intent;
+      }
     } catch (error) {
-      this.logger.error(
-        `Qualification cleanup ownership read failed cleanup=${cleanupId} code=CLEANUP_OWNERSHIP_READ_FAILED`,
-        error instanceof Error ? error.name : 'UnknownError',
-      );
-      throw new ServiceUnavailableException(
-        'Qualification cleanup ownership could not be reconciled',
-      );
+      persistenceError = error;
     }
 
-    const intent = await this.ensureStorageCleanupIntent(storageKey, cleanupId);
-    await this.retryStorageCleanupIntent(intent.id);
-    return null;
+    this.logger.error(
+      `Qualification cleanup reservation failed cleanup=${cleanupId} code=CLEANUP_RESERVATION_FAILED`,
+      persistenceError instanceof Error
+        ? persistenceError.name
+        : 'ReservationConflict',
+    );
+    throw new ServiceUnavailableException(
+      'Qualification storage cleanup could not be reserved',
+    );
   }
 
   async ensureStorageCleanupIntent(
     storageKey: string,
     cleanupId: string = randomUUID(),
+    claimedBy?: string,
   ): Promise<{
     id: string;
     status: QualificationStorageCleanupStatus;
@@ -815,6 +849,7 @@ export class QualificationService {
           storageKey,
           status: 'PENDING',
           nextAttemptAt: new Date(),
+          ...(claimedBy ? { claimedAt: new Date(), claimedBy } : {}),
         },
         skipDuplicates: true,
       });
@@ -828,7 +863,12 @@ export class QualificationService {
           where: { storageKey },
           select: { id: true, status: true },
         });
-      if (authoritative) return authoritative;
+      if (authoritative) {
+        return {
+          id: authoritative.id,
+          status: authoritative.status,
+        };
+      }
     } catch (error) {
       persistenceError ??= error;
     }
@@ -897,10 +937,70 @@ export class QualificationService {
       });
     if (!intent) return { cleaned: false, status: 'MISSING' };
     if (intent.status === 'COMPLETED') {
+      await this.finalizeDeletedStorageDocuments(intent.storageKey);
       return { cleaned: true, status: 'COMPLETED' };
     }
     if (intent.claimedBy !== claimToken) {
       return { cleaned: false, status: intent.status };
+    }
+
+    let activeOwner: { id: string } | null = null;
+    try {
+      activeOwner = await this.prisma.kycDocument.findFirst({
+        where: {
+          storageKey: intent.storageKey,
+          isActive: true,
+          lifecycleState: 'READY',
+        },
+        select: { id: true },
+      });
+    } catch (error) {
+      const backoffMs = Math.min(
+        CLEANUP_BASE_BACKOFF_MS * 2 ** Math.min(intent.attempts, 10),
+        CLEANUP_MAX_BACKOFF_MS,
+      );
+      const nextAttemptAt = new Date(Date.now() + backoffMs);
+      await this.prisma.qualificationStorageCleanupIntent.updateMany({
+        where: {
+          id: intent.id,
+          status: 'PENDING',
+          claimedBy: claimToken,
+        },
+        data: {
+          attempts: { increment: 1 },
+          errorCode: 'CLEANUP_OWNERSHIP_READ_FAILED',
+          nextAttemptAt,
+          claimedAt: null,
+          claimedBy: null,
+        },
+      });
+      this.logger.error(
+        `Qualification cleanup ownership read failed cleanup=${intent.id} code=CLEANUP_OWNERSHIP_READ_FAILED`,
+        error instanceof Error ? error.name : 'UnknownError',
+      );
+      return { cleaned: false, status: 'PENDING', nextAttemptAt };
+    }
+    if (activeOwner) {
+      const resolved =
+        await this.prisma.qualificationStorageCleanupIntent.updateMany({
+          where: {
+            id: intent.id,
+            status: 'PENDING',
+            claimedBy: claimToken,
+          },
+          data: {
+            status: 'COMPLETED',
+            completedAt: new Date(),
+            errorCode: null,
+            nextAttemptAt: null,
+            claimedAt: null,
+            claimedBy: null,
+          },
+        });
+      return {
+        cleaned: resolved.count === 1,
+        status: resolved.count === 1 ? 'COMPLETED' : 'PENDING',
+      };
     }
 
     try {
@@ -960,7 +1060,35 @@ export class QualificationService {
         status: authoritative?.status ?? 'MISSING',
       };
     }
+    await this.finalizeDeletedStorageDocuments(intent.storageKey);
     return { cleaned: true, status: 'COMPLETED' };
+  }
+
+  private async finalizeDeletedStorageDocuments(
+    storageKey: string,
+  ): Promise<void> {
+    try {
+      await this.prisma.kycDocument.updateMany({
+        where: {
+          storageKey,
+          isActive: false,
+          lifecycleState: { not: 'READY' },
+        },
+        data: {
+          lifecycleState: 'FAILED',
+          objectDeletedAt: new Date(),
+          cleanupErrorCode: null,
+          cleanupNextAttemptAt: null,
+          cleanupClaimedAt: null,
+          cleanupClaimedBy: null,
+        },
+      });
+    } catch (error) {
+      this.logger.error(
+        'Qualification deleted-object lifecycle reconciliation failed code=DELETED_OBJECT_RECONCILIATION_FAILED',
+        error instanceof Error ? error.name : 'UnknownError',
+      );
+    }
   }
 
   async retryPendingDocumentCleanup(
@@ -1096,9 +1224,17 @@ export class QualificationService {
   }
 
   private uploadErrorCode(
-    phase: 'STAGE' | 'UPLOAD' | 'MARK_UPLOADED' | 'ASSESSMENT' | 'PROMOTION',
+    phase:
+      | 'RESERVE_CLEANUP'
+      | 'STAGE'
+      | 'UPLOAD'
+      | 'MARK_UPLOADED'
+      | 'ASSESSMENT'
+      | 'PROMOTION',
   ): string {
     switch (phase) {
+      case 'RESERVE_CLEANUP':
+        return 'CLEANUP_INTENT_RESERVATION_FAILED';
       case 'STAGE':
         return 'DOCUMENT_STAGE_FAILED';
       case 'UPLOAD':
