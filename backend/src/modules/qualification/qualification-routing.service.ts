@@ -72,6 +72,7 @@ export class QualificationRoutingService {
             documents: {
               where: {
                 isActive: true,
+                lifecycleState: 'READY',
                 documentType: { in: [...REQUIRED_KYC_DOCUMENT_TYPES] },
               },
               select: {
@@ -224,14 +225,25 @@ export class QualificationRoutingService {
             },
           );
           if (!existingReviewTask) {
-            await tx.qualificationReviewTask.create({
+            const created = await tx.qualificationReviewTask.createMany({
               data: {
                 submissionId,
                 kind: 'KYC',
                 status: 'OPEN',
                 reasonCodes: this.json(reasonCodes),
               },
+              skipDuplicates: true,
             });
+            if (created.count === 0) {
+              await tx.qualificationReviewTask.findFirst({
+                where: {
+                  submissionId,
+                  kind: 'KYC',
+                  status: { in: ['OPEN', 'ASSIGNED'] },
+                },
+                select: { id: true },
+              });
+            }
           }
         }
 

@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { QualificationRoutingService } from './qualification-routing.service';
 
 describe('QualificationRoutingService', () => {
@@ -12,6 +14,7 @@ describe('QualificationRoutingService', () => {
     qualificationReviewTask: {
       findFirst: jest.fn(),
       create: jest.fn(),
+      createMany: jest.fn(),
     },
     qualificationAuditLog: {
       create: jest.fn(),
@@ -58,6 +61,7 @@ describe('QualificationRoutingService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    tx.qualificationReviewTask.findFirst.mockReset();
     tx.$executeRawUnsafe.mockResolvedValue(0);
     tx.kycSubmission.findUnique.mockResolvedValue({
       id: 'submission-1',
@@ -72,6 +76,7 @@ describe('QualificationRoutingService', () => {
     tx.kycSubmission.update.mockResolvedValue({ id: 'submission-1' });
     tx.qualificationReviewTask.findFirst.mockResolvedValue(null);
     tx.qualificationReviewTask.create.mockResolvedValue({ id: 'review-1' });
+    tx.qualificationReviewTask.createMany.mockResolvedValue({ count: 1 });
     tx.qualificationAuditLog.create.mockResolvedValue({ id: 'audit-1' });
   });
 
@@ -103,12 +108,31 @@ describe('QualificationRoutingService', () => {
         humanReviewRequired: true,
         lockedUntil: null,
       });
-      expect(tx.qualificationReviewTask.create).toHaveBeenCalledTimes(
+      expect(tx.qualificationReviewTask.createMany).toHaveBeenCalledTimes(
         createsReview ? 1 : 0,
       );
     },
   );
 
+  it('loads only active READY evidence for aggregate routing', async () => {
+    await service.routeSubmission('submission-1', 'user-1');
+
+    expect(tx.kycSubmission.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({
+          documents: expect.objectContaining({
+            where: {
+              isActive: true,
+              lifecycleState: 'READY',
+              documentType: {
+                in: ['id-front', 'id-back', 'selfie-with-id'],
+              },
+            },
+          }),
+        }),
+      }),
+    );
+  });
   it('lets a persisted hard failure win over confidence thresholds', async () => {
     tx.kycSubmission.findUnique.mockResolvedValue({
       id: 'submission-1',
@@ -210,6 +234,38 @@ describe('QualificationRoutingService', () => {
     });
   });
 
+  it('treats a concurrent partial-unique conflict as idempotent KYC task creation', async () => {
+    tx.qualificationReviewTask.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'review-created-concurrently' });
+    tx.qualificationReviewTask.createMany.mockResolvedValue({ count: 0 });
+
+    await expect(
+      service.routeSubmission('submission-1', 'user-1'),
+    ).resolves.toEqual(expect.objectContaining({ status: 'AI_PRECLEARED' }));
+
+    expect(tx.qualificationReviewTask.createMany).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        submissionId: 'submission-1',
+        kind: 'KYC',
+        status: 'OPEN',
+      }),
+      skipDuplicates: true,
+    });
+    expect(tx.qualificationReviewTask.create).not.toHaveBeenCalled();
+  });
+
+  it('ships a partial unique index for one unresolved KYC task per submission', () => {
+    const migrationPath = join(
+      process.cwd(),
+      'prisma/migrations/20260730170000_add_qualification_document_saga/migration.sql',
+    );
+    expect(existsSync(migrationPath)).toBe(true);
+    const migration = readFileSync(migrationPath, 'utf8');
+    expect(migration).toMatch(
+      /CREATE UNIQUE INDEX "qualification_review_tasks_one_unresolved_kyc"[\s\S]*WHERE "kind" = 'KYC' AND "status" <> 'DECIDED'/,
+    );
+  });
   it('does not duplicate persistence or open KYC review work when routing repeats', async () => {
     let status = 'DRAFT';
     tx.kycSubmission.findUnique.mockImplementation(() => ({
@@ -230,6 +286,6 @@ describe('QualificationRoutingService', () => {
     expect(first).toEqual(second);
     expect(tx.kycSubmission.update).toHaveBeenCalledTimes(1);
     expect(tx.qualificationAuditLog.create).toHaveBeenCalledTimes(1);
-    expect(tx.qualificationReviewTask.create).toHaveBeenCalledTimes(1);
+    expect(tx.qualificationReviewTask.createMany).toHaveBeenCalledTimes(1);
   });
 });

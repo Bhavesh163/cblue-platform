@@ -9,6 +9,7 @@ describe('QualificationEvaluationService', () => {
     fixer: { update: jest.fn() },
     qualificationAuditLog: { create: jest.fn() },
     kycSubmission: { update: jest.fn() },
+    $executeRawUnsafe: jest.fn(),
   } as any;
   const prisma = {
     kycSubmission: { findFirst: jest.fn(), findUnique: jest.fn() },
@@ -23,6 +24,7 @@ describe('QualificationEvaluationService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    tx.$executeRawUnsafe.mockResolvedValue(0);
     tx.qualificationEvaluation.create.mockResolvedValue({ id: 'evaluation-1' });
     tx.qualificationReviewTask.findFirst.mockResolvedValue(null);
     tx.tierQualification.findFirst.mockResolvedValue(null);
@@ -280,9 +282,14 @@ describe('QualificationEvaluationService', () => {
         data: expect.objectContaining({
           submissionId: 'submission-2',
           status: 'OPEN',
+          kind: 'TIER',
           priority: 10,
         }),
       }),
+    );
+    expect(tx.$executeRawUnsafe).toHaveBeenCalledWith(
+      'SELECT pg_advisory_xact_lock(hashtext($1))',
+      'submission-2',
     );
     expect(tx.kycSubmission.update).toHaveBeenCalledWith({
       where: { id: 'submission-2' },

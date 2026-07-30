@@ -5,7 +5,11 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { QualificationSubmissionStatus } from '@prisma/client';
+import {
+  Prisma,
+  QualificationDocumentLifecycleState,
+  QualificationSubmissionStatus,
+} from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -326,23 +330,38 @@ export class QualificationService {
     }
     this.assertUploadableSubmission(submission.status, submission.lockedUntil);
 
-    const safeName = (file.originalname || 'document')
-      .replace(/[^a-zA-Z0-9._-]/g, '_')
-      .slice(-80);
+    const documentId = randomUUID();
     const storageKey = [
       'qualification',
       submission.fixerId,
       submission.id,
-      randomUUID() + '-' + (safeName || 'document'),
+      documentId,
     ].join('/');
     const checksumSha256 = createHash('sha256')
       .update(file.buffer)
       .digest('hex');
-    let storageWriteAttempted = false;
-    let stagedDocumentId: string | null = null;
+    let phase:
+      | 'STAGE'
+      | 'UPLOAD'
+      | 'MARK_UPLOADED'
+      | 'ASSESSMENT'
+      | 'PROMOTION' = 'STAGE';
+    let uploadAttempted = false;
+    let document: {
+      id: string;
+      documentType: string;
+      contentType: string;
+      sizeBytes: number;
+      evidenceStatus: string;
+      expiresAt: Date | null;
+      createdAt: Date;
+    } | null = null;
+    let persistedAssessment: Awaited<
+      ReturnType<QualificationAssessmentService['assessDocument']>
+    > | null = null;
 
     try {
-      const document = await this.prisma.$transaction(async (tx) => {
+      document = await this.prisma.$transaction(async (tx) => {
         await tx.$executeRawUnsafe(
           'SELECT pg_advisory_xact_lock(hashtext($1))',
           submission.id,
@@ -363,7 +382,13 @@ export class QualificationService {
           liveSubmission.lockedUntil,
         );
         const duplicate = await tx.kycDocument.findFirst({
-          where: { submissionId: submission.id, checksumSha256 },
+          where: {
+            submissionId: submission.id,
+            checksumSha256,
+            lifecycleState: {
+              in: ['PENDING_UPLOAD', 'UPLOADED', 'ASSESSING', 'READY'],
+            },
+          },
           select: { id: true },
         });
         if (duplicate) {
@@ -376,7 +401,9 @@ export class QualificationService {
             where: {
               submissionId: submission.id,
               documentType,
-              isActive: true,
+              lifecycleState: {
+                in: ['PENDING_UPLOAD', 'UPLOADED', 'ASSESSING', 'READY'],
+              },
             },
           });
           if (existingCount >= PORTFOLIO_MAX_FILES) {
@@ -387,7 +414,9 @@ export class QualificationService {
             where: {
               submissionId: submission.id,
               documentType,
-              isActive: true,
+              lifecycleState: {
+                in: ['PENDING_UPLOAD', 'UPLOADED', 'ASSESSING', 'READY'],
+              },
             },
           });
           if (existingCount >= 1) {
@@ -397,15 +426,9 @@ export class QualificationService {
           }
         }
 
-        storageWriteAttempted = true;
-        await this.storage.putPrivateObject({
-          key: storageKey,
-          body: file.buffer,
-          contentType: file.mimetype,
-        });
-
         return tx.kycDocument.create({
           data: {
+            id: documentId,
             submissionId: submission.id,
             documentType,
             storageKey,
@@ -413,7 +436,8 @@ export class QualificationService {
             contentType: file.mimetype,
             sizeBytes: fileSize,
             encrypted: true,
-            isActive: !isKyc,
+            isActive: false,
+            lifecycleState: 'PENDING_UPLOAD',
             retentionDeleteAt: new Date(
               Date.now() + 3 * 365 * 24 * 60 * 60 * 1000,
             ),
@@ -429,122 +453,218 @@ export class QualificationService {
           },
         });
       });
-      stagedDocumentId = document.id;
 
-      const assessment = await this.assessment.assessDocument({
+      phase = 'UPLOAD';
+      uploadAttempted = true;
+      await this.storage.putPrivateObject({
+        key: storageKey,
+        body: file.buffer,
+        contentType: file.mimetype,
+      });
+
+      phase = 'MARK_UPLOADED';
+      await this.transitionLifecycleOrConfirm(
+        documentId,
+        'PENDING_UPLOAD',
+        {
+          lifecycleState: 'UPLOADED',
+          objectUploadedAt: new Date(),
+          cleanupErrorCode: null,
+        },
+        ['UPLOADED', 'ASSESSING', 'READY'],
+      );
+
+      phase = 'ASSESSMENT';
+      await this.transitionLifecycleOrConfirm(
+        documentId,
+        'UPLOADED',
+        {
+          lifecycleState: 'ASSESSING',
+        },
+        ['ASSESSING', 'READY'],
+      );
+      persistedAssessment = await this.assessment.assessDocument({
         submissionId: submission.id,
-        documentId: document.id,
+        documentId,
         registeredName: submission.fixer?.user.name || '',
         actorId: userId,
         auditAction: 'DOCUMENT_ASSESSED_ON_UPLOAD',
       });
 
-      if (isKyc) {
-        await this.prisma.$transaction(async (tx) => {
-          await tx.$executeRawUnsafe(
-            'SELECT pg_advisory_xact_lock(hashtext($1))',
-            submission.id,
+      const assessmentForPromotion = persistedAssessment;
+      phase = 'PROMOTION';
+      await this.prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(
+          'SELECT pg_advisory_xact_lock(hashtext($1))',
+          submission.id,
+        );
+        const liveSubmission = await tx.kycSubmission.findUnique({
+          where: { id: submission.id },
+          select: {
+            status: true,
+            failedAttempts: true,
+            lockedUntil: true,
+          },
+        });
+        if (!liveSubmission) {
+          throw new NotFoundException('Qualification submission not found');
+        }
+        this.assertUploadableSubmission(
+          liveSubmission.status,
+          liveSubmission.lockedUntil,
+        );
+        const staged = await tx.kycDocument.findUnique({
+          where: { id: documentId },
+          select: { id: true, isActive: true, lifecycleState: true },
+        });
+        if (
+          !staged ||
+          staged.isActive ||
+          staged.lifecycleState !== 'ASSESSING'
+        ) {
+          throw new ConflictException(
+            'Qualification evidence changed during promotion',
           );
-          const liveSubmission = await tx.kycSubmission.findUnique({
-            where: { id: submission.id },
-            select: {
-              status: true,
-              failedAttempts: true,
-              lockedUntil: true,
-            },
-          });
-          if (!liveSubmission) {
-            throw new NotFoundException('Qualification submission not found');
-          }
-          this.assertUploadableSubmission(
-            liveSubmission.status,
-            liveSubmission.lockedUntil,
-          );
-          const previousActive = await tx.kycDocument.findFirst({
-            where: {
-              submissionId: submission.id,
-              documentType,
-              isActive: true,
-              id: { not: document.id },
-            },
-            select: { id: true },
-          });
-          const supersededAt = new Date();
-          if (previousActive) {
-            const superseded = await tx.kycDocument.updateMany({
+        }
+        const previousActive = isKyc
+          ? await tx.kycDocument.findFirst({
               where: {
-                id: previousActive.id,
                 submissionId: submission.id,
+                documentType,
                 isActive: true,
+                lifecycleState: 'READY',
+                id: { not: documentId },
               },
-              data: {
-                isActive: false,
-                supersededAt,
-                supersededById: document.id,
-              },
-            });
-            if (superseded.count !== 1) {
-              throw new ConflictException(
-                'Active KYC evidence changed during replacement',
-              );
-            }
-          }
-          const promoted = await tx.kycDocument.updateMany({
+              select: { id: true },
+            })
+          : null;
+        const readyAt = new Date();
+        if (previousActive) {
+          const superseded = await tx.kycDocument.updateMany({
             where: {
-              id: document.id,
+              id: previousActive.id,
               submissionId: submission.id,
-              isActive: false,
+              isActive: true,
+              lifecycleState: 'READY',
             },
-            data: { isActive: true },
+            data: {
+              isActive: false,
+              supersededAt: readyAt,
+              supersededById: documentId,
+            },
           });
-          if (promoted.count !== 1) {
+          if (superseded.count !== 1) {
             throw new ConflictException(
-              'Replacement KYC evidence could not be activated',
+              'Active KYC evidence changed during replacement',
             );
           }
-          if (previousActive) {
-            await tx.kycSubmission.update({
-              where: { id: submission.id },
-              data:
-                assessment.route === 'NEEDS_RESUBMISSION'
-                  ? { status: 'DRAFT', lockedUntil: null }
-                  : {
-                      status: 'DRAFT',
-                      failedAttempts: 0,
-                      lockedUntil: null,
-                    },
-            });
-            await tx.qualificationAuditLog.create({
-              data: {
-                submissionId: submission.id,
-                actorId: userId,
-                action: 'KYC_DOCUMENT_SUPERSEDED',
-                entityType: 'KycDocument',
-                entityId: document.id,
-                reason: 'Assessed KYC replacement activated',
-                metadata: {
-                  documentType,
-                  supersededDocumentId: previousActive.id,
-                },
-              },
-            });
-          }
+        }
+        const promoted = await tx.kycDocument.updateMany({
+          where: {
+            id: documentId,
+            submissionId: submission.id,
+            isActive: false,
+            lifecycleState: 'ASSESSING',
+          },
+          data: {
+            isActive: true,
+            lifecycleState: 'READY',
+            readyAt,
+            cleanupErrorCode: null,
+          },
         });
+        if (promoted.count !== 1) {
+          throw new ConflictException(
+            'Qualification evidence could not be activated',
+          );
+        }
+        if (previousActive) {
+          await tx.kycSubmission.update({
+            where: { id: submission.id },
+            data:
+              assessmentForPromotion.route === 'NEEDS_RESUBMISSION'
+                ? { status: 'DRAFT', lockedUntil: null }
+                : {
+                    status: 'DRAFT',
+                    failedAttempts: 0,
+                    lockedUntil: null,
+                  },
+          });
+          await tx.qualificationAuditLog.create({
+            data: {
+              submissionId: submission.id,
+              actorId: userId,
+              action: 'KYC_DOCUMENT_SUPERSEDED',
+              entityType: 'KycDocument',
+              entityId: documentId,
+              reason: 'Assessed KYC replacement activated',
+              metadata: {
+                documentType,
+                supersededDocumentId: previousActive.id,
+              },
+            },
+          });
+        }
+      });
+
+      return { ...document, assessment: persistedAssessment };
+    } catch (error) {
+      const errorCode = this.uploadErrorCode(phase);
+      let authoritative: {
+        id: string;
+        submissionId: string;
+        storageKey: string;
+        isActive: boolean;
+        lifecycleState: string;
+      } | null = null;
+      try {
+        authoritative = await this.prisma.kycDocument.findUnique({
+          where: { id: documentId },
+          select: {
+            id: true,
+            submissionId: true,
+            storageKey: true,
+            isActive: true,
+            lifecycleState: true,
+          },
+        });
+      } catch (readError) {
+        this.logger.error(
+          `Qualification document reconciliation read failed document=${documentId} submission=${submission.id} code=RECONCILIATION_READ_FAILED`,
+          readError instanceof Error ? readError.name : 'UnknownError',
+        );
       }
 
-      return { ...document, assessment };
-    } catch (error) {
-      if (storageWriteAttempted) {
-        await this.cleanupFailedUpload({
-          submissionId: submission.id,
-          documentId: stagedDocumentId,
-          storageKey,
-          stagedInactive: isKyc,
-        });
+      if (
+        authoritative?.isActive &&
+        authoritative.lifecycleState === 'READY' &&
+        document &&
+        persistedAssessment
+      ) {
+        return { ...document, assessment: persistedAssessment };
+      }
+
+      if (authoritative && !authoritative.isActive) {
+        if (uploadAttempted) {
+          await this.markDeletePending(documentId, errorCode);
+          await this.retryPendingDocumentCleanup(documentId);
+        } else {
+          await this.prisma.kycDocument.updateMany({
+            where: {
+              id: documentId,
+              isActive: false,
+              lifecycleState: { not: 'READY' },
+            },
+            data: {
+              lifecycleState: 'FAILED',
+              cleanupErrorCode: errorCode,
+            },
+          });
+        }
       }
       this.logger.error(
-        `Failed to persist qualification evidence for ${submission.id}`,
-        error instanceof Error ? error.stack : String(error),
+        `Qualification upload failed document=${documentId} submission=${submission.id} code=${errorCode}`,
+        error instanceof Error ? error.name : 'UnknownError',
       );
       throw error;
     }
@@ -565,39 +685,151 @@ export class QualificationService {
     }
   }
 
-  private async cleanupFailedUpload(input: {
-    submissionId: string;
-    documentId: string | null;
-    storageKey: string;
-    stagedInactive: boolean;
-  }): Promise<void> {
-    let storageDeleted = false;
-    for (let attempt = 1; attempt <= 2 && !storageDeleted; attempt += 1) {
-      try {
-        await this.storage.deletePrivateObject(input.storageKey);
-        storageDeleted = true;
-      } catch (error) {
-        this.logger.error(
-          `Failed Spaces compensation attempt ${attempt} for ${input.storageKey}`,
-          error instanceof Error ? error.stack : String(error),
-        );
-      }
-    }
-    if (!storageDeleted || !input.documentId) return;
-
+  private async transitionLifecycleOrConfirm(
+    documentId: string,
+    from: QualificationDocumentLifecycleState,
+    data: Prisma.KycDocumentUpdateManyMutationInput,
+    acceptableStates: QualificationDocumentLifecycleState[],
+  ): Promise<void> {
     try {
-      await this.prisma.kycDocument.deleteMany({
+      const transitioned = await this.prisma.kycDocument.updateMany({
+        where: { id: documentId, isActive: false, lifecycleState: from },
+        data,
+      });
+      if (transitioned.count === 1) return;
+    } catch (error) {
+      this.logger.error(
+        `Qualification lifecycle transition uncertain document=${documentId} code=LIFECYCLE_TRANSITION_UNCERTAIN`,
+        error instanceof Error ? error.name : 'UnknownError',
+      );
+    }
+
+    const authoritative = await this.prisma.kycDocument.findUnique({
+      where: { id: documentId },
+      select: { lifecycleState: true, isActive: true },
+    });
+    if (
+      authoritative &&
+      acceptableStates.includes(authoritative.lifecycleState)
+    ) {
+      return;
+    }
+    throw new ConflictException(
+      'Qualification document lifecycle transition was not persisted',
+    );
+  }
+
+  private async markDeletePending(
+    documentId: string,
+    errorCode: string,
+  ): Promise<void> {
+    try {
+      await this.prisma.kycDocument.updateMany({
         where: {
-          id: input.documentId,
-          submissionId: input.submissionId,
-          ...(input.stagedInactive ? { isActive: false } : {}),
+          id: documentId,
+          isActive: false,
+          lifecycleState: { not: 'READY' },
+        },
+        data: {
+          lifecycleState: 'DELETE_PENDING',
+          cleanupErrorCode: errorCode,
         },
       });
     } catch (error) {
       this.logger.error(
-        `Failed to remove compensated qualification document ${input.documentId}`,
-        error instanceof Error ? error.stack : String(error),
+        `Qualification cleanup intent uncertain document=${documentId} code=CLEANUP_INTENT_UNCERTAIN`,
+        error instanceof Error ? error.name : 'UnknownError',
       );
+    }
+  }
+
+  async retryPendingDocumentCleanup(documentId: string): Promise<{
+    cleaned: boolean;
+    lifecycleState: QualificationDocumentLifecycleState | 'MISSING';
+  }> {
+    const document = await this.prisma.kycDocument.findUnique({
+      where: { id: documentId },
+      select: {
+        id: true,
+        submissionId: true,
+        storageKey: true,
+        isActive: true,
+        lifecycleState: true,
+      },
+    });
+    if (!document) return { cleaned: false, lifecycleState: 'MISSING' };
+    if (
+      document.isActive ||
+      document.lifecycleState === 'READY' ||
+      document.lifecycleState !== 'DELETE_PENDING'
+    ) {
+      return {
+        cleaned: false,
+        lifecycleState: document.lifecycleState,
+      };
+    }
+
+    try {
+      await this.storage.deletePrivateObject(document.storageKey);
+    } catch (error) {
+      await this.prisma.kycDocument.updateMany({
+        where: {
+          id: document.id,
+          isActive: false,
+          lifecycleState: 'DELETE_PENDING',
+        },
+        data: {
+          cleanupAttempts: { increment: 1 },
+          cleanupErrorCode: 'OBJECT_DELETE_FAILED',
+        },
+      });
+      this.logger.error(
+        `Qualification cleanup failed document=${document.id} submission=${document.submissionId} code=OBJECT_DELETE_FAILED`,
+        error instanceof Error ? error.name : 'UnknownError',
+      );
+      return { cleaned: false, lifecycleState: 'DELETE_PENDING' };
+    }
+
+    const finalized = await this.prisma.kycDocument.updateMany({
+      where: {
+        id: document.id,
+        isActive: false,
+        lifecycleState: 'DELETE_PENDING',
+      },
+      data: {
+        lifecycleState: 'FAILED',
+        objectDeletedAt: new Date(),
+        cleanupAttempts: { increment: 1 },
+        cleanupErrorCode: null,
+      },
+    });
+    if (finalized.count !== 1) {
+      const authoritative = await this.prisma.kycDocument.findUnique({
+        where: { id: document.id },
+        select: { lifecycleState: true },
+      });
+      return {
+        cleaned: authoritative?.lifecycleState === 'FAILED',
+        lifecycleState: authoritative?.lifecycleState ?? 'MISSING',
+      };
+    }
+    return { cleaned: true, lifecycleState: 'FAILED' };
+  }
+
+  private uploadErrorCode(
+    phase: 'STAGE' | 'UPLOAD' | 'MARK_UPLOADED' | 'ASSESSMENT' | 'PROMOTION',
+  ): string {
+    switch (phase) {
+      case 'STAGE':
+        return 'DOCUMENT_STAGE_FAILED';
+      case 'UPLOAD':
+        return 'OBJECT_UPLOAD_FAILED';
+      case 'MARK_UPLOADED':
+        return 'UPLOAD_STATE_FAILED';
+      case 'ASSESSMENT':
+        return 'DOCUMENT_ASSESSMENT_FAILED';
+      case 'PROMOTION':
+        return 'DOCUMENT_PROMOTION_FAILED';
     }
   }
   async verifyDocumentForAdmin(
@@ -659,6 +891,7 @@ export class QualificationService {
                 sizeBytes: true,
                 contentType: true,
                 isActive: true,
+                lifecycleState: true,
               },
             },
           },
@@ -673,7 +906,8 @@ export class QualificationService {
         }
 
         const activeDocuments = submission.documents.filter(
-          (document) => document.isActive,
+          (document) =>
+            document.isActive && document.lifecycleState === 'READY',
         );
         const documentTypes = new Set(
           activeDocuments.map((document) => document.documentType),

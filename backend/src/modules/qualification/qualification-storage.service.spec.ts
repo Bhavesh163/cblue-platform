@@ -43,4 +43,32 @@ describe('QualificationStorageService', () => {
       Key: 'qualification/private.pdf',
     });
   });
+
+  it('propagates deletion failures so cleanup remains retryable', async () => {
+    const config = {
+      get: jest.fn(
+        (key: string) =>
+          ({
+            'spaces.endpoint': 'https://spaces.example',
+            'spaces.key': 'spaces-key',
+            'spaces.secret': 'spaces-secret',
+            'spaces.bucket': 'qualification-evidence',
+          })[key],
+      ),
+    } as any;
+    const readiness = { assertReady: jest.fn().mockResolvedValue(undefined) };
+    const storageError = Object.assign(new Error('delete unavailable'), {
+      name: 'TimeoutError',
+    });
+    const send = jest.fn().mockRejectedValue(storageError);
+    const service = new QualificationStorageService(config, readiness as any);
+    (service as any).client = { send };
+
+    await expect(
+      service.deletePrivateObject('qualification/private.pdf'),
+    ).rejects.toBe(storageError);
+
+    expect(readiness.assertReady).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith(expect.any(DeleteObjectCommand));
+  });
 });

@@ -109,6 +109,10 @@ export class QualificationEvaluationService {
       deterministic.recommendedTier !== FixerTier.ECONOMY;
 
     const created = await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(
+        'SELECT pg_advisory_xact_lock(hashtext($1))',
+        submissionId,
+      );
       const evaluation = await tx.qualificationEvaluation.create({
         data: {
           submissionId,
@@ -153,6 +157,7 @@ export class QualificationEvaluationService {
         const existingReviewTask = await tx.qualificationReviewTask.findFirst({
           where: {
             submissionId,
+            kind: 'TIER',
             status: { in: ['OPEN', 'ASSIGNED'] },
           },
           select: { id: true },
@@ -162,6 +167,7 @@ export class QualificationEvaluationService {
             data: {
               submissionId,
               status: 'OPEN',
+              kind: 'TIER',
               priority:
                 deterministic.recommendedTier === FixerTier.ECONOMY ? 0 : 10,
               reasonCodes: this.json({

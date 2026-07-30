@@ -58,6 +58,15 @@ enum QualificationEvidenceStatus {
   INSUFFICIENT
 }
 
+enum QualificationDocumentLifecycleState {
+  PENDING_UPLOAD
+  UPLOADED
+  ASSESSING
+  READY
+  DELETE_PENDING
+  FAILED
+}
+
 enum QualificationReviewStatus {
   OPEN
   ASSIGNED
@@ -335,17 +344,23 @@ model KycSubmission {
 }
 
 model KycDocument {
-  id                     String                      @id @default(uuid())
+  id                     String                              @id @default(uuid())
   submissionId           String
-  submission             KycSubmission               @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  submission             KycSubmission                       @relation(fields: [submissionId], references: [id], onDelete: Cascade)
   documentType           String
   storageKey             String
   checksumSha256         String
   contentType            String
   sizeBytes              Int
-  encrypted              Boolean                     @default(true)
-  evidenceStatus         QualificationEvidenceStatus @default(UNCHECKED)
-  isActive               Boolean                     @default(true)
+  encrypted              Boolean                             @default(true)
+  evidenceStatus         QualificationEvidenceStatus         @default(UNCHECKED)
+  isActive               Boolean                             @default(true)
+  lifecycleState         QualificationDocumentLifecycleState @default(PENDING_UPLOAD)
+  objectUploadedAt       DateTime?
+  readyAt                DateTime?
+  objectDeletedAt        DateTime?
+  cleanupAttempts        Int                                 @default(0)
+  cleanupErrorCode       String?
   supersededAt           DateTime?
   supersededById         String?
   assessmentReasonCodes  Json?
@@ -359,11 +374,12 @@ model KycDocument {
   credentialVerifiedAt   DateTime?
   expiresAt              DateTime?
   retentionDeleteAt      DateTime?
-  createdAt              DateTime                    @default(now())
-  updatedAt              DateTime                    @updatedAt
+  createdAt              DateTime                            @default(now())
+  updatedAt              DateTime                            @updatedAt
 
   @@index([submissionId])
   @@index([submissionId, isActive, documentType])
+  @@index([lifecycleState, updatedAt])
   @@index([evidenceStatus, expiresAt])
   @@map("kyc_documents")
 }

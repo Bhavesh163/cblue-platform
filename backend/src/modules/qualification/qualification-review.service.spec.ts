@@ -189,6 +189,49 @@ describe('QualificationReviewService', () => {
     }));
   });
 
+  it('routes a rejected KYC review to resubmission without rejecting the fixer account', async () => {
+    tx.qualificationReviewTask.findUnique.mockResolvedValue({
+      id: 'task-1',
+      kind: 'KYC',
+      status: 'ASSIGNED',
+      assignedTo: 'maker-1',
+      proposedAt: new Date('2026-07-25T00:00:00.000Z'),
+      proposedDecision: 'REJECT',
+      proposedTier: null,
+      proposedReason: 'Identity evidence must be replaced.',
+      proposedBy: 'maker-1',
+      submissionId: 'submission-1',
+      submission: {
+        ...submission,
+        fixer: {
+          id: 'fixer-1',
+          status: 'APPROVED',
+          tier: 'STANDARD',
+          verified: true,
+        },
+      },
+    });
+
+    const result = await service.checkTask('checker-2', 'task-1', {
+      acceptProposal: true,
+      reason: 'The KYC evidence requires a new submission.',
+    });
+
+    expect(result).toEqual(expect.objectContaining({
+      applied: true,
+      requiresIndependentCheck: false,
+    }));
+    expect(tx.kycSubmission.update).toHaveBeenCalledWith({
+      where: { id: 'submission-1' },
+      data: expect.objectContaining({
+        status: 'NEEDS_RESUBMISSION',
+        reviewerId: 'checker-2',
+      }),
+    });
+    expect(tx.fixer.update).not.toHaveBeenCalled();
+    expect(tx.tierQualification.create).not.toHaveBeenCalled();
+  });
+
   it('rejects a concurrent second checker atomically', async () => {
     tx.qualificationReviewTask.findUnique.mockResolvedValue({
       id: 'task-1',

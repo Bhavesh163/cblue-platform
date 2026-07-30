@@ -319,6 +319,50 @@ export class QualificationReviewService {
         throw new ConflictException('The approval proposal has no tier');
       }
 
+      if (!approved && task.kind === 'KYC') {
+        await tx.kycSubmission.update({
+          where: { id: task.submissionId },
+          data: {
+            status: 'NEEDS_RESUBMISSION',
+            reviewedAt: new Date(),
+            reviewerId: checkerId,
+            decisionReason: task.proposedReason,
+          },
+        });
+        const updatedTask = await tx.qualificationReviewTask.update({
+          where: { id: taskId },
+          data: {
+            status: QualificationReviewStatus.DECIDED,
+            decidedAt: checkedAt,
+            decision: task.proposedDecision,
+            checkedBy: checkerId,
+            checkedAt,
+            checkReason,
+          },
+        });
+        await tx.qualificationAuditLog.create({
+          data: {
+            submissionId: task.submissionId,
+            actorId: checkerId,
+            action: 'KYC_RESUBMISSION_REQUIRED',
+            entityType: 'QualificationReviewTask',
+            entityId: taskId,
+            reason: checkReason,
+            metadata: {
+              makerId: task.proposedBy,
+              decision: task.proposedDecision,
+              fixerStatusChanged: false,
+            },
+          },
+        });
+        return {
+          task: updatedTask,
+          tierQualification: null,
+          fixer: task.submission.fixer,
+          requiresIndependentCheck: false,
+          applied: true,
+        };
+      }
       const effectiveAt = approved ? new Date() : null;
       const tierQualification = await tx.tierQualification.create({
         data: {

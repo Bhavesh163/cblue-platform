@@ -20,6 +20,7 @@ describe('QualificationService', () => {
     qualificationReviewTask: { findFirst: jest.fn() },
     kycDocument: {
       findFirst: jest.fn(),
+      findUnique: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn(),
       count: jest.fn(),
@@ -46,6 +47,8 @@ describe('QualificationService', () => {
       create: jest.fn(),
       deleteMany: jest.fn(),
       findFirst: jest.fn(),
+      findUnique: jest.fn(),
+      updateMany: jest.fn(),
       findMany: jest.fn(),
     },
     qualificationAuditLog: { create: jest.fn(), findMany: jest.fn() },
@@ -71,6 +74,9 @@ describe('QualificationService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    prisma.$transaction
+      .mockReset()
+      .mockImplementation((callback: (client: any) => unknown) => callback(tx));
     readiness.assertReady.mockResolvedValue(undefined);
     assessment.assessDocument.mockResolvedValue({
       evidenceStatus: 'INSUFFICIENT',
@@ -87,10 +93,17 @@ describe('QualificationService', () => {
     });
     tx.$executeRawUnsafe.mockResolvedValue(0);
     tx.kycDocument.findFirst.mockResolvedValue(null);
+    tx.kycDocument.findUnique.mockResolvedValue({
+      id: 'document-1',
+      isActive: false,
+      lifecycleState: 'ASSESSING',
+    });
     tx.kycDocument.count.mockResolvedValue(0);
     tx.kycDocument.updateMany.mockResolvedValue({ count: 1 });
     tx.kycSubmission.findUnique.mockResolvedValue({ status: 'DRAFT' });
     prisma.kycDocument.deleteMany.mockResolvedValue({ count: 1 });
+    prisma.kycDocument.findUnique.mockResolvedValue(null);
+    prisma.kycDocument.updateMany.mockResolvedValue({ count: 1 });
     storage.deletePrivateObject.mockResolvedValue(undefined);
     routing.routeSubmission.mockResolvedValue({
       status: 'NEEDS_REVIEW',
@@ -372,6 +385,211 @@ describe('QualificationService', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
+  it('persists a pending document before uploading outside the advisory-locked transaction', async () => {
+    prisma.kycSubmission.findFirst.mockResolvedValue({
+      id: 'submission-1',
+      fixerId: 'fixer-1',
+      status: 'DRAFT',
+      failedAttempts: 0,
+      lockedUntil: null,
+      fixer: { user: { name: 'Registered Name' } },
+    });
+    tx.kycDocument.create.mockImplementation(({ data }: any) => ({
+      id: data.id,
+      documentType: data.documentType,
+      contentType: data.contentType,
+      sizeBytes: data.sizeBytes,
+      evidenceStatus: 'UNCHECKED',
+      expiresAt: null,
+      createdAt: new Date('2026-07-30T00:00:00.000Z'),
+    }));
+    let transactionDepth = 0;
+    prisma.$transaction.mockImplementation(
+      async (callback: (client: any) => unknown) => {
+        transactionDepth += 1;
+        try {
+          return await callback(tx);
+        } finally {
+          transactionDepth -= 1;
+        }
+      },
+    );
+    storage.putPrivateObject.mockImplementation(() => {
+      expect(transactionDepth).toBe(0);
+      return Promise.resolve();
+    });
+
+    await service.uploadDocumentForUser('user-1', 'submission-1', 'id-front', {
+      originalname: 'identity.jpg',
+      mimetype: 'image/jpeg',
+      size: 4,
+      buffer: Buffer.from([0xff, 0xd8, 0xff, 0x10]),
+    } as Express.Multer.File);
+
+    expect(tx.kycDocument.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          isActive: false,
+          lifecycleState: 'PENDING_UPLOAD',
+        }),
+      }),
+    );
+    expect(tx.kycDocument.create.mock.invocationCallOrder[0]).toBeLessThan(
+      storage.putPrivateObject.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('durably tracks upload and cleanup failure without logging object keys or filenames', async () => {
+    prisma.kycSubmission.findFirst.mockResolvedValue({
+      id: 'submission-1',
+      fixerId: 'fixer-1',
+      status: 'DRAFT',
+      failedAttempts: 0,
+      lockedUntil: null,
+      fixer: { user: { name: 'Registered Name' } },
+    });
+    tx.kycDocument.create.mockImplementation(({ data }: any) => ({
+      id: data.id,
+      documentType: data.documentType,
+      contentType: data.contentType,
+      sizeBytes: data.sizeBytes,
+      evidenceStatus: 'UNCHECKED',
+      expiresAt: null,
+      createdAt: new Date('2026-07-30T00:00:00.000Z'),
+    }));
+    storage.putPrivateObject.mockRejectedValueOnce(
+      Object.assign(new Error('upload failed'), { code: 'NetworkingError' }),
+    );
+    storage.deletePrivateObject.mockRejectedValueOnce(
+      Object.assign(new Error('cleanup failed'), { code: 'TimeoutError' }),
+    );
+    prisma.kycDocument.findUnique.mockResolvedValue({
+      id: 'staged-document',
+      submissionId: 'submission-1',
+      storageKey: 'qualification/fixer-1/submission-1/private-name.jpg',
+      isActive: false,
+      lifecycleState: 'DELETE_PENDING',
+    });
+
+    await expect(
+      service.uploadDocumentForUser('user-1', 'submission-1', 'id-front', {
+        originalname: 'private-name.jpg',
+        mimetype: 'image/jpeg',
+        size: 4,
+        buffer: Buffer.from([0xff, 0xd8, 0xff, 0x11]),
+      } as Express.Multer.File),
+    ).rejects.toThrow('upload failed');
+
+    expect(prisma.kycDocument.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ isActive: false }),
+        data: expect.objectContaining({
+          lifecycleState: 'DELETE_PENDING',
+          cleanupErrorCode: expect.any(String),
+        }),
+      }),
+    );
+    const logged = (Logger.prototype.error as jest.Mock).mock.calls
+      .flat()
+      .join(' ');
+    expect(logged).not.toContain('private-name.jpg');
+    expect(logged).not.toContain('qualification/fixer-1');
+  });
+
+  it('does not compensate an ambiguous promotion that authoritatively committed READY and active', async () => {
+    prisma.kycSubmission.findFirst.mockResolvedValue({
+      id: 'submission-1',
+      fixerId: 'fixer-1',
+      status: 'NEEDS_RESUBMISSION',
+      failedAttempts: 2,
+      lockedUntil: null,
+      fixer: { user: { name: 'Registered Name' } },
+    });
+    tx.kycSubmission.findUnique.mockResolvedValue({
+      status: 'NEEDS_RESUBMISSION',
+      failedAttempts: 2,
+      lockedUntil: null,
+    });
+    tx.kycDocument.findFirst.mockImplementation(({ where }: any) =>
+      where.checksumSha256 ? null : { id: 'prior-active' },
+    );
+    tx.kycDocument.create.mockImplementation(({ data }: any) => ({
+      id: data.id,
+      documentType: data.documentType,
+      contentType: data.contentType,
+      sizeBytes: data.sizeBytes,
+      evidenceStatus: 'UNCHECKED',
+      expiresAt: null,
+      createdAt: new Date('2026-07-30T00:00:00.000Z'),
+    }));
+    let transactionCall = 0;
+    prisma.$transaction.mockImplementation(
+      async (callback: (client: any) => unknown) => {
+        transactionCall += 1;
+        const result = await callback(tx);
+        if (transactionCall === 2) {
+          throw new Error('promotion commit acknowledgement lost');
+        }
+        return result;
+      },
+    );
+    prisma.kycDocument.findUnique.mockResolvedValue({
+      id: 'authoritative-ready',
+      submissionId: 'submission-1',
+      storageKey: 'opaque-key',
+      isActive: true,
+      lifecycleState: 'READY',
+    });
+
+    await expect(
+      service.uploadDocumentForUser('user-1', 'submission-1', 'id-front', {
+        originalname: 'replacement.jpg',
+        mimetype: 'image/jpeg',
+        size: 4,
+        buffer: Buffer.from([0xff, 0xd8, 0xff, 0x12]),
+      } as Express.Multer.File),
+    ).resolves.toEqual(
+      expect.objectContaining({ assessment: expect.any(Object) }),
+    );
+
+    expect(storage.deletePrivateObject).not.toHaveBeenCalled();
+    expect(prisma.kycDocument.updateMany).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ lifecycleState: 'DELETE_PENDING' }),
+      }),
+    );
+  });
+
+  it('retries durable DELETE_PENDING cleanup and retains a terminal lifecycle row', async () => {
+    prisma.kycDocument.findUnique.mockResolvedValue({
+      id: 'document-cleanup',
+      submissionId: 'submission-1',
+      storageKey: 'opaque-storage-key',
+      isActive: false,
+      lifecycleState: 'DELETE_PENDING',
+    });
+
+    await expect(
+      service.retryPendingDocumentCleanup('document-cleanup'),
+    ).resolves.toEqual({ cleaned: true, lifecycleState: 'FAILED' });
+
+    expect(storage.deletePrivateObject).toHaveBeenCalledWith(
+      'opaque-storage-key',
+    );
+    expect(prisma.kycDocument.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'document-cleanup',
+        isActive: false,
+        lifecycleState: 'DELETE_PENDING',
+      },
+      data: expect.objectContaining({
+        lifecycleState: 'FAILED',
+        objectDeletedAt: expect.any(Date),
+        cleanupAttempts: { increment: 1 },
+        cleanupErrorCode: null,
+      }),
+    });
+  });
   it('stores uploaded documents privately and never accepts a client storage key', async () => {
     prisma.kycSubmission.findFirst.mockResolvedValue({
       id: 'submission-1',
@@ -380,7 +598,7 @@ describe('QualificationService', () => {
       fixer: { user: { name: 'Suppadesh Fungprasertsuk' } },
     });
     tx.kycDocument.create.mockImplementation(({ data, select }: any) => ({
-      id: 'document-1',
+      id: data.id,
       documentType: data.documentType,
       contentType: data.contentType,
       sizeBytes: data.sizeBytes,
@@ -407,33 +625,50 @@ describe('QualificationService', () => {
         body: Buffer.from([0xff, 0xd8, 0xff, 0x00]),
         contentType: 'image/jpeg',
         key: expect.stringMatching(
-          /^qualification\/fixer-1\/submission-1\/[a-f0-9-]+-\.\._\.\._identity\.jpg$/,
+          /^qualification\/fixer-1\/submission-1\/[a-f0-9-]+$/,
         ),
       }),
     );
     const call = tx.kycDocument.create.mock.calls[0][0];
+    const uploadedDocumentId = call.data.id;
     expect(call.data.storageKey).not.toContain('../../');
+    expect(call.data.storageKey).not.toContain('identity.jpg');
+    expect(call.data.lifecycleState).toBe('PENDING_UPLOAD');
     expect(call.data.checksumSha256).toHaveLength(64);
     expect(call.data.encrypted).toBe(true);
     expect(call.data.isActive).toBe(false);
-    expect(result.id).toBe('document-1');
+    expect(tx.kycDocument.findFirst).toHaveBeenCalledWith({
+      where: {
+        submissionId: 'submission-1',
+        checksumSha256: expect.any(String),
+        lifecycleState: {
+          in: ['PENDING_UPLOAD', 'UPLOADED', 'ASSESSING', 'READY'],
+        },
+      },
+      select: { id: true },
+    });
+    expect(result.id).toBe(uploadedDocumentId);
     expect(result.assessment).toEqual(
       expect.objectContaining({ route: 'NEEDS_REVIEW' }),
     );
     expect(assessment.assessDocument).toHaveBeenCalledWith({
       submissionId: 'submission-1',
-      documentId: 'document-1',
+      documentId: uploadedDocumentId,
       registeredName: 'Suppadesh Fungprasertsuk',
       actorId: 'user-1',
       auditAction: 'DOCUMENT_ASSESSED_ON_UPLOAD',
     });
     expect(tx.kycDocument.updateMany).toHaveBeenCalledWith({
       where: {
-        id: 'document-1',
+        id: uploadedDocumentId,
         submissionId: 'submission-1',
         isActive: false,
+        lifecycleState: 'ASSESSING',
       },
-      data: { isActive: true },
+      data: expect.objectContaining({
+        isActive: true,
+        lifecycleState: 'READY',
+      }),
     });
   });
 
@@ -461,7 +696,7 @@ describe('QualificationService', () => {
           },
     );
     tx.kycDocument.create.mockImplementation(({ data }: any) => ({
-      id: 'new-id-front',
+      id: data.id,
       documentType: data.documentType,
       contentType: data.contentType,
       sizeBytes: data.sizeBytes,
@@ -477,7 +712,8 @@ describe('QualificationService', () => {
         size: 4,
         buffer: Buffer.from([0xff, 0xd8, 0xff, 0x01]),
       } as Express.Multer.File),
-    ).resolves.toEqual(expect.objectContaining({ id: 'new-id-front' }));
+    ).resolves.toEqual(expect.objectContaining({ id: expect.any(String) }));
+    const replacementId = tx.kycDocument.create.mock.calls[0][0].data.id;
 
     expect(tx.kycDocument.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -489,20 +725,25 @@ describe('QualificationService', () => {
         id: 'old-id-front',
         submissionId: 'submission-1',
         isActive: true,
+        lifecycleState: 'READY',
       },
       data: {
         isActive: false,
         supersededAt: expect.any(Date),
-        supersededById: 'new-id-front',
+        supersededById: replacementId,
       },
     });
     expect(tx.kycDocument.updateMany).toHaveBeenCalledWith({
       where: {
-        id: 'new-id-front',
+        id: replacementId,
         submissionId: 'submission-1',
         isActive: false,
+        lifecycleState: 'ASSESSING',
       },
-      data: { isActive: true },
+      data: expect.objectContaining({
+        isActive: true,
+        lifecycleState: 'READY',
+      }),
     });
     expect(tx.kycSubmission.update).toHaveBeenCalledWith({
       where: { id: 'submission-1' },
@@ -516,7 +757,7 @@ describe('QualificationService', () => {
       data: expect.objectContaining({
         action: 'KYC_DOCUMENT_SUPERSEDED',
         actorId: 'user-1',
-        entityId: 'new-id-front',
+        entityId: replacementId,
         metadata: {
           documentType: 'id-front',
           supersededDocumentId: 'old-id-front',
@@ -525,7 +766,7 @@ describe('QualificationService', () => {
     });
   });
 
-  it('deletes staged persistence and the Spaces object when assessment fails', async () => {
+  it('marks failed assessment cleanup durably and preserves the prior active evidence', async () => {
     prisma.kycSubmission.findFirst.mockResolvedValue({
       id: 'submission-1',
       fixerId: 'fixer-1',
@@ -535,7 +776,7 @@ describe('QualificationService', () => {
       fixer: { user: { name: 'Suppadesh Fungprasertsuk' } },
     });
     tx.kycDocument.create.mockImplementation(({ data }: any) => ({
-      id: 'staged-id-front',
+      id: data.id,
       documentType: data.documentType,
       contentType: data.contentType,
       sizeBytes: data.sizeBytes,
@@ -546,6 +787,21 @@ describe('QualificationService', () => {
     assessment.assessDocument.mockRejectedValueOnce(
       new Error('assessment persistence failed'),
     );
+    prisma.kycDocument.findUnique
+      .mockResolvedValueOnce({
+        id: 'staged-id-front',
+        submissionId: 'submission-1',
+        storageKey: 'opaque-storage-key',
+        isActive: false,
+        lifecycleState: 'ASSESSING',
+      })
+      .mockResolvedValueOnce({
+        id: 'staged-id-front',
+        submissionId: 'submission-1',
+        storageKey: 'opaque-storage-key',
+        isActive: false,
+        lifecycleState: 'DELETE_PENDING',
+      });
 
     await expect(
       service.uploadDocumentForUser('user-1', 'submission-1', 'id-front', {
@@ -557,21 +813,21 @@ describe('QualificationService', () => {
     ).rejects.toThrow('assessment persistence failed');
 
     expect(storage.deletePrivateObject).toHaveBeenCalledWith(
-      expect.stringMatching(
-        /^qualification\/fixer-1\/submission-1\/[a-f0-9-]+-replacement\.jpg$/,
-      ),
+      'opaque-storage-key',
     );
-    expect(prisma.kycDocument.deleteMany).toHaveBeenCalledWith({
-      where: {
-        id: 'staged-id-front',
-        submissionId: 'submission-1',
-        isActive: false,
-      },
-    });
-    expect(tx.kycDocument.updateMany).not.toHaveBeenCalled();
+    expect(prisma.kycDocument.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ lifecycleState: 'DELETE_PENDING' }),
+      }),
+    );
+    expect(prisma.kycDocument.deleteMany).not.toHaveBeenCalled();
+    expect(tx.kycDocument.updateMany).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ isActive: false }),
+      }),
+    );
   });
-
-  it('deletes the Spaces object when document persistence fails after upload', async () => {
+  it('does not call Spaces when durable document staging fails', async () => {
     prisma.kycSubmission.findFirst.mockResolvedValue({
       id: 'submission-1',
       fixerId: 'fixer-1',
@@ -593,7 +849,8 @@ describe('QualificationService', () => {
       } as Express.Multer.File),
     ).rejects.toThrow('document persistence failed');
 
-    expect(storage.deletePrivateObject).toHaveBeenCalledTimes(1);
+    expect(storage.putPrivateObject).not.toHaveBeenCalled();
+    expect(storage.deletePrivateObject).not.toHaveBeenCalled();
     expect(assessment.assessDocument).not.toHaveBeenCalled();
   });
   it('stores a size-limited portfolio PDF as private evidence', async () => {
@@ -692,7 +949,7 @@ describe('QualificationService', () => {
     expect(storage.putPrivateObject).not.toHaveBeenCalled();
   });
 
-  it('does not route a qualification submission without all three active KYC types', async () => {
+  it('does not route a qualification submission without all three active READY KYC types', async () => {
     tx.kycSubmission.findFirst.mockResolvedValue({
       id: 'submission-1',
       status: 'DRAFT',
@@ -702,18 +959,21 @@ describe('QualificationService', () => {
           sizeBytes: 100,
           contentType: 'image/jpeg',
           isActive: true,
+          lifecycleState: 'READY',
         },
         {
           documentType: 'id-back',
           sizeBytes: 100,
           contentType: 'image/jpeg',
           isActive: true,
+          lifecycleState: 'READY',
         },
         {
           documentType: 'selfie-with-id',
           sizeBytes: 100,
           contentType: 'image/jpeg',
-          isActive: false,
+          isActive: true,
+          lifecycleState: 'ASSESSING',
         },
       ],
     });
@@ -723,7 +983,6 @@ describe('QualificationService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(routing.routeSubmission).not.toHaveBeenCalled();
   });
-
   it('rejects submission before persistence when evidence storage is unavailable', async () => {
     readiness.assertReady.mockRejectedValueOnce(
       new ServiceUnavailableException(
@@ -749,30 +1008,35 @@ describe('QualificationService', () => {
           sizeBytes: 100,
           contentType: 'image/jpeg',
           isActive: true,
+          lifecycleState: 'READY',
         },
         {
           documentType: 'id-back',
           sizeBytes: 100,
           contentType: 'image/jpeg',
           isActive: true,
+          lifecycleState: 'READY',
         },
         {
           documentType: 'selfie-with-id',
           sizeBytes: 100,
           contentType: 'image/jpeg',
           isActive: true,
+          lifecycleState: 'READY',
         },
         {
           documentType: 'portfolio',
           sizeBytes: 250 * 1024,
           contentType: 'image/jpeg',
           isActive: true,
+          lifecycleState: 'READY',
         },
         {
           documentType: 'portfolio',
           sizeBytes: 200 * 1024,
           contentType: 'application/pdf',
           isActive: true,
+          lifecycleState: 'READY',
         },
       ],
     });
