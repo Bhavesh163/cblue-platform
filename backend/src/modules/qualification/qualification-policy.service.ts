@@ -1,10 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { FixerTier } from '@prisma/client';
 
-export const QUALIFICATION_POLICY_VERSION = 'cblue-fixer-qualification-v1';
+export const QUALIFICATION_POLICY_VERSION = 'cblue-fixer-qualification-v2';
 
 export type QualificationEvidenceInput = {
-  kycApproved: boolean;
   yearsExperience: number;
   relatedCertificateCount: number;
   corporateCertificateCount: number;
@@ -16,13 +15,10 @@ export type QualificationEvidenceInput = {
   corporateEvidenceVerified: boolean;
 };
 
-export type QualificationPolicyResult = {
-  policyVersion: string;
-  recommendedTier: FixerTier;
-  eligibleTiers: FixerTier[];
-  humanReviewRequired: boolean;
-  publicPromotionAllowed: boolean;
-  reasons: string[];
+export type TierPolicyDecision = {
+  maximumTier: FixerTier;
+  eligibilityScore: number;
+  reasonCodes: string[];
 };
 
 const tierRank: Record<FixerTier, number> = {
@@ -35,18 +31,9 @@ const tierRank: Record<FixerTier, number> = {
 
 @Injectable()
 export class QualificationPolicyService {
-  evaluate(input: QualificationEvidenceInput): QualificationPolicyResult {
-    if (!input.kycApproved) {
-      return {
-        policyVersion: QUALIFICATION_POLICY_VERSION,
-        recommendedTier: FixerTier.ECONOMY,
-        eligibleTiers: [FixerTier.ECONOMY],
-        humanReviewRequired: true,
-        publicPromotionAllowed: false,
-        reasons: ['Approved KYC is required before any tier qualification.'],
-      };
-    }
-
+  calculateTierCeiling(
+    input: QualificationEvidenceInput,
+  ): TierPolicyDecision {
     const standardQualified =
       (input.yearsExperience > 3 && input.relatedCertificateCount >= 2) ||
       input.corporateCertificateCount >= 1 ||
@@ -54,7 +41,8 @@ export class QualificationPolicyService {
     const corporateQualified =
       input.corporateEvidenceVerified &&
       (input.corporateEndorsedCompletionCertificateCount >= 2 ||
-        (input.hasEligibleMastersOrDoctorate && input.corporateCertificateCount >= 1));
+        (input.hasEligibleMastersOrDoctorate &&
+          input.corporateCertificateCount >= 1));
     const specialistQualified =
       input.corporateEvidenceVerified &&
       input.corporateEndorsedCompletionCertificateCount >= 5;
@@ -69,37 +57,73 @@ export class QualificationPolicyService {
     if (specialistQualified) eligibleTiers.push(FixerTier.SPECIALIST);
     if (expertQualified) eligibleTiers.push(FixerTier.EXPERT);
 
-    const recommendedTier = eligibleTiers.reduce(
+    const maximumTier = eligibleTiers.reduce(
       (best, tier) => (tierRank[tier] > tierRank[best] ? tier : best),
       FixerTier.ECONOMY,
     );
-    const humanReviewRequired = tierRank[recommendedTier] >= tierRank[FixerTier.CORPORATE];
-
-    const reasons: string[] = [];
+    const reasonCodes: string[] = [];
     if (!standardQualified) {
-      reasons.push('Standard requires more than 3 years plus two related certificates, a corporate certificate, or a million-baht completion certificate.');
+      reasonCodes.push('STANDARD_EVIDENCE_INSUFFICIENT');
     }
     if (!corporateQualified) {
-      reasons.push('Corporate requires verified corporate evidence and qualifying endorsed certificates or an eligible advanced degree with corporate evidence.');
+      reasonCodes.push('CORPORATE_EVIDENCE_INSUFFICIENT');
     }
     if (!specialistQualified) {
-      reasons.push('Specialist requires five completion certificates endorsed by verified corporate clients.');
+      reasonCodes.push('SPECIALIST_EVIDENCE_INSUFFICIENT');
     }
     if (!expertQualified) {
-      reasons.push('Expert requires five project completion certificates and an independently verifiable international award.');
+      reasonCodes.push('EXPERT_EVIDENCE_INSUFFICIENT');
     }
-    if (humanReviewRequired) {
-      reasons.push('Corporate and higher tiers require authorized human review.');
+    if (maximumTier !== FixerTier.ECONOMY) {
+      reasonCodes.push('TIER_MAKER_CHECKER_REQUIRED');
     }
 
     return {
-      policyVersion: QUALIFICATION_POLICY_VERSION,
-      recommendedTier,
-      eligibleTiers,
-      humanReviewRequired,
-      publicPromotionAllowed: recommendedTier === FixerTier.ECONOMY ||
-        recommendedTier === FixerTier.STANDARD,
-      reasons,
+      maximumTier,
+      eligibilityScore: this.calculateEligibilityScore(input),
+      reasonCodes,
     };
+  }
+
+  evaluate(input: QualificationEvidenceInput & { kycApproved?: boolean }) {
+    if (input.kycApproved === false) {
+      return {
+        policyVersion: QUALIFICATION_POLICY_VERSION,
+        recommendedTier: FixerTier.ECONOMY,
+        eligibleTiers: [FixerTier.ECONOMY],
+        humanReviewRequired: true,
+        publicPromotionAllowed: false,
+        reasons: ['Approved KYC is required before any tier qualification.'],
+      };
+    }
+    const decision = this.calculateTierCeiling(input);
+    const eligibleTiers = Object.values(FixerTier).filter(
+      (tier) => tierRank[tier] <= tierRank[decision.maximumTier],
+    );
+    return {
+      policyVersion: QUALIFICATION_POLICY_VERSION,
+      recommendedTier: decision.maximumTier,
+      eligibleTiers,
+      humanReviewRequired: decision.maximumTier !== FixerTier.ECONOMY,
+      publicPromotionAllowed:
+        decision.maximumTier === FixerTier.ECONOMY ||
+        decision.maximumTier === FixerTier.STANDARD,
+      reasons: decision.reasonCodes,
+    };
+  }
+  private calculateEligibilityScore(input: QualificationEvidenceInput) {
+    return Math.min(
+      100,
+      Math.min(25, Math.max(0, input.yearsExperience) * 5) +
+        Math.min(15, Math.max(0, input.relatedCertificateCount) * 7) +
+        Math.min(
+          15,
+          Math.max(0, input.projectCompletionCertificateCount) * 3,
+        ) +
+        Math.min(10, Math.max(0, input.corporateCertificateCount) * 5) +
+        (input.corporateEvidenceVerified ? 20 : 0) +
+        (input.hasEligibleMastersOrDoctorate ? 5 : 0) +
+        (input.hasInternationalAward ? 10 : 0),
+    );
   }
 }

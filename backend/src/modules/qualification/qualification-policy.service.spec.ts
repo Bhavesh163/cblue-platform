@@ -20,6 +20,21 @@ const base = {
 describe('QualificationPolicyService', () => {
   const service = new QualificationPolicyService();
 
+  it('calculates a versioned deterministic tier ceiling', () => {
+    const result = service.calculateTierCeiling({
+      ...base,
+      corporateEvidenceVerified: true,
+      corporateEndorsedCompletionCertificateCount: 2,
+    });
+
+    expect(QUALIFICATION_POLICY_VERSION).toBe(
+      'cblue-fixer-qualification-v2',
+    );
+    expect(result.maximumTier).toBe(FixerTier.CORPORATE);
+    expect(result.eligibilityScore).toBeGreaterThan(0);
+    expect(result.reasonCodes).toEqual(expect.any(Array));
+  });
+
   it('keeps unapproved KYC at Economy and blocks promotion', () => {
     const result = service.evaluate({ ...base, kycApproved: false });
     expect(result).toMatchObject({

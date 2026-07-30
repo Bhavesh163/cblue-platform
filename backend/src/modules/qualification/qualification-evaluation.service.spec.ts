@@ -18,12 +18,20 @@ describe('QualificationEvaluationService', () => {
       callback(tx),
     ),
   } as any;
-  const policy = { evaluate: jest.fn() } as any;
+  const policy = { evaluate: jest.fn(), calculateTierCeiling: jest.fn() } as any;
   const config = { get: jest.fn().mockReturnValue(undefined) } as any;
   const service = new QualificationEvaluationService(prisma, policy, config);
 
   beforeEach(() => {
     jest.clearAllMocks();
+    policy.calculateTierCeiling.mockImplementation((input: any) => {
+      const result = policy.evaluate(input);
+      return {
+        maximumTier: result.recommendedTier,
+        eligibilityScore: 0,
+        reasonCodes: result.reasons || [],
+      };
+    });
     tx.$executeRawUnsafe.mockResolvedValue(0);
     tx.qualificationEvaluation.create.mockResolvedValue({ id: 'evaluation-1' });
     tx.qualificationReviewTask.findFirst.mockResolvedValue(null);
@@ -78,29 +86,9 @@ describe('QualificationEvaluationService', () => {
       }),
     );
     expect(tx.qualificationReviewTask.create).not.toHaveBeenCalled();
-    expect(tx.tierQualification.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          approvedTier: 'ECONOMY',
-          source: 'DETERMINISTIC',
-        }),
-      }),
-    );
-    expect(tx.fixer.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          tier: 'ECONOMY',
-          status: 'APPROVED',
-          verified: true,
-        }),
-      }),
-    );
-    expect(tx.kycSubmission.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'submission-1' },
-        data: expect.objectContaining({ status: 'APPROVED' }),
-      }),
-    );
+    expect(tx.tierQualification.create).not.toHaveBeenCalled();
+    expect(tx.fixer.update).not.toHaveBeenCalled();
+    expect(tx.kycSubmission.update).not.toHaveBeenCalled();
   });
 
   it('allows an admin re-evaluation and records the admin actor', async () => {
@@ -165,7 +153,7 @@ describe('QualificationEvaluationService', () => {
     await service.evaluateSubmissionForUser('user-1', 'submission-1');
 
     expect(tx.tierQualification.create).not.toHaveBeenCalled();
-    expect(tx.fixer.update).toHaveBeenCalled();
+    expect(tx.fixer.update).not.toHaveBeenCalled();
   });
 
   it('uses only validated extracted degree and project-value evidence in tier inputs', async () => {
@@ -247,6 +235,21 @@ describe('QualificationEvaluationService', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
+  it('requires KYC approval before tier evaluation', async () => {
+    prisma.kycSubmission.findFirst.mockResolvedValue({
+      id: 'submission-unapproved',
+      status: 'NEEDS_REVIEW',
+      fixer: { id: 'fixer-1', yearsExperience: 1 },
+      documents: [],
+    });
+
+    await expect(
+      service.evaluateTier('submission-unapproved'),
+    ).rejects.toThrow('KYC approval is required before tier evaluation');
+    expect(policy.evaluate).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   it('creates a review task when evidence is incomplete or an upper tier is recommended', async () => {
     prisma.kycSubmission.findFirst.mockResolvedValue({
       id: 'submission-2',
@@ -291,10 +294,7 @@ describe('QualificationEvaluationService', () => {
       'SELECT pg_advisory_xact_lock(hashtext($1))',
       'submission-2',
     );
-    expect(tx.kycSubmission.update).toHaveBeenCalledWith({
-      where: { id: 'submission-2' },
-      data: { status: 'NEEDS_REVIEW' },
-    });
+    expect(tx.kycSubmission.update).not.toHaveBeenCalled();
   });
 
   it('reuses an existing open review task during re-evaluation', async () => {

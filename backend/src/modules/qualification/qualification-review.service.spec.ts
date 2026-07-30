@@ -25,7 +25,8 @@ describe('QualificationReviewService', () => {
     },
     $transaction: jest.fn(async (callback: (client: any) => unknown) => callback(tx)),
   } as any;
-  const service = new QualificationReviewService(prisma);
+  const tierEvaluation = { evaluateTier: jest.fn() } as any;
+  const service = new QualificationReviewService(prisma, tierEvaluation);
 
   const submission = {
     fixerId: 'fixer-1',
@@ -48,6 +49,9 @@ describe('QualificationReviewService', () => {
     });
     tx.kycSubmission.update.mockResolvedValue({ id: 'submission-1' });
     tx.qualificationAuditLog.create.mockResolvedValue({ id: 'audit-1' });
+    tierEvaluation.evaluateTier.mockResolvedValue({
+      maximumTier: 'ECONOMY',
+    });
   });
 
   it('atomically assigns only an open task to the maker', async () => {
@@ -146,6 +150,58 @@ describe('QualificationReviewService', () => {
     expect(tx.fixer.update).not.toHaveBeenCalled();
   });
 
+  it('grants verified Economy on KYC approval and starts tier evaluation', async () => {
+    tx.qualificationReviewTask.findUnique.mockResolvedValue({
+      id: 'task-1',
+      kind: 'KYC',
+      status: 'ASSIGNED',
+      assignedTo: 'maker-1',
+      proposedAt: new Date('2026-07-25T00:00:00.000Z'),
+      proposedDecision: 'APPROVE',
+      proposedTier: null,
+      proposedReason: 'Identity evidence is verified and complete.',
+      proposedBy: 'maker-1',
+      submissionId: 'submission-1',
+      submission: {
+        ...submission,
+        evaluations: [],
+        fixer: {
+          id: 'fixer-1',
+          status: 'PENDING',
+          tier: 'ECONOMY',
+          verified: false,
+        },
+      },
+    });
+
+    const result = await service.checkTask('checker-2', 'task-1', {
+      acceptProposal: true,
+      reason: 'Independent identity check confirms the proposal.',
+    });
+
+    expect(result).toEqual(expect.objectContaining({ applied: true }));
+    expect(tx.kycSubmission.update).toHaveBeenCalledWith({
+      where: { id: 'submission-1' },
+      data: expect.objectContaining({
+        status: 'APPROVED',
+        reviewerId: 'checker-2',
+      }),
+    });
+    expect(tx.fixer.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          status: 'APPROVED',
+          verified: true,
+          tier: 'ECONOMY',
+        },
+      }),
+    );
+    expect(tierEvaluation.evaluateTier).toHaveBeenCalledWith(
+      'submission-1',
+      'checker-2',
+    );
+  });
+
   it('applies an upper-tier proposal only after an independent checker confirms it', async () => {
     tx.qualificationReviewTask.findUnique.mockResolvedValue({
       id: 'task-1',
@@ -174,11 +230,7 @@ describe('QualificationReviewService', () => {
       }),
     }));
     expect(tx.fixer.update).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
-        status: 'APPROVED',
-        tier: 'SPECIALIST',
-        verified: true,
-      }),
+      data: { tier: 'SPECIALIST' },
     }));
     expect(tx.qualificationAuditLog.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
@@ -317,6 +369,6 @@ describe('QualificationReviewService', () => {
 
     await expect(service.decideTask('maker-1', 'task-1', dto))
       .rejects.toBeInstanceOf(ConflictException);
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.$transaction).toHaveBeenCalled();
   });
 });

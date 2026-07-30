@@ -2,24 +2,23 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
-  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
-  FixerStatus,
   FixerTier,
   Prisma,
-  QualificationDecisionSource,
   QualificationEvidenceStatus,
   QualificationEvaluationStatus,
   QualificationRisk,
+  QualificationSubmissionStatus,
 } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   QualificationEvidenceInput,
-  QualificationPolicyResult,
+  QUALIFICATION_POLICY_VERSION,
   QualificationPolicyService,
+  TierPolicyDecision,
 } from './qualification-policy.service';
 
 type AdvisoryResult = {
@@ -53,10 +52,15 @@ export class QualificationEvaluationService {
     return this.evaluateSubmission(submissionId, undefined, adminId);
   }
 
+  async evaluateTier(submissionId: string, actorId?: string) {
+    return this.evaluateSubmission(submissionId, undefined, actorId, true);
+  }
+
   private async evaluateSubmission(
     submissionId: string,
     ownerUserId?: string,
     actorId?: string,
+    requireKycApproval = false,
   ) {
     const submission = await this.prisma.kycSubmission.findFirst({
       where: ownerUserId
@@ -67,6 +71,11 @@ export class QualificationEvaluationService {
           select: { id: true, yearsExperience: true },
         },
         documents: {
+          where: {
+            isActive: true,
+            lifecycleState: 'READY',
+            evidenceStatus: QualificationEvidenceStatus.VALIDATED,
+          },
           select: {
             id: true,
             documentType: true,
@@ -79,22 +88,30 @@ export class QualificationEvaluationService {
     if (!submission) {
       throw new NotFoundException('Qualification submission not found');
     }
-    if (ownerUserId && submission.status !== 'SUBMITTED') {
+    if (
+      (requireKycApproval &&
+        submission.status !== QualificationSubmissionStatus.APPROVED) ||
+      (!requireKycApproval &&
+        ownerUserId &&
+        submission.status !== 'SUBMITTED')
+    ) {
       throw new ConflictException(
-        'Qualification must be finalized before evaluation',
+        requireKycApproval
+          ? 'KYC approval is required before tier evaluation'
+          : 'Qualification must be finalized before evaluation',
       );
     }
 
     const evidence = this.buildEvidenceInput(submission);
-    const deterministic = this.policy.evaluate(evidence);
+    const deterministic = this.policy.calculateTierCeiling(evidence);
     const inputHash = createHash('sha256')
       .update(JSON.stringify({ submissionId, evidence }))
       .digest('hex');
-    const deterministicRisk = this.riskFor(evidence, deterministic);
+    const deterministicRisk = this.riskFor(deterministic);
     const deterministicOutput = {
       source: 'deterministic-policy',
       evidence,
-      result: deterministic,
+      decision: deterministic,
     };
 
     const advisory = await this.requestTyphoonAdvisory(
@@ -102,11 +119,7 @@ export class QualificationEvaluationService {
       evidence,
       deterministic,
     );
-    const reviewRequired =
-      deterministic.humanReviewRequired ||
-      deterministicRisk !== QualificationRisk.LOW ||
-      Boolean(advisory) ||
-      deterministic.recommendedTier !== FixerTier.ECONOMY;
+    const reviewRequired = deterministic.maximumTier !== FixerTier.ECONOMY;
 
     const created = await this.prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe(
@@ -119,13 +132,15 @@ export class QualificationEvaluationService {
           provider: 'DETERMINISTIC_POLICY',
           model: null,
           promptVersion: null,
-          policyVersion: deterministic.policyVersion,
+          policyVersion: QUALIFICATION_POLICY_VERSION,
           status: QualificationEvaluationStatus.COMPLETED,
-          deterministicScore: this.scoreFor(evidence),
+          deterministicScore: deterministic.eligibilityScore,
+          tierEligibilityScore: deterministic.eligibilityScore,
+          humanReviewRequired: reviewRequired,
           aiScore: advisory ? advisory.confidence : null,
           risk: advisory?.risk || deterministicRisk,
-          recommendedTier: deterministic.recommendedTier,
-          confidence: advisory?.confidence || (reviewRequired ? 60 : 90),
+          recommendedTier: deterministic.maximumTier,
+          confidence: advisory?.confidence ?? (reviewRequired ? 60 : 90),
           inputHash,
           output: this.json(deterministicOutput),
           completedAt: new Date(),
@@ -139,9 +154,11 @@ export class QualificationEvaluationService {
             provider: 'TYPHOON_ADVISORY',
             model: this.config.get<string>('typhoon.model') || null,
             promptVersion: 'cblue-fixer-qualification-advisory-v1',
-            policyVersion: deterministic.policyVersion,
+            policyVersion: QUALIFICATION_POLICY_VERSION,
             status: QualificationEvaluationStatus.COMPLETED,
-            deterministicScore: this.scoreFor(evidence),
+            deterministicScore: deterministic.eligibilityScore,
+            tierEligibilityScore: deterministic.eligibilityScore,
+            humanReviewRequired: reviewRequired,
             aiScore: advisory.confidence,
             risk: advisory.risk,
             recommendedTier: advisory.recommendedTier,
@@ -168,46 +185,14 @@ export class QualificationEvaluationService {
               submissionId,
               status: 'OPEN',
               kind: 'TIER',
-              priority:
-                deterministic.recommendedTier === FixerTier.ECONOMY ? 0 : 10,
+              priority: 10,
               reasonCodes: this.json({
-                policyReasons: deterministic.reasons,
+                policyVersion: QUALIFICATION_POLICY_VERSION,
+                reasonCodes: deterministic.reasonCodes,
                 typhoonAdvisory: Boolean(advisory),
               }),
             },
           });
-      } else {
-        const effectiveAt = new Date();
-        const existingQualification = await tx.tierQualification.findFirst({
-          where: {
-            submissionId,
-            source: QualificationDecisionSource.DETERMINISTIC,
-            approvedTier: FixerTier.ECONOMY,
-          },
-          select: { id: true },
-        });
-        if (!existingQualification) {
-          await tx.tierQualification.create({
-            data: {
-              fixerId: submission.fixer.id,
-              submissionId,
-              recommendedTier: FixerTier.ECONOMY,
-              approvedTier: FixerTier.ECONOMY,
-              source: QualificationDecisionSource.DETERMINISTIC,
-              policyVersion: deterministic.policyVersion,
-              reason: 'Validated KYC qualifies the partner for Economy tier.',
-              effectiveAt,
-            },
-          });
-        }
-        await tx.fixer.update({
-          where: { id: submission.fixer.id },
-          data: {
-            tier: FixerTier.ECONOMY,
-            status: FixerStatus.APPROVED,
-            verified: true,
-          },
-        });
       }
 
       await tx.qualificationAuditLog.create({
@@ -221,17 +206,6 @@ export class QualificationEvaluationService {
           afterHash: inputHash,
         },
       });
-      await tx.kycSubmission.update({
-        where: { id: submissionId },
-        data: reviewRequired
-          ? { status: 'NEEDS_REVIEW' }
-          : {
-              status: 'APPROVED',
-              reviewedAt: new Date(),
-              reviewerId: null,
-              decisionReason: 'Validated KYC qualifies for Economy tier.',
-            },
-      });
 
       return evaluation;
     });
@@ -239,11 +213,11 @@ export class QualificationEvaluationService {
     return {
       evaluationId: created.id,
       submissionId,
-      policyVersion: deterministic.policyVersion,
+      policyVersion: QUALIFICATION_POLICY_VERSION,
       deterministic,
       advisory,
       reviewRequired,
-      status: reviewRequired ? 'NEEDS_REVIEW' : 'APPROVED',
+      status: QualificationSubmissionStatus.APPROVED,
     };
   }
 
@@ -337,7 +311,6 @@ export class QualificationEvaluationService {
       (document) =>
         document.evidenceStatus === QualificationEvidenceStatus.VALIDATED,
     );
-    const idVerified = verified('id-front') > 0 && verified('id-back') > 0;
     const corporateVerified =
       verified('corporate-certificate') > 0 ||
       verified('project-completion-certificate') >= 2;
@@ -355,7 +328,6 @@ export class QualificationEvaluationService {
     });
 
     return {
-      kycApproved: idVerified,
       yearsExperience: submission.fixer.yearsExperience || 0,
       relatedCertificateCount:
         verified('education-certificate') +
@@ -374,32 +346,17 @@ export class QualificationEvaluationService {
     };
   }
 
-  private scoreFor(input: QualificationEvidenceInput) {
-    return Math.min(
-      100,
-      (input.kycApproved ? 15 : 0) +
-        Math.min(25, Math.max(0, input.yearsExperience) * 5) +
-        Math.min(15, input.relatedCertificateCount * 7) +
-        Math.min(15, input.projectCompletionCertificateCount * 3) +
-        Math.min(10, input.corporateCertificateCount * 5) +
-        (input.corporateEvidenceVerified ? 10 : 0) +
-        (input.hasInternationalAward ? 10 : 0),
-    );
-  }
-
-  private riskFor(
-    input: QualificationEvidenceInput,
-    result: QualificationPolicyResult,
-  ) {
-    if (!input.kycApproved) return QualificationRisk.HIGH;
-    if (result.humanReviewRequired) return QualificationRisk.MEDIUM;
+  private riskFor(decision: TierPolicyDecision) {
+    if (decision.maximumTier !== FixerTier.ECONOMY) {
+      return QualificationRisk.MEDIUM;
+    }
     return QualificationRisk.LOW;
   }
 
   private async requestTyphoonAdvisory(
     submissionId: string,
     evidence: QualificationEvidenceInput,
-    deterministic: QualificationPolicyResult,
+    deterministic: TierPolicyDecision,
   ): Promise<AdvisoryResult | null> {
     const apiKey =
       this.config.get<string>('typhoon.apiKey') || process.env.TYPHOON_API_KEY;
@@ -441,7 +398,7 @@ export class QualificationEvaluationService {
                 content: JSON.stringify({
                   submissionId,
                   evidence,
-                  deterministicRecommendation: deterministic.recommendedTier,
+                  deterministicCeiling: deterministic.maximumTier,
                   schema: {
                     recommendedTier:
                       'ECONOMY|STANDARD|CORPORATE|SPECIALIST|EXPERT',
@@ -474,7 +431,10 @@ export class QualificationEvaluationService {
         return null;
       }
       return {
-        recommendedTier: parsed.recommendedTier,
+        recommendedTier: this.clampTier(
+          parsed.recommendedTier,
+          deterministic.maximumTier,
+        ),
         risk: parsed.risk,
         confidence,
         findings: Array.isArray(parsed.findings)
@@ -488,6 +448,13 @@ export class QualificationEvaluationService {
     } finally {
       clearTimeout(timeout);
     }
+  }
+
+  private clampTier(recommended: FixerTier, maximum: FixerTier) {
+    if (tierRank[recommended] > tierRank[maximum]) {
+      return maximum;
+    }
+    return recommended;
   }
 
   private isTier(value: unknown): value is FixerTier {

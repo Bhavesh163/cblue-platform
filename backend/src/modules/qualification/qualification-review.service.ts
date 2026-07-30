@@ -15,6 +15,7 @@ import {
   QualificationReviewDecisionDto,
 } from './dto/qualification-review-decision.dto';
 import { QualificationReviewCheckDto } from './dto/qualification-review-check.dto';
+import { QualificationEvaluationService } from './qualification-evaluation.service';
 
 const tierRank: Record<FixerTier, number> = {
   ECONOMY: 0,
@@ -26,7 +27,10 @@ const tierRank: Record<FixerTier, number> = {
 
 @Injectable()
 export class QualificationReviewService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tierEvaluation: QualificationEvaluationService,
+  ) {}
 
   async listTasks(status?: QualificationReviewStatus) {
     return this.prisma.qualificationReviewTask.findMany({
@@ -96,8 +100,11 @@ export class QualificationReviewService {
         where: { id: taskId },
         select: { id: true },
       });
-      if (!exists) throw new NotFoundException('Qualification review task not found');
-      throw new ConflictException('Qualification review task is no longer open');
+      if (!exists)
+        throw new NotFoundException('Qualification review task not found');
+      throw new ConflictException(
+        'Qualification review task is no longer open',
+      );
     }
     return this.prisma.qualificationReviewTask.findUnique({
       where: { id: taskId },
@@ -109,11 +116,9 @@ export class QualificationReviewService {
     taskId: string,
     dto: QualificationReviewDecisionDto,
   ) {
-    if (
-      dto.decision === QualificationReviewDecision.APPROVE &&
-      !dto.approvedTier
-    ) {
-      throw new ConflictException('An approved tier is required for approval');
+    const reason = dto.reason.trim();
+    if (!reason) {
+      throw new ConflictException('A decision reason is required');
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -132,7 +137,8 @@ export class QualificationReviewService {
           },
         },
       });
-      if (!task) throw new NotFoundException('Qualification review task not found');
+      if (!task)
+        throw new NotFoundException('Qualification review task not found');
       if (
         task.status !== QualificationReviewStatus.ASSIGNED ||
         task.proposedAt
@@ -142,15 +148,27 @@ export class QualificationReviewService {
         );
       }
       if (task.assignedTo !== adminId) {
-        throw new ConflictException('Qualification review task belongs to another admin');
+        throw new ConflictException(
+          'Qualification review task belongs to another admin',
+        );
       }
 
       const approved = dto.decision === QualificationReviewDecision.APPROVE;
       const recommendedTier = task.submission.evaluations[0]?.recommendedTier;
+      if (approved && task.kind !== 'KYC' && !dto.approvedTier) {
+        throw new ConflictException(
+          'An approved tier is required for TIER approval',
+        );
+      }
+      if (approved && task.kind === 'KYC' && dto.approvedTier) {
+        throw new ConflictException('KYC approval cannot propose a tier');
+      }
       if (
         approved &&
+        task.kind !== 'KYC' &&
         dto.approvedTier &&
-        (!recommendedTier || tierRank[dto.approvedTier] > tierRank[recommendedTier])
+        (!recommendedTier ||
+          tierRank[dto.approvedTier] > tierRank[recommendedTier])
       ) {
         throw new ConflictException(
           'Approved tier cannot exceed the deterministic evidence recommendation',
@@ -167,19 +185,22 @@ export class QualificationReviewService {
         },
         data: {
           proposedDecision: dto.decision,
-          proposedTier: approved ? dto.approvedTier : null,
+          proposedTier:
+            approved && task.kind !== 'KYC' ? dto.approvedTier : null,
           proposedReason: dto.reason.trim(),
           proposedBy: adminId,
           proposedAt,
         },
       });
       if (proposed.count !== 1) {
-        throw new ConflictException('Qualification proposal was already submitted');
+        throw new ConflictException(
+          'Qualification proposal was already submitted',
+        );
       }
       const updatedTask = {
         ...task,
         proposedDecision: dto.decision,
-        proposedTier: approved ? dto.approvedTier : null,
+        proposedTier: approved && task.kind !== 'KYC' ? dto.approvedTier : null,
         proposedReason: dto.reason.trim(),
         proposedBy: adminId,
         proposedAt,
@@ -213,7 +234,7 @@ export class QualificationReviewService {
     taskId: string,
     dto: QualificationReviewCheckDto,
   ) {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const task = await tx.qualificationReviewTask.findUnique({
         where: { id: taskId },
         include: {
@@ -230,7 +251,8 @@ export class QualificationReviewService {
           },
         },
       });
-      if (!task) throw new NotFoundException('Qualification review task not found');
+      if (!task)
+        throw new NotFoundException('Qualification review task not found');
       if (
         task.status !== QualificationReviewStatus.ASSIGNED ||
         !task.proposedAt ||
@@ -299,6 +321,7 @@ export class QualificationReviewService {
           task: reopened,
           requiresIndependentCheck: false,
           applied: false,
+          startTierEvaluation: false,
         };
       }
 
@@ -315,10 +338,77 @@ export class QualificationReviewService {
           'Proposed tier exceeds the latest deterministic evidence recommendation',
         );
       }
-      if (approved && !approvedTier) {
+      if (approved && task.kind === 'TIER' && !approvedTier) {
         throw new ConflictException('The approval proposal has no tier');
       }
 
+      if (approved && task.kind === 'KYC') {
+        const tierQualification = await tx.tierQualification.create({
+          data: {
+            fixerId: task.submission.fixerId,
+            submissionId: task.submissionId,
+            recommendedTier: FixerTier.ECONOMY,
+            approvedTier: FixerTier.ECONOMY,
+            source: QualificationDecisionSource.HUMAN,
+            policyVersion: task.submission.policyVersion,
+            reason: task.proposedReason,
+            effectiveAt: checkedAt,
+            approvedBy: checkerId,
+          },
+        });
+        const fixer = await tx.fixer.update({
+          where: { id: task.submission.fixerId },
+          data: {
+            status: FixerStatus.APPROVED,
+            verified: true,
+            tier: FixerTier.ECONOMY,
+          },
+          select: { id: true, status: true, tier: true, verified: true },
+        });
+        await tx.kycSubmission.update({
+          where: { id: task.submissionId },
+          data: {
+            status: 'APPROVED',
+            reviewedAt: checkedAt,
+            reviewerId: checkerId,
+            decisionReason: task.proposedReason,
+          },
+        });
+        const updatedTask = await tx.qualificationReviewTask.update({
+          where: { id: taskId },
+          data: {
+            status: QualificationReviewStatus.DECIDED,
+            decidedAt: checkedAt,
+            decision: task.proposedDecision,
+            checkedBy: checkerId,
+            checkedAt,
+            checkReason,
+          },
+        });
+        await tx.qualificationAuditLog.create({
+          data: {
+            submissionId: task.submissionId,
+            actorId: checkerId,
+            action: 'KYC_APPROVED',
+            entityType: 'TierQualification',
+            entityId: tierQualification.id,
+            reason: checkReason,
+            metadata: {
+              makerId: task.proposedBy,
+              approvedTier: FixerTier.ECONOMY,
+            },
+          },
+        });
+        await this.tierEvaluation.evaluateTier(task.submissionId, checkerId);
+        return {
+          task: updatedTask,
+          tierQualification,
+          fixer,
+          requiresIndependentCheck: false,
+          applied: true,
+          startTierEvaluation: true,
+        };
+      }
       if (!approved && task.kind === 'KYC') {
         await tx.kycSubmission.update({
           where: { id: task.submissionId },
@@ -361,9 +451,42 @@ export class QualificationReviewService {
           fixer: task.submission.fixer,
           requiresIndependentCheck: false,
           applied: true,
+          startTierEvaluation: false,
         };
       }
-      const effectiveAt = approved ? new Date() : null;
+      if (!approved && task.kind === 'TIER') {
+        const updatedTask = await tx.qualificationReviewTask.update({
+          where: { id: taskId },
+          data: {
+            status: QualificationReviewStatus.DECIDED,
+            decidedAt: checkedAt,
+            decision: task.proposedDecision,
+            checkedBy: checkerId,
+            checkedAt,
+            checkReason,
+          },
+        });
+        await tx.qualificationAuditLog.create({
+          data: {
+            submissionId: task.submissionId,
+            actorId: checkerId,
+            action: 'TIER_REJECTED',
+            entityType: 'QualificationReviewTask',
+            entityId: taskId,
+            reason: checkReason,
+            metadata: { makerId: task.proposedBy },
+          },
+        });
+        return {
+          task: updatedTask,
+          tierQualification: null,
+          fixer: task.submission.fixer,
+          requiresIndependentCheck: false,
+          applied: true,
+          startTierEvaluation: false,
+        };
+      }
+      const effectiveAt = new Date();
       const tierQualification = await tx.tierQualification.create({
         data: {
           fixerId: task.submission.fixerId,
@@ -379,22 +502,10 @@ export class QualificationReviewService {
       });
       const fixer = await tx.fixer.update({
         where: { id: task.submission.fixerId },
-        data: {
-          status: approved ? FixerStatus.APPROVED : FixerStatus.REJECTED,
-          verified: approved,
-          ...(approvedTier ? { tier: approvedTier } : {}),
-        },
+        data: { tier: approvedTier as FixerTier },
         select: { id: true, status: true, tier: true, verified: true },
       });
-      await tx.kycSubmission.update({
-        where: { id: task.submissionId },
-        data: {
-          status: approved ? 'APPROVED' : 'REJECTED',
-          reviewedAt: new Date(),
-          reviewerId: checkerId,
-          decisionReason: task.proposedReason,
-        },
-      });
+
       const updatedTask = await tx.qualificationReviewTask.update({
         where: { id: taskId },
         data: {
@@ -428,7 +539,14 @@ export class QualificationReviewService {
         fixer,
         requiresIndependentCheck: false,
         applied: true,
+        startTierEvaluation: false,
       };
     });
+
+    if (result.startTierEvaluation) {
+      await this.tierEvaluation.evaluateTier(taskId, checkerId);
+    }
+    const { startTierEvaluation, ...response } = result;
+    return response;
   }
 }
