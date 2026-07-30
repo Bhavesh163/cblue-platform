@@ -41,6 +41,27 @@ interface PriceRow {
   finalPrice: string;
 }
 
+type UploadAssessmentResponse = {
+  id: string;
+  documentType: string;
+  assessment?: {
+    route?: string;
+    confidence?: number | null;
+    reasonCodes?: string[];
+    evidenceStatus?: string;
+  };
+};
+
+type PersistedEvidenceSlot = {
+  localFile: File;
+  documentId: string | null;
+  uploadState: "idle" | "uploading" | "assessing" | "complete" | "error";
+  kycStatus: string | null;
+  confidence: number | null;
+  reasonCodes: string[];
+  message: string | null;
+};
+
 interface FormData {
   name: string;
   email: string;
@@ -148,7 +169,8 @@ function FixerRegisterContent() {
   const searchParams = useSearchParams();
   const isEditMode = searchParams.get("edit") === "1";
   const [form, setForm] = useState<FormData>(initialForm);
-  const [kycImages, setKycImages] = useState<File[]>([]);
+  const [kycSlots, setKycSlots] = useState<PersistedEvidenceSlot[]>([]);
+  const [qualificationDraftId, setQualificationDraftId] = useState<string | null>(null);
   const [portfolioImages, setPortfolioImages] = useState<File[]>([]);
   const [portfolioProcessing, setPortfolioProcessing] = useState(false);
   const [qualificationOutcome, setQualificationOutcome] = useState<{
@@ -408,9 +430,6 @@ function FixerRegisterContent() {
   );
 
   /* Browser preflight only. Authoritative KYC decisions are made server-side. */
-  const [kycSlotStatus, setKycSlotStatus] = useState<
-    ("pending" | "valid" | "rejected")[]
-  >([]);
   const [kycValidating, setKycValidating] = useState(false);
 
   const validateKycImage = useCallback(
@@ -421,12 +440,7 @@ function FixerRegisterContent() {
       if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
         return {
           valid: false,
-          reason:
-            locale === "th"
-              ? "รองรับเฉพาะรูป JPEG, PNG หรือ WebP"
-              : locale === "zh"
-                ? "仅支持 JPEG、PNG 或 WebP 图片"
-                : "Only JPEG, PNG, or WebP images are supported",
+          reason: "Only JPEG, PNG, or WebP images are supported",
         };
       }
 
@@ -435,36 +449,23 @@ function FixerRegisterContent() {
         const image = new window.Image();
         image.onload = () => {
           URL.revokeObjectURL(url);
-          if (image.naturalWidth < 200 || image.naturalHeight < 150) {
-            resolve({
-              valid: false,
-              reason:
-                locale === "th"
-                  ? "รูปภาพเล็กเกินไป ต้องมีความละเอียดอย่างน้อย 200x150 พิกเซล"
-                  : locale === "zh"
-                    ? "图片太小，最低分辨率为 200x150 像素"
-                    : "Image too small; minimum resolution is 200x150 pixels",
-            });
-            return;
-          }
-          resolve({ valid: true });
+          resolve(
+            image.naturalWidth < 200 || image.naturalHeight < 150
+              ? {
+                  valid: false,
+                  reason: "Image too small; minimum resolution is 200x150 pixels",
+                }
+              : { valid: true },
+          );
         };
         image.onerror = () => {
           URL.revokeObjectURL(url);
-          resolve({
-            valid: false,
-            reason:
-              locale === "th"
-                ? "ไม่สามารถอ่านไฟล์รูปภาพได้"
-                : locale === "zh"
-                  ? "无法读取图片文件"
-                  : "Cannot read image file",
-          });
+          resolve({ valid: false, reason: "Cannot read image file" });
         };
         image.src = url;
       });
     },
-    [locale],
+    [],
   );
 
   const addKycImagesWithValidation = useCallback(
@@ -472,38 +473,39 @@ function FixerRegisterContent() {
       if (files.length === 0) return;
       setKycValidating(true);
       setError("");
-      const currentCount = kycImages.length;
-      const newFiles: File[] = [];
-      const newStatuses: ("pending" | "valid" | "rejected")[] = [
-        ...kycSlotStatus,
-      ];
+      const currentCount = kycSlots.length;
+      const newSlots: PersistedEvidenceSlot[] = [];
 
       for (
         let index = 0;
-        index < files.length && currentCount + newFiles.length < 3;
+        index < files.length && currentCount + newSlots.length < 3;
         index += 1
       ) {
-        const slotIndex = currentCount + newFiles.length;
+        const slotIndex = currentCount + newSlots.length;
         const file = files[index]!;
         const result = await validateKycImage(file, slotIndex);
         if (!result.valid) {
-          newStatuses[slotIndex] = "rejected";
-          setKycSlotStatus(newStatuses);
           setError(result.reason || "Image rejected");
           setKycValidating(false);
           return;
         }
-        newFiles.push(file);
-        newStatuses[slotIndex] = "valid";
+        newSlots.push({
+          localFile: file,
+          documentId: null,
+          uploadState: "idle",
+          kycStatus: null,
+          confidence: null,
+          reasonCodes: [],
+          message: null,
+        });
       }
 
-      if (newFiles.length > 0) {
-        setKycImages((current) => [...current, ...newFiles].slice(0, 3));
-        setKycSlotStatus(newStatuses);
+      if (newSlots.length > 0) {
+        setKycSlots((current) => [...current, ...newSlots].slice(0, 3));
       }
       setKycValidating(false);
     },
-    [kycImages.length, kycSlotStatus, validateKycImage],
+    [kycSlots.length, validateKycImage],
   );
   /* Camera helpers for KYC */
   const startCamera = async () => {
@@ -878,7 +880,7 @@ function FixerRegisterContent() {
       setError(t("skillError"));
       return;
     }
-    if (kycImages.length < 3) {
+    if (kycSlots.length < 3) {
       setError(
         locale === "th"
           ? "กรุณาอัปโหลด KYC ให้ครบ 3 รูป (ด้านหน้า, ด้านหลัง, เซลฟี่คู่บัตร)"
@@ -1009,7 +1011,7 @@ function FixerRegisterContent() {
           })),
         gpsCoords: gpsCoords || undefined,
         recaptchaToken,
-        kycImageCount: kycImages.length,
+        kycImageCount: kycSlots.length,
         portfolioImageCount: portfolioImages.length,
       };
 
@@ -1065,7 +1067,7 @@ function FixerRegisterContent() {
       setIsAlreadyFixer(true);
 
       const createQualification = await fetch(
-        "/api/v1/qualification/submissions",
+        "/api/v1/qualification/submissions/draft",
         {
           method: "POST",
           headers: {
@@ -1083,8 +1085,12 @@ function FixerRegisterContent() {
           detail.message || "Unable to create qualification submission",
         );
       }
-      const qualification = await createQualification.json();
-      const uploadEvidence = async (documentType: string, file: File) => {
+      const qualification = (await createQualification.json()) as { id: string };
+      setQualificationDraftId(qualification.id);
+      const uploadEvidence = async (
+        documentType: string,
+        file: File,
+      ): Promise<UploadAssessmentResponse> => {
         const body = new globalThis.FormData();
         body.append("documentType", documentType);
         body.append("file", file);
@@ -1102,11 +1108,40 @@ function FixerRegisterContent() {
             detail.message || `Unable to store ${documentType} evidence`,
           );
         }
+        return (await response.json()) as UploadAssessmentResponse;
       };
 
       const kycTypes = ["id-front", "id-back", "selfie-with-id"];
       for (let index = 0; index < kycTypes.length; index += 1) {
-        await uploadEvidence(kycTypes[index]!, kycImages[index]!);
+        setKycSlots((current) =>
+          current.map((slot, slotIndex) =>
+            slotIndex === index
+              ? { ...slot, uploadState: "assessing", message: null }
+              : slot,
+          ),
+        );
+        const uploaded = await uploadEvidence(
+          kycTypes[index]!,
+          kycSlots[index]!.localFile,
+        );
+        setKycSlots((current) =>
+          current.map((slot, slotIndex) =>
+            slotIndex === index
+              ? {
+                  ...slot,
+                  documentId: uploaded.id,
+                  uploadState: "complete",
+                  kycStatus:
+                    uploaded.assessment?.evidenceStatus ||
+                    uploaded.assessment?.route ||
+                    null,
+                  confidence: uploaded.assessment?.confidence ?? null,
+                  reasonCodes: uploaded.assessment?.reasonCodes || [],
+                  message: uploaded.assessment?.reasonCodes?.join(", ") || null,
+                }
+              : slot,
+          ),
+        );
       }
       for (const portfolioImage of portfolioImages) {
         await uploadEvidence("portfolio", portfolioImage);
@@ -1955,9 +1990,9 @@ function FixerRegisterContent() {
                 )}
 
                 {/* Preview captured/uploaded images */}
-                {kycImages.length > 0 && (
+                {kycSlots.length > 0 && (
                   <div className="flex gap-2 flex-wrap">
-                    {kycImages.map((img, i) => {
+                    {kycSlots.map((slot, i) => {
                       const kycLabel =
                         i === 0
                           ? locale === "th"
@@ -1976,17 +2011,30 @@ function FixerRegisterContent() {
                               : locale === "zh"
                                 ? "自拍"
                                 : "Selfie";
-                      const status = kycSlotStatus[i] || "valid";
+                      const status = slot.uploadState === "error" ? "rejected" : "valid";
                       return (
                         <div key={i} className="relative group text-center">
                           <img
-                            src={URL.createObjectURL(img)}
+                            src={URL.createObjectURL(slot.localFile)}
                             alt={`KYC ${i + 1}`}
                             className={`w-20 h-20 object-cover rounded-lg border-2 ${status === "valid" ? "border-green-400" : "border-gray-200"}`}
                           />
                           <span className="block text-[10px] text-gray-500 mt-0.5">
                             {kycLabel}
                           </span>
+                          {slot.uploadState === "assessing" && (
+                            <span className="block max-w-28 text-[10px] text-sky-600">
+                              Assessing evidence...
+                            </span>
+                          )}
+                          {slot.kycStatus && (
+                            <span className="block max-w-28 text-[10px] text-slate-600">
+                              {slot.kycStatus}
+                              {slot.confidence !== null
+                                ? " (" + slot.confidence + "%)"
+                                : ""}
+                            </span>
+                          )}
                           {status === "valid" && (
                             <span className="absolute top-0.5 left-0.5 text-green-500 text-xs">
                               ✓
@@ -1995,12 +2043,7 @@ function FixerRegisterContent() {
                           <button
                             type="button"
                             onClick={() => {
-                              setKycImages((prev) =>
-                                prev.filter((_, idx) => idx !== i),
-                              );
-                              setKycSlotStatus((prev) =>
-                                prev.filter((_, idx) => idx !== i),
-                              );
+                              setKycSlots((prev) => prev.filter((_, idx) => idx !== i));
                             }}
                             className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
                           >
@@ -2010,7 +2053,7 @@ function FixerRegisterContent() {
                       );
                     })}
                     <p className="text-xs text-green-600 self-end">
-                      {kycImages.length}/3{" "}
+                      {kycSlots.length}/3{" "}
                       {locale === "th"
                         ? "รูป"
                         : locale === "zh"

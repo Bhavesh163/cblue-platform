@@ -221,11 +221,11 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                       ) : (
                         <span>{task.submission?.documents?.length ?? 0} document(s). Claim this task to review evidence.</span>
                       )}
+                    </td>
                     <td className="min-w-72 py-3 pr-4 align-top text-slate-700">
                       {Array.isArray(task.submission?.fixer?.priceList) && task.submission.fixer.priceList.length ? (
                         <div className="space-y-1.5">{task.submission.fixer.priceList.slice(0, 30).map((row, index) => <div key={`${row.service || "service"}-${index}`} className="flex justify-between gap-4 rounded bg-slate-50 px-2.5 py-1.5"><span>{row.service || "Service"}{row.unit ? ` / ${row.unit}` : ""}</span><span className="whitespace-nowrap font-semibold">{Number(row.finalPrice || 0).toLocaleString("th-TH", { style: "currency", currency: "THB", maximumFractionDigits: 0 })}</span></div>)}</div>
                       ) : <span className="text-slate-500">No price list recorded</span>}
-                    </td>
                     </td>
                     <td className="min-w-72 py-3 pr-4 align-top">
                       {task.status === "OPEN" && (

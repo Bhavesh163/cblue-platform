@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { getApiUrl } from "../lib/api";
 
 type EvidenceStatus = "VALIDATED" | "CONTRADICTED" | "INSUFFICIENT" | "EXPIRED";
@@ -37,6 +37,16 @@ export default function QualificationEvidenceControls({
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    setUrls({});
+    setStatus({});
+    setReason({});
+    setError("");
+    if (!submissionId || readOnly) return;
+    const timeout = window.setTimeout(() => setUrls({}), 5 * 60 * 1000);
+    return () => window.clearTimeout(timeout);
+  }, [readOnly, submissionId]);
 
   async function createLink(documentId: string) {
     if (!submissionId) return;
