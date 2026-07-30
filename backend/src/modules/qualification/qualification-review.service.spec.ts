@@ -75,10 +75,6 @@ describe('QualificationReviewService', () => {
       status: 'PENDING',
     });
     prisma.qualificationHandoff.updateMany.mockResolvedValue({ count: 1 });
-    prisma.qualificationHandoff.update.mockResolvedValue({
-      id: 'handoff-1',
-      status: 'COMPLETED',
-    });
     tierEvaluation.evaluateTier.mockResolvedValue({
       maximumTier: 'ECONOMY',
     });
@@ -490,7 +486,7 @@ describe('QualificationReviewService', () => {
       'submission-1',
       'checker-2',
     );
-    expect(prisma.qualificationHandoff.updateMany).toHaveBeenCalledTimes(1);
+    expect(prisma.qualificationHandoff.updateMany).toHaveBeenCalledTimes(2);
   });
 
   it('keeps KYC approval committed when handoff processing fails and retries it', async () => {
@@ -536,7 +532,7 @@ describe('QualificationReviewService', () => {
         }),
       }),
     );
-    expect(prisma.qualificationHandoff.update).toHaveBeenCalledWith(
+    expect(prisma.qualificationHandoff.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ status: 'FAILED' }),
       }),

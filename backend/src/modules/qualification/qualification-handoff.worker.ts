@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { QualificationReviewService } from './qualification-review.service';
 
 const HANDOFF_INTERVAL_MS = 30_000;
+const HANDOFF_SHUTDOWN_GRACE_MS = 5_000;
 
 @Injectable()
 export class QualificationHandoffWorker
@@ -32,7 +33,15 @@ export class QualificationHandoffWorker
       clearTimeout(this.timer);
       this.timer = null;
     }
-    if (this.activeRun) await this.activeRun;
+    if (this.activeRun) {
+      await Promise.race([
+        this.activeRun,
+        new Promise<void>((resolve) => {
+          const timeout = setTimeout(resolve, HANDOFF_SHUTDOWN_GRACE_MS);
+          timeout.unref?.();
+        }),
+      ]);
+    }
   }
 
   runBatch(): Promise<number> {

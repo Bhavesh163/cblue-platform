@@ -644,6 +644,7 @@ export class QualificationReviewService {
       handoff.claimedAt.getTime() >= Date.now() - HANDOFF_LEASE_MS
     )
       return handoff.status;
+    const claimAt = new Date();
     const claimed = await this.prisma.qualificationHandoff.updateMany({
       where: {
         id: handoff.id,
@@ -665,7 +666,7 @@ export class QualificationReviewService {
       data: {
         status: QualificationHandoffStatus.RUNNING,
         attempts: { increment: 1 },
-        claimedAt: new Date(),
+        claimedAt: claimAt,
         lastError: null,
       },
     });
@@ -678,24 +679,46 @@ export class QualificationReviewService {
     }
     try {
       await this.tierEvaluation.evaluateTier(submissionId, actorId);
-      await this.prisma.qualificationHandoff.update({
-        where: { id: handoff.id },
+      const completed = await this.prisma.qualificationHandoff.updateMany({
+        where: {
+          id: handoff.id,
+          status: QualificationHandoffStatus.RUNNING,
+          claimedAt: claimAt,
+        },
         data: {
           status: QualificationHandoffStatus.COMPLETED,
           completedAt: new Date(),
           lastError: null,
         },
       });
+      if (completed.count !== 1) {
+        const current = await this.prisma.qualificationHandoff.findUnique({
+          where: { id: handoff.id },
+          select: { status: true },
+        });
+        return current?.status || QualificationHandoffStatus.RUNNING;
+      }
       return QualificationHandoffStatus.COMPLETED;
     } catch (error: unknown) {
-      await this.prisma.qualificationHandoff.update({
-        where: { id: handoff.id },
+      const failed = await this.prisma.qualificationHandoff.updateMany({
+        where: {
+          id: handoff.id,
+          status: QualificationHandoffStatus.RUNNING,
+          claimedAt: claimAt,
+        },
         data: {
           status: QualificationHandoffStatus.FAILED,
           claimedAt: null,
           lastError: error instanceof Error ? error.message : String(error),
         },
       });
+      if (failed.count !== 1) {
+        const current = await this.prisma.qualificationHandoff.findUnique({
+          where: { id: handoff.id },
+          select: { status: true },
+        });
+        return current?.status || QualificationHandoffStatus.RUNNING;
+      }
       return QualificationHandoffStatus.FAILED;
     }
   }
