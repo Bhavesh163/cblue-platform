@@ -4,10 +4,12 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import {
   Prisma,
   QualificationDocumentLifecycleState,
+  QualificationStorageCleanupStatus,
   QualificationSubmissionStatus,
 } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
@@ -620,6 +622,7 @@ export class QualificationService {
         isActive: boolean;
         lifecycleState: string;
       } | null = null;
+      let cleanupId: string | null = null;
       try {
         authoritative = await this.prisma.kycDocument.findUnique({
           where: { id: documentId },
@@ -639,15 +642,11 @@ export class QualificationService {
       }
 
       if (!authoritative && uploadAttempted) {
-        authoritative = await this.reconcileMissingCleanupIntent({
-          documentId,
-          submissionId: submission.id,
-          documentType,
+        cleanupId = randomUUID();
+        authoritative = await this.reconcileMissingCleanupIntent(
           storageKey,
-          checksumSha256,
-          contentType: file.mimetype,
-          sizeBytes: fileSize,
-        });
+          cleanupId,
+        );
       }
 
       if (
@@ -678,7 +677,9 @@ export class QualificationService {
         }
       }
       this.logger.error(
-        `Qualification upload failed document=${documentId} submission=${submission.id} code=${errorCode}`,
+        cleanupId
+          ? `Qualification upload failed cleanup=${cleanupId} code=${errorCode}`
+          : `Qualification upload failed document=${documentId} submission=${submission.id} code=${errorCode}`,
         error instanceof Error ? error.name : 'UnknownError',
       );
       throw error;
@@ -761,15 +762,10 @@ export class QualificationService {
     }
   }
 
-  private async reconcileMissingCleanupIntent(input: {
-    documentId: string;
-    submissionId: string;
-    documentType: string;
-    storageKey: string;
-    checksumSha256: string;
-    contentType: string;
-    sizeBytes: number;
-  }): Promise<{
+  private async reconcileMissingCleanupIntent(
+    storageKey: string,
+    cleanupId: string,
+  ): Promise<{
     id: string;
     submissionId: string;
     storageKey: string;
@@ -785,50 +781,186 @@ export class QualificationService {
     } as const;
     try {
       const owner = await this.prisma.kycDocument.findFirst({
-        where: { storageKey: input.storageKey },
+        where: { storageKey },
         select,
       });
       if (owner) return owner;
-
-      return await this.prisma.kycDocument.create({
-        data: {
-          id: input.documentId,
-          submissionId: input.submissionId,
-          documentType: input.documentType,
-          storageKey: input.storageKey,
-          checksumSha256: input.checksumSha256,
-          contentType: input.contentType,
-          sizeBytes: input.sizeBytes,
-          encrypted: true,
-          isActive: false,
-          lifecycleState: 'DELETE_PENDING',
-          objectUploadedAt: new Date(),
-          cleanupErrorCode: 'RECONCILIATION_ROW_MISSING',
-          cleanupNextAttemptAt: new Date(),
-          retentionDeleteAt: new Date(
-            Date.now() + 3 * 365 * 24 * 60 * 60 * 1000,
-          ),
-        },
-        select,
-      });
     } catch (error) {
       this.logger.error(
-        `Qualification cleanup intent recovery uncertain document=${input.documentId} submission=${input.submissionId} code=CLEANUP_INTENT_RECOVERY_UNCERTAIN`,
+        `Qualification cleanup ownership read failed cleanup=${cleanupId} code=CLEANUP_OWNERSHIP_READ_FAILED`,
         error instanceof Error ? error.name : 'UnknownError',
       );
-      try {
-        return await this.prisma.kycDocument.findFirst({
-          where: { storageKey: input.storageKey },
-          select,
+      throw new ServiceUnavailableException(
+        'Qualification cleanup ownership could not be reconciled',
+      );
+    }
+
+    const intent = await this.ensureStorageCleanupIntent(storageKey, cleanupId);
+    await this.retryStorageCleanupIntent(intent.id);
+    return null;
+  }
+
+  async ensureStorageCleanupIntent(
+    storageKey: string,
+    cleanupId: string = randomUUID(),
+  ): Promise<{
+    id: string;
+    status: QualificationStorageCleanupStatus;
+  }> {
+    let persistenceError: unknown;
+    try {
+      await this.prisma.qualificationStorageCleanupIntent.createMany({
+        data: {
+          id: cleanupId,
+          storageKey,
+          status: 'PENDING',
+          nextAttemptAt: new Date(),
+        },
+        skipDuplicates: true,
+      });
+    } catch (error) {
+      persistenceError = error;
+    }
+
+    try {
+      const authoritative =
+        await this.prisma.qualificationStorageCleanupIntent.findUnique({
+          where: { storageKey },
+          select: { id: true, status: true },
         });
-      } catch (readError) {
-        this.logger.error(
-          `Qualification cleanup ownership read failed document=${input.documentId} submission=${input.submissionId} code=CLEANUP_OWNERSHIP_READ_FAILED`,
-          readError instanceof Error ? readError.name : 'UnknownError',
-        );
-        return null;
+      if (authoritative) return authoritative;
+    } catch (error) {
+      persistenceError ??= error;
+    }
+
+    this.logger.error(
+      `Qualification cleanup intent persistence failed cleanup=${cleanupId} code=CLEANUP_INTENT_PERSIST_FAILED`,
+      persistenceError instanceof Error
+        ? persistenceError.name
+        : 'UnknownError',
+    );
+    throw new ServiceUnavailableException(
+      'Qualification storage cleanup could not be persisted',
+    );
+  }
+
+  async retryStorageCleanupIntent(
+    cleanupId: string,
+    claimedBy?: string,
+  ): Promise<{
+    cleaned: boolean;
+    status: QualificationStorageCleanupStatus | 'MISSING';
+    nextAttemptAt?: Date;
+  }> {
+    const claimToken = claimedBy ?? randomUUID();
+    const now = new Date();
+    if (!claimedBy) {
+      const claimed =
+        await this.prisma.qualificationStorageCleanupIntent.updateMany({
+          where: {
+            id: cleanupId,
+            status: 'PENDING',
+            OR: [
+              { claimedAt: null },
+              {
+                claimedAt: {
+                  lt: new Date(now.getTime() - CLEANUP_CLAIM_STALE_MS),
+                },
+              },
+            ],
+          },
+          data: { claimedAt: now, claimedBy: claimToken },
+        });
+      if (claimed.count !== 1) {
+        const current =
+          await this.prisma.qualificationStorageCleanupIntent.findUnique({
+            where: { id: cleanupId },
+            select: { status: true },
+          });
+        return {
+          cleaned: current?.status === 'COMPLETED',
+          status: current?.status ?? 'MISSING',
+        };
       }
     }
+
+    const intent =
+      await this.prisma.qualificationStorageCleanupIntent.findUnique({
+        where: { id: cleanupId },
+        select: {
+          id: true,
+          storageKey: true,
+          status: true,
+          attempts: true,
+          claimedBy: true,
+        },
+      });
+    if (!intent) return { cleaned: false, status: 'MISSING' };
+    if (intent.status === 'COMPLETED') {
+      return { cleaned: true, status: 'COMPLETED' };
+    }
+    if (intent.claimedBy !== claimToken) {
+      return { cleaned: false, status: intent.status };
+    }
+
+    try {
+      await this.storage.deletePrivateObject(intent.storageKey);
+    } catch (error) {
+      const backoffMs = Math.min(
+        CLEANUP_BASE_BACKOFF_MS * 2 ** Math.min(intent.attempts, 10),
+        CLEANUP_MAX_BACKOFF_MS,
+      );
+      const nextAttemptAt = new Date(Date.now() + backoffMs);
+      await this.prisma.qualificationStorageCleanupIntent.updateMany({
+        where: {
+          id: intent.id,
+          status: 'PENDING',
+          claimedBy: claimToken,
+        },
+        data: {
+          attempts: { increment: 1 },
+          errorCode: 'OBJECT_DELETE_FAILED',
+          nextAttemptAt,
+          claimedAt: null,
+          claimedBy: null,
+        },
+      });
+      this.logger.error(
+        `Qualification orphan cleanup failed cleanup=${intent.id} code=OBJECT_DELETE_FAILED`,
+        error instanceof Error ? error.name : 'UnknownError',
+      );
+      return { cleaned: false, status: 'PENDING', nextAttemptAt };
+    }
+
+    const finalized =
+      await this.prisma.qualificationStorageCleanupIntent.updateMany({
+        where: {
+          id: intent.id,
+          status: 'PENDING',
+          claimedBy: claimToken,
+        },
+        data: {
+          status: 'COMPLETED',
+          completedAt: new Date(),
+          attempts: { increment: 1 },
+          errorCode: null,
+          nextAttemptAt: null,
+          claimedAt: null,
+          claimedBy: null,
+        },
+      });
+    if (finalized.count !== 1) {
+      const authoritative =
+        await this.prisma.qualificationStorageCleanupIntent.findUnique({
+          where: { id: intent.id },
+          select: { status: true },
+        });
+      return {
+        cleaned: authoritative?.status === 'COMPLETED',
+        status: authoritative?.status ?? 'MISSING',
+      };
+    }
+    return { cleaned: true, status: 'COMPLETED' };
   }
 
   async retryPendingDocumentCleanup(

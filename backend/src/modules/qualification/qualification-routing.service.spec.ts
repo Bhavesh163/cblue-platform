@@ -266,6 +266,25 @@ describe('QualificationRoutingService', () => {
       /CREATE UNIQUE INDEX "qualification_review_tasks_one_unresolved_kyc"[\s\S]*WHERE "kind" = 'KYC' AND "status" <> 'DECIDED'/,
     );
   });
+
+  it('ships cascade-independent, idempotent orphan cleanup intents', () => {
+    const migrationPath = join(
+      process.cwd(),
+      'prisma/migrations/20260730230000_add_qualification_storage_cleanup_intents/migration.sql',
+    );
+    expect(existsSync(migrationPath)).toBe(true);
+    const migration = readFileSync(migrationPath, 'utf8');
+    const table = migration.match(
+      /CREATE TABLE "qualification_storage_cleanup_intents" \([\s\S]*?\n\);/,
+    )?.[0];
+
+    expect(table).toBeDefined();
+    expect(table).not.toContain('REFERENCES');
+    expect(migration).toMatch(
+      /CREATE UNIQUE INDEX "qualification_storage_cleanup_intents_storageKey_key"[\s\S]*\("storageKey"\)/,
+    );
+  });
+
   it('does not duplicate persistence or open KYC review work when routing repeats', async () => {
     let status = 'DRAFT';
     tx.kycSubmission.findUnique.mockImplementation(() => ({

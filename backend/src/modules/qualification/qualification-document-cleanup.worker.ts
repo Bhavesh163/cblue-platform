@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { QualificationService } from './qualification.service';
 
-const CLEANUP_BATCH_SIZE = 20;
+const CLEANUP_SOURCE_BATCH_SIZE = 10;
 const CLEANUP_INTERVAL_MS = 30_000;
 
 @Injectable()
@@ -68,9 +68,41 @@ export class QualificationDocumentCleanupWorker
   }
 
   private async processBatch(): Promise<number> {
-    let claimed: Array<{ id: string }>;
+    const documents = await this.claimDocuments();
+    const intents = await this.claimStorageIntents();
+
+    for (const document of documents) {
+      try {
+        await this.qualification.retryPendingDocumentCleanup(
+          document.id,
+          this.workerId,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Qualification cleanup item failed document=${document.id} code=CLEANUP_ITEM_FAILED`,
+          error instanceof Error ? error.name : 'UnknownError',
+        );
+      }
+    }
+    for (const intent of intents) {
+      try {
+        await this.qualification.retryStorageCleanupIntent(
+          intent.id,
+          this.workerId,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Qualification orphan cleanup item failed cleanup=${intent.id} code=CLEANUP_INTENT_ITEM_FAILED`,
+          error instanceof Error ? error.name : 'UnknownError',
+        );
+      }
+    }
+    return documents.length + intents.length;
+  }
+
+  private async claimDocuments(): Promise<Array<{ id: string }>> {
     try {
-      claimed = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      return await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
         WITH due AS (
           SELECT "id"
           FROM "kyc_documents"
@@ -85,7 +117,7 @@ export class QualificationDocumentCleanupWorker
             )
           ORDER BY "cleanupNextAttemptAt" ASC NULLS FIRST, "updatedAt" ASC
           FOR UPDATE SKIP LOCKED
-          LIMIT ${CLEANUP_BATCH_SIZE}
+          LIMIT ${CLEANUP_SOURCE_BATCH_SIZE}
         )
         UPDATE "kyc_documents" AS document
         SET
@@ -98,25 +130,44 @@ export class QualificationDocumentCleanupWorker
       `);
     } catch (error) {
       this.logger.error(
-        'Qualification cleanup batch failed code=CLEANUP_BATCH_FAILED',
+        'Qualification cleanup batch failed source=DOCUMENT code=CLEANUP_BATCH_FAILED',
         error instanceof Error ? error.name : 'UnknownError',
       );
-      return 0;
+      return [];
     }
+  }
 
-    for (const document of claimed) {
-      try {
-        await this.qualification.retryPendingDocumentCleanup(
-          document.id,
-          this.workerId,
-        );
-      } catch (error) {
-        this.logger.error(
-          `Qualification cleanup item failed document=${document.id} code=CLEANUP_ITEM_FAILED`,
-          error instanceof Error ? error.name : 'UnknownError',
-        );
-      }
+  private async claimStorageIntents(): Promise<Array<{ id: string }>> {
+    try {
+      return await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+        WITH due AS (
+          SELECT "id"
+          FROM "qualification_storage_cleanup_intents"
+          WHERE "status" = 'PENDING'
+            AND "nextAttemptAt" <= NOW()
+            AND (
+              "claimedAt" IS NULL
+              OR "claimedAt" < NOW() - INTERVAL '5 minutes'
+            )
+          ORDER BY "nextAttemptAt" ASC, "updatedAt" ASC
+          FOR UPDATE SKIP LOCKED
+          LIMIT ${CLEANUP_SOURCE_BATCH_SIZE}
+        )
+        UPDATE "qualification_storage_cleanup_intents" AS intent
+        SET
+          "claimedAt" = NOW(),
+          "claimedBy" = ${this.workerId},
+          "updatedAt" = NOW()
+        FROM due
+        WHERE intent."id" = due."id"
+        RETURNING intent."id"
+      `);
+    } catch (error) {
+      this.logger.error(
+        'Qualification cleanup batch failed source=ORPHAN_INTENT code=CLEANUP_BATCH_FAILED',
+        error instanceof Error ? error.name : 'UnknownError',
+      );
+      return [];
     }
-    return claimed.length;
   }
 }

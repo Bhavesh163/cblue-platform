@@ -51,6 +51,11 @@ describe('QualificationService', () => {
       updateMany: jest.fn(),
       findMany: jest.fn(),
     },
+    qualificationStorageCleanupIntent: {
+      createMany: jest.fn(),
+      findUnique: jest.fn(),
+      updateMany: jest.fn(),
+    },
     qualificationAuditLog: { create: jest.fn(), findMany: jest.fn() },
     $transaction: jest.fn((callback: (client: any) => unknown) => callback(tx)),
   } as any;
@@ -104,6 +109,8 @@ describe('QualificationService', () => {
     prisma.kycDocument.deleteMany.mockResolvedValue({ count: 1 });
     prisma.kycDocument.findUnique.mockResolvedValue(null);
     prisma.kycDocument.updateMany.mockResolvedValue({ count: 1 });
+    prisma.qualificationStorageCleanupIntent.createMany.mockResolvedValue({ count: 1 });
+    prisma.qualificationStorageCleanupIntent.updateMany.mockResolvedValue({ count: 1 });
     storage.deletePrivateObject.mockResolvedValue(undefined);
     routing.routeSubmission.mockResolvedValue({
       status: 'NEEDS_REVIEW',
@@ -560,7 +567,7 @@ describe('QualificationService', () => {
     );
   });
 
-  it('recreates durable cleanup intent when reconciliation finds no row after upload', async () => {
+  it('persists independent cleanup when the submission and document were cascade-deleted', async () => {
     prisma.kycSubmission.findFirst.mockResolvedValue({
       id: 'submission-1',
       fixerId: 'fixer-1',
@@ -604,7 +611,22 @@ describe('QualificationService', () => {
           : null,
       );
     prisma.kycDocument.findFirst.mockResolvedValue(null);
-    prisma.kycDocument.create.mockImplementation(({ data }: any) => data);
+    prisma.kycDocument.create.mockRejectedValue(
+      new Error('submission FK missing'),
+    );
+    prisma.qualificationStorageCleanupIntent.findUnique.mockImplementation(
+      ({ where }: any) => ({
+        id: 'cleanup-1',
+        storageKey:
+          where.storageKey ??
+          'qualification/fixer-1/submission-1/opaque-document-id',
+        status: 'PENDING',
+        attempts: 0,
+        claimedBy:
+          prisma.qualificationStorageCleanupIntent.updateMany.mock.calls.at(-1)
+            ?.[0].data.claimedBy ?? null,
+      }),
+    );
     storage.deletePrivateObject.mockRejectedValueOnce(
       new Error('delete unavailable'),
     );
@@ -627,22 +649,25 @@ describe('QualificationService', () => {
         lifecycleState: true,
       }),
     });
-    expect(prisma.kycDocument.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        id: staged.id,
-        submissionId: 'submission-1',
+    expect(prisma.kycDocument.create).not.toHaveBeenCalled();
+    expect(
+      prisma.qualificationStorageCleanupIntent.createMany,
+    ).toHaveBeenCalledWith({
+      data: {
+        id: expect.any(String),
         storageKey: staged.storageKey,
-        isActive: false,
-        lifecycleState: 'DELETE_PENDING',
-        cleanupNextAttemptAt: expect.any(Date),
-      }),
-      select: expect.any(Object),
+        status: 'PENDING',
+        nextAttemptAt: expect.any(Date),
+      },
+      skipDuplicates: true,
     });
-    expect(prisma.kycDocument.updateMany).toHaveBeenCalledWith(
+    expect(
+      prisma.qualificationStorageCleanupIntent.updateMany,
+    ).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          cleanupErrorCode: 'OBJECT_DELETE_FAILED',
-          cleanupNextAttemptAt: expect.any(Date),
+          errorCode: 'OBJECT_DELETE_FAILED',
+          nextAttemptAt: expect.any(Date),
         }),
       }),
     );
@@ -652,6 +677,150 @@ describe('QualificationService', () => {
     expect(logged).not.toContain('passport-owner-name.jpg');
     expect(logged).not.toContain(staged.storageKey);
   });
+
+  it('creates orphan cleanup intent idempotently without returning the private key', async () => {
+    prisma.qualificationStorageCleanupIntent.createMany.mockResolvedValue({
+      count: 0,
+    });
+    prisma.qualificationStorageCleanupIntent.findUnique.mockResolvedValue({
+      id: 'cleanup-existing',
+      status: 'PENDING',
+    });
+
+    await expect(
+      service.ensureStorageCleanupIntent(
+        'qualification/private/passport-owner.jpg',
+        'cleanup-new',
+      ),
+    ).resolves.toEqual({
+      id: 'cleanup-existing',
+      status: 'PENDING',
+    });
+
+    expect(
+      prisma.qualificationStorageCleanupIntent.createMany,
+    ).toHaveBeenCalledWith({
+      data: {
+        id: 'cleanup-new',
+        storageKey: 'qualification/private/passport-owner.jpg',
+        status: 'PENDING',
+        nextAttemptAt: expect.any(Date),
+      },
+      skipDuplicates: true,
+    });
+  });
+
+  it('does not delete or leak the private key when intent persistence fails', async () => {
+    prisma.qualificationStorageCleanupIntent.createMany.mockRejectedValue(
+      new Error('database unavailable'),
+    );
+    prisma.qualificationStorageCleanupIntent.findUnique.mockResolvedValue(null);
+
+    await expect(
+      service.ensureStorageCleanupIntent(
+        'qualification/private/passport-owner.jpg',
+        'cleanup-failed',
+      ),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+
+    expect(storage.deletePrivateObject).not.toHaveBeenCalled();
+    const logged = (Logger.prototype.error as jest.Mock).mock.calls
+      .flat()
+      .join(' ');
+    expect(logged).toContain('cleanup=cleanup-failed');
+    expect(logged).toContain('code=CLEANUP_INTENT_PERSIST_FAILED');
+    expect(logged).not.toContain('passport-owner');
+    expect(logged).not.toContain('qualification/private');
+  });
+
+  it('retries orphan cleanup successfully and remains idempotent after completion', async () => {
+    prisma.qualificationStorageCleanupIntent.findUnique
+      .mockResolvedValueOnce({
+        id: 'cleanup-success',
+        storageKey: 'qualification/private/opaque-key',
+        status: 'PENDING',
+        attempts: 0,
+        claimedBy: 'worker-1',
+      })
+      .mockResolvedValueOnce({
+        id: 'cleanup-success',
+        status: 'COMPLETED',
+      });
+
+    await expect(
+      service.retryStorageCleanupIntent('cleanup-success', 'worker-1'),
+    ).resolves.toEqual({ cleaned: true, status: 'COMPLETED' });
+    await expect(
+      service.retryStorageCleanupIntent('cleanup-success', 'worker-1'),
+    ).resolves.toEqual({ cleaned: true, status: 'COMPLETED' });
+
+    expect(storage.deletePrivateObject).toHaveBeenCalledTimes(1);
+    expect(
+      prisma.qualificationStorageCleanupIntent.updateMany,
+    ).toHaveBeenCalledWith({
+      where: {
+        id: 'cleanup-success',
+        status: 'PENDING',
+        claimedBy: 'worker-1',
+      },
+      data: expect.objectContaining({
+        status: 'COMPLETED',
+        completedAt: expect.any(Date),
+        errorCode: null,
+        nextAttemptAt: null,
+        claimedAt: null,
+        claimedBy: null,
+      }),
+    });
+  });
+
+  it('persists orphan cleanup retry backoff and logs only cleanup metadata', async () => {
+    jest.useFakeTimers().setSystemTime(Date.parse('2026-07-30T12:00:00.000Z'));
+    prisma.qualificationStorageCleanupIntent.findUnique.mockResolvedValue({
+      id: 'cleanup-retry',
+      storageKey: 'qualification/private/passport-owner.jpg',
+      status: 'PENDING',
+      attempts: 1,
+      claimedBy: 'worker-1',
+    });
+    storage.deletePrivateObject.mockRejectedValueOnce(
+      new Error('private key should never be logged'),
+    );
+
+    await expect(
+      service.retryStorageCleanupIntent('cleanup-retry', 'worker-1'),
+    ).resolves.toEqual({
+      cleaned: false,
+      status: 'PENDING',
+      nextAttemptAt: new Date('2026-07-30T12:01:00.000Z'),
+    });
+
+    expect(
+      prisma.qualificationStorageCleanupIntent.updateMany,
+    ).toHaveBeenCalledWith({
+      where: {
+        id: 'cleanup-retry',
+        status: 'PENDING',
+        claimedBy: 'worker-1',
+      },
+      data: {
+        attempts: { increment: 1 },
+        errorCode: 'OBJECT_DELETE_FAILED',
+        nextAttemptAt: new Date('2026-07-30T12:01:00.000Z'),
+        claimedAt: null,
+        claimedBy: null,
+      },
+    });
+    const logged = (Logger.prototype.error as jest.Mock).mock.calls
+      .flat()
+      .join(' ');
+    expect(logged).toContain('cleanup=cleanup-retry');
+    expect(logged).toContain('code=OBJECT_DELETE_FAILED');
+    expect(logged).not.toContain('passport-owner');
+    expect(logged).not.toContain('private key');
+    jest.useRealTimers();
+  });
+
 
   it('retries durable DELETE_PENDING cleanup and retains a terminal lifecycle row', async () => {
     prisma.kycDocument.findUnique.mockResolvedValue({

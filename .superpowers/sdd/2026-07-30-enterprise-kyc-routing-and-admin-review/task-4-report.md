@@ -337,3 +337,85 @@ test gap are addressed without adding an external queue or changing BLUE/LBLUE.
   covered through deterministic adapter and saga failure injection.
 - The focused run emits the AWS SDK notice that future releases will require
   Node 22; the current Node 20 environment passes all requested gates.
+
+---
+
+## Fix Round 3/5
+
+### Status
+
+Complete. Uploaded objects remain durably trackable even when their qualification
+submission and document rows have been cascade-deleted.
+
+### Independent Cleanup Intent
+
+- Added the standalone `qualification_storage_cleanup_intents` table and
+  `QualificationStorageCleanupStatus` enum.
+- The table has no relation or foreign key to `KycSubmission` or
+  `KycDocument`, so cleanup obligations survive qualification cascades.
+- The private Spaces key exists only in this backend persistence model. Service
+  results expose cleanup ID, status, and retry timing, never the key.
+- A unique storage-key index makes intent creation idempotent. Creation uses
+  `createMany({ skipDuplicates: true })` followed by an authoritative reread.
+- Ambiguous or failed persistence never triggers object deletion. It returns a
+  service-unavailable failure and logs only cleanup ID, bounded error code, and
+  error class.
+
+### Reconciliation and Retry
+
+- The successful-upload/no-document branch first checks authoritative document
+  ownership by opaque key. If no owner exists, it persists an independent intent
+  before any cleanup attempt.
+- Orphan deletion requires exact persisted claim ownership and is idempotent:
+  completed intents return successfully without another storage call.
+- Failed deletion increments durable attempts, clears the lease, stores
+  `OBJECT_DELETE_FAILED`, and schedules exponential backoff from 30 seconds to
+  one hour.
+- Successful deletion compare-and-sets the claim, records completion, clears
+  retry metadata, and retains the terminal intent as durable evidence.
+
+### Worker
+
+- The module-started cleanup worker now claims both document
+  `DELETE_PENDING` rows and independent orphan intents.
+- Each source is bounded at 10 rows per poll for a maximum combined batch of 20.
+- Both claims use `FOR UPDATE SKIP LOCKED`, a persisted worker ID, and the
+  existing five-minute stale-claim lease.
+- One source's claim failure does not prevent processing the other source.
+- Orphan worker logs contain only cleanup ID, source/error code, and error class.
+
+### TDD Evidence
+
+- The initial service run failed because the old reconciliation path attempted
+  to recreate a cascade-dependent `KycDocument` and the independent intent
+  methods did not exist.
+- Added coverage for a deleted submission/document, persistence failure without
+  deletion, idempotent duplicate creation, retry success and terminal
+  idempotency, retry failure/backoff, strict claim ownership, dual-source worker
+  claiming, local concurrency, shutdown, and key-free logs/results.
+- Added a migration-contract assertion proving the new table contains no
+  `REFERENCES` clause and has a unique storage-key index.
+
+### Final Verification
+
+- `npm test -- qualification-document-cleanup.worker.spec.ts qualification-routing.service.spec.ts qualification.service.spec.ts qualification-review.service.spec.ts qualification-storage.service.spec.ts qualification-evaluation.service.spec.ts --runInBand`
+  - 6/6 suites passed.
+  - 71/71 tests passed.
+- `npm run test:e2e -- qualification-routing.concurrent.e2e-spec.ts --runInBand`
+  - 1/1 suite guarded and skipped.
+  - 1/1 test skipped because `TEST_DATABASE_URL` was not set.
+- `npx prisma format`, `npx prisma validate`, and `npx prisma generate`
+  - Passed; Prisma Client v7.7.0 generated.
+- `npm run build`
+  - Passed.
+- `git diff --check`
+  - Passed.
+
+### Concerns
+
+- The PostgreSQL integration spec remains guarded because
+  `TEST_DATABASE_URL` is absent in this environment.
+- No live external Spaces service was used; storage and lifecycle behavior is
+  covered with deterministic failure injection.
+- The AWS SDK warns that releases after early January 2027 will require Node 22;
+  the current Node 20.20.1 environment passes all requested gates.
