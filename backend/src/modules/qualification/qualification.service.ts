@@ -107,13 +107,23 @@ export class QualificationService {
     });
   }
 
-  async createSubmissionForUser(userId: string, consentVersion: string) {
+  async createOrResumeDraftForUser(userId: string, consentVersion: string) {
     const fixer = await this.prisma.fixer.findUnique({
       where: { userId },
       select: { id: true },
     });
     if (!fixer) throw new NotFoundException('Fixer profile not found');
+
+    const draft = await this.prisma.kycSubmission.findFirst({
+      where: { fixerId: fixer.id, status: QualificationSubmissionStatus.DRAFT },
+      orderBy: { version: 'desc' },
+    });
+    if (draft) return draft;
     return this.createSubmission(fixer.id, new Date(), consentVersion);
+  }
+
+  async createSubmissionForUser(userId: string, consentVersion: string) {
+    return this.createOrResumeDraftForUser(userId, consentVersion);
   }
 
   async getStatusForUser(userId: string) {

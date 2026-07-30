@@ -312,7 +312,7 @@ describe('QualificationService', () => {
           id: 'submission-1',
           version: 2,
           status: 'APPROVED',
-          policyVersion: 'cblue-fixer-qualification-v1',
+          policyVersion: 'cblue-fixer-qualification-v2',
           submittedAt: updatedAt,
           reviewedAt: updatedAt,
           decisionReason: 'Verified by admin',
@@ -351,7 +351,7 @@ describe('QualificationService', () => {
           approvedTier: 'STANDARD',
           recommendedTier: 'STANDARD',
           source: 'HUMAN',
-          policyVersion: 'cblue-fixer-qualification-v1',
+          policyVersion: 'cblue-fixer-qualification-v2',
           reason: 'Verified by admin',
           effectiveAt: updatedAt,
           expiresAt: null,
@@ -364,7 +364,7 @@ describe('QualificationService', () => {
 
     expect(result).toEqual(
       expect.objectContaining({
-        sourceVersion: 'cblue-fixer-qualification-v1',
+        sourceVersion: 'cblue-fixer-qualification-v2',
         fixer: expect.objectContaining({
           id: 'fixer-1',
           tier: 'STANDARD',
@@ -1668,5 +1668,24 @@ describe('QualificationService', () => {
         action: 'DOCUMENT_VIEW_URL_CREATED',
       }),
     });
+  });
+  it("resumes only the authenticated fixer's latest editable draft", async () => {
+    prisma.fixer.findUnique.mockResolvedValue({ id: 'fixer-1' });
+    prisma.kycSubmission.findFirst.mockResolvedValue({
+      id: 'draft-1',
+      version: 3,
+      status: 'DRAFT',
+    });
+
+    await expect(
+      service.createOrResumeDraftForUser('user-1', 'pdpa-v2'),
+    ).resolves.toEqual(
+      expect.objectContaining({ id: 'draft-1', status: 'DRAFT' }),
+    );
+    expect(prisma.kycSubmission.findFirst).toHaveBeenCalledWith({
+      where: { fixerId: 'fixer-1', status: 'DRAFT' },
+      orderBy: { version: 'desc' },
+    });
+    expect(prisma.kycSubmission.create).not.toHaveBeenCalled();
   });
 });

@@ -16,6 +16,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CreateQualificationSubmissionDto } from './dto/create-qualification-submission.dto';
+import { CreateQualificationDraftDto } from './dto/create-qualification-draft.dto';
 import { QualificationReviewDecisionDto } from './dto/qualification-review-decision.dto';
 import { QualificationEvidenceDecisionDto } from './dto/qualification-evidence-decision.dto';
 import { QualificationReviewCheckDto } from './dto/qualification-review-check.dto';
@@ -32,6 +33,17 @@ export class QualificationController {
     private readonly evaluations: QualificationEvaluationService,
     private readonly reviews: QualificationReviewService,
   ) {}
+
+  @Post('submissions/draft')
+  createOrResumeDraft(
+    @CurrentUser('id') userId: string,
+    @Body() dto: CreateQualificationDraftDto,
+  ) {
+    return this.qualification.createOrResumeDraftForUser(
+      userId,
+      dto.consentVersion,
+    );
+  }
 
   @Post('submissions')
   createSubmission(
