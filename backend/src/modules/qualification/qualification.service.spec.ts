@@ -560,6 +560,99 @@ describe('QualificationService', () => {
     );
   });
 
+  it('recreates durable cleanup intent when reconciliation finds no row after upload', async () => {
+    prisma.kycSubmission.findFirst.mockResolvedValue({
+      id: 'submission-1',
+      fixerId: 'fixer-1',
+      status: 'DRAFT',
+      failedAttempts: 0,
+      lockedUntil: null,
+      fixer: { user: { name: 'Registered Name' } },
+    });
+    tx.kycDocument.create.mockImplementation(({ data }: any) => ({
+      id: data.id,
+      documentType: data.documentType,
+      contentType: data.contentType,
+      sizeBytes: data.sizeBytes,
+      evidenceStatus: 'UNCHECKED',
+      expiresAt: null,
+      createdAt: new Date('2026-07-30T00:00:00.000Z'),
+    }));
+    let transactionCall = 0;
+    prisma.$transaction.mockImplementation(
+      async (callback: (client: any) => unknown) => {
+        transactionCall += 1;
+        if (transactionCall === 2) {
+          throw new Error('promotion failed before commit');
+        }
+        return callback(tx);
+      },
+    );
+    prisma.kycDocument.findUnique
+      .mockResolvedValueOnce(null)
+      .mockImplementation(async ({ where }: any) =>
+        where.id
+          ? {
+              id: where.id,
+              submissionId: 'submission-1',
+              storageKey:
+                'qualification/fixer-1/submission-1/opaque-document-id',
+              isActive: false,
+              lifecycleState: 'DELETE_PENDING',
+              cleanupAttempts: 0,
+            }
+          : null,
+      );
+    prisma.kycDocument.findFirst.mockResolvedValue(null);
+    prisma.kycDocument.create.mockImplementation(({ data }: any) => data);
+    storage.deletePrivateObject.mockRejectedValueOnce(
+      new Error('delete unavailable'),
+    );
+
+    await expect(
+      service.uploadDocumentForUser('user-1', 'submission-1', 'id-front', {
+        originalname: 'passport-owner-name.jpg',
+        mimetype: 'image/jpeg',
+        size: 4,
+        buffer: Buffer.from([0xff, 0xd8, 0xff, 0x13]),
+      } as Express.Multer.File),
+    ).rejects.toThrow('promotion failed before commit');
+
+    const staged = tx.kycDocument.create.mock.calls[0][0].data;
+    expect(prisma.kycDocument.findFirst).toHaveBeenCalledWith({
+      where: { storageKey: staged.storageKey },
+      select: expect.objectContaining({
+        id: true,
+        isActive: true,
+        lifecycleState: true,
+      }),
+    });
+    expect(prisma.kycDocument.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        id: staged.id,
+        submissionId: 'submission-1',
+        storageKey: staged.storageKey,
+        isActive: false,
+        lifecycleState: 'DELETE_PENDING',
+        cleanupNextAttemptAt: expect.any(Date),
+      }),
+      select: expect.any(Object),
+    });
+    expect(prisma.kycDocument.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          cleanupErrorCode: 'OBJECT_DELETE_FAILED',
+          cleanupNextAttemptAt: expect.any(Date),
+        }),
+      }),
+    );
+    const logged = (Logger.prototype.error as jest.Mock).mock.calls
+      .flat()
+      .join(' ');
+    expect(logged).not.toContain('passport-owner-name.jpg');
+    expect(logged).not.toContain(staged.storageKey);
+  });
+
   it('retries durable DELETE_PENDING cleanup and retains a terminal lifecycle row', async () => {
     prisma.kycDocument.findUnique.mockResolvedValue({
       id: 'document-cleanup',
@@ -577,11 +670,12 @@ describe('QualificationService', () => {
       'opaque-storage-key',
     );
     expect(prisma.kycDocument.updateMany).toHaveBeenCalledWith({
-      where: {
+      where: expect.objectContaining({
         id: 'document-cleanup',
         isActive: false,
         lifecycleState: 'DELETE_PENDING',
-      },
+        cleanupClaimedBy: expect.any(String),
+      }),
       data: expect.objectContaining({
         lifecycleState: 'FAILED',
         objectDeletedAt: expect.any(Date),
@@ -590,6 +684,48 @@ describe('QualificationService', () => {
       }),
     });
   });
+
+  it('persists exponential backoff and releases the worker claim after cleanup failure', async () => {
+    jest.useFakeTimers().setSystemTime(Date.parse('2026-07-30T12:00:00.000Z'));
+    prisma.kycDocument.findUnique.mockResolvedValue({
+      id: 'document-retry',
+      submissionId: 'submission-1',
+      storageKey: 'opaque-storage-key',
+      isActive: false,
+      lifecycleState: 'DELETE_PENDING',
+      cleanupAttempts: 2,
+      cleanupClaimedBy: 'worker-1',
+    });
+    storage.deletePrivateObject.mockRejectedValueOnce(
+      new Error('storage unavailable'),
+    );
+
+    await expect(
+      service.retryPendingDocumentCleanup('document-retry', 'worker-1'),
+    ).resolves.toEqual({
+      cleaned: false,
+      lifecycleState: 'DELETE_PENDING',
+      nextAttemptAt: new Date('2026-07-30T12:02:00.000Z'),
+    });
+
+    expect(prisma.kycDocument.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'document-retry',
+        isActive: false,
+        lifecycleState: 'DELETE_PENDING',
+        cleanupClaimedBy: 'worker-1',
+      },
+      data: {
+        cleanupAttempts: { increment: 1 },
+        cleanupErrorCode: 'OBJECT_DELETE_FAILED',
+        cleanupNextAttemptAt: new Date('2026-07-30T12:02:00.000Z'),
+        cleanupClaimedAt: null,
+        cleanupClaimedBy: null,
+      },
+    });
+    jest.useRealTimers();
+  });
+
   it('stores uploaded documents privately and never accepts a client storage key', async () => {
     prisma.kycSubmission.findFirst.mockResolvedValue({
       id: 'submission-1',

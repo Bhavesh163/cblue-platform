@@ -361,6 +361,9 @@ model KycDocument {
   objectDeletedAt        DateTime?
   cleanupAttempts        Int                                 @default(0)
   cleanupErrorCode       String?
+  cleanupNextAttemptAt   DateTime?
+  cleanupClaimedAt       DateTime?
+  cleanupClaimedBy       String?
   supersededAt           DateTime?
   supersededById         String?
   assessmentReasonCodes  Json?
@@ -380,6 +383,7 @@ model KycDocument {
   @@index([submissionId])
   @@index([submissionId, isActive, documentType])
   @@index([lifecycleState, updatedAt])
+  @@index([lifecycleState, cleanupNextAttemptAt, cleanupClaimedAt])
   @@index([evidenceStatus, expiresAt])
   @@map("kyc_documents")
 }

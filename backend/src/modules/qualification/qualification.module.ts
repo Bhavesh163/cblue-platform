@@ -13,6 +13,7 @@ import { QualificationReviewService } from './qualification-review.service';
 import { QualificationVerificationService } from './qualification-verification.service';
 import { QualificationAssessmentService } from './qualification-assessment.service';
 import { QualificationRoutingService } from './qualification-routing.service';
+import { QualificationDocumentCleanupWorker } from './qualification-document-cleanup.worker';
 
 @Module({
   controllers: [QualificationController],
@@ -30,6 +31,7 @@ import { QualificationRoutingService } from './qualification-routing.service';
     QualificationVerificationService,
     QualificationAssessmentService,
     QualificationRoutingService,
+    QualificationDocumentCleanupWorker,
   ],
   exports: [
     QualificationPolicyService,

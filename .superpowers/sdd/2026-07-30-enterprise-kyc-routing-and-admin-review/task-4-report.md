@@ -239,3 +239,101 @@ or tier-evaluation separation.
   migration-contract and failure-injection tests.
 - The focused run emits an AWS SDK notice that future releases will require
   Node 22; the current Node 20 environment still passes all requested gates.
+
+---
+
+## Fix Round 2/5
+
+### Status
+
+Complete. The remaining cleanup-operability findings and PostgreSQL concurrency
+test gap are addressed without adding an external queue or changing BLUE/LBLUE.
+
+### Production Cleanup Worker
+
+- Added `QualificationDocumentCleanupWorker` to the qualification module so it
+  starts with Nest module initialization and stops on module destruction.
+- The worker polls every 30 seconds and claims at most 20 due
+  `DELETE_PENDING` rows per batch.
+- Claims are acquired atomically with PostgreSQL `FOR UPDATE SKIP LOCKED`,
+  persisted worker IDs/timestamps, and a five-minute stale-claim lease.
+- Concurrent local invocations share one in-flight promise, while database
+  claims prevent duplicate work across processes.
+- Shutdown clears the timer, waits for the active batch, and does not reschedule.
+- Worker and item failures log only sanitized document IDs, bounded codes, and
+  error class names.
+
+### Retry and Backoff State
+
+- Added `cleanupNextAttemptAt`, `cleanupClaimedAt`, and
+  `cleanupClaimedBy` to persisted qualification documents.
+- Added a due-work index over lifecycle, next-attempt, and claim timestamps.
+- Existing `DELETE_PENDING` rows are made immediately due by migration.
+- Failed object deletion increments `cleanupAttempts`, clears the claim, and
+  schedules exponential backoff from 30 seconds up to one hour.
+- Successful deletion compare-and-sets the owning claim, transitions the row to
+  terminal `FAILED`, records `objectDeletedAt`, and clears retry metadata.
+
+### No-Row Reconciliation
+
+- After a successful upload, an authoritative no-row result now triggers an
+  ownership lookup by the still-known opaque storage key.
+- If no row owns the key, the service recreates the caller-generated document ID
+  as an inactive `DELETE_PENDING` cleanup obligation before attempting object
+  deletion.
+- If creation has an ambiguous outcome, the service rereads ownership by key and
+  never deletes an active or `READY` owner.
+- A subsequent deletion failure remains represented by the recreated row with
+  attempts, error code, and next retry timestamp.
+- Logs remain free of storage keys and original filenames.
+
+### PostgreSQL Integration Coverage
+
+- Added `qualification-routing.concurrent.e2e-spec.ts`, guarded by
+  `TEST_DATABASE_URL`.
+- With PostgreSQL available, the spec creates real qualification evidence and
+  evaluations, invokes two concurrent routing transactions, verifies exactly one
+  routing audit and unresolved KYC task, inspects the partial unique index, and
+  proves a second direct unresolved KYC insert fails with Prisma `P2002`.
+- The current environment did not provide `TEST_DATABASE_URL`, so Jest
+  reported the guarded integration test as one explicit skip.
+- Deterministic unit failure-injection and migration-contract coverage remain
+  active regardless of database availability.
+
+### TDD Evidence
+
+- Worker spec initially failed because the production worker did not exist.
+- No-row reconciliation initially failed because no storage-key ownership lookup
+  or durable row recreation occurred.
+- Added unit coverage for successful cleanup, failed deletion with exact
+  exponential backoff, cross-run claim coalescing, bounded `SKIP LOCKED`
+  claims, sanitized logs, and clean shutdown.
+- Added upload failure-injection coverage proving no-row reconciliation recreates
+  durable cleanup intent and preserves retry metadata when deletion fails.
+
+### Final Verification
+
+- `npm test -- qualification-document-cleanup.worker.spec.ts qualification-routing.service.spec.ts qualification.service.spec.ts qualification-review.service.spec.ts qualification-storage.service.spec.ts qualification-evaluation.service.spec.ts --runInBand`
+  - 6/6 suites passed.
+  - 65/65 tests passed.
+- `npm run test:e2e -- qualification-routing.concurrent.e2e-spec.ts --runInBand`
+  - 1/1 suite guarded and skipped.
+  - 1/1 test skipped because `TEST_DATABASE_URL` was not set.
+- `npx prisma validate`
+  - Passed; schema is valid.
+- `npx prisma generate`
+  - Passed; Prisma Client v7.7.0 generated.
+- `npm run build`
+  - Passed.
+- `git diff --check`
+  - Passed.
+
+### Concerns
+
+- The PostgreSQL integration spec could not execute in this environment because
+  `TEST_DATABASE_URL` was absent; it is ready to run against a migrated test
+  database.
+- No live external Spaces service was used. Storage success/failure behavior is
+  covered through deterministic adapter and saga failure injection.
+- The focused run emits the AWS SDK notice that future releases will require
+  Node 22; the current Node 20 environment passes all requested gates.
