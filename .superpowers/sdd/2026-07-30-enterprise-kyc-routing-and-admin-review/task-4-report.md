@@ -520,3 +520,67 @@ that is durably reserved before the network request begins.
 - Prisma 7 does not run with the default Node 18 executable in this shell, so
   Prisma and build gates used the installed Node 20.20.1 runtime. The AWS SDK
   warns that releases after early January 2027 will require Node 22.
+
+---
+
+## Fix Round 5/5
+
+### Status
+
+Complete. Object deletion can no longer terminalize the independent cleanup
+intent ahead of a stale document row.
+
+### Atomic Post-Delete Finalization
+
+- Spaces deletion remains outside the database transaction and is intentionally
+  idempotent.
+- After deletion succeeds, one database transaction updates every inactive,
+  non-`READY` document for the storage key to terminal `FAILED` and
+  compare-and-set completes the claimed independent intent.
+- The document rows and cleanup intent share one completion timestamp.
+- Intent completion requires the exact `PENDING` intent ID and worker claim.
+  A lost claim rolls back document terminalization.
+- An independent intent with no surviving document completes in the same
+  transaction after a zero-row document update.
+- Completed intents no longer attempt best-effort document reconciliation
+  outside their completion transaction.
+
+### Retry Safety
+
+- If document terminalization, intent completion, or transaction commit fails,
+  the intent remains `PENDING` with its existing claim.
+- The persisted claim lease makes the intent recoverable after expiry.
+- The next worker repeats the idempotent Spaces deletion and retries the entire
+  atomic database finalization.
+- A stale live document continues to block same-checksum upload until the
+  atomic transaction commits its `FAILED` lifecycle and `COMPLETED` intent.
+
+### Failure-Injection Coverage
+
+- Injected document-terminalization failure after successful object deletion.
+- Verified the first cleanup returns `PENDING`, does not complete the intent,
+  and leaves the same-checksum lifecycle blocked.
+- Simulated a subsequent worker claim and verified Spaces deletion repeats.
+- Verified the retry atomically terminalizes the stale document, completes the
+  intent, and only then unblocks the same-checksum lifecycle.
+- Verified a no-document intent still completes through the transaction.
+
+### Final Verification
+
+- `npm test -- qualification-document-cleanup.worker.spec.ts qualification.service.spec.ts --runInBand`
+  - 2/2 suites passed.
+  - 40/40 tests passed.
+- Scoped ESLint on `qualification.service.ts` and
+  `qualification.service.spec.ts` with `--quiet`
+  - Passed with zero errors.
+- `npm run build`
+  - Passed under Node 20.20.1.
+- `git diff --check`
+  - Passed.
+
+### Concerns
+
+- No live external Spaces or PostgreSQL integration test was run in this final
+  round. The delete/finalize rollback and retry boundary is covered with
+  deterministic failure injection.
+- The existing AWS SDK Node 22 future-version warning remains unchanged.

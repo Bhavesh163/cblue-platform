@@ -34,7 +34,10 @@ describe('QualificationService', () => {
       updateMany: jest.fn(),
     },
     qualificationAuditLog: { create: jest.fn() },
-    qualificationStorageCleanupIntent: { deleteMany: jest.fn() },
+    qualificationStorageCleanupIntent: {
+      deleteMany: jest.fn(),
+      updateMany: jest.fn(),
+    },
     $executeRawUnsafe: jest.fn(),
   } as any;
   const prisma = {
@@ -108,6 +111,9 @@ describe('QualificationService', () => {
     tx.kycDocument.updateMany.mockResolvedValue({ count: 1 });
     tx.kycSubmission.findUnique.mockResolvedValue({ status: 'DRAFT' });
     tx.qualificationStorageCleanupIntent.deleteMany.mockResolvedValue({
+      count: 1,
+    });
+    tx.qualificationStorageCleanupIntent.updateMany.mockResolvedValue({
       count: 1,
     });
     prisma.kycDocument.deleteMany.mockResolvedValue({ count: 1 });
@@ -898,6 +904,7 @@ describe('QualificationService', () => {
         id: 'cleanup-success',
         status: 'COMPLETED',
       });
+    tx.kycDocument.updateMany.mockResolvedValueOnce({ count: 0 });
 
     await expect(
       service.retryStorageCleanupIntent('cleanup-success', 'worker-1'),
@@ -908,7 +915,7 @@ describe('QualificationService', () => {
 
     expect(storage.deletePrivateObject).toHaveBeenCalledTimes(1);
     expect(
-      prisma.qualificationStorageCleanupIntent.updateMany,
+      tx.qualificationStorageCleanupIntent.updateMany,
     ).toHaveBeenCalledWith({
       where: {
         id: 'cleanup-success',
@@ -924,6 +931,84 @@ describe('QualificationService', () => {
         claimedBy: null,
       }),
     });
+  });
+
+  it('retries atomic document and intent finalization after post-delete database failure', async () => {
+    const storageKey = 'qualification/private/stale-checksum-key';
+    let documentLifecycle = 'ASSESSING';
+    const liveDuplicateStates = new Set([
+      'PENDING_UPLOAD',
+      'UPLOADED',
+      'ASSESSING',
+      'READY',
+    ]);
+    const sameChecksumUploadIsBlocked = () =>
+      liveDuplicateStates.has(documentLifecycle);
+
+    prisma.qualificationStorageCleanupIntent.findUnique
+      .mockResolvedValueOnce({
+        id: 'cleanup-atomic',
+        storageKey,
+        status: 'PENDING',
+        attempts: 0,
+        claimedBy: 'worker-1',
+      })
+      .mockResolvedValueOnce({
+        id: 'cleanup-atomic',
+        storageKey,
+        status: 'PENDING',
+        attempts: 0,
+        claimedBy: 'worker-2',
+      });
+    prisma.kycDocument.findFirst.mockResolvedValue(null);
+    tx.kycDocument.updateMany
+      .mockRejectedValueOnce(new Error('document terminalization failed'))
+      .mockImplementationOnce(({ data }: any) => {
+        documentLifecycle = data.lifecycleState;
+        return { count: 1 };
+      });
+
+    await expect(
+      service.retryStorageCleanupIntent('cleanup-atomic', 'worker-1'),
+    ).resolves.toEqual({ cleaned: false, status: 'PENDING' });
+
+    expect(storage.deletePrivateObject).toHaveBeenCalledTimes(1);
+    expect(storage.deletePrivateObject).toHaveBeenLastCalledWith(storageKey);
+    expect(sameChecksumUploadIsBlocked()).toBe(true);
+    expect(
+      tx.qualificationStorageCleanupIntent.updateMany,
+    ).not.toHaveBeenCalled();
+
+    await expect(
+      service.retryStorageCleanupIntent('cleanup-atomic', 'worker-2'),
+    ).resolves.toEqual({ cleaned: true, status: 'COMPLETED' });
+
+    expect(storage.deletePrivateObject).toHaveBeenCalledTimes(2);
+    expect(storage.deletePrivateObject).toHaveBeenLastCalledWith(storageKey);
+    expect(sameChecksumUploadIsBlocked()).toBe(false);
+    expect(tx.kycDocument.updateMany).toHaveBeenLastCalledWith({
+      where: {
+        storageKey,
+        isActive: false,
+        lifecycleState: { not: 'READY' },
+      },
+      data: expect.objectContaining({
+        lifecycleState: 'FAILED',
+        objectDeletedAt: expect.any(Date),
+      }),
+    });
+    expect(
+      tx.qualificationStorageCleanupIntent.updateMany,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'cleanup-atomic',
+          status: 'PENDING',
+          claimedBy: 'worker-2',
+        },
+        data: expect.objectContaining({ status: 'COMPLETED' }),
+      }),
+    );
   });
 
   it('does not delete an object when worker cleanup races authoritative ownership', async () => {

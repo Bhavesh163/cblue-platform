@@ -937,7 +937,6 @@ export class QualificationService {
       });
     if (!intent) return { cleaned: false, status: 'MISSING' };
     if (intent.status === 'COMPLETED') {
-      await this.finalizeDeletedStorageDocuments(intent.storageKey);
       return { cleaned: true, status: 'COMPLETED' };
     }
     if (intent.claimedBy !== claimToken) {
@@ -1032,62 +1031,70 @@ export class QualificationService {
       return { cleaned: false, status: 'PENDING', nextAttemptAt };
     }
 
-    const finalized =
-      await this.prisma.qualificationStorageCleanupIntent.updateMany({
-        where: {
-          id: intent.id,
-          status: 'PENDING',
-          claimedBy: claimToken,
-        },
-        data: {
-          status: 'COMPLETED',
-          completedAt: new Date(),
-          attempts: { increment: 1 },
-          errorCode: null,
-          nextAttemptAt: null,
-          claimedAt: null,
-          claimedBy: null,
-        },
-      });
-    if (finalized.count !== 1) {
-      const authoritative =
-        await this.prisma.qualificationStorageCleanupIntent.findUnique({
-          where: { id: intent.id },
-          select: { status: true },
-        });
-      return {
-        cleaned: authoritative?.status === 'COMPLETED',
-        status: authoritative?.status ?? 'MISSING',
-      };
-    }
-    await this.finalizeDeletedStorageDocuments(intent.storageKey);
-    return { cleaned: true, status: 'COMPLETED' };
+    const finalized = await this.finalizeDeletedStorageCleanup(
+      intent.id,
+      intent.storageKey,
+      claimToken,
+    );
+    return finalized
+      ? { cleaned: true, status: 'COMPLETED' }
+      : { cleaned: false, status: 'PENDING' };
   }
 
-  private async finalizeDeletedStorageDocuments(
+  private async finalizeDeletedStorageCleanup(
+    cleanupId: string,
     storageKey: string,
-  ): Promise<void> {
+    claimToken: string,
+  ): Promise<boolean> {
     try {
-      await this.prisma.kycDocument.updateMany({
-        where: {
-          storageKey,
-          isActive: false,
-          lifecycleState: { not: 'READY' },
-        },
-        data: {
-          lifecycleState: 'FAILED',
-          objectDeletedAt: new Date(),
-          cleanupErrorCode: null,
-          cleanupNextAttemptAt: null,
-          cleanupClaimedAt: null,
-          cleanupClaimedBy: null,
-        },
+      await this.prisma.$transaction(async (tx) => {
+        const completedAt = new Date();
+        await tx.kycDocument.updateMany({
+          where: {
+            storageKey,
+            isActive: false,
+            lifecycleState: { not: 'READY' },
+          },
+          data: {
+            lifecycleState: 'FAILED',
+            objectDeletedAt: completedAt,
+            cleanupErrorCode: null,
+            cleanupNextAttemptAt: null,
+            cleanupClaimedAt: null,
+            cleanupClaimedBy: null,
+          },
+        });
+        const finalized = await tx.qualificationStorageCleanupIntent.updateMany(
+          {
+            where: {
+              id: cleanupId,
+              status: 'PENDING',
+              claimedBy: claimToken,
+            },
+            data: {
+              status: 'COMPLETED',
+              completedAt,
+              attempts: { increment: 1 },
+              errorCode: null,
+              nextAttemptAt: null,
+              claimedAt: null,
+              claimedBy: null,
+            },
+          },
+        );
+        if (finalized.count !== 1) {
+          throw new ConflictException(
+            'Qualification storage cleanup ownership changed',
+          );
+        }
       });
+      return true;
     } catch (error) {
       this.logger.error(
-        'Qualification deleted-object lifecycle reconciliation failed code=DELETED_OBJECT_RECONCILIATION_FAILED',
+        `Qualification storage cleanup finalization failed cleanup=${cleanupId} code=CLEANUP_FINALIZATION_FAILED`,
         error instanceof Error ? error.name : 'UnknownError',
       );
+      return false;
     }
   }
 
