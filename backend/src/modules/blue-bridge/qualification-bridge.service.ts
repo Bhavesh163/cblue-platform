@@ -57,6 +57,13 @@ export class QualificationBridgeService {
                 risk: true,
                 recommendedTier: true,
                 confidence: true,
+                identityConfidence: true,
+                documentAuthenticityConfidence: true,
+                faceMatchConfidence: true,
+                livenessConfidence: true,
+                credentialConfidence: true,
+                tierEligibilityScore: true,
+                humanReviewRequired: true,
                 completedAt: true,
                 createdAt: true,
               },
@@ -102,9 +109,17 @@ export class QualificationBridgeService {
     const submission = fixer.qualificationSubmissions[0] || null;
     const tierQualification = fixer.tierQualifications[0] || null;
     const evidenceStatuses = submission?.documents.map((document) => document.evidenceStatus) || [];
+    const kycEvaluation =
+      submission?.evaluations.find(
+        (evaluation) => evaluation.provider !== 'DETERMINISTIC_POLICY',
+      ) || submission?.evaluations[0] || null;
+    const tierEvaluation =
+      submission?.evaluations.find(
+        (evaluation) => evaluation.provider === 'DETERMINISTIC_POLICY',
+      ) || null;
 
     return {
-      sourceVersion: 'cblue-fixer-qualification-v1',
+      sourceVersion: 'cblue-fixer-qualification-v2',
       subject: { id: fixer.user.id, displayName: fixer.user.name || 'Partner' },
       fixer: {
         id: fixer.id,
@@ -129,6 +144,25 @@ export class QualificationBridgeService {
           }
         : null,
       tierQualification,
+      kyc: {
+        status: submission?.status || null,
+        identityConfidence: kycEvaluation?.identityConfidence ?? null,
+        documentAuthenticityConfidence:
+          kycEvaluation?.documentAuthenticityConfidence ?? null,
+        faceMatchConfidence: kycEvaluation?.faceMatchConfidence ?? null,
+        livenessConfidence: kycEvaluation?.livenessConfidence ?? null,
+        fraudRisk: kycEvaluation?.risk || null,
+        humanReviewRequired: kycEvaluation?.humanReviewRequired ?? null,
+      },
+      tier: {
+        eligibilityScore: tierEvaluation?.tierEligibilityScore ?? null,
+        recommendedTier:
+          tierQualification?.recommendedTier ||
+          tierEvaluation?.recommendedTier ||
+          null,
+        approvedTier: tierQualification?.approvedTier || null,
+        humanReviewRequired: tierEvaluation?.humanReviewRequired ?? null,
+      },
       verification: {
         documentCount: evidenceStatuses.length,
         validatedCount: evidenceStatuses.filter((status) => status === 'VALIDATED').length,

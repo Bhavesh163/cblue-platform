@@ -78,8 +78,10 @@ describe('QualificationBridgeService', () => {
 
     const result = await service.getSnapshot('partner@example.com', 'bridge-secret');
 
-    expect(result.sourceVersion).toBe('cblue-fixer-qualification-v1');
+    expect(result.sourceVersion).toBe('cblue-fixer-qualification-v2');
     expect(result.fixer.tier).toBe('STANDARD');
+    expect(result.kyc).toEqual(expect.objectContaining({ status: 'NEEDS_REVIEW', humanReviewRequired: null }));
+    expect(result.tier).toEqual(expect.objectContaining({ recommendedTier: 'STANDARD', approvedTier: null }));
     expect(result.submission?.reviewTask?.status).toBe('ASSIGNED');
     expect(result.verification).toEqual(expect.objectContaining({
       documentCount: 1,
@@ -88,6 +90,7 @@ describe('QualificationBridgeService', () => {
     }));
     expect(result.submission?.documents[0]).not.toHaveProperty('storageKey');
     expect(result.submission?.evaluations[0].provider).toBe('DETERMINISTIC_POLICY');
+    expect(JSON.stringify(result)).not.toMatch(/storageKey|signedUrl|rawOcr|providerSecret|assignedTo|reviewerId/);
   });
 
   it('does not expose a qualification record for an unknown linked subject', async () => {
