@@ -22,6 +22,16 @@ type KnownGpsArea = ThaiReverseGeocodeResult & {
 const KNOWN_GPS_AREAS: KnownGpsArea[] = [
   {
     province: 'กรุงเทพมหานคร',
+    district: 'วังทองหลาง',
+    subdistrict: 'สะพานสอง',
+    postalCode: '10310',
+    minLat: 13.7863498,
+    maxLat: 13.8028206,
+    minLng: 100.5883725,
+    maxLng: 100.6129265,
+  },
+  {
+    province: 'กรุงเทพมหานคร',
     district: 'วัฒนา',
     subdistrict: 'คลองเตยเหนือ',
     postalCode: '10110',

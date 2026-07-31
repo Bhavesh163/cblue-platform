@@ -233,8 +233,7 @@ test("property registration persists authoritative GPS mode and resolved matchin
   const submitStart = propertyRegisterPage.indexOf("async function handleSubmit");
   const submitEnd = propertyRegisterPage.indexOf("if (submitted)", submitStart);
   const submitBody = propertyRegisterPage.slice(submitStart, submitEnd);
-    assert.ok(submitBody.includes("await normalizeGpsAddressForSubmit(gpsCoords"));
-    assert.ok(submitBody.includes("await normalizeGpsAddressForSubmit(gpsCoords"));
+  assert.ok(submitBody.includes("await normalizeGpsAddressForSubmit(gpsCoords"));
   assert.match(submitBody, /province: persistedLocation.province/);
   assert.match(submitBody, /subdistrict:.*persistedLocation\.subdistrict/);
 });
@@ -243,6 +242,14 @@ test("real-estate summaries and workflow modals use separate location projection
   assert.ok(realEstatePage.includes('getPropertySummaryLocation(prop)'));
   assert.ok(realEstatePage.includes('getPropertyModalLocation(showContactFlow)'));
   assert.doesNotMatch(realEstatePage, /function getPropertySiteLocation/);
+});
+
+test("real-estate filters cascade province, district, and subdistrict datasets", () => {
+  assert.match(realEstatePage, /getDistrictsForProvince\(filters\.province\)/);
+  assert.match(realEstatePage, /getSubdistrictsForDistrict\(filters\.province, filters\.district\)/);
+  assert.match(realEstatePage, /district: e\.target\.value, subdistrict: ""/);
+  assert.match(realEstatePage, /disabled=\{!filters\.province\}/);
+  assert.match(realEstatePage, /disabled=\{!filters\.district\}/);
 });
 
 test("property workflow projection declarations expose location and file helpers", () => {

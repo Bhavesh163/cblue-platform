@@ -29,6 +29,28 @@ type KnownGpsArea = ThaiGpsLocationResult &
 const KNOWN_GPS_AREAS: KnownGpsArea[] = [
   {
     province: 'กรุงเทพมหานคร',
+    district: 'วังทองหลาง',
+    subdistrict: 'สะพานสอง',
+    postalCode: '10310',
+    minLat: 13.7863498,
+    maxLat: 13.8028206,
+    minLng: 100.5883725,
+    maxLng: 100.6129265,
+    aliases: [
+      'bangkok',
+      'bkk',
+      'กรุงเทพ',
+      'กรุงเทพมหานคร',
+      'wang thonglang',
+      'wang thong lang',
+      'วังทองหลาง',
+      'saphan song',
+      'สะพานสอง',
+      '10310',
+    ],
+  },
+  {
+    province: 'กรุงเทพมหานคร',
     district: 'วัฒนา',
     subdistrict: 'คลองเตยเหนือ',
     postalCode: '10110',

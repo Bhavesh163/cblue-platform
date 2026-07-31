@@ -6,6 +6,8 @@ import Image from "next/image";
 import { useTranslations, useLocale } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { THAI_PROVINCES } from "../lib/constants";
+import { getDistrictsForProvince } from "../lib/thai-address-data";
+import { getSubdistrictsForDistrict } from "../lib/thai-subdistrict-data";
 import PdpaConsent from "../components/PdpaConsent";
 import { clearSubscriberSession, refreshSubscriberSession } from "../../../lib/subscriberSession";
 import { propertyModalLocation, propertySummaryLocation } from "../../../lib/propertyWorkflowProjection";
@@ -1265,13 +1267,17 @@ function PropertiesPageContent() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   {locale === "th" ? "อำเภอ/เขต" : locale === "zh" ? "县/区" : "District"}
                 </label>
-                <input
-                  type="text"
+                <select
                   value={filters.district}
-                  onChange={(e) => setFilters({ ...filters, district: e.target.value })}
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none"
-                  placeholder={locale === "th" ? "เช่น วัฒนา" : locale === "zh" ? "例如 Watthana" : "e.g. Watthana"}
-                />
+                  onChange={(e) => setFilters({ ...filters, district: e.target.value, subdistrict: "" })}
+                  disabled={!filters.province}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none bg-white disabled:bg-gray-100 disabled:text-gray-500"
+                >
+                  <option value="">{locale === "th" ? "-- เลือกอำเภอ/เขต --" : locale === "zh" ? "-- 选择县/区 --" : "-- Select District --"}</option>
+                  {getDistrictsForProvince(filters.province).map((district) => (
+                    <option key={district} value={district}>{district}</option>
+                  ))}
+                </select>
               </div>
 
               {/* Subdistrict */}
@@ -1279,13 +1285,17 @@ function PropertiesPageContent() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   {locale === "th" ? "ตำบล/แขวง" : locale === "zh" ? "乡/镇" : "Sub-district"}
                 </label>
-                <input
-                  type="text"
+                <select
                   value={filters.subdistrict}
                   onChange={(e) => setFilters({ ...filters, subdistrict: e.target.value })}
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none"
-                  placeholder={locale === "th" ? "เช่น คลองเตยเหนือ" : locale === "zh" ? "例如 Khlong Toei Nuea" : "e.g. Khlong Toei Nuea"}
-                />
+                  disabled={!filters.district}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none bg-white disabled:bg-gray-100 disabled:text-gray-500"
+                >
+                  <option value="">{locale === "th" ? "-- เลือกตำบล/แขวง --" : locale === "zh" ? "-- 选择乡/镇 --" : "-- Select Sub-district --"}</option>
+                  {getSubdistrictsForDistrict(filters.province, filters.district).map((subdistrict) => (
+                    <option key={subdistrict} value={subdistrict}>{subdistrict}</option>
+                  ))}
+                </select>
               </div>
 
               {/* Price Range */}

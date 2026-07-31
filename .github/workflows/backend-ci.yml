@@ -343,13 +343,15 @@ jobs:
                 return
               fi
 
-              if [ -f "$DEPLOY_DIR/backend/.env" ]; then
-                runtime_file_value=$(grep -E "^${runtime_key}=" "$DEPLOY_DIR/backend/.env" | tail -1 | cut -d '=' -f2- | sed 's/^"//;s/"$//' || true)
-                if [ -n "$runtime_file_value" ]; then
-                  printf '%s' "$runtime_file_value"
-                  return
+              for runtime_env_file in "$DEPLOY_DIR/backend/.env" "$DEPLOY_DIR/.env"; do
+                if [ -f "$runtime_env_file" ]; then
+                  runtime_file_value=$(grep -E "^${runtime_key}=" "$runtime_env_file" | tail -1 | cut -d '=' -f2- | sed 's/^"//;s/"$//' || true)
+                  if [ -n "$runtime_file_value" ]; then
+                    printf '%s' "$runtime_file_value"
+                    return
+                  fi
                 fi
-              fi
+              done
 
               if [ -n "$PREV_BACKEND" ]; then
                 runtime_container_value=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$PREV_BACKEND" 2>/dev/null | grep "^${runtime_key}=" | sed "s/^${runtime_key}=//" | head -1 || true)

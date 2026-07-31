@@ -120,7 +120,8 @@ export default () => ({
   },
   qualificationVerification: {
     credentialUrl: process.env.QUALIFICATION_CREDENTIAL_VERIFIER_URL || '',
-    credentialApiKey: process.env.QUALIFICATION_CREDENTIAL_VERIFIER_API_KEY || '',
+    credentialApiKey:
+      process.env.QUALIFICATION_CREDENTIAL_VERIFIER_API_KEY || '',
   },
   typhoon: {
     apiKey: process.env.TYPHOON_API_KEY || '',

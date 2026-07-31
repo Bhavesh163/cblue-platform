@@ -15,7 +15,8 @@ export class RecaptchaService {
   constructor(private readonly configService: ConfigService) {}
 
   async verify(token: string | undefined, action: string): Promise<void> {
-    const secretKey = this.configService.get<string>('recaptcha.secretKey') || '';
+    const secretKey =
+      this.configService.get<string>('recaptcha.secretKey') || '';
     const nodeEnv = this.configService.get<string>('nodeEnv') || 'development';
 
     if (!secretKey) {
@@ -35,14 +36,17 @@ export class RecaptchaService {
 
     let payload: RecaptchaVerifyResponse;
     try {
-      const response = await fetch('https://www.google.com/recaptcha/api/siteverify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          secret: secretKey,
-          response: normalizedToken,
-        }),
-      });
+      const response = await fetch(
+        'https://www.google.com/recaptcha/api/siteverify',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            secret: secretKey,
+            response: normalizedToken,
+          }),
+        },
+      );
       payload = (await response.json()) as RecaptchaVerifyResponse;
     } catch (error) {
       this.logger.warn(
@@ -58,7 +62,8 @@ export class RecaptchaService {
       throw new BadRequestException('reCAPTCHA verification failed');
     }
 
-    const minimumScore = this.configService.get<number>('recaptcha.minimumScore') ?? 0;
+    const minimumScore =
+      this.configService.get<number>('recaptcha.minimumScore') ?? 0;
     if (typeof payload.score === 'number' && payload.score < minimumScore) {
       throw new BadRequestException('reCAPTCHA risk score too low');
     }

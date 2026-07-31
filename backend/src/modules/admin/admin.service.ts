@@ -40,7 +40,13 @@ export class AdminService {
     ) as { message?: string } | undefined;
     if (cautionFlag?.message) return cautionFlag.message;
 
-    return `Upper tier ${String(fixer.aiTier || fixer.tier || 'partner')} requires human evidence review`;
+    const tier =
+      typeof fixer.aiTier === 'string'
+        ? fixer.aiTier
+        : typeof fixer.tier === 'string'
+          ? fixer.tier
+          : 'partner';
+    return `Upper tier ${tier} requires human evidence review`;
   }
   async getPendingFixers(pagination: PaginationDto) {
     const { page = 1, limit = 20 } = pagination;
