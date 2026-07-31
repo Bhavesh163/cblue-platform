@@ -2306,7 +2306,8 @@ export class FixerService {
         data: {
           status: DemandGapStatus.RESOLVED,
           resolvedAt: new Date(),
-          resolutionNote: 'Resolved automatically after eligible providers became available',
+          resolutionNote:
+            'Resolved automatically after eligible providers became available',
         },
       });
       return;
@@ -2325,17 +2326,37 @@ export class FixerService {
         resolutionNote: null,
       },
     });
-    await demandStore.upsert({
+    const demand = await demandStore.upsert({
       where: { fingerprint },
       create: {
         fingerprint,
-        service: String(input.service || '').trim().slice(0, 200) || 'Unspecified service',
-        bookingType: String(input.bookingType || '').trim().slice(0, 50) || null,
-        requestText: String(input.description || '').trim().slice(0, 2000) || null,
-        requestedServices: parseRequestedServices(input.description || '') as unknown as Prisma.InputJsonValue,
-        district: String(input.district || '').trim().slice(0, 120) || null,
-        province: String(input.province || '').trim().slice(0, 120) || null,
-        postalCode: String(input.postalCode || '').trim().slice(0, 20) || null,
+        service:
+          String(input.service || '')
+            .trim()
+            .slice(0, 200) || 'Unspecified service',
+        bookingType:
+          String(input.bookingType || '')
+            .trim()
+            .slice(0, 50) || null,
+        requestText:
+          String(input.description || '')
+            .trim()
+            .slice(0, 2000) || null,
+        requestedServices: parseRequestedServices(
+          input.description || '',
+        ) as unknown as Prisma.InputJsonValue,
+        district:
+          String(input.district || '')
+            .trim()
+            .slice(0, 120) || null,
+        province:
+          String(input.province || '')
+            .trim()
+            .slice(0, 120) || null,
+        postalCode:
+          String(input.postalCode || '')
+            .trim()
+            .slice(0, 20) || null,
         latitude: this.toFiniteCoordinate(input.latitude),
         longitude: this.toFiniteCoordinate(input.longitude),
         expiresAt,
@@ -2344,6 +2365,38 @@ export class FixerService {
         occurrenceCount: { increment: 1 },
         lastSeenAt: now,
         expiresAt,
+      },
+    });
+    await this.prisma.unmatchedServiceDemandOccurrence.create({
+      data: {
+        demandId: demand.id,
+        fingerprint,
+        service:
+          String(input.service || '')
+            .trim()
+            .slice(0, 200) || 'Unspecified service',
+        bookingType:
+          String(input.bookingType || '')
+            .trim()
+            .slice(0, 50) || null,
+        requestText:
+          String(input.description || '')
+            .trim()
+            .slice(0, 2000) || null,
+        district:
+          String(input.district || '')
+            .trim()
+            .slice(0, 120) || null,
+        province:
+          String(input.province || '')
+            .trim()
+            .slice(0, 120) || null,
+        postalCode:
+          String(input.postalCode || '')
+            .trim()
+            .slice(0, 20) || null,
+        latitude: this.toFiniteCoordinate(input.latitude),
+        longitude: this.toFiniteCoordinate(input.longitude),
       },
     });
   }

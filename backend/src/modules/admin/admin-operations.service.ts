@@ -10,6 +10,12 @@ import { UpdateDemandGapDto } from './dto/update-demand-gap.dto';
 const INCIDENT_ACTIONS = ['partner-decline', 'customer-cancel'] as const;
 
 type RevenuePoint = { period: string; amount: number; count: number };
+type IncidentPoint = {
+  period: string;
+  partnerDeclines: number;
+  customerCancellations: number;
+  total: number;
+};
 type IncidentRow = {
   id: string;
   reference: string;
@@ -29,94 +35,115 @@ export class AdminOperationsService {
     const safeDays = Math.min(365, Math.max(7, Math.trunc(days) || 90));
     const since = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000);
 
-    const [payments, fixerActions, propertyEvents, demandGaps] =
-      await Promise.all([
-        this.prisma.payment.findMany({
-          where: { status: PaymentStatus.COMPLETED, paidAt: { gte: since } },
-          orderBy: { paidAt: 'desc' },
-          take: 5000,
-          select: {
-            id: true,
-            orderId: true,
-            amount: true,
-            method: true,
-            transactionRef: true,
-            paidAt: true,
-            createdAt: true,
-            order: {
-              select: {
-                orderType: true,
-                serviceCategory: true,
-                user: { select: { id: true, name: true, email: true } },
-                fixer: {
-                  select: {
-                    user: { select: { id: true, name: true, email: true } },
-                  },
+    const [
+      payments,
+      fixerActions,
+      propertyEvents,
+      demandGaps,
+      demandOccurrences,
+    ] = await Promise.all([
+      this.prisma.payment.findMany({
+        where: { status: PaymentStatus.COMPLETED, paidAt: { gte: since } },
+        orderBy: { paidAt: 'desc' },
+        take: 5000,
+        select: {
+          id: true,
+          orderId: true,
+          amount: true,
+          method: true,
+          transactionRef: true,
+          paidAt: true,
+          createdAt: true,
+          order: {
+            select: {
+              orderType: true,
+              serviceCategory: true,
+              user: { select: { id: true, name: true, email: true } },
+              fixer: {
+                select: {
+                  user: { select: { id: true, name: true, email: true } },
                 },
               },
             },
           },
-        }),
-        this.prisma.fixerWorkflowAction.findMany({
-          where: {
-            action: { in: [...INCIDENT_ACTIONS] },
-            createdAt: { gte: since },
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 2000,
-          select: {
-            id: true,
-            actorUserId: true,
-            action: true,
-            payload: true,
-            createdAt: true,
-            order: {
-              select: {
-                id: true,
-                serviceCategory: true,
-                userId: true,
-                user: { select: { name: true, email: true } },
-                fixer: {
-                  select: {
-                    userId: true,
-                    user: { select: { name: true, email: true } },
-                  },
+        },
+      }),
+      this.prisma.fixerWorkflowAction.findMany({
+        where: {
+          action: { in: [...INCIDENT_ACTIONS] },
+          createdAt: { gte: since },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 2000,
+        select: {
+          id: true,
+          actorUserId: true,
+          action: true,
+          payload: true,
+          createdAt: true,
+          order: {
+            select: {
+              id: true,
+              serviceCategory: true,
+              userId: true,
+              user: { select: { name: true, email: true } },
+              fixer: {
+                select: {
+                  userId: true,
+                  user: { select: { name: true, email: true } },
                 },
               },
             },
           },
-        }),
-        this.prisma.propertyInquiryWorkflowEvent.findMany({
-          where: {
-            action: { in: [...INCIDENT_ACTIONS] },
-            createdAt: { gte: since },
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 2000,
-          select: {
-            id: true,
-            actorId: true,
-            action: true,
-            note: true,
-            metadata: true,
-            createdAt: true,
-            inquiry: {
-              select: {
-                poNumber: true,
-                customerId: true,
-                customerName: true,
-                listerUserId: true,
-                listerName: true,
-              },
+        },
+      }),
+      this.prisma.propertyInquiryWorkflowEvent.findMany({
+        where: {
+          action: { in: [...INCIDENT_ACTIONS] },
+          createdAt: { gte: since },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 2000,
+        select: {
+          id: true,
+          actorId: true,
+          action: true,
+          note: true,
+          metadata: true,
+          createdAt: true,
+          inquiry: {
+            select: {
+              poNumber: true,
+              customerId: true,
+              customerName: true,
+              listerUserId: true,
+              listerName: true,
             },
           },
-        }),
-        this.prisma.unmatchedServiceDemand.findMany({
-          where: { expiresAt: { gt: new Date() } },
-          orderBy: [{ status: 'asc' }, { lastSeenAt: 'desc' }],
-          take: 200,
-        }),
-      ]);
+        },
+      }),
+      this.prisma.unmatchedServiceDemand.findMany({
+        where: { expiresAt: { gt: new Date() } },
+        orderBy: [{ status: 'asc' }, { lastSeenAt: 'desc' }],
+        take: 200,
+      }),
+      this.prisma.unmatchedServiceDemandOccurrence.findMany({
+        where: { occurredAt: { gte: since } },
+        orderBy: { occurredAt: 'desc' },
+        take: 5000,
+        select: {
+          id: true,
+          demandId: true,
+          fingerprint: true,
+          service: true,
+          bookingType: true,
+          district: true,
+          province: true,
+          postalCode: true,
+          occurredAt: true,
+        },
+      }),
+    ]);
 
     const incidents: IncidentRow[] = [
       ...fixerActions.map((event) => {
@@ -178,7 +205,13 @@ export class AdminOperationsService {
       windowDays: safeDays,
       demandGaps,
       incidents,
+      incidentSeries: {
+        daily: this.groupIncidents(incidents, 'daily'),
+        weekly: this.groupIncidents(incidents, 'weekly'),
+        monthly: this.groupIncidents(incidents, 'monthly'),
+      },
       repeatRisk: this.buildRepeatRisk(incidents),
+      demandOccurrences,
       revenue: {
         currency: 'THB',
         total: revenueDetails.reduce((sum, item) => sum + item.amount, 0),
@@ -259,6 +292,36 @@ export class AdminOperationsService {
         };
       })
       .sort((a, b) => b.count - a.count);
+  }
+
+  private groupIncidents(
+    rows: IncidentRow[],
+    grain: 'daily' | 'weekly' | 'monthly',
+  ): IncidentPoint[] {
+    const groups = new Map<string, IncidentPoint>();
+    for (const row of rows) {
+      const date = new Date(row.createdAt.getTime() + 7 * 60 * 60 * 1000);
+      const period =
+        grain === 'daily'
+          ? date.toISOString().slice(0, 10)
+          : grain === 'monthly'
+            ? date.toISOString().slice(0, 7)
+            : this.startOfIsoWeek(date).toISOString().slice(0, 10);
+      const current = groups.get(period) || {
+        period,
+        partnerDeclines: 0,
+        customerCancellations: 0,
+        total: 0,
+      };
+      current.total += 1;
+      if (row.eventType === 'PARTNER_DECLINE') current.partnerDeclines += 1;
+      if (row.eventType === 'CUSTOMER_CANCEL')
+        current.customerCancellations += 1;
+      groups.set(period, current);
+    }
+    return [...groups.values()].sort((a, b) =>
+      a.period.localeCompare(b.period),
+    );
   }
 
   private groupRevenue(

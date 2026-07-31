@@ -19,6 +19,7 @@ import { CreateQualificationSubmissionDto } from './dto/create-qualification-sub
 import { CreateQualificationDraftDto } from './dto/create-qualification-draft.dto';
 import { QualificationReviewDecisionDto } from './dto/qualification-review-decision.dto';
 import { QualificationEvidenceDecisionDto } from './dto/qualification-evidence-decision.dto';
+import { QualificationComplianceAccessDto } from './dto/qualification-compliance-access.dto';
 import { QualificationReviewCheckDto } from './dto/qualification-review-check.dto';
 import { UploadQualificationDocumentDto } from './dto/upload-qualification-document.dto';
 import { QualificationEvaluationService } from './qualification-evaluation.service';
@@ -176,6 +177,23 @@ export class QualificationController {
       adminId,
       submissionId,
       documentId,
+    );
+  }
+
+  @Post('admin/submissions/:submissionId/documents/:documentId/compliance-url')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  createComplianceDocumentUrl(
+    @CurrentUser('id') adminId: string,
+    @Param('submissionId') submissionId: string,
+    @Param('documentId') documentId: string,
+    @Body() dto: QualificationComplianceAccessDto,
+  ) {
+    return this.qualification.createComplianceDocumentUrl(
+      adminId,
+      submissionId,
+      documentId,
+      dto,
     );
   }
 

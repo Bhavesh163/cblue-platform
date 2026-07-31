@@ -90,6 +90,80 @@ export class AdminService {
       limit,
     };
   }
+  async getFixerQualificationDetail(fixerId: string) {
+    const fixer = await this.prisma.fixer.findUnique({
+      where: { id: fixerId },
+      select: {
+        id: true,
+        tier: true,
+        status: true,
+        verified: true,
+        priceList: true,
+        aiScore: true,
+        aiTier: true,
+        aiBreakdown: true,
+        aiFlags: true,
+        aiCredentialStatus: true,
+        user: { select: { id: true, name: true, email: true } },
+        qualificationSubmissions: {
+          orderBy: { version: 'desc' },
+          select: {
+            id: true,
+            version: true,
+            status: true,
+            submittedAt: true,
+            reviewedAt: true,
+            reviewerId: true,
+            decisionReason: true,
+            documents: {
+              select: {
+                id: true,
+                documentType: true,
+                contentType: true,
+                sizeBytes: true,
+                evidenceStatus: true,
+                lifecycleState: true,
+                createdAt: true,
+                expiresAt: true,
+              },
+              orderBy: { createdAt: 'asc' },
+            },
+            evaluations: {
+              select: {
+                id: true,
+                provider: true,
+                status: true,
+                risk: true,
+                recommendedTier: true,
+                confidence: true,
+                tierEligibilityScore: true,
+                humanReviewRequired: true,
+                completedAt: true,
+                createdAt: true,
+              },
+              orderBy: { createdAt: 'desc' },
+            },
+            reviewTasks: {
+              select: {
+                id: true,
+                kind: true,
+                status: true,
+                proposedTier: true,
+                decision: true,
+                proposedReason: true,
+                checkedBy: true,
+                decidedAt: true,
+              },
+              orderBy: { createdAt: 'desc' },
+            },
+          },
+        },
+      },
+    });
+    if (!fixer) throw new NotFoundException('Fixer not found');
+    return fixer;
+  }
+
   async approveFixer(fixerId: string, dto: ApproveFixerDto) {
     const fixer = await this.prisma.fixer.findUnique({
       where: { id: fixerId },

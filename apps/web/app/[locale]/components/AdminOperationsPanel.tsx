@@ -41,6 +41,12 @@ type Risk = {
   lastOccurredAt?: string | null;
 };
 type RevenuePoint = { period: string; amount: number; count: number };
+type IncidentPoint = {
+  period: string;
+  partnerDeclines: number;
+  customerCancellations: number;
+  total: number;
+};
 type RevenueDetail = {
   id: string;
   orderId: string;
@@ -58,6 +64,18 @@ type Overview = {
   demandGaps: DemandGap[];
   incidents: Incident[];
   repeatRisk: Risk[];
+  incidentSeries: {
+    daily: IncidentPoint[];
+    weekly: IncidentPoint[];
+    monthly: IncidentPoint[];
+  };
+  demandOccurrences: Array<{
+    id: string;
+    service: string;
+    district?: string | null;
+    province?: string | null;
+    occurredAt: string;
+  }>;
   revenue: {
     currency: string;
     total: number;
@@ -117,6 +135,19 @@ export default function AdminOperationsPanel({ token }: { token: string }) {
     () => Math.max(1, ...series.map((point) => point.amount)),
     [series],
   );
+  const demandByLocation = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const occurrence of overview?.demandOccurrences || []) {
+      const location =
+        [occurrence.district, occurrence.province].filter(Boolean).join(", ") ||
+        "Location not supplied";
+      counts.set(location, (counts.get(location) || 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([location, count]) => ({ location, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 12);
+  }, [overview?.demandOccurrences]);
 
   async function updateGap(gap: DemandGap, status: string) {
     const note = notes[gap.id]?.trim() || "";
@@ -289,6 +320,40 @@ export default function AdminOperationsPanel({ token }: { token: string }) {
             grouped by exact request and location.
           </p>
         </div>
+        {demandByLocation.length > 0 && (
+          <div
+            className="mb-5 flex min-h-36 items-end gap-2 overflow-x-auto border-b border-slate-200 pb-2"
+            aria-label="unmatched demand by location chart"
+          >
+            {demandByLocation.map((row) => {
+              const maxCount = Math.max(
+                ...demandByLocation.map((item) => item.count),
+              );
+              return (
+                <div
+                  key={row.location}
+                  className="flex min-w-24 flex-1 flex-col items-center justify-end gap-1"
+                >
+                  <span className="text-[11px] font-semibold text-slate-700">
+                    {row.count}
+                  </span>
+                  <div
+                    className="w-full max-w-16 rounded-t bg-sky-600"
+                    style={{
+                      height: Math.max(
+                        4,
+                        Math.round((row.count / maxCount) * 90),
+                      ),
+                    }}
+                  />
+                  <span className="max-w-24 truncate text-[10px] text-slate-600">
+                    {row.location}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
         {overview?.demandGaps.length ? (
           <div className="overflow-x-auto">
             <table className="min-w-[1180px] w-full text-left text-sm">
@@ -377,6 +442,84 @@ export default function AdminOperationsPanel({ token }: { token: string }) {
             No unmatched service demand is currently open.
           </p>
         )}
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-white p-5">
+        <h3 className="font-bold text-slate-950">
+          Declines and cancellations over time
+        </h3>
+        <p className="mt-1 text-sm text-slate-600">
+          Counts are grouped from persisted workflow events; no client-side
+          reconstruction.
+        </p>
+        <div
+          className="mt-4 flex min-h-36 items-end gap-2 overflow-x-auto border-b border-slate-200 pb-2"
+          aria-label="daily decline and cancellation chart"
+        >
+          {(overview?.incidentSeries.daily || []).map((row) => {
+            const maxTotal = Math.max(
+              1,
+              ...(overview?.incidentSeries.daily || []).map(
+                (item) => item.total,
+              ),
+            );
+            return (
+              <div
+                key={row.period}
+                className="flex min-w-20 flex-1 flex-col items-center justify-end gap-1"
+              >
+                <span className="text-[11px] font-semibold text-slate-700">
+                  {row.total}
+                </span>
+                <div
+                  className="w-full max-w-16 rounded-t bg-amber-500"
+                  style={{
+                    height: Math.max(
+                      4,
+                      Math.round((row.total / maxTotal) * 90),
+                    ),
+                  }}
+                />
+                <span className="text-[10px] text-slate-600">{row.period}</span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-[760px] w-full text-left text-sm">
+            <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
+              <tr>
+                <th className="py-2 pr-4">Period</th>
+                <th className="py-2 pr-4">Partner declines</th>
+                <th className="py-2 pr-4">Customer cancellations</th>
+                <th className="py-2 text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {(overview?.incidentSeries.daily || []).map((row) => (
+                <tr key={row.period}>
+                  <td className="py-3 pr-4 font-semibold text-slate-800">
+                    {row.period}
+                  </td>
+                  <td className="py-3 pr-4 text-slate-700">
+                    {row.partnerDeclines}
+                  </td>
+                  <td className="py-3 pr-4 text-slate-700">
+                    {row.customerCancellations}
+                  </td>
+                  <td className="py-3 text-right font-semibold text-slate-900">
+                    {row.total}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!overview?.incidentSeries.daily.length && (
+            <p className="py-4 text-sm text-slate-500">
+              No persisted incidents in this reporting window.
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">

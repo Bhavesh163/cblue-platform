@@ -12,6 +12,7 @@ describe('AdminOperationsService', () => {
       findUnique: jest.fn(),
       update: jest.fn(),
     },
+    unmatchedServiceDemandOccurrence: { findMany: jest.fn() },
   };
   let service: AdminOperationsService;
 
@@ -22,6 +23,7 @@ describe('AdminOperationsService', () => {
     prisma.fixerWorkflowAction.findMany.mockResolvedValue([]);
     prisma.propertyInquiryWorkflowEvent.findMany.mockResolvedValue([]);
     prisma.unmatchedServiceDemand.findMany.mockResolvedValue([]);
+    prisma.unmatchedServiceDemandOccurrence.findMany.mockResolvedValue([]);
   });
 
   it('reports only persisted completed payment revenue by day, week, and month', async () => {
@@ -94,6 +96,40 @@ describe('AdminOperationsService', () => {
         reason: 'Schedule conflict for the requested date',
         createdAt,
       }),
+    ]);
+  });
+
+  it('groups persisted declines and cancellations into daily incident series', async () => {
+    const createdAt = new Date('2026-07-21T06:30:00.000Z');
+    prisma.fixerWorkflowAction.findMany.mockResolvedValue([
+      {
+        id: 'event-1',
+        actorUserId: 'partner-1',
+        action: 'partner-decline',
+        payload: { reason: 'Schedule conflict' },
+        createdAt,
+        order: {
+          id: 'order-1',
+          serviceCategory: 'ELECTRICAL',
+          userId: 'customer-1',
+          user: { name: 'Customer', email: null },
+          fixer: {
+            userId: 'partner-1',
+            user: { name: 'Partner', email: null },
+          },
+        },
+      },
+    ]);
+
+    const result = await service.getOverview(90);
+
+    expect(result.incidentSeries.daily).toEqual([
+      {
+        period: '2026-07-21',
+        partnerDeclines: 1,
+        customerCancellations: 0,
+        total: 1,
+      },
     ]);
   });
 

@@ -61,6 +61,11 @@ export class AdminController {
     return this.adminService.getTierReviewFixers(pagination);
   }
 
+  @Get('fixers/:fixerId/qualification-detail')
+  getFixerQualificationDetail(@Param('fixerId') fixerId: string) {
+    return this.adminService.getFixerQualificationDetail(fixerId);
+  }
+
   @Put('fixers/:fixerId/status')
   approveFixer(
     @Param('fixerId') fixerId: string,

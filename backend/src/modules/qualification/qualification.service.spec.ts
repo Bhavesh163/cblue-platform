@@ -61,6 +61,7 @@ describe('QualificationService', () => {
       updateMany: jest.fn(),
     },
     qualificationAuditLog: { create: jest.fn(), findMany: jest.fn() },
+    qualificationDocumentAccess: { create: jest.fn() },
     $transaction: jest.fn((callback: (client: any) => unknown) => callback(tx)),
   } as any;
   const policy = { evaluate: jest.fn() } as any;
@@ -1669,6 +1670,47 @@ describe('QualificationService', () => {
       }),
     });
   });
+  it('creates an audited compliance retrieval URL with an optional legal hold', async () => {
+    prisma.kycDocument.findFirst.mockResolvedValue({
+      id: 'document-1',
+      storageKey: 'qualification/fixer-1/submission-1/document-1',
+      documentType: 'id-front',
+    });
+    storage.createReadUrl.mockResolvedValue(
+      'https://private.example/compliance',
+    );
+
+    await expect(
+      service.createComplianceDocumentUrl(
+        'admin-1',
+        'submission-1',
+        'document-1',
+        {
+          purpose: 'Regulator request for identity evidence',
+          caseReference: 'REG-2026-001',
+          legalHold: true,
+          legalHoldUntil: '2027-01-01T00:00:00.000Z',
+        },
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        documentId: 'document-1',
+        documentType: 'id-front',
+        expiresInSeconds: 300,
+        url: 'https://private.example/compliance',
+      }),
+    );
+    expect(prisma.qualificationDocumentAccess.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        submissionId: 'submission-1',
+        actorId: 'admin-1',
+        purpose: 'Regulator request for identity evidence',
+        caseReference: 'REG-2026-001',
+        legalHoldUntil: expect.any(Date),
+      }),
+    });
+  });
+
   it("resumes only the authenticated fixer's latest editable draft", async () => {
     prisma.fixer.findUnique.mockResolvedValue({ id: 'fixer-1' });
     prisma.kycSubmission.findFirst.mockResolvedValue({

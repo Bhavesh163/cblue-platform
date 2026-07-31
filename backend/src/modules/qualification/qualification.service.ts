@@ -23,6 +23,7 @@ import { QualificationStorageService } from './qualification-storage.service';
 import { QUALIFICATION_DOCUMENT_TYPES } from './dto/upload-qualification-document.dto';
 import { QualificationStorageReadinessService } from './qualification-storage-readiness.service';
 import { QualificationEvidenceDecisionDto } from './dto/qualification-evidence-decision.dto';
+import { QualificationComplianceAccessDto } from './dto/qualification-compliance-access.dto';
 import { QualificationAssessmentService } from './qualification-assessment.service';
 import { QualificationRoutingService } from './qualification-routing.service';
 
@@ -1566,6 +1567,61 @@ export class QualificationService {
       documentId: document.id,
       documentType: document.documentType,
       expiresInSeconds,
+      url,
+    };
+  }
+
+  async createComplianceDocumentUrl(
+    adminId: string,
+    submissionId: string,
+    documentId: string,
+    dto: QualificationComplianceAccessDto,
+  ) {
+    const purpose = dto.purpose.trim();
+    const document = await this.prisma.kycDocument.findFirst({
+      where: { id: documentId, submissionId, lifecycleState: 'READY' },
+      select: { id: true, storageKey: true, documentType: true },
+    });
+    if (!document)
+      throw new NotFoundException('Qualification document not found');
+    const legalHoldUntil = dto.legalHold
+      ? new Date(dto.legalHoldUntil || Date.now() + 365 * 24 * 60 * 60 * 1000)
+      : null;
+    const expiresInSeconds = 300;
+    const url = await this.storage.createReadUrl(
+      document.storageKey,
+      expiresInSeconds,
+    );
+    await this.prisma.qualificationDocumentAccess.create({
+      data: {
+        documentId: document.id,
+        submissionId,
+        actorId: adminId,
+        purpose,
+        caseReference: dto.caseReference?.trim() || null,
+        legalHoldUntil,
+      },
+    });
+    await this.prisma.qualificationAuditLog.create({
+      data: {
+        submissionId,
+        actorId: adminId,
+        action: 'COMPLIANCE_DOCUMENT_ACCESS_GRANTED',
+        entityType: 'KycDocument',
+        entityId: document.id,
+        reason: purpose,
+        metadata: {
+          caseReference: dto.caseReference?.trim() || null,
+          legalHold: Boolean(dto.legalHold),
+          legalHoldUntil: legalHoldUntil?.toISOString() || null,
+        },
+      },
+    });
+    return {
+      documentId: document.id,
+      documentType: document.documentType,
+      expiresInSeconds,
+      legalHoldUntil,
       url,
     };
   }

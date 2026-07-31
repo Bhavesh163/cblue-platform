@@ -348,6 +348,7 @@ model KycSubmission {
   createdAt             DateTime                      @default(now())
   updatedAt             DateTime                      @updatedAt
   qualificationHandoffs QualificationHandoff[]
+  complianceAccesses QualificationDocumentAccess[]
 
   @@unique([fixerId, version])
   @@index([status, createdAt])
@@ -392,6 +393,7 @@ model KycDocument {
   retentionDeleteAt      DateTime?
   createdAt              DateTime                            @default(now())
   updatedAt              DateTime                            @updatedAt
+  complianceAccesses     QualificationDocumentAccess[]
 
   @@index([submissionId])
   @@index([submissionId, isActive, documentType])
@@ -738,11 +740,49 @@ model UnmatchedServiceDemand {
   resolutionNote    String?
   resolvedAt        DateTime?
   expiresAt         DateTime
+  occurrences       UnmatchedServiceDemandOccurrence[]
 
   @@index([status, lastSeenAt])
   @@index([province, district])
   @@index([expiresAt])
   @@map("unmatched_service_demands")
+}
+
+model QualificationDocumentAccess {
+  id             String      @id @default(uuid())
+  documentId     String
+  document       KycDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  submissionId   String
+  submission     KycSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  actorId        String
+  purpose        String
+  caseReference  String?
+  legalHoldUntil DateTime?
+  createdAt      DateTime    @default(now())
+
+  @@index([submissionId, createdAt])
+  @@index([documentId, createdAt])
+  @@map("qualification_document_accesses")
+}
+
+model UnmatchedServiceDemandOccurrence {
+  id          String                 @id @default(uuid())
+  demandId    String
+  demand      UnmatchedServiceDemand @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  fingerprint String
+  service     String
+  bookingType String?
+  requestText String?
+  district    String?
+  province    String?
+  postalCode  String?
+  latitude    Float?
+  longitude   Float?
+  occurredAt  DateTime               @default(now())
+
+  @@index([fingerprint, occurredAt])
+  @@index([province, district, occurredAt])
+  @@map("unmatched_service_demand_occurrences")
 }
 
 model Review {
