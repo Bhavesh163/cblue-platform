@@ -822,34 +822,25 @@ export class PropertyWorkflowBridgeService {
     };
   }
 
-  // Server-owned location presentation. When GPS coordinates are present the
-  // workflow action modals render the persisted coordinates; summary cards and
-  // request/active-job rows render the persisted subdistrict. When GPS is
-  // absent (or zero) both surfaces render the persisted subdistrict. This never
-  // inspects titles, descriptions, PRE numbers, modal text, or localStorage.
+  // Server-owned location presentation. GPS listings retain coordinates for
+  // action modals and combine the persisted subdistrict with coordinates on
+  // summary surfaces. Administrative listings never expose stale coordinates.
   private locationPresentation(property: any) {
     const latitude = Number(property?.latitude);
     const longitude = Number(property?.longitude);
-    const hasGps =
-      Number.isFinite(latitude) &&
-      Number.isFinite(longitude) &&
-      !(Math.abs(latitude) < 0.000001 && Math.abs(longitude) < 0.000001);
-    const summaryDisplay = String(
-      property?.subdistrict ||
-        property?.district ||
-        property?.province ||
-        '',
-    ).trim();
+    const hasCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude) && !(Math.abs(latitude) < 0.000001 && Math.abs(longitude) < 0.000001);
+    const storedMode = String(property?.locationMode || '').toUpperCase();
+    const hasGps = storedMode === 'GPS' ? hasCoordinates : storedMode === 'ADMINISTRATIVE' ? false : hasCoordinates;
+    const administrativeDisplay = String(property?.subdistrict || property?.district || property?.province || '').trim();
+    const coordinateDisplay = hasGps ? `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` : '';
     return {
       mode: hasGps ? 'gps' : 'administrative',
       coordinates: hasGps ? { latitude, longitude } : null,
       siteSubdistrict: String(property?.subdistrict || '').trim(),
       postalCode: String(property?.postalCode || '').trim(),
       province: String(property?.province || '').trim(),
-      modalDisplay: hasGps
-        ? `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
-        : summaryDisplay,
-      summaryDisplay,
+      modalDisplay: coordinateDisplay || administrativeDisplay,
+      summaryDisplay: hasGps ? [administrativeDisplay, coordinateDisplay].filter(Boolean).join(' \\u00b7 ') : administrativeDisplay,
     };
   }
 
@@ -900,6 +891,7 @@ export class PropertyWorkflowBridgeService {
   }
 
   private publicListing(property: any, includeContact = false) {
+    const locationPresentation = this.locationPresentation(property);
     return {
       id: property.id,
       title: property.title,
@@ -908,6 +900,7 @@ export class PropertyWorkflowBridgeService {
       tier: property.tier,
       price: property.price,
       location: {
+        mode: locationPresentation.mode,
         province: property.province,
         district: property.district,
         subdistrict: property.subdistrict,

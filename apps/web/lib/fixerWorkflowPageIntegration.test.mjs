@@ -18,6 +18,14 @@ const projectionDeclaration = readFileSync(
   new URL("./fixerWorkflowUiProjection.d.ts", import.meta.url),
   "utf8",
 );
+const propertyRegisterPage = readFileSync(
+  new URL("../app/[locale]/properties/register/page.tsx", import.meta.url),
+  "utf8",
+);
+const realEstatePage = readFileSync(
+  new URL("../app/[locale]/properties/page.tsx", import.meta.url),
+  "utf8",
+);
 const propertyProjectionDeclaration = readFileSync(
   new URL("./propertyWorkflowProjection.d.ts", import.meta.url),
   "utf8",
@@ -157,7 +165,7 @@ test("all three booking forms resolve GPS address fields during submit", () => {
     const submitStart = page.indexOf("async function handleSubmit");
     const successStart = page.indexOf("if (success)", submitStart);
     const submitBody = page.slice(submitStart, successStart);
-    assert.match(submitBody, /await normalizeGpsAddressForSubmit\(gpsCoords/);
+    assert.ok(submitBody.includes("await normalizeGpsAddressForSubmit(gpsCoords"));
     assert.match(submitBody, /resolvedSubmitAddress/);
   }
 });
@@ -219,6 +227,22 @@ test("direct fixer chat has no fabricated default room or PO parsing fallback", 
   assert.doesNotMatch(customerChatPage, /po_to_order_/);
   assert.match(customerChatPage, /applyAuthoritativeOrderMetadata/);
   assert.match(customerChatPage, /serviceCategory \|\| order\?\.service \|\| order\?\.title/);
+});
+
+test("property registration persists authoritative GPS mode and resolved matching fields", () => {
+  const submitStart = propertyRegisterPage.indexOf("async function handleSubmit");
+  const submitEnd = propertyRegisterPage.indexOf("if (submitted)", submitStart);
+  const submitBody = propertyRegisterPage.slice(submitStart, submitEnd);
+    assert.ok(submitBody.includes("await normalizeGpsAddressForSubmit(gpsCoords"));
+    assert.ok(submitBody.includes("await normalizeGpsAddressForSubmit(gpsCoords"));
+  assert.match(submitBody, /province: persistedLocation.province/);
+  assert.match(submitBody, /subdistrict:.*persistedLocation\.subdistrict/);
+});
+
+test("real-estate summaries and workflow modals use separate location projections", () => {
+  assert.ok(realEstatePage.includes('getPropertySummaryLocation(prop)'));
+  assert.ok(realEstatePage.includes('getPropertyModalLocation(showContactFlow)'));
+  assert.doesNotMatch(realEstatePage, /function getPropertySiteLocation/);
 });
 
 test("property workflow projection declarations expose location and file helpers", () => {

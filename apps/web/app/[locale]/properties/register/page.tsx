@@ -255,6 +255,12 @@ export default function PropertyRegisterPage() {
     }
   }
 
+  function handleLocationTypeChange(nextLocationType: "gps" | "dropdown" | "address") {
+    setLocationType(nextLocationType);
+    setGpsCoords(null);
+    setForm((prev) => ({ ...prev, province: "", district: "", subdistrict: "", postalCode: "" }));
+  }
+
   async function handleGpsDetected(coords: { lat: number; lng: number }) {
     setGpsCoords(coords);
     setForm((prev) => ({ ...prev, province: "", district: "", subdistrict: "", postalCode: "" }));
@@ -328,6 +334,17 @@ export default function PropertyRegisterPage() {
 
     setSubmitting(true);
     try {
+      let persistedLocation = { province: form.province, district: form.district, subdistrict: form.subdistrict, postalCode: form.postalCode };
+      if (locationType === "gps" && gpsCoords) {
+        const resolved = await normalizeGpsAddressForSubmit(gpsCoords);
+        if (!resolved?.province || !resolved.subdistrict) {
+          setError("The subdistrict could not be confirmed from GPS. Detect the location again or select it from the list.");
+          return;
+        }
+        persistedLocation = { province: resolved.province, district: resolved.district, subdistrict: resolved.subdistrict, postalCode: resolved.postalCode };
+        setForm((prev) => ({ ...prev, ...persistedLocation }));
+      }
+
       // Compose address fields not in DTO into addressLine
       const addressParts = [
         form.houseNumber,
@@ -350,13 +367,14 @@ export default function PropertyRegisterPage() {
         bathrooms: form.bathrooms ? parseInt(form.bathrooms) : undefined,
         floors: form.floors ? parseInt(form.floors) : undefined,
         yearBuilt: form.yearBuilt ? parseInt(form.yearBuilt) : undefined,
-        province: form.province || undefined,
-        district: form.district || undefined,
-        subdistrict: (form.subdistrict && !form.subdistrict.startsWith('--')) ? form.subdistrict : undefined,
-        postalCode: form.postalCode || undefined,
+        province: persistedLocation.province || undefined,
+        district: persistedLocation.district || undefined,
+        subdistrict: (persistedLocation.subdistrict && !persistedLocation.subdistrict.startsWith('--')) ? persistedLocation.subdistrict : undefined,
+        postalCode: persistedLocation.postalCode || undefined,
         addressLine: addressParts || undefined,
-        latitude: gpsCoords?.lat,
-        longitude: gpsCoords?.lng,
+        latitude: locationType === "gps" ? gpsCoords?.lat : undefined,
+        longitude: locationType === "gps" ? gpsCoords?.lng : undefined,
+        locationMode: locationType === "gps" ? "GPS" : "ADMINISTRATIVE",
         contactName: form.contactName,
         contactPhone: form.contactPhone,
         contactEmail: form.contactEmail,
@@ -742,15 +760,15 @@ export default function PropertyRegisterPage() {
                 {/* Location method selector — 3 mutually exclusive options */}
                 <div className="flex flex-wrap gap-4">
                   <label className="flex items-center gap-2 text-sm">
-                    <input type="radio" name="locationType" value="gps" checked={locationType === "gps"} onChange={() => setLocationType("gps")} className="text-green-600 focus:ring-green-500" />
+                    <input type="radio" name="locationType" value="gps" checked={locationType === "gps"} onChange={() => handleLocationTypeChange("gps")} className="text-green-600 focus:ring-green-500" />
                     📍 {locale === "th" ? "ตรวจจับตำแหน่งอัตโนมัติ (GPS)" : locale === "zh" ? "自动检测位置 (GPS)" : "Auto-detect Location (GPS)"}
                   </label>
                   <label className="flex items-center gap-2 text-sm">
-                    <input type="radio" name="locationType" value="dropdown" checked={locationType === "dropdown"} onChange={() => setLocationType("dropdown")} className="text-green-600 focus:ring-green-500" />
+                    <input type="radio" name="locationType" value="dropdown" checked={locationType === "dropdown"} onChange={() => handleLocationTypeChange("dropdown")} className="text-green-600 focus:ring-green-500" />
                     {locale === "th" ? "เลือกจากรายการ" : locale === "zh" ? "从列表选择" : "Select from list"}
                   </label>
                   <label className="flex items-center gap-2 text-sm">
-                    <input type="radio" name="locationType" value="address" checked={locationType === "address"} onChange={() => setLocationType("address")} className="text-green-600 focus:ring-green-500" />
+                    <input type="radio" name="locationType" value="address" checked={locationType === "address"} onChange={() => handleLocationTypeChange("address")} className="text-green-600 focus:ring-green-500" />
                     {locale === "th" ? "กรอกที่อยู่ / รหัสไปรษณีย์" : locale === "zh" ? "输入地址/邮政编码" : "Enter address / postal code"}
                   </label>
                 </div>

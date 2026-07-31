@@ -232,9 +232,9 @@ describe('PropertyWorkflowBridgeService', () => {
           audience: ['customer', 'lister'],
           notifications: {
             customer:
-              'Bangkok Office · Order: PRE-2607-7944: Please wait for the selected lister to accept the inquiry.',
+              'Bangkok Office ï¿½ Order: PRE-2607-7944: Please wait for the selected lister to accept the inquiry.',
             lister:
-              'Bangkok Office · Order: PRE-2607-7944: A customer selected your listing. Please accept or decline the inquiry.',
+              'Bangkok Office ï¿½ Order: PRE-2607-7944: A customer selected your listing. Please accept or decline the inquiry.',
           },
         },
         createdAt,
@@ -255,7 +255,7 @@ describe('PropertyWorkflowBridgeService', () => {
         action: 'partner-notified',
         audience: ['customer', 'lister'],
         message:
-          'Bangkok Office · Order: PRE-2607-7944: Please wait for the selected lister to accept the inquiry.',
+          'Bangkok Office ï¿½ Order: PRE-2607-7944: Please wait for the selected lister to accept the inquiry.',
         createdAt,
       }),
     ]);
@@ -376,6 +376,7 @@ describe('PropertyWorkflowBridgeService', () => {
     const result = await service.listings({ page: 1, limit: 20 });
     expect(result.listings).toHaveLength(1);
     expect(result.listings[0]).not.toHaveProperty('contact');
+    expect(result.listings[0].location.mode).toBe('gps');
     expect(result.listings[0].attachments[0].url).toBe(
       'https://files.example/listing.jpg',
     );
@@ -1027,7 +1028,7 @@ describe('PropertyWorkflowBridgeService', () => {
       postalCode: '10310',
       province: 'Bangkok',
       modalDisplay: '13.790000, 100.610000',
-      summaryDisplay: 'Saphansong',
+      summaryDisplay: 'Saphansong \\u00b7 13.790000, 100.610000',
     });
   });
 

@@ -15,7 +15,7 @@ test("uses GPS only in property workflow modals and subdistrict on summary surfa
     subdistrict: "Saphan Song",
   };
   assert.equal(propertyModalLocation(item), "13.794107, 100.609535");
-  assert.equal(propertySummaryLocation(item), "Saphan Song");
+  assert.equal(propertySummaryLocation(item), "Saphan Song Â· 13.794107, 100.609535");
 });
 
 test("uses subdistrict in both surfaces without GPS", () => {
@@ -28,6 +28,12 @@ test("falls back to district then province when subdistrict is missing", () => {
   const item = { district: "Wang Thonglang", province: "Bangkok" };
   assert.equal(propertyModalLocation(item), "Wang Thonglang");
   assert.equal(propertySummaryLocation(item), "Wang Thonglang");
+});
+
+test("explicit administrative mode ignores stale coordinates", () => {
+  const item = { subdistrict: "Saphan Song", latitude: 13.794107, longitude: 100.609535, locationMode: "ADMINISTRATIVE" };
+  assert.equal(propertyModalLocation(item), "Saphan Song");
+  assert.equal(propertySummaryLocation(item), "Saphan Song");
 });
 
 test("treats zero coordinates as administrative location", () => {
@@ -45,11 +51,11 @@ test("prefers authoritative presentation fields over persisted coordinates", () 
       mode: "gps",
       coordinates: { latitude: 13.794107, longitude: 100.609535 },
       modalDisplay: "13.794107, 100.609535",
-      summaryDisplay: "Saphan Song",
+      summaryDisplay: "Saphan Song Â· 13.794107, 100.609535",
     },
   };
   assert.equal(propertyModalLocation(item), "13.794107, 100.609535");
-  assert.equal(propertySummaryLocation(item), "Saphan Song");
+  assert.equal(propertySummaryLocation(item), "Saphan Song Â· 13.794107, 100.609535");
 });
 
 test("prefers authoritative administrative presentation when persisted GPS exists", () => {
@@ -145,9 +151,9 @@ test("projects the latest persisted Step 3 notification for its audience", () =>
             audience: ["customer", "lister"],
             notifications: {
               customer:
-                "House · Order: PRE-2607-7944: Please wait for the selected lister to accept the inquiry.",
+                "House ï¿½ Order: PRE-2607-7944: Please wait for the selected lister to accept the inquiry.",
               lister:
-                "House · Order: PRE-2607-7944: A customer selected your listing. Please accept or decline the inquiry.",
+                "House ï¿½ Order: PRE-2607-7944: A customer selected your listing. Please accept or decline the inquiry.",
             },
           },
         },
@@ -160,7 +166,7 @@ test("projects the latest persisted Step 3 notification for its audience", () =>
     id: "property-workflow-partner-notified-PRE-2607-7944-2026-07-22T03:04:05.000Z",
     action: "partner-notified",
     message:
-      "House · Order: PRE-2607-7944: Please wait for the selected lister to accept the inquiry.",
+      "House ï¿½ Order: PRE-2607-7944: Please wait for the selected lister to accept the inquiry.",
     createdAt: "2026-07-22T03:04:05.000Z",
   });
 });

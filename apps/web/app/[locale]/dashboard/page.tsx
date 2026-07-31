@@ -1553,7 +1553,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   const [cancelJobReason, setCancelJobReason] = useState("");
   const [persistedCustomerAlerts, setPersistedCustomerAlerts] = useState<any[]>([]);
   // Property inquiry workflow state (cblue_prop_inquiries — not ghis-gated)
-  interface PropInquiry { id: string; poNumber: string; propertyId: string; propertyTitle: string; propertyTier: string; propertyFee: number; propertyType: string; listingType: string; propertyPrice: number; province: string; district: string; subdistrict?: string; addressLine?: string; latitude?: number | null; longitude?: number | null; area?: number | null; bedrooms?: number | null; bathrooms?: number | null; propertyImages?: string[]; customerEmail: string; customerName: string; listerName: string; status: string; step: number; createdAt: number; updatedAt: number; meetingDate?: string; meetingTime?: string; meetingVenue?: string; meetingNote?: string; customerRating?: number | null; customerComment?: string; listerRating?: number | null; listerComment?: string; reselectedOnce?: boolean; }
+  interface PropInquiry { id: string; poNumber: string; propertyId: string; propertyTitle: string; propertyTier: string; propertyFee: number; propertyType: string; listingType: string; propertyPrice: number; province: string; district: string; subdistrict?: string; addressLine?: string; latitude?: number | null; longitude?: number | null; locationMode?: "GPS" | "ADMINISTRATIVE"; area?: number | null; bedrooms?: number | null; bathrooms?: number | null; propertyImages?: string[]; customerEmail: string; customerName: string; listerName: string; status: string; step: number; createdAt: number; updatedAt: number; meetingDate?: string; meetingTime?: string; meetingVenue?: string; meetingNote?: string; customerRating?: number | null; customerComment?: string; listerRating?: number | null; listerComment?: string; reselectedOnce?: boolean; }
   interface PropInquiry { workflowEvents?: any[]; }
   const [propInquiries, setPropInquiries] = useState<PropInquiry[]>([]);
   const lastKnownBackendOrderPosRef = useRef<Set<string>>(new Set());
@@ -2190,6 +2190,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         addressLine: api.property?.addressLine || '',
         latitude: typeof api.property?.latitude === 'number' ? api.property.latitude : null,
         longitude: typeof api.property?.longitude === 'number' ? api.property.longitude : null,
+        locationMode: api.property?.locationMode === 'GPS' ? 'GPS' : 'ADMINISTRATIVE',
         area: typeof api.property?.area === 'number' ? api.property.area : null,
         bedrooms: typeof api.property?.bedrooms === 'number' ? api.property.bedrooms : null,
         bathrooms: typeof api.property?.bathrooms === 'number' ? api.property.bathrooms : null,

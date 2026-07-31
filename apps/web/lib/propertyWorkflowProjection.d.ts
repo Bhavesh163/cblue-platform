@@ -10,6 +10,7 @@ export declare function propertyModalLocation(item: {
   province?: string | null;
   postalCode?: string | null;
   addressLine?: string | null;
+  locationMode?: 'GPS' | 'ADMINISTRATIVE' | 'gps' | 'administrative';
   locationPresentation?: {
     mode?: 'gps' | 'administrative';
     coordinates?: { latitude?: number | null; longitude?: number | null } | null;
@@ -26,6 +27,7 @@ export declare function propertySummaryLocation(item: {
   province?: string | null;
   postalCode?: string | null;
   addressLine?: string | null;
+  locationMode?: 'GPS' | 'ADMINISTRATIVE' | 'gps' | 'administrative';
   locationPresentation?: {
     mode?: 'gps' | 'administrative';
     coordinates?: { latitude?: number | null; longitude?: number | null } | null;

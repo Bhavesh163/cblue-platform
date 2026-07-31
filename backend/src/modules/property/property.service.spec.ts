@@ -74,11 +74,34 @@ describe('PropertyService', () => {
             postalCode: '10110',
             latitude: 13.736717,
             longitude: 100.560062,
+            locationMode: 'GPS',
           }),
         }),
       );
     });
   });
+
+    it('persists administrative mode without stale GPS coordinates', async () => {
+      prisma.user.findUnique.mockResolvedValue({ id: 'user-1' });
+      prisma.property.create.mockResolvedValue({ id: 'property-2' });
+      await service.create({ id: 'user-1', email: 'owner@example.com' }, {
+        propertyType: 'HOUSE', listingType: 'RENT', title: 'Administrative listing', price: 40000,
+        province: 'Bangkok', district: 'Wang Thonglang', subdistrict: 'Saphan Song', postalCode: '10310',
+        latitude: 13.794107, longitude: 100.609535, locationMode: 'ADMINISTRATIVE',
+        contactName: 'Owner', contactPhone: '+66812345678', contactEmail: 'owner@example.com',
+      } as never);
+      expect(prisma.property.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ locationMode: 'ADMINISTRATIVE', subdistrict: 'Saphan Song', latitude: null, longitude: null }) }));
+    });
+
+    it('rejects explicit GPS mode when administrative matching fields are unresolved', async () => {
+      prisma.user.findUnique.mockResolvedValue({ id: 'user-1' });
+      await expect(service.create({ id: 'user-1', email: 'owner@example.com' }, {
+        propertyType: 'LAND', listingType: 'SALE', title: 'Unresolved GPS listing', price: 1000000,
+        province: '', district: '', subdistrict: '', postalCode: '', latitude: 18.5, longitude: 98.5,
+        locationMode: 'GPS', contactName: 'Owner', contactPhone: '+66812345678', contactEmail: 'owner@example.com',
+      } as never)).rejects.toThrow('GPS location could not be resolved');
+      expect(prisma.property.create).not.toHaveBeenCalled();
+    });
 
   describe('update', () => {
     it('normalizes GPS-only property location before updating', async () => {
@@ -114,6 +137,17 @@ describe('PropertyService', () => {
       );
     });
   });
+
+    it('clears stale coordinates when switching to administrative mode', async () => {
+      prisma.property.findUnique.mockResolvedValue({ id: 'property-1', userId: 'user-1', province: 'Bangkok', district: 'Wang Thonglang', subdistrict: 'Saphan Song', latitude: 13.794107, longitude: 100.609535, locationMode: 'GPS' });
+      prisma.user.findUnique.mockResolvedValue({ id: 'user-1' });
+      prisma.user.findMany.mockResolvedValue([]);
+      prisma.subscriber.findUnique.mockResolvedValue(null);
+      prisma.subscriber.findMany.mockResolvedValue([]);
+      prisma.property.update.mockResolvedValue({ id: 'property-1' });
+      await service.update('property-1', 'user-1', { province: 'Bangkok', district: 'Wang Thonglang', subdistrict: 'Saphan Song', locationMode: 'ADMINISTRATIVE' } as never);
+      expect(prisma.property.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ locationMode: 'ADMINISTRATIVE', latitude: null, longitude: null }) }));
+    });
 
   describe('search', () => {
     it('should coerce string pagination values before querying Prisma', async () => {
@@ -456,7 +490,7 @@ describe('PropertyService', () => {
 
       const result = await service.findByUser('bhavesh-user');
 
-      expect(result).toEqual([ownProperty]);
+      expect(result).toEqual([{ ...ownProperty, locationMode: 'ADMINISTRATIVE' }]);
       expect(prisma.property.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {

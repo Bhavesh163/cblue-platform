@@ -186,6 +186,11 @@ enum PropertyStatus {
   REMOVED
 }
 
+enum PropertyLocationMode {
+  GPS
+  ADMINISTRATIVE
+}
+
 enum DayOfWeek {
   MONDAY
   TUESDAY
@@ -889,6 +894,7 @@ model Property {
   addressLine String?
   latitude    Float?
   longitude   Float?
+  locationMode PropertyLocationMode @default(ADMINISTRATIVE)
 
   // Contact
   contactName  String

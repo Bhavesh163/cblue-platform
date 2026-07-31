@@ -26,6 +26,7 @@
  *   province?: string | null;
  *   postalCode?: string | null;
  *   addressLine?: string | null;
+ *   locationMode?: 'GPS' | 'ADMINISTRATIVE' | 'gps' | 'administrative';
  *   locationPresentation?: {
  *     mode?: 'gps' | 'administrative';
  *     coordinates?: Coordinates | null;
@@ -68,6 +69,15 @@ function administrativeSummary(item) {
   );
 }
 
+function locationMode(item) {
+  const presentationMode = normalizeLocationPart(item?.locationPresentation?.mode).toLowerCase();
+  if (presentationMode) return presentationMode;
+  const persistedMode = normalizeLocationPart(item?.locationMode).toLowerCase();
+  if (persistedMode === 'gps') return 'gps';
+  if (persistedMode === 'administrative') return 'administrative';
+  return '';
+}
+
 /**
  * Returns the location string for property workflow action modals. Prefers the
  * authoritative bridge `locationPresentation.modalDisplay` and falls back to
@@ -89,9 +99,8 @@ export function propertyModalLocation(item) {
       return formatGps(coords.latitude, coords.longitude);
     }
   }
-  if (hasFiniteGps(item.latitude, item.longitude)) {
-    return formatGps(item.latitude, item.longitude);
-  }
+  const mode = locationMode(item);
+  if (mode !== 'administrative' && hasFiniteGps(item.latitude, item.longitude)) return formatGps(item.latitude, item.longitude);
   return administrativeSummary(item);
 }
 
@@ -115,7 +124,12 @@ export function propertySummaryLocation(item) {
       return presentation.summaryDisplay.trim();
     }
   }
-  return administrativeSummary(item);
+  const administrative = administrativeSummary(item);
+  const mode = locationMode(item);
+  const hasGps = mode === 'gps' || (!mode && hasFiniteGps(item.latitude, item.longitude));
+  if (!hasGps || !hasFiniteGps(item.latitude, item.longitude)) return administrative;
+  const coordinates = formatGps(item.latitude, item.longitude);
+  return administrative === LOCATION_FALLBACK ? coordinates : administrative + ' \u00b7 ' + coordinates;
 }
 
 function collectUrl(value) {

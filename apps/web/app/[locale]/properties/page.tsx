@@ -8,6 +8,7 @@ import { useSearchParams } from "next/navigation";
 import { THAI_PROVINCES } from "../lib/constants";
 import PdpaConsent from "../components/PdpaConsent";
 import { clearSubscriberSession, refreshSubscriberSession } from "../../../lib/subscriberSession";
+import { propertyModalLocation, propertySummaryLocation } from "../../../lib/propertyWorkflowProjection";
 const CORE_PROPERTY_TYPES = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "APARTMENT"] as const;
 const EXTRA_PROPERTY_TYPES = ["OFFICE", "WAREHOUSE", "SHOPHOUSE"] as const;
 const PROPERTY_TYPES = [...CORE_PROPERTY_TYPES, ...EXTRA_PROPERTY_TYPES] as const;
@@ -35,6 +36,7 @@ interface Property {
   addressLine?: string;
   latitude?: number | null;
   longitude?: number | null;
+  locationMode?: "GPS" | "ADMINISTRATIVE";
   contactName?: string;
   contactEmail?: string;
   images: { url: string }[];
@@ -73,23 +75,12 @@ function hasValidGpsCoordinatePair(latitude: number | null, longitude: number | 
   return true;
 }
 
-function getPropertySiteLocation(property: Partial<Property>) {
-  const parts = [
-    normalizeOptionalLocationText(property.addressLine),
-    normalizeOptionalLocationText(property.subdistrict),
-    normalizeOptionalLocationText(property.district),
-    normalizeOptionalLocationText(property.province),
-  ].filter(Boolean);
-  const locationLabel = parts.join(", " );
-  if (locationLabel) return locationLabel;
+function getPropertySummaryLocation(property: Partial<Property>) {
+  return propertySummaryLocation(property);
+}
 
-  const latitude = normalizeCoordinate(property.latitude);
-  const longitude = normalizeCoordinate(property.longitude);
-  if (latitude !== null && longitude !== null && hasValidGpsCoordinatePair(latitude, longitude)) {
-    return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
-  }
-
-  return "Unknown";
+function getPropertyModalLocation(property: Partial<Property>) {
+  return propertyModalLocation(property);
 }
 
 function isLikelyValidImageDataPayload(payload: string) {
@@ -377,6 +368,7 @@ function sanitizeProperty(raw: any): Property {
     addressLine: normalizeOptionalLocationText(raw?.addressLine),
     latitude: normalizeCoordinate(raw?.latitude),
     longitude: normalizeCoordinate(raw?.longitude),
+    locationMode: String(raw?.locationMode || "").toUpperCase() === "GPS" ? "GPS" : "ADMINISTRATIVE",
     contactEmail: String(raw?.contactEmail || "").trim().toLowerCase(),
     images,
   };
@@ -435,8 +427,8 @@ function dedupeProperties(items: Property[]) {
 
     const existingHasImage = (existing.images?.length || 0) > 0;
     const nextHasImage = (item.images?.length || 0) > 0;
-    const existingHasUsableLocation = getPropertySiteLocation(existing) !== "Unknown";
-    const nextHasUsableLocation = getPropertySiteLocation(item) !== "Unknown";
+    const existingHasUsableLocation = getPropertySummaryLocation(existing) !== "Unknown";
+    const nextHasUsableLocation = getPropertySummaryLocation(item) !== "Unknown";
     const existingQuality = (existingHasImage ? 2 : 0) + (existingHasUsableLocation ? 1 : 0);
     const nextQuality = (nextHasImage ? 2 : 0) + (nextHasUsableLocation ? 1 : 0);
     const existingTs = parsePropertyTimestamp(existing.updatedAt || existing.createdAt);
@@ -970,7 +962,7 @@ function PropertiesPageContent() {
                 <div>
                   <p className="font-bold text-gray-900">{showContactFlow.title}</p>
                   <p className="text-sm text-green-700 font-semibold">฿{formatPrice(showContactFlow.price)}{showContactFlow.listingType === "RENT" ? "/mo" : ""}</p>
-                  <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "สถานที่" : locale === "zh" ? "项目地点" : "Site Location"}: {getPropertySiteLocation(showContactFlow)}</p>
+                  <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "สถานที่" : locale === "zh" ? "项目地点" : "Site Location"}: {getPropertyModalLocation(showContactFlow)}</p>
                   {Array.isArray(showContactFlow.images) && showContactFlow.images.length > 0 && (
                     <button
                       type="button"
@@ -1019,7 +1011,7 @@ function PropertiesPageContent() {
                       <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ทรัพย์สิน" : locale === "zh" ? "房产" : "Property"}</span><span className="font-semibold text-right max-w-[60%] line-clamp-1">{showContactFlow.title}</span></div>
                       <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ราคา" : locale === "zh" ? "价格" : "Price"}</span><span className="font-semibold">฿{formatPrice(showContactFlow.price)}{showContactFlow.listingType === "RENT" ? "/mo" : ""}</span></div>
                       <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "จังหวัด" : locale === "zh" ? "省份" : "Province"}</span><span className="font-semibold">{showContactFlow.province}</span></div>
-                      <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}</span><span className="font-semibold text-right max-w-[60%] break-words">{getPropertySiteLocation(showContactFlow)}</span></div>
+                      <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}</span><span className="font-semibold text-right max-w-[60%] break-words">{getPropertyModalLocation(showContactFlow)}</span></div>
                       <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ระดับบริการ (กำหนดโดยผู้ลงประกาศ)" : locale === "zh" ? "服务等级（由房源方设定）" : "Service Tier (set by lister)"}</span><span className="font-semibold">{tierLabel}</span></div>
                       <div className="flex justify-between border-t border-gray-100 pt-2">
                         <span className="text-gray-600 font-semibold">{locale === "th" ? "ค่าดำเนินการ (ชำระในแดชบอร์ด)" : locale === "zh" ? "处理费（在控制台支付）" : "Processing Fee (pay in Dashboard)"}</span>
@@ -1171,7 +1163,7 @@ function PropertiesPageContent() {
                   </p>
                   <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-4 text-sm text-left">
                     <p className="text-emerald-800 font-semibold">
-                      {locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}: <span className="font-bold">{getPropertySiteLocation(showContactFlow)}</span>
+                      {locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}: <span className="font-bold">{getPropertyModalLocation(showContactFlow)}</span>
                     </p>
                   </div>
                   <div className="bg-gray-50 rounded-xl p-3 mb-4 text-xs text-gray-500">
@@ -1428,7 +1420,7 @@ function PropertiesPageContent() {
                       {prop.area && <span>{prop.area} sqm</span>}
                     </div>
                     <p className="text-xs text-gray-400 mt-2">
-                      {getPropertySiteLocation(prop)}
+                      {getPropertySummaryLocation(prop)}
                     </p>
                     <button
                       onClick={() => { void handleContactLister(prop); }}
@@ -1526,7 +1518,7 @@ function PropertiesPageContent() {
                             {prop.bathrooms && <span>{prop.bathrooms} bath</span>}
                             {prop.area && <span>{prop.area} sqm</span>}
                           </div>
-                          <p className="text-xs text-gray-400 mt-1">{getPropertySiteLocation(prop)}</p>
+                          <p className="text-xs text-gray-400 mt-1">{getPropertySummaryLocation(prop)}</p>
                         </div>
                       </Link>
                     ))}

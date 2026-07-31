@@ -16,6 +16,7 @@ import {
   ListingType,
   PropertyTier,
   PropertyStatus,
+  PropertyLocationMode,
 } from '@prisma/client';
 
 export class PropertyImageDto {
@@ -104,6 +105,10 @@ export class CreatePropertyDto {
   @IsOptional()
   @IsNumber()
   longitude?: number;
+
+  @IsOptional()
+  @IsEnum(PropertyLocationMode)
+  locationMode?: PropertyLocationMode;
 
   @IsString()
   @IsNotEmpty()
