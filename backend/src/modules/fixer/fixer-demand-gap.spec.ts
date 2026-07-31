@@ -6,6 +6,9 @@ describe('FixerService unmatched demand persistence', () => {
     updateMany: jest.fn(),
     upsert: jest.fn(),
   };
+  const occurrenceStore = {
+    create: jest.fn(),
+  };
   let service: FixerService;
 
   beforeEach(() => {
@@ -13,6 +16,7 @@ describe('FixerService unmatched demand persistence', () => {
     service = Object.create(FixerService.prototype) as FixerService;
     (service as unknown as { prisma: unknown }).prisma = {
       unmatchedServiceDemand: demandStore,
+      unmatchedServiceDemandOccurrence: occurrenceStore,
     };
   });
 
@@ -22,7 +26,10 @@ describe('FixerService unmatched demand persistence', () => {
 
     await (
       service as unknown as {
-        persistMatchDemand(input: Record<string, unknown>, count: number): Promise<void>;
+        persistMatchDemand(
+          input: Record<string, unknown>,
+          count: number,
+        ): Promise<void>;
       }
     ).persistMatchDemand(
       {
@@ -36,6 +43,14 @@ describe('FixerService unmatched demand persistence', () => {
       0,
     );
 
+    expect(occurrenceStore.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        demandId: 'gap-1',
+        service: 'project',
+        district: 'Pathum Wan',
+        province: 'Bangkok',
+      }),
+    });
     expect(demandStore.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         create: expect.objectContaining({
@@ -60,7 +75,10 @@ describe('FixerService unmatched demand persistence', () => {
 
     await (
       service as unknown as {
-        persistMatchDemand(input: Record<string, unknown>, count: number): Promise<void>;
+        persistMatchDemand(
+          input: Record<string, unknown>,
+          count: number,
+        ): Promise<void>;
       }
     ).persistMatchDemand(
       {
