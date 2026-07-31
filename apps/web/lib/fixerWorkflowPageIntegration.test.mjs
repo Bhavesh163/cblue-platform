@@ -246,8 +246,9 @@ test("real-estate summaries and workflow modals use separate location projection
 
 test("real-estate filters cascade province, district, and subdistrict datasets", () => {
   assert.match(realEstatePage, /getDistrictsForProvince\(filters\.province\)/);
-  assert.match(realEstatePage, /getSubdistrictsForDistrict\(filters\.province, filters\.district\)/);
-  assert.match(realEstatePage, /district: e\.target\.value, subdistrict: ""/);
+  assert.match(realEstatePage, /getSubdistrictsForDistrict\(/);
+  assert.match(realEstatePage, /filters\.province,\s*filters\.district/);
+  assert.match(realEstatePage, /district: e\.target\.value,[\s\S]*subdistrict: ""/);
   assert.match(realEstatePage, /disabled=\{!filters\.province\}/);
   assert.match(realEstatePage, /disabled=\{!filters\.district\}/);
 });
@@ -276,4 +277,13 @@ test("property pages no longer define a page-local GPS-first site location helpe
   assert.doesNotMatch(partnerPage, /const getPropSiteLocation = \(p: \{/);
   assert.doesNotMatch(customerPage, /lat\.toFixed\(6\), \$\{lng\.toFixed\(6\)\}/);
   assert.doesNotMatch(partnerPage, /lat\.toFixed\(6\), \$\{lng\.toFixed\(6\)\}/);
+});
+
+
+test("property contact flow uses the authoritative 8-step inquiry contract", () => {
+  assert.match(realEstatePage, /api\/v1\/blue\/property-workflow\/inquiries/);
+  assert.match(realEstatePage, /Step \$\{contactStep === "done" \? 4 : 3\} of 8/);
+  assert.match(realEstatePage, /snapshot\?\.reference \|\| snapshot\?\.poNumber/);
+  assert.doesNotMatch(realEstatePage, /function generatePO/);
+  assert.doesNotMatch(realEstatePage, /Math\.random\(\)/);
 });

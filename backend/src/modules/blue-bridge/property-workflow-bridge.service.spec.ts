@@ -1173,3 +1173,32 @@ describe('PropertyWorkflowBridgeService', () => {
     expect(emptySnapshot.uploadedFiles).toEqual([]);
   });
 });
+
+
+  it('returns complete non-private listing details and media aliases', async () => {
+    const stored = inquiry();
+    const prisma = {
+      propertyInquiry: { findUnique: jest.fn().mockResolvedValue(stored) },
+    } as unknown as PrismaService;
+    const service = new PropertyWorkflowBridgeService(prisma, {
+      search: jest.fn(),
+    } as unknown as PropertyService);
+
+    const snapshot = await service.snapshot(stored.poNumber, "customer-1");
+
+    expect(snapshot.listing).toEqual(
+      expect.objectContaining({
+        title: property.title,
+        propertyType: property.propertyType,
+        listingType: property.listingType,
+        siteSubdistrict: property.subdistrict,
+        locationSummary: expect.stringContaining(property.subdistrict),
+        attachments: expect.arrayContaining([
+          expect.objectContaining({ url: property.images[0].url }),
+        ]),
+        images: expect.arrayContaining([
+          expect.objectContaining({ url: property.images[0].url }),
+        ]),
+      }),
+    );
+  });

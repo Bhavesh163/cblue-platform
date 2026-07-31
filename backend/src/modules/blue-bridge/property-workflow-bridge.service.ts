@@ -891,33 +891,44 @@ export class PropertyWorkflowBridgeService {
   }
 
   private publicListing(property: any, includeContact = false) {
-    const locationPresentation = this.locationPresentation(property);
+    const location = this.locationPresentation(property);
+    const attachments = (property.images || []).map((image: any) => ({
+      id: image.id,
+      url: image.url,
+      key: image.key,
+      sortOrder: image.sortOrder,
+      isPrimary: image.isPrimary,
+      createdAt: image.createdAt,
+    }));
     return {
       id: property.id,
       title: property.title,
+      description: property.description || null,
       propertyType: property.propertyType,
       listingType: property.listingType,
       tier: property.tier,
       price: property.price,
+      bedrooms: property.bedrooms ?? null,
+      bathrooms: property.bathrooms ?? null,
+      area: property.area ?? null,
+      floors: property.floors ?? null,
+      siteSubdistrict: location.siteSubdistrict || null,
+      locationSummary: location.summaryDisplay || null,
       location: {
-        mode: locationPresentation.mode,
-        province: property.province,
-        district: property.district,
-        subdistrict: property.subdistrict,
-        postalCode: property.postalCode,
-        addressLine: property.addressLine,
+        mode: location.mode,
+        province: location.province,
+        district: String(property.district || "").trim(),
+        subdistrict: location.siteSubdistrict,
+        siteSubdistrict: location.siteSubdistrict,
+        postalCode: location.postalCode,
+        addressLine: String(property.addressLine || "").trim(),
         latitude: property.latitude,
         longitude: property.longitude,
       },
-      attachments: (property.images || []).map((image: any) => ({
-        id: image.id,
-        url: image.url,
-        key: image.key,
-        sortOrder: image.sortOrder,
-        isPrimary: image.isPrimary,
-        createdAt: image.createdAt,
-      })),
+      attachments,
+      images: attachments,
       createdAt: property.createdAt,
+      updatedAt: property.updatedAt,
       ...(includeContact
         ? {
             contact: {
@@ -929,7 +940,6 @@ export class PropertyWorkflowBridgeService {
         : {}),
     };
   }
-
   private async nextReference() {
     const now = new Date(Date.now() + 7 * 60 * 60 * 1000);
     for (let attempt = 0; attempt < 8; attempt += 1) {
