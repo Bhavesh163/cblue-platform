@@ -325,7 +325,7 @@
       "q27": "How does the real estate contact flow work?",
       "a27": "After searching and selecting a property, you must log in first. Then choose a tier, pay the processing fee via PromptPay QR, and a PO is created with both your details and the lister's. After the lister confirms, you can chat anonymously, schedule a meeting, and rate the experience.",
       "q28": "How does AI evaluate fixer registration?",
-      "a28": "CBLUE AI runs an 8-phase evaluation: KYC document verification, company validation, online credential search, experience analysis, fraud detection, portfolio review, price list evaluation, and tier computation. It scores 7 factors (100 points total) and assigns a tier from Economy to Expert.",
+      "a28": "blue AI runs an 8-phase evaluation: KYC document verification, company validation, online credential search, experience analysis, fraud detection, portfolio review, price list evaluation, and tier computation. It scores 7 factors (100 points total) and assigns a tier from Economy to Expert.",
       "q29": "Can fixers upgrade their tier?",
       "a29": "Yes. If a fixer adds more portfolio evidence, updates their KYC, gains work experience through CBLUE jobs, or improves their profile, the AI will re-evaluate and may upgrade them to a higher tier automatically.",
       "q30": "How are the top 8 matches selected?",

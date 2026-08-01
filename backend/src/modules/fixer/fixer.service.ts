@@ -785,7 +785,7 @@ export class FixerService {
     for (const candidate of finalCandidates) {
       const note = review.notesByCandidateId[candidate.id];
       if (note) {
-        candidate.selectedReason = `${candidate.selectedReason} | Typhoon: ${note}`;
+        candidate.selectedReason = `${candidate.selectedReason} | blue AI: ${note}`;
       }
     }
 

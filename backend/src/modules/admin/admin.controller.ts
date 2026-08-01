@@ -51,6 +51,24 @@ export class AdminController {
     return this.operationsService.updateDemandGap(gapId, adminId, dto);
   }
 
+  @Get('fixers/directory')
+  getFixerDirectory(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('province') province?: string,
+    @Query('district') district?: string,
+    @Query('service') service?: string,
+    @Query('tier') tier?: string,
+  ) {
+    return this.adminService.getFixerDirectory({
+      page: Number(page) || 1,
+      limit: Number(limit) || 20,
+      province,
+      district,
+      service,
+      tier,
+    });
+  }
   @Get('fixers/pending')
   getPendingFixers(@Query() pagination: PaginationDto) {
     return this.adminService.getPendingFixers(pagination);

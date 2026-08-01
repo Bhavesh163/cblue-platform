@@ -1516,7 +1516,7 @@ describe('FixerService', () => {
       expect(
         result.map((candidate: { id: string }) => candidate.id),
       ).not.toContain('digital-only');
-      expect(result[0]?.selectedReason).toContain('Typhoon: Best balance');
+      expect(result[0]?.selectedReason).toContain('blue AI: Best balance');
       expect((result[0] as any)?.matchTrace?.typhoon).toEqual(
         expect.objectContaining({
           applied: true,

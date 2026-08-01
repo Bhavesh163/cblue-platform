@@ -1260,23 +1260,23 @@ function FixerRegisterContent() {
                 ? "CBLUE ได้จัดเก็บเอกสาร KYC และรูปผลงานในพื้นที่ส่วนตัวแล้ว ผู้ดูแลระบบจะตรวจสอบหลักฐานก่อนอนุมัติระดับ Economy หรือเสนอระดับที่สูงขึ้น"
                 : locale === "zh"
                   ? "CBLUE已将KYC文件和作品图片存入私有存储。管理员将在批准Economy等级或建议更高等级前审核证据。"
-                  : "CBLUE has stored the KYC documents and portfolio images privately. Administrators will review the evidence before approving Economy tier or proposing a higher tier."}
+                  : "Your submission is pending KYC review. Tier classification runs separately after KYC approval and validated credential evidence."}
           </p>
           <dl className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
             <div className="rounded-lg border border-gray-200 p-4">
-              <dt className="text-gray-500">Submission status</dt>
+              <dt className="text-gray-500">KYC status</dt>
               <dd className="font-semibold text-gray-900 mt-1">
                 {qualificationOutcome?.status || "NEEDS_REVIEW"}
               </dd>
             </div>
             <div className="rounded-lg border border-gray-200 p-4">
-              <dt className="text-gray-500">Policy recommendation</dt>
+              <dt className="text-gray-500">Tier evaluation recommendation</dt>
               <dd className="font-semibold text-gray-900 mt-1">
                 {qualificationOutcome?.recommendedTier || "ECONOMY"}
               </dd>
             </div>
             <div className="rounded-lg border border-gray-200 p-4 sm:col-span-2">
-              <dt className="text-gray-500">Evidence stored</dt>
+              <dt className="text-gray-500">Documents received</dt>
               <dd className="font-semibold text-gray-900 mt-1">
                 3 KYC images and {portfolioImages.length} portfolio file(s)
               </dd>
@@ -1284,7 +1284,7 @@ function FixerRegisterContent() {
           </dl>
           {!isApproved && (
             <p className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-              The profile remains pending until KYC evidence is validated.
+              KYC remains pending until the evidence is validated.
               Upper-tier approval requires independent maker-checker review.
             </p>
           )}
