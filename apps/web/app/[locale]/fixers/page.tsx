@@ -15255,12 +15255,12 @@ function PartnerProfile({
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden mb-8">
         <div className="bg-sky-50 px-6 py-4 border-b border-sky-100 flex items-center justify-between">
           <h3 className="font-bold text-sky-900 flex items-center gap-2">
-            <span className="text-xl"></span> blue AI Tier Assessment
+            <span className="text-xl"></span> Qualification status (AI advisory only)
           </h3>
           <span className="text-sm text-sky-700 font-semibold bg-white px-3 py-1 rounded-full shadow-sm">
             {partner.tierScore == null
               ? "Assessment pending"
-              : "Overall Score: " + partner.tierScore + "/100"}
+              : "Legacy advisory score: " + partner.tierScore + "/100"}
           </span>
         </div>
 
@@ -15274,14 +15274,14 @@ function PartnerProfile({
               >
                 {partner.credentialStatus === "verified"
                   ? "Credential evidence reviewed"
-                  : "Credential assessment pending"}
+                  : "Credential evidence review pending"}
               </p>
               <p
                 className={`${partner.credentialStatus === "verified" ? "text-green-600" : "text-amber-700"} text-sm`}
               >
                 {partner.credentialStatus === "verified"
                   ? "The current qualification result is based on persisted CBLUE evidence."
-                  : "Qualification results will appear after the required evidence and administrator review are complete."}
+                  : "The server-owned qualification result appears after required evidence and administrator review are complete."}
               </p>
             </div>
           </div>

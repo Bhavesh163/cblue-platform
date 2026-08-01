@@ -86,6 +86,34 @@ describe('QualificationReviewService', () => {
     });
   });
 
+  it('returns the latest actionable submission for each fixer', async () => {
+    const older = {
+      id: 'older-task',
+      kind: 'KYC',
+      createdAt: new Date('2026-07-01T00:00:00.000Z'),
+      submission: {
+        version: 1,
+        submittedAt: new Date('2026-07-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-07-01T00:00:00.000Z'),
+        fixer: { id: 'fixer-1' },
+      },
+    };
+    const newer = {
+      id: 'newer-task',
+      kind: 'TIER',
+      createdAt: new Date('2026-07-02T00:00:00.000Z'),
+      submission: {
+        version: 2,
+        submittedAt: new Date('2026-07-02T00:00:00.000Z'),
+        updatedAt: new Date('2026-07-02T00:00:00.000Z'),
+        fixer: { id: 'fixer-1' },
+      },
+    };
+    prisma.qualificationReviewTask.findMany.mockResolvedValue([older, newer]);
+
+    await expect(service.listTasks()).resolves.toEqual([newer]);
+  });
+
   it('atomically assigns only an open task to the maker', async () => {
     prisma.qualificationReviewTask.findUnique.mockResolvedValue({
       id: 'task-1',

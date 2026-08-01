@@ -28,6 +28,7 @@ import { QualificationAssessmentService } from './qualification-assessment.servi
 import { QualificationRoutingService } from './qualification-routing.service';
 
 const PORTFOLIO_MAX_FILES = 10;
+const CONSENT_RETENTION_MS = 3 * 365 * 24 * 60 * 60 * 1000;
 const PORTFOLIO_MAX_FILE_BYTES = 300 * 1024;
 const KYC_DOCUMENT_TYPES = ['id-front', 'id-back', 'selfie-with-id'] as const;
 const UPLOADABLE_SUBMISSION_STATUSES = new Set([
@@ -104,6 +105,9 @@ export class QualificationService {
         policyVersion: QUALIFICATION_POLICY_VERSION,
         consentAt,
         consentVersion,
+        consentRetentionDeleteAt: new Date(
+          consentAt.getTime() + CONSENT_RETENTION_MS,
+        ),
       },
     });
   }
@@ -468,9 +472,7 @@ export class QualificationService {
             encrypted: true,
             isActive: false,
             lifecycleState: 'PENDING_UPLOAD',
-            retentionDeleteAt: new Date(
-              Date.now() + 3 * 365 * 24 * 60 * 60 * 1000,
-            ),
+            retentionDeleteAt: null,
           },
           select: {
             id: true,

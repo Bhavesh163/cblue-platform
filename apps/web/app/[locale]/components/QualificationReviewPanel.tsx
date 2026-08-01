@@ -206,14 +206,14 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1120px] text-left text-sm">
             <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-              <tr><th className="py-2 pr-4">Partner</th><th className="py-2 pr-4">Recommendation</th><th className="py-2 pr-4">Proposed price list</th><th className="py-2 pr-4">Evidence</th><th className="py-2 pr-4">Action</th></tr>
+              <tr><th className="py-2 pr-4">Partner / review type</th><th className="py-2 pr-4">Recommendation</th><th className="py-2 pr-4">Evidence</th><th className="py-2 pr-4">Proposed price list</th><th className="py-2 pr-4">Action</th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {tasks.map((task) => {
                 const evaluation = task.submission?.evaluations?.find((item) => item.provider === "DETERMINISTIC_POLICY") || task.submission?.evaluations?.[0];
                 return (
                   <tr key={task.id}>
-                    <td className="py-3 pr-4 align-top font-semibold text-slate-900">{displayName(task)}<p className="mt-1 text-xs font-normal text-slate-500">{task.submission?.status || "REVIEW"}</p></td>
+                    <td className="py-3 pr-4 align-top font-semibold text-slate-900">{displayName(task)}<p className="mt-1 text-xs font-normal text-slate-500">{task.kind || "REVIEW"} / {task.submission?.status || "REVIEW"}</p></td>
                     <td className="py-3 pr-4 align-top text-slate-700">{evaluation?.recommendedTier || "Pending"}<p className="mt-1 text-xs text-slate-500">{evaluation?.risk || "-"} risk / {evaluation?.confidence ?? "-"}% confidence</p>{task.status === "ASSIGNED" && task.assignedTo === adminId && !task.proposedAt && <button type="button" onClick={() => void reevaluate(task.submission?.id)} disabled={!task.submission?.id || reevaluating === task.submission?.id} className="mt-2 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">{reevaluating === task.submission?.id ? "Evaluating..." : "Re-evaluate evidence"}</button>}</td>
                     <td className="py-3 pr-4 align-top text-slate-600">
                       {task.status === "ASSIGNED" && task.assignedTo === adminId && !task.proposedAt ? (

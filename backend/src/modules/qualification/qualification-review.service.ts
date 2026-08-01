@@ -85,9 +85,30 @@ export class QualificationReviewService {
       },
     });
     const latestByFixer = new Map<string, (typeof tasks)[number]>();
+    const rankTask = (task: (typeof tasks)[number]) => [
+      task.submission.version,
+      task.submission.submittedAt?.getTime() ?? 0,
+      task.submission.updatedAt.getTime(),
+      task.kind === QualificationReviewKind.KYC ? 1 : 0,
+      task.createdAt.getTime(),
+    ];
+    const isHigherRank = (candidate: number[], current: number[]) => {
+      for (let index = 0; index < candidate.length; index += 1) {
+        if (candidate[index] === current[index]) continue;
+        return candidate[index] > current[index];
+      }
+      return false;
+    };
     for (const task of tasks) {
       const fixerId = task.submission.fixer.id;
-      if (!latestByFixer.has(fixerId)) latestByFixer.set(fixerId, task);
+      const current = latestByFixer.get(fixerId);
+      if (!current) {
+        latestByFixer.set(fixerId, task);
+        continue;
+      }
+      if (isHigherRank(rankTask(task), rankTask(current))) {
+        latestByFixer.set(fixerId, task);
+      }
     }
     return [...latestByFixer.values()];
   }

@@ -212,6 +212,11 @@ model User {
   role     UserRole @default(USER)
   isActive Boolean  @default(true)
 
+  lastActivityAt   DateTime @default(now())
+  inactiveNoticeAt DateTime?
+  inactiveDeleteAt DateTime?
+  legalHoldUntil   DateTime?
+
   subscriberId String? @unique
 
   addresses         Address[]
@@ -338,6 +343,7 @@ model KycSubmission {
   policyVersion         String
   consentAt             DateTime?
   consentVersion        String?
+  consentRetentionDeleteAt DateTime?
   submittedAt           DateTime?
   reviewedAt            DateTime?
   reviewerId            String?

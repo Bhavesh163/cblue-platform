@@ -1,6 +1,7 @@
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -80,6 +81,16 @@ export class QualificationStorageService {
   async createReadUrl(key: string, expiresInSeconds = 300) {
     await this.readiness.assertReady();
     const client = this.requireClient();
+
+    try {
+      await client.send(
+        new HeadObjectCommand({ Bucket: this.bucket, Key: key }),
+      );
+    } catch {
+      throw new ServiceUnavailableException(
+        'Qualification document object is unavailable',
+      );
+    }
 
     return getSignedUrl(
       client,

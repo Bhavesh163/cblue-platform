@@ -118,11 +118,6 @@ export default () => ({
   visionService: {
     url: process.env.VISION_SERVICE_URL || 'http://localhost:8010',
   },
-  qualificationVerification: {
-    credentialUrl: process.env.QUALIFICATION_CREDENTIAL_VERIFIER_URL || '',
-    credentialApiKey:
-      process.env.QUALIFICATION_CREDENTIAL_VERIFIER_API_KEY || '',
-  },
   typhoon: {
     apiKey: process.env.TYPHOON_API_KEY || '',
     baseUrl: process.env.TYPHOON_BASE_URL || 'https://api.opentyphoon.ai/v1',

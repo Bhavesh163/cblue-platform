@@ -15,6 +15,7 @@ import { QualificationAssessmentService } from './qualification-assessment.servi
 import { QualificationRoutingService } from './qualification-routing.service';
 import { QualificationDocumentCleanupWorker } from './qualification-document-cleanup.worker';
 import { QualificationHandoffWorker } from './qualification-handoff.worker';
+import { QualificationRetentionWorker } from './qualification-retention.worker';
 
 @Module({
   controllers: [QualificationController],
@@ -34,6 +35,7 @@ import { QualificationHandoffWorker } from './qualification-handoff.worker';
     QualificationRoutingService,
     QualificationDocumentCleanupWorker,
     QualificationHandoffWorker,
+    QualificationRetentionWorker,
   ],
   exports: [
     QualificationPolicyService,

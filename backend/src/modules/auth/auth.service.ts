@@ -137,6 +137,15 @@ export class AuthService {
       });
     }
 
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        lastActivityAt: new Date(),
+        inactiveNoticeAt: null,
+        inactiveDeleteAt: null,
+      },
+    });
+
     // Generate tokens
     const tokens = await this.generateTokens(user);
 
@@ -160,6 +169,15 @@ export class AuthService {
     if (!user || !user.isActive || user.role !== UserRole.ADMIN) {
       throw new UnauthorizedException('Admin access required');
     }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        lastActivityAt: new Date(),
+        inactiveNoticeAt: null,
+        inactiveDeleteAt: null,
+      },
+    });
 
     const tokens = await this.generateTokens(user);
 
