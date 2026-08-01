@@ -1161,25 +1161,17 @@ function FixerRegisterContent() {
         );
       }
 
-      const evaluationResponse = await fetch(
-        `/api/v1/qualification/submissions/${qualification.id}/evaluate`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
-      if (!evaluationResponse.ok) {
-        const detail = await evaluationResponse.json().catch(() => ({}));
-        throw new Error(
-          detail.message || "Unable to evaluate qualification submission",
-        );
-      }
-      const evaluation = await evaluationResponse.json();
+      const routedSubmission = (await finalizeQualification.json()) as {
+        status?: string;
+        confidence?: number | null;
+        reasonCodes?: string[];
+        humanReviewRequired?: boolean;
+      };
       setQualificationOutcome({
         submissionId: qualification.id,
-        status: evaluation.status,
-        reviewRequired: Boolean(evaluation.reviewRequired),
-        recommendedTier: evaluation.deterministic?.recommendedTier || "ECONOMY",
+        status: routedSubmission.status || "NEEDS_REVIEW",
+        reviewRequired: routedSubmission.humanReviewRequired !== false,
+        recommendedTier: "ECONOMY",
       });
       setSuccess(true);
     } catch (cause) {

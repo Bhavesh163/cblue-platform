@@ -55,6 +55,20 @@ describe('AdminService', () => {
       prisma.fixer.count.mockResolvedValue(1);
 
       const result = await service.getPendingFixers({ page: 1, limit: 20 });
+      expect(prisma.fixer.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: expect.arrayContaining([
+              { status: FixerStatus.PENDING },
+              expect.objectContaining({
+                qualificationSubmissions: expect.objectContaining({
+                  some: expect.any(Object),
+                }),
+              }),
+            ]),
+          }),
+        }),
+      );
       expect(result.total).toBe(1);
       expect(result.fixers).toHaveLength(1);
     });

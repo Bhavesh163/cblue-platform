@@ -1,5 +1,12 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { FixerStatus, FixerTier, OrderStatus } from '@prisma/client';
+import {
+  FixerStatus,
+  FixerTier,
+  OrderStatus,
+  QualificationReviewKind,
+  QualificationReviewStatus,
+  QualificationSubmissionStatus,
+} from '@prisma/client';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ApproveFixerDto } from './dto/approve-fixer.dto';
@@ -50,16 +57,44 @@ export class AdminService {
   }
   async getPendingFixers(pagination: PaginationDto) {
     const { page = 1, limit = 20 } = pagination;
+    const where = {
+      OR: [
+        { status: FixerStatus.PENDING },
+        {
+          qualificationSubmissions: {
+            some: {
+              status: {
+                in: [
+                  QualificationSubmissionStatus.NEEDS_REVIEW,
+                  QualificationSubmissionStatus.AI_PRECLEARED,
+                ],
+              },
+              reviewTasks: {
+                some: {
+                  kind: QualificationReviewKind.KYC,
+                  status: {
+                    in: [
+                      QualificationReviewStatus.OPEN,
+                      QualificationReviewStatus.ASSIGNED,
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        },
+      ],
+    };
     const [fixers, total] = await Promise.all([
       this.prisma.fixer.findMany({
-        where: { status: FixerStatus.PENDING },
+        where,
         include: { user: true, skills: true, images: true },
         skip: (page - 1) * limit,
         take: limit,
         orderBy: { createdAt: 'asc' },
       }),
       this.prisma.fixer.count({
-        where: { status: FixerStatus.PENDING },
+        where,
       }),
     ]);
 
