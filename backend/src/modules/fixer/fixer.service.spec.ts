@@ -500,7 +500,7 @@ describe('FixerService', () => {
           aiCredentialStatus: 'unverified',
           aiFlags: expect.arrayContaining([
             expect.objectContaining({
-              message: expect.stringContaining('Typhoon review:'),
+              message: expect.stringContaining('blue AI review:'),
             }),
           ]),
         }),
