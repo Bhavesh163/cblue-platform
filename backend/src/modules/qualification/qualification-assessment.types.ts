@@ -26,6 +26,7 @@ export type QualificationDocumentAssessment = {
   faceMatchConfidence: number | null;
   livenessConfidence: number | null;
   reasonCodes: QualificationReasonCode[];
+  extractedFields?: Record<string, string | number | null> | null;
   provider: string;
   model: string | null;
   assessedAt: Date;

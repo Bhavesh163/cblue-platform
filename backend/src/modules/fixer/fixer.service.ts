@@ -546,7 +546,7 @@ export class FixerService {
         parsed.risk === 'low' ? 'pass' : 'warn';
       const flags = parsed.notes.map((note) => ({
         type: flagType,
-        message: `Typhoon review: ${note}`,
+        message: `blue AI review: ${note}`,
       }));
 
       return {
@@ -555,7 +555,7 @@ export class FixerService {
       };
     } catch (error) {
       this.logger.warn(
-        `Typhoon tier review unavailable, using deterministic evaluator: ${error instanceof Error ? error.message : 'unknown error'}`,
+        `blue AI tier review unavailable, using deterministic evaluator: ${error instanceof Error ? error.message : 'unknown error'}`,
       );
       return null;
     }
@@ -758,7 +758,7 @@ export class FixerService {
       );
     } catch (error) {
       this.logger.warn(
-        `Typhoon Top-8 review unavailable, using deterministic matcher: ${error instanceof Error ? error.message : 'unknown error'}`,
+        `blue AI Top-8 review unavailable, using deterministic matcher: ${error instanceof Error ? error.message : 'unknown error'}`,
       );
       return null;
     }

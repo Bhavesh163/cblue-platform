@@ -3,10 +3,17 @@
 import Link from "next/link";
 import { useLocale } from "next-intl";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+} from "react";
 import ReCaptcha from "../components/ReCaptcha";
 import { getApiUrl } from "../lib/api";
 import QualificationReviewPanel from "../components/QualificationReviewPanel";
+import AdminPartnerDirectory from "../components/AdminPartnerDirectory";
 import AdminOperationsPanel from "../components/AdminOperationsPanel";
 import QualificationAuditPanel from "../components/QualificationAuditPanel";
 
@@ -134,7 +141,10 @@ async function postJson<T>(endpoint: string, body: unknown): Promise<T> {
   });
 
   if (!response.ok) {
-    throw makeApiError(await readErrorMessage(response, "Request failed"), response.status);
+    throw makeApiError(
+      await readErrorMessage(response, "Request failed"),
+      response.status,
+    );
   }
 
   return response.json() as Promise<T>;
@@ -149,7 +159,10 @@ async function adminFetch<T>(endpoint: string, token: string): Promise<T> {
   });
 
   if (!response.ok) {
-    throw makeApiError(await readErrorMessage(response, "Admin request failed"), response.status);
+    throw makeApiError(
+      await readErrorMessage(response, "Admin request failed"),
+      response.status,
+    );
   }
 
   return response.json() as Promise<T>;
@@ -183,7 +196,12 @@ function formatDate(value: string | null | undefined) {
 }
 
 function getFixerName(fixer: FixerRow) {
-  return fixer.user?.name || fixer.user?.email || fixer.user?.phone || "Unnamed fixer";
+  return (
+    fixer.user?.name ||
+    fixer.user?.email ||
+    fixer.user?.phone ||
+    "Unnamed fixer"
+  );
 }
 
 function getCustomerName(order: OrderRow) {
@@ -191,7 +209,12 @@ function getCustomerName(order: OrderRow) {
 }
 
 function getProviderName(order: OrderRow) {
-  return order.fixer?.user?.name || order.fixer?.user?.email || order.fixer?.user?.phone || "Unassigned";
+  return (
+    order.fixer?.user?.name ||
+    order.fixer?.user?.email ||
+    order.fixer?.user?.phone ||
+    "Unassigned"
+  );
 }
 
 function getSkillText(fixer: FixerRow) {
@@ -205,7 +228,12 @@ function getSkillText(fixer: FixerRow) {
 }
 
 function isAuthError(error: unknown) {
-  return typeof error === "object" && error !== null && "status" in error && [401, 403].includes(Number((error as ApiError).status));
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "status" in error &&
+    [401, 403].includes(Number((error as ApiError).status))
+  );
 }
 
 function StatusBadge({ value }: { value?: string | null }) {
@@ -219,14 +247,23 @@ function StatusBadge({ value }: { value?: string | null }) {
         : "bg-slate-50 text-slate-700 ring-slate-200";
 
   return (
-    <span className={"inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold ring-1 " + tone}>
+    <span
+      className={
+        "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold ring-1 " +
+        tone
+      }
+    >
       {normalized.replaceAll("_", " ")}
     </span>
   );
 }
 
 function EmptyState({ label }: { label: string }) {
-  return <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">{label}</p>;
+  return (
+    <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+      {label}
+    </p>
+  );
 }
 
 export default function AdminPage() {
@@ -252,7 +289,10 @@ export default function AdminPage() {
   const [fraudFlags, setFraudFlags] = useState<FraudFlag[]>([]);
 
   const activeOrdersFromRows = useMemo(
-    () => orders.filter((order) => ACTIVE_ORDER_STATUSES.has(String(order.status || ""))).length,
+    () =>
+      orders.filter((order) =>
+        ACTIVE_ORDER_STATUSES.has(String(order.status || "")),
+      ).length,
     [orders],
   );
 
@@ -273,17 +313,34 @@ export default function AdminPage() {
       setConsoleLoading(true);
       setConsoleError("");
       try {
-        const [dashboardData, pendingData, tierData, ordersData, fraudData] = await Promise.all([
-          adminFetch<DashboardStats>("/admin/dashboard", nextToken),
-          adminFetch<AdminPayload<"fixers", FixerRow>>("/admin/fixers/pending?limit=8", nextToken),
-          adminFetch<AdminPayload<"fixers", FixerRow>>("/admin/fixers/tier-review?limit=8", nextToken),
-          adminFetch<AdminPayload<"orders", OrderRow>>("/admin/orders?limit=12", nextToken),
-          adminFetch<AdminPayload<"flags", FraudFlag>>("/admin/fraud/flags", nextToken),
-        ]);
+        const [dashboardData, pendingData, tierData, ordersData, fraudData] =
+          await Promise.all([
+            adminFetch<DashboardStats>("/admin/dashboard", nextToken),
+            adminFetch<AdminPayload<"fixers", FixerRow>>(
+              "/admin/fixers/pending?limit=8",
+              nextToken,
+            ),
+            adminFetch<AdminPayload<"fixers", FixerRow>>(
+              "/admin/fixers/tier-review?limit=8",
+              nextToken,
+            ),
+            adminFetch<AdminPayload<"orders", OrderRow>>(
+              "/admin/orders?limit=12",
+              nextToken,
+            ),
+            adminFetch<AdminPayload<"flags", FraudFlag>>(
+              "/admin/fraud/flags",
+              nextToken,
+            ),
+          ]);
 
         setStats(dashboardData);
-        setPendingFixers(Array.isArray(pendingData.fixers) ? pendingData.fixers : []);
-        setTierReviewFixers(Array.isArray(tierData.fixers) ? tierData.fixers : []);
+        setPendingFixers(
+          Array.isArray(pendingData.fixers) ? pendingData.fixers : [],
+        );
+        setTierReviewFixers(
+          Array.isArray(tierData.fixers) ? tierData.fixers : [],
+        );
         setOrders(Array.isArray(ordersData.orders) ? ordersData.orders : []);
         setFraudFlags(Array.isArray(fraudData.flags) ? fraudData.flags : []);
       } catch (error) {
@@ -292,7 +349,11 @@ export default function AdminPage() {
           setAuthError("Admin session expired. Please log in again.");
           return;
         }
-        setConsoleError(error instanceof Error ? error.message : "Unable to load admin console.");
+        setConsoleError(
+          error instanceof Error
+            ? error.message
+            : "Unable to load admin console.",
+        );
       } finally {
         setConsoleLoading(false);
       }
@@ -326,7 +387,9 @@ export default function AdminPage() {
       return;
     }
     if (!recaptchaToken) {
-      setAuthError("Please complete reCAPTCHA before requesting the admin OTP.");
+      setAuthError(
+        "Please complete reCAPTCHA before requesting the admin OTP.",
+      );
       return;
     }
 
@@ -339,7 +402,9 @@ export default function AdminPage() {
       setOtpSent(true);
       setOtp("");
     } catch (error) {
-      setAuthError(error instanceof Error ? error.message : "Unable to send admin OTP.");
+      setAuthError(
+        error instanceof Error ? error.message : "Unable to send admin OTP.",
+      );
     } finally {
       setAuthLoading(false);
     }
@@ -375,7 +440,9 @@ export default function AdminPage() {
       await loadConsole(data.accessToken);
       router.replace(prefix + "/admin");
     } catch (error) {
-      setAuthError(error instanceof Error ? error.message : "Unable to verify admin OTP.");
+      setAuthError(
+        error instanceof Error ? error.message : "Unable to verify admin OTP.",
+      );
     } finally {
       setAuthLoading(false);
     }
@@ -386,16 +453,30 @@ export default function AdminPage() {
       <div className="min-h-screen bg-slate-50 px-4 py-12">
         <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-[1fr_420px]">
           <section className="rounded-lg border border-slate-200 bg-white p-8 shadow-sm">
-            <Link href={prefix} className="text-sm font-semibold text-sky-700 hover:text-sky-800">
+            <Link
+              href={prefix}
+              className="text-sm font-semibold text-sky-700 hover:text-sky-800"
+            >
               Back to CBLUE
             </Link>
-            <h1 className="mt-8 text-3xl font-bold tracking-tight text-slate-950">Admin Control Center</h1>
+            <h1 className="mt-8 text-3xl font-bold tracking-tight text-slate-950">
+              Admin Control Center
+            </h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
-              Secure operations for CBLUE.co.th, fixer and pro review, fraud checks, active order monitoring, and BLUE workflow support. This page never renders mock admin data.
+              Secure operations for CBLUE.co.th, fixer and pro review, fraud
+              checks, active order monitoring, and BLUE workflow support. This
+              page never renders mock admin data.
             </p>
             <div className="mt-8 grid gap-3 sm:grid-cols-3">
-              {["ADMIN role only", "reCAPTCHA before OTP", "Live API records"].map((item) => (
-                <div key={item} className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+              {[
+                "ADMIN role only",
+                "reCAPTCHA before OTP",
+                "Live API records",
+              ].map((item) => (
+                <div
+                  key={item}
+                  className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700"
+                >
                   {item}
                 </div>
               ))}
@@ -404,18 +485,30 @@ export default function AdminPage() {
 
           <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="text-xl font-bold text-slate-950">Admin login</h2>
-            <p className="mt-1 text-sm text-slate-500">Use the email address of a CBLUE user with role ADMIN.</p>
+            <p className="mt-1 text-sm text-slate-500">
+              Use the email address of a CBLUE user with role ADMIN.
+            </p>
 
             {authError && (
-              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+              <div
+                className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+                role="alert"
+              >
                 {authError}
               </div>
             )}
 
             {!otpSent ? (
-              <form onSubmit={handleSendOtp} className="mt-5 space-y-4" noValidate>
+              <form
+                onSubmit={handleSendOtp}
+                className="mt-5 space-y-4"
+                noValidate
+              >
                 <div>
-                  <label htmlFor="admin-email" className="block text-sm font-semibold text-slate-700">
+                  <label
+                    htmlFor="admin-email"
+                    className="block text-sm font-semibold text-slate-700"
+                  >
                     Admin email
                   </label>
                   <input
@@ -429,7 +522,10 @@ export default function AdminPage() {
                   />
                 </div>
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                  <ReCaptcha onVerify={setRecaptchaToken} onExpire={() => setRecaptchaToken("")} />
+                  <ReCaptcha
+                    onVerify={setRecaptchaToken}
+                    onExpire={() => setRecaptchaToken("")}
+                  />
                 </div>
                 <button
                   type="submit"
@@ -440,9 +536,16 @@ export default function AdminPage() {
                 </button>
               </form>
             ) : (
-              <form onSubmit={handleVerifyOtp} className="mt-5 space-y-4" noValidate>
+              <form
+                onSubmit={handleVerifyOtp}
+                className="mt-5 space-y-4"
+                noValidate
+              >
                 <div>
-                  <label htmlFor="admin-otp" className="block text-sm font-semibold text-slate-700">
+                  <label
+                    htmlFor="admin-otp"
+                    className="block text-sm font-semibold text-slate-700"
+                  >
                     6-digit OTP
                   </label>
                   <input
@@ -450,7 +553,9 @@ export default function AdminPage() {
                     type="text"
                     inputMode="numeric"
                     value={otp}
-                    onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                    onChange={(event) =>
+                      setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))
+                    }
                     placeholder="123456"
                     className="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm tracking-[0.35em] outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                   />
@@ -486,10 +591,19 @@ export default function AdminPage() {
       <div className="mx-auto max-w-[1600px] space-y-6">
         <header className="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-semibold text-sky-700">CBLUE.co.th + BLUE service operations</p>
-            <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-950">Admin Control Center</h1>
+            <p className="text-sm font-semibold text-sky-700">
+              CBLUE.co.th + BLUE service operations
+            </p>
+            <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-950">
+              Admin Control Center
+            </h1>
             <p className="mt-2 text-sm text-slate-500">
-              Signed in as {adminUser?.name || adminUser?.email || adminUser?.phone || "admin"}. Protected by ADMIN role APIs.
+              Signed in as{" "}
+              {adminUser?.name ||
+                adminUser?.email ||
+                adminUser?.phone ||
+                "admin"}
+              . Protected by ADMIN role APIs.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -513,12 +627,17 @@ export default function AdminPage() {
 
         <QualificationReviewPanel token={token} adminId={adminUser?.id || ""} />
 
+        <AdminPartnerDirectory token={token} />
+
         <QualificationAuditPanel token={token} />
 
         <AdminOperationsPanel token={token} />
 
         {consoleError && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+          <div
+            className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+            role="alert"
+          >
             {consoleError}
           </div>
         )}
@@ -532,9 +651,16 @@ export default function AdminPage() {
             ["Active", stats?.activeOrders ?? activeOrdersFromRows],
             ["Completed", stats?.completedOrders],
           ].map(([label, value]) => (
-            <div key={String(label)} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-              <p className="mt-2 text-2xl font-bold text-slate-950">{formatNumber(Number(value ?? 0))}</p>
+            <div
+              key={String(label)}
+              className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+            >
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {label}
+              </p>
+              <p className="mt-2 text-2xl font-bold text-slate-950">
+                {formatNumber(Number(value ?? 0))}
+              </p>
             </div>
           ))}
         </section>
@@ -543,10 +669,17 @@ export default function AdminPage() {
           <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
-                <h2 className="text-lg font-bold text-slate-950">Fixer tier review</h2>
-                <p className="text-sm text-slate-500">Corporate, Specialist, and Expert tiers waiting for human evidence review.</p>
+                <h2 className="text-lg font-bold text-slate-950">
+                  Fixer tier review
+                </h2>
+                <p className="text-sm text-slate-500">
+                  Corporate, Specialist, and Expert tiers waiting for human
+                  evidence review.
+                </p>
               </div>
-              <StatusBadge value={tierReviewFixers.length ? "NEEDS REVIEW" : "CLEAR"} />
+              <StatusBadge
+                value={tierReviewFixers.length ? "NEEDS REVIEW" : "CLEAR"}
+              />
             </div>
             {tierReviewFixers.length ? (
               <div className="overflow-x-auto">
@@ -563,10 +696,16 @@ export default function AdminPage() {
                       <tr key={fixer.id}>
                         <td className="py-3 pr-3 align-top font-semibold text-slate-900">
                           {getFixerName(fixer)}
-                          <p className="mt-1 text-xs font-normal text-slate-500">{getSkillText(fixer)}</p>
+                          <p className="mt-1 text-xs font-normal text-slate-500">
+                            {getSkillText(fixer)}
+                          </p>
                         </td>
-                        <td className="py-3 pr-3 align-top"><StatusBadge value={fixer.tier || fixer.aiTier} /></td>
-                        <td className="py-3 pr-3 align-top text-slate-600">{fixer.reviewReason || "Evidence review required"}</td>
+                        <td className="py-3 pr-3 align-top">
+                          <StatusBadge value={fixer.tier || fixer.aiTier} />
+                        </td>
+                        <td className="py-3 pr-3 align-top text-slate-600">
+                          {fixer.reviewReason || "Evidence review required"}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -579,19 +718,32 @@ export default function AdminPage() {
 
           <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-4">
-              <h2 className="text-lg font-bold text-slate-950">Pending fixer and pro registrations</h2>
-              <p className="text-sm text-slate-500">Human queue for new CBLUE fixer and pro approvals.</p>
+              <h2 className="text-lg font-bold text-slate-950">
+                Pending fixer and pro registrations
+              </h2>
+              <p className="text-sm text-slate-500">
+                Human queue for new CBLUE fixer and pro approvals.
+              </p>
             </div>
             {pendingFixers.length ? (
               <div className="space-y-3">
                 {pendingFixers.map((fixer) => (
-                  <div key={fixer.id} className="rounded-lg border border-slate-200 px-4 py-3">
+                  <div
+                    key={fixer.id}
+                    className="rounded-lg border border-slate-200 px-4 py-3"
+                  >
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="font-semibold text-slate-900">{getFixerName(fixer)}</p>
+                      <p className="font-semibold text-slate-900">
+                        {getFixerName(fixer)}
+                      </p>
                       <StatusBadge value={fixer.status || "PENDING"} />
                     </div>
-                    <p className="mt-1 text-sm text-slate-500">{getSkillText(fixer)}</p>
-                    <p className="mt-2 text-xs text-slate-400">Submitted {formatDate(fixer.createdAt)}</p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {getSkillText(fixer)}
+                    </p>
+                    <p className="mt-2 text-xs text-slate-400">
+                      Submitted {formatDate(fixer.createdAt)}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -604,18 +756,32 @@ export default function AdminPage() {
         <section className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
           <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-4">
-              <h2 className="text-lg font-bold text-slate-950">Fraud and credential flags</h2>
-              <p className="text-sm text-slate-500">Signals that need admin judgement before promotion or public trust display.</p>
+              <h2 className="text-lg font-bold text-slate-950">
+                Fraud and credential flags
+              </h2>
+              <p className="text-sm text-slate-500">
+                Signals that need admin judgement before promotion or public
+                trust display.
+              </p>
             </div>
             {fraudFlags.length ? (
               <div className="space-y-3">
                 {fraudFlags.map((flag, index) => (
-                  <div key={(flag.fixerId || "flag") + String(index)} className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                  <div
+                    key={(flag.fixerId || "flag") + String(index)}
+                    className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3"
+                  >
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="font-semibold text-amber-950">{flag.user?.name || flag.user?.phone || "Unknown partner"}</p>
+                      <p className="font-semibold text-amber-950">
+                        {flag.user?.name ||
+                          flag.user?.phone ||
+                          "Unknown partner"}
+                      </p>
                       <StatusBadge value={flag.type || "FLAG"} />
                     </div>
-                    <p className="mt-1 text-sm text-amber-800">{flag.detail || "Review required"}</p>
+                    <p className="mt-1 text-sm text-amber-800">
+                      {flag.detail || "Review required"}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -627,10 +793,17 @@ export default function AdminPage() {
           <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <h2 className="text-lg font-bold text-slate-950">Orders and BLUE workflow feed</h2>
-                <p className="text-sm text-slate-500">Latest real CBLUE orders used for CBLUE.co.th operations and BLUE service workflow support.</p>
+                <h2 className="text-lg font-bold text-slate-950">
+                  Orders and BLUE workflow feed
+                </h2>
+                <p className="text-sm text-slate-500">
+                  Latest real CBLUE orders used for CBLUE.co.th operations and
+                  BLUE service workflow support.
+                </p>
               </div>
-              <p className="text-xs font-semibold text-slate-500">No canceled, declined, or finished jobs are counted as active.</p>
+              <p className="text-xs font-semibold text-slate-500">
+                No canceled, declined, or finished jobs are counted as active.
+              </p>
             </div>
             {orders.length ? (
               <div className="overflow-x-auto">
@@ -649,12 +822,22 @@ export default function AdminPage() {
                       <tr key={order.id}>
                         <td className="py-3 pr-3 align-top font-semibold text-slate-900">
                           {order.poNumber || order.id}
-                          <p className="mt-1 text-xs font-normal text-slate-500">{formatDate(order.createdAt)}</p>
+                          <p className="mt-1 text-xs font-normal text-slate-500">
+                            {formatDate(order.createdAt)}
+                          </p>
                         </td>
-                        <td className="py-3 pr-3 align-top text-slate-600">{getCustomerName(order)}</td>
-                        <td className="py-3 pr-3 align-top text-slate-600">{getProviderName(order)}</td>
-                        <td className="py-3 pr-3 align-top"><StatusBadge value={order.status} /></td>
-                        <td className="py-3 pr-3 align-top text-slate-600">{formatMoney(order.totalAmount ?? order.budget)}</td>
+                        <td className="py-3 pr-3 align-top text-slate-600">
+                          {getCustomerName(order)}
+                        </td>
+                        <td className="py-3 pr-3 align-top text-slate-600">
+                          {getProviderName(order)}
+                        </td>
+                        <td className="py-3 pr-3 align-top">
+                          <StatusBadge value={order.status} />
+                        </td>
+                        <td className="py-3 pr-3 align-top text-slate-600">
+                          {formatMoney(order.totalAmount ?? order.budget)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

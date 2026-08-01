@@ -37,9 +37,9 @@ export class QualificationReviewService {
   ) {}
 
   async listTasks(status?: QualificationReviewStatus) {
-    return this.prisma.qualificationReviewTask.findMany({
+    const tasks = await this.prisma.qualificationReviewTask.findMany({
       where: status ? { status } : undefined,
-      orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
+      orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
       include: {
         submission: {
           include: {
@@ -84,6 +84,12 @@ export class QualificationReviewService {
         },
       },
     });
+    const latestByFixer = new Map<string, (typeof tasks)[number]>();
+    for (const task of tasks) {
+      const fixerId = task.submission.fixer.id;
+      if (!latestByFixer.has(fixerId)) latestByFixer.set(fixerId, task);
+    }
+    return [...latestByFixer.values()];
   }
 
   async assignTask(adminId: string, taskId: string) {

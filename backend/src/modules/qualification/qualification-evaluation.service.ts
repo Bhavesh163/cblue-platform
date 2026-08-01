@@ -302,6 +302,27 @@ export class QualificationEvaluationService {
       (document) =>
         document.evidenceStatus === QualificationEvidenceStatus.VALIDATED,
     );
+    const isCredentialEvidence = (document: (typeof documents)[number]) => {
+      if (
+        document.documentType === 'education-certificate' ||
+        document.documentType === 'professional-certificate'
+      )
+        return true;
+      if (document.documentType !== 'portfolio') return false;
+      const fields = extracted(document);
+      const detected = String(fields.detectedDocumentType || '').toLowerCase();
+      const level = String(fields.credentialLevel || '').toLowerCase();
+      return (
+        detected.includes('certificate') ||
+        detected.includes('degree') ||
+        detected.includes('diploma') ||
+        detected.includes('toeic') ||
+        level.includes('bachelor') ||
+        level.includes('master') ||
+        level.includes('doctor')
+      );
+    };
+    const credentialDocuments = validatedDocuments.filter(isCredentialEvidence);
     const corporateVerified =
       verified('corporate-certificate') > 0 ||
       verified('project-completion-certificate') >= 2;
@@ -310,8 +331,7 @@ export class QualificationEvaluationService {
         document.documentType === 'project-completion-certificate' &&
         Number(extracted(document).projectValue || 0) >= 1_000_000,
     ).length;
-    const hasEligibleDegree = validatedDocuments.some((document) => {
-      if (document.documentType !== 'education-certificate') return false;
+    const hasEligibleDegree = credentialDocuments.some((document) => {
       const level = String(
         extracted(document).credentialLevel || '',
       ).toLowerCase();
@@ -320,9 +340,7 @@ export class QualificationEvaluationService {
 
     return {
       yearsExperience: submission.fixer.yearsExperience || 0,
-      relatedCertificateCount:
-        verified('education-certificate') +
-        verified('professional-certificate'),
+      relatedCertificateCount: credentialDocuments.length,
       corporateCertificateCount: verified('corporate-certificate'),
       corporateEndorsedCompletionCertificateCount: verified(
         'project-completion-certificate',

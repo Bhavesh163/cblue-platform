@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
+  Prisma,
   FixerStatus,
   FixerTier,
   OrderStatus,
@@ -55,6 +56,116 @@ export class AdminService {
           : 'partner';
     return `Upper tier ${tier} requires human evidence review`;
   }
+  async getFixerDirectory(query: {
+    page?: number;
+    limit?: number;
+    province?: string;
+    district?: string;
+    service?: string;
+    tier?: string;
+  }) {
+    const page = Math.max(1, query.page || 1);
+    const limit = Math.min(20, Math.max(1, query.limit || 20));
+    const where: Prisma.FixerWhereInput = {
+      ...(query.province
+        ? { serviceProvince: { contains: query.province, mode: 'insensitive' } }
+        : {}),
+      ...(query.district
+        ? { serviceDistrict: { contains: query.district, mode: 'insensitive' } }
+        : {}),
+      ...(query.tier ? { tier: query.tier as FixerTier } : {}),
+      ...(query.service
+        ? {
+            skills: {
+              some: { name: { contains: query.service, mode: 'insensitive' } },
+            },
+          }
+        : {}),
+    };
+    const [rows, total] = await Promise.all([
+      this.prisma.fixer.findMany({
+        where,
+        orderBy: { updatedAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+        select: {
+          id: true,
+          tier: true,
+          status: true,
+          verified: true,
+          rating: true,
+          completedJobs: true,
+          yearsExperience: true,
+          serviceProvince: true,
+          serviceDistrict: true,
+          servicePostalCode: true,
+          priceList: true,
+          aiScore: true,
+          aiTier: true,
+          aiCredentialStatus: true,
+          createdAt: true,
+          updatedAt: true,
+          user: { select: { id: true, name: true, email: true, phone: true } },
+          skills: {
+            select: { category: true, name: true, yearsExperience: true },
+          },
+          qualificationSubmissions: {
+            orderBy: { version: 'desc' },
+            take: 1,
+            select: {
+              id: true,
+              version: true,
+              status: true,
+              submittedAt: true,
+              documents: {
+                select: {
+                  id: true,
+                  documentType: true,
+                  contentType: true,
+                  sizeBytes: true,
+                  evidenceStatus: true,
+                  createdAt: true,
+                },
+              },
+            },
+          },
+          orders: {
+            select: {
+              status: true,
+              workflowActions: { select: { action: true } },
+            },
+          },
+        },
+      }),
+      this.prisma.fixer.count({ where }),
+    ]);
+    return {
+      rows: rows.map((row) => ({
+        ...row,
+        declineCount: row.orders.reduce(
+          (sum, order) =>
+            sum +
+            order.workflowActions.filter(
+              (event) => event.action === 'partner-decline',
+            ).length,
+          0,
+        ),
+        cancellationCount: row.orders.reduce(
+          (sum, order) =>
+            sum +
+            order.workflowActions.filter(
+              (event) => event.action === 'customer-cancel',
+            ).length,
+          0,
+        ),
+        orders: undefined,
+      })),
+      total,
+      page,
+      limit,
+    };
+  }
+
   async getPendingFixers(pagination: PaginationDto) {
     const { page = 1, limit = 20 } = pagination;
     const where = {

@@ -120,6 +120,9 @@ export class QualificationAssessmentService {
           )
             ? 'PROVIDER_UNAVAILABLE'
             : null,
+          extractedFields: persistedAssessment.extractedFields
+            ? this.json(persistedAssessment.extractedFields)
+            : undefined,
         },
       });
       if (updated.count !== 1) {
@@ -226,8 +229,8 @@ export class QualificationAssessmentService {
     const assessment = value as Record<string, unknown>;
     const keys = Object.keys(assessment);
     if (
-      keys.length !== ASSESSMENT_KEYS.size ||
-      keys.some((key) => !ASSESSMENT_KEYS.has(key))
+      keys.length < ASSESSMENT_KEYS.size ||
+      keys.some((key) => !ASSESSMENT_KEYS.has(key) && key !== 'extractedFields')
     ) {
       return false;
     }

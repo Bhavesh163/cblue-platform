@@ -156,12 +156,27 @@ export class QualificationVerificationService {
         });
       }
 
-      return result({
-        evidenceStatus: 'INSUFFICIENT',
-        route: 'NEEDS_REVIEW',
-        confidence: fields.confidence,
-        reasonCodes: ['DOCUMENT_VALID', 'HUMAN_REVIEW_REQUIRED'],
-      });
+      return {
+        ...result({
+          evidenceStatus: 'INSUFFICIENT',
+          route: 'NEEDS_REVIEW',
+          confidence: fields.confidence,
+          reasonCodes: ['DOCUMENT_VALID', 'HUMAN_REVIEW_REQUIRED'],
+        }),
+        extractedFields: {
+          detectedDocumentType: fields.detectedDocumentType,
+          documentName: fields.documentName,
+          issuerName: fields.issuerName,
+          credentialNumber: fields.credentialNumber,
+          projectName: fields.projectName,
+          projectLocation: fields.projectLocation,
+          issuedAt: fields.issuedAt,
+          expiresAt: fields.expiresAt,
+          credentialLevel: fields.credentialLevel,
+          projectValue: fields.projectValue,
+          confidence: fields.confidence,
+        },
+      };
     } catch {
       return unavailable();
     }
@@ -196,7 +211,7 @@ export class QualificationVerificationService {
     }
     const payload = (await response.json()) as unknown;
     const text = this.findText(payload).trim();
-    if (!text || text.startsWith('[Typhoon OCR error:')) {
+    if (!text || text.startsWith('[blue AI OCR error:')) {
       throw new ServiceUnavailableException(
         'Qualification OCR returned no usable text',
       );
