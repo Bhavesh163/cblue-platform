@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getApiUrl } from "../lib/api";
+import { adminFetchResponse } from "./adminApi";
 
 type EvidenceStatus = "VALIDATED" | "CONTRADICTED" | "INSUFFICIENT" | "EXPIRED";
 type DocumentRow = { id: string; documentType: string; evidenceStatus: string };
@@ -56,7 +57,7 @@ export default function QualificationEvidenceControls({
     setBusy("link:" + documentId);
     setError("");
     try {
-      const response = await fetch(
+      const response = await adminFetchResponse(
         getApiUrl(
           "/qualification/admin/submissions/" +
             submissionId +
@@ -101,7 +102,7 @@ export default function QualificationEvidenceControls({
     setBusy("compliance:" + documentId);
     setError("");
     try {
-      const response = await fetch(
+      const response = await adminFetchResponse(
         getApiUrl(
           "/qualification/admin/submissions/" +
             submissionId +
@@ -145,7 +146,7 @@ export default function QualificationEvidenceControls({
     setBusy("verify:" + documentId);
     setError("");
     try {
-      const response = await fetch(
+      const response = await adminFetchResponse(
         getApiUrl(
           "/qualification/admin/submissions/" +
             submissionId +
@@ -185,7 +186,7 @@ export default function QualificationEvidenceControls({
     setBusy("save:" + documentId);
     setError("");
     try {
-      const response = await fetch(
+      const response = await adminFetchResponse(
         getApiUrl(
           "/qualification/admin/submissions/" +
             submissionId +

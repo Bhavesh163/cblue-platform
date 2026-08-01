@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getApiUrl } from "../lib/api";
+import { adminFetchResponse } from "./adminApi";
 import QualificationEvidenceControls from "./QualificationEvidenceControls";
 
 type ReviewTask = {
   id: string;
+  kind?: "KYC" | "TIER";
   status?: string;
   priority?: number;
   assignedTo?: string | null;
@@ -66,7 +68,7 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(getApiUrl("/qualification/admin/review-tasks"), {
+      const response = await adminFetchResponse(getApiUrl("/qualification/admin/review-tasks"), {
         cache: "no-store",
         headers: { Authorization: "Bearer " + token },
       });
@@ -86,7 +88,7 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
     setClaiming(taskId);
     setError("");
     try {
-      const response = await fetch(getApiUrl(`/qualification/admin/review-tasks/${taskId}/assign`), {
+      const response = await adminFetchResponse(getApiUrl(`/qualification/admin/review-tasks/${taskId}/assign`), {
         method: "POST",
         headers: { Authorization: "Bearer " + token },
       });
@@ -108,7 +110,7 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
       setError("Enter a decision reason with at least 10 characters.");
       return;
     }
-    if (selectedDecision === "APPROVE" && !selectedTier) {
+    if (task.kind !== "KYC" && selectedDecision === "APPROVE" && !selectedTier) {
       setError("Select the approved tier before approving a task.");
       return;
     }
@@ -116,13 +118,13 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
     setDeciding(task.id);
     setError("");
     try {
-      const response = await fetch(getApiUrl("/qualification/admin/review-tasks/" + task.id + "/decision"), {
+      const response = await adminFetchResponse(getApiUrl("/qualification/admin/review-tasks/" + task.id + "/decision"), {
         method: "POST",
         headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
         body: JSON.stringify({
           decision: selectedDecision,
           reason: selectedReason,
-          ...(selectedDecision === "APPROVE" ? { approvedTier: selectedTier } : {}),
+          ...(task.kind !== "KYC" && selectedDecision === "APPROVE" ? { approvedTier: selectedTier } : {}),
         }),
       });
       if (!response.ok) throw new Error("The review decision could not be saved.");
@@ -143,7 +145,7 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
     setChecking(task.id);
     setError("");
     try {
-      const response = await fetch(getApiUrl(
+      const response = await adminFetchResponse(getApiUrl(
         "/qualification/admin/review-tasks/" + task.id + "/check",
       ), {
         method: "POST",
@@ -167,7 +169,7 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
     setReevaluating(submissionId);
     setError("");
     try {
-      const response = await fetch(getApiUrl(
+      const response = await adminFetchResponse(getApiUrl(
         "/qualification/admin/submissions/" + submissionId + "/re-evaluate",
       ), {
         method: "POST",
@@ -245,7 +247,7 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                               <option value="APPROVE">Propose approval</option>
                               <option value="REJECT">Propose rejection</option>
                             </select>
-                            {(decision[task.id] || "APPROVE") === "APPROVE" && (
+                            {task.kind !== "KYC" && (decision[task.id] || "APPROVE") === "APPROVE" && (
                               <select
                                 aria-label={"Proposed tier for " + displayName(task)}
                                 value={approvedTier[task.id] || evaluation?.recommendedTier || ""}

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getApiUrl } from "../lib/api";
+import { adminFetchResponse } from "./adminApi";
 import QualificationEvidenceControls from "./QualificationEvidenceControls";
 
 type DirectoryRow = {
@@ -107,7 +108,7 @@ export default function AdminPartnerDirectory({ token }: Props) {
       const params = new URLSearchParams({ limit: "20" });
       for (const [key, value] of Object.entries(filters))
         if (value.trim()) params.set(key, value.trim());
-      const response = await fetch(
+      const response = await adminFetchResponse(
         getApiUrl("/admin/fixers/directory?" + params.toString()),
         {
           cache: "no-store",
@@ -136,7 +137,7 @@ export default function AdminPartnerDirectory({ token }: Props) {
     setDetailLoading(fixerId);
     setError("");
     try {
-      const response = await fetch(
+      const response = await adminFetchResponse(
         getApiUrl("/admin/fixers/" + fixerId + "/qualification-detail"),
         {
           cache: "no-store",

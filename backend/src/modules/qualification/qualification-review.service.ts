@@ -335,6 +335,34 @@ export class QualificationReviewService {
         };
       }
 
+      if (
+        dto.acceptProposal &&
+        task.proposedDecision === QualificationReviewDecision.APPROVE &&
+        task.kind === QualificationReviewKind.KYC
+      ) {
+        const documents = await tx.kycDocument.findMany({
+          where: {
+            submissionId: task.submissionId,
+            isActive: true,
+            lifecycleState: 'READY',
+          },
+          select: { documentType: true, evidenceStatus: true },
+        });
+        const requiredTypes = ['id-front', 'id-back', 'selfie-with-id'];
+        const allValidated = requiredTypes.every((type) =>
+          documents.some(
+            (document) =>
+              document.documentType === type &&
+              document.evidenceStatus === 'VALIDATED',
+          ),
+        );
+        if (!allValidated) {
+          throw new ConflictException(
+            'All required KYC evidence must be validated before approval',
+          );
+        }
+      }
+
       const approved =
         task.proposedDecision === QualificationReviewDecision.APPROVE;
       const approvedTier = approved ? task.proposedTier : null;

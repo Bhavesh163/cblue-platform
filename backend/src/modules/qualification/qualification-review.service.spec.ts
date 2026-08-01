@@ -15,6 +15,7 @@ describe('QualificationReviewService', () => {
     tierQualification: { create: jest.fn() },
     fixer: { update: jest.fn() },
     kycSubmission: { update: jest.fn() },
+    kycDocument: { findMany: jest.fn() },
     qualificationAuditLog: { create: jest.fn() },
     qualificationHandoff: { upsert: jest.fn() },
   } as any;
@@ -65,6 +66,11 @@ describe('QualificationReviewService', () => {
       verified: true,
     });
     tx.kycSubmission.update.mockResolvedValue({ id: 'submission-1' });
+    tx.kycDocument.findMany.mockResolvedValue([
+      { documentType: 'id-front', evidenceStatus: 'VALIDATED' },
+      { documentType: 'id-back', evidenceStatus: 'VALIDATED' },
+      { documentType: 'selfie-with-id', evidenceStatus: 'VALIDATED' },
+    ]);
     tx.qualificationAuditLog.create.mockResolvedValue({ id: 'audit-1' });
     tx.qualificationHandoff.upsert.mockResolvedValue({
       id: 'handoff-1',

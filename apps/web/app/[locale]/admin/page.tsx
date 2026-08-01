@@ -16,6 +16,11 @@ import QualificationReviewPanel from "../components/QualificationReviewPanel";
 import AdminPartnerDirectory from "../components/AdminPartnerDirectory";
 import AdminOperationsPanel from "../components/AdminOperationsPanel";
 import QualificationAuditPanel from "../components/QualificationAuditPanel";
+import {
+  adminRequest,
+  clearAdminTokens,
+  persistAdminTokens,
+} from "../components/adminApi";
 
 const ADMIN_TOKEN_KEY = "cblue_admin_token";
 const ADMIN_USER_KEY = "cblue_admin_user";
@@ -114,6 +119,9 @@ type AdminPayload<T extends string, R> = {
 
 type AuthResponse = {
   accessToken?: string;
+  refreshToken?: string;
+  accessTokenExpiresAt?: string;
+  refreshTokenExpiresAt?: string;
   user?: AdminUser;
 };
 
@@ -143,24 +151,6 @@ async function postJson<T>(endpoint: string, body: unknown): Promise<T> {
   if (!response.ok) {
     throw makeApiError(
       await readErrorMessage(response, "Request failed"),
-      response.status,
-    );
-  }
-
-  return response.json() as Promise<T>;
-}
-
-async function adminFetch<T>(endpoint: string, token: string): Promise<T> {
-  const response = await fetch(getApiUrl(endpoint), {
-    cache: "no-store",
-    headers: {
-      Authorization: "Bearer " + token,
-    },
-  });
-
-  if (!response.ok) {
-    throw makeApiError(
-      await readErrorMessage(response, "Admin request failed"),
       response.status,
     );
   }
@@ -297,8 +287,7 @@ export default function AdminPage() {
   );
 
   const clearAdminSession = useCallback(() => {
-    localStorage.removeItem(ADMIN_TOKEN_KEY);
-    localStorage.removeItem(ADMIN_USER_KEY);
+    clearAdminTokens();
     setToken("");
     setAdminUser(null);
     setStats(null);
@@ -309,28 +298,24 @@ export default function AdminPage() {
   }, []);
 
   const loadConsole = useCallback(
-    async (nextToken: string) => {
+    async (_nextToken: string) => {
       setConsoleLoading(true);
       setConsoleError("");
       try {
         const [dashboardData, pendingData, tierData, ordersData, fraudData] =
           await Promise.all([
-            adminFetch<DashboardStats>("/admin/dashboard", nextToken),
-            adminFetch<AdminPayload<"fixers", FixerRow>>(
+            adminRequest<DashboardStats>("/admin/dashboard"),
+            adminRequest<AdminPayload<"fixers", FixerRow>>(
               "/admin/fixers/pending?limit=8",
-              nextToken,
             ),
-            adminFetch<AdminPayload<"fixers", FixerRow>>(
+            adminRequest<AdminPayload<"fixers", FixerRow>>(
               "/admin/fixers/tier-review?limit=8",
-              nextToken,
             ),
-            adminFetch<AdminPayload<"orders", OrderRow>>(
+            adminRequest<AdminPayload<"orders", OrderRow>>(
               "/admin/orders?limit=12",
-              nextToken,
             ),
-            adminFetch<AdminPayload<"flags", FraudFlag>>(
+            adminRequest<AdminPayload<"flags", FraudFlag>>(
               "/admin/fraud/flags",
-              nextToken,
             ),
           ]);
 
@@ -431,7 +416,7 @@ export default function AdminPage() {
         throw new Error("Admin access required.");
       }
 
-      localStorage.setItem(ADMIN_TOKEN_KEY, data.accessToken);
+      persistAdminTokens(data);
       localStorage.setItem(ADMIN_USER_KEY, JSON.stringify(data.user));
       setToken(data.accessToken);
       setAdminUser(data.user);
