@@ -30,7 +30,7 @@ import { QualificationRoutingService } from './qualification-routing.service';
 const PORTFOLIO_MAX_FILES = 10;
 const CONSENT_RETENTION_MS = 3 * 365 * 24 * 60 * 60 * 1000;
 const PORTFOLIO_MAX_FILE_BYTES = 300 * 1024;
-const KYC_DOCUMENT_TYPES = ['id-front', 'id-back', 'selfie-with-id'] as const;
+const KYC_DOCUMENT_TYPES = ['id-front', 'selfie-with-id'] as const;
 const UPLOADABLE_SUBMISSION_STATUSES = new Set([
   'DRAFT',
   'NEEDS_RESUBMISSION',

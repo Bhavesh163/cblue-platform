@@ -3,11 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { QualificationReasonCode } from './qualification-assessment.types';
 
-const REQUIRED_KYC_DOCUMENT_TYPES = [
-  'id-front',
-  'id-back',
-  'selfie-with-id',
-] as const;
+const REQUIRED_KYC_DOCUMENT_TYPES = ['id-front', 'selfie-with-id'] as const;
 const HARD_FAILURE_REASON_CODES = new Set<QualificationReasonCode>([
   'WRONG_DOCUMENT_TYPE',
   'UNREADABLE_DOCUMENT',

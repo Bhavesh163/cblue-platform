@@ -369,7 +369,7 @@ export class QualificationReviewService {
           },
           select: { documentType: true, evidenceStatus: true },
         });
-        const requiredTypes = ['id-front', 'id-back', 'selfie-with-id'];
+        const requiredTypes = ['id-front', 'selfie-with-id'];
         const allValidated = requiredTypes.every((type) =>
           documents.some(
             (document) =>

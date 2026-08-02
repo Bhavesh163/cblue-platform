@@ -35,13 +35,6 @@ describe('QualificationRoutingService', () => {
       assessmentReasonCodes: reasonCodes,
     },
     {
-      id: 'id-back',
-      documentType: 'id-back',
-      checksumSha256: 'back-checksum',
-      assessedAt: new Date('2026-07-30T00:00:00.000Z'),
-      assessmentReasonCodes: ['DOCUMENT_VALID'],
-    },
-    {
       id: 'selfie',
       documentType: 'selfie-with-id',
       checksumSha256: 'selfie-checksum',
@@ -50,10 +43,8 @@ describe('QualificationRoutingService', () => {
     },
   ];
 
-  const evaluations = (
-    confidences: [number | null, number | null, number | null],
-  ) =>
-    ['front', 'back', 'selfie'].map((slot, index) => ({
+  const evaluations = (confidences: [number | null, number | null]) =>
+    ['front', 'selfie'].map((slot, index) => ({
       inputHash: `${slot}-checksum`,
       confidence: confidences[index],
       createdAt: new Date(`2026-07-30T00:00:0${index}.000Z`),
@@ -71,7 +62,7 @@ describe('QualificationRoutingService', () => {
       documents: requiredDocuments(),
     });
     tx.qualificationEvaluation.findMany.mockResolvedValue(
-      evaluations([90, 95, 98]),
+      evaluations([90, 98]),
     );
     tx.kycSubmission.update.mockResolvedValue({ id: 'submission-1' });
     tx.qualificationReviewTask.findFirst.mockResolvedValue(null);
@@ -96,7 +87,7 @@ describe('QualificationRoutingService', () => {
     'routes minimum confidence $confidence to $status',
     async ({ confidence, status, createsReview }) => {
       tx.qualificationEvaluation.findMany.mockResolvedValue(
-        evaluations([99, confidence, 96]),
+        evaluations([confidence, 96]),
       );
 
       await expect(
@@ -125,7 +116,7 @@ describe('QualificationRoutingService', () => {
               isActive: true,
               lifecycleState: 'READY',
               documentType: {
-                in: ['id-front', 'id-back', 'selfie-with-id'],
+                in: ['id-front', 'selfie-with-id'],
               },
             },
           }),
@@ -150,7 +141,7 @@ describe('QualificationRoutingService', () => {
     ).resolves.toEqual(
       expect.objectContaining({
         status: 'NEEDS_RESUBMISSION',
-        confidence: 97,
+        confidence: 98,
         reasonCodes: [
           'WRONG_DOCUMENT_TYPE',
           'DOCUMENT_VALID',

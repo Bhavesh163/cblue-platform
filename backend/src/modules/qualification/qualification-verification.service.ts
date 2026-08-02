@@ -36,8 +36,11 @@ const EXTRACTION_KEYS = new Set<keyof ExtractedCredentialFields>([
   'projectValue',
   'confidence',
 ]);
-const IDENTITY_TYPES = new Set(['id-front', 'id-back']);
-const DOCUMENT_TYPES = new Set<string>(QUALIFICATION_DOCUMENT_TYPES);
+const IDENTITY_TYPES = new Set(['id-front']);
+const DOCUMENT_TYPES = new Set<string>([
+  ...QUALIFICATION_DOCUMENT_TYPES,
+  'id-back',
+]);
 
 @Injectable()
 export class QualificationVerificationService {

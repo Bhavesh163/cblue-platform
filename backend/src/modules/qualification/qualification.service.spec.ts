@@ -365,7 +365,7 @@ describe('QualificationService', () => {
 
     expect(result).toEqual(
       expect.objectContaining({
-        sourceVersion: 'cblue-fixer-qualification-v2',
+        sourceVersion: 'cblue-fixer-qualification-v3',
         fixer: expect.objectContaining({
           id: 'fixer-1',
           tier: 'STANDARD',

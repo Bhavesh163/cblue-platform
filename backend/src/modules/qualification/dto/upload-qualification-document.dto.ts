@@ -2,8 +2,8 @@ import { IsIn, IsNotEmpty, IsString } from 'class-validator';
 
 export const QUALIFICATION_DOCUMENT_TYPES = [
   'id-front',
-  'id-back',
   'selfie-with-id',
+  'company-affidavit',
   'education-certificate',
   'professional-certificate',
   'corporate-certificate',

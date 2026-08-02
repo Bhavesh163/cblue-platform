@@ -53,6 +53,7 @@ type UploadAssessmentResponse = {
 };
 
 type PersistedEvidenceSlot = {
+  documentType: "id-front" | "selfie-with-id";
   localFile: File;
   documentId: string | null;
   uploadState: "idle" | "uploading" | "assessing" | "complete" | "error";
@@ -170,8 +171,11 @@ function FixerRegisterContent() {
   const isEditMode = searchParams.get("edit") === "1";
   const [form, setForm] = useState<FormData>(initialForm);
   const [kycSlots, setKycSlots] = useState<PersistedEvidenceSlot[]>([]);
-  const [qualificationDraftId, setQualificationDraftId] = useState<string | null>(null);
+  const [qualificationDraftId, setQualificationDraftId] = useState<
+    string | null
+  >(null);
   const [portfolioImages, setPortfolioImages] = useState<File[]>([]);
+  const [companyAffidavit, setCompanyAffidavit] = useState<File | null>(null);
   const [portfolioProcessing, setPortfolioProcessing] = useState(false);
   const [qualificationOutcome, setQualificationOutcome] = useState<{
     submissionId: string;
@@ -453,7 +457,8 @@ function FixerRegisterContent() {
             image.naturalWidth < 200 || image.naturalHeight < 150
               ? {
                   valid: false,
-                  reason: "Image too small; minimum resolution is 200x150 pixels",
+                  reason:
+                    "Image too small; minimum resolution is 200x150 pixels",
                 }
               : { valid: true },
           );
@@ -468,6 +473,56 @@ function FixerRegisterContent() {
     [],
   );
 
+  const uploadKycImmediately = useCallback(
+    async (
+      documentType: "id-front" | "selfie-with-id",
+      file: File,
+    ): Promise<UploadAssessmentResponse | null> => {
+      const token = localStorage.getItem("subscriber_token");
+      if (!token) return null;
+      try {
+        let draftId = qualificationDraftId;
+        if (!draftId) {
+          const draftResponse = await fetch(
+            "/api/v1/qualification/submissions/draft",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: "Bearer " + token,
+              },
+              body: JSON.stringify({
+                consentVersion: "cblue-fixer-qualification-v3",
+              }),
+            },
+          );
+          if (!draftResponse.ok) return null;
+          const draft = (await draftResponse.json()) as { id?: string };
+          draftId = draft.id || null;
+          if (!draftId) return null;
+          setQualificationDraftId(draftId);
+        }
+        const body = new globalThis.FormData();
+        body.append("documentType", documentType);
+        body.append("file", file);
+        const response = await fetch(
+          "/api/v1/qualification/submissions/" + draftId + "/documents",
+          {
+            method: "POST",
+            headers: { Authorization: "Bearer " + token },
+            body,
+          },
+        );
+        return response.ok
+          ? ((await response.json()) as UploadAssessmentResponse)
+          : null;
+      } catch {
+        return null;
+      }
+    },
+    [qualificationDraftId],
+  );
+
   const addKycImagesWithValidation = useCallback(
     async (files: File[]) => {
       if (files.length === 0) return;
@@ -478,7 +533,7 @@ function FixerRegisterContent() {
 
       for (
         let index = 0;
-        index < files.length && currentCount + newSlots.length < 3;
+        index < files.length && currentCount + newSlots.length < 2;
         index += 1
       ) {
         const slotIndex = currentCount + newSlots.length;
@@ -489,23 +544,29 @@ function FixerRegisterContent() {
           setKycValidating(false);
           return;
         }
+        const documentType = slotIndex === 0 ? "id-front" : "selfie-with-id";
+        const uploaded = await uploadKycImmediately(documentType, file);
         newSlots.push({
+          documentType,
           localFile: file,
-          documentId: null,
-          uploadState: "idle",
-          kycStatus: null,
-          confidence: null,
-          reasonCodes: [],
+          documentId: uploaded?.id || null,
+          uploadState: uploaded ? "complete" : "idle",
+          kycStatus:
+            uploaded?.assessment?.evidenceStatus ||
+            uploaded?.assessment?.route ||
+            null,
+          confidence: uploaded?.assessment?.confidence ?? null,
+          reasonCodes: uploaded?.assessment?.reasonCodes || [],
           message: null,
         });
       }
 
       if (newSlots.length > 0) {
-        setKycSlots((current) => [...current, ...newSlots].slice(0, 3));
+        setKycSlots((current) => [...current, ...newSlots].slice(0, 2));
       }
       setKycValidating(false);
     },
-    [kycSlots.length, validateKycImage],
+    [kycSlots.length, validateKycImage, uploadKycImmediately],
   );
   /* Camera helpers for KYC */
   const startCamera = async () => {
@@ -880,13 +941,13 @@ function FixerRegisterContent() {
       setError(t("skillError"));
       return;
     }
-    if (kycSlots.length < 3) {
+    if (kycSlots.length < 2) {
       setError(
         locale === "th"
-          ? "กรุณาอัปโหลด KYC ให้ครบ 3 รูป (ด้านหน้า, ด้านหลัง, เซลฟี่คู่บัตร)"
+          ? "กรุณาอัปโหลด KYC ให้ครบ 2 รูป (ด้านหน้าและเซลฟี่คู่บัตร)"
           : locale === "zh"
-            ? "请上传完整3张KYC图片（正面、背面、手持自拍）"
-            : "Please upload all 3 KYC images (front, back, and selfie with ID)",
+            ? "请上传完整2张KYC图片（正面和手持自拍）"
+            : "Please upload both KYC images (front and selfie with ID)",
       );
       return;
     }
@@ -1085,7 +1146,9 @@ function FixerRegisterContent() {
           detail.message || "Unable to create qualification submission",
         );
       }
-      const qualification = (await createQualification.json()) as { id: string };
+      const qualification = (await createQualification.json()) as {
+        id: string;
+      };
       setQualificationDraftId(qualification.id);
       const uploadEvidence = async (
         documentType: string,
@@ -1111,8 +1174,9 @@ function FixerRegisterContent() {
         return (await response.json()) as UploadAssessmentResponse;
       };
 
-      const kycTypes = ["id-front", "id-back", "selfie-with-id"];
+      const kycTypes = ["id-front", "selfie-with-id"];
       for (let index = 0; index < kycTypes.length; index += 1) {
+        if (kycSlots[index]?.documentId) continue;
         setKycSlots((current) =>
           current.map((slot, slotIndex) =>
             slotIndex === index
@@ -1142,6 +1206,9 @@ function FixerRegisterContent() {
               : slot,
           ),
         );
+      }
+      if (companyAffidavit) {
+        await uploadEvidence("company-affidavit", companyAffidavit);
       }
       for (const portfolioImage of portfolioImages) {
         await uploadEvidence("portfolio", portfolioImage);
@@ -1284,8 +1351,8 @@ function FixerRegisterContent() {
           </dl>
           {!isApproved && (
             <p className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-              KYC remains pending until the evidence is validated.
-              Upper-tier approval requires independent maker-checker review.
+              KYC remains pending until the evidence is validated. Upper-tier
+              approval requires independent maker-checker review.
             </p>
           )}
           <div className="mt-7">
@@ -1940,18 +2007,18 @@ function FixerRegisterContent() {
                 {/* KYC photo guide */}
                 <p className="text-xs text-gray-400 mb-2">
                   {locale === "th"
-                    ? "อัพโหลดตามลำดับ: 1) บัตรด้านหน้า 2) บัตรด้านหลัง 3) เซลฟี่คู่กับบัตร"
+                    ? "อัพโหลดตามลำดับ: 1) บัตรด้านหน้า 2) เซลฟี่คู่กับบัตร"
                     : locale === "zh"
-                      ? "按顺序上传：1) 证件正面 2) 证件反面 3) 手持证件自拍"
-                      : "Upload in order: 1) ID card front 2) ID card back 3) Selfie with ID"}
+                      ? "按顺序上传：1) 证件正面 2) 手持证件自拍"
+                      : "Upload in order: 1) ID card front 2) Selfie with ID"}
                 </p>
                 <p className="text-xs text-sky-600 mb-2">
                   {" "}
                   {locale === "th"
-                    ? "เอกสาร KYC จะผ่านการตรวจสอบความครบถ้วนอย่างปลอดภัย และรอการยืนยันจากผู้ดูแลระบบ"
+                    ? "blue กำลังตรวจสอบเอกสารยืนยันตัวตนของคุณอย่างปลอดภัย"
                     : locale === "zh"
-                      ? "KYC资料将接受安全的完整性检查，并等待管理员最终确认"
-                      : "KYC evidence is securely checked for completeness and awaits final administrator verification"}
+                      ? "blue 正在安全检查您的身份资料"
+                      : "blue is checking your identity securely"}
                 </p>
 
                 {/* Validating indicator */}
@@ -1974,10 +2041,10 @@ function FixerRegisterContent() {
                       />
                     </svg>
                     {locale === "th"
-                      ? "AI กำลังตรวจสอบรูปภาพ..."
+                      ? "blue AI กำลังตรวจสอบรูปภาพ..."
                       : locale === "zh"
-                        ? "AI正在验证照片..."
-                        : "AI verifying photo..."}
+                        ? "blue AI 正在检查照片..."
+                        : "blue AI is checking the photo..."}
                   </div>
                 )}
 
@@ -1986,24 +2053,19 @@ function FixerRegisterContent() {
                   <div className="flex gap-2 flex-wrap">
                     {kycSlots.map((slot, i) => {
                       const kycLabel =
-                        i === 0
+                        slot.documentType === "id-front"
                           ? locale === "th"
-                            ? "หน้า"
+                            ? "ด้านหน้า"
                             : locale === "zh"
                               ? "正面"
                               : "Front"
-                          : i === 1
-                            ? locale === "th"
-                              ? "หลัง"
-                              : locale === "zh"
-                                ? "反面"
-                                : "Back"
-                            : locale === "th"
-                              ? "เซลฟี่"
-                              : locale === "zh"
-                                ? "自拍"
-                                : "Selfie";
-                      const status = slot.uploadState === "error" ? "rejected" : "valid";
+                          : locale === "th"
+                            ? "เซลฟี่คู่บัตร"
+                            : locale === "zh"
+                              ? "手持证件自拍"
+                              : "Selfie with ID";
+                      const status =
+                        slot.uploadState === "error" ? "rejected" : "valid";
                       return (
                         <div key={i} className="relative group text-center">
                           <img
@@ -2035,7 +2097,9 @@ function FixerRegisterContent() {
                           <button
                             type="button"
                             onClick={() => {
-                              setKycSlots((prev) => prev.filter((_, idx) => idx !== i));
+                              setKycSlots((prev) =>
+                                prev.filter((_, idx) => idx !== i),
+                              );
                             }}
                             className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
                           >
@@ -2045,7 +2109,7 @@ function FixerRegisterContent() {
                       );
                     })}
                     <p className="text-xs text-green-600 self-end">
-                      {kycSlots.length}/3{" "}
+                      {kycSlots.length}/2{" "}
                       {locale === "th"
                         ? "รูป"
                         : locale === "zh"
@@ -2057,6 +2121,30 @@ function FixerRegisterContent() {
               </div>
             </div>
           </fieldset>
+
+          {/* Optional company evidence */}
+          <div className="mb-6 w-full rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <label className="block text-sm font-semibold text-slate-800">
+              {locale === "th"
+                ? "หนังสือรับรองบริษัท (ไม่บังคับ)"
+                : locale === "zh"
+                  ? "公司证明（可选）"
+                  : "Company affidavit (optional)"}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                className="mt-2 block w-full text-sm text-slate-600"
+                onChange={(event) =>
+                  setCompanyAffidavit(event.target.files?.[0] || null)
+                }
+              />
+            </label>
+            {companyAffidavit && (
+              <p className="mt-2 text-xs text-slate-500">
+                {companyAffidavit.name}
+              </p>
+            )}
+          </div>
 
           {/* Portfolio */}
           <fieldset>

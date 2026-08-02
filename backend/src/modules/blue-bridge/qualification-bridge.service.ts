@@ -19,7 +19,8 @@ export class QualificationBridgeService {
     if (!subject) throw new NotFoundException('Qualification not found');
 
     const userIds = await this.resolveUserIds(subject);
-    if (userIds.length === 0) throw new NotFoundException('Qualification not found');
+    if (userIds.length === 0)
+      throw new NotFoundException('Qualification not found');
     const fixer = await this.prisma.fixer.findFirst({
       where: { userId: { in: userIds } },
       include: {
@@ -108,18 +109,21 @@ export class QualificationBridgeService {
     if (!fixer) throw new NotFoundException('Qualification not found');
     const submission = fixer.qualificationSubmissions[0] || null;
     const tierQualification = fixer.tierQualifications[0] || null;
-    const evidenceStatuses = submission?.documents.map((document) => document.evidenceStatus) || [];
+    const evidenceStatuses =
+      submission?.documents.map((document) => document.evidenceStatus) || [];
     const kycEvaluation =
       submission?.evaluations.find(
         (evaluation) => evaluation.provider !== 'DETERMINISTIC_POLICY',
-      ) || submission?.evaluations[0] || null;
+      ) ||
+      submission?.evaluations[0] ||
+      null;
     const tierEvaluation =
       submission?.evaluations.find(
         (evaluation) => evaluation.provider === 'DETERMINISTIC_POLICY',
       ) || null;
 
     return {
-      sourceVersion: 'cblue-fixer-qualification-v2',
+      sourceVersion: 'cblue-fixer-qualification-v3',
       subject: { id: fixer.user.id, displayName: fixer.user.name || 'Partner' },
       fixer: {
         id: fixer.id,
@@ -131,6 +135,8 @@ export class QualificationBridgeService {
         aiTier: fixer.aiTier,
         aiCredentialStatus: fixer.aiCredentialStatus,
       },
+      requiredEvidence: ['id-front', 'selfie-with-id'],
+      optionalEvidence: ['company-affidavit'],
       submission: submission
         ? {
             id: submission.id,
@@ -138,8 +144,31 @@ export class QualificationBridgeService {
             status: submission.status,
             policyVersion: submission.policyVersion,
             submittedAt: submission.submittedAt,
-            documents: submission.documents,
-            evaluations: submission.evaluations,
+            documents: submission.documents.map((document) => ({
+              documentType: document.documentType,
+              evidenceStatus: document.evidenceStatus,
+              expiresAt: document.expiresAt,
+              createdAt: document.createdAt,
+            })),
+            evaluations: submission.evaluations.map((evaluation) => ({
+              policyVersion: evaluation.policyVersion,
+              status: evaluation.status,
+              deterministicScore: evaluation.deterministicScore,
+              aiScore: evaluation.aiScore,
+              risk: evaluation.risk,
+              recommendedTier: evaluation.recommendedTier,
+              confidence: evaluation.confidence,
+              identityConfidence: evaluation.identityConfidence,
+              documentAuthenticityConfidence:
+                evaluation.documentAuthenticityConfidence,
+              faceMatchConfidence: evaluation.faceMatchConfidence,
+              livenessConfidence: evaluation.livenessConfidence,
+              credentialConfidence: evaluation.credentialConfidence,
+              tierEligibilityScore: evaluation.tierEligibilityScore,
+              humanReviewRequired: evaluation.humanReviewRequired,
+              completedAt: evaluation.completedAt,
+              createdAt: evaluation.createdAt,
+            })),
             reviewTask: submission.reviewTasks[0] || null,
           }
         : null,
@@ -165,10 +194,18 @@ export class QualificationBridgeService {
       },
       verification: {
         documentCount: evidenceStatuses.length,
-        validatedCount: evidenceStatuses.filter((status) => status === 'VALIDATED').length,
-        contradictedCount: evidenceStatuses.filter((status) => status === 'CONTRADICTED').length,
-        insufficientCount: evidenceStatuses.filter((status) => status === 'INSUFFICIENT').length,
-        uncheckedCount: evidenceStatuses.filter((status) => status === 'UNCHECKED').length,
+        validatedCount: evidenceStatuses.filter(
+          (status) => status === 'VALIDATED',
+        ).length,
+        contradictedCount: evidenceStatuses.filter(
+          (status) => status === 'CONTRADICTED',
+        ).length,
+        insufficientCount: evidenceStatuses.filter(
+          (status) => status === 'INSUFFICIENT',
+        ).length,
+        uncheckedCount: evidenceStatuses.filter(
+          (status) => status === 'UNCHECKED',
+        ).length,
         makerCheckerStatus: submission?.reviewTasks[0]?.proposedAt
           ? 'AWAITING_CHECKER'
           : submission?.reviewTasks[0]?.status || null,

@@ -27,9 +27,7 @@ describe('QualificationPolicyService', () => {
       corporateEndorsedCompletionCertificateCount: 2,
     });
 
-    expect(QUALIFICATION_POLICY_VERSION).toBe(
-      'cblue-fixer-qualification-v2',
-    );
+    expect(QUALIFICATION_POLICY_VERSION).toBe('cblue-fixer-qualification-v3');
     expect(result.maximumTier).toBe(FixerTier.CORPORATE);
     expect(result.eligibilityScore).toBeGreaterThan(0);
     expect(result.reasonCodes).toEqual(expect.any(Array));
@@ -46,13 +44,23 @@ describe('QualificationPolicyService', () => {
   });
 
   it('qualifies Standard from experience and two related certificates', () => {
-    const result = service.evaluate({ ...base, yearsExperience: 4, relatedCertificateCount: 2 });
+    const result = service.evaluate({
+      ...base,
+      yearsExperience: 4,
+      relatedCertificateCount: 2,
+    });
     expect(result.recommendedTier).toBe(FixerTier.STANDARD);
-    expect(result.eligibleTiers).toEqual([FixerTier.ECONOMY, FixerTier.STANDARD]);
+    expect(result.eligibleTiers).toEqual([
+      FixerTier.ECONOMY,
+      FixerTier.STANDARD,
+    ]);
   });
 
   it('does not promote Corporate without verified corporate evidence', () => {
-    const result = service.evaluate({ ...base, corporateEndorsedCompletionCertificateCount: 2 });
+    const result = service.evaluate({
+      ...base,
+      corporateEndorsedCompletionCertificateCount: 2,
+    });
     expect(result.recommendedTier).toBe(FixerTier.ECONOMY);
     expect(result.humanReviewRequired).toBe(false);
   });
