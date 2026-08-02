@@ -742,9 +742,14 @@ export class QualificationReviewService {
       try {
         await this.notifications.send({
           userId: result.notificationUserId,
-          type: NotificationType.PUSH,
+          type: NotificationType.IN_APP,
           title,
           body,
+          dedupeKey:
+            'qualification-decision:' +
+            result.task.id +
+            ':' +
+            result.task.decision,
           data: {
             taskId: result.task.id,
             kind: result.task.kind,
@@ -762,6 +767,11 @@ export class QualificationReviewService {
             kind: result.task.kind,
             decision: result.task.decision,
           },
+          dedupeKey:
+            'qualification-decision-email:' +
+            result.task.id +
+            ':' +
+            result.task.decision,
         });
       } catch (error) {
         this.logger.error(

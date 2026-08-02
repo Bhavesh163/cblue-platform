@@ -40,8 +40,22 @@ const REASON_CODES = new Set<QualificationReasonCode>([
   'AFFIDAVIT_REVIEW_REQUIRED',
   'AFFIDAVIT_EXPIRED',
   'LIVENESS_FAILED',
+  'MISSING_REQUIRED_EVIDENCE',
   'PROVIDER_UNAVAILABLE',
   'HUMAN_REVIEW_REQUIRED',
+]);
+const REQUIRED_ASSESSMENT_KEYS = new Set([
+  'evidenceStatus',
+  'route',
+  'confidence',
+  'identityConfidence',
+  'documentAuthenticityConfidence',
+  'faceMatchConfidence',
+  'livenessConfidence',
+  'reasonCodes',
+  'provider',
+  'model',
+  'assessedAt',
 ]);
 const ASSESSMENT_KEYS = new Set([
   'evidenceStatus',
@@ -55,6 +69,10 @@ const ASSESSMENT_KEYS = new Set([
   'provider',
   'model',
   'assessedAt',
+  'extractedFields',
+  'identityNumberLast4',
+  'identityNumberHash',
+  'identityExpiryDate',
 ]);
 
 type AssessmentInput = {
@@ -126,6 +144,9 @@ export class QualificationAssessmentService {
           identityNumberLast4: persistedAssessment.identityNumberLast4,
           identityNumberHash: persistedAssessment.identityNumberHash,
           identityExpiryDate: persistedAssessment.identityExpiryDate,
+          extractedFields: persistedAssessment.extractedFields
+            ? this.json(persistedAssessment.extractedFields)
+            : Prisma.JsonNull,
         },
       });
       if (updated.count !== 1) {
@@ -138,6 +159,7 @@ export class QualificationAssessmentService {
         evidenceStatus: persistedAssessment.evidenceStatus,
         route: persistedAssessment.route,
         reasonCodes: persistedAssessment.reasonCodes,
+        extractedFields: persistedAssessment.extractedFields ?? null,
       });
       const evaluation = await tx.qualificationEvaluation.create({
         data: {
@@ -232,8 +254,9 @@ export class QualificationAssessmentService {
     const assessment = value as Record<string, unknown>;
     const keys = Object.keys(assessment);
     if (
-      keys.length < ASSESSMENT_KEYS.size ||
-      keys.some((key) => !ASSESSMENT_KEYS.has(key) && key !== 'extractedFields')
+      keys.length < REQUIRED_ASSESSMENT_KEYS.size ||
+      Array.from(REQUIRED_ASSESSMENT_KEYS).some((key) => !keys.includes(key)) ||
+      keys.some((key) => !ASSESSMENT_KEYS.has(key))
     ) {
       return false;
     }
@@ -272,7 +295,20 @@ export class QualificationAssessmentService {
           assessment.model.length > 0 &&
           assessment.model.length <= 200)) &&
       assessment.assessedAt instanceof Date &&
-      !Number.isNaN(assessment.assessedAt.getTime())
+      !Number.isNaN(assessment.assessedAt.getTime()) &&
+      (assessment.extractedFields === undefined ||
+        assessment.extractedFields === null ||
+        (typeof assessment.extractedFields === 'object' &&
+          !Array.isArray(assessment.extractedFields))) &&
+      (assessment.identityNumberLast4 === undefined ||
+        assessment.identityNumberLast4 === null ||
+        typeof assessment.identityNumberLast4 === 'string') &&
+      (assessment.identityNumberHash === undefined ||
+        assessment.identityNumberHash === null ||
+        typeof assessment.identityNumberHash === 'string') &&
+      (assessment.identityExpiryDate === undefined ||
+        assessment.identityExpiryDate === null ||
+        assessment.identityExpiryDate instanceof Date)
     );
   }
 

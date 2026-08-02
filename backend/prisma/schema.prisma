@@ -138,6 +138,7 @@ enum NotificationType {
   PUSH
   SMS
   EMAIL
+  IN_APP
 }
 
 enum NotificationStatus {
@@ -397,6 +398,7 @@ model KycDocument {
   identityNumberLast4    String?
   identityNumberHash     String?
   identityExpiryDate     DateTime?
+  legalHoldUntil         DateTime?
   extractionProvider     String?
   extractionModel        String?
   extractedAt            DateTime?
@@ -839,6 +841,10 @@ model Notification {
   attempts       Int       @default(0)
   lastErrorCode  String?
   nextAttemptAt  DateTime?
+  dedupeKey      String?   @unique
+  claimedAt      DateTime?
+  claimedBy      String?
+  claimExpiresAt DateTime?
   updatedAt      DateTime  @updatedAt
   createdAt      DateTime  @default(now())
 

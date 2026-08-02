@@ -34,6 +34,7 @@ describe('QualificationService', () => {
       updateMany: jest.fn(),
     },
     qualificationAuditLog: { create: jest.fn() },
+    qualificationDocumentAccess: { create: jest.fn() },
     qualificationStorageCleanupIntent: {
       deleteMany: jest.fn(),
       updateMany: jest.fn(),
@@ -223,7 +224,12 @@ describe('QualificationService', () => {
     );
     expect(tx.kycDocument.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'document-1', submissionId: 'submission-1' },
+        where: {
+          id: 'document-1',
+          submissionId: 'submission-1',
+          isActive: true,
+          lifecycleState: 'READY',
+        },
       }),
     );
     expect(tx.qualificationAuditLog.create).toHaveBeenCalledWith({
@@ -1704,7 +1710,7 @@ describe('QualificationService', () => {
         url: 'https://private.example/compliance',
       }),
     );
-    expect(prisma.qualificationDocumentAccess.create).toHaveBeenCalledWith({
+    expect(tx.qualificationDocumentAccess.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         submissionId: 'submission-1',
         actorId: 'admin-1',

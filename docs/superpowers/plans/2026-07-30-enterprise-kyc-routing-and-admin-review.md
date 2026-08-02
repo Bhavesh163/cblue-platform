@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Implement immediate, server-owned KYC evidence assessment and a separate maker-checker tier qualification flow backed by private DigitalOcean Spaces storage.
+**Goal:** Implement immediate, server-owned KYC evidence assessment and a separate administrator review tier qualification flow backed by private DigitalOcean Spaces storage.
 
 **Architecture:** CBLUE owns evidence, assessments, routing, review tasks, and tier decisions. The web client uploads authenticated evidence to CBLUE immediately after the core fixer profile exists; CBLUE stores it privately in Spaces, records deterministic/provider assessments, and returns stable reason codes. BLUE receives only a versioned sanitized snapshot through its existing NestJS bridge boundary.
 
@@ -18,7 +18,7 @@
 - Missing face-match or liveness providers persist `null`; never fabricate scores.
 - KYC approval and tier qualification remain separate state machines.
 - Economy requires approved KYC and minimum profile completeness.
-- Standard through Expert require deterministic eligibility plus maker-checker approval.
+- Standard through Expert require deterministic eligibility plus administrator review approval.
 - Use the existing `SPACES_ENDPOINT`, `SPACES_KEY`, `SPACES_SECRET`, `SPACES_BUCKET`, and `SPACES_REGION` runtime credentials.
 - Qualification operations fail closed when Spaces is unavailable; unrelated CBLUE services remain available.
 - Keep existing qualification routes compatible while adding the authoritative v2 fields.
@@ -52,10 +52,10 @@
 - `backend/src/modules/qualification/qualification.service.ts`: draft reuse, immediate assessment response, evidence replacement, and sanitized status.
 - `backend/src/modules/qualification/qualification-evaluation.service.ts`: tier-only evaluation after KYC approval.
 - `backend/src/modules/qualification/qualification-policy.service.ts`: deterministic tier ceiling and policy v2.
-- `backend/src/modules/qualification/qualification-review.service.ts`: KYC/TIER task separation and maker-checker decisions.
+- `backend/src/modules/qualification/qualification-review.service.ts`: KYC/TIER task separation and administrator review decisions.
 - `backend/src/modules/qualification/qualification.controller.ts`: draft, upload assessment, status, readiness, and admin queue contracts.
 - `backend/src/modules/qualification/dto/upload-qualification-document.dto.ts`: typed evidence slots.
-- `backend/src/modules/blue-bridge/qualification-bridge.service.ts`: sanitized `cblue-fixer-qualification-v2` snapshot.
+- `backend/src/modules/blue-bridge/qualification-bridge.service.ts`: sanitized `cblue-fixer-qualification-v3` snapshot.
 - Existing qualification and bridge specs: focused regression coverage.
 - `backend/package.json`: storage probe script.
 - `.github/workflows/backend-ci.yml`: pre-cutover qualification readiness probe.
@@ -444,7 +444,7 @@ export type KycRoutingDecision = {
 };
 ```
 
-Use active `id-front`, `id-back`, and `selfie-with-id` evidence only. A hard
+Use active `id-front`, ``, and `selfie-with-id` evidence only. A hard
 failure wins over score thresholds. Aggregate confidence is the minimum
 non-null confidence across the required identity checks; any unavailable
 required assessment routes to review instead of being omitted from the score.
@@ -496,7 +496,7 @@ git commit -m "Route KYC evidence to human review"
 
 **Interfaces:**
 - Produces: `QualificationPolicyService.calculateTierCeiling(input): TierPolicyDecision`.
-- Produces: separate `KYC` and `TIER` maker-checker tasks.
+- Produces: separate `KYC` and `TIER` administrator review tasks.
 - Preserves: one admin cannot both propose and check a decision.
 
 - [ ] **Step 1: Write failing KYC/tier separation tests**
@@ -526,7 +526,7 @@ Expected: FAIL on missing separation and task kind.
 
 - [ ] **Step 3: Version and implement deterministic policy**
 
-Update policy version to `cblue-fixer-qualification-v2`. Return:
+Update policy version to `cblue-fixer-qualification-v3`. Return:
 
 ```ts
 export type TierPolicyDecision = {
@@ -538,7 +538,7 @@ export type TierPolicyDecision = {
 
 Only verified structured evidence contributes. Typhoon may recommend at or below `maximumTier`; unavailable or malformed AI output leaves deterministic policy authoritative.
 
-- [ ] **Step 4: Apply maker-checker decisions by task kind**
+- [ ] **Step 4: Apply administrator review decisions by task kind**
 
 For `KYC`, checker approval sets submission `APPROVED`, fixer `verified=true`, fixer `status=APPROVED`, and tier `ECONOMY`. It then starts tier evaluation. For `TIER`, checker approval changes only the approved tier within the deterministic ceiling. `REJECTED` is reserved for an explicit final admin decision and must include a reason.
 
@@ -716,7 +716,7 @@ No nested `<td>`, no fabricated scores, and no emoji. Use full-width responsive 
 
 - [ ] **Step 3: Separate KYC and tier decisions**
 
-KYC tasks show ID slots, nullable identity/authenticity/face/liveness values, reason codes, and KYC maker-checker controls. Tier tasks show credential/portfolio evidence, deterministic ceiling, AI recommendation, price list, and tier maker-checker controls. A missing score renders an em dash, not zero.
+KYC tasks show ID slots, nullable identity/authenticity/face/liveness values, reason codes, and KYC administrator review controls. Tier tasks show credential/portfolio evidence, deterministic ceiling, AI recommendation, price list, and tier administrator review controls. A missing score renders an em dash, not zero.
 
 - [ ] **Step 4: Keep private evidence access assigned and audited**
 
@@ -832,7 +832,7 @@ git commit -m "Persist KYC evidence during fixer registration"
 - Verify: `.github/workflows/backend-ci.yml`
 
 **Interfaces:**
-- Produces: `sourceVersion: "cblue-fixer-qualification-v2"`.
+- Produces: `sourceVersion: "cblue-fixer-qualification-v3"`.
 - Produces: separate `kyc` and `tier` objects.
 - Preserves: bridge key and linked-subject authorization.
 
@@ -843,7 +843,7 @@ Assert:
 ```ts
 expect(snapshot).toEqual(
   expect.objectContaining({
-    sourceVersion: 'cblue-fixer-qualification-v2',
+    sourceVersion: 'cblue-fixer-qualification-v3',
     kyc: {
       status: 'NEEDS_REVIEW',
       identityConfidence: 78,
@@ -923,7 +923,7 @@ Verify:
 3. ID front, ID back, and selfie each upload and return persisted assessments;
 4. the submission appears in the KYC admin queue;
 5. assigned admin signed links expire after five minutes;
-6. KYC maker-checker approval grants Economy;
+6. KYC administrator review approval grants Economy;
 7. upper-tier evidence creates a separate TIER task;
 8. `/api/v1/blue/qualification` returns v2 for the linked partner;
 9. the snapshot contains no private evidence or secrets.

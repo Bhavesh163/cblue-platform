@@ -291,7 +291,7 @@ The versioned snapshot adds:
 
 ```json
 {
-  "sourceVersion": "cblue-fixer-qualification-v2",
+  "sourceVersion": "cblue-fixer-qualification-v3",
   "kyc": {
     "status": "NEEDS_REVIEW",
     "identityConfidence": 78,

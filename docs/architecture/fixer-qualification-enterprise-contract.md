@@ -58,8 +58,8 @@ Authorization: Bearer <CBLUE admin access token>
 CBLUE sends the private file server-to-server to the configured document service, stores structured
 fields and hashes instead of raw OCR text, compares the extracted name with the
 registered name deterministically, and optionally verifies credentials through
-a fixed server-configured credential provider. Missing or unavailable
-providers fail closed to manual review.
+the configured document service. Missing or unavailable
+processing fails closed to manual review.
 
 Only evidence with persisted `VALIDATED` status contributes to deterministic
 tier rules. Contradicted, insufficient, expired, and unchecked evidence does
@@ -67,13 +67,10 @@ not contribute.
 
 ## Single-Administrator Decision
 
-1. An administrator atomically claims an open task.
-2. The maker reviews evidence and submits a proposal.
-3. The proposal does not change the partner tier.
-4. A different administrator reviews read-only evidence.
-5. The administrator records the decision or returns the task to the open queue.
-6. Only the administrator decision updates the operational Fixer tier and submission.
-7. Both actions are persisted in the qualification audit log.
+1. Any authorized administrator atomically claims an open task.
+2. The administrator reviews the persisted evidence and records one decision.
+3. The decision is applied only within the deterministic tier ceiling.
+4. The decision and evidence access are persisted in the qualification audit log.
 
 Concurrent administrator decisions and checker confirmations use conditional database
 updates so only one succeeds.
@@ -94,10 +91,7 @@ Required for automatic OCR:
 - `TYPHOON_BASE_URL`
 - `TYPHOON_MODEL`
 
-Optional issuer and registry verification adapter:
 
-- `QUALIFICATION_CREDENTIAL_VERIFIER_URL`
-- `QUALIFICATION_CREDENTIAL_VERIFIER_API_KEY`
 
 When the optional credential verifier is absent, certificates remain
 insufficient until an assigned admin validates them manually. Typhoon is

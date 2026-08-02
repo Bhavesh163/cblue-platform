@@ -18,5 +18,9 @@ export class SendNotificationDto {
   body: string;
 
   @IsOptional()
+  @IsString()
+  dedupeKey?: string;
+
+  @IsOptional()
   data?: Record<string, any>;
 }

@@ -23,6 +23,11 @@ const REASON_CODES = new Set<QualificationReasonCode>([
   'UNREADABLE_DOCUMENT',
   'EXPIRED_ID',
   'IDENTITY_CONTRADICTION',
+  'INVALID_ID_NUMBER',
+  'SELFIE_REVIEW_REQUIRED',
+  'AFFIDAVIT_REVIEW_REQUIRED',
+  'AFFIDAVIT_EXPIRED',
+  'MISSING_REQUIRED_EVIDENCE',
   'LIVENESS_FAILED',
   'PROVIDER_UNAVAILABLE',
   'HUMAN_REVIEW_REQUIRED',
@@ -131,14 +136,15 @@ export class QualificationRoutingService {
         };
         const confidences: number[] = [];
         let unavailable = false;
+        let missingEvidence = false;
 
         for (const documentType of REQUIRED_KYC_DOCUMENT_TYPES) {
           const document = submission.documents.find(
             (candidate) => candidate.documentType === documentType,
           );
           if (!document) {
-            unavailable = true;
-            addReason('PROVIDER_UNAVAILABLE');
+            missingEvidence = true;
+            addReason('MISSING_REQUIRED_EVIDENCE');
             continue;
           }
           for (const reasonCode of this.readReasonCodes(
@@ -171,6 +177,7 @@ export class QualificationRoutingService {
         const status = this.statusFor({
           hardFailure,
           unavailable,
+          missingEvidence,
           confidence,
         });
         const failedAttempts = hardFailure
@@ -193,7 +200,10 @@ export class QualificationRoutingService {
             : lockedUntil,
         };
 
-        if (ROUTED_STATUSES.has(submission.status)) return decision;
+        const alreadyRouted = ROUTED_STATUSES.has(submission.status);
+        if (alreadyRouted && submission.status === decision.status) {
+          return decision;
+        }
 
         const submittedAt = new Date();
         await tx.kycSubmission.update({
@@ -265,9 +275,19 @@ export class QualificationRoutingService {
         try {
           await this.notifications.send({
             userId: applicantUserId,
+            type: NotificationType.IN_APP,
+            title: 'Information update needed',
+            body: 'Please update your identity information and submit again so we can continue your registration.',
+            dedupeKey: 'qualification:' + submissionId + ':' + decision.status,
+            data: { submissionId, status: decision.status },
+          });
+          await this.notifications.send({
+            userId: applicantUserId,
             type: NotificationType.EMAIL,
             title: 'Information update needed',
             body: 'Please update your identity information and submit again so we can continue your registration.',
+            dedupeKey:
+              'qualification-email:' + submissionId + ':' + decision.status,
             data: { submissionId, status: decision.status },
           });
         } catch (notificationError) {
@@ -292,9 +312,11 @@ export class QualificationRoutingService {
   private statusFor(input: {
     hardFailure: boolean;
     unavailable: boolean;
+    missingEvidence: boolean;
     confidence: number | null;
   }): KycRoutingDecision['status'] {
     if (input.hardFailure) return 'NEEDS_RESUBMISSION';
+    if (input.missingEvidence) return 'NEEDS_MORE_EVIDENCE';
     if (input.unavailable || input.confidence === null) return 'NEEDS_REVIEW';
     if (input.confidence >= 90) return 'AI_PRECLEARED';
     if (input.confidence >= 60) return 'NEEDS_REVIEW';

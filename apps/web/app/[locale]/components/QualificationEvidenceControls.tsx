@@ -38,6 +38,15 @@ export default function QualificationEvidenceControls({
   const [compliancePurpose, setCompliancePurpose] = useState<
     Record<string, string>
   >({});
+  const [complianceCaseReference, setComplianceCaseReference] = useState<
+    Record<string, string>
+  >({});
+  const [complianceLegalHold, setComplianceLegalHold] = useState<
+    Record<string, boolean>
+  >({});
+  const [complianceLegalHoldUntil, setComplianceLegalHoldUntil] = useState<
+    Record<string, string>
+  >({});
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -45,6 +54,9 @@ export default function QualificationEvidenceControls({
   useEffect(() => {
     setUrls({});
     setStatus({});
+    setComplianceCaseReference({});
+    setComplianceLegalHold({});
+    setComplianceLegalHoldUntil({});
     setReason({});
     setError("");
     if (!submissionId || readOnly) return;
@@ -116,7 +128,13 @@ export default function QualificationEvidenceControls({
             Authorization: "Bearer " + token,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ purpose }),
+          body: JSON.stringify({
+            purpose,
+            caseReference:
+              complianceCaseReference[documentId]?.trim() || undefined,
+            legalHold: Boolean(complianceLegalHold[documentId]),
+            legalHoldUntil: complianceLegalHoldUntil[documentId] || undefined,
+          }),
         },
       );
       if (!response.ok)
@@ -276,6 +294,49 @@ export default function QualificationEvidenceControls({
                   placeholder="Regulator/compliance purpose"
                   className="min-w-56 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs"
                 />
+                <input
+                  aria-label={
+                    "Compliance case reference for " + document.documentType
+                  }
+                  value={complianceCaseReference[document.id] || ""}
+                  onChange={(event) =>
+                    setComplianceCaseReference((current) => ({
+                      ...current,
+                      [document.id]: event.target.value,
+                    }))
+                  }
+                  placeholder="Case reference"
+                  className="min-w-40 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs"
+                />
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(complianceLegalHold[document.id])}
+                    onChange={(event) =>
+                      setComplianceLegalHold((current) => ({
+                        ...current,
+                        [document.id]: event.target.checked,
+                      }))
+                    }
+                  />
+                  Legal hold
+                </label>
+                {complianceLegalHold[document.id] && (
+                  <input
+                    type="date"
+                    aria-label={
+                      "Legal hold end date for " + document.documentType
+                    }
+                    value={complianceLegalHoldUntil[document.id] || ""}
+                    onChange={(event) =>
+                      setComplianceLegalHoldUntil((current) => ({
+                        ...current,
+                        [document.id]: event.target.value,
+                      }))
+                    }
+                    className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs"
+                  />
+                )}
                 <button
                   type="button"
                   onClick={() => void createComplianceLink(document.id)}

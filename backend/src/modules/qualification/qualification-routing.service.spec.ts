@@ -136,6 +136,28 @@ describe('QualificationRoutingService', () => {
     );
   });
 
+  it('routes missing required evidence to more evidence instead of provider failure', async () => {
+    tx.kycSubmission.findUnique.mockResolvedValue({
+      id: 'submission-1',
+      status: 'DRAFT',
+      failedAttempts: 0,
+      lockedUntil: null,
+      documents: requiredDocuments().slice(0, 1),
+    });
+    tx.qualificationEvaluation.findMany.mockResolvedValue(
+      evaluations([95, null]),
+    );
+
+    await expect(
+      service.routeSubmission('submission-1', 'user-1'),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        status: 'NEEDS_MORE_EVIDENCE',
+        reasonCodes: expect.arrayContaining(['MISSING_REQUIRED_EVIDENCE']),
+      }),
+    );
+  });
+
   it('loads only active READY evidence for aggregate routing', async () => {
     await service.routeSubmission('submission-1', 'user-1');
 

@@ -73,9 +73,17 @@ export class QualificationRetentionWorker
     const noticeCutoff = addCalendarMonths(now, -NOTICE_MONTHS);
     const users = await this.prisma.user.findMany({
       where: {
-        isActive: true,
-        lastActivityAt: { lte: noticeCutoff },
-        OR: [{ legalHoldUntil: null }, { legalHoldUntil: { lt: now } }],
+        AND: [
+          {
+            OR: [
+              { isActive: true, lastActivityAt: { lte: noticeCutoff } },
+              { isActive: false, inactiveDeleteAt: { lte: now } },
+            ],
+          },
+          {
+            OR: [{ legalHoldUntil: null }, { legalHoldUntil: { lt: now } }],
+          },
+        ],
       },
       select: {
         id: true,
@@ -83,6 +91,15 @@ export class QualificationRetentionWorker
         lastActivityAt: true,
         inactiveNoticeAt: true,
         inactiveDeleteAt: true,
+        orders: {
+          where: { status: { in: ['COMPLETED', 'CANCELLED'] } },
+          select: {
+            id: true,
+            updatedAt: true,
+            legalHoldUntil: true,
+            serviceHistoryDeleteAt: true,
+          },
+        },
         fixer: {
           select: {
             qualificationSubmissions: {
@@ -92,8 +109,16 @@ export class QualificationRetentionWorker
                   where: {
                     isActive: true,
                     lifecycleState: { in: ['READY', 'FAILED'] },
+                    OR: [
+                      { legalHoldUntil: null },
+                      { legalHoldUntil: { lt: now } },
+                    ],
                   },
-                  select: { id: true, lifecycleState: true },
+                  select: {
+                    id: true,
+                    lifecycleState: true,
+                    legalHoldUntil: true,
+                  },
                 },
               },
             },
@@ -126,15 +151,13 @@ export class QualificationRetentionWorker
           },
         });
       }
-      if (now >= inactiveDeleteAt && user.isActive) {
-        await this.prisma.user.update({
-          where: { id: user.id },
-          data: { isActive: false },
-        });
-      }
       if (now < inactiveDeleteAt) continue;
 
-      for (const order of user.fixer?.orders ?? []) {
+      const historyOrders = [
+        ...(user.orders ?? []),
+        ...(user.fixer?.orders ?? []),
+      ];
+      for (const order of historyOrders) {
         const serviceHistoryDeleteAt = addCalendarMonths(
           order.updatedAt,
           SERVICE_HISTORY_MONTHS,
@@ -161,7 +184,9 @@ export class QualificationRetentionWorker
 
       for (const submission of user.fixer?.qualificationSubmissions ?? []) {
         const documents = submission.documents.filter(
-          (document) => document.lifecycleState !== 'DELETE_PENDING',
+          (document) =>
+            document.lifecycleState !== 'DELETE_PENDING' &&
+            (!document.legalHoldUntil || document.legalHoldUntil < now),
         );
         if (documents.length === 0) continue;
         await this.prisma.$transaction(async (tx) => {
@@ -191,6 +216,13 @@ export class QualificationRetentionWorker
           });
         });
         scheduled += documents.length;
+      }
+
+      if (now >= inactiveDeleteAt && user.isActive) {
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: { isActive: false },
+        });
       }
     }
     if (scheduled > 0) {

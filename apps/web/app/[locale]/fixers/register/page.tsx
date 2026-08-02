@@ -63,6 +63,10 @@ function applicantKycReason(code: string): string {
       return "The name on this document does not match the profile name.";
     case "UNREADABLE_DOCUMENT":
       return "The image is unclear. Please upload a sharper, well-lit photo.";
+    case "LIVENESS_FAILED":
+      return "The selfie could not be confirmed. Please upload a clear selfie holding your identity card.";
+    case "MISSING_REQUIRED_EVIDENCE":
+      return "Please upload both required identity photos to continue.";
     case "DOCUMENT_VALID":
     case "SELFIE_REVIEW_REQUIRED":
     case "HUMAN_REVIEW_REQUIRED":
@@ -603,6 +607,8 @@ function FixerRegisterContent() {
               "INVALID_ID_NUMBER",
               "UNREADABLE_DOCUMENT",
               "EXPIRED_ID",
+              "IDENTITY_CONTRADICTION",
+              "LIVENESS_FAILED",
             ].includes(code)
               ? applicantKycReason(code)
               : "We could not save this photo securely. Please try again.",
@@ -616,13 +622,17 @@ function FixerRegisterContent() {
             "INVALID_ID_NUMBER",
             "UNREADABLE_DOCUMENT",
             "EXPIRED_ID",
+            "IDENTITY_CONTRADICTION",
+            "LIVENESS_FAILED",
           ].includes(code),
         );
         if (
           immediateReason === "WRONG_DOCUMENT_TYPE" ||
           immediateReason === "INVALID_ID_NUMBER" ||
           immediateReason === "UNREADABLE_DOCUMENT" ||
-          immediateReason === "EXPIRED_ID"
+          immediateReason === "EXPIRED_ID" ||
+          immediateReason === "IDENTITY_CONTRADICTION" ||
+          immediateReason === "LIVENESS_FAILED"
         ) {
           setError(applicantKycReason(immediateReason));
           setKycValidating(false);
@@ -1250,7 +1260,9 @@ function FixerRegisterContent() {
         if (!response.ok) {
           const detail = await response.json().catch(() => ({}));
           throw new Error(
-            detail.message || `Unable to store ${documentType} evidence`,
+            documentType === "id-front" || documentType === "selfie-with-id"
+              ? "We could not save this photo securely. Please try again."
+              : "We could not save this document securely. Please try again.",
           );
         }
         return (await response.json()) as UploadAssessmentResponse;
@@ -1283,7 +1295,9 @@ function FixerRegisterContent() {
                     null,
                   confidence: uploaded.assessment?.confidence ?? null,
                   reasonCodes: uploaded.assessment?.reasonCodes || [],
-                  message: uploaded.assessment?.reasonCodes?.join(", ") || null,
+                  message: uploaded.assessment?.reasonCodes?.[0]
+                    ? applicantKycReason(uploaded.assessment.reasonCodes[0])
+                    : null,
                 }
               : slot,
           ),

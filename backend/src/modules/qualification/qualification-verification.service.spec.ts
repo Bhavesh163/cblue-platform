@@ -191,6 +191,27 @@ describe('QualificationVerificationService', () => {
     });
   });
 
+  it('keeps readable generic portfolio evidence available for tier review', async () => {
+    prisma.kycDocument.findFirst.mockResolvedValue({
+      documentType: 'portfolio',
+      storageKey: 'qualification/private/portfolio',
+      contentType: 'application/pdf',
+    });
+    respond({
+      ...validFields,
+      detectedDocumentType: 'portfolio',
+      documentName: null,
+      credentialNumber: null,
+      expiresAt: null,
+      confidence: 88,
+    });
+
+    await expect(assess()).resolves.toMatchObject({
+      route: 'NEEDS_REVIEW',
+      reasonCodes: expect.arrayContaining(['DOCUMENT_VALID']),
+    });
+  });
+
   it.each(['timeout', 'invalid JSON'])(
     'fails closed on provider %s',
     async (kind) => {

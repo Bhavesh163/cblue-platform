@@ -47,12 +47,13 @@ export class QualificationBridgeService {
             },
             evaluations: {
               orderBy: { createdAt: 'desc' },
-              take: 3,
+              take: 20,
               select: {
                 id: true,
                 provider: true,
                 model: true,
                 policyVersion: true,
+                promptVersion: true,
                 status: true,
                 deterministicScore: true,
                 aiScore: true,
@@ -120,10 +121,11 @@ export class QualificationBridgeService {
       submission?.documents.map((document) => document.evidenceStatus) || [];
     const kycEvaluation =
       submission?.evaluations.find(
-        (evaluation) => evaluation.provider !== 'DETERMINISTIC_POLICY',
-      ) ||
-      submission?.evaluations[0] ||
-      null;
+        (evaluation) =>
+          evaluation.provider === 'TYPHOON_OCR' &&
+          evaluation.promptVersion ===
+            'cblue-qualification-document-assessment-v1',
+      ) || null;
     const tierEvaluation =
       submission?.evaluations.find(
         (evaluation) => evaluation.provider === 'DETERMINISTIC_POLICY',

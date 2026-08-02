@@ -16,6 +16,7 @@ describe('NotificationService', () => {
     prisma = {
       notification: {
         create: jest.fn(),
+        findUnique: jest.fn(),
         findMany: jest.fn(),
         update: jest.fn(),
         updateMany: jest.fn(),
@@ -35,6 +36,8 @@ describe('NotificationService', () => {
       ],
     }).compile();
 
+    prisma.notification.findUnique.mockResolvedValue(null);
+    prisma.notification.updateMany.mockResolvedValue({ count: 1 });
     service = module.get<NotificationService>(NotificationService);
   });
 
@@ -104,6 +107,24 @@ describe('NotificationService', () => {
     });
   });
 
+  it('does not create a duplicate notification for an existing idempotency key', async () => {
+    prisma.notification.findUnique.mockResolvedValue({
+      id: 'already-queued',
+      status: 'SENT',
+    } as never);
+
+    await expect(
+      service.send({
+        userId: 'user-1',
+        type: NotificationType.IN_APP,
+        title: 'Review update',
+        body: 'Your review was updated.',
+        dedupeKey: 'qualification-task-1-APPROVE',
+      }),
+    ).resolves.toEqual(expect.objectContaining({ id: 'already-queued' }));
+    expect(prisma.notification.create).not.toHaveBeenCalled();
+  });
+
   describe('retryFailedEmails', () => {
     it('claims due failed email notifications and retries them with persisted attempt state', async () => {
       prisma.notification.findMany.mockResolvedValue([
@@ -131,7 +152,7 @@ describe('NotificationService', () => {
       );
       expect(prisma.notification.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'notif-failed' },
+          where: expect.objectContaining({ id: 'notif-failed' }),
           data: expect.objectContaining({ attempts: 2 }),
         }),
       );

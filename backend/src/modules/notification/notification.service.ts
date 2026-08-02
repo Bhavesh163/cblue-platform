@@ -1,4 +1,5 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
 import { OnEvent } from '@nestjs/event-emitter';
 import { NotificationType } from '@prisma/client';
@@ -18,16 +19,35 @@ export class NotificationService {
   ) {}
 
   async send(dto: SendNotificationDto) {
-    const notification = await this.prisma.notification.create({
-      data: {
-        userId: dto.userId,
-        type: dto.type,
-        title: dto.title,
-        body: dto.body,
-        data: dto.data ?? undefined,
-        attempts: 0,
-      },
-    });
+    if (dto.dedupeKey) {
+      const existing = await this.prisma.notification.findUnique({
+        where: { dedupeKey: dto.dedupeKey },
+      });
+      if (existing) return existing;
+    }
+
+    let notification;
+    try {
+      notification = await this.prisma.notification.create({
+        data: {
+          userId: dto.userId,
+          type: dto.type,
+          title: dto.title,
+          body: dto.body,
+          data: dto.data ?? undefined,
+          dedupeKey: dto.dedupeKey,
+          attempts: 0,
+        },
+      });
+    } catch (error) {
+      if (dto.dedupeKey) {
+        const existing = await this.prisma.notification.findUnique({
+          where: { dedupeKey: dto.dedupeKey },
+        });
+        if (existing) return existing;
+      }
+      throw error;
+    }
 
     let delivered = true;
     switch (dto.type) {
@@ -39,6 +59,9 @@ export class NotificationService {
         break;
       case NotificationType.EMAIL:
         delivered = await this.sendEmail(dto);
+        break;
+      case NotificationType.IN_APP:
+        delivered = true;
         break;
     }
 
@@ -52,6 +75,9 @@ export class NotificationService {
             attempts: 1,
             lastErrorCode: null,
             nextAttemptAt: null,
+            claimedAt: null,
+            claimedBy: null,
+            claimExpiresAt: null,
           }
         : {
             status: 'FAILED',
@@ -79,6 +105,21 @@ export class NotificationService {
 
     let retried = 0;
     for (const notification of notifications) {
+      const claimToken = randomUUID();
+      const claimed = await this.prisma.notification.updateMany({
+        where: {
+          id: notification.id,
+          status: 'FAILED',
+          OR: [{ claimedAt: null }, { claimExpiresAt: { lte: now } }],
+        },
+        data: {
+          claimedAt: now,
+          claimedBy: claimToken,
+          claimExpiresAt: new Date(now.getTime() + RETRY_BASE_MS),
+        },
+      });
+      if (claimed.count !== 1) continue;
+
       const attempt = notification.attempts + 1;
       const delivered = await this.sendEmail({
         userId: notification.userId,
@@ -86,6 +127,7 @@ export class NotificationService {
         title: notification.title,
         body: notification.body,
         data: this.readNotificationData(notification.data),
+        dedupeKey: notification.dedupeKey ?? undefined,
       });
       const nextAttemptAt = delivered
         ? null
@@ -93,7 +135,7 @@ export class NotificationService {
           ? new Date(now.getTime() + RETRY_BASE_MS * 2 ** (attempt - 1))
           : null;
       await this.prisma.notification.update({
-        where: { id: notification.id },
+        where: { id: notification.id, claimedBy: claimToken },
         data: delivered
           ? {
               status: 'SENT',
@@ -107,6 +149,9 @@ export class NotificationService {
               attempts: attempt,
               lastErrorCode: 'EMAIL_DELIVERY_FAILED',
               nextAttemptAt,
+              claimedAt: null,
+              claimedBy: null,
+              claimExpiresAt: null,
             },
       });
       retried += 1;
@@ -218,6 +263,7 @@ export class NotificationService {
               From: { Email: fromEmail, Name: 'CBLUE' },
               To: [{ Email: user.email, Name: user.name || 'CBLUE partner' }],
               Subject: dto.title,
+              CustomID: dto.dedupeKey,
               TextPart: dto.body,
               HTMLPart: '<p>' + dto.body.replace(/</g, '&lt;') + '</p>',
             },

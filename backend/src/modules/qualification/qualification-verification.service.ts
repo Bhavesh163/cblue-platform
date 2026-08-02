@@ -41,7 +41,8 @@ const EXTRACTION_KEYS = new Set<keyof ExtractedCredentialFields>([
   'projectValue',
   'confidence',
 ]);
-const IDENTITY_TYPES = new Set(['id-front']);
+const IDENTITY_TYPES = new Set(['id-front', 'selfie-with-id']);
+const ID_FRONT_TYPES = new Set(['id-front']);
 const DOCUMENT_TYPES = new Set<string>([
   ...QUALIFICATION_DOCUMENT_TYPES,
   'id-back',
@@ -130,10 +131,9 @@ export class QualificationVerificationService {
       }
       if (
         fields.confidence < 70 ||
-        (!fields.documentName &&
-          document.documentType !== 'company-affidavit') ||
         (IDENTITY_TYPES.has(document.documentType) &&
-          fields.detectedDocumentType === null)
+          fields.detectedDocumentType === null) ||
+        (document.documentType === 'id-front' && !fields.documentName)
       ) {
         return result({
           evidenceStatus: 'INSUFFICIENT',
@@ -147,14 +147,14 @@ export class QualificationVerificationService {
         : null;
       const identityNumber = normalizeThaiDigits(fields.credentialNumber);
       const withIdentity = (assessment: QualificationDocumentAssessment) =>
-        IDENTITY_TYPES.has(document.documentType)
+        ID_FRONT_TYPES.has(document.documentType)
           ? {
               ...assessment,
               ...identityMetadata(fields.credentialNumber, expiresAt),
             }
           : assessment;
       if (
-        document.documentType === 'id-front' &&
+        ID_FRONT_TYPES.has(document.documentType) &&
         (identityNumber.length !== 13 ||
           !hasValidThaiNationalId(identityNumber))
       ) {
@@ -230,7 +230,14 @@ export class QualificationVerificationService {
         });
       }
 
-      if (!this.namesMatch(input.registeredName, fields.documentName)) {
+      const nameMustMatch =
+        document.documentType !== 'portfolio' &&
+        document.documentType !== 'selfie-with-id' &&
+        Boolean(fields.documentName);
+      if (
+        nameMustMatch &&
+        !this.namesMatch(input.registeredName, fields.documentName)
+      ) {
         return withIdentity(
           result({
             evidenceStatus: 'CONTRADICTED',

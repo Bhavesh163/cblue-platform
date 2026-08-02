@@ -267,6 +267,9 @@ export class QualificationService {
             evidenceStatus: true,
             expiresAt: true,
             createdAt: true,
+            isActive: true,
+            lifecycleState: true,
+            legalHoldUntil: true,
           },
           orderBy: { createdAt: 'asc' },
         },
@@ -1420,7 +1423,12 @@ export class QualificationService {
         throw new BadRequestException('Evidence decision reason is too short');
       }
       const document = await tx.kycDocument.findFirst({
-        where: { id: documentId, submissionId },
+        where: {
+          id: documentId,
+          submissionId,
+          isActive: true,
+          lifecycleState: 'READY',
+        },
         select: {
           id: true,
           documentType: true,
@@ -1442,6 +1450,9 @@ export class QualificationService {
           evidenceStatus: true,
           expiresAt: true,
           createdAt: true,
+          isActive: true,
+          lifecycleState: true,
+          legalHoldUntil: true,
         },
       });
       await tx.qualificationAuditLog.create({
@@ -1553,7 +1564,13 @@ export class QualificationService {
           },
         },
       },
-      select: { id: true, storageKey: true, documentType: true },
+      select: {
+        id: true,
+        storageKey: true,
+        documentType: true,
+        isActive: true,
+        lifecycleState: true,
+      },
     });
     if (!document)
       throw new NotFoundException('Qualification document not found');
@@ -1588,8 +1605,18 @@ export class QualificationService {
   ) {
     const purpose = dto.purpose.trim();
     const document = await this.prisma.kycDocument.findFirst({
-      where: { id: documentId, submissionId, lifecycleState: 'READY' },
-      select: { id: true, storageKey: true, documentType: true },
+      where: {
+        id: documentId,
+        submissionId,
+        isActive: true,
+        lifecycleState: 'READY',
+      },
+      select: {
+        id: true,
+        storageKey: true,
+        documentType: true,
+        legalHoldUntil: true,
+      },
     });
     if (!document)
       throw new NotFoundException('Qualification document not found');
@@ -1601,30 +1628,38 @@ export class QualificationService {
       document.storageKey,
       expiresInSeconds,
     );
-    await this.prisma.qualificationDocumentAccess.create({
-      data: {
-        documentId: document.id,
-        submissionId,
-        actorId: adminId,
-        purpose,
-        caseReference: dto.caseReference?.trim() || null,
-        legalHoldUntil,
-      },
-    });
-    await this.prisma.qualificationAuditLog.create({
-      data: {
-        submissionId,
-        actorId: adminId,
-        action: 'COMPLIANCE_DOCUMENT_ACCESS_GRANTED',
-        entityType: 'KycDocument',
-        entityId: document.id,
-        reason: purpose,
-        metadata: {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.qualificationDocumentAccess.create({
+        data: {
+          documentId: document.id,
+          submissionId,
+          actorId: adminId,
+          purpose,
           caseReference: dto.caseReference?.trim() || null,
-          legalHold: Boolean(dto.legalHold),
-          legalHoldUntil: legalHoldUntil?.toISOString() || null,
+          legalHoldUntil,
         },
-      },
+      });
+      if (legalHoldUntil) {
+        await tx.kycDocument.update({
+          where: { id: document.id },
+          data: { legalHoldUntil },
+        });
+      }
+      await tx.qualificationAuditLog.create({
+        data: {
+          submissionId,
+          actorId: adminId,
+          action: 'COMPLIANCE_DOCUMENT_ACCESS_GRANTED',
+          entityType: 'KycDocument',
+          entityId: document.id,
+          reason: purpose,
+          metadata: {
+            caseReference: dto.caseReference?.trim() || null,
+            legalHold: Boolean(dto.legalHold),
+            legalHoldUntil: legalHoldUntil?.toISOString() || null,
+          },
+        },
+      });
     });
     return {
       documentId: document.id,

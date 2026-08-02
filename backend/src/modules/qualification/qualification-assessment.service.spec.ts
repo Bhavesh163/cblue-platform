@@ -120,6 +120,41 @@ describe('QualificationAssessmentService', () => {
     expect(tx.qualificationAuditLog.create).not.toHaveBeenCalled();
   });
 
+  it('persists structured extracted evidence for later tier evaluation', async () => {
+    const extractedFields = {
+      detectedDocumentType: 'id-front',
+      documentName: null,
+      issuerName: null,
+      credentialNumber: null,
+      projectName: null,
+      projectLocation: null,
+      issuedAt: null,
+      expiresAt: null,
+      credentialLevel: null,
+      projectValue: null,
+      confidence: 94,
+    };
+    verification.assessStoredDocument.mockResolvedValue({
+      ...providerAssessment,
+      extractedFields,
+    });
+
+    await assess();
+
+    expect(tx.kycDocument.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ extractedFields }),
+      }),
+    );
+    expect(tx.qualificationEvaluation.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          output: expect.objectContaining({ extractedFields }),
+        }),
+      }),
+    );
+  });
+
   it('fails closed when provider enums, reasons, or nullable scores are malformed', async () => {
     verification.assessStoredDocument.mockResolvedValue({
       ...providerAssessment,
