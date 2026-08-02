@@ -12,10 +12,14 @@ import {
   QualificationReviewKind,
   QualificationReviewStatus,
   QualificationSubmissionStatus,
+  Prisma,
 } from '@prisma/client';
 import { Optional } from '@nestjs/common';
 import { NotificationType } from '@prisma/client';
-import { NotificationService } from '../notification/notification.service';
+import {
+  NotificationService,
+  queueNotificationInTransaction,
+} from '../notification/notification.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   QualificationReviewDecision,
@@ -25,6 +29,38 @@ import { QualificationReviewCheckDto } from './dto/qualification-review-check.dt
 import { QualificationEvaluationService } from './qualification-evaluation.service';
 const HANDOFF_LEASE_MS = 5 * 60 * 1000;
 const REVIEW_CLAIM_LEASE_MS = 30 * 60 * 1000;
+
+async function queueDecisionNotifications(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  taskId: string,
+  kind: QualificationReviewKind,
+  decision: QualificationReviewDecision,
+) {
+  const approved = decision === QualificationReviewDecision.APPROVE;
+  const title = approved
+    ? 'Qualification decision complete'
+    : decision === QualificationReviewDecision.REJECT
+      ? 'Qualification decision needs attention'
+      : 'Qualification review updated';
+  const body = approved
+    ? 'Your submitted information has passed this review. You can continue with your partner profile.'
+    : 'Please review your submitted information and provide corrected evidence where requested.';
+  const base = {
+    userId,
+    type: NotificationType.IN_APP,
+    title,
+    body,
+    dedupeKey: 'qualification-decision:' + taskId + ':' + decision,
+    data: { taskId, kind, decision, approved },
+  };
+  await queueNotificationInTransaction(tx, base);
+  await queueNotificationInTransaction(tx, {
+    ...base,
+    type: NotificationType.EMAIL,
+    dedupeKey: 'qualification-decision-email:' + taskId + ':' + decision,
+  });
+}
 
 const tierRank: Record<FixerTier, number> = {
   ECONOMY: 0,
@@ -567,7 +603,7 @@ export class QualificationReviewService {
           data: {
             status: QualificationReviewStatus.DECIDED,
             decidedAt: checkedAt,
-            decision: task.proposedDecision,
+            decision: task.proposedDecision as QualificationReviewDecision,
             checkedBy: checkerId,
             checkedAt,
             checkReason,
@@ -601,6 +637,13 @@ export class QualificationReviewService {
           },
           update: {},
         });
+        await queueDecisionNotifications(
+          tx,
+          task.submission.fixer.userId,
+          taskId,
+          task.kind,
+          task.proposedDecision as QualificationReviewDecision,
+        );
         return {
           task: updatedTask,
           tierQualification,
@@ -626,7 +669,7 @@ export class QualificationReviewService {
           data: {
             status: QualificationReviewStatus.DECIDED,
             decidedAt: checkedAt,
-            decision: task.proposedDecision,
+            decision: task.proposedDecision as QualificationReviewDecision,
             checkedBy: checkerId,
             checkedAt,
             checkReason,
@@ -642,11 +685,18 @@ export class QualificationReviewService {
             reason: checkReason,
             metadata: {
               makerId: task.proposedBy,
-              decision: task.proposedDecision,
+              decision: task.proposedDecision as QualificationReviewDecision,
               fixerStatusChanged: false,
             },
           },
         });
+        await queueDecisionNotifications(
+          tx,
+          task.submission.fixer.userId,
+          taskId,
+          task.kind,
+          task.proposedDecision as QualificationReviewDecision,
+        );
         return {
           task: updatedTask,
           tierQualification: null,
@@ -663,7 +713,7 @@ export class QualificationReviewService {
           data: {
             status: QualificationReviewStatus.DECIDED,
             decidedAt: checkedAt,
-            decision: task.proposedDecision,
+            decision: task.proposedDecision as QualificationReviewDecision,
             checkedBy: checkerId,
             checkedAt,
             checkReason,
@@ -680,6 +730,13 @@ export class QualificationReviewService {
             metadata: { makerId: task.proposedBy },
           },
         });
+        await queueDecisionNotifications(
+          tx,
+          task.submission.fixer.userId,
+          taskId,
+          task.kind,
+          task.proposedDecision as QualificationReviewDecision,
+        );
         return {
           task: updatedTask,
           tierQualification: null,
@@ -715,7 +772,7 @@ export class QualificationReviewService {
         data: {
           status: QualificationReviewStatus.DECIDED,
           decidedAt: checkedAt,
-          decision: task.proposedDecision,
+          decision: task.proposedDecision as QualificationReviewDecision,
           checkedBy: checkerId,
           checkedAt,
           checkReason,
@@ -731,12 +788,19 @@ export class QualificationReviewService {
           reason: checkReason,
           metadata: {
             makerId: task.proposedBy,
-            decision: task.proposedDecision,
+            decision: task.proposedDecision as QualificationReviewDecision,
             approvedTier,
           },
         },
       });
 
+      await queueDecisionNotifications(
+        tx,
+        task.submission.fixer.userId,
+        taskId,
+        task.kind,
+        task.proposedDecision as QualificationReviewDecision,
+      );
       return {
         task: updatedTask,
         tierQualification,

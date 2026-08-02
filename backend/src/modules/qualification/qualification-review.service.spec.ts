@@ -18,6 +18,7 @@ describe('QualificationReviewService', () => {
     kycDocument: { findMany: jest.fn() },
     qualificationAuditLog: { create: jest.fn() },
     qualificationHandoff: { upsert: jest.fn() },
+    notification: { createMany: jest.fn() },
   } as any;
   const prisma = {
     qualificationReviewTask: {
@@ -72,6 +73,7 @@ describe('QualificationReviewService', () => {
       { documentType: 'selfie-with-id', evidenceStatus: 'VALIDATED' },
     ]);
     tx.qualificationAuditLog.create.mockResolvedValue({ id: 'audit-1' });
+    tx.notification.createMany.mockResolvedValue({ count: 1 });
     tx.qualificationHandoff.upsert.mockResolvedValue({
       id: 'handoff-1',
       status: 'PENDING',

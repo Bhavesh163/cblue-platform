@@ -13,6 +13,7 @@ import { QualificationEvaluationService } from './qualification-evaluation.servi
 const INTERVAL_MS = 30_000;
 const LEASE_MS = 5 * 60 * 1000;
 const SHUTDOWN_GRACE_MS = 5_000;
+const MAX_ATTEMPTS = 5;
 
 @Injectable()
 export class QualificationEvidenceAssessmentWorker
@@ -78,6 +79,7 @@ export class QualificationEvidenceAssessmentWorker
             QualificationEvaluationStatus.FAILED,
           ],
         },
+        attempts: { lt: MAX_ATTEMPTS },
         nextAttemptAt: { lte: now },
         eligibleAt: { lte: now },
         OR: [
@@ -148,12 +150,6 @@ export class QualificationEvidenceAssessmentWorker
             readyAt: new Date(),
           },
         });
-        if (submission.status === 'APPROVED') {
-          await this.tierEvaluation.evaluateTier(
-            job.submissionId,
-            'system:qualification-evidence-worker',
-          );
-        }
         await this.prisma.qualificationEvidenceAssessmentJob.updateMany({
           where: {
             id: job.id,
@@ -168,6 +164,29 @@ export class QualificationEvidenceAssessmentWorker
             lastError: null,
           },
         });
+        if (submission.status === 'APPROVED') {
+          const pendingJob =
+            await this.prisma.qualificationEvidenceAssessmentJob.findFirst({
+              where: {
+                submissionId: job.submissionId,
+                status: {
+                  in: [
+                    QualificationEvaluationStatus.QUEUED,
+                    QualificationEvaluationStatus.RUNNING,
+                    QualificationEvaluationStatus.FAILED,
+                  ],
+                },
+                attempts: { lt: MAX_ATTEMPTS },
+              },
+              select: { id: true },
+            });
+          if (!pendingJob) {
+            await this.tierEvaluation.evaluateTier(
+              job.submissionId,
+              'system:qualification-evidence-worker',
+            );
+          }
+        }
         processed += 1;
       } catch (error) {
         await this.prisma.qualificationEvidenceAssessmentJob.updateMany({
@@ -182,9 +201,45 @@ export class QualificationEvidenceAssessmentWorker
             claimedBy: null,
             lastError:
               error instanceof Error ? error.message : 'ASSESSMENT_FAILED',
-            nextAttemptAt: new Date(Date.now() + 60_000),
+            nextAttemptAt:
+              job.attempts + 1 >= MAX_ATTEMPTS
+                ? new Date('9999-12-31T00:00:00.000Z')
+                : new Date(Date.now() + 60_000),
           },
         });
+        if (job.attempts + 1 >= MAX_ATTEMPTS) {
+          await this.prisma.$transaction(async (tx) => {
+            const existingTask = await tx.qualificationReviewTask.findFirst({
+              where: {
+                submissionId: job.submissionId,
+                kind: 'KYC',
+                status: { in: ['OPEN', 'ASSIGNED'] },
+              },
+              select: { id: true },
+            });
+            if (!existingTask) {
+              await tx.qualificationReviewTask.create({
+                data: {
+                  submissionId: job.submissionId,
+                  kind: 'KYC',
+                  status: 'OPEN',
+                  reasonCodes: ['EVIDENCE_ASSESSMENT_RETRY_EXHAUSTED'],
+                },
+              });
+            }
+            await tx.qualificationAuditLog.create({
+              data: {
+                submissionId: job.submissionId,
+                actorId: 'system:qualification-evidence-worker',
+                action: 'EVIDENCE_ASSESSMENT_RETRY_EXHAUSTED',
+                entityType: 'KycDocument',
+                entityId: job.documentId,
+                reason:
+                  'Evidence assessment retries exhausted; routed to administrator review',
+              },
+            });
+          });
+        }
         this.logger.error(
           'Qualification evidence assessment failed',
           error instanceof Error ? error.name : 'UnknownError',

@@ -51,6 +51,16 @@ type UploadAssessmentResponse = {
     evidenceStatus?: string;
   };
 };
+class KycUploadError extends Error {
+  readonly code: string;
+
+  constructor(code: string) {
+    super(code);
+    this.name = "KycUploadError";
+    this.code = code;
+  }
+}
+
 function applicantKycReason(code: string): string {
   switch (code) {
     case "WRONG_DOCUMENT_TYPE":
@@ -558,10 +568,9 @@ function FixerRegisterContent() {
             code?: string;
           } | null;
           const code = typeof payload?.code === "string" ? payload.code : "";
+          if (code) throw new KycUploadError(code);
           throw new Error(
-            code
-              ? applicantKycReason(code)
-              : "We could not receive this file. Please try again with a clearer image.",
+            "We could not receive this file. Please try again with a clearer image.",
           );
         }
         return (await response.json()) as UploadAssessmentResponse;
@@ -600,17 +609,9 @@ function FixerRegisterContent() {
         try {
           uploaded = await uploadKycImmediately(documentType, file);
         } catch (error) {
-          const code = error instanceof Error ? error.message : "";
           setError(
-            [
-              "WRONG_DOCUMENT_TYPE",
-              "INVALID_ID_NUMBER",
-              "UNREADABLE_DOCUMENT",
-              "EXPIRED_ID",
-              "IDENTITY_CONTRADICTION",
-              "LIVENESS_FAILED",
-            ].includes(code)
-              ? applicantKycReason(code)
+            error instanceof KycUploadError
+              ? applicantKycReason(error.code)
               : "We could not save this photo securely. Please try again.",
           );
           setKycValidating(false);

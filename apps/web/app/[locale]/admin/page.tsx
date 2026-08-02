@@ -16,6 +16,7 @@ import QualificationReviewPanel from "../components/QualificationReviewPanel";
 import AdminPartnerDirectory from "../components/AdminPartnerDirectory";
 import AdminOperationsPanel from "../components/AdminOperationsPanel";
 import QualificationAuditPanel from "../components/QualificationAuditPanel";
+import QualificationHistoryPanel from "../components/QualificationHistoryPanel";
 import {
   adminRequest,
   clearAdminTokens,
@@ -615,6 +616,8 @@ export default function AdminPage() {
         <AdminPartnerDirectory token={token} />
 
         <QualificationAuditPanel token={token} />
+
+        <QualificationHistoryPanel token={token} />
 
         <AdminOperationsPanel token={token} />
 

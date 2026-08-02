@@ -19,6 +19,9 @@ describe('QualificationRoutingService', () => {
     qualificationAuditLog: {
       create: jest.fn(),
     },
+    notification: {
+      createMany: jest.fn(),
+    },
     $executeRawUnsafe: jest.fn(),
   } as any;
   const prisma = {
@@ -74,6 +77,7 @@ describe('QualificationRoutingService', () => {
     tx.qualificationReviewTask.create.mockResolvedValue({ id: 'review-1' });
     tx.qualificationReviewTask.createMany.mockResolvedValue({ count: 1 });
     tx.qualificationAuditLog.create.mockResolvedValue({ id: 'audit-1' });
+    tx.notification.createMany.mockResolvedValue({ count: 1 });
     notifications.send.mockResolvedValue({ id: 'notification-1' });
   });
 

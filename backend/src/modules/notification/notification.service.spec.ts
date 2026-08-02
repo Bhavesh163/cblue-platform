@@ -147,7 +147,7 @@ describe('NotificationService', () => {
       expect(prisma.notification.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            status: 'FAILED',
+            status: { in: ['FAILED', 'PENDING'] },
             type: NotificationType.EMAIL,
           }),
         }),

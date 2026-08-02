@@ -272,7 +272,7 @@ export class QualificationRetentionWorker
         scheduled += documents.length;
       }
 
-      if (now >= inactiveDeleteAt && user.isActive) {
+      if (now >= inactiveDeleteAt) {
         await this.prisma.user.update({
           where: { id: user.id },
           data: {
