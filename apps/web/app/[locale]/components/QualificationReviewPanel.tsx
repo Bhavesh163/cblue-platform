@@ -58,8 +58,6 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
   const [claiming, setClaiming] = useState("");
   const [deciding, setDeciding] = useState("");
   const [reevaluating, setReevaluating] = useState("");
-  const [checking, setChecking] = useState("");
-  const [checkReason, setCheckReason] = useState<Record<string, string>>({});
   const [decision, setDecision] = useState<Record<string, "APPROVE" | "REJECT">>({});
   const [approvedTier, setApprovedTier] = useState<Record<string, string>>({});
   const [reason, setReason] = useState<Record<string, string>>({});
@@ -136,34 +134,6 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
     }
   }
 
-  async function check(task: ReviewTask, acceptProposal: boolean) {
-    const selectedReason = checkReason[task.id]?.trim() || "";
-    if (selectedReason.length < 10) {
-      setError("Enter an independent check reason with at least 10 characters.");
-      return;
-    }
-    setChecking(task.id);
-    setError("");
-    try {
-      const response = await adminFetchResponse(getApiUrl(
-        "/qualification/admin/review-tasks/" + task.id + "/check",
-      ), {
-        method: "POST",
-        headers: {
-          Authorization: "Bearer " + token,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ acceptProposal, reason: selectedReason }),
-      });
-      if (!response.ok) throw new Error("The independent check could not be saved.");
-      await load();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to save independent check.");
-    } finally {
-      setChecking("");
-    }
-  }
-
   async function reevaluate(submissionId?: string) {
     if (!submissionId) return;
     setReevaluating(submissionId);
@@ -216,10 +186,8 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                     <td className="py-3 pr-4 align-top font-semibold text-slate-900">{displayName(task)}<p className="mt-1 text-xs font-normal text-slate-500">{task.kind || "REVIEW"} / {task.submission?.status || "REVIEW"}</p></td>
                     <td className="py-3 pr-4 align-top text-slate-700">{evaluation?.recommendedTier || "Pending"}<p className="mt-1 text-xs text-slate-500">{evaluation?.risk || "-"} risk / {evaluation?.confidence ?? "-"}% confidence</p>{task.status === "ASSIGNED" && task.assignedTo === adminId && !task.proposedAt && <button type="button" onClick={() => void reevaluate(task.submission?.id)} disabled={!task.submission?.id || reevaluating === task.submission?.id} className="mt-2 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">{reevaluating === task.submission?.id ? "Evaluating..." : "Re-evaluate evidence"}</button>}</td>
                     <td className="py-3 pr-4 align-top text-slate-600">
-                      {task.status === "ASSIGNED" && task.assignedTo === adminId && !task.proposedAt ? (
-                        <QualificationEvidenceControls token={token} submissionId={task.submission?.id} documents={task.submission?.documents || []} onChanged={load} />
-                      ) : task.status === "ASSIGNED" && task.proposedAt && task.proposedBy !== adminId ? (
-                        <QualificationEvidenceControls token={token} submissionId={task.submission?.id} documents={task.submission?.documents || []} onChanged={load} readOnly />
+                      {task.status === "ASSIGNED" && task.assignedTo === adminId ? (
+                        <QualificationEvidenceControls token={token} submissionId={task.submission?.id} documents={task.submission?.documents || []} onChanged={load} readOnly={Boolean(task.proposedAt)} />
                       ) : (
                         <span>{task.submission?.documents?.length ?? 0} document(s). Claim this task to review evidence.</span>
                       )}
@@ -244,8 +212,8 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                               onChange={(event) => setDecision((current) => ({ ...current, [task.id]: event.target.value as "APPROVE" | "REJECT" }))}
                               className="rounded-lg border border-slate-300 px-2 py-2 text-xs font-semibold text-slate-700"
                             >
-                              <option value="APPROVE">Propose approval</option>
-                              <option value="REJECT">Propose rejection</option>
+                              <option value="APPROVE">Approve submission</option>
+                              <option value="REJECT">Request changes</option>
                             </select>
                             {task.kind !== "KYC" && (decision[task.id] || "APPROVE") === "APPROVE" && (
                               <select
@@ -260,41 +228,25 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                             )}
                           </div>
                           <input
-                            aria-label={"Proposal reason for " + displayName(task)}
+                            aria-label={"Decision reason for " + displayName(task)}
                             value={reason[task.id] || ""}
                             onChange={(event) => setReason((current) => ({ ...current, [task.id]: event.target.value }))}
-                            placeholder="Proposal reason (10+ characters)"
+                            placeholder="Decision reason (10+ characters)"
                             className="w-full rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
                           />
                           <button type="button" onClick={() => void decide(task)} disabled={deciding === task.id} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800 disabled:opacity-60">
-                            {deciding === task.id ? "Submitting..." : "Submit for independent check"}
+                            {deciding === task.id ? "Saving..." : "Save decision"}
                           </button>
                         </div>
                       )}
                       {task.status === "ASSIGNED" && task.proposedAt && (
                         <div className="min-w-80 space-y-2">
-                          <p className="font-semibold text-slate-800">Proposed {task.proposedDecision || "decision"}{task.proposedTier ? " / " + task.proposedTier : ""}</p>
-                          <p className="text-xs text-slate-600">{task.proposedReason || "No proposal reason supplied."}</p>
-                          {task.proposedBy === adminId ? (
-                            <p className="text-xs font-semibold text-slate-500">Awaiting a different administrator to check this proposal.</p>
-                          ) : (
-                            <>
-                              <input
-                                aria-label={"Independent check reason for " + displayName(task)}
-                                value={checkReason[task.id] || ""}
-                                onChange={(event) => setCheckReason((current) => ({ ...current, [task.id]: event.target.value }))}
-                                placeholder="Independent check reason (10+ characters)"
-                                className="w-full rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
-                              />
-                              <div className="flex flex-wrap gap-2">
-                                <button type="button" onClick={() => void check(task, true)} disabled={checking === task.id} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800 disabled:opacity-60">Confirm proposal</button>
-                                <button type="button" onClick={() => void check(task, false)} disabled={checking === task.id} className="rounded-lg border border-red-300 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-50 disabled:opacity-60">Return for review</button>
-                              </div>
-                            </>
-                          )}
+                          <p className="font-semibold text-slate-800">Decision recorded: {task.proposedDecision || "reviewed"}{task.proposedTier ? " / " + task.proposedTier : ""}</p>
+                          <p className="text-xs text-slate-600">{task.proposedReason || "No decision reason supplied."}</p>
+                          <p className="text-xs font-semibold text-slate-500">This review is already being finalized by the assigned administrator.</p>
                         </div>
                       )}
-                      {task.status === "ASSIGNED" && !task.proposedAt && task.assignedTo !== adminId && <span className="text-xs font-semibold text-slate-500">Assigned to another administrator</span>}
+                      {task.status === "ASSIGNED" && task.assignedTo !== adminId && <span className="text-xs font-semibold text-slate-500">Assigned to another administrator</span>}
                       {task.status !== "OPEN" && task.status !== "ASSIGNED" && <span className="text-xs font-semibold text-slate-500">{task.status || "DECIDED"}</span>}
                     </td>
                   </tr>

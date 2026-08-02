@@ -181,12 +181,22 @@ describe('QualificationReviewService', () => {
         applied: true,
       }),
     );
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     expect(tx.qualificationReviewTask.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           proposedDecision: 'APPROVE',
           proposedTier: 'SPECIALIST',
           proposedBy: 'maker-1',
+        }),
+      }),
+    );
+    expect(tx.qualificationReviewTask.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'task-1' },
+        data: expect.objectContaining({
+          status: 'DECIDED',
+          checkedBy: 'maker-1',
         }),
       }),
     );

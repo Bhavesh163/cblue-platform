@@ -186,6 +186,12 @@ function normalizeDateToIso(value: string): string | null {
     .padStart(2, "0")}-${d.toString().padStart(2, "0")}`;
 }
 
+function applicantQualificationStatus(status: string | undefined) {
+  if (status === "APPROVED") return "Verified";
+  if (status === "NEEDS_RESUBMISSION" || status === "NEEDS_MORE_EVIDENCE") return "Updates needed";
+  return "Under review";
+}
+
 function FixerRegisterContent() {
   const t = useTranslations("fixer");
   const locale = useLocale();
@@ -1398,17 +1404,17 @@ function FixerRegisterContent() {
                 ? "CBLUE ได้จัดเก็บเอกสาร KYC และรูปผลงานในพื้นที่ส่วนตัวแล้ว ผู้ดูแลระบบจะตรวจสอบหลักฐานก่อนอนุมัติระดับ Economy หรือเสนอระดับที่สูงขึ้น"
                 : locale === "zh"
                   ? "CBLUE已将KYC文件和作品图片存入私有存储。管理员将在批准Economy等级或建议更高等级前审核证据。"
-                  : "Your submission is pending KYC review. Tier classification runs separately after KYC approval and validated credential evidence."}
+                  : "Your information has been received. We will notify you if anything needs correction and when your profile is ready to receive work."}
           </p>
           <dl className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
             <div className="rounded-lg border border-gray-200 p-4">
-              <dt className="text-gray-500">KYC status</dt>
+              <dt className="text-gray-500">Profile review</dt>
               <dd className="font-semibold text-gray-900 mt-1">
-                {qualificationOutcome?.status || "NEEDS_REVIEW"}
+                {applicantQualificationStatus(qualificationOutcome?.status)}
               </dd>
             </div>
             <div className="rounded-lg border border-gray-200 p-4">
-              <dt className="text-gray-500">Tier evaluation recommendation</dt>
+              <dt className="text-gray-500">Recommended partner level</dt>
               <dd className="font-semibold text-gray-900 mt-1">
                 {qualificationOutcome?.recommendedTier || "ECONOMY"}
               </dd>
@@ -1416,14 +1422,13 @@ function FixerRegisterContent() {
             <div className="rounded-lg border border-gray-200 p-4 sm:col-span-2">
               <dt className="text-gray-500">Documents received</dt>
               <dd className="font-semibold text-gray-900 mt-1">
-                3 KYC images and {portfolioImages.length} portfolio file(s)
+                {kycSlots.length} identity photo(s) and {portfolioImages.length} portfolio file(s)
               </dd>
             </div>
           </dl>
           {!isApproved && (
             <p className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-              KYC remains pending until the evidence is validated. Upper-tier
-              approval requires independent maker-checker review.
+              Your submitted information is being reviewed. We will let you know if anything needs to be corrected and when your profile is ready.
             </p>
           )}
           <div className="mt-7">

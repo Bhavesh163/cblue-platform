@@ -206,9 +206,12 @@ export class QualificationBridgeService {
         uncheckedCount: evidenceStatuses.filter(
           (status) => status === 'UNCHECKED',
         ).length,
-        makerCheckerStatus: submission?.reviewTasks[0]?.proposedAt
-          ? 'AWAITING_CHECKER'
-          : submission?.reviewTasks[0]?.status || null,
+        makerCheckerStatus: submission?.reviewTasks[0]
+          ? submission.reviewTasks[0].proposedAt &&
+            !submission.reviewTasks[0].checkedAt
+            ? 'DECISION_IN_PROGRESS'
+            : submission.reviewTasks[0].status
+          : null,
       },
     };
   }

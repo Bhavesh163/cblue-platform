@@ -1294,7 +1294,6 @@ export class QualificationService {
               where: {
                 status: 'ASSIGNED',
                 assignedTo: adminId,
-                proposedAt: null,
               },
               select: { id: true },
               take: 1,
@@ -1308,7 +1307,7 @@ export class QualificationService {
     }
     if (!context.submission.reviewTasks.length) {
       throw new ConflictException(
-        'Qualification document verification requires the assigned maker',
+        'Qualification document verification requires the assigned administrator',
       );
     }
     return this.assessment.assessDocument({
@@ -1549,10 +1548,7 @@ export class QualificationService {
           reviewTasks: {
             some: {
               status: 'ASSIGNED',
-              OR: [
-                { assignedTo: adminId, proposedAt: null },
-                { proposedAt: { not: null }, proposedBy: { not: adminId } },
-              ],
+              assignedTo: adminId,
             },
           },
         },

@@ -135,7 +135,7 @@ describe('QualificationBridgeService', () => {
       expect.objectContaining({
         documentCount: 1,
         validatedCount: 1,
-        makerCheckerStatus: 'AWAITING_CHECKER',
+        makerCheckerStatus: 'DECISION_IN_PROGRESS',
       }),
     );
     expect(result.submission?.documents[0]).not.toHaveProperty('storageKey');

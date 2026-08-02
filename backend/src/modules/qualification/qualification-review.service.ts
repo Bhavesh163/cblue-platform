@@ -158,124 +158,34 @@ export class QualificationReviewService {
     if (!reason) {
       throw new ConflictException('A decision reason is required');
     }
-
-    await this.prisma.$transaction(async (tx) => {
-      const task = await tx.qualificationReviewTask.findUnique({
-        where: { id: taskId },
-        include: {
-          submission: {
-            include: {
-              evaluations: {
-                where: { provider: 'DETERMINISTIC_POLICY' },
-                orderBy: { createdAt: 'desc' },
-                take: 1,
-                select: { recommendedTier: true },
-              },
-            },
-          },
-        },
-      });
-      if (!task)
-        throw new NotFoundException('Qualification review task not found');
-      if (
-        task.status !== QualificationReviewStatus.ASSIGNED ||
-        task.proposedAt
-      ) {
-        throw new ConflictException(
-          'Qualification review task is not awaiting a maker decision',
-        );
-      }
-      if (task.assignedTo !== adminId) {
-        throw new ConflictException(
-          'Qualification review task belongs to another admin',
-        );
-      }
-
-      const approved = dto.decision === QualificationReviewDecision.APPROVE;
-      const recommendedTier = task.submission.evaluations[0]?.recommendedTier;
-      if (approved && task.kind !== 'KYC' && !dto.approvedTier) {
-        throw new ConflictException(
-          'An approved tier is required for TIER approval',
-        );
-      }
-      if (approved && task.kind === 'KYC' && dto.approvedTier) {
-        throw new ConflictException('KYC approval cannot propose a tier');
-      }
-      if (
-        approved &&
-        task.kind !== 'KYC' &&
-        dto.approvedTier &&
-        (!recommendedTier ||
-          tierRank[dto.approvedTier] > tierRank[recommendedTier])
-      ) {
-        throw new ConflictException(
-          'Approved tier cannot exceed the deterministic evidence recommendation',
-        );
-      }
-
-      const proposedAt = new Date();
-      const proposed = await tx.qualificationReviewTask.updateMany({
-        where: {
-          id: taskId,
-          status: QualificationReviewStatus.ASSIGNED,
-          assignedTo: adminId,
-          proposedAt: null,
-        },
-        data: {
-          proposedDecision: dto.decision,
-          proposedTier:
-            approved && task.kind !== 'KYC' ? dto.approvedTier : null,
-          proposedReason: dto.reason.trim(),
-          proposedBy: adminId,
-          proposedAt,
-        },
-      });
-      if (proposed.count !== 1) {
-        throw new ConflictException(
-          'Qualification proposal was already submitted',
-        );
-      }
-      const updatedTask = {
-        ...task,
-        proposedDecision: dto.decision,
-        proposedTier: approved && task.kind !== 'KYC' ? dto.approvedTier : null,
-        proposedReason: dto.reason.trim(),
-        proposedBy: adminId,
-        proposedAt,
-      };
-      await tx.qualificationAuditLog.create({
-        data: {
-          submissionId: task.submissionId,
-          actorId: adminId,
-          action: 'QUALIFICATION_DECISION_PROPOSED',
-          entityType: 'QualificationReviewTask',
-          entityId: taskId,
-          reason: dto.reason.trim(),
-          metadata: {
-            decision: dto.decision,
-            approvedTier: dto.approvedTier || null,
-            requiresIndependentCheck: false,
-          },
-        },
-      });
-
-      return updatedTask;
-    });
-
-    // One assigned administrator may review and finalize the task.
-    return this.checkTask(adminId, taskId, {
-      acceptProposal: true,
-      reason,
-    });
+    // Finalize the decision in the same transaction as the proposal metadata.
+    return this.checkTask(
+      adminId,
+      taskId,
+      {
+        acceptProposal: true,
+        reason,
+      },
+      {
+        decision: dto.decision,
+        approvedTier: dto.approvedTier,
+        reason,
+      },
+    );
   }
 
   async checkTask(
     checkerId: string,
     taskId: string,
     dto: QualificationReviewCheckDto,
+    directDecision?: {
+      decision: QualificationReviewDecision;
+      approvedTier?: FixerTier;
+      reason: string;
+    },
   ) {
     const result = await this.prisma.$transaction(async (tx) => {
-      const task = await tx.qualificationReviewTask.findUnique({
+      const loadedTask = await tx.qualificationReviewTask.findUnique({
         where: { id: taskId },
         include: {
           submission: {
@@ -291,8 +201,100 @@ export class QualificationReviewService {
           },
         },
       });
-      if (!task)
+      if (!loadedTask)
         throw new NotFoundException('Qualification review task not found');
+      let task = loadedTask;
+      if (directDecision) {
+        if (
+          task.status !== QualificationReviewStatus.ASSIGNED ||
+          task.proposedAt ||
+          task.assignedTo !== checkerId
+        ) {
+          throw new ConflictException(
+            'Qualification review task is not awaiting an administrator decision',
+          );
+        }
+        const approved =
+          directDecision.decision === QualificationReviewDecision.APPROVE;
+        const recommendedTier = task.submission.evaluations[0]?.recommendedTier;
+        if (
+          approved &&
+          task.kind !== QualificationReviewKind.KYC &&
+          !directDecision.approvedTier
+        ) {
+          throw new ConflictException(
+            'An approved tier is required for TIER approval',
+          );
+        }
+        if (
+          approved &&
+          task.kind === QualificationReviewKind.KYC &&
+          directDecision.approvedTier
+        ) {
+          throw new ConflictException('KYC approval cannot include a tier');
+        }
+        if (
+          approved &&
+          task.kind !== QualificationReviewKind.KYC &&
+          directDecision.approvedTier &&
+          (!recommendedTier ||
+            tierRank[directDecision.approvedTier] > tierRank[recommendedTier])
+        ) {
+          throw new ConflictException(
+            'Approved tier cannot exceed the deterministic evidence recommendation',
+          );
+        }
+        const proposedAt = new Date();
+        const proposed = await tx.qualificationReviewTask.updateMany({
+          where: {
+            id: taskId,
+            status: QualificationReviewStatus.ASSIGNED,
+            assignedTo: checkerId,
+            proposedAt: null,
+          },
+          data: {
+            proposedDecision: directDecision.decision,
+            proposedTier:
+              approved && task.kind !== QualificationReviewKind.KYC
+                ? directDecision.approvedTier
+                : null,
+            proposedReason: directDecision.reason,
+            proposedBy: checkerId,
+            proposedAt,
+          },
+        });
+        if (proposed.count !== 1) {
+          throw new ConflictException(
+            'Qualification decision was already submitted',
+          );
+        }
+        await tx.qualificationAuditLog.create({
+          data: {
+            submissionId: task.submissionId,
+            actorId: checkerId,
+            action: 'QUALIFICATION_DECISION_PROPOSED',
+            entityType: 'QualificationReviewTask',
+            entityId: taskId,
+            reason: directDecision.reason,
+            metadata: {
+              decision: directDecision.decision,
+              approvedTier: directDecision.approvedTier || null,
+              requiresIndependentCheck: false,
+            },
+          },
+        });
+        task = {
+          ...task,
+          proposedDecision: directDecision.decision,
+          proposedTier:
+            approved && task.kind !== QualificationReviewKind.KYC
+              ? (directDecision.approvedTier ?? null)
+              : null,
+          proposedReason: directDecision.reason,
+          proposedBy: checkerId,
+          proposedAt,
+        };
+      }
       if (
         task.status !== QualificationReviewStatus.ASSIGNED ||
         !task.proposedAt ||
