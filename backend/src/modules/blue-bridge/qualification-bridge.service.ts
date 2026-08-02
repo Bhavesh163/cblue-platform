@@ -236,6 +236,11 @@ export class QualificationBridgeService {
             ? 'DECISION_IN_PROGRESS'
             : reviewTasks[0].status
           : null,
+        decisionStatus: reviewTasks[0]
+          ? reviewTasks[0].proposedAt && !reviewTasks[0].checkedAt
+            ? 'DECISION_IN_PROGRESS'
+            : reviewTasks[0].status
+          : null,
         makerCheckerStatus: reviewTasks[0]
           ? reviewTasks[0].proposedAt && !reviewTasks[0].checkedAt
             ? 'DECISION_IN_PROGRESS'

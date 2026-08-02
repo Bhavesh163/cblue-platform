@@ -17,6 +17,7 @@ describe('QualificationService', () => {
   });
 
   const tx = {
+    fixer: { findUnique: jest.fn() },
     qualificationReviewTask: { findFirst: jest.fn() },
     kycDocument: {
       findFirst: jest.fn(),
@@ -32,6 +33,7 @@ describe('QualificationService', () => {
       findUniqueOrThrow: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn(),
+      create: jest.fn(),
     },
     qualificationAuditLog: { create: jest.fn() },
     qualificationDocumentAccess: { create: jest.fn() },
@@ -115,6 +117,7 @@ describe('QualificationService', () => {
       assessedAt: new Date('2026-07-30T00:00:00.000Z'),
     });
     tx.$executeRawUnsafe.mockResolvedValue(0);
+    tx.fixer.findUnique.mockResolvedValue({ id: 'fixer-1' });
     tx.kycDocument.findFirst.mockResolvedValue(null);
     tx.kycDocument.findUnique.mockResolvedValue({
       id: 'document-1',
@@ -300,14 +303,16 @@ describe('QualificationService', () => {
     });
   });
   it('creates a submission for the authenticated fixer profile', async () => {
-    prisma.fixer.findUnique.mockResolvedValue({ id: 'fixer-1' });
-    prisma.kycSubmission.findFirst.mockResolvedValue(null);
-    prisma.kycSubmission.create.mockResolvedValue({ id: 'submission-1' });
+    tx.fixer.findUnique.mockResolvedValue({ id: 'fixer-1' });
+    tx.kycSubmission.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+    tx.kycSubmission.create.mockResolvedValue({ id: 'submission-1' });
 
     await expect(
       service.createSubmissionForUser('user-1', 'pdpa-v1'),
     ).resolves.toEqual({ id: 'submission-1' });
-    expect(prisma.kycSubmission.create).toHaveBeenCalledWith(
+    expect(tx.kycSubmission.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           fixerId: 'fixer-1',
@@ -440,7 +445,7 @@ describe('QualificationService', () => {
     );
   });
   it('rejects a submission request without a fixer profile', async () => {
-    prisma.fixer.findUnique.mockResolvedValue(null);
+    tx.fixer.findUnique.mockResolvedValue(null);
     await expect(
       service.createSubmissionForUser('user-unknown', 'pdpa-v1'),
     ).rejects.toBeInstanceOf(NotFoundException);
@@ -1484,6 +1489,11 @@ describe('QualificationService', () => {
       expiresAt: null,
       createdAt: new Date('2026-07-24T00:00:00.000Z'),
     }));
+    tx.kycDocument.findUnique.mockResolvedValue({
+      id: 'portfolio-pdf-1',
+      isActive: false,
+      lifecycleState: 'UPLOADED',
+    });
     const pdf = Buffer.from('%PDF-1.4\nportfolio');
 
     await expect(
@@ -1732,9 +1742,62 @@ describe('QualificationService', () => {
     });
   });
 
-  it("resumes only the authenticated fixer's latest editable draft", async () => {
-    prisma.fixer.findUnique.mockResolvedValue({ id: 'fixer-1' });
+  it('atomically promotes portfolio evidence and creates its assessment job', async () => {
     prisma.kycSubmission.findFirst.mockResolvedValue({
+      id: 'submission-1',
+      fixerId: 'fixer-1',
+      status: 'DRAFT',
+      failedAttempts: 0,
+      lockedUntil: null,
+      fixer: { user: { name: 'Registered Name' } },
+    });
+    tx.kycDocument.create.mockImplementation(({ data }: any) => ({
+      id: data.id,
+      documentType: data.documentType,
+      contentType: data.contentType,
+      sizeBytes: data.sizeBytes,
+      evidenceStatus: 'UNCHECKED',
+      expiresAt: null,
+      createdAt: new Date('2026-07-30T00:00:00.000Z'),
+    }));
+    tx.qualificationEvidenceAssessmentJob.create.mockResolvedValue({
+      id: 'job-1',
+    });
+    tx.kycDocument.findUnique.mockResolvedValue({
+      id: 'document-1',
+      isActive: false,
+      lifecycleState: 'UPLOADED',
+    });
+
+    await expect(
+      service.uploadDocumentForUser('user-1', 'submission-1', 'portfolio', {
+        originalname: 'portfolio.pdf',
+        mimetype: 'application/pdf',
+        size: 4,
+        buffer: Buffer.from('%PDF-1.7'),
+      } as Express.Multer.File),
+    ).resolves.toEqual(expect.objectContaining({ assessmentPending: true }));
+
+    expect(tx.qualificationEvidenceAssessmentJob.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        documentId: expect.any(String),
+        submissionId: 'submission-1',
+        status: 'QUEUED',
+        eligibleAt: null,
+      }),
+    });
+    expect(tx.qualificationStorageCleanupIntent.deleteMany).toHaveBeenCalled();
+    expect(tx.qualificationAuditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: 'EVIDENCE_ASSESSMENT_QUEUED',
+        entityType: 'KycDocument',
+      }),
+    });
+  });
+
+  it("resumes only the authenticated fixer's latest editable draft", async () => {
+    tx.fixer.findUnique.mockResolvedValue({ id: 'fixer-1' });
+    tx.kycSubmission.findFirst.mockResolvedValue({
       id: 'draft-1',
       version: 3,
       policyVersion: 'cblue-fixer-qualification-v3',
@@ -1746,7 +1809,7 @@ describe('QualificationService', () => {
     ).resolves.toEqual(
       expect.objectContaining({ id: 'draft-1', status: 'DRAFT' }),
     );
-    expect(prisma.kycSubmission.findFirst).toHaveBeenCalledWith({
+    expect(tx.kycSubmission.findFirst).toHaveBeenCalledWith({
       where: { fixerId: 'fixer-1', status: 'DRAFT' },
       orderBy: { version: 'desc' },
     });

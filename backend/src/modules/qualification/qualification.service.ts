@@ -113,29 +113,53 @@ export class QualificationService {
   }
 
   async createOrResumeDraftForUser(userId: string, consentVersion: string) {
-    const fixer = await this.prisma.fixer.findUnique({
-      where: { userId },
-      select: { id: true },
-    });
-    if (!fixer) throw new NotFoundException('Fixer profile not found');
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(
+        'SELECT pg_advisory_xact_lock(hashtext($1))',
+        'qualification-draft:' + userId,
+      );
+      const fixer = await tx.fixer.findUnique({
+        where: { userId },
+        select: { id: true },
+      });
+      if (!fixer) throw new NotFoundException('Fixer profile not found');
 
-    const draft = await this.prisma.kycSubmission.findFirst({
-      where: { fixerId: fixer.id, status: QualificationSubmissionStatus.DRAFT },
-      orderBy: { version: 'desc' },
-    });
-    if (draft) {
-      if (draft.policyVersion !== QUALIFICATION_POLICY_VERSION) {
-        return this.prisma.kycSubmission.update({
-          where: { id: draft.id },
-          data: {
-            policyVersion: QUALIFICATION_POLICY_VERSION,
-            decisionReason: null,
-          },
-        });
+      const draft = await tx.kycSubmission.findFirst({
+        where: {
+          fixerId: fixer.id,
+          status: QualificationSubmissionStatus.DRAFT,
+        },
+        orderBy: { version: 'desc' },
+      });
+      if (draft) {
+        if (draft.policyVersion !== QUALIFICATION_POLICY_VERSION) {
+          return tx.kycSubmission.update({
+            where: { id: draft.id },
+            data: {
+              policyVersion: QUALIFICATION_POLICY_VERSION,
+              decisionReason: null,
+            },
+          });
+        }
+        return draft;
       }
-      return draft;
-    }
-    return this.createSubmission(fixer.id, new Date(), consentVersion);
+      const latest = await tx.kycSubmission.findFirst({
+        where: { fixerId: fixer.id },
+        orderBy: { version: 'desc' },
+        select: { version: true },
+      });
+      return tx.kycSubmission.create({
+        data: {
+          fixerId: fixer.id,
+          version: (latest?.version ?? 0) + 1,
+          status: QualificationSubmissionStatus.DRAFT,
+          policyVersion: QUALIFICATION_POLICY_VERSION,
+          consentAt: new Date(),
+          consentVersion,
+          consentRetentionDeleteAt: new Date(Date.now() + CONSENT_RETENTION_MS),
+        },
+      });
+    });
   }
 
   async createSubmissionForUser(userId: string, consentVersion: string) {
@@ -522,25 +546,77 @@ export class QualificationService {
       if (!isKyc) {
         phase = 'PROMOTION';
         const readyAt = new Date();
-        await this.transitionLifecycleOrConfirm(
-          documentId,
-          'UPLOADED',
-          {
-            isActive: true,
-            lifecycleState: 'READY',
-            readyAt,
-            cleanupErrorCode: null,
-          },
-          ['READY'],
-        );
-        await this.prisma.qualificationEvidenceAssessmentJob.create({
-          data: {
-            documentId,
-            submissionId: submission.id,
-            status: 'QUEUED',
-            nextAttemptAt: new Date(),
-            eligibleAt: null,
-          },
+        await this.prisma.$transaction(async (tx) => {
+          await tx.$executeRawUnsafe(
+            'SELECT pg_advisory_xact_lock(hashtext($1))',
+            submission.id,
+          );
+          const staged = await tx.kycDocument.findUnique({
+            where: { id: documentId },
+            select: { id: true, isActive: true, lifecycleState: true },
+          });
+          if (
+            !staged ||
+            staged.isActive ||
+            staged.lifecycleState !== 'UPLOADED'
+          ) {
+            throw new ConflictException(
+              'Qualification evidence changed during promotion',
+            );
+          }
+          const promoted = await tx.kycDocument.updateMany({
+            where: {
+              id: documentId,
+              submissionId: submission.id,
+              isActive: false,
+              lifecycleState: 'UPLOADED',
+            },
+            data: {
+              isActive: true,
+              lifecycleState: 'READY',
+              readyAt,
+              cleanupErrorCode: null,
+            },
+          });
+          if (promoted.count !== 1) {
+            throw new ConflictException(
+              'Qualification evidence could not be activated',
+            );
+          }
+          await tx.qualificationEvidenceAssessmentJob.create({
+            data: {
+              documentId,
+              submissionId: submission.id,
+              status: 'QUEUED',
+              nextAttemptAt: readyAt,
+              eligibleAt: null,
+            },
+          });
+          const resolvedCleanupIntent =
+            await tx.qualificationStorageCleanupIntent.deleteMany({
+              where: {
+                id: reservedCleanupIntent.id,
+                storageKey,
+                status: 'PENDING',
+                claimedBy: cleanupReservation,
+              },
+            });
+          if (resolvedCleanupIntent.count !== 1) {
+            throw new ConflictException(
+              'Qualification storage ownership changed during promotion',
+            );
+          }
+          await tx.qualificationAuditLog.create({
+            data: {
+              submissionId: submission.id,
+              actorId: userId,
+              action: 'EVIDENCE_ASSESSMENT_QUEUED',
+              entityType: 'KycDocument',
+              entityId: documentId,
+              reason: 'Evidence promoted and queued for assessment',
+              metadata: { documentType },
+            },
+          });
         });
         return { ...document, assessment: null, assessmentPending: true };
       }
@@ -1549,7 +1625,9 @@ export class QualificationService {
       orderBy: { submittedAt: 'asc' },
       include: {
         fixer: {
-          include: {
+          select: {
+            id: true,
+            priceList: true,
             user: { select: { id: true, email: true, name: true } },
           },
         },
@@ -1562,8 +1640,77 @@ export class QualificationService {
             evidenceStatus: true,
             expiresAt: true,
             createdAt: true,
+            extractedFields: true,
+            assessmentReasonCodes: true,
+            identityNumberLast4: true,
+            identityExpiryDate: true,
+            legalHoldUntil: true,
+            assessmentJob: {
+              select: {
+                status: true,
+                attempts: true,
+                lastError: true,
+                nextAttemptAt: true,
+                completedAt: true,
+              },
+            },
+            complianceAccesses: {
+              orderBy: { createdAt: 'desc' },
+              take: 20,
+              select: {
+                actorId: true,
+                purpose: true,
+                caseReference: true,
+                legalHoldUntil: true,
+                createdAt: true,
+              },
+            },
           },
           orderBy: { createdAt: 'asc' },
+        },
+        evaluations: {
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+          select: {
+            provider: true,
+            policyVersion: true,
+            status: true,
+            recommendedTier: true,
+            confidence: true,
+            risk: true,
+            tierEligibilityScore: true,
+            humanReviewRequired: true,
+            createdAt: true,
+            completedAt: true,
+          },
+        },
+        reviewTasks: {
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+          select: {
+            id: true,
+            kind: true,
+            status: true,
+            proposedDecision: true,
+            proposedTier: true,
+            decision: true,
+            proposedAt: true,
+            decidedAt: true,
+            createdAt: true,
+          },
+        },
+        auditLogs: {
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+          select: {
+            id: true,
+            actorId: true,
+            action: true,
+            entityType: true,
+            entityId: true,
+            reason: true,
+            createdAt: true,
+          },
         },
       },
     });
@@ -1579,7 +1726,11 @@ export class QualificationService {
             user: submission.fixer.user,
           }
         : null,
+      priceList: submission.fixer?.priceList || [],
       documents: submission.documents,
+      evaluations: submission.evaluations,
+      reviewTasks: submission.reviewTasks,
+      auditLogs: submission.auditLogs,
     }));
   }
 

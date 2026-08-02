@@ -2,12 +2,32 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
 import { OnEvent } from '@nestjs/event-emitter';
-import { NotificationType } from '@prisma/client';
+import { NotificationType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SendNotificationDto } from './dto/send-notification.dto';
 
 const MAX_EMAIL_ATTEMPTS = 5;
 const RETRY_BASE_MS = 5 * 60 * 1000;
+
+export async function queueNotificationInTransaction(
+  tx: Prisma.TransactionClient,
+  dto: SendNotificationDto,
+) {
+  await tx.notification.createMany({
+    data: [
+      {
+        userId: dto.userId,
+        type: dto.type,
+        title: dto.title,
+        body: dto.body,
+        data: dto.data ?? undefined,
+        dedupeKey: dto.dedupeKey,
+        attempts: 0,
+      },
+    ],
+    skipDuplicates: true,
+  });
+}
 
 @Injectable()
 export class NotificationService {
@@ -97,7 +117,7 @@ export class NotificationService {
     const now = new Date();
     const notifications = await this.prisma.notification.findMany({
       where: {
-        status: 'FAILED',
+        status: { in: ['FAILED', 'PENDING'] },
         type: NotificationType.EMAIL,
         attempts: { lt: MAX_EMAIL_ATTEMPTS },
         OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }],
@@ -112,7 +132,7 @@ export class NotificationService {
       const claimed = await this.prisma.notification.updateMany({
         where: {
           id: notification.id,
-          status: 'FAILED',
+          status: { in: ['FAILED', 'PENDING'] },
           OR: [{ claimedAt: null }, { claimExpiresAt: { lte: now } }],
         },
         data: {

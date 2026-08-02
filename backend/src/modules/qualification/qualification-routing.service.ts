@@ -6,7 +6,10 @@ import {
 } from '@nestjs/common';
 import { NotificationType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { NotificationService } from '../notification/notification.service';
+import {
+  NotificationService,
+  queueNotificationInTransaction,
+} from '../notification/notification.service';
 import { QualificationReasonCode } from './qualification-assessment.types';
 
 const REQUIRED_KYC_DOCUMENT_TYPES = ['id-front', 'selfie-with-id'] as const;
@@ -205,6 +208,22 @@ export class QualificationRoutingService {
           return decision;
         }
 
+        if (applicantUserId && status === 'NEEDS_RESUBMISSION') {
+          const notification = {
+            userId: applicantUserId,
+            type: NotificationType.IN_APP,
+            title: 'Information update needed',
+            body: 'Please update your identity information and submit again so we can continue your registration.',
+            dedupeKey: 'qualification:' + submissionId + ':' + status,
+            data: { submissionId, status },
+          };
+          await queueNotificationInTransaction(tx, notification);
+          await queueNotificationInTransaction(tx, {
+            ...notification,
+            type: NotificationType.EMAIL,
+            dedupeKey: 'qualification-email:' + submissionId + ':' + status,
+          });
+        }
         const submittedAt = new Date();
         await tx.kycSubmission.update({
           where: { id: submissionId },
