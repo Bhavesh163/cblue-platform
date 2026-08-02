@@ -8,6 +8,11 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { QUALIFICATION_DOCUMENT_TYPES } from './dto/upload-qualification-document.dto';
 import { QualificationDocumentAssessment } from './qualification-assessment.types';
 import { QualificationStorageService } from './qualification-storage.service';
+import {
+  hasValidThaiNationalId,
+  identityMetadata,
+  normalizeThaiDigits,
+} from './identity-evidence.util';
 
 type ExtractedCredentialFields = {
   detectedDocumentType: string | null;
@@ -124,7 +129,8 @@ export class QualificationVerificationService {
       }
       if (
         fields.confidence < 70 ||
-        !fields.documentName ||
+        (!fields.documentName &&
+          document.documentType !== 'company-affidavit') ||
         (IDENTITY_TYPES.has(document.documentType) &&
           fields.detectedDocumentType === null)
       ) {
@@ -138,39 +144,119 @@ export class QualificationVerificationService {
       const expiresAt = fields.expiresAt
         ? new Date(`${fields.expiresAt}T00:00:00.000Z`)
         : null;
+      const identityNumber = normalizeThaiDigits(fields.credentialNumber);
+      const withIdentity = (assessment: QualificationDocumentAssessment) =>
+        IDENTITY_TYPES.has(document.documentType)
+          ? {
+              ...assessment,
+              ...identityMetadata(fields.credentialNumber, expiresAt),
+            }
+          : assessment;
+      if (
+        document.documentType === 'id-front' &&
+        identityNumber.length > 0 &&
+        !hasValidThaiNationalId(identityNumber)
+      ) {
+        return withIdentity(
+          result({
+            evidenceStatus: 'INSUFFICIENT',
+            route: 'NEEDS_RESUBMISSION',
+            confidence: fields.confidence,
+            reasonCodes: ['INVALID_ID_NUMBER'],
+          }),
+        );
+      }
       if (
         IDENTITY_TYPES.has(document.documentType) &&
         expiresAt &&
         expiresAt < new Date()
       ) {
-        return result({
-          evidenceStatus: 'EXPIRED',
-          route: 'NEEDS_RESUBMISSION',
-          confidence: fields.confidence,
-          reasonCodes: ['EXPIRED_ID'],
-        });
+        return withIdentity(
+          result({
+            evidenceStatus: 'EXPIRED',
+            route: 'NEEDS_RESUBMISSION',
+            confidence: fields.confidence,
+            reasonCodes: ['EXPIRED_ID'],
+          }),
+        );
       }
-      if (!this.namesMatch(input.registeredName, fields.documentName)) {
-        return result({
-          evidenceStatus: 'CONTRADICTED',
-          route: 'NEEDS_REVIEW',
-          confidence: fields.confidence,
-          reasonCodes: ['IDENTITY_CONTRADICTION', 'HUMAN_REVIEW_REQUIRED'],
+
+      if (document.documentType === 'company-affidavit') {
+        const issuedAt = fields.issuedAt
+          ? new Date(`${fields.issuedAt}T00:00:00.000Z`)
+          : null;
+        if (
+          !issuedAt ||
+          issuedAt.getTime() < Date.now() - 183 * 24 * 60 * 60 * 1000
+        ) {
+          return withIdentity(
+            result({
+              evidenceStatus: 'INSUFFICIENT',
+              route: 'NEEDS_REVIEW',
+              confidence: fields.confidence,
+              reasonCodes: ['AFFIDAVIT_EXPIRED', 'HUMAN_REVIEW_REQUIRED'],
+            }),
+          );
+        }
+        return withIdentity({
+          ...result({
+            evidenceStatus: 'INSUFFICIENT',
+            route: 'NEEDS_REVIEW',
+            confidence: fields.confidence,
+            reasonCodes: ['AFFIDAVIT_REVIEW_REQUIRED', 'HUMAN_REVIEW_REQUIRED'],
+          }),
+          extractedFields: {
+            detectedDocumentType: fields.detectedDocumentType,
+            documentName: null,
+            issuerName: null,
+            credentialNumber: null,
+            projectName: fields.projectName,
+            projectLocation: fields.projectLocation,
+            issuedAt: fields.issuedAt,
+            expiresAt: fields.expiresAt,
+            credentialLevel: fields.credentialLevel,
+            projectValue: fields.projectValue,
+            confidence: fields.confidence,
+          },
         });
       }
 
-      return {
+      if (!this.namesMatch(input.registeredName, fields.documentName)) {
+        return withIdentity(
+          result({
+            evidenceStatus: 'CONTRADICTED',
+            route: 'NEEDS_REVIEW',
+            confidence: fields.confidence,
+            reasonCodes: ['IDENTITY_CONTRADICTION', 'HUMAN_REVIEW_REQUIRED'],
+          }),
+        );
+      }
+
+      return withIdentity({
         ...result({
           evidenceStatus: 'INSUFFICIENT',
           route: 'NEEDS_REVIEW',
           confidence: fields.confidence,
-          reasonCodes: ['DOCUMENT_VALID', 'HUMAN_REVIEW_REQUIRED'],
+          reasonCodes:
+            document.documentType === 'selfie-with-id'
+              ? [
+                  'DOCUMENT_VALID',
+                  'SELFIE_REVIEW_REQUIRED',
+                  'HUMAN_REVIEW_REQUIRED',
+                ]
+              : ['DOCUMENT_VALID', 'HUMAN_REVIEW_REQUIRED'],
         }),
         extractedFields: {
           detectedDocumentType: fields.detectedDocumentType,
-          documentName: fields.documentName,
-          issuerName: fields.issuerName,
-          credentialNumber: fields.credentialNumber,
+          documentName: IDENTITY_TYPES.has(document.documentType)
+            ? null
+            : fields.documentName,
+          issuerName: IDENTITY_TYPES.has(document.documentType)
+            ? null
+            : fields.issuerName,
+          credentialNumber: IDENTITY_TYPES.has(document.documentType)
+            ? null
+            : fields.credentialNumber,
           projectName: fields.projectName,
           projectLocation: fields.projectLocation,
           issuedAt: fields.issuedAt,
@@ -179,7 +265,7 @@ export class QualificationVerificationService {
           projectValue: fields.projectValue,
           confidence: fields.confidence,
         },
-      };
+      });
     } catch {
       return unavailable();
     }
@@ -295,7 +381,7 @@ export class QualificationVerificationService {
 
     let parsed: unknown;
     try {
-      parsed = JSON.parse(raw.replace(/^\`\`\`json\s*|\s*\`\`\`$/g, ''));
+      parsed = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, ''));
     } catch {
       throw new ServiceUnavailableException(
         'Qualification extraction returned invalid data',

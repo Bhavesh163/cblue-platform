@@ -4,6 +4,10 @@ export type QualificationReasonCode =
   | 'UNREADABLE_DOCUMENT'
   | 'EXPIRED_ID'
   | 'IDENTITY_CONTRADICTION'
+  | 'INVALID_ID_NUMBER'
+  | 'SELFIE_REVIEW_REQUIRED'
+  | 'AFFIDAVIT_REVIEW_REQUIRED'
+  | 'AFFIDAVIT_EXPIRED'
   | 'LIVENESS_FAILED'
   | 'PROVIDER_UNAVAILABLE'
   | 'HUMAN_REVIEW_REQUIRED';
@@ -27,6 +31,9 @@ export type QualificationDocumentAssessment = {
   livenessConfidence: number | null;
   reasonCodes: QualificationReasonCode[];
   extractedFields?: Record<string, string | number | null> | null;
+  identityNumberLast4?: string | null;
+  identityNumberHash?: string | null;
+  identityExpiryDate?: Date | null;
   provider: string;
   model: string | null;
   assessedAt: Date;

@@ -123,7 +123,18 @@ export class QualificationService {
       where: { fixerId: fixer.id, status: QualificationSubmissionStatus.DRAFT },
       orderBy: { version: 'desc' },
     });
-    if (draft) return draft;
+    if (draft) {
+      if (draft.policyVersion !== QUALIFICATION_POLICY_VERSION) {
+        return this.prisma.kycSubmission.update({
+          where: { id: draft.id },
+          data: {
+            policyVersion: QUALIFICATION_POLICY_VERSION,
+            decisionReason: null,
+          },
+        });
+      }
+      return draft;
+    }
     return this.createSubmission(fixer.id, new Date(), consentVersion);
   }
 

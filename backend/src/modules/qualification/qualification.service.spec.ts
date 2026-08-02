@@ -45,10 +45,12 @@ describe('QualificationService', () => {
     kycSubmission: {
       findFirst: jest.fn(),
       create: jest.fn(),
+      update: jest.fn(),
       findMany: jest.fn(),
     },
     kycDocument: {
       create: jest.fn(),
+      update: jest.fn(),
       deleteMany: jest.fn(),
       findFirst: jest.fn(),
       findUnique: jest.fn(),
@@ -61,7 +63,9 @@ describe('QualificationService', () => {
       updateMany: jest.fn(),
     },
     qualificationAuditLog: { create: jest.fn(), findMany: jest.fn() },
+    update: jest.fn(),
     qualificationDocumentAccess: { create: jest.fn() },
+    update: jest.fn(),
     $transaction: jest.fn((callback: (client: any) => unknown) => callback(tx)),
   } as any;
   const policy = { evaluate: jest.fn() } as any;
@@ -1716,6 +1720,7 @@ describe('QualificationService', () => {
     prisma.kycSubmission.findFirst.mockResolvedValue({
       id: 'draft-1',
       version: 3,
+      policyVersion: 'cblue-fixer-qualification-v3',
       status: 'DRAFT',
     });
 

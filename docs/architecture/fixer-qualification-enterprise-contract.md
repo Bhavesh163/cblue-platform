@@ -26,7 +26,7 @@ The response is versioned with:
 
 ```json
 {
-  "sourceVersion": "cblue-fixer-qualification-v1",
+  "sourceVersion": "cblue-fixer-qualification-v3",
   "subject": {},
   "fixer": {},
   "submission": {},
@@ -55,7 +55,7 @@ POST /api/v1/qualification/admin/submissions/:submissionId/documents/:documentId
 Authorization: Bearer <CBLUE admin access token>
 ```
 
-CBLUE sends the private file server-to-server to Typhoon OCR, stores structured
+CBLUE sends the private file server-to-server to the configured document service, stores structured
 fields and hashes instead of raw OCR text, compares the extracted name with the
 registered name deterministically, and optionally verifies credentials through
 a fixed server-configured credential provider. Missing or unavailable

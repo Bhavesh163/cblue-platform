@@ -394,6 +394,9 @@ model KycDocument {
   assessmentReasonCodes  Json?
   assessedAt             DateTime?
   extractedFields        Json?
+  identityNumberLast4    String?
+  identityNumberHash     String?
+  identityExpiryDate     DateTime?
   extractionProvider     String?
   extractionModel        String?
   extractedAt            DateTime?

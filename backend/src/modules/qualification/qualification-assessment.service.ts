@@ -35,7 +35,10 @@ const REASON_CODES = new Set<QualificationReasonCode>([
   'WRONG_DOCUMENT_TYPE',
   'UNREADABLE_DOCUMENT',
   'EXPIRED_ID',
-  'IDENTITY_CONTRADICTION',
+  'INVALID_ID_NUMBER',
+  'SELFIE_REVIEW_REQUIRED',
+  'AFFIDAVIT_REVIEW_REQUIRED',
+  'AFFIDAVIT_EXPIRED',
   'LIVENESS_FAILED',
   'PROVIDER_UNAVAILABLE',
   'HUMAN_REVIEW_REQUIRED',
@@ -120,9 +123,9 @@ export class QualificationAssessmentService {
           )
             ? 'PROVIDER_UNAVAILABLE'
             : null,
-          extractedFields: persistedAssessment.extractedFields
-            ? this.json(persistedAssessment.extractedFields)
-            : undefined,
+          identityNumberLast4: persistedAssessment.identityNumberLast4,
+          identityNumberHash: persistedAssessment.identityNumberHash,
+          identityExpiryDate: persistedAssessment.identityExpiryDate,
         },
       });
       if (updated.count !== 1) {

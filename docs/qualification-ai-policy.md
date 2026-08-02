@@ -8,11 +8,11 @@ User-facing qualification copy calls the product **blue AI**. Provider implement
 
 KYC is a prerequisite for fixer and pro eligibility and is separate from tier classification.
 
-- Wrong document type, unreadable evidence, missing identity side, expired ID, identity contradiction, or failed liveness routes the evidence to `NEEDS_RESUBMISSION`.
+- Wrong document type, unreadable evidence, an invalid identity number, an expired ID, identity contradiction, or failed liveness routes the evidence to `NEEDS_RESUBMISSION`.
 - The applicant sees the reason immediately after upload.
 - Valid but non-authoritative evidence routes to `NEEDS_REVIEW` for administrator verification.
 - No automated model may make an irreversible identity rejection.
-- Administrators review the persisted ID front, ID back, selfie, and qualification files through audited, short-lived private links.
+- Administrators review the persisted ID front, selfie, and qualification files through audited, short-lived private links.
 - Approval of KYC does not automatically approve an upper tier.
 
 ## Tier decision

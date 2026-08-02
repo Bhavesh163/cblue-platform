@@ -51,6 +51,22 @@ type UploadAssessmentResponse = {
     evidenceStatus?: string;
   };
 };
+function applicantKycReason(code: string): string {
+  switch (code) {
+    case "WRONG_DOCUMENT_TYPE":
+      return "Please upload a clear photo of the front of your identity card.";
+    case "INVALID_ID_NUMBER":
+      return "Please upload a clear, valid identity card photo.";
+    case "EXPIRED_ID":
+      return "This identity card appears to be expired. Please upload a current card.";
+    case "IDENTITY_CONTRADICTION":
+      return "The name on this document does not match the profile name.";
+    case "UNREADABLE_DOCUMENT":
+      return "The image is unclear. Please upload a sharper, well-lit photo.";
+    default:
+      return "We could not verify this photo. Please upload a clearer image and try again.";
+  }
+}
 
 type PersistedEvidenceSlot = {
   documentType: "id-front" | "selfie-with-id";
@@ -513,11 +529,19 @@ function FixerRegisterContent() {
             body,
           },
         );
-        return response.ok
-          ? ((await response.json()) as UploadAssessmentResponse)
-          : null;
-      } catch {
-        return null;
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => null)) as {
+            message?: string | string[];
+            code?: string;
+          } | null;
+          const message = Array.isArray(payload?.message)
+            ? payload.message.join(" ")
+            : payload?.code || payload?.message;
+          throw new Error(message || "KYC_UPLOAD_REJECTED");
+        }
+        return (await response.json()) as UploadAssessmentResponse;
+      } catch (error) {
+        throw error instanceof Error ? error : new Error("KYC_UPLOAD_FAILED");
       }
     },
     [qualificationDraftId],
@@ -545,7 +569,29 @@ function FixerRegisterContent() {
           return;
         }
         const documentType = slotIndex === 0 ? "id-front" : "selfie-with-id";
-        const uploaded = await uploadKycImmediately(documentType, file);
+        let uploaded: UploadAssessmentResponse | null = null;
+        try {
+          uploaded = await uploadKycImmediately(documentType, file);
+        } catch (error) {
+          setError(
+            applicantKycReason(
+              error instanceof Error ? error.message : "KYC_UPLOAD_FAILED",
+            ),
+          );
+          setKycValidating(false);
+          return;
+        }
+        const immediateReason = uploaded?.assessment?.reasonCodes?.[0];
+        if (
+          immediateReason === "WRONG_DOCUMENT_TYPE" ||
+          immediateReason === "INVALID_ID_NUMBER" ||
+          immediateReason === "UNREADABLE_DOCUMENT" ||
+          immediateReason === "EXPIRED_ID"
+        ) {
+          setError(applicantKycReason(immediateReason));
+          setKycValidating(false);
+          return;
+        }
         newSlots.push({
           documentType,
           localFile: file,
@@ -1136,7 +1182,7 @@ function FixerRegisterContent() {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            consentVersion: "cblue-fixer-qualification-v1",
+            consentVersion: "cblue-fixer-qualification-v3",
           }),
         },
       );
@@ -1921,10 +1967,10 @@ function FixerRegisterContent() {
                 </label>
                 <p className="text-xs text-gray-500 mb-2">
                   {locale === "th"
-                    ? "ถ่ายรูปบัตรประชาชนหน้า-หลัง และภาพถ่ายคู่กับบัตร (selfie) สูงสุด 3 รูป"
+                    ? "ถ่ายรูปด้านหน้าบัตรประชาชนและภาพถ่ายคู่กับบัตร (selfie) สูงสุด 2 รูป"
                     : locale === "zh"
-                      ? "拍摄身份证正反面及手持身份证自拍照，最多3张"
-                      : "Take photos of ID card front/back and a selfie with your ID (max 3)"}
+                      ? "拍摄身份证正面及手持身份证自拍照，最多2张"
+                      : "Upload a photo of the front of your identity card and a selfie with your ID (max 2)"}
                 </p>
 
                 {/* Camera view */}
@@ -2081,12 +2127,11 @@ function FixerRegisterContent() {
                               Assessing evidence...
                             </span>
                           )}
-                          {slot.kycStatus && (
+                          {slot.kycStatus && slot.kycStatus !== "VALIDATED" && (
                             <span className="block max-w-28 text-[10px] text-slate-600">
-                              {slot.kycStatus}
-                              {slot.confidence !== null
-                                ? " (" + slot.confidence + "%)"
-                                : ""}
+                              {slot.reasonCodes.length > 0
+                                ? applicantKycReason(slot.reasonCodes[0]!)
+                                : "Your photo is being reviewed."}
                             </span>
                           )}
                           {status === "valid" && (
