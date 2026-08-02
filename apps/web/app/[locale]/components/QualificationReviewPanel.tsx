@@ -56,6 +56,7 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [claiming, setClaiming] = useState("");
+  const [releasing, setReleasing] = useState("");
   const [deciding, setDeciding] = useState("");
   const [reevaluating, setReevaluating] = useState("");
   const [decision, setDecision] = useState<Record<string, "APPROVE" | "REJECT">>({});
@@ -96,6 +97,23 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
       setError(cause instanceof Error ? cause.message : "Unable to claim review task.");
     } finally {
       setClaiming("");
+    }
+  }
+
+  async function release(taskId: string) {
+    setReleasing(taskId);
+    setError("");
+    try {
+      const response = await adminFetchResponse(getApiUrl("/qualification/admin/review-tasks/" + taskId + "/release"), {
+        method: "POST",
+        headers: { Authorization: "Bearer " + token },
+      });
+      if (!response.ok) throw new Error("The review task could not be released.");
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to release review task.");
+    } finally {
+      setReleasing("");
     }
   }
 
@@ -236,6 +254,9 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                           />
                           <button type="button" onClick={() => void decide(task)} disabled={deciding === task.id} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800 disabled:opacity-60">
                             {deciding === task.id ? "Saving..." : "Save decision"}
+                          </button>
+                          <button type="button" onClick={() => void release(task.id)} disabled={releasing === task.id} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
+                            {releasing === task.id ? "Releasing..." : "Release claim"}
                           </button>
                         </div>
                       )}

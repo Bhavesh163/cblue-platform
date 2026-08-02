@@ -24,6 +24,7 @@ import {
 import { QualificationReviewCheckDto } from './dto/qualification-review-check.dto';
 import { QualificationEvaluationService } from './qualification-evaluation.service';
 const HANDOFF_LEASE_MS = 5 * 60 * 1000;
+const REVIEW_CLAIM_LEASE_MS = 30 * 60 * 1000;
 
 const tierRank: Record<FixerTier, number> = {
   ECONOMY: 0,
@@ -44,8 +45,18 @@ export class QualificationReviewService {
   ) {}
 
   async listTasks(status?: QualificationReviewStatus) {
+    const where = status
+      ? { status }
+      : {
+          status: {
+            in: [
+              QualificationReviewStatus.OPEN,
+              QualificationReviewStatus.ASSIGNED,
+            ],
+          },
+        };
     const tasks = await this.prisma.qualificationReviewTask.findMany({
-      where: status ? { status } : undefined,
+      where,
       orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
       include: {
         submission: {
@@ -62,6 +73,7 @@ export class QualificationReviewService {
                 contentType: true,
                 sizeBytes: true,
                 evidenceStatus: true,
+                assessmentReasonCodes: true,
                 extractedFields: true,
                 extractionProvider: true,
                 extractionModel: true,
@@ -69,6 +81,8 @@ export class QualificationReviewService {
                 credentialVerification: true,
                 credentialVerifiedAt: true,
                 expiresAt: true,
+                identityNumberLast4: true,
+                identityExpiryDate: true,
                 createdAt: true,
               },
               orderBy: { createdAt: 'asc' },
@@ -91,46 +105,39 @@ export class QualificationReviewService {
         },
       },
     });
-    const latestByFixer = new Map<string, (typeof tasks)[number]>();
-    const rankTask = (task: (typeof tasks)[number]) => [
-      task.submission.version,
-      task.submission.submittedAt?.getTime() ?? 0,
-      task.submission.updatedAt.getTime(),
-      task.kind === QualificationReviewKind.KYC ? 1 : 0,
-      task.createdAt.getTime(),
-    ];
-    const isHigherRank = (candidate: number[], current: number[]) => {
-      for (let index = 0; index < candidate.length; index += 1) {
-        if (candidate[index] === current[index]) continue;
-        return candidate[index] > current[index];
-      }
-      return false;
-    };
+    const latestByKind = new Map<string, (typeof tasks)[number]>();
     for (const task of tasks) {
-      const fixerId = task.submission.fixer.id;
-      const current = latestByFixer.get(fixerId);
-      if (!current) {
-        latestByFixer.set(fixerId, task);
-        continue;
-      }
-      if (isHigherRank(rankTask(task), rankTask(current))) {
-        latestByFixer.set(fixerId, task);
-      }
+      const key = task.submission.fixer.id + ':' + task.kind;
+      const current = latestByKind.get(key);
+      if (!current || task.createdAt.getTime() > current.createdAt.getTime())
+        latestByKind.set(key, task);
     }
-    return [...latestByFixer.values()];
+    return [...latestByKind.values()].sort(
+      (left, right) =>
+        right.priority - left.priority ||
+        right.createdAt.getTime() - left.createdAt.getTime(),
+    );
   }
 
   async assignTask(adminId: string, taskId: string) {
+    const now = new Date();
+    const staleBefore = new Date(now.getTime() - REVIEW_CLAIM_LEASE_MS);
     const claimed = await this.prisma.qualificationReviewTask.updateMany({
       where: {
         id: taskId,
-        status: QualificationReviewStatus.OPEN,
         proposedAt: null,
+        OR: [
+          { status: QualificationReviewStatus.OPEN },
+          {
+            status: QualificationReviewStatus.ASSIGNED,
+            assignedAt: { lt: staleBefore },
+          },
+        ],
       },
       data: {
         status: QualificationReviewStatus.ASSIGNED,
         assignedTo: adminId,
-        assignedAt: new Date(),
+        assignedAt: now,
       },
     });
     if (claimed.count !== 1) {
@@ -141,11 +148,65 @@ export class QualificationReviewService {
       if (!exists)
         throw new NotFoundException('Qualification review task not found');
       throw new ConflictException(
-        'Qualification review task is no longer open',
+        'Qualification review task is currently assigned to another administrator',
       );
     }
     return this.prisma.qualificationReviewTask.findUnique({
       where: { id: taskId },
+    });
+  }
+
+  async releaseTask(adminId: string, taskId: string) {
+    const task = await this.prisma.qualificationReviewTask.findUnique({
+      where: { id: taskId },
+      select: {
+        id: true,
+        submissionId: true,
+        status: true,
+        assignedTo: true,
+        proposedAt: true,
+      },
+    });
+    if (!task)
+      throw new NotFoundException('Qualification review task not found');
+    if (
+      task.status !== QualificationReviewStatus.ASSIGNED ||
+      task.assignedTo !== adminId ||
+      task.proposedAt
+    ) {
+      throw new ConflictException(
+        'Qualification review task cannot be released',
+      );
+    }
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.qualificationReviewTask.updateMany({
+        where: {
+          id: taskId,
+          status: QualificationReviewStatus.ASSIGNED,
+          assignedTo: adminId,
+          proposedAt: null,
+        },
+        data: {
+          status: QualificationReviewStatus.OPEN,
+          assignedTo: null,
+          assignedAt: null,
+        },
+      });
+      if (updated.count !== 1)
+        throw new ConflictException(
+          'Qualification review task changed while releasing',
+        );
+      await tx.qualificationAuditLog.create({
+        data: {
+          submissionId: task.submissionId,
+          actorId: adminId,
+          action: 'QUALIFICATION_REVIEW_RELEASED',
+          entityType: 'QualificationReviewTask',
+          entityId: taskId,
+          reason: 'Administrator released the review claim',
+        },
+      });
+      return tx.qualificationReviewTask.findUnique({ where: { id: taskId } });
     });
   }
 
@@ -657,6 +718,17 @@ export class QualificationReviewService {
             kind: result.task.kind,
             decision: result.task.decision,
             approved,
+          },
+        });
+        await this.notifications.send({
+          userId: result.notificationUserId,
+          type: NotificationType.EMAIL,
+          title,
+          body,
+          data: {
+            taskId: result.task.id,
+            kind: result.task.kind,
+            decision: result.task.decision,
           },
         });
       } catch (error) {

@@ -111,7 +111,7 @@ describe('QualificationReviewService', () => {
     };
     prisma.qualificationReviewTask.findMany.mockResolvedValue([older, newer]);
 
-    await expect(service.listTasks()).resolves.toEqual([newer]);
+    await expect(service.listTasks()).resolves.toEqual([newer, older]);
   });
 
   it('atomically assigns only an open task to the maker', async () => {
@@ -125,7 +125,14 @@ describe('QualificationReviewService', () => {
       expect.objectContaining({ status: 'ASSIGNED', assignedTo: 'maker-1' }),
     );
     expect(prisma.qualificationReviewTask.updateMany).toHaveBeenCalledWith({
-      where: { id: 'task-1', status: 'OPEN', proposedAt: null },
+      where: expect.objectContaining({
+        id: 'task-1',
+        proposedAt: null,
+        OR: expect.arrayContaining([
+          { status: 'OPEN' },
+          expect.objectContaining({ status: 'ASSIGNED' }),
+        ]),
+      }),
       data: expect.objectContaining({
         status: 'ASSIGNED',
         assignedTo: 'maker-1',
@@ -142,6 +149,35 @@ describe('QualificationReviewService', () => {
     await expect(
       service.assignTask('maker-2', 'task-1'),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('releases an abandoned claim and records the audit event', async () => {
+    prisma.qualificationReviewTask.findUnique.mockResolvedValue({
+      id: 'task-1',
+      submissionId: 'submission-1',
+      status: 'ASSIGNED',
+      assignedTo: 'maker-1',
+      proposedAt: null,
+    });
+    prisma.$transaction.mockImplementation(
+      async (callback: (client: any) => unknown) => callback(tx),
+    );
+    tx.qualificationReviewTask.updateMany.mockResolvedValue({ count: 1 });
+    tx.qualificationReviewTask.findUnique.mockResolvedValue({
+      id: 'task-1',
+      status: 'OPEN',
+    });
+
+    await expect(service.releaseTask('maker-1', 'task-1')).resolves.toEqual(
+      expect.objectContaining({ status: 'OPEN' }),
+    );
+    expect(tx.qualificationAuditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: 'QUALIFICATION_REVIEW_RELEASED',
+        }),
+      }),
+    );
   });
 
   it('allows one assigned administrator to finalize a decision', async () => {

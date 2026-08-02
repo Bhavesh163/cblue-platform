@@ -221,6 +221,16 @@ export class QualificationController {
     return this.reviews.assignTask(adminId, taskId);
   }
 
+  @Post('admin/review-tasks/:taskId/release')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  releaseReviewTask(
+    @CurrentUser('id') adminId: string,
+    @Param('taskId') taskId: string,
+  ) {
+    return this.reviews.releaseTask(adminId, taskId);
+  }
+
   @Post('admin/review-tasks/:taskId/check')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)

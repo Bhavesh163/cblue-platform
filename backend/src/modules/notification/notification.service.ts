@@ -1,4 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { OnEvent } from '@nestjs/event-emitter';
 import { NotificationType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -8,7 +9,10 @@ import { SendNotificationDto } from './dto/send-notification.dto';
 export class NotificationService {
   private readonly logger = new Logger(NotificationService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Optional() private readonly config?: ConfigService,
+  ) {}
 
   async send(dto: SendNotificationDto) {
     const notification = await this.prisma.notification.create({
@@ -21,7 +25,7 @@ export class NotificationService {
       },
     });
 
-    // Dispatch to appropriate channel
+    let delivered = true;
     switch (dto.type) {
       case NotificationType.PUSH:
         this.sendPush(dto);
@@ -30,14 +34,15 @@ export class NotificationService {
         this.sendSms(dto);
         break;
       case NotificationType.EMAIL:
-        this.sendEmail(dto);
+        delivered = await this.sendEmail(dto);
         break;
     }
 
-    // Mark as sent
     await this.prisma.notification.update({
       where: { id: notification.id },
-      data: { status: 'SENT', sentAt: new Date() },
+      data: delivered
+        ? { status: 'SENT', sentAt: new Date() }
+        : { status: 'FAILED' },
     });
 
     return notification;
@@ -110,8 +115,51 @@ export class NotificationService {
     this.logger.log(`[DEV] SMS to ${dto.userId}: ${dto.body}`);
   }
 
-  private sendEmail(dto: SendNotificationDto) {
-    // TODO: Integrate email provider (SendGrid / SES)
-    this.logger.log(`[DEV] Email to ${dto.userId}: ${dto.title}`);
+  private async sendEmail(dto: SendNotificationDto): Promise<boolean> {
+    const user = this.prisma.user
+      ? await this.prisma.user.findUnique({
+          where: { id: dto.userId },
+          select: { email: true, name: true },
+        })
+      : null;
+    const apiKey = this.config?.get<string>('mailjet.apiKey') || '';
+    const apiSecret = this.config?.get<string>('mailjet.apiSecret') || '';
+    const fromEmail = this.config?.get<string>('mailjet.fromEmail') || '';
+    if (!user?.email || !apiKey || !apiSecret || !fromEmail) {
+      this.logger.warn('Applicant email notification is not configured');
+      return false;
+    }
+    try {
+      const response = await fetch('https://api.mailjet.com/v3.1/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization:
+            'Basic ' + Buffer.from(apiKey + ':' + apiSecret).toString('base64'),
+        },
+        body: JSON.stringify({
+          Messages: [
+            {
+              From: { Email: fromEmail, Name: 'CBLUE' },
+              To: [{ Email: user.email, Name: user.name || 'CBLUE partner' }],
+              Subject: dto.title,
+              TextPart: dto.body,
+              HTMLPart: '<p>' + dto.body.replace(/</g, '&lt;') + '</p>',
+            },
+          ],
+        }),
+      });
+      if (!response.ok) {
+        this.logger.warn('Applicant email notification delivery failed');
+        return false;
+      }
+      return true;
+    } catch (error) {
+      this.logger.warn(
+        'Applicant email notification delivery failed',
+        error instanceof Error ? error.message : String(error),
+      );
+      return false;
+    }
   }
 }
