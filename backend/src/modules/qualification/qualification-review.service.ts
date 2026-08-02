@@ -83,6 +83,28 @@ export class QualificationReviewService {
                 expiresAt: true,
                 identityNumberLast4: true,
                 identityExpiryDate: true,
+                subjectNameHash: true,
+                legalHoldUntil: true,
+                assessmentJob: {
+                  select: {
+                    status: true,
+                    attempts: true,
+                    lastError: true,
+                    nextAttemptAt: true,
+                    completedAt: true,
+                  },
+                },
+                complianceAccesses: {
+                  orderBy: { createdAt: 'desc' },
+                  take: 10,
+                  select: {
+                    actorId: true,
+                    purpose: true,
+                    caseReference: true,
+                    legalHoldUntil: true,
+                    createdAt: true,
+                  },
+                },
                 createdAt: true,
               },
               orderBy: { createdAt: 'asc' },

@@ -11,6 +11,7 @@ import { QualificationStorageService } from './qualification-storage.service';
 import {
   hasValidThaiNationalId,
   identityMetadata,
+  identityNameHash,
   normalizeThaiDigits,
 } from './identity-evidence.util';
 
@@ -150,9 +151,16 @@ export class QualificationVerificationService {
         ID_FRONT_TYPES.has(document.documentType)
           ? {
               ...assessment,
-              ...identityMetadata(fields.credentialNumber, expiresAt),
+              ...identityMetadata(
+                fields.credentialNumber,
+                expiresAt,
+                fields.documentName,
+              ),
             }
-          : assessment;
+          : {
+              ...assessment,
+              subjectNameHash: identityNameHash(fields.documentName),
+            };
       if (
         ID_FRONT_TYPES.has(document.documentType) &&
         (identityNumber.length !== 13 ||
@@ -233,6 +241,7 @@ export class QualificationVerificationService {
       const nameMustMatch =
         document.documentType !== 'portfolio' &&
         document.documentType !== 'selfie-with-id' &&
+        document.documentType !== 'company-affidavit' &&
         Boolean(fields.documentName);
       if (
         nameMustMatch &&

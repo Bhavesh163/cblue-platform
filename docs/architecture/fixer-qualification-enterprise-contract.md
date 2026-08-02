@@ -10,7 +10,7 @@ Flutter -> BLUE NestJS workflow bridge -> CBLUE backend
 ```
 
 CBLUE owns qualification submissions, private documents, evidence status,
-evaluation runs, review assignment, administrator decisions, administrator decisions,
+evaluation runs, review assignment, administrator decisions,
 approved tiers, expiry, and audit history. BLUE may normalize and cache the
 CBLUE snapshot, but must not create or override qualification state. Flutter
 must not call CBLUE directly.
@@ -37,6 +37,7 @@ The response is versioned with:
     "contradictedCount": 0,
     "insufficientCount": 0,
     "uncheckedCount": 0,
+    "adminDecisionStatus": "OPEN",
     "makerCheckerStatus": "OPEN"
   }
 }
@@ -72,8 +73,9 @@ not contribute.
 3. The decision is applied only within the deterministic tier ceiling.
 4. The decision and evidence access are persisted in the qualification audit log.
 
-Concurrent administrator decisions and checker confirmations use conditional database
-updates so only one succeeds.
+All authorized administrators may review and finalize a task. Conditional database
+updates ensure that only one final decision succeeds. The legacy makerCheckerStatus
+field remains for compatibility; adminDecisionStatus is authoritative.
 
 ## Runtime Configuration
 
@@ -93,6 +95,5 @@ Required for automatic OCR:
 
 
 
-When the optional credential verifier is absent, certificates remain
-insufficient until an assigned admin validates them manually. Typhoon is
-advisory and cannot approve a tier.
+Credential and portfolio evidence remains insufficient until an authorized administrator
+validates it manually. Automated assessment is advisory and cannot approve a tier.

@@ -34,6 +34,7 @@ export type QualificationDocumentAssessment = {
   extractedFields?: Record<string, string | number | null> | null;
   identityNumberLast4?: string | null;
   identityNumberHash?: string | null;
+  subjectNameHash?: string | null;
   identityExpiryDate?: Date | null;
   provider: string;
   model: string | null;

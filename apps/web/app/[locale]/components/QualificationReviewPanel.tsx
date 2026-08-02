@@ -38,6 +38,22 @@ type ReviewTask = {
       extractedFields?: Record<string, unknown> | null;
       identityNumberLast4?: string | null;
       identityExpiryDate?: string | null;
+      subjectNameHash?: string | null;
+      legalHoldUntil?: string | null;
+      assessmentJob?: {
+        status?: string;
+        attempts?: number;
+        lastError?: string | null;
+        nextAttemptAt?: string;
+        completedAt?: string | null;
+      } | null;
+      complianceAccesses?: Array<{
+        actorId?: string;
+        purpose?: string;
+        caseReference?: string | null;
+        legalHoldUntil?: string | null;
+        createdAt?: string;
+      }>;
     }>;
     evaluations?: Array<{
       provider: string;
@@ -406,6 +422,68 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                                   document.identityExpiryDate,
                                 ).toLocaleDateString()}
                               </p>
+                            ) : null}
+                            {document.extractedFields ? (
+                              <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-500">
+                                {[
+                                  "documentName",
+                                  "issuerName",
+                                  "credentialLevel",
+                                  "projectName",
+                                  "projectValue",
+                                ].map((key) => {
+                                  const value = document.extractedFields?.[key];
+                                  return value !== null &&
+                                    value !== undefined &&
+                                    value !== "" ? (
+                                    <span key={key}>
+                                      {key}: {String(value)}
+                                    </span>
+                                  ) : null;
+                                })}
+                              </div>
+                            ) : null}
+                            {document.assessmentJob ? (
+                              <p className="mt-1 text-xs text-slate-500">
+                                Assessment:{" "}
+                                {document.assessmentJob.status || "queued"}
+                                {document.assessmentJob.lastError
+                                  ? " / retry scheduled"
+                                  : ""}
+                              </p>
+                            ) : null}
+                            {document.legalHoldUntil ? (
+                              <p className="text-xs font-semibold text-amber-700">
+                                Legal hold until{" "}
+                                {new Date(
+                                  document.legalHoldUntil,
+                                ).toLocaleDateString()}
+                              </p>
+                            ) : null}
+                            {document.complianceAccesses?.length ? (
+                              <div className="mt-2 border-t border-slate-200 pt-2">
+                                <p className="text-[11px] font-semibold text-slate-600">
+                                  Compliance access history
+                                </p>
+                                {document.complianceAccesses
+                                  .slice(0, 3)
+                                  .map((access, index) => (
+                                    <p
+                                      key={String(access.createdAt) + index}
+                                      className="text-[11px] text-slate-500"
+                                    >
+                                      {access.createdAt
+                                        ? new Date(
+                                            access.createdAt,
+                                          ).toLocaleString()
+                                        : "-"}{" "}
+                                      / {access.purpose || "review"}
+                                      {access.caseReference
+                                        ? " / " + access.caseReference
+                                        : ""}
+                                    </p>
+                                  ))}
+                              </div>
                             ) : null}
                           </div>
                         ))}

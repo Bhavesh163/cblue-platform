@@ -57,12 +57,14 @@ describe('NotificationService', () => {
         status: 'SENT',
       } as never);
 
-      await service.send({
+      const result = await service.send({
         userId: 'user-1',
         type: NotificationType.PUSH,
         title: 'Test',
         body: 'Test notification',
       });
+
+      expect(result).toEqual(expect.objectContaining({ status: 'SENT' }));
 
       expect(prisma.notification.create).toHaveBeenCalledTimes(1);
       expect(prisma.notification.update).toHaveBeenCalledWith(
@@ -153,7 +155,12 @@ describe('NotificationService', () => {
       expect(prisma.notification.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({ id: 'notif-failed' }),
-          data: expect.objectContaining({ attempts: 2 }),
+          data: expect.objectContaining({
+            attempts: 2,
+            claimedAt: null,
+            claimedBy: null,
+            claimExpiresAt: null,
+          }),
         }),
       );
     });

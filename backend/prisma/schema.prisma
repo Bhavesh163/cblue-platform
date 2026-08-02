@@ -213,7 +213,7 @@ model User {
   role     UserRole @default(USER)
   isActive Boolean  @default(true)
 
-  lastActivityAt   DateTime @default(now())
+  lastActivityAt   DateTime  @default(now())
   inactiveNoticeAt DateTime?
   inactiveDeleteAt DateTime?
   legalHoldUntil   DateTime?
@@ -336,31 +336,32 @@ model Fixer {
 }
 
 model KycSubmission {
-  id                    String                        @id @default(uuid())
-  fixerId               String
-  fixer                 Fixer                         @relation(fields: [fixerId], references: [id], onDelete: Cascade)
-  version               Int
-  status                QualificationSubmissionStatus @default(DRAFT)
-  policyVersion         String
-  consentAt             DateTime?
-  consentVersion        String?
+  id                       String                               @id @default(uuid())
+  fixerId                  String
+  fixer                    Fixer                                @relation(fields: [fixerId], references: [id], onDelete: Cascade)
+  version                  Int
+  status                   QualificationSubmissionStatus        @default(DRAFT)
+  policyVersion            String
+  consentAt                DateTime?
+  consentVersion           String?
   consentRetentionDeleteAt DateTime?
-  submittedAt           DateTime?
-  reviewedAt            DateTime?
-  reviewerId            String?
-  decisionReason        String?
-  failedAttempts        Int                           @default(0)
-  lockedUntil           DateTime?
-  expiresAt             DateTime?
-  documents             KycDocument[]
-  evaluations           QualificationEvaluation[]
-  reviewTasks           QualificationReviewTask[]
-  tierQualifications    TierQualification[]
-  auditLogs             QualificationAuditLog[]
-  createdAt             DateTime                      @default(now())
-  updatedAt             DateTime                      @updatedAt
-  qualificationHandoffs QualificationHandoff[]
-  complianceAccesses QualificationDocumentAccess[]
+  submittedAt              DateTime?
+  reviewedAt               DateTime?
+  reviewerId               String?
+  decisionReason           String?
+  failedAttempts           Int                                  @default(0)
+  lockedUntil              DateTime?
+  expiresAt                DateTime?
+  documents                KycDocument[]
+  evaluations              QualificationEvaluation[]
+  reviewTasks              QualificationReviewTask[]
+  tierQualifications       TierQualification[]
+  auditLogs                QualificationAuditLog[]
+  createdAt                DateTime                             @default(now())
+  updatedAt                DateTime                             @updatedAt
+  qualificationHandoffs    QualificationHandoff[]
+  evidenceAssessmentJobs   QualificationEvidenceAssessmentJob[]
+  complianceAccesses       QualificationDocumentAccess[]
 
   @@unique([fixerId, version])
   @@index([status, createdAt])
@@ -397,6 +398,7 @@ model KycDocument {
   extractedFields        Json?
   identityNumberLast4    String?
   identityNumberHash     String?
+  subjectNameHash        String?
   identityExpiryDate     DateTime?
   legalHoldUntil         DateTime?
   extractionProvider     String?
@@ -410,6 +412,7 @@ model KycDocument {
   createdAt              DateTime                            @default(now())
   updatedAt              DateTime                            @updatedAt
   complianceAccesses     QualificationDocumentAccess[]
+  assessmentJob          QualificationEvidenceAssessmentJob?
 
   @@index([submissionId])
   @@index([submissionId, isActive, documentType])
@@ -417,7 +420,30 @@ model KycDocument {
   @@index([lifecycleState, cleanupNextAttemptAt, cleanupClaimedAt])
   @@index([evidenceStatus, expiresAt])
   @@index([identityNumberHash])
+  @@index([subjectNameHash])
   @@map("kyc_documents")
+}
+
+model QualificationEvidenceAssessmentJob {
+  id            String                        @id @default(uuid())
+  documentId    String                        @unique
+  document      KycDocument                   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  submissionId  String
+  submission    KycSubmission                 @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  status        QualificationEvaluationStatus @default(QUEUED)
+  attempts      Int                           @default(0)
+  claimedAt     DateTime?
+  claimedBy     String?
+  nextAttemptAt DateTime                      @default(now())
+  eligibleAt    DateTime?
+  lastError     String?
+  completedAt   DateTime?
+  createdAt     DateTime                      @default(now())
+  updatedAt     DateTime                      @updatedAt
+
+  @@index([status, nextAttemptAt, claimedAt])
+  @@index([submissionId, status])
+  @@map("qualification_evidence_assessment_jobs")
 }
 
 model QualificationStorageCleanupIntent {
@@ -633,22 +659,22 @@ model Order {
   addressId String
   address   Address @relation(fields: [addressId], references: [id])
 
-  status           OrderStatus @default(CREATED)
-  orderType        OrderType   @default(HOUSEHOLD)
-  serviceCategory  String
-  description      String
-  isUrgent         Boolean     @default(false)
-  scheduledAt      DateTime?
-  meetingDate      String?
-  meetingTime      String?
-  meetingVenue     String?
-  meetingNote      String?
-  estimatedPrice   Float?
-  finalPrice       Float?
-  budgetBreakdown  Json?
-  workflowPhase    String?
-  chatEnabled      Boolean     @default(false)
-  workflowRevision Int         @default(0)
+  status                 OrderStatus @default(CREATED)
+  orderType              OrderType   @default(HOUSEHOLD)
+  serviceCategory        String
+  description            String
+  isUrgent               Boolean     @default(false)
+  scheduledAt            DateTime?
+  meetingDate            String?
+  meetingTime            String?
+  meetingVenue           String?
+  meetingNote            String?
+  estimatedPrice         Float?
+  finalPrice             Float?
+  budgetBreakdown        Json?
+  workflowPhase          String?
+  chatEnabled            Boolean     @default(false)
+  workflowRevision       Int         @default(0)
   archivedAt             DateTime?
   serviceHistoryDeleteAt DateTime?
   legalHoldUntil         DateTime?
@@ -740,8 +766,8 @@ model Payment {
 }
 
 model UnmatchedServiceDemand {
-  id                String          @id @default(uuid())
-  fingerprint       String          @unique
+  id                String                             @id @default(uuid())
+  fingerprint       String                             @unique
   service           String
   bookingType       String?
   requestText       String?
@@ -751,10 +777,10 @@ model UnmatchedServiceDemand {
   postalCode        String?
   latitude          Float?
   longitude         Float?
-  status            DemandGapStatus @default(OPEN)
-  occurrenceCount   Int             @default(1)
-  firstSeenAt       DateTime        @default(now())
-  lastSeenAt        DateTime        @default(now())
+  status            DemandGapStatus                    @default(OPEN)
+  occurrenceCount   Int                                @default(1)
+  firstSeenAt       DateTime                           @default(now())
+  lastSeenAt        DateTime                           @default(now())
   assignedAdminId   String?
   resolutionNote    String?
   resolvedAt        DateTime?
@@ -768,16 +794,16 @@ model UnmatchedServiceDemand {
 }
 
 model QualificationDocumentAccess {
-  id             String      @id @default(uuid())
+  id             String        @id @default(uuid())
   documentId     String
-  document       KycDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document       KycDocument   @relation(fields: [documentId], references: [id], onDelete: Cascade)
   submissionId   String
   submission     KycSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
   actorId        String
   purpose        String
   caseReference  String?
   legalHoldUntil DateTime?
-  createdAt      DateTime    @default(now())
+  createdAt      DateTime      @default(now())
 
   @@index([submissionId, createdAt])
   @@index([documentId, createdAt])
@@ -909,13 +935,13 @@ model Property {
   floors    Int?
 
   // Location
-  province    String
-  district    String
-  subdistrict String?
-  postalCode  String?
-  addressLine String?
-  latitude    Float?
-  longitude   Float?
+  province     String
+  district     String
+  subdistrict  String?
+  postalCode   String?
+  addressLine  String?
+  latitude     Float?
+  longitude    Float?
   locationMode PropertyLocationMode @default(ADMINISTRATIVE)
 
   // Contact

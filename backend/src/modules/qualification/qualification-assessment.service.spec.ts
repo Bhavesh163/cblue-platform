@@ -155,6 +155,35 @@ describe('QualificationAssessmentService', () => {
     );
   });
 
+  it('binds portfolio identity to the active ID evidence', async () => {
+    verification.assessStoredDocument.mockResolvedValue({
+      ...providerAssessment,
+      subjectNameHash: 'portfolio-name-hash',
+    });
+    prisma.kycDocument.findFirst
+      .mockResolvedValueOnce({
+        id: 'document-1',
+        documentType: 'portfolio',
+        checksumSha256: 'checksum-1',
+        evidenceStatus: 'UNCHECKED',
+        updatedAt: new Date('2026-07-30T00:00:00.000Z'),
+      })
+      .mockResolvedValueOnce({ subjectNameHash: 'id-name-hash' });
+
+    const result = await assess();
+
+    expect(result.evidenceStatus).toBe('CONTRADICTED');
+    expect(result.reasonCodes).toContain('IDENTITY_CONTRADICTION');
+    expect(tx.kycDocument.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          subjectNameHash: 'portfolio-name-hash',
+          evidenceStatus: 'CONTRADICTED',
+        }),
+      }),
+    );
+  });
+
   it('fails closed when provider enums, reasons, or nullable scores are malformed', async () => {
     verification.assessStoredDocument.mockResolvedValue({
       ...providerAssessment,

@@ -231,6 +231,11 @@ export class QualificationBridgeService {
         uncheckedCount: evidenceStatuses.filter(
           (status) => status === 'UNCHECKED',
         ).length,
+        adminDecisionStatus: reviewTasks[0]
+          ? reviewTasks[0].proposedAt && !reviewTasks[0].checkedAt
+            ? 'DECISION_IN_PROGRESS'
+            : reviewTasks[0].status
+          : null,
         makerCheckerStatus: reviewTasks[0]
           ? reviewTasks[0].proposedAt && !reviewTasks[0].checkedAt
             ? 'DECISION_IN_PROGRESS'

@@ -519,6 +519,32 @@ export class QualificationService {
         ['UPLOADED', 'ASSESSING', 'READY'],
       );
 
+      if (!isKyc) {
+        phase = 'PROMOTION';
+        const readyAt = new Date();
+        await this.transitionLifecycleOrConfirm(
+          documentId,
+          'UPLOADED',
+          {
+            isActive: true,
+            lifecycleState: 'READY',
+            readyAt,
+            cleanupErrorCode: null,
+          },
+          ['READY'],
+        );
+        await this.prisma.qualificationEvidenceAssessmentJob.create({
+          data: {
+            documentId,
+            submissionId: submission.id,
+            status: 'QUEUED',
+            nextAttemptAt: new Date(),
+            eligibleAt: null,
+          },
+        });
+        return { ...document, assessment: null, assessmentPending: true };
+      }
+
       phase = 'ASSESSMENT';
       await this.transitionLifecycleOrConfirm(
         documentId,
@@ -1388,6 +1414,17 @@ export class QualificationService {
         }
       });
 
+      await this.prisma.qualificationEvidenceAssessmentJob.updateMany({
+        where: {
+          submissionId,
+          status: 'QUEUED',
+          eligibleAt: null,
+        },
+        data: {
+          eligibleAt: new Date(),
+          nextAttemptAt: new Date(),
+        },
+      });
       return await this.routing.routeSubmission(submissionId, userId);
     } catch (error) {
       this.logger.error(

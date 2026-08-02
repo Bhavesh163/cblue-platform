@@ -137,6 +137,60 @@ export class QualificationRetentionWorker
     });
 
     let scheduled = 0;
+
+    const consentDue = await this.prisma.kycSubmission.findMany({
+      where: {
+        consentRetentionDeleteAt: { lte: now },
+        fixer: {
+          user: {
+            OR: [{ legalHoldUntil: null }, { legalHoldUntil: { lt: now } }],
+          },
+        },
+      },
+      select: { id: true },
+    });
+    if (consentDue.length) {
+      await this.prisma.kycSubmission.updateMany({
+        where: {
+          id: { in: consentDue.map((submission) => submission.id) },
+          consentRetentionDeleteAt: { lte: now },
+        },
+        data: {
+          consentAt: null,
+          consentVersion: null,
+          consentRetentionDeleteAt: null,
+        },
+      });
+    }
+
+    const historyDue = await this.prisma.order.findMany({
+      where: {
+        status: { in: ['COMPLETED', 'CANCELLED'] },
+        serviceHistoryDeleteAt: null,
+        updatedAt: { lte: addCalendarMonths(now, -SERVICE_HISTORY_MONTHS) },
+        OR: [{ legalHoldUntil: null }, { legalHoldUntil: { lt: now } }],
+      },
+      select: { id: true },
+      take: 500,
+    });
+    if (historyDue.length) {
+      await this.prisma.order.updateMany({
+        where: {
+          id: { in: historyDue.map((order) => order.id) },
+          serviceHistoryDeleteAt: null,
+        },
+        data: {
+          serviceHistoryDeleteAt: now,
+          archivedAt: now,
+          description: '[Archived service history]',
+          meetingDate: null,
+          meetingTime: null,
+          meetingVenue: null,
+          meetingNote: null,
+        },
+      });
+      scheduled += historyDue.length;
+    }
     for (const user of users) {
       const inactiveDeleteAt = addCalendarMonths(
         user.lastActivityAt,
@@ -221,7 +275,13 @@ export class QualificationRetentionWorker
       if (now >= inactiveDeleteAt && user.isActive) {
         await this.prisma.user.update({
           where: { id: user.id },
-          data: { isActive: false },
+          data: {
+            isActive: false,
+            name: '[Removed account]',
+            company: null,
+            phone: null,
+            email: 'removed+' + user.id + '@invalid.cblue',
+          },
         });
       }
     }

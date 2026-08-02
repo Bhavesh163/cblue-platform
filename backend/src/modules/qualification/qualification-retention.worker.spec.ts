@@ -2,6 +2,8 @@ import { QualificationRetentionWorker } from './qualification-retention.worker';
 
 describe('QualificationRetentionWorker', () => {
   const prisma = {
+    kycSubmission: { findMany: jest.fn(), updateMany: jest.fn() },
+    order: { findMany: jest.fn(), updateMany: jest.fn() },
     user: {
       findMany: jest.fn(),
       update: jest.fn(),
@@ -20,6 +22,8 @@ describe('QualificationRetentionWorker', () => {
   beforeEach(() => {
     jest.useFakeTimers().setSystemTime(Date.parse('2026-08-02T00:00:00.000Z'));
     jest.clearAllMocks();
+    prisma.kycSubmission.findMany.mockResolvedValue([]);
+    prisma.order.findMany.mockResolvedValue([]);
     prisma.user.update.mockResolvedValue({});
     prisma.kycDocument.updateMany.mockResolvedValue({ count: 1 });
     prisma.qualificationAuditLog.create.mockResolvedValue({ id: 'audit-1' });

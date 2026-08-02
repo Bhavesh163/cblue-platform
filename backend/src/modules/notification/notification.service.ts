@@ -66,7 +66,7 @@ export class NotificationService {
     }
 
     const now = new Date();
-    await this.prisma.notification.update({
+    const updated = await this.prisma.notification.update({
       where: { id: notification.id },
       data: delivered
         ? {
@@ -84,10 +84,13 @@ export class NotificationService {
             attempts: 1,
             lastErrorCode: 'EMAIL_DELIVERY_FAILED',
             nextAttemptAt: new Date(now.getTime() + RETRY_BASE_MS),
+            claimedAt: null,
+            claimedBy: null,
+            claimExpiresAt: null,
           },
     });
 
-    return notification;
+    return updated;
   }
 
   async retryFailedEmails(limit = 50): Promise<number> {
@@ -143,6 +146,9 @@ export class NotificationService {
               attempts: attempt,
               lastErrorCode: null,
               nextAttemptAt: null,
+              claimedAt: null,
+              claimedBy: null,
+              claimExpiresAt: null,
             }
           : {
               status: 'FAILED',

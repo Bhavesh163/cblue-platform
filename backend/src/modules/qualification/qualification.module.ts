@@ -17,6 +17,7 @@ import { QualificationRoutingService } from './qualification-routing.service';
 import { QualificationDocumentCleanupWorker } from './qualification-document-cleanup.worker';
 import { QualificationHandoffWorker } from './qualification-handoff.worker';
 import { QualificationRetentionWorker } from './qualification-retention.worker';
+import { QualificationEvidenceAssessmentWorker } from './qualification-evidence-assessment.worker';
 
 @Module({
   imports: [NotificationModule],
@@ -38,6 +39,7 @@ import { QualificationRetentionWorker } from './qualification-retention.worker';
     QualificationDocumentCleanupWorker,
     QualificationHandoffWorker,
     QualificationRetentionWorker,
+    QualificationEvidenceAssessmentWorker,
   ],
   exports: [
     QualificationPolicyService,

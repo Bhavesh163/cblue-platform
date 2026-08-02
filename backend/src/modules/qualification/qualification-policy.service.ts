@@ -73,7 +73,7 @@ export class QualificationPolicyService {
       reasonCodes.push('EXPERT_EVIDENCE_INSUFFICIENT');
     }
     if (maximumTier !== FixerTier.ECONOMY) {
-      reasonCodes.push('TIER_MAKER_CHECKER_REQUIRED');
+      reasonCodes.push('TIER_ADMIN_REVIEW_REQUIRED');
     }
 
     return {

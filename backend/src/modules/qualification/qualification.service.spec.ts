@@ -35,6 +35,10 @@ describe('QualificationService', () => {
     },
     qualificationAuditLog: { create: jest.fn() },
     qualificationDocumentAccess: { create: jest.fn() },
+    qualificationEvidenceAssessmentJob: {
+      create: jest.fn(),
+      updateMany: jest.fn(),
+    },
     qualificationStorageCleanupIntent: {
       deleteMany: jest.fn(),
       updateMany: jest.fn(),
@@ -57,6 +61,10 @@ describe('QualificationService', () => {
       findUnique: jest.fn(),
       updateMany: jest.fn(),
       findMany: jest.fn(),
+    },
+    qualificationEvidenceAssessmentJob: {
+      create: jest.fn(),
+      updateMany: jest.fn(),
     },
     qualificationStorageCleanupIntent: {
       createMany: jest.fn(),
@@ -118,6 +126,9 @@ describe('QualificationService', () => {
     tx.kycSubmission.findUnique.mockResolvedValue({ status: 'DRAFT' });
     tx.qualificationStorageCleanupIntent.deleteMany.mockResolvedValue({
       count: 1,
+    });
+    prisma.qualificationEvidenceAssessmentJob.create.mockResolvedValue({
+      id: 'job-1',
     });
     tx.qualificationStorageCleanupIntent.updateMany.mockResolvedValue({
       count: 1,

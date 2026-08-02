@@ -72,6 +72,7 @@ const ASSESSMENT_KEYS = new Set([
   'extractedFields',
   'identityNumberLast4',
   'identityNumberHash',
+  'subjectNameHash',
   'identityExpiryDate',
 ]);
 
@@ -102,6 +103,7 @@ export class QualificationAssessmentService {
         checksumSha256: true,
         evidenceStatus: true,
         updatedAt: true,
+        documentType: true,
       },
     });
     if (!document) {
@@ -115,6 +117,11 @@ export class QualificationAssessmentService {
       candidate = this.isAssessment(providerResult)
         ? this.requireHumanReview(providerResult)
         : this.unavailableAssessment();
+      candidate = await this.bindEvidenceIdentity(
+        input.submissionId,
+        document.documentType,
+        candidate,
+      );
     } catch {
       candidate = this.unavailableAssessment();
     }
@@ -143,6 +150,7 @@ export class QualificationAssessmentService {
             : null,
           identityNumberLast4: persistedAssessment.identityNumberLast4,
           identityNumberHash: persistedAssessment.identityNumberHash,
+          subjectNameHash: persistedAssessment.subjectNameHash,
           identityExpiryDate: persistedAssessment.identityExpiryDate,
           extractedFields: persistedAssessment.extractedFields
             ? this.json(persistedAssessment.extractedFields)
@@ -306,10 +314,55 @@ export class QualificationAssessmentService {
       (assessment.identityNumberHash === undefined ||
         assessment.identityNumberHash === null ||
         typeof assessment.identityNumberHash === 'string') &&
+      (assessment.subjectNameHash === undefined ||
+        assessment.subjectNameHash === null ||
+        typeof assessment.subjectNameHash === 'string') &&
       (assessment.identityExpiryDate === undefined ||
         assessment.identityExpiryDate === null ||
         assessment.identityExpiryDate instanceof Date)
     );
+  }
+
+  private async bindEvidenceIdentity(
+    submissionId: string,
+    documentType: string,
+    assessment: QualificationDocumentAssessment,
+  ): Promise<QualificationDocumentAssessment> {
+    if (
+      !assessment.subjectNameHash ||
+      !['portfolio', 'company-affidavit'].includes(documentType)
+    ) {
+      return assessment;
+    }
+    const identity = await this.prisma.kycDocument.findFirst({
+      where: {
+        submissionId,
+        documentType: 'id-front',
+        isActive: true,
+        lifecycleState: 'READY',
+      },
+      select: { subjectNameHash: true },
+    });
+    if (!identity?.subjectNameHash) {
+      return {
+        ...assessment,
+        route: 'NEEDS_REVIEW',
+        reasonCodes: assessment.reasonCodes.includes('HUMAN_REVIEW_REQUIRED')
+          ? assessment.reasonCodes
+          : [...assessment.reasonCodes, 'HUMAN_REVIEW_REQUIRED'],
+      };
+    }
+    if (identity.subjectNameHash !== assessment.subjectNameHash) {
+      return {
+        ...assessment,
+        evidenceStatus: 'CONTRADICTED',
+        route: 'NEEDS_REVIEW',
+        reasonCodes: assessment.reasonCodes.includes('IDENTITY_CONTRADICTION')
+          ? assessment.reasonCodes
+          : ['IDENTITY_CONTRADICTION', ...assessment.reasonCodes],
+      };
+    }
+    return assessment;
   }
 
   private riskFor(assessment: QualificationDocumentAssessment) {

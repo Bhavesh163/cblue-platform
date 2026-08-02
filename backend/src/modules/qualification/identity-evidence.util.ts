@@ -23,13 +23,30 @@ export function hasValidThaiNationalId(value: string): boolean {
   return (11 - (checksum % 11)) % 10 === Number(value[12]);
 }
 
+export function identityNameHash(value: string | null): string | null {
+  const normalized = String(value || '')
+    .normalize('NFKC')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLocaleLowerCase();
+  const secret =
+    process.env.QUALIFICATION_IDENTITY_HMAC_SECRET ||
+    process.env.JWT_SECRET ||
+    '';
+  return normalized && secret
+    ? createHmac('sha256', secret).update(normalized).digest('hex')
+    : null;
+}
+
 export function identityMetadata(
   value: string | null,
   expiresAt: Date | null,
+  subjectName: string | null = null,
 ): {
   identityNumberLast4: string | null;
   identityNumberHash: string | null;
   identityExpiryDate: Date | null;
+  subjectNameHash: string | null;
 } {
   const normalized = normalizeThaiDigits(value);
   const secret =
@@ -43,5 +60,6 @@ export function identityMetadata(
         ? createHmac('sha256', secret).update(normalized).digest('hex')
         : null,
     identityExpiryDate: expiresAt,
+    subjectNameHash: identityNameHash(subjectName),
   };
 }
