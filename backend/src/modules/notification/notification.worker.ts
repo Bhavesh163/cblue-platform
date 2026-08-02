@@ -1,13 +1,40 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { NotificationService } from './notification.service';
 import { QUEUE_EVENTS } from '../../queue/queue.constants';
 
 @Injectable()
-export class NotificationWorker {
+export class NotificationWorker implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(NotificationWorker.name);
+  private retryTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(private readonly notificationService: NotificationService) {}
+
+  onModuleInit(): void {
+    this.retryTimer = setInterval(() => {
+      void this.notificationService
+        .retryFailedEmails()
+        .catch((error: unknown) => {
+          this.logger.warn(
+            'Notification retry batch failed',
+            error instanceof Error ? error.message : String(error),
+          );
+        });
+    }, 60_000);
+    this.retryTimer.unref?.();
+  }
+
+  onModuleDestroy(): void {
+    if (this.retryTimer) {
+      clearInterval(this.retryTimer);
+      this.retryTimer = null;
+    }
+  }
 
   @OnEvent(QUEUE_EVENTS.ORDER_MATCHED)
   onOrderMatched(payload: {

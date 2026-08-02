@@ -116,7 +116,8 @@ export class QualificationVerificationService {
       );
 
       if (
-        IDENTITY_TYPES.has(document.documentType) &&
+        (document.documentType === 'id-front' ||
+          document.documentType === 'selfie-with-id') &&
         fields.detectedDocumentType !== null &&
         fields.detectedDocumentType !== document.documentType
       ) {
@@ -198,26 +199,34 @@ export class QualificationVerificationService {
             }),
           );
         }
+        const affidavitFields = {
+          detectedDocumentType: fields.detectedDocumentType,
+          documentName: fields.documentName,
+          issuerName: fields.issuerName,
+          credentialNumber: fields.credentialNumber,
+          projectName: fields.projectName,
+          projectLocation: fields.projectLocation,
+          issuedAt: fields.issuedAt,
+          expiresAt: fields.expiresAt,
+          credentialLevel: fields.credentialLevel,
+          projectValue: fields.projectValue,
+          confidence: fields.confidence,
+        };
+        const affidavitIdentityContradiction =
+          Boolean(fields.documentName) &&
+          !this.namesMatch(input.registeredName, fields.documentName);
         return withIdentity({
           ...result({
-            evidenceStatus: 'INSUFFICIENT',
+            evidenceStatus: affidavitIdentityContradiction
+              ? 'CONTRADICTED'
+              : 'INSUFFICIENT',
             route: 'NEEDS_REVIEW',
             confidence: fields.confidence,
-            reasonCodes: ['AFFIDAVIT_REVIEW_REQUIRED', 'HUMAN_REVIEW_REQUIRED'],
+            reasonCodes: affidavitIdentityContradiction
+              ? ['IDENTITY_CONTRADICTION', 'HUMAN_REVIEW_REQUIRED']
+              : ['AFFIDAVIT_REVIEW_REQUIRED', 'HUMAN_REVIEW_REQUIRED'],
           }),
-          extractedFields: {
-            detectedDocumentType: fields.detectedDocumentType,
-            documentName: null,
-            issuerName: null,
-            credentialNumber: null,
-            projectName: fields.projectName,
-            projectLocation: fields.projectLocation,
-            issuedAt: fields.issuedAt,
-            expiresAt: fields.expiresAt,
-            credentialLevel: fields.credentialLevel,
-            projectValue: fields.projectValue,
-            confidence: fields.confidence,
-          },
+          extractedFields: affidavitFields,
         });
       }
 

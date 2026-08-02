@@ -96,6 +96,21 @@ describe('QualificationVerificationService', () => {
     },
   );
 
+  it('rejects a detected identity-card image uploaded in the selfie slot', async () => {
+    prisma.kycDocument.findFirst.mockResolvedValue({
+      documentType: 'selfie-with-id',
+      storageKey: 'qualification/private/selfie',
+      contentType: 'image/jpeg',
+    });
+    respond({ ...validFields, detectedDocumentType: 'id-front' });
+
+    await expect(assess()).resolves.toMatchObject({
+      evidenceStatus: 'INSUFFICIENT',
+      route: 'NEEDS_RESUBMISSION',
+      reasonCodes: expect.arrayContaining(['WRONG_DOCUMENT_TYPE']),
+    });
+  });
+
   it('keeps a model-readable identity document non-authoritative', async () => {
     respond(validFields);
 
@@ -107,6 +122,43 @@ describe('QualificationVerificationService', () => {
       faceMatchConfidence: null,
       livenessConfidence: null,
       reasonCodes: ['DOCUMENT_VALID', 'HUMAN_REVIEW_REQUIRED'],
+    });
+  });
+
+  it('retains affidavit identity fields and flags a registered-name contradiction', async () => {
+    prisma.kycDocument.findFirst.mockResolvedValue({
+      documentType: 'company-affidavit',
+      storageKey: 'qualification/private/affidavit',
+      contentType: 'application/pdf',
+    });
+    respond({
+      detectedDocumentType: 'company-affidavit',
+      documentName: 'Somchai Director',
+      issuerName: 'Example Company Ltd',
+      credentialNumber: null,
+      projectName: null,
+      projectLocation: null,
+      issuedAt: '2026-07-01',
+      expiresAt: null,
+      credentialLevel: null,
+      projectValue: null,
+      confidence: 96,
+    });
+
+    await expect(
+      service.assessStoredDocument({
+        submissionId: 'submission-1',
+        documentId: 'document-1',
+        registeredName: 'Different Registered Name',
+      }),
+    ).resolves.toMatchObject({
+      evidenceStatus: 'CONTRADICTED',
+      route: 'NEEDS_REVIEW',
+      reasonCodes: expect.arrayContaining(['IDENTITY_CONTRADICTION']),
+      extractedFields: expect.objectContaining({
+        documentName: 'Somchai Director',
+        issuerName: 'Example Company Ltd',
+      }),
     });
   });
 

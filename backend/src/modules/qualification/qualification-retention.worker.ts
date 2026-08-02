@@ -1,13 +1,34 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-const NOTICE_AFTER_MS = 11 * 30 * DAY_MS;
-const DELETE_AFTER_MS = 12 * 30 * DAY_MS;
-const RETENTION_INTERVAL_MS = DAY_MS;
+const NOTICE_MONTHS = 11;
+const DELETE_MONTHS = 12;
+const SERVICE_HISTORY_MONTHS = 18;
+const RETENTION_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+function addCalendarMonths(value: Date, months: number): Date {
+  const result = new Date(value);
+  const day = result.getDate();
+  result.setDate(1);
+  result.setMonth(result.getMonth() + months);
+  const lastDay = new Date(
+    result.getFullYear(),
+    result.getMonth() + 1,
+    0,
+  ).getDate();
+  result.setDate(Math.min(day, lastDay));
+  return result;
+}
 
 @Injectable()
-export class QualificationRetentionWorker implements OnModuleInit, OnModuleDestroy {
+export class QualificationRetentionWorker
+  implements OnModuleInit, OnModuleDestroy
+{
   private readonly logger = new Logger(QualificationRetentionWorker.name);
   private timer: ReturnType<typeof setTimeout> | null = null;
   private activeRun: Promise<number> | null = null;
@@ -49,8 +70,7 @@ export class QualificationRetentionWorker implements OnModuleInit, OnModuleDestr
 
   private async processBatch(): Promise<number> {
     const now = new Date();
-    const noticeCutoff = new Date(now.getTime() - NOTICE_AFTER_MS);
-    const deleteCutoff = new Date(now.getTime() - DELETE_AFTER_MS);
+    const noticeCutoff = addCalendarMonths(now, -NOTICE_MONTHS);
     const users = await this.prisma.user.findMany({
       where: {
         isActive: true,
@@ -59,6 +79,7 @@ export class QualificationRetentionWorker implements OnModuleInit, OnModuleDestr
       },
       select: {
         id: true,
+        isActive: true,
         lastActivityAt: true,
         inactiveNoticeAt: true,
         inactiveDeleteAt: true,
@@ -76,6 +97,15 @@ export class QualificationRetentionWorker implements OnModuleInit, OnModuleDestr
                 },
               },
             },
+            orders: {
+              where: { status: { in: ['COMPLETED', 'CANCELLED'] } },
+              select: {
+                id: true,
+                updatedAt: true,
+                legalHoldUntil: true,
+                serviceHistoryDeleteAt: true,
+              },
+            },
           },
         },
       },
@@ -83,8 +113,9 @@ export class QualificationRetentionWorker implements OnModuleInit, OnModuleDestr
 
     let scheduled = 0;
     for (const user of users) {
-      const inactiveDeleteAt = new Date(
-        user.lastActivityAt.getTime() + DELETE_AFTER_MS,
+      const inactiveDeleteAt = addCalendarMonths(
+        user.lastActivityAt,
+        DELETE_MONTHS,
       );
       if (!user.inactiveNoticeAt || !user.inactiveDeleteAt) {
         await this.prisma.user.update({
@@ -95,7 +126,38 @@ export class QualificationRetentionWorker implements OnModuleInit, OnModuleDestr
           },
         });
       }
-      if (user.lastActivityAt > deleteCutoff) continue;
+      if (now >= inactiveDeleteAt && user.isActive) {
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: { isActive: false },
+        });
+      }
+      if (now < inactiveDeleteAt) continue;
+
+      for (const order of user.fixer?.orders ?? []) {
+        const serviceHistoryDeleteAt = addCalendarMonths(
+          order.updatedAt,
+          SERVICE_HISTORY_MONTHS,
+        );
+        if (
+          !order.serviceHistoryDeleteAt &&
+          serviceHistoryDeleteAt <= now &&
+          (!order.legalHoldUntil || order.legalHoldUntil < now)
+        ) {
+          await this.prisma.order.updateMany({
+            where: {
+              id: order.id,
+              status: { in: ['COMPLETED', 'CANCELLED'] },
+              serviceHistoryDeleteAt: null,
+              OR: [{ legalHoldUntil: null }, { legalHoldUntil: { lt: now } }],
+            },
+            data: {
+              serviceHistoryDeleteAt: now,
+              archivedAt: now,
+            },
+          });
+        }
+      }
 
       for (const submission of user.fixer?.qualificationSubmissions ?? []) {
         const documents = submission.documents.filter(
@@ -122,7 +184,8 @@ export class QualificationRetentionWorker implements OnModuleInit, OnModuleDestr
               action: 'RETENTION_DELETE_SCHEDULED',
               entityType: 'KycDocument',
               entityId: submission.id,
-              reason: 'Inactive account reached the 12-month private evidence retention limit',
+              reason:
+                'Inactive account reached the 12-month private evidence retention limit',
               metadata: { scheduledAt: now.toISOString(), legalHold: false },
             },
           });
@@ -131,7 +194,11 @@ export class QualificationRetentionWorker implements OnModuleInit, OnModuleDestr
       }
     }
     if (scheduled > 0) {
-      this.logger.log('Scheduled ' + scheduled + ' qualification documents for retention cleanup');
+      this.logger.log(
+        'Scheduled ' +
+          scheduled +
+          ' qualification documents for retention cleanup',
+      );
     }
     return scheduled;
   }

@@ -10,7 +10,7 @@ Flutter -> BLUE NestJS workflow bridge -> CBLUE backend
 ```
 
 CBLUE owns qualification submissions, private documents, evidence status,
-evaluation runs, review assignment, maker proposals, checker decisions,
+evaluation runs, review assignment, administrator decisions, administrator decisions,
 approved tiers, expiry, and audit history. BLUE may normalize and cache the
 CBLUE snapshot, but must not create or override qualification state. Flutter
 must not call CBLUE directly.
@@ -65,17 +65,17 @@ Only evidence with persisted `VALIDATED` status contributes to deterministic
 tier rules. Contradicted, insufficient, expired, and unchecked evidence does
 not contribute.
 
-## Maker-Checker Decision
+## Single-Administrator Decision
 
 1. An administrator atomically claims an open task.
 2. The maker reviews evidence and submits a proposal.
 3. The proposal does not change the partner tier.
 4. A different administrator reviews read-only evidence.
-5. The checker either confirms the proposal or returns it to the open queue.
-6. Only checker confirmation updates the operational Fixer tier and submission.
+5. The administrator records the decision or returns the task to the open queue.
+6. Only the administrator decision updates the operational Fixer tier and submission.
 7. Both actions are persisted in the qualification audit log.
 
-Concurrent maker proposals and checker confirmations use conditional database
+Concurrent administrator decisions and checker confirmations use conditional database
 updates so only one succeeds.
 
 ## Runtime Configuration

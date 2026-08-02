@@ -9,6 +9,7 @@ describe('NotificationService', () => {
   let prisma: {
     notification: Record<string, jest.Mock>;
     order: Record<string, jest.Mock>;
+    user: Record<string, jest.Mock>;
   };
 
   beforeEach(async () => {
@@ -20,6 +21,9 @@ describe('NotificationService', () => {
         updateMany: jest.fn(),
       },
       order: {
+        findUnique: jest.fn(),
+      },
+      user: {
         findUnique: jest.fn(),
       },
     };
@@ -97,6 +101,40 @@ describe('NotificationService', () => {
       });
 
       expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('retryFailedEmails', () => {
+    it('claims due failed email notifications and retries them with persisted attempt state', async () => {
+      prisma.notification.findMany.mockResolvedValue([
+        {
+          id: 'notif-failed',
+          userId: 'user-1',
+          type: NotificationType.EMAIL,
+          title: 'Review update',
+          body: 'Please review your submitted information.',
+          data: null,
+          attempts: 1,
+        },
+      ] as never);
+      prisma.notification.update.mockResolvedValue({} as never);
+
+      await service.retryFailedEmails();
+
+      expect(prisma.notification.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            status: 'FAILED',
+            type: NotificationType.EMAIL,
+          }),
+        }),
+      );
+      expect(prisma.notification.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'notif-failed' },
+          data: expect.objectContaining({ attempts: 2 }),
+        }),
+      );
     });
   });
 

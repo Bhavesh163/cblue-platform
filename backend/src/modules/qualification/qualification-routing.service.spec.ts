@@ -25,6 +25,11 @@ describe('QualificationRoutingService', () => {
     $transaction: jest.fn((callback: (client: any) => unknown) => callback(tx)),
   } as any;
   const service = new QualificationRoutingService(prisma);
+  const notifications = { send: jest.fn() };
+  const notifyingService = new QualificationRoutingService(
+    prisma,
+    notifications as any,
+  );
 
   const requiredDocuments = (reasonCodes: string[] = ['DOCUMENT_VALID']) => [
     {
@@ -69,6 +74,7 @@ describe('QualificationRoutingService', () => {
     tx.qualificationReviewTask.create.mockResolvedValue({ id: 'review-1' });
     tx.qualificationReviewTask.createMany.mockResolvedValue({ count: 1 });
     tx.qualificationAuditLog.create.mockResolvedValue({ id: 'audit-1' });
+    notifications.send.mockResolvedValue({ id: 'notification-1' });
   });
 
   afterEach(() => {
@@ -104,6 +110,31 @@ describe('QualificationRoutingService', () => {
       );
     },
   );
+
+  it('queues a safe applicant email when evidence needs resubmission', async () => {
+    tx.kycSubmission.findUnique.mockResolvedValue({
+      id: 'submission-1',
+      status: 'DRAFT',
+      failedAttempts: 0,
+      lockedUntil: null,
+      fixer: { userId: 'user-1' },
+      documents: requiredDocuments(['WRONG_DOCUMENT_TYPE']),
+    });
+    tx.qualificationEvaluation.findMany.mockResolvedValue(
+      evaluations([99, 98]),
+    );
+
+    await notifyingService.routeSubmission('submission-1', 'user-1');
+
+    expect(notifications.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        type: 'EMAIL',
+        title: 'Information update needed',
+        body: expect.not.stringContaining('provider'),
+      }),
+    );
+  });
 
   it('loads only active READY evidence for aggregate routing', async () => {
     await service.routeSubmission('submission-1', 'user-1');

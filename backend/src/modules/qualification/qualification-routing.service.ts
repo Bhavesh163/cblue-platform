@@ -1,6 +1,12 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
+import { NotificationType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationService } from '../notification/notification.service';
 import { QualificationReasonCode } from './qualification-assessment.types';
 
 const REQUIRED_KYC_DOCUMENT_TYPES = ['id-front', 'selfie-with-id'] as const;
@@ -46,14 +52,18 @@ export type KycRoutingDecision = {
 export class QualificationRoutingService {
   private readonly logger = new Logger(QualificationRoutingService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly notifications?: NotificationService,
+  ) {}
 
   async routeSubmission(
     submissionId: string,
     actorId: string,
   ): Promise<KycRoutingDecision> {
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      let applicantUserId: string | null = null;
+      const decision = await this.prisma.$transaction(async (tx) => {
         await tx.$executeRawUnsafe(
           'SELECT pg_advisory_xact_lock(hashtext($1))',
           submissionId,
@@ -65,6 +75,7 @@ export class QualificationRoutingService {
             status: true,
             failedAttempts: true,
             lockedUntil: true,
+            fixer: { select: { userId: true } },
             documents: {
               where: {
                 isActive: true,
@@ -84,6 +95,7 @@ export class QualificationRoutingService {
         if (!submission) {
           throw new NotFoundException('Qualification submission not found');
         }
+        applicantUserId = submission.fixer?.userId ?? null;
 
         const checksums = submission.documents.map(
           (document) => document.checksumSha256,
@@ -245,6 +257,29 @@ export class QualificationRoutingService {
 
         return decision;
       });
+      if (
+        applicantUserId &&
+        decision.status === 'NEEDS_RESUBMISSION' &&
+        this.notifications
+      ) {
+        try {
+          await this.notifications.send({
+            userId: applicantUserId,
+            type: NotificationType.EMAIL,
+            title: 'Information update needed',
+            body: 'Please update your identity information and submit again so we can continue your registration.',
+            data: { submissionId, status: decision.status },
+          });
+        } catch (notificationError) {
+          this.logger.warn(
+            'Qualification resubmission notification could not be queued',
+            notificationError instanceof Error
+              ? notificationError.message
+              : String(notificationError),
+          );
+        }
+      }
+      return decision;
     } catch (error) {
       this.logger.error(
         `Failed to route qualification submission ${submissionId}`,

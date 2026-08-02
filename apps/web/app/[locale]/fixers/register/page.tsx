@@ -66,7 +66,7 @@ function applicantKycReason(code: string): string {
     case "DOCUMENT_VALID":
     case "SELFIE_REVIEW_REQUIRED":
     case "HUMAN_REVIEW_REQUIRED":
-      return "Your photo was received and is being reviewed.";
+      return "Your photo was received and is being checked.";
     case "PROVIDER_UNAVAILABLE":
       return "We could not complete the check right now. Please try again shortly.";
     default:
@@ -188,7 +188,8 @@ function normalizeDateToIso(value: string): string | null {
 
 function applicantQualificationStatus(status: string | undefined) {
   if (status === "APPROVED") return "Verified";
-  if (status === "NEEDS_RESUBMISSION" || status === "NEEDS_MORE_EVIDENCE") return "Updates needed";
+  if (status === "NEEDS_RESUBMISSION" || status === "NEEDS_MORE_EVIDENCE")
+    return "Updates needed";
   return "Under review";
 }
 
@@ -552,14 +553,18 @@ function FixerRegisterContent() {
             message?: string | string[];
             code?: string;
           } | null;
-          const message = Array.isArray(payload?.message)
-            ? payload.message.join(" ")
-            : payload?.code || payload?.message;
-          throw new Error(message || "KYC_UPLOAD_REJECTED");
+          const code = typeof payload?.code === "string" ? payload.code : "";
+          throw new Error(
+            code
+              ? applicantKycReason(code)
+              : "We could not receive this file. Please try again with a clearer image.",
+          );
         }
         return (await response.json()) as UploadAssessmentResponse;
       } catch (error) {
-        throw error instanceof Error ? error : new Error("KYC_UPLOAD_FAILED");
+        throw error instanceof Error
+          ? error
+          : new Error("We could not receive this file. Please try again.");
       }
     },
     [qualificationDraftId],
@@ -1396,14 +1401,14 @@ function FixerRegisterContent() {
           <p className="text-sm text-gray-600 leading-6">
             {isApproved
               ? locale === "th"
-                ? "KYC ที่ผ่านการตรวจสอบทำให้โปรไฟล์ได้รับระดับ Economy และพร้อมรับงาน"
+                ? "เราได้รับข้อมูลยืนยันตัวตนแล้ว โปรไฟล์พร้อมสำหรับการพิจารณางานระดับ Economy"
                 : locale === "zh"
-                  ? "经验证的KYC已使您的资料获得Economy等级并可接收工作。"
-                  : "Validated KYC has qualified the profile for Economy tier and it is ready to receive work."
+                  ? "您的身份资料已收到，资料通过后即可接收Economy级别的工作。"
+                  : "Your identity information has been received and the profile is ready for Economy-level work."
               : locale === "th"
-                ? "CBLUE ได้จัดเก็บเอกสาร KYC และรูปผลงานในพื้นที่ส่วนตัวแล้ว ผู้ดูแลระบบจะตรวจสอบหลักฐานก่อนอนุมัติระดับ Economy หรือเสนอระดับที่สูงขึ้น"
+                ? "เราได้รับเอกสารและผลงานของคุณไว้แล้ว เราจะแจ้งให้ทราบหากต้องแก้ไขข้อมูลหรือเมื่อโปรไฟล์พร้อมรับงาน"
                 : locale === "zh"
-                  ? "CBLUE已将KYC文件和作品图片存入私有存储。管理员将在批准Economy等级或建议更高等级前审核证据。"
+                  ? "我们已收到您的资料和作品文件。如需补充或修正，我们会及时通知您。"
                   : "Your information has been received. We will notify you if anything needs correction and when your profile is ready to receive work."}
           </p>
           <dl className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
@@ -1422,13 +1427,15 @@ function FixerRegisterContent() {
             <div className="rounded-lg border border-gray-200 p-4 sm:col-span-2">
               <dt className="text-gray-500">Documents received</dt>
               <dd className="font-semibold text-gray-900 mt-1">
-                {kycSlots.length} identity photo(s) and {portfolioImages.length} portfolio file(s)
+                {kycSlots.length} identity photo(s) and {portfolioImages.length}{" "}
+                portfolio file(s)
               </dd>
             </div>
           </dl>
           {!isApproved && (
             <p className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-              Your submitted information is being reviewed. We will let you know if anything needs to be corrected and when your profile is ready.
+              Your submitted information is being reviewed. We will let you know
+              if anything needs to be corrected and when your profile is ready.
             </p>
           )}
           <div className="mt-7">

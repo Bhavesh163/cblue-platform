@@ -81,6 +81,7 @@ describe('QualificationBridgeService', () => {
           reviewTasks: [
             {
               id: 'task-1',
+              kind: 'KYC',
               status: 'ASSIGNED',
               priority: 10,
               assignedAt: new Date('2026-07-24T00:00:00.000Z'),
@@ -90,6 +91,19 @@ describe('QualificationBridgeService', () => {
               checkedAt: null,
               decidedAt: null,
               createdAt: new Date('2026-07-24T00:00:00.000Z'),
+            },
+            {
+              id: 'task-2',
+              kind: 'TIER',
+              status: 'OPEN',
+              priority: 5,
+              assignedAt: null,
+              proposedDecision: null,
+              proposedTier: 'STANDARD',
+              proposedAt: null,
+              checkedAt: null,
+              decidedAt: null,
+              createdAt: new Date('2026-07-24T02:00:00.000Z'),
             },
           ],
         },
@@ -131,6 +145,12 @@ describe('QualificationBridgeService', () => {
       }),
     );
     expect(result.submission?.reviewTask?.status).toBe('ASSIGNED');
+    expect(result.reviewStatus).toEqual(
+      expect.objectContaining({
+        kyc: expect.objectContaining({ id: 'task-1', kind: 'KYC' }),
+        tier: expect.objectContaining({ id: 'task-2', kind: 'TIER' }),
+      }),
+    );
     expect(result.verification).toEqual(
       expect.objectContaining({
         documentCount: 1,

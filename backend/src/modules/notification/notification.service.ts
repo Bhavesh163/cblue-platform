@@ -5,6 +5,9 @@ import { NotificationType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SendNotificationDto } from './dto/send-notification.dto';
 
+const MAX_EMAIL_ATTEMPTS = 5;
+const RETRY_BASE_MS = 5 * 60 * 1000;
+
 @Injectable()
 export class NotificationService {
   private readonly logger = new Logger(NotificationService.name);
@@ -22,6 +25,7 @@ export class NotificationService {
         title: dto.title,
         body: dto.body,
         data: dto.data ?? undefined,
+        attempts: 0,
       },
     });
 
@@ -38,14 +42,85 @@ export class NotificationService {
         break;
     }
 
+    const now = new Date();
     await this.prisma.notification.update({
       where: { id: notification.id },
       data: delivered
-        ? { status: 'SENT', sentAt: new Date() }
-        : { status: 'FAILED' },
+        ? {
+            status: 'SENT',
+            sentAt: now,
+            attempts: 1,
+            lastErrorCode: null,
+            nextAttemptAt: null,
+          }
+        : {
+            status: 'FAILED',
+            attempts: 1,
+            lastErrorCode: 'EMAIL_DELIVERY_FAILED',
+            nextAttemptAt: new Date(now.getTime() + RETRY_BASE_MS),
+          },
     });
 
     return notification;
+  }
+
+  async retryFailedEmails(limit = 50): Promise<number> {
+    const now = new Date();
+    const notifications = await this.prisma.notification.findMany({
+      where: {
+        status: 'FAILED',
+        type: NotificationType.EMAIL,
+        attempts: { lt: MAX_EMAIL_ATTEMPTS },
+        OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }],
+      },
+      orderBy: { createdAt: 'asc' },
+      take: limit,
+    });
+
+    let retried = 0;
+    for (const notification of notifications) {
+      const attempt = notification.attempts + 1;
+      const delivered = await this.sendEmail({
+        userId: notification.userId,
+        type: NotificationType.EMAIL,
+        title: notification.title,
+        body: notification.body,
+        data: this.readNotificationData(notification.data),
+      });
+      const nextAttemptAt = delivered
+        ? null
+        : attempt < MAX_EMAIL_ATTEMPTS
+          ? new Date(now.getTime() + RETRY_BASE_MS * 2 ** (attempt - 1))
+          : null;
+      await this.prisma.notification.update({
+        where: { id: notification.id },
+        data: delivered
+          ? {
+              status: 'SENT',
+              sentAt: now,
+              attempts: attempt,
+              lastErrorCode: null,
+              nextAttemptAt: null,
+            }
+          : {
+              status: 'FAILED',
+              attempts: attempt,
+              lastErrorCode: 'EMAIL_DELIVERY_FAILED',
+              nextAttemptAt,
+            },
+      });
+      retried += 1;
+    }
+    return retried;
+  }
+
+  private readNotificationData(
+    value: unknown,
+  ): Record<string, unknown> | undefined {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return undefined;
+    }
+    return value as Record<string, unknown>;
   }
 
   async getByUser(userId: string) {

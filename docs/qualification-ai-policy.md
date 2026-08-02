@@ -21,7 +21,7 @@ After KYC approval, blue AI evaluates portfolio and credential evidence separate
 
 - Economy is the baseline.
 - Standard is eligible when the applicant has more than three years of experience and at least two validated related credentials, including qualifying Bachelor, Master, or Doctorate evidence.
-- Corporate, Specialist, and Expert require the deterministic evidence ceiling and maker-checker administrator approval.
+- Corporate, Specialist, and Expert require the deterministic evidence ceiling and single-administrator administrator approval.
 - A weak portfolio lowers the recommended tier; it does not invalidate otherwise valid KYC.
 - A document uploaded as portfolio may count as credential evidence only after persisted document extraction identifies its credential type and an administrator validates it.
 

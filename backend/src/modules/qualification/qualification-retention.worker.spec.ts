@@ -18,9 +18,7 @@ describe('QualificationRetentionWorker', () => {
   } as any;
 
   beforeEach(() => {
-    jest.useFakeTimers().setSystemTime(
-      Date.parse('2026-08-02T00:00:00.000Z'),
-    );
+    jest.useFakeTimers().setSystemTime(Date.parse('2026-08-02T00:00:00.000Z'));
     jest.clearAllMocks();
     prisma.user.update.mockResolvedValue({});
     prisma.kycDocument.updateMany.mockResolvedValue({ count: 1 });
@@ -42,9 +40,7 @@ describe('QualificationRetentionWorker', () => {
           qualificationSubmissions: [
             {
               id: 'submission-1',
-              documents: [
-                { id: 'document-1', lifecycleState: 'READY' },
-              ],
+              documents: [{ id: 'document-1', lifecycleState: 'READY' }],
             },
           ],
         },
@@ -59,7 +55,7 @@ describe('QualificationRetentionWorker', () => {
         where: { id: 'user-1' },
         data: expect.objectContaining({
           inactiveNoticeAt: expect.any(Date),
-          inactiveDeleteAt: expect.any(Date),
+          inactiveDeleteAt: new Date('2026-07-01T00:00:00.000Z'),
         }),
       }),
     );

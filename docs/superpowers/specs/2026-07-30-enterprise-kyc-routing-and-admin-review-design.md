@@ -83,7 +83,7 @@ private URL.
 
 ### Evidence replacement
 
-`id-front`, `id-back`, and `selfie-with-id` each have one active document.
+`id-front` and `selfie-with-id` each have one active document.
 Uploading a replacement marks the prior document as superseded and records an
 audit event. Superseded evidence remains private until the retention process
 deletes it. Portfolio evidence remains limited to ten active files.
@@ -179,13 +179,13 @@ The tier pipeline starts only after KYC approval.
 
 1. Approved KYC and a complete core profile make the partner eligible for
    Economy.
-2. CBLUE grants Economy after the authoritative KYC maker-checker decision.
+2. CBLUE grants Economy after the authoritative KYC single-administrator decision.
 3. Deterministic policy evaluates verified experience and credentials and sets
    the maximum eligible tier.
 4. Typhoon may provide a fraud-risk and tier recommendation within that
    deterministic ceiling.
 5. Standard, Corporate, Specialist, and Expert require a separate upper-tier
-   maker-checker task.
+   single-administrator task.
 6. Missing or weak tier evidence lowers the recommendation. It does not reject
    the partner or revoke valid KYC.
 
@@ -202,7 +202,7 @@ Display persisted counts for:
 - evidence requiring resubmission;
 - upper-tier reviews;
 - assigned tasks;
-- checker decisions pending.
+- administrator decisions pending.
 
 ### Review task
 
@@ -214,7 +214,7 @@ Each task identifies whether it is `KYC` or `TIER` and shows:
 - ID front, ID back, selfie-with-ID, and portfolio metadata;
 - five-minute signed evidence links for assigned reviewers;
 - proposed price list;
-- maker proposal and independent checker controls;
+- administrator decision and administrator decision controls;
 - complete audit history.
 
 Document views remain role-protected and audited. Private URLs expire after
@@ -320,7 +320,7 @@ URLs, storage keys, raw OCR, administrator identities, or provider secrets.
   data, OCR text, document bytes, storage credentials, or presigned URLs.
 - Provider timeout and invalid output route to review rather than approval.
 - Audit events record uploads, replacements, assessments, submissions, task
-  assignments, document views, maker proposals, checker decisions, expiry, and
+  assignments, document views, administrator decisions, administrator decisions, expiry, and
   resubmission.
 
 ## Testing
@@ -336,7 +336,7 @@ URLs, storage keys, raw OCR, administrator identities, or provider secrets.
 - unavailable face/liveness providers persist `null`;
 - portfolio evaluation cannot change KYC;
 - tier evaluation cannot start before KYC approval;
-- Economy is applied only after KYC maker-checker approval;
+- Economy is applied only after KYC single-administrator approval;
 - upper tiers cannot exceed the deterministic ceiling;
 - three hard failures create a temporary cooldown;
 - review tasks and audit events are created exactly once;
@@ -358,7 +358,7 @@ URLs, storage keys, raw OCR, administrator identities, or provider secrets.
 - every upload returns a persisted assessment;
 - the submission appears in the admin queue;
 - an assigned admin can open five-minute evidence links;
-- maker-checker KYC approval grants Economy;
+- single-administrator KYC approval grants Economy;
 - upper-tier evidence produces a separate tier task;
 - the BLUE bridge returns the same sanitized authoritative state.
 

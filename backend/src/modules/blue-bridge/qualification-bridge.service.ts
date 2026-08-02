@@ -40,6 +40,7 @@ export class QualificationBridgeService {
                 credentialVerifiedAt: true,
                 expiresAt: true,
                 retentionDeleteAt: true,
+                assessmentReasonCodes: true,
                 createdAt: true,
               },
               orderBy: { createdAt: 'asc' },
@@ -72,9 +73,10 @@ export class QualificationBridgeService {
             reviewTasks: {
               where: { status: { not: 'DECIDED' } },
               orderBy: { createdAt: 'desc' },
-              take: 1,
+              take: 10,
               select: {
                 id: true,
+                kind: true,
                 status: true,
                 priority: true,
                 assignedAt: true,
@@ -109,6 +111,11 @@ export class QualificationBridgeService {
     if (!fixer) throw new NotFoundException('Qualification not found');
     const submission = fixer.qualificationSubmissions[0] || null;
     const tierQualification = fixer.tierQualifications[0] || null;
+    const reviewTasks = submission?.reviewTasks || [];
+    const reviewStatus = {
+      kyc: reviewTasks.find((task) => task.kind === 'KYC') || null,
+      tier: reviewTasks.find((task) => task.kind === 'TIER') || null,
+    };
     const evidenceStatuses =
       submission?.documents.map((document) => document.evidenceStatus) || [];
     const kycEvaluation =
@@ -147,6 +154,9 @@ export class QualificationBridgeService {
             documents: submission.documents.map((document) => ({
               documentType: document.documentType,
               evidenceStatus: document.evidenceStatus,
+              reasonCodes: Array.isArray(document.assessmentReasonCodes)
+                ? document.assessmentReasonCodes
+                : [],
               expiresAt: document.expiresAt,
               createdAt: document.createdAt,
             })),
@@ -169,9 +179,11 @@ export class QualificationBridgeService {
               completedAt: evaluation.completedAt,
               createdAt: evaluation.createdAt,
             })),
-            reviewTask: submission.reviewTasks[0] || null,
+            reviewTask: reviewTasks[0] || null,
+            reviewTasks,
           }
         : null,
+      reviewStatus,
       tierQualification,
       kyc: {
         status: submission?.status || null,
@@ -182,6 +194,17 @@ export class QualificationBridgeService {
         livenessConfidence: kycEvaluation?.livenessConfidence ?? null,
         fraudRisk: kycEvaluation?.risk || null,
         humanReviewRequired: kycEvaluation?.humanReviewRequired ?? null,
+        reasonCodes: Array.from(
+          new Set(
+            (submission?.documents || []).flatMap((document) =>
+              Array.isArray(document.assessmentReasonCodes)
+                ? document.assessmentReasonCodes.filter(
+                    (value): value is string => typeof value === 'string',
+                  )
+                : [],
+            ),
+          ),
+        ),
       },
       tier: {
         eligibilityScore: tierEvaluation?.tierEligibilityScore ?? null,
@@ -206,11 +229,10 @@ export class QualificationBridgeService {
         uncheckedCount: evidenceStatuses.filter(
           (status) => status === 'UNCHECKED',
         ).length,
-        makerCheckerStatus: submission?.reviewTasks[0]
-          ? submission.reviewTasks[0].proposedAt &&
-            !submission.reviewTasks[0].checkedAt
+        makerCheckerStatus: reviewTasks[0]
+          ? reviewTasks[0].proposedAt && !reviewTasks[0].checkedAt
             ? 'DECISION_IN_PROGRESS'
-            : submission.reviewTasks[0].status
+            : reviewTasks[0].status
           : null,
       },
     };
