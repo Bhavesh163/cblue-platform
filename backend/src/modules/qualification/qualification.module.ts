@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { NotificationModule } from '../notification/notification.module';
 import { QualificationController } from './qualification.controller';
 import { QualificationPolicyService } from './qualification-policy.service';
 import { QualificationService } from './qualification.service';
@@ -18,6 +19,7 @@ import { QualificationHandoffWorker } from './qualification-handoff.worker';
 import { QualificationRetentionWorker } from './qualification-retention.worker';
 
 @Module({
+  imports: [NotificationModule],
   controllers: [QualificationController],
   providers: [
     QualificationPolicyService,

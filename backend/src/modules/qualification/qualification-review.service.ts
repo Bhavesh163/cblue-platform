@@ -1,6 +1,7 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import {
@@ -12,6 +13,9 @@ import {
   QualificationReviewStatus,
   QualificationSubmissionStatus,
 } from '@prisma/client';
+import { Optional } from '@nestjs/common';
+import { NotificationType } from '@prisma/client';
+import { NotificationService } from '../notification/notification.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   QualificationReviewDecision,
@@ -31,9 +35,12 @@ const tierRank: Record<FixerTier, number> = {
 
 @Injectable()
 export class QualificationReviewService {
+  private readonly logger = new Logger(QualificationReviewService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly tierEvaluation: QualificationEvaluationService,
+    @Optional() private readonly notifications?: NotificationService,
   ) {}
 
   async listTasks(status?: QualificationReviewStatus) {
@@ -152,7 +159,7 @@ export class QualificationReviewService {
       throw new ConflictException('A decision reason is required');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx) => {
       const task = await tx.qualificationReviewTask.findUnique({
         where: { id: taskId },
         include: {
@@ -247,16 +254,18 @@ export class QualificationReviewService {
           metadata: {
             decision: dto.decision,
             approvedTier: dto.approvedTier || null,
-            requiresIndependentCheck: true,
+            requiresIndependentCheck: false,
           },
         },
       });
 
-      return {
-        task: updatedTask,
-        requiresIndependentCheck: true,
-        applied: false,
-      };
+      return updatedTask;
+    });
+
+    // One assigned administrator may review and finalize the task.
+    return this.checkTask(adminId, taskId, {
+      acceptProposal: true,
+      reason,
     });
   }
 
@@ -294,12 +303,6 @@ export class QualificationReviewService {
           'Qualification review task is not awaiting an independent check',
         );
       }
-      if (task.proposedBy === checkerId) {
-        throw new ConflictException(
-          'The maker and checker must be different administrators',
-        );
-      }
-
       const checkReason = dto.reason.trim();
       const checkedAt = new Date();
       const checkerClaim = await tx.qualificationReviewTask.updateMany({
@@ -488,6 +491,7 @@ export class QualificationReviewService {
           requiresIndependentCheck: false,
           applied: true,
           startTierEvaluation: true,
+          notificationUserId: task.submission.fixer.userId,
         };
       }
       if (!approved && task.kind === 'KYC') {
@@ -533,6 +537,7 @@ export class QualificationReviewService {
           requiresIndependentCheck: false,
           applied: true,
           startTierEvaluation: false,
+          notificationUserId: task.submission.fixer.userId,
         };
       }
       if (!approved && task.kind === 'TIER') {
@@ -565,6 +570,7 @@ export class QualificationReviewService {
           requiresIndependentCheck: false,
           applied: true,
           startTierEvaluation: false,
+          notificationUserId: task.submission.fixer.userId,
         };
       }
       const effectiveAt = new Date();
@@ -621,8 +627,43 @@ export class QualificationReviewService {
         requiresIndependentCheck: false,
         applied: true,
         startTierEvaluation: false,
+        notificationUserId: task.submission.fixer.userId,
       };
     });
+
+    if (result.applied && result.notificationUserId && this.notifications) {
+      const approved =
+        result.task.decision === QualificationReviewDecision.APPROVE;
+      const title =
+        result.task.decision === QualificationReviewDecision.APPROVE
+          ? 'Qualification decision complete'
+          : result.task.decision === QualificationReviewDecision.REJECT
+            ? 'Qualification decision needs attention'
+            : 'Qualification review updated';
+      const body =
+        result.task.decision === QualificationReviewDecision.APPROVE
+          ? 'Your submitted information has passed this review. You can continue with your partner profile.'
+          : 'Please review your submitted information and provide corrected evidence where requested.';
+      try {
+        await this.notifications.send({
+          userId: result.notificationUserId,
+          type: NotificationType.PUSH,
+          title,
+          body,
+          data: {
+            taskId: result.task.id,
+            kind: result.task.kind,
+            decision: result.task.decision,
+            approved,
+          },
+        });
+      } catch (error) {
+        this.logger.error(
+          'Qualification decision notification failed',
+          error instanceof Error ? error.stack : String(error),
+        );
+      }
+    }
 
     let handoffStatus: QualificationHandoffStatus | undefined;
     if (result.startTierEvaluation) {
@@ -631,7 +672,11 @@ export class QualificationReviewService {
         checkerId,
       );
     }
-    const { startTierEvaluation, ...response } = result;
+    const {
+      startTierEvaluation,
+      notificationUserId: _notificationUserId,
+      ...response
+    } = result;
     return handoffStatus ? { ...response, handoffStatus } : response;
   }
   async retryTierEvaluationHandoff(

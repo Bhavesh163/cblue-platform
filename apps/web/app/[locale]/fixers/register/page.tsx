@@ -63,6 +63,12 @@ function applicantKycReason(code: string): string {
       return "The name on this document does not match the profile name.";
     case "UNREADABLE_DOCUMENT":
       return "The image is unclear. Please upload a sharper, well-lit photo.";
+    case "DOCUMENT_VALID":
+    case "SELFIE_REVIEW_REQUIRED":
+    case "HUMAN_REVIEW_REQUIRED":
+      return "Your photo was received and is being reviewed.";
+    case "PROVIDER_UNAVAILABLE":
+      return "We could not complete the check right now. Please try again shortly.";
     default:
       return "We could not verify this photo. Please upload a clearer image and try again.";
   }
@@ -493,9 +499,11 @@ function FixerRegisterContent() {
     async (
       documentType: "id-front" | "selfie-with-id",
       file: File,
-    ): Promise<UploadAssessmentResponse | null> => {
+    ): Promise<UploadAssessmentResponse> => {
       const token = localStorage.getItem("subscriber_token");
-      if (!token) return null;
+      if (!token) {
+        throw new Error("Please sign in before uploading identity photos.");
+      }
       try {
         let draftId = qualificationDraftId;
         if (!draftId) {
@@ -512,10 +520,14 @@ function FixerRegisterContent() {
               }),
             },
           );
-          if (!draftResponse.ok) return null;
+          if (!draftResponse.ok) {
+            throw new Error("We could not start your secure verification.");
+          }
           const draft = (await draftResponse.json()) as { id?: string };
           draftId = draft.id || null;
-          if (!draftId) return null;
+          if (!draftId) {
+            throw new Error("We could not start your secure verification.");
+          }
           setQualificationDraftId(draftId);
         }
         const body = new globalThis.FormData();
@@ -573,15 +585,28 @@ function FixerRegisterContent() {
         try {
           uploaded = await uploadKycImmediately(documentType, file);
         } catch (error) {
+          const code = error instanceof Error ? error.message : "";
           setError(
-            applicantKycReason(
-              error instanceof Error ? error.message : "KYC_UPLOAD_FAILED",
-            ),
+            [
+              "WRONG_DOCUMENT_TYPE",
+              "INVALID_ID_NUMBER",
+              "UNREADABLE_DOCUMENT",
+              "EXPIRED_ID",
+            ].includes(code)
+              ? applicantKycReason(code)
+              : "We could not save this photo securely. Please try again.",
           );
           setKycValidating(false);
           return;
         }
-        const immediateReason = uploaded?.assessment?.reasonCodes?.[0];
+        const immediateReason = uploaded.assessment?.reasonCodes?.find((code) =>
+          [
+            "WRONG_DOCUMENT_TYPE",
+            "INVALID_ID_NUMBER",
+            "UNREADABLE_DOCUMENT",
+            "EXPIRED_ID",
+          ].includes(code),
+        );
         if (
           immediateReason === "WRONG_DOCUMENT_TYPE" ||
           immediateReason === "INVALID_ID_NUMBER" ||
@@ -595,8 +620,8 @@ function FixerRegisterContent() {
         newSlots.push({
           documentType,
           localFile: file,
-          documentId: uploaded?.id || null,
-          uploadState: uploaded ? "complete" : "idle",
+          documentId: uploaded.id,
+          uploadState: "complete",
           kycStatus:
             uploaded?.assessment?.evidenceStatus ||
             uploaded?.assessment?.route ||

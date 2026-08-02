@@ -414,6 +414,7 @@ model KycDocument {
   @@index([lifecycleState, updatedAt])
   @@index([lifecycleState, cleanupNextAttemptAt, cleanupClaimedAt])
   @@index([evidenceStatus, expiresAt])
+  @@index([identityNumberHash])
   @@map("kyc_documents")
 }
 

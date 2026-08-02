@@ -154,8 +154,8 @@ export class QualificationVerificationService {
           : assessment;
       if (
         document.documentType === 'id-front' &&
-        identityNumber.length > 0 &&
-        !hasValidThaiNationalId(identityNumber)
+        (identityNumber.length !== 13 ||
+          !hasValidThaiNationalId(identityNumber))
       ) {
         return withIdentity(
           result({

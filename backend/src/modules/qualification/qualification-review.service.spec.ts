@@ -144,15 +144,30 @@ describe('QualificationReviewService', () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('persists a maker proposal without changing the operational tier', async () => {
-    tx.qualificationReviewTask.findUnique.mockResolvedValue({
-      id: 'task-1',
-      status: 'ASSIGNED',
-      assignedTo: 'maker-1',
-      proposedAt: null,
-      submissionId: 'submission-1',
-      submission,
-    });
+  it('allows one assigned administrator to finalize a decision', async () => {
+    tx.qualificationReviewTask.findUnique
+      .mockResolvedValueOnce({
+        id: 'task-1',
+        kind: 'TIER',
+        status: 'ASSIGNED',
+        assignedTo: 'maker-1',
+        proposedAt: null,
+        submissionId: 'submission-1',
+        submission,
+      })
+      .mockResolvedValueOnce({
+        id: 'task-1',
+        kind: 'TIER',
+        status: 'ASSIGNED',
+        assignedTo: 'maker-1',
+        proposedAt: new Date(),
+        proposedDecision: 'APPROVE',
+        proposedTier: 'SPECIALIST',
+        proposedReason: 'Evidence supports the proposed specialist tier.',
+        proposedBy: 'maker-1',
+        submissionId: 'submission-1',
+        submission,
+      });
     const dto = {
       decision: QualificationReviewDecision.APPROVE,
       approvedTier: 'SPECIALIST',
@@ -163,8 +178,7 @@ describe('QualificationReviewService', () => {
 
     expect(result).toEqual(
       expect.objectContaining({
-        requiresIndependentCheck: true,
-        applied: false,
+        applied: true,
       }),
     );
     expect(tx.qualificationReviewTask.updateMany).toHaveBeenCalledWith(
@@ -176,8 +190,8 @@ describe('QualificationReviewService', () => {
         }),
       }),
     );
-    expect(tx.tierQualification.create).not.toHaveBeenCalled();
-    expect(tx.fixer.update).not.toHaveBeenCalled();
+    expect(tx.tierQualification.create).toHaveBeenCalled();
+    expect(tx.fixer.update).toHaveBeenCalled();
     expect(tx.qualificationAuditLog.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -207,9 +221,10 @@ describe('QualificationReviewService', () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('prevents the maker from checking their own proposal', async () => {
+  it('allows the assigned administrator to finalize their own proposal', async () => {
     tx.qualificationReviewTask.findUnique.mockResolvedValue({
       id: 'task-1',
+      kind: 'TIER',
       status: 'ASSIGNED',
       assignedTo: 'maker-1',
       proposedAt: new Date(),
@@ -224,10 +239,10 @@ describe('QualificationReviewService', () => {
     await expect(
       service.checkTask('maker-1', 'task-1', {
         acceptProposal: true,
-        reason: 'Independent check completed successfully.',
+        reason: 'The assigned administrator completed the review.',
       }),
-    ).rejects.toBeInstanceOf(ConflictException);
-    expect(tx.fixer.update).not.toHaveBeenCalled();
+    ).resolves.toEqual(expect.objectContaining({ applied: true }));
+    expect(tx.fixer.update).toHaveBeenCalled();
   });
 
   it('grants verified Economy on KYC approval and starts tier evaluation', async () => {

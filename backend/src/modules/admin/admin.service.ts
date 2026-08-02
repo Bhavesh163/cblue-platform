@@ -278,7 +278,6 @@ export class AdminService {
                 createdAt: true,
                 expiresAt: true,
                 identityNumberLast4: true,
-                identityNumberHash: true,
                 identityExpiryDate: true,
               },
               orderBy: { createdAt: 'asc' },

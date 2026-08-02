@@ -17,7 +17,7 @@ describe('QualificationVerificationService', () => {
     detectedDocumentType: 'id-front',
     documentName: 'Suppadesh Fungprasertsuk',
     issuerName: null,
-    credentialNumber: null,
+    credentialNumber: '1101700203450',
     projectName: null,
     projectLocation: null,
     issuedAt: null,
