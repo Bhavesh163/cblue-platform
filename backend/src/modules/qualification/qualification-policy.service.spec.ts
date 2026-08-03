@@ -27,7 +27,7 @@ describe('QualificationPolicyService', () => {
       corporateEndorsedCompletionCertificateCount: 2,
     });
 
-    expect(QUALIFICATION_POLICY_VERSION).toBe('cblue-fixer-qualification-v4');
+    expect(QUALIFICATION_POLICY_VERSION).toBe('cblue-fixer-qualification-v5');
     expect(result.maximumTier).toBe(FixerTier.CORPORATE);
     expect(result.eligibilityScore).toBeGreaterThan(0);
     expect(result.reasonCodes).toEqual(expect.any(Array));
@@ -65,6 +65,22 @@ describe('QualificationPolicyService', () => {
       FixerTier.ECONOMY,
       FixerTier.STANDARD,
     ]);
+  });
+
+  it('qualifies Standard from one verified corporate certificate alone', () => {
+    const result = service.evaluate({
+      ...base,
+      corporateCertificateCount: 1,
+    });
+    expect(result.recommendedTier).toBe(FixerTier.STANDARD);
+  });
+
+  it('qualifies Standard from one verified million-baht completion certificate alone', () => {
+    const result = service.evaluate({
+      ...base,
+      millionBahtCompletionCertificateCount: 1,
+    });
+    expect(result.recommendedTier).toBe(FixerTier.STANDARD);
   });
 
   it('does not promote Corporate without verified corporate evidence', () => {

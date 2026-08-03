@@ -111,7 +111,7 @@ const TIERS = [
   "EXPERT",
 ] as const;
 
-const CURRENT_POLICY_VERSION = "cblue-fixer-qualification-v4";
+const CURRENT_POLICY_VERSION = "cblue-fixer-qualification-v5";
 
 function allowedTiers(recommended?: string | null) {
   const ceiling = TIERS.indexOf(recommended as (typeof TIERS)[number]);

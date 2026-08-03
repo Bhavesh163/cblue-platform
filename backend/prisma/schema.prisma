@@ -452,6 +452,7 @@ model QualificationCredentialVerification {
   issuerType           QualificationCredentialIssuerType?
   issuerName           String?
   credentialType       String?
+  credentialCount      Int                                       @default(1)
   verificationMethod   String
   externalReference    String?
   projectValueBaht     Int?

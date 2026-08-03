@@ -393,7 +393,7 @@ describe('QualificationService', () => {
 
     expect(result).toEqual(
       expect.objectContaining({
-        sourceVersion: 'cblue-fixer-qualification-v4',
+        sourceVersion: 'cblue-fixer-qualification-v5',
         fixer: expect.objectContaining({
           id: 'fixer-1',
           tier: 'STANDARD',
@@ -1802,7 +1802,7 @@ describe('QualificationService', () => {
     tx.kycSubmission.findFirst.mockResolvedValue({
       id: 'draft-1',
       version: 3,
-      policyVersion: 'cblue-fixer-qualification-v4',
+      policyVersion: 'cblue-fixer-qualification-v5',
       status: 'DRAFT',
     });
 

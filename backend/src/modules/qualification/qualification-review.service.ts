@@ -250,6 +250,7 @@ export class QualificationReviewService {
                     issuerType: true,
                     issuerName: true,
                     credentialType: true,
+                    credentialCount: true,
                     verificationMethod: true,
                     externalReference: true,
                     projectValueBaht: true,

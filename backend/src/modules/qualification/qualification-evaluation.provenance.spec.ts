@@ -110,9 +110,10 @@ describe('QualificationEvaluationService credential provenance', () => {
           credentialVerifications: [
             {
               status: 'VERIFIED',
-              credentialType: 'Bachelor degree',
+              credentialType: 'Bachelor of Engineering and MBA degrees',
+              credentialCount: 2,
               issuerType: 'EDUCATIONAL_INSTITUTION',
-              issuerName: 'Accredited University',
+              issuerName: 'Accredited Universities',
               projectValueBaht: null,
               corporateEndorsement: false,
               verifiedAt: new Date('2026-08-03T00:00:00.000Z'),
@@ -122,7 +123,7 @@ describe('QualificationEvaluationService credential provenance', () => {
       ],
     });
 
-    expect(evidence.relatedCertificateCount).toBe(1);
+    expect(evidence.relatedCertificateCount).toBe(2);
   });
 
   it('does not count extracted credential text without persisted verification', () => {

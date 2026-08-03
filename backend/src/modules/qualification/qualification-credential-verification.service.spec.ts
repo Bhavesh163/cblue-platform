@@ -41,6 +41,8 @@ describe('QualificationCredentialVerificationService', () => {
         status: 'VERIFIED',
         issuerType: 'SET_LISTED_COMPANY',
         issuerName: 'Example Public Company',
+        credentialType: 'Two completion certificates',
+        credentialCount: 2,
         verificationMethod: 'REGISTRY_REVIEW',
         externalReference: 'registry-case-1',
         projectValueBaht: 1000000,
@@ -62,6 +64,7 @@ describe('QualificationCredentialVerificationService', () => {
           issuerType: 'SET_LISTED_COMPANY',
           corporateEndorsement: true,
           projectValueBaht: 1000000,
+          credentialCount: 2,
         }),
       }),
     );

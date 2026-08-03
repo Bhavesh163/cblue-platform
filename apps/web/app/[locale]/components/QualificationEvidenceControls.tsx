@@ -25,6 +25,8 @@ type DocumentRow = {
     status: CredentialStatus;
     issuerType?: IssuerType | null;
     issuerName?: string | null;
+    credentialType?: string | null;
+    credentialCount?: number | null;
     verificationMethod?: string | null;
     externalReference?: string | null;
     projectValueBaht?: number | null;
@@ -84,6 +86,12 @@ export default function QualificationEvidenceControls({
   const [credentialIssuerName, setCredentialIssuerName] = useState<
     Record<string, string>
   >({});
+  const [credentialType, setCredentialType] = useState<Record<string, string>>(
+    {},
+  );
+  const [credentialCount, setCredentialCount] = useState<
+    Record<string, string>
+  >({});
   const [credentialMethod, setCredentialMethod] = useState<
     Record<string, string>
   >({});
@@ -126,6 +134,22 @@ export default function QualificationEvidenceControls({
     setCredentialStatus({});
     setCredentialIssuerType({});
     setCredentialIssuerName({});
+    setCredentialType(
+      Object.fromEntries(
+        documents.map((document) => [
+          document.id,
+          document.credentialVerification?.credentialType || "",
+        ]),
+      ),
+    );
+    setCredentialCount(
+      Object.fromEntries(
+        documents.map((document) => [
+          document.id,
+          String(document.credentialVerification?.credentialCount || 1),
+        ]),
+      ),
+    );
     setCredentialMethod({});
     setCredentialReference({});
     setCredentialProjectValue({});
@@ -135,7 +159,7 @@ export default function QualificationEvidenceControls({
     if (!submissionId || readOnly) return;
     const timeout = window.setTimeout(() => setUrls({}), 5 * 60 * 1000);
     return () => window.clearTimeout(timeout);
-  }, [readOnly, submissionId]);
+  }, [documents, readOnly, submissionId]);
 
   async function createLink(documentId: string) {
     if (!submissionId) return;
@@ -319,10 +343,19 @@ export default function QualificationEvidenceControls({
     const selectedStatus = credentialStatus[documentId];
     const method = credentialMethod[documentId]?.trim() || "";
     const decisionReason = credentialReason[documentId]?.trim() || "";
+    const verifiedCredentialCount = Number(credentialCount[documentId] || 1);
     if (!selectedStatus || method.length < 3 || decisionReason.length < 10) {
       setError(
         "Select a credential result and enter the verification method and reason.",
       );
+      return;
+    }
+    if (
+      !Number.isInteger(verifiedCredentialCount) ||
+      verifiedCredentialCount < 1 ||
+      verifiedCredentialCount > 20
+    ) {
+      setError("Verified credential count must be between 1 and 20.");
       return;
     }
     setBusy("credential:" + documentId);
@@ -346,6 +379,8 @@ export default function QualificationEvidenceControls({
             status: selectedStatus,
             issuerType: credentialIssuerType[documentId] || undefined,
             issuerName: credentialIssuerName[documentId]?.trim() || undefined,
+            credentialType: credentialType[documentId]?.trim() || undefined,
+            credentialCount: verifiedCredentialCount,
             verificationMethod: method,
             externalReference:
               credentialReference[documentId]?.trim() || undefined,
@@ -449,6 +484,11 @@ export default function QualificationEvidenceControls({
                 Credential: {document.credentialVerification.status}
                 {document.credentialVerification.issuerName
                   ? " / " + document.credentialVerification.issuerName
+                  : ""}
+                {document.credentialVerification.credentialCount
+                  ? " / " +
+                    document.credentialVerification.credentialCount +
+                    " verified credential(s)"
                   : ""}
               </span>
             ) : null}
@@ -561,6 +601,36 @@ export default function QualificationEvidenceControls({
                       }))
                     }
                     placeholder="Issuer name"
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-700"
+                  />
+                  <input
+                    aria-label={"Credential type for " + document.documentType}
+                    value={credentialType[document.id] || ""}
+                    onChange={(event) =>
+                      setCredentialType((current) => ({
+                        ...current,
+                        [document.id]: event.target.value,
+                      }))
+                    }
+                    placeholder="Credential type or qualification"
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-700"
+                  />
+                  <input
+                    aria-label={
+                      "Verified credential count for " + document.documentType
+                    }
+                    type="number"
+                    min="1"
+                    max="20"
+                    step="1"
+                    value={credentialCount[document.id] || "1"}
+                    onChange={(event) =>
+                      setCredentialCount((current) => ({
+                        ...current,
+                        [document.id]: event.target.value,
+                      }))
+                    }
+                    placeholder="Verified credential count"
                     className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-700"
                   />
                   <input

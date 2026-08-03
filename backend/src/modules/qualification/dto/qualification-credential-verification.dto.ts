@@ -3,6 +3,7 @@ import {
   IsIn,
   IsInt,
   IsOptional,
+  Max,
   IsString,
   MaxLength,
   Min,
@@ -42,6 +43,11 @@ export class QualificationCredentialVerificationDto {
   @IsString()
   @MaxLength(120)
   credentialType?: string;
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(20)
+  credentialCount?: number;
 
   @IsString()
   @MinLength(3)

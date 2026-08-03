@@ -86,6 +86,7 @@ export class QualificationEvaluationService {
               select: {
                 status: true,
                 credentialType: true,
+                credentialCount: true,
                 issuerType: true,
                 issuerName: true,
                 projectValueBaht: true,
@@ -302,6 +303,7 @@ export class QualificationEvaluationService {
       credentialVerifications?: Array<{
         status: string;
         credentialType: string | null;
+        credentialCount: number;
         issuerType: string | null;
         issuerName: string | null;
         projectValueBaht: number | null;
@@ -406,7 +408,10 @@ export class QualificationEvaluationService {
 
     return {
       yearsExperience: submission.fixer.yearsExperience || 0,
-      relatedCertificateCount: credentialDocuments.length,
+      relatedCertificateCount: credentialDocuments.reduce((total, document) => {
+        const persistedCount = latestVerification(document)?.credentialCount;
+        return total + Math.max(1, Math.min(20, persistedCount || 1));
+      }, 0),
       corporateCertificateCount: verifiedCorporateCertificates.length,
       corporateEndorsedCompletionCertificateCount:
         verifiedCorporateCompletionCertificates.length,

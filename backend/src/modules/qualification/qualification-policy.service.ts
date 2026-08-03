@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { FixerTier } from '@prisma/client';
 
-export const QUALIFICATION_POLICY_VERSION = 'cblue-fixer-qualification-v4';
+export const QUALIFICATION_POLICY_VERSION = 'cblue-fixer-qualification-v5';
 
 export type QualificationEvidenceInput = {
   yearsExperience: number;
