@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/require-await */
 import { ConflictException } from '@nestjs/common';
 import { QualificationReviewService } from './qualification-review.service';
 import {
@@ -88,34 +89,43 @@ describe('QualificationReviewService', () => {
     });
   });
 
-  it('returns the latest actionable submission for each fixer', async () => {
-    const older = {
-      id: 'older-task',
+  it('returns only review tasks for the latest partner submission', async () => {
+    const stale = {
+      id: 'stale-task',
       kind: 'KYC',
-      createdAt: new Date('2026-07-01T00:00:00.000Z'),
+      priority: 20,
+      createdAt: new Date('2026-07-30T00:00:00.000Z'),
       submission: {
-        version: 1,
-        submittedAt: new Date('2026-07-01T00:00:00.000Z'),
-        updatedAt: new Date('2026-07-01T00:00:00.000Z'),
-        fixer: { id: 'fixer-1' },
+        id: 'submission-v3',
+        version: 3,
+        status: 'NEEDS_REVIEW',
+        documents: [],
+        fixer: {
+          id: 'fixer-1',
+          qualificationSubmissions: [{ id: 'submission-v4', version: 4 }],
+        },
       },
     };
-    const newer = {
-      id: 'newer-task',
+    const current = {
+      id: 'current-task',
       kind: 'TIER',
-      createdAt: new Date('2026-07-02T00:00:00.000Z'),
+      priority: 10,
+      createdAt: new Date('2026-08-01T00:00:00.000Z'),
       submission: {
-        version: 2,
-        submittedAt: new Date('2026-07-02T00:00:00.000Z'),
-        updatedAt: new Date('2026-07-02T00:00:00.000Z'),
-        fixer: { id: 'fixer-1' },
+        id: 'submission-v4',
+        version: 4,
+        status: 'APPROVED',
+        documents: [],
+        fixer: {
+          id: 'fixer-1',
+          qualificationSubmissions: [{ id: 'submission-v4', version: 4 }],
+        },
       },
     };
-    prisma.qualificationReviewTask.findMany.mockResolvedValue([older, newer]);
+    prisma.qualificationReviewTask.findMany.mockResolvedValue([stale, current]);
 
     await expect(service.listTasks()).resolves.toEqual([
-      expect.objectContaining({ id: 'newer-task' }),
-      expect.objectContaining({ id: 'older-task' }),
+      expect.objectContaining({ id: 'current-task' }),
     ]);
   });
 
@@ -126,10 +136,14 @@ describe('QualificationReviewService', () => {
       priority: 0,
       createdAt: new Date('2026-07-30T00:00:00.000Z'),
       submission: {
+        id: 'submission-v1',
         version: 1,
         status: 'NEEDS_REVIEW',
         documents: [],
-        fixer: { id: 'fixer-1' },
+        fixer: {
+          id: 'fixer-1',
+          qualificationSubmissions: [{ id: 'submission-v2', version: 2 }],
+        },
       },
     };
     const current = {
@@ -138,6 +152,7 @@ describe('QualificationReviewService', () => {
       priority: 0,
       createdAt: new Date('2026-07-29T00:00:00.000Z'),
       submission: {
+        id: 'submission-v2',
         version: 2,
         status: 'NEEDS_REVIEW',
         documents: [
@@ -154,7 +169,10 @@ describe('QualificationReviewService', () => {
             lifecycleState: 'READY',
           },
         ],
-        fixer: { id: 'fixer-1' },
+        fixer: {
+          id: 'fixer-1',
+          qualificationSubmissions: [{ id: 'submission-v2', version: 2 }],
+        },
       },
     };
     prisma.qualificationReviewTask.findMany.mockResolvedValue([stale, current]);
@@ -408,6 +426,19 @@ describe('QualificationReviewService', () => {
     expect(tierEvaluation.evaluateTier).toHaveBeenCalledWith(
       'submission-1',
       'checker-2',
+    );
+    expect(tx.qualificationReviewTask.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: { not: 'task-1' },
+          kind: 'KYC',
+          submission: { fixerId: 'fixer-1' },
+        }),
+        data: expect.objectContaining({
+          status: 'DECIDED',
+          decision: 'SUPERSEDED_BY_NEWER_SUBMISSION',
+        }),
+      }),
     );
   });
 
@@ -713,6 +744,20 @@ describe('QualificationReviewService', () => {
 
     expect(prisma.qualificationReviewTask.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [
+            {
+              kind: 'KYC',
+              submission: {
+                status: { in: ['NEEDS_REVIEW', 'AI_PRECLEARED'] },
+              },
+            },
+            {
+              kind: 'TIER',
+              submission: { status: 'APPROVED' },
+            },
+          ],
+        }),
         include: expect.objectContaining({
           submission: expect.objectContaining({
             include: expect.objectContaining({

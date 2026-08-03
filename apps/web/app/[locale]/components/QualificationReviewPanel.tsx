@@ -133,6 +133,7 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
   >({});
   const [approvedTier, setApprovedTier] = useState<Record<string, string>>({});
   const [reason, setReason] = useState<Record<string, string>>({});
+  const [expandedTaskId, setExpandedTaskId] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -153,7 +154,11 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
           ),
         );
       const payload = (await response.json()) as unknown;
-      setTasks(Array.isArray(payload) ? payload : []);
+      const nextTasks = Array.isArray(payload) ? (payload as ReviewTask[]) : [];
+      setTasks(nextTasks);
+      setExpandedTaskId((current) =>
+        nextTasks.some((task) => task.id === current) ? current : "",
+      );
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -187,10 +192,11 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
             "This review task is no longer available.",
           ),
         );
+      setExpandedTaskId(taskId);
       await load();
     } catch (cause) {
       setError(
-        cause instanceof Error ? cause.message : "Unable to claim review task.",
+        cause instanceof Error ? cause.message : "Unable to start review.",
       );
     } finally {
       setClaiming("");
@@ -215,12 +221,13 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
             "The review task could not be released.",
           ),
         );
+      setExpandedTaskId("");
       await load();
     } catch (cause) {
       setError(
         cause instanceof Error
           ? cause.message
-          : "Unable to release review task.",
+          : "Unable to return review task to the queue.",
       );
     } finally {
       setReleasing("");
@@ -275,6 +282,7 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
             "The review decision could not be saved.",
           ),
         );
+      setExpandedTaskId("");
       await load();
     } catch (cause) {
       setError(
@@ -327,8 +335,10 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
           <h2 className="text-lg font-bold text-slate-950">
             Qualification review queue
           </h2>
-          <p className="text-sm text-slate-500">
-            Live evidence tasks from CBLUE. Tier decisions remain server-owned.
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+            Only each partner&apos;s latest submission appears here. Start
+            review reserves it for you for 30 minutes. Return to queue releases
+            it without a decision. Completed decisions leave this queue.
           </p>
         </div>
         <button
@@ -375,8 +385,21 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                 const approvalBlocked =
                   selectedDecision === "APPROVE" &&
                   !task.reviewReadiness?.canApprove;
+                const assignedToCurrent =
+                  task.status === "ASSIGNED" &&
+                  task.assignedTo === adminId &&
+                  !task.proposedAt;
+                const expanded =
+                  assignedToCurrent && expandedTaskId === task.id;
                 return (
-                  <tr key={task.id}>
+                  <tr
+                    key={task.id}
+                    className={
+                      expanded
+                        ? "bg-sky-50 outline outline-2 outline-sky-200"
+                        : "bg-white"
+                    }
+                  >
                     <td className="py-3 pr-4 align-top font-semibold text-slate-900">
                       {displayName(task)}
                       <p className="mt-1 text-xs font-normal text-slate-500">
@@ -443,7 +466,8 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                     <td className="py-3 pr-4 align-top text-slate-600">
                       <div className="space-y-2">
                         {task.status === "ASSIGNED" &&
-                        task.assignedTo === adminId ? (
+                        task.assignedTo === adminId &&
+                        expanded ? (
                           <QualificationEvidenceControls
                             token={token}
                             submissionId={task.submission?.id}
@@ -453,14 +477,17 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                           />
                         ) : (
                           <span>
-                            {documents.length} document(s). Claim this task to
-                            review evidence.
+                            {documents.length} document(s).{" "}
+                            {assignedToCurrent
+                              ? "Open details to review evidence."
+                              : "Start review to inspect evidence."}
                           </span>
                         )}
                       </div>
                     </td>
                     <td className="min-w-72 py-3 pr-4 align-top text-slate-700">
-                      {Array.isArray(task.submission?.fixer?.priceList) &&
+                      {expanded &&
+                      Array.isArray(task.submission?.fixer?.priceList) &&
                       task.submission.fixer.priceList.length ? (
                         <div className="space-y-1.5">
                           {task.submission.fixer.priceList
@@ -489,7 +516,10 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                         </div>
                       ) : (
                         <span className="text-slate-500">
-                          No price list recorded
+                          {Array.isArray(task.submission?.fixer?.priceList)
+                            ? task.submission.fixer.priceList.length
+                            : 0}{" "}
+                          price-list item(s)
                         </span>
                       )}
                     </td>
@@ -501,117 +531,129 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                           disabled={claiming === task.id}
                           className="rounded-lg bg-sky-600 px-3 py-2 text-xs font-bold text-white hover:bg-sky-700 disabled:opacity-60"
                         >
-                          {claiming === task.id ? "Claiming..." : "Claim task"}
+                          {claiming === task.id
+                            ? "Starting..."
+                            : "Start review"}
                         </button>
                       )}
-                      {task.status === "ASSIGNED" &&
-                        task.assignedTo === adminId &&
-                        !task.proposedAt && (
-                          <div className="space-y-2">
-                            <div className="flex flex-wrap gap-2">
-                              <select
-                                aria-label={"Decision for " + displayName(task)}
-                                value={decision[task.id] || "APPROVE"}
-                                onChange={(event) =>
-                                  setDecision((current) => ({
-                                    ...current,
-                                    [task.id]: event.target.value as
-                                      | "APPROVE"
-                                      | "REJECT",
-                                  }))
-                                }
-                                className="rounded-lg border border-slate-300 px-2 py-2 text-xs font-semibold text-slate-700"
-                              >
-                                <option value="APPROVE">
-                                  {task.kind === "KYC"
-                                    ? "Approve KYC"
-                                    : "Approve tier"}
-                                </option>
-                                <option value="REJECT">
-                                  {task.kind === "KYC"
-                                    ? "Request KYC resubmission"
-                                    : "Decline tier request"}
-                                </option>
-                              </select>
-                              {task.kind !== "KYC" &&
-                                (decision[task.id] || "APPROVE") ===
-                                  "APPROVE" && (
-                                  <select
-                                    aria-label={
-                                      "Proposed tier for " + displayName(task)
-                                    }
-                                    value={
-                                      approvedTier[task.id] ||
-                                      evaluation?.recommendedTier ||
-                                      ""
-                                    }
-                                    onChange={(event) =>
-                                      setApprovedTier((current) => ({
-                                        ...current,
-                                        [task.id]: event.target.value,
-                                      }))
-                                    }
-                                    className="rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
-                                  >
-                                    <option value="">Select tier</option>
-                                    {allowedTiers(
-                                      evaluation?.recommendedTier,
-                                    ).map((tier) => (
-                                      <option key={tier} value={tier}>
-                                        {tier}
-                                      </option>
-                                    ))}
-                                  </select>
-                                )}
-                            </div>
-                            <input
-                              aria-label={
-                                "Decision reason for " + displayName(task)
-                              }
-                              value={reason[task.id] || ""}
+                      {assignedToCurrent && (
+                        <button
+                          type="button"
+                          aria-expanded={expanded}
+                          onClick={() =>
+                            setExpandedTaskId(expanded ? "" : task.id)
+                          }
+                          className="mb-2 rounded-lg border border-sky-700 bg-white px-3 py-2 text-xs font-bold text-sky-800 hover:bg-sky-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-600"
+                        >
+                          {expanded ? "Hide details" : "Continue review"}
+                        </button>
+                      )}
+                      {assignedToCurrent && expanded && (
+                        <div className="space-y-2 border-t border-sky-200 pt-3">
+                          <div className="flex flex-wrap gap-2">
+                            <select
+                              aria-label={"Decision for " + displayName(task)}
+                              value={decision[task.id] || "APPROVE"}
                               onChange={(event) =>
-                                setReason((current) => ({
+                                setDecision((current) => ({
                                   ...current,
-                                  [task.id]: event.target.value,
+                                  [task.id]: event.target.value as
+                                    | "APPROVE"
+                                    | "REJECT",
                                 }))
                               }
-                              placeholder="Decision reason (10+ characters)"
-                              className="w-full rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
-                            />
-                            {approvalBlocked &&
-                            task.reviewReadiness?.blockingReason ? (
-                              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                                {task.reviewReadiness.blockingReason}
-                              </p>
-                            ) : null}
-                            <button
-                              type="button"
-                              onClick={() => void decide(task)}
-                              disabled={deciding === task.id || approvalBlocked}
-                              className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                              className="rounded-lg border border-slate-300 px-2 py-2 text-xs font-semibold text-slate-700"
                             >
-                              {deciding === task.id
-                                ? "Saving..."
-                                : selectedDecision === "REJECT"
-                                  ? task.kind === "KYC"
-                                    ? "Request resubmission"
-                                    : "Decline tier"
-                                  : task.kind === "KYC"
-                                    ? "Approve KYC"
-                                    : "Approve tier"}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => void release(task.id)}
-                              disabled={releasing === task.id}
-                              className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-                            >
-                              {releasing === task.id
-                                ? "Releasing..."
-                                : "Release claim"}
-                            </button>
+                              <option value="APPROVE">
+                                {task.kind === "KYC"
+                                  ? "Approve KYC"
+                                  : "Approve tier"}
+                              </option>
+                              <option value="REJECT">
+                                {task.kind === "KYC"
+                                  ? "Request KYC resubmission"
+                                  : "Decline tier request"}
+                              </option>
+                            </select>
+                            {task.kind !== "KYC" &&
+                              (decision[task.id] || "APPROVE") ===
+                                "APPROVE" && (
+                                <select
+                                  aria-label={
+                                    "Proposed tier for " + displayName(task)
+                                  }
+                                  value={
+                                    approvedTier[task.id] ||
+                                    evaluation?.recommendedTier ||
+                                    ""
+                                  }
+                                  onChange={(event) =>
+                                    setApprovedTier((current) => ({
+                                      ...current,
+                                      [task.id]: event.target.value,
+                                    }))
+                                  }
+                                  className="rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
+                                >
+                                  <option value="">Select tier</option>
+                                  {allowedTiers(
+                                    evaluation?.recommendedTier,
+                                  ).map((tier) => (
+                                    <option key={tier} value={tier}>
+                                      {tier}
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
                           </div>
-                        )}
+                          <input
+                            aria-label={
+                              "Decision reason for " + displayName(task)
+                            }
+                            value={reason[task.id] || ""}
+                            onChange={(event) =>
+                              setReason((current) => ({
+                                ...current,
+                                [task.id]: event.target.value,
+                              }))
+                            }
+                            placeholder="Decision reason (10+ characters)"
+                            className="w-full rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
+                          />
+                          {approvalBlocked &&
+                          task.reviewReadiness?.blockingReason ? (
+                            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                              {task.reviewReadiness.blockingReason}
+                            </p>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => void decide(task)}
+                            disabled={deciding === task.id || approvalBlocked}
+                            className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                          >
+                            {deciding === task.id
+                              ? "Saving..."
+                              : selectedDecision === "REJECT"
+                                ? task.kind === "KYC"
+                                  ? "Request resubmission"
+                                  : "Decline tier"
+                                : task.kind === "KYC"
+                                  ? "Approve KYC"
+                                  : "Approve tier"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void release(task.id)}
+                            disabled={releasing === task.id}
+                            className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                          >
+                            {releasing === task.id
+                              ? "Returning..."
+                              : "Return to queue"}
+                          </button>
+                        </div>
+                      )}
                       {task.status === "ASSIGNED" && task.proposedAt && (
                         <div className="min-w-80 space-y-2">
                           <p className="font-semibold text-slate-800">
@@ -624,8 +666,8 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                               "No decision reason supplied."}
                           </p>
                           <p className="text-xs font-semibold text-slate-500">
-                            This review is already being finalized by the
-                            assigned administrator.
+                            This decision is being finalized by the assigned
+                            administrator.
                           </p>
                         </div>
                       )}
@@ -653,7 +695,7 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                       {task.status === "ASSIGNED" &&
                         task.assignedTo !== adminId && (
                           <span className="text-xs font-semibold text-slate-500">
-                            Assigned to another administrator
+                            In review by another administrator
                           </span>
                         )}
                       {task.status !== "OPEN" && task.status !== "ASSIGNED" && (

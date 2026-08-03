@@ -43,7 +43,7 @@ function getReviewReadiness(task: {
     }>;
   };
 }) {
-  if (task.kind === QualificationReviewKind.KYC) {
+  if (task.kind === 'KYC') {
     const documents = task.submission.documents || [];
     const requiredEvidence = REQUIRED_KYC_DOCUMENT_TYPES.map((documentType) => {
       const document = documents.find(
@@ -84,23 +84,28 @@ async function queueDecisionNotifications(
   taskId: string,
   kind: QualificationReviewKind,
   decision: QualificationReviewDecision,
+  reason?: string | null,
+  approvedTier?: FixerTier | null,
 ) {
-  const approved = decision === QualificationReviewDecision.APPROVE;
-  const title = approved
-    ? 'Qualification decision complete'
-    : decision === QualificationReviewDecision.REJECT
-      ? 'Qualification decision needs attention'
-      : 'Qualification review updated';
-  const body = approved
-    ? 'Your submitted information has passed this review. You can continue with your partner profile.'
-    : 'Please review your submitted information and provide corrected evidence where requested.';
+  const content = buildDecisionNotification(
+    kind,
+    decision,
+    reason,
+    approvedTier,
+  );
   const base = {
     userId,
     type: NotificationType.IN_APP,
-    title,
-    body,
+    title: content.title,
+    body: content.body,
     dedupeKey: 'qualification-decision:' + taskId + ':' + decision,
-    data: { taskId, kind, decision, approved },
+    data: {
+      taskId,
+      kind,
+      decision,
+      approved: decision === QualificationReviewDecision.APPROVE,
+      approvedTier: approvedTier || null,
+    },
   };
   await queueNotificationInTransaction(tx, base);
   await queueNotificationInTransaction(tx, {
@@ -108,6 +113,54 @@ async function queueDecisionNotifications(
     type: NotificationType.EMAIL,
     dedupeKey: 'qualification-decision-email:' + taskId + ':' + decision,
   });
+}
+
+function buildDecisionNotification(
+  kind: QualificationReviewKind,
+  decision: QualificationReviewDecision,
+  reason?: string | null,
+  approvedTier?: FixerTier | null,
+) {
+  const approved = decision === QualificationReviewDecision.APPROVE;
+  if (kind === QualificationReviewKind.KYC) {
+    return approved
+      ? {
+          title: 'Identity review approved',
+          body: 'Your identity review is approved. Your partner profile is active at the Economy tier while your qualification evidence is reviewed.',
+        }
+      : {
+          title: 'Identity information update needed',
+          body:
+            'Your identity evidence needs an update.' +
+            (reason ? ' ' + reason : ''),
+        };
+  }
+  return approved
+    ? {
+        title: 'Partner tier approved',
+        body:
+          'Your approved partner tier is ' +
+          (approvedTier || FixerTier.ECONOMY) +
+          '.',
+      }
+    : {
+        title: 'Tier review complete',
+        body:
+          'Your current approved tier remains unchanged.' +
+          (reason ? ' ' + reason : ''),
+      };
+}
+
+function parseReviewDecision(
+  value: string | null,
+): QualificationReviewDecision {
+  if (value === QualificationReviewDecision.APPROVE) {
+    return QualificationReviewDecision.APPROVE;
+  }
+  if (value === QualificationReviewDecision.REJECT) {
+    return QualificationReviewDecision.REJECT;
+  }
+  throw new ConflictException('Qualification review decision is invalid');
 }
 
 const tierRank: Record<FixerTier, number> = {
@@ -137,7 +190,17 @@ export class QualificationReviewService {
         ],
       },
       OR: [
-        { kind: QualificationReviewKind.KYC },
+        {
+          kind: QualificationReviewKind.KYC,
+          submission: {
+            status: {
+              in: [
+                QualificationSubmissionStatus.NEEDS_REVIEW,
+                QualificationSubmissionStatus.AI_PRECLEARED,
+              ],
+            },
+          },
+        },
         {
           kind: QualificationReviewKind.TIER,
           submission: { status: QualificationSubmissionStatus.APPROVED },
@@ -153,6 +216,11 @@ export class QualificationReviewService {
             fixer: {
               include: {
                 user: { select: { id: true, name: true, email: true } },
+                qualificationSubmissions: {
+                  orderBy: { version: 'desc' },
+                  take: 1,
+                  select: { id: true, version: true },
+                },
               },
             },
             documents: {
@@ -273,6 +341,11 @@ export class QualificationReviewService {
     });
     const latestByKind = new Map<string, (typeof tasks)[number]>();
     for (const task of tasks) {
+      const latestSubmission =
+        task.submission.fixer.qualificationSubmissions[0];
+      if (!latestSubmission || latestSubmission.id !== task.submission.id) {
+        continue;
+      }
       const key = task.submission.fixer.id + ':' + task.kind;
       const current = latestByKind.get(key);
       if (
@@ -463,11 +536,7 @@ export class QualificationReviewService {
             'An approved tier is required for TIER approval',
           );
         }
-        if (
-          approved &&
-          task.kind === QualificationReviewKind.KYC &&
-          directDecision.approvedTier
-        ) {
+        if (approved && task.kind === 'KYC' && directDecision.approvedTier) {
           throw new ConflictException('KYC approval cannot include a tier');
         }
         if (
@@ -598,10 +667,11 @@ export class QualificationReviewService {
         };
       }
 
+      const reviewDecision = parseReviewDecision(task.proposedDecision);
       if (
         dto.acceptProposal &&
-        task.proposedDecision === QualificationReviewDecision.APPROVE &&
-        task.kind === QualificationReviewKind.KYC
+        reviewDecision === QualificationReviewDecision.APPROVE &&
+        task.kind === 'KYC'
       ) {
         const documents = await tx.kycDocument.findMany({
           where: {
@@ -625,9 +695,28 @@ export class QualificationReviewService {
         }
       }
 
-      const approved =
-        task.proposedDecision === QualificationReviewDecision.APPROVE;
+      const approved = reviewDecision === QualificationReviewDecision.APPROVE;
       const approvedTier = approved ? task.proposedTier : null;
+      if (task.kind === 'KYC') {
+        await tx.qualificationReviewTask.updateMany({
+          where: {
+            id: { not: taskId },
+            kind: QualificationReviewKind.KYC,
+            status: {
+              in: [
+                QualificationReviewStatus.OPEN,
+                QualificationReviewStatus.ASSIGNED,
+              ],
+            },
+            submission: { fixerId: task.submission.fixerId },
+          },
+          data: {
+            status: QualificationReviewStatus.DECIDED,
+            decision: 'SUPERSEDED_BY_NEWER_SUBMISSION',
+            decidedAt: checkedAt,
+          },
+        });
+      }
       if (
         approved &&
         task.kind === QualificationReviewKind.TIER &&
@@ -688,7 +777,7 @@ export class QualificationReviewService {
           data: {
             status: QualificationReviewStatus.DECIDED,
             decidedAt: checkedAt,
-            decision: task.proposedDecision as QualificationReviewDecision,
+            decision: task.proposedDecision,
             checkedBy: checkerId,
             checkedAt,
             checkReason,
@@ -727,7 +816,9 @@ export class QualificationReviewService {
           task.submission.fixer.userId,
           taskId,
           task.kind,
-          task.proposedDecision as QualificationReviewDecision,
+          reviewDecision,
+          task.proposedReason,
+          task.proposedTier,
         );
         return {
           task: updatedTask,
@@ -754,7 +845,7 @@ export class QualificationReviewService {
           data: {
             status: QualificationReviewStatus.DECIDED,
             decidedAt: checkedAt,
-            decision: task.proposedDecision as QualificationReviewDecision,
+            decision: task.proposedDecision,
             checkedBy: checkerId,
             checkedAt,
             checkReason,
@@ -770,7 +861,7 @@ export class QualificationReviewService {
             reason: checkReason,
             metadata: {
               makerId: task.proposedBy,
-              decision: task.proposedDecision as QualificationReviewDecision,
+              decision: task.proposedDecision,
               fixerStatusChanged: false,
             },
           },
@@ -780,7 +871,9 @@ export class QualificationReviewService {
           task.submission.fixer.userId,
           taskId,
           task.kind,
-          task.proposedDecision as QualificationReviewDecision,
+          reviewDecision,
+          task.proposedReason,
+          task.proposedTier,
         );
         return {
           task: updatedTask,
@@ -798,7 +891,7 @@ export class QualificationReviewService {
           data: {
             status: QualificationReviewStatus.DECIDED,
             decidedAt: checkedAt,
-            decision: task.proposedDecision as QualificationReviewDecision,
+            decision: task.proposedDecision,
             checkedBy: checkerId,
             checkedAt,
             checkReason,
@@ -820,7 +913,9 @@ export class QualificationReviewService {
           task.submission.fixer.userId,
           taskId,
           task.kind,
-          task.proposedDecision as QualificationReviewDecision,
+          reviewDecision,
+          task.proposedReason,
+          task.proposedTier,
         );
         return {
           task: updatedTask,
@@ -857,7 +952,7 @@ export class QualificationReviewService {
         data: {
           status: QualificationReviewStatus.DECIDED,
           decidedAt: checkedAt,
-          decision: task.proposedDecision as QualificationReviewDecision,
+          decision: task.proposedDecision,
           checkedBy: checkerId,
           checkedAt,
           checkReason,
@@ -873,7 +968,7 @@ export class QualificationReviewService {
           reason: checkReason,
           metadata: {
             makerId: task.proposedBy,
-            decision: task.proposedDecision as QualificationReviewDecision,
+            decision: task.proposedDecision,
             approvedTier,
           },
         },
@@ -884,7 +979,9 @@ export class QualificationReviewService {
         task.submission.fixer.userId,
         taskId,
         task.kind,
-        task.proposedDecision as QualificationReviewDecision,
+        reviewDecision,
+        task.proposedReason,
+        task.proposedTier,
       );
       return {
         task: updatedTask,
@@ -898,24 +995,20 @@ export class QualificationReviewService {
     });
 
     if (result.applied && result.notificationUserId && this.notifications) {
-      const approved =
-        result.task.decision === QualificationReviewDecision.APPROVE;
-      const title =
-        result.task.decision === QualificationReviewDecision.APPROVE
-          ? 'Qualification decision complete'
-          : result.task.decision === QualificationReviewDecision.REJECT
-            ? 'Qualification decision needs attention'
-            : 'Qualification review updated';
-      const body =
-        result.task.decision === QualificationReviewDecision.APPROVE
-          ? 'Your submitted information has passed this review. You can continue with your partner profile.'
-          : 'Please review your submitted information and provide corrected evidence where requested.';
+      const resultDecision = parseReviewDecision(result.task.decision);
+      const content = buildDecisionNotification(
+        result.task.kind,
+        resultDecision,
+        result.task.proposedReason,
+        result.tierQualification?.approvedTier,
+      );
+      const approved = resultDecision === QualificationReviewDecision.APPROVE;
       try {
         await this.notifications.send({
           userId: result.notificationUserId,
           type: NotificationType.IN_APP,
-          title,
-          body,
+          title: content.title,
+          body: content.body,
           dedupeKey:
             'qualification-decision:' +
             result.task.id +
@@ -931,8 +1024,8 @@ export class QualificationReviewService {
         await this.notifications.send({
           userId: result.notificationUserId,
           type: NotificationType.EMAIL,
-          title,
-          body,
+          title: content.title,
+          body: content.body,
           data: {
             taskId: result.task.id,
             kind: result.task.kind,
@@ -959,11 +1052,9 @@ export class QualificationReviewService {
         checkerId,
       );
     }
-    const {
-      startTierEvaluation,
-      notificationUserId: _notificationUserId,
-      ...response
-    } = result;
+    const { startTierEvaluation, notificationUserId, ...response } = result;
+    void startTierEvaluation;
+    void notificationUserId;
     return handoffStatus ? { ...response, handoffStatus } : response;
   }
   async retryTierEvaluationHandoff(

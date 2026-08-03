@@ -2,7 +2,7 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
 import { OnEvent } from '@nestjs/event-emitter';
-import { NotificationType, Prisma } from '@prisma/client';
+import { Notification, NotificationType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SendNotificationDto } from './dto/send-notification.dto';
 
@@ -43,10 +43,10 @@ export class NotificationService {
       const existing = await this.prisma.notification.findUnique({
         where: { dedupeKey: dto.dedupeKey },
       });
-      if (existing) return existing;
+      if (existing) return this.dispatchExisting(existing);
     }
 
-    let notification;
+    let notification: Notification;
     try {
       notification = await this.prisma.notification.create({
         data: {
@@ -64,7 +64,7 @@ export class NotificationService {
         const existing = await this.prisma.notification.findUnique({
           where: { dedupeKey: dto.dedupeKey },
         });
-        if (existing) return existing;
+        if (existing) return this.dispatchExisting(existing);
       }
       throw error;
     }
@@ -111,6 +111,81 @@ export class NotificationService {
     });
 
     return updated;
+  }
+
+  private async dispatchExisting(notification: Notification) {
+    if (notification.status === 'SENT') return notification;
+    const now = new Date();
+    const claimToken = randomUUID();
+    const claimed = await this.prisma.notification.updateMany({
+      where: {
+        id: notification.id,
+        status: { in: ['PENDING', 'FAILED'] },
+        OR: [{ claimedAt: null }, { claimExpiresAt: { lte: now } }],
+      },
+      data: {
+        claimedAt: now,
+        claimedBy: claimToken,
+        claimExpiresAt: new Date(now.getTime() + RETRY_BASE_MS),
+      },
+    });
+    if (claimed.count !== 1) {
+      return this.prisma.notification.findUnique({
+        where: { id: notification.id },
+      });
+    }
+
+    const dto: SendNotificationDto = {
+      userId: notification.userId,
+      type: notification.type,
+      title: notification.title,
+      body: notification.body,
+      data: this.readNotificationData(notification.data),
+      dedupeKey: notification.dedupeKey ?? undefined,
+    };
+    let delivered = true;
+    switch (notification.type) {
+      case NotificationType.PUSH:
+        this.sendPush(dto);
+        break;
+      case NotificationType.SMS:
+        this.sendSms(dto);
+        break;
+      case NotificationType.EMAIL:
+        delivered = await this.sendEmail(dto);
+        break;
+      case NotificationType.IN_APP:
+        delivered = true;
+        break;
+    }
+
+    const attempt = notification.attempts + 1;
+    return this.prisma.notification.update({
+      where: { id: notification.id, claimedBy: claimToken },
+      data: delivered
+        ? {
+            status: 'SENT',
+            sentAt: now,
+            attempts: attempt,
+            lastErrorCode: null,
+            nextAttemptAt: null,
+            claimedAt: null,
+            claimedBy: null,
+            claimExpiresAt: null,
+          }
+        : {
+            status: 'FAILED',
+            attempts: attempt,
+            lastErrorCode: 'EMAIL_DELIVERY_FAILED',
+            nextAttemptAt:
+              attempt < MAX_EMAIL_ATTEMPTS
+                ? new Date(now.getTime() + RETRY_BASE_MS * 2 ** (attempt - 1))
+                : null,
+            claimedAt: null,
+            claimedBy: null,
+            claimExpiresAt: null,
+          },
+    });
   }
 
   async retryFailedEmails(limit = 50): Promise<number> {

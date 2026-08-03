@@ -127,6 +127,115 @@ describe('NotificationService', () => {
     expect(prisma.notification.create).not.toHaveBeenCalled();
   });
 
+  it('dispatches a transactionally queued in-app notification exactly once', async () => {
+    prisma.notification.findUnique.mockResolvedValue({
+      id: 'queued-notification',
+      userId: 'user-1',
+      type: NotificationType.IN_APP,
+      title: 'Identity review approved',
+      body: 'Your identity review is approved.',
+      data: null,
+      dedupeKey: 'qualification-decision:task-1:APPROVE',
+      status: 'PENDING',
+      attempts: 0,
+      claimedAt: null,
+      claimExpiresAt: null,
+    } as never);
+    prisma.notification.update.mockResolvedValue({
+      id: 'queued-notification',
+      status: 'SENT',
+    } as never);
+
+    await expect(
+      service.send({
+        userId: 'user-1',
+        type: NotificationType.IN_APP,
+        title: 'Identity review approved',
+        body: 'Your identity review is approved.',
+        dedupeKey: 'qualification-decision:task-1:APPROVE',
+      }),
+    ).resolves.toEqual(expect.objectContaining({ status: 'SENT' }));
+
+    expect(prisma.notification.create).not.toHaveBeenCalled();
+    expect(prisma.notification.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'queued-notification',
+          status: { in: ['PENDING', 'FAILED'] },
+        }),
+      }),
+    );
+    expect(prisma.notification.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'queued-notification' }),
+        data: expect.objectContaining({ status: 'SENT', attempts: 1 }),
+      }),
+    );
+  });
+
+  it('delivers a transactionally queued applicant email through Mailjet', async () => {
+    const config = {
+      get: jest.fn((key: string) => {
+        const values: Record<string, string> = {
+          'mailjet.apiKey': 'test-api-key',
+          'mailjet.apiSecret': 'test-api-secret',
+          'mailjet.fromEmail': 'noreply@example.com',
+        };
+        return values[key];
+      }),
+    };
+    const emailService = new NotificationService(
+      prisma as never,
+      config as never,
+    );
+    prisma.notification.findUnique.mockResolvedValue({
+      id: 'queued-email',
+      userId: 'user-1',
+      type: NotificationType.EMAIL,
+      title: 'Partner tier approved',
+      body: 'Your approved partner tier is Standard.',
+      data: null,
+      dedupeKey: 'qualification-decision-email:task-1:APPROVE',
+      status: 'PENDING',
+      attempts: 0,
+      claimedAt: null,
+      claimExpiresAt: null,
+    } as never);
+    prisma.user.findUnique.mockResolvedValue({
+      email: 'partner@example.com',
+      name: 'Partner',
+    } as never);
+    prisma.notification.update.mockResolvedValue({
+      id: 'queued-email',
+      status: 'SENT',
+    } as never);
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+    } as Response);
+
+    await expect(
+      emailService.send({
+        userId: 'user-1',
+        type: NotificationType.EMAIL,
+        title: 'Partner tier approved',
+        body: 'Your approved partner tier is Standard.',
+        dedupeKey: 'qualification-decision-email:task-1:APPROVE',
+      }),
+    ).resolves.toEqual(expect.objectContaining({ status: 'SENT' }));
+
+    expect(prisma.notification.create).not.toHaveBeenCalled();
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://api.mailjet.com/v3.1/send',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(prisma.notification.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'SENT', attempts: 1 }),
+      }),
+    );
+    fetchSpy.mockRestore();
+  });
+
   describe('retryFailedEmails', () => {
     it('claims due failed email notifications and retries them with persisted attempt state', async () => {
       prisma.notification.findMany.mockResolvedValue([

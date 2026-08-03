@@ -122,7 +122,7 @@ export class QualificationEvaluationService {
       evidence,
       deterministic,
     );
-    const reviewRequired = deterministic.maximumTier !== FixerTier.ECONOMY;
+    const reviewRequired = true;
 
     const created = await this.prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe(
@@ -173,43 +173,41 @@ export class QualificationEvaluationService {
         });
       }
 
-      if (reviewRequired) {
-        const existingReviewTask = await tx.qualificationReviewTask.findFirst({
+      const existingReviewTask = await tx.qualificationReviewTask.findFirst({
+        where: {
+          submissionId,
+          kind: 'TIER',
+          status: { in: ['OPEN', 'ASSIGNED'] },
+        },
+        select: { id: true },
+      });
+      if (!existingReviewTask) {
+        await tx.qualificationReviewTask.updateMany({
           where: {
-            submissionId,
+            submission: { fixerId: submission.fixer.id },
+            submissionId: { not: submissionId },
             kind: 'TIER',
             status: { in: ['OPEN', 'ASSIGNED'] },
           },
-          select: { id: true },
+          data: {
+            status: 'DECIDED',
+            decision: 'SUPERSEDED_BY_NEWER_SUBMISSION',
+            decidedAt: new Date(),
+          },
         });
-        if (!existingReviewTask) {
-          await tx.qualificationReviewTask.updateMany({
-            where: {
-              submission: { fixerId: submission.fixer.id },
-              submissionId: { not: submissionId },
-              kind: 'TIER',
-              status: { in: ['OPEN', 'ASSIGNED'] },
-            },
-            data: {
-              status: 'DECIDED',
-              decision: 'SUPERSEDED_BY_NEWER_SUBMISSION',
-              decidedAt: new Date(),
-            },
-          });
-          await tx.qualificationReviewTask.create({
-            data: {
-              submissionId,
-              status: 'OPEN',
-              kind: 'TIER',
-              priority: 10,
-              reasonCodes: this.json({
-                policyVersion: QUALIFICATION_POLICY_VERSION,
-                reasonCodes: deterministic.reasonCodes,
-                typhoonAdvisory: Boolean(advisory),
-              }),
-            },
-          });
-        }
+        await tx.qualificationReviewTask.create({
+          data: {
+            submissionId,
+            status: 'OPEN',
+            kind: 'TIER',
+            priority: 10,
+            reasonCodes: this.json({
+              policyVersion: QUALIFICATION_POLICY_VERSION,
+              reasonCodes: deterministic.reasonCodes,
+              advisoryAvailable: Boolean(advisory),
+            }),
+          },
+        });
       }
 
       await tx.qualificationAuditLog.create({

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/require-await */
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { QualificationEvaluationService } from './qualification-evaluation.service';
 
@@ -40,7 +41,7 @@ describe('QualificationEvaluationService', () => {
     tx.kycSubmission.update.mockResolvedValue({ id: 'submission-1' });
   });
 
-  it('counts only validated evidence and auto-approves Economy without Typhoon', async () => {
+  it('opens a separate human tier review after KYC approval even at Economy', async () => {
     prisma.kycSubmission.findFirst.mockResolvedValue({
       id: 'submission-1',
       status: 'APPROVED',
@@ -67,7 +68,7 @@ describe('QualificationEvaluationService', () => {
     );
 
     expect(result.advisory).toBeNull();
-    expect(result.reviewRequired).toBe(false);
+    expect(result.reviewRequired).toBe(true);
     expect(result.status).toBe('APPROVED');
     expect(tx.qualificationEvaluation.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -79,7 +80,16 @@ describe('QualificationEvaluationService', () => {
         }),
       }),
     );
-    expect(tx.qualificationReviewTask.create).not.toHaveBeenCalled();
+    expect(tx.qualificationReviewTask.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          submissionId: 'submission-1',
+          status: 'OPEN',
+          kind: 'TIER',
+          priority: 10,
+        }),
+      }),
+    );
     expect(tx.tierQualification.create).not.toHaveBeenCalled();
     expect(tx.fixer.update).not.toHaveBeenCalled();
     expect(tx.kycSubmission.update).not.toHaveBeenCalled();
