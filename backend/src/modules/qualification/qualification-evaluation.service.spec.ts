@@ -4,7 +4,11 @@ import { QualificationEvaluationService } from './qualification-evaluation.servi
 describe('QualificationEvaluationService', () => {
   const tx = {
     qualificationEvaluation: { create: jest.fn() },
-    qualificationReviewTask: { findFirst: jest.fn(), create: jest.fn() },
+    qualificationReviewTask: {
+      findFirst: jest.fn(),
+      updateMany: jest.fn(),
+      create: jest.fn(),
+    },
     tierQualification: { findFirst: jest.fn(), create: jest.fn() },
     fixer: { update: jest.fn() },
     qualificationAuditLog: { create: jest.fn() },
@@ -28,6 +32,7 @@ describe('QualificationEvaluationService', () => {
     tx.$executeRawUnsafe.mockResolvedValue(0);
     tx.qualificationEvaluation.create.mockResolvedValue({ id: 'evaluation-1' });
     tx.qualificationReviewTask.findFirst.mockResolvedValue(null);
+    tx.qualificationReviewTask.updateMany.mockResolvedValue({ count: 0 });
     tx.tierQualification.findFirst.mockResolvedValue(null);
     tx.tierQualification.create.mockResolvedValue({ id: 'qualification-1' });
     tx.fixer.update.mockResolvedValue({ id: 'fixer-1' });
@@ -271,7 +276,7 @@ describe('QualificationEvaluationService', () => {
     );
     expect(tx.$executeRawUnsafe).toHaveBeenCalledWith(
       'SELECT pg_advisory_xact_lock(hashtext($1))',
-      'submission-2',
+      'qualification-tier:fixer-2',
     );
     expect(tx.kycSubmission.update).not.toHaveBeenCalled();
   });

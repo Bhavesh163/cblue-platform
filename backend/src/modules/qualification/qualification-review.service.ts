@@ -103,6 +103,11 @@ export class QualificationReviewService {
               },
             },
             documents: {
+              where: {
+                isActive: true,
+                lifecycleState: { not: 'DELETE_PENDING' },
+                documentType: { not: 'id-back' },
+              },
               select: {
                 id: true,
                 documentType: true,

@@ -1815,4 +1815,27 @@ describe('QualificationService', () => {
     });
     expect(prisma.kycSubmission.create).not.toHaveBeenCalled();
   });
+  it('requires active ready evidence for ordinary admin review links', async () => {
+    prisma.kycDocument.findFirst.mockResolvedValue({
+      id: 'document-1',
+      storageKey: 'qualification/fixer-1/submission-1/document-1',
+      documentType: 'id-front',
+    });
+    storage.createReadUrl.mockResolvedValue('https://private.example/document');
+
+    await service.createAdminDocumentUrl(
+      'admin-1',
+      'submission-1',
+      'document-1',
+    );
+
+    expect(prisma.kycDocument.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          isActive: true,
+          lifecycleState: 'READY',
+        }),
+      }),
+    );
+  });
 });

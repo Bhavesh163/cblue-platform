@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getApiUrl } from "../lib/api";
 import { adminFetchResponse } from "./adminApi";
 import QualificationEvidenceControls from "./QualificationEvidenceControls";
+import { visibleQualificationDocuments } from "../../../lib/qualificationAdminProjection.mjs";
 
 type ReviewTask = {
   id: string;
@@ -35,6 +36,9 @@ type ReviewTask = {
       documentType: string;
       evidenceStatus: string;
       assessmentReasonCodes?: string[] | null;
+      isActive?: boolean;
+      lifecycleState?: string;
+      objectDeletedAt?: string | null;
       extractedFields?: Record<string, unknown> | null;
       identityNumberLast4?: string | null;
       identityExpiryDate?: string | null;
@@ -330,6 +334,9 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                   task.submission?.evaluations?.find(
                     (item) => item.provider === "DETERMINISTIC_POLICY",
                   ) || task.submission?.evaluations?.[0];
+                const documents = visibleQualificationDocuments(
+                  task.submission?.documents || [],
+                );
                 return (
                   <tr key={task.id}>
                     <td className="py-3 pr-4 align-top font-semibold text-slate-900">
@@ -397,109 +404,19 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                     </td>
                     <td className="py-3 pr-4 align-top text-slate-600">
                       <div className="space-y-2">
-                        {task.submission?.documents?.map((document) => (
-                          <div
-                            key={document.id}
-                            className="rounded bg-slate-50 px-2.5 py-2"
-                          >
-                            <p className="font-semibold text-slate-800">
-                              {document.documentType}: {document.evidenceStatus}
-                            </p>
-                            {document.assessmentReasonCodes?.length ? (
-                              <p className="mt-1 text-xs text-red-700">
-                                {document.assessmentReasonCodes.join(", ")}
-                              </p>
-                            ) : null}
-                            {document.identityNumberLast4 ? (
-                              <p className="mt-1 text-xs text-slate-500">
-                                ID ending {document.identityNumberLast4}
-                              </p>
-                            ) : null}
-                            {document.identityExpiryDate ? (
-                              <p className="text-xs text-slate-500">
-                                Expiry:{" "}
-                                {new Date(
-                                  document.identityExpiryDate,
-                                ).toLocaleDateString()}
-                              </p>
-                            ) : null}
-                            {document.extractedFields ? (
-                              <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-500">
-                                {[
-                                  "documentName",
-                                  "issuerName",
-                                  "credentialLevel",
-                                  "projectName",
-                                  "projectValue",
-                                ].map((key) => {
-                                  const value = document.extractedFields?.[key];
-                                  return value !== null &&
-                                    value !== undefined &&
-                                    value !== "" ? (
-                                    <span key={key}>
-                                      {key}: {String(value)}
-                                    </span>
-                                  ) : null;
-                                })}
-                              </div>
-                            ) : null}
-                            {document.assessmentJob ? (
-                              <p className="mt-1 text-xs text-slate-500">
-                                Assessment:{" "}
-                                {document.assessmentJob.status || "queued"}
-                                {document.assessmentJob.lastError
-                                  ? " / retry scheduled"
-                                  : ""}
-                              </p>
-                            ) : null}
-                            {document.legalHoldUntil ? (
-                              <p className="text-xs font-semibold text-amber-700">
-                                Legal hold until{" "}
-                                {new Date(
-                                  document.legalHoldUntil,
-                                ).toLocaleDateString()}
-                              </p>
-                            ) : null}
-                            {document.complianceAccesses?.length ? (
-                              <div className="mt-2 border-t border-slate-200 pt-2">
-                                <p className="text-[11px] font-semibold text-slate-600">
-                                  Compliance access history
-                                </p>
-                                {document.complianceAccesses
-                                  .slice(0, 3)
-                                  .map((access, index) => (
-                                    <p
-                                      key={String(access.createdAt) + index}
-                                      className="text-[11px] text-slate-500"
-                                    >
-                                      {access.createdAt
-                                        ? new Date(
-                                            access.createdAt,
-                                          ).toLocaleString()
-                                        : "-"}{" "}
-                                      / {access.purpose || "review"}
-                                      {access.caseReference
-                                        ? " / " + access.caseReference
-                                        : ""}
-                                    </p>
-                                  ))}
-                              </div>
-                            ) : null}
-                          </div>
-                        ))}
                         {task.status === "ASSIGNED" &&
                         task.assignedTo === adminId ? (
                           <QualificationEvidenceControls
                             token={token}
                             submissionId={task.submission?.id}
-                            documents={task.submission?.documents || []}
+                            documents={documents}
                             onChanged={load}
                             readOnly={Boolean(task.proposedAt)}
                           />
                         ) : (
                           <span>
-                            {task.submission?.documents?.length ?? 0}{" "}
-                            document(s). Claim this task to review evidence.
+                            {documents.length} document(s). Claim this task to
+                            review evidence.
                           </span>
                         )}
                       </div>

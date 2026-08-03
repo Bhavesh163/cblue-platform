@@ -283,16 +283,23 @@ export class QualificationService {
       where: { id: submissionId, fixer: { userId } },
       include: {
         documents: {
+          where: {
+            isActive: true,
+            lifecycleState: { not: 'DELETE_PENDING' },
+            documentType: { not: 'id-back' },
+          },
           select: {
             id: true,
             documentType: true,
+            isActive: true,
+            lifecycleState: true,
+            objectDeletedAt: true,
+            supersededAt: true,
             contentType: true,
             sizeBytes: true,
             evidenceStatus: true,
             expiresAt: true,
             createdAt: true,
-            isActive: true,
-            lifecycleState: true,
             legalHoldUntil: true,
           },
           orderBy: { createdAt: 'asc' },
@@ -1632,9 +1639,18 @@ export class QualificationService {
           },
         },
         documents: {
+          where: {
+            isActive: true,
+            lifecycleState: { not: 'DELETE_PENDING' },
+            documentType: { not: 'id-back' },
+          },
           select: {
             id: true,
             documentType: true,
+            isActive: true,
+            lifecycleState: true,
+            objectDeletedAt: true,
+            supersededAt: true,
             contentType: true,
             sizeBytes: true,
             evidenceStatus: true,
@@ -1743,6 +1759,8 @@ export class QualificationService {
       where: {
         id: documentId,
         submissionId,
+        isActive: true,
+        lifecycleState: 'READY',
         submission: {
           reviewTasks: {
             some: {

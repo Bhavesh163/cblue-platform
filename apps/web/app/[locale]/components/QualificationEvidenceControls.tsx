@@ -5,7 +5,15 @@ import { getApiUrl } from "../lib/api";
 import { adminFetchResponse } from "./adminApi";
 
 type EvidenceStatus = "VALIDATED" | "CONTRADICTED" | "INSUFFICIENT" | "EXPIRED";
-type DocumentRow = { id: string; documentType: string; evidenceStatus: string };
+type DocumentRow = {
+  id: string;
+  documentType: string;
+  evidenceStatus: string;
+  assessmentReasonCodes?: string[] | null;
+  identityNumberLast4?: string | null;
+  identityExpiryDate?: string | null;
+  extractedFields?: Record<string, unknown> | null;
+};
 type Props = {
   token: string;
   submissionId?: string;
@@ -359,6 +367,22 @@ export default function QualificationEvidenceControls({
                 Open document
               </a>
             )}
+            {document.assessmentReasonCodes?.length ? (
+              <p className="mt-1 text-xs text-red-700">
+                {document.assessmentReasonCodes.join(", ")}
+              </p>
+            ) : null}
+            {document.identityNumberLast4 ? (
+              <p className="mt-1 text-xs text-slate-500">
+                ID ending {document.identityNumberLast4}
+              </p>
+            ) : null}
+            {document.identityExpiryDate ? (
+              <p className="text-xs text-slate-500">
+                Expiry:{" "}
+                {new Date(document.identityExpiryDate).toLocaleDateString()}
+              </p>
+            ) : null}
           </div>
           {!readOnly && (
             <div className="mt-2 grid gap-2 md:grid-cols-[150px_minmax(220px,1fr)_auto]">

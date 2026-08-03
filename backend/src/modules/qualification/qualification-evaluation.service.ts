@@ -115,7 +115,7 @@ export class QualificationEvaluationService {
     const created = await this.prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe(
         'SELECT pg_advisory_xact_lock(hashtext($1))',
-        submissionId,
+        'qualification-tier:' + submission.fixer.id,
       );
       const evaluation = await tx.qualificationEvaluation.create({
         data: {
@@ -170,7 +170,20 @@ export class QualificationEvaluationService {
           },
           select: { id: true },
         });
-        if (!existingReviewTask)
+        if (!existingReviewTask) {
+          await tx.qualificationReviewTask.updateMany({
+            where: {
+              submission: { fixerId: submission.fixer.id },
+              submissionId: { not: submissionId },
+              kind: 'TIER',
+              status: { in: ['OPEN', 'ASSIGNED'] },
+            },
+            data: {
+              status: 'DECIDED',
+              decision: 'SUPERSEDED_BY_NEWER_SUBMISSION',
+              decidedAt: new Date(),
+            },
+          });
           await tx.qualificationReviewTask.create({
             data: {
               submissionId,
@@ -184,6 +197,7 @@ export class QualificationEvaluationService {
               }),
             },
           });
+        }
       }
 
       await tx.qualificationAuditLog.create({

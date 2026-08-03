@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getApiUrl } from "../lib/api";
 import { adminFetchResponse } from "./adminApi";
+import { visibleQualificationDocuments } from "../../../lib/qualificationAdminProjection.mjs";
 
 type DocumentRow = {
   id: string;
@@ -136,7 +137,9 @@ export default function QualificationHistoryPanel({ token }: Props) {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {submissions.map((submission) => {
-                const documents = submission.documents || [];
+                const documents: DocumentRow[] = visibleQualificationDocuments(
+                  submission.documents || [],
+                );
                 const priceCount = Array.isArray(submission.priceList)
                   ? submission.priceList.length
                   : 0;

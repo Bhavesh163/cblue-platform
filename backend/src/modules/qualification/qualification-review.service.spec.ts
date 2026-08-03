@@ -640,4 +640,27 @@ describe('QualificationReviewService', () => {
     ).resolves.toBe('COMPLETED');
     expect(tierEvaluation.evaluateTier).toHaveBeenCalledTimes(2);
   });
+  it('projects only active non-legacy evidence into the live queue', async () => {
+    prisma.qualificationReviewTask.findMany.mockResolvedValue([]);
+
+    await service.listTasks();
+
+    expect(prisma.qualificationReviewTask.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: expect.objectContaining({
+          submission: expect.objectContaining({
+            include: expect.objectContaining({
+              documents: expect.objectContaining({
+                where: {
+                  isActive: true,
+                  lifecycleState: { not: 'DELETE_PENDING' },
+                  documentType: { not: 'id-back' },
+                },
+              }),
+            }),
+          }),
+        }),
+      }),
+    );
+  });
 });

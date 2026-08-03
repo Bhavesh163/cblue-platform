@@ -83,7 +83,7 @@ export class QualificationRoutingService {
             status: true,
             failedAttempts: true,
             lockedUntil: true,
-            fixer: { select: { userId: true } },
+            fixer: { select: { id: true, userId: true } },
             documents: {
               where: {
                 isActive: true,
@@ -104,6 +104,13 @@ export class QualificationRoutingService {
           throw new NotFoundException('Qualification submission not found');
         }
         applicantUserId = submission.fixer?.userId ?? null;
+        const fixerId = submission.fixer?.id;
+        if (fixerId) {
+          await tx.$executeRawUnsafe(
+            'SELECT pg_advisory_xact_lock(hashtext($1))',
+            'qualification-kyc:' + fixerId,
+          );
+        }
 
         const checksums = submission.documents.map(
           (document) => document.checksumSha256,
@@ -262,6 +269,21 @@ export class QualificationRoutingService {
             },
           );
           if (!existingReviewTask) {
+            if (fixerId) {
+              await tx.qualificationReviewTask.updateMany({
+                where: {
+                  submission: { fixerId },
+                  submissionId: { not: submissionId },
+                  kind: 'KYC',
+                  status: { in: ['OPEN', 'ASSIGNED'] },
+                },
+                data: {
+                  status: 'DECIDED',
+                  decision: 'SUPERSEDED_BY_NEWER_SUBMISSION',
+                  decidedAt: new Date(),
+                },
+              });
+            }
             const created = await tx.qualificationReviewTask.createMany({
               data: {
                 submissionId,

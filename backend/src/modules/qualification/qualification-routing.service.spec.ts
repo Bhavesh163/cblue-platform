@@ -15,6 +15,7 @@ describe('QualificationRoutingService', () => {
       findFirst: jest.fn(),
       create: jest.fn(),
       createMany: jest.fn(),
+      updateMany: jest.fn(),
     },
     qualificationAuditLog: {
       create: jest.fn(),
@@ -68,6 +69,7 @@ describe('QualificationRoutingService', () => {
       failedAttempts: 0,
       lockedUntil: null,
       documents: requiredDocuments(),
+      fixer: { id: 'fixer-1', userId: 'user-1' },
     });
     tx.qualificationEvaluation.findMany.mockResolvedValue(
       evaluations([90, 98]),
@@ -354,5 +356,21 @@ describe('QualificationRoutingService', () => {
     expect(tx.kycSubmission.update).toHaveBeenCalledTimes(1);
     expect(tx.qualificationAuditLog.create).toHaveBeenCalledTimes(1);
     expect(tx.qualificationReviewTask.createMany).toHaveBeenCalledTimes(1);
+  });
+  it('supersedes older unresolved KYC tasks for the same fixer before creating the current task', async () => {
+    tx.qualificationReviewTask.findFirst.mockResolvedValue(null);
+    await service.routeSubmission('submission-1', 'user-1');
+    expect(tx.qualificationReviewTask.updateMany).toHaveBeenCalledWith({
+      where: {
+        submission: { fixerId: 'fixer-1' },
+        submissionId: { not: 'submission-1' },
+        kind: 'KYC',
+        status: { in: ['OPEN', 'ASSIGNED'] },
+      },
+      data: expect.objectContaining({
+        status: 'DECIDED',
+        decision: 'SUPERSEDED_BY_NEWER_SUBMISSION',
+      }),
+    });
   });
 });

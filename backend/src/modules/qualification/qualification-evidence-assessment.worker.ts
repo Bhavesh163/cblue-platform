@@ -93,6 +93,7 @@ export class QualificationEvidenceAssessmentWorker
         id: true,
         documentId: true,
         submissionId: true,
+        submission: { select: { fixerId: true } },
         attempts: true,
       },
     });
@@ -217,6 +218,25 @@ export class QualificationEvidenceAssessmentWorker
               },
               select: { id: true },
             });
+            if (job.submission?.fixerId) {
+              await tx.$executeRawUnsafe(
+                'SELECT pg_advisory_xact_lock(hashtext($1))',
+                'qualification-kyc:' + job.submission.fixerId,
+              );
+              await tx.qualificationReviewTask.updateMany({
+                where: {
+                  submission: { fixerId: job.submission.fixerId },
+                  submissionId: { not: job.submissionId },
+                  kind: 'KYC',
+                  status: { in: ['OPEN', 'ASSIGNED'] },
+                },
+                data: {
+                  status: 'DECIDED',
+                  decision: 'SUPERSEDED_BY_NEWER_SUBMISSION',
+                  decidedAt: new Date(),
+                },
+              });
+            }
             if (!existingTask) {
               await tx.qualificationReviewTask.create({
                 data: {
