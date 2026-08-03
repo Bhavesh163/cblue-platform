@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getApiUrl } from "../lib/api";
-import { adminFetchResponse } from "./adminApi";
+import { adminFetchResponse, readAdminResponseError } from "./adminApi";
 import QualificationEvidenceControls from "./QualificationEvidenceControls";
 
 type DirectoryRow = {
@@ -15,14 +15,15 @@ type DirectoryRow = {
   yearsExperience?: number | null;
   serviceProvince?: string | null;
   serviceDistrict?: string | null;
+  serviceSubdistrict?: string | null;
   servicePostalCode?: string | null;
   priceList?: Array<{
     service?: string;
     unit?: string;
     finalPrice?: number | string;
   }> | null;
-  declineCount?: number;
-  cancellationCount?: number;
+  declineCount90Days?: number;
+  cancellationCount12Months?: number;
   user?: {
     name?: string | null;
     email?: string | null;
@@ -55,6 +56,20 @@ type Detail = {
   tier?: string | null;
   status?: string | null;
   verified?: boolean;
+  yearsExperience?: number | null;
+  bio?: string | null;
+  description?: string | null;
+  pastExperience?: string | null;
+  pastProjectType?: string | null;
+  companyAddress?: Record<string, unknown> | null;
+  serviceProvince?: string | null;
+  serviceDistrict?: string | null;
+  servicePostalCode?: string | null;
+  skills?: Array<{
+    category?: string | null;
+    name?: string | null;
+    yearsExperience?: number | null;
+  }>;
   priceList?: Array<{
     service?: string;
     unit?: string;
@@ -84,8 +99,31 @@ type Detail = {
 
 type Props = { token: string };
 
+const TEXT_FILTERS = [
+  ["province", "Province"],
+  ["district", "District"],
+  ["subdistrict", "Subdistrict"],
+  ["service", "Service"],
+] as const;
+
+const NUMBER_FILTERS = [
+  ["minRating", "Minimum rating", "0", "5"],
+  ["maxDeclines90Days", "Maximum declines (90 days)", "0", undefined],
+  [
+    "maxCancellations12Months",
+    "Maximum cancellations (12 months)",
+    "0",
+    undefined,
+  ],
+] as const;
+
 function displayName(row: DirectoryRow | Detail) {
   return row.user?.name || row.user?.email || row.user?.phone || row.id;
+}
+
+function addressValue(detail: Detail, key: string) {
+  const value = detail.companyAddress?.[key];
+  return typeof value === "string" && value.trim() ? value : "";
 }
 
 export default function AdminPartnerDirectory({ token }: Props) {
@@ -94,8 +132,12 @@ export default function AdminPartnerDirectory({ token }: Props) {
   const [filters, setFilters] = useState({
     province: "",
     district: "",
+    subdistrict: "",
     service: "",
     tier: "",
+    minRating: "",
+    maxDeclines90Days: "",
+    maxCancellations12Months: "",
   });
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState("");
@@ -115,7 +157,13 @@ export default function AdminPartnerDirectory({ token }: Props) {
           headers: { Authorization: "Bearer " + token },
         },
       );
-      if (!response.ok) throw new Error("Unable to load provider directory.");
+      if (!response.ok)
+        throw new Error(
+          await readAdminResponseError(
+            response,
+            "Unable to load provider directory.",
+          ),
+        );
       const payload = (await response.json()) as { rows?: DirectoryRow[] };
       setRows(Array.isArray(payload.rows) ? payload.rows : []);
     } catch (cause) {
@@ -144,7 +192,13 @@ export default function AdminPartnerDirectory({ token }: Props) {
           headers: { Authorization: "Bearer " + token },
         },
       );
-      if (!response.ok) throw new Error("Unable to load provider detail.");
+      if (!response.ok)
+        throw new Error(
+          await readAdminResponseError(
+            response,
+            "Unable to load provider detail.",
+          ),
+        );
       setSelected((await response.json()) as Detail);
     } catch (cause) {
       setError(
@@ -183,37 +237,63 @@ export default function AdminPartnerDirectory({ token }: Props) {
           {error}
         </p>
       )}
-      <div className="grid gap-2 md:grid-cols-4">
-        {(["province", "district", "service"] as const).map((key) => (
-          <input
-            key={key}
-            value={filters[key]}
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {TEXT_FILTERS.map(([key, label]) => (
+          <label key={key} className="text-xs font-semibold text-slate-600">
+            {label}
+            <input
+              value={filters[key as keyof typeof filters]}
+              onChange={(event) =>
+                setFilters((current) => ({
+                  ...current,
+                  [key]: event.target.value,
+                }))
+              }
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900"
+            />
+          </label>
+        ))}
+        <label className="text-xs font-semibold text-slate-600">
+          Tier
+          <select
+            value={filters.tier}
             onChange={(event) =>
               setFilters((current) => ({
                 ...current,
-                [key]: event.target.value,
+                tier: event.target.value,
               }))
             }
-            placeholder={key.charAt(0).toUpperCase() + key.slice(1)}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          />
+            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900"
+          >
+            <option value="">All tiers</option>
+            {["ECONOMY", "STANDARD", "CORPORATE", "SPECIALIST", "EXPERT"].map(
+              (tier) => (
+                <option key={tier} value={tier}>
+                  {tier}
+                </option>
+              ),
+            )}
+          </select>
+        </label>
+        {NUMBER_FILTERS.map(([key, label, min, max]) => (
+          <label key={key} className="text-xs font-semibold text-slate-600">
+            {label}
+            <input
+              type="number"
+              min={min}
+              max={max}
+              step={key === "minRating" ? "0.1" : "1"}
+              value={filters[key as keyof typeof filters]}
+              onChange={(event) =>
+                setFilters((current) => ({
+                  ...current,
+                  [key]: event.target.value,
+                }))
+              }
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900"
+            />
+          </label>
         ))}
-        <select
-          value={filters.tier}
-          onChange={(event) =>
-            setFilters((current) => ({ ...current, tier: event.target.value }))
-          }
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-        >
-          <option value="">All tiers</option>
-          {["ECONOMY", "STANDARD", "CORPORATE", "SPECIALIST", "EXPERT"].map(
-            (tier) => (
-              <option key={tier} value={tier}>
-                {tier}
-              </option>
-            ),
-          )}
-        </select>
       </div>
       <div className="mt-4 overflow-x-auto">
         <table className="w-full min-w-[1100px] text-left text-sm">
@@ -239,6 +319,7 @@ export default function AdminPartnerDirectory({ token }: Props) {
                 </td>
                 <td className="py-3 pr-4 align-top text-slate-600">
                   {[
+                    row.serviceSubdistrict,
                     row.serviceDistrict,
                     row.serviceProvince,
                     row.servicePostalCode,
@@ -260,9 +341,10 @@ export default function AdminPartnerDirectory({ token }: Props) {
                   {row.rating ?? "-"} / 5
                 </td>
                 <td className="py-3 pr-4 align-top text-slate-600">
-                  Declines {row.declineCount || 0}
+                  Declines (90 days): {row.declineCount90Days || 0}
                   <br />
-                  Cancellations {row.cancellationCount || 0}
+                  Cancellations (12 months):{" "}
+                  {row.cancellationCount12Months || 0}
                 </td>
                 <td className="py-3 pr-4 align-top">
                   <button
@@ -285,14 +367,14 @@ export default function AdminPartnerDirectory({ token }: Props) {
         </p>
       )}
       {selected && (
-        <div className="mt-6 rounded-lg border border-sky-200 bg-sky-50 p-4">
+        <div className="mt-6 border-t border-slate-200 pt-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h3 className="font-bold text-slate-950">
                 {displayName(selected)}
               </h3>
               <p className="text-sm text-slate-600">
-                Status {selected.status || "-"} � Tier {selected.tier || "-"} �
+                Status {selected.status || "-"} / Tier {selected.tier || "-"} �
                 KYC {selected.verified ? "approved" : "pending"}
               </p>
             </div>
@@ -303,6 +385,59 @@ export default function AdminPartnerDirectory({ token }: Props) {
             >
               Close detail
             </button>
+          </div>
+          <div className="mt-5 grid gap-x-6 gap-y-3 border-y border-slate-200 py-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div>
+              <p className="text-xs font-semibold text-slate-500">Email</p>
+              <p className="text-sm text-slate-800">
+                {selected.user?.email || "Not recorded"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-500">Phone</p>
+              <p className="text-sm text-slate-800">
+                {selected.user?.phone || "Not recorded"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-500">Experience</p>
+              <p className="text-sm text-slate-800">
+                {selected.yearsExperience ?? "Not recorded"} years
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-500">
+                Service area
+              </p>
+              <p className="text-sm text-slate-800">
+                {[
+                  addressValue(selected, "subdistrict"),
+                  selected.serviceDistrict,
+                  selected.serviceProvince,
+                  selected.servicePostalCode,
+                ]
+                  .filter(Boolean)
+                  .join(", ") || "Not recorded"}
+              </p>
+            </div>
+            <div className="sm:col-span-2 xl:col-span-4">
+              <p className="text-xs font-semibold text-slate-500">Profile</p>
+              <p className="text-sm text-slate-800">
+                {selected.bio ||
+                  selected.description ||
+                  selected.pastExperience ||
+                  "Not recorded"}
+              </p>
+            </div>
+            <div className="sm:col-span-2 xl:col-span-4">
+              <p className="text-xs font-semibold text-slate-500">Services</p>
+              <p className="text-sm text-slate-800">
+                {(selected.skills || [])
+                  .map((skill) => skill.name || skill.category)
+                  .filter(Boolean)
+                  .join(", ") || "Not recorded"}
+              </p>
+            </div>
           </div>
           <h4 className="mt-4 font-semibold text-slate-900">
             Proposed price list

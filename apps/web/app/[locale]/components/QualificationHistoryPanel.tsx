@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getApiUrl } from "../lib/api";
-import { adminFetchResponse } from "./adminApi";
+import { adminFetchResponse, readAdminResponseError } from "./adminApi";
 import { visibleQualificationDocuments } from "../../../lib/qualificationAdminProjection.mjs";
 
 type DocumentRow = {
@@ -48,7 +48,12 @@ export default function QualificationHistoryPanel({ token }: Props) {
         { cache: "no-store", headers: { Authorization: "Bearer " + token } },
       );
       if (!response.ok)
-        throw new Error("Unable to load qualification history.");
+        throw new Error(
+          await readAdminResponseError(
+            response,
+            "Unable to load qualification history.",
+          ),
+        );
       const payload = (await response.json()) as unknown;
       setSubmissions(Array.isArray(payload) ? payload : []);
     } catch (cause) {
@@ -78,7 +83,12 @@ export default function QualificationHistoryPanel({ token }: Props) {
         { cache: "no-store", headers: { Authorization: "Bearer " + token } },
       );
       if (!response.ok)
-        throw new Error("Unable to create a protected document link.");
+        throw new Error(
+          await readAdminResponseError(
+            response,
+            "Unable to create a protected document link.",
+          ),
+        );
       const payload = (await response.json()) as { url?: unknown };
       if (typeof payload.url !== "string" || !payload.url) {
         throw new Error("Protected document link was not returned.");

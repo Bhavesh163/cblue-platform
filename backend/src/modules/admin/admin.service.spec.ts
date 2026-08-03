@@ -116,6 +116,78 @@ describe('AdminService', () => {
       );
     });
   });
+  describe('getFixerDirectory', () => {
+    it('returns authoritative service area and recent incident windows', async () => {
+      const now = new Date();
+      prisma.fixer.findMany.mockResolvedValue([
+        {
+          id: 'fixer-1',
+          companyAddress: { subdistrict: 'Saphan Song' },
+          orders: [
+            {
+              workflowActions: [
+                { action: 'partner-decline', createdAt: now },
+                { action: 'customer-cancel', createdAt: now },
+              ],
+            },
+          ],
+          qualificationSubmissions: [],
+          skills: [],
+          user: { id: 'user-1', name: 'Provider' },
+        },
+      ]);
+      prisma.fixer.count.mockResolvedValue(1);
+
+      const result = await service.getFixerDirectory({
+        subdistrict: 'Saphan',
+        maxDeclines90Days: 1,
+        maxCancellations12Months: 1,
+      });
+
+      expect(result.rows).toEqual([
+        expect.objectContaining({
+          id: 'fixer-1',
+          serviceSubdistrict: 'Saphan Song',
+          declineCount90Days: 1,
+          cancellationCount12Months: 1,
+        }),
+      ]);
+      expect(prisma.fixer.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          select: expect.objectContaining({
+            companyAddress: true,
+            orders: expect.any(Object),
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('getFixerQualificationDetail', () => {
+    it('returns the persisted provider detail selected for admin review', async () => {
+      prisma.fixer.findUnique.mockResolvedValue({
+        id: 'fixer-1',
+        user: { id: 'user-1', name: 'Provider', addresses: [] },
+        skills: [],
+        qualificationSubmissions: [],
+      });
+
+      await expect(
+        service.getFixerQualificationDetail('fixer-1'),
+      ).resolves.toEqual(expect.objectContaining({ id: 'fixer-1' }));
+      expect(prisma.fixer.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'fixer-1' },
+          select: expect.objectContaining({
+            companyAddress: true,
+            skills: expect.any(Object),
+            qualificationSubmissions: expect.any(Object),
+          }),
+        }),
+      );
+    });
+  });
+
   describe('approveFixer', () => {
     it('should throw NotFoundException if fixer not found', async () => {
       prisma.fixer.findUnique.mockResolvedValue(null);

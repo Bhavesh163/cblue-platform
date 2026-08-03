@@ -57,16 +57,28 @@ export class AdminController {
     @Query('limit') limit?: string,
     @Query('province') province?: string,
     @Query('district') district?: string,
+    @Query('subdistrict') subdistrict?: string,
     @Query('service') service?: string,
     @Query('tier') tier?: string,
+    @Query('minRating') minRating?: string,
+    @Query('maxDeclines90Days') maxDeclines90Days?: string,
+    @Query('maxCancellations12Months') maxCancellations12Months?: string,
   ) {
     return this.adminService.getFixerDirectory({
       page: Number(page) || 1,
       limit: Number(limit) || 20,
       province,
       district,
+      subdistrict,
       service,
       tier,
+      minRating: minRating === undefined ? undefined : Number(minRating),
+      maxDeclines90Days:
+        maxDeclines90Days === undefined ? undefined : Number(maxDeclines90Days),
+      maxCancellations12Months:
+        maxCancellations12Months === undefined
+          ? undefined
+          : Number(maxCancellations12Months),
     });
   }
   @Get('fixers/pending')

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getApiUrl } from "../lib/api";
-import { adminFetchResponse } from "./adminApi";
+import { adminFetchResponse, readAdminResponseError } from "./adminApi";
 import QualificationEvidenceControls from "./QualificationEvidenceControls";
 import { visibleQualificationDocuments } from "../../../lib/qualificationAdminProjection.mjs";
 
@@ -20,6 +20,15 @@ type ReviewTask = {
   checkedBy?: string | null;
   checkedAt?: string | null;
   createdAt?: string;
+  reviewReadiness?: {
+    canApprove: boolean;
+    blockingReason?: string | null;
+    requiredEvidence?: Array<{
+      documentType: string;
+      status: string;
+      ready: boolean;
+    }>;
+  };
   submission?: {
     id?: string;
     status?: string;
@@ -137,7 +146,12 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
         },
       );
       if (!response.ok)
-        throw new Error("Unable to load qualification review tasks.");
+        throw new Error(
+          await readAdminResponseError(
+            response,
+            "Unable to load qualification review tasks.",
+          ),
+        );
       const payload = (await response.json()) as unknown;
       setTasks(Array.isArray(payload) ? payload : []);
     } catch (cause) {
@@ -167,7 +181,12 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
         },
       );
       if (!response.ok)
-        throw new Error("This review task is no longer available.");
+        throw new Error(
+          await readAdminResponseError(
+            response,
+            "This review task is no longer available.",
+          ),
+        );
       await load();
     } catch (cause) {
       setError(
@@ -190,7 +209,12 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
         },
       );
       if (!response.ok)
-        throw new Error("The review task could not be released.");
+        throw new Error(
+          await readAdminResponseError(
+            response,
+            "The review task could not be released.",
+          ),
+        );
       await load();
     } catch (cause) {
       setError(
@@ -245,7 +269,12 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
         },
       );
       if (!response.ok)
-        throw new Error("The review decision could not be saved.");
+        throw new Error(
+          await readAdminResponseError(
+            response,
+            "The review decision could not be saved.",
+          ),
+        );
       await load();
     } catch (cause) {
       setError(
@@ -273,7 +302,12 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
         },
       );
       if (!response.ok)
-        throw new Error("The qualification could not be re-evaluated.");
+        throw new Error(
+          await readAdminResponseError(
+            response,
+            "The qualification could not be re-evaluated.",
+          ),
+        );
       await load();
     } catch (cause) {
       setError(
@@ -318,7 +352,7 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
       )}
       {tasks.length > 0 && (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1120px] text-left text-sm">
+          <table className="w-full min-w-[980px] text-left text-sm">
             <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="py-2 pr-4">Partner / review type</th>
@@ -337,12 +371,16 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                 const documents = visibleQualificationDocuments(
                   task.submission?.documents || [],
                 );
+                const selectedDecision = decision[task.id] || "APPROVE";
+                const approvalBlocked =
+                  selectedDecision === "APPROVE" &&
+                  !task.reviewReadiness?.canApprove;
                 return (
                   <tr key={task.id}>
                     <td className="py-3 pr-4 align-top font-semibold text-slate-900">
                       {displayName(task)}
                       <p className="mt-1 text-xs font-normal text-slate-500">
-                        {task.kind || "REVIEW"} /{" "}
+                        {task.kind === "KYC" ? "KYC review" : "Tier review"} /{" "}
                         {task.submission?.status || "REVIEW"}
                       </p>
                     </td>
@@ -485,9 +523,15 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                                 className="rounded-lg border border-slate-300 px-2 py-2 text-xs font-semibold text-slate-700"
                               >
                                 <option value="APPROVE">
-                                  Approve submission
+                                  {task.kind === "KYC"
+                                    ? "Approve KYC"
+                                    : "Approve tier"}
                                 </option>
-                                <option value="REJECT">Request changes</option>
+                                <option value="REJECT">
+                                  {task.kind === "KYC"
+                                    ? "Request KYC resubmission"
+                                    : "Decline tier request"}
+                                </option>
                               </select>
                               {task.kind !== "KYC" &&
                                 (decision[task.id] || "APPROVE") ===
@@ -534,15 +578,27 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                               placeholder="Decision reason (10+ characters)"
                               className="w-full rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
                             />
+                            {approvalBlocked &&
+                            task.reviewReadiness?.blockingReason ? (
+                              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                                {task.reviewReadiness.blockingReason}
+                              </p>
+                            ) : null}
                             <button
                               type="button"
                               onClick={() => void decide(task)}
-                              disabled={deciding === task.id}
-                              className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800 disabled:opacity-60"
+                              disabled={deciding === task.id || approvalBlocked}
+                              className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
                             >
                               {deciding === task.id
                                 ? "Saving..."
-                                : "Save decision"}
+                                : selectedDecision === "REJECT"
+                                  ? task.kind === "KYC"
+                                    ? "Request resubmission"
+                                    : "Decline tier"
+                                  : task.kind === "KYC"
+                                    ? "Approve KYC"
+                                    : "Approve tier"}
                             </button>
                             <button
                               type="button"

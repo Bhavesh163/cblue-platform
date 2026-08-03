@@ -61,11 +61,19 @@ export class AdminService {
     limit?: number;
     province?: string;
     district?: string;
+    subdistrict?: string;
     service?: string;
     tier?: string;
+    minRating?: number;
+    maxDeclines90Days?: number;
+    maxCancellations12Months?: number;
   }) {
     const page = Math.max(1, query.page || 1);
     const limit = Math.min(20, Math.max(1, query.limit || 20));
+    const hasPostFilters =
+      Boolean(query.subdistrict?.trim()) ||
+      query.maxDeclines90Days !== undefined ||
+      query.maxCancellations12Months !== undefined;
     const where: Prisma.FixerWhereInput = {
       ...(query.province
         ? { serviceProvince: { contains: query.province, mode: 'insensitive' } }
@@ -74,6 +82,9 @@ export class AdminService {
         ? { serviceDistrict: { contains: query.district, mode: 'insensitive' } }
         : {}),
       ...(query.tier ? { tier: query.tier as FixerTier } : {}),
+      ...(query.minRating !== undefined
+        ? { rating: { gte: query.minRating } }
+        : {}),
       ...(query.service
         ? {
             skills: {
@@ -82,12 +93,22 @@ export class AdminService {
           }
         : {}),
     };
-    const [rows, total] = await Promise.all([
+    const now = new Date();
+    const declineWindowStart = new Date(now);
+    declineWindowStart.setUTCDate(declineWindowStart.getUTCDate() - 90);
+    const cancellationWindowStart = new Date(now);
+    cancellationWindowStart.setUTCFullYear(
+      cancellationWindowStart.getUTCFullYear() - 1,
+    );
+    const incidentWindowStart =
+      declineWindowStart < cancellationWindowStart
+        ? declineWindowStart
+        : cancellationWindowStart;
+    const [candidates, persistedTotal] = await Promise.all([
       this.prisma.fixer.findMany({
         where,
         orderBy: { updatedAt: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit,
+        ...(hasPostFilters ? {} : { skip: (page - 1) * limit, take: limit }),
         select: {
           id: true,
           tier: true,
@@ -99,6 +120,7 @@ export class AdminService {
           serviceProvince: true,
           serviceDistrict: true,
           servicePostalCode: true,
+          companyAddress: true,
           priceList: true,
           aiScore: true,
           aiTier: true,
@@ -118,6 +140,11 @@ export class AdminService {
               status: true,
               submittedAt: true,
               documents: {
+                where: {
+                  isActive: true,
+                  lifecycleState: { not: 'DELETE_PENDING' },
+                  documentType: { not: 'id-back' },
+                },
                 select: {
                   id: true,
                   documentType: true,
@@ -131,36 +158,73 @@ export class AdminService {
           },
           orders: {
             select: {
-              status: true,
-              workflowActions: { select: { action: true } },
+              workflowActions: {
+                where: {
+                  action: { in: ['partner-decline', 'customer-cancel'] },
+                  createdAt: { gte: incidentWindowStart },
+                },
+                select: { action: true, createdAt: true },
+              },
             },
           },
         },
       }),
       this.prisma.fixer.count({ where }),
     ]);
-    return {
-      rows: rows.map((row) => ({
+    const normalized = candidates.map((row) => {
+      const address =
+        row.companyAddress &&
+        typeof row.companyAddress === 'object' &&
+        !Array.isArray(row.companyAddress)
+          ? row.companyAddress
+          : null;
+      const serviceSubdistrict =
+        typeof address?.subdistrict === 'string' ? address.subdistrict : null;
+      const workflowActions = row.orders.flatMap(
+        (order) => order.workflowActions,
+      );
+      return {
         ...row,
-        declineCount: row.orders.reduce(
-          (sum, order) =>
-            sum +
-            order.workflowActions.filter(
-              (event) => event.action === 'partner-decline',
-            ).length,
-          0,
-        ),
-        cancellationCount: row.orders.reduce(
-          (sum, order) =>
-            sum +
-            order.workflowActions.filter(
-              (event) => event.action === 'customer-cancel',
-            ).length,
-          0,
-        ),
+        serviceSubdistrict,
+        declineCount90Days: workflowActions.filter(
+          (event) =>
+            event.action === 'partner-decline' &&
+            event.createdAt >= declineWindowStart,
+        ).length,
+        cancellationCount12Months: workflowActions.filter(
+          (event) =>
+            event.action === 'customer-cancel' &&
+            event.createdAt >= cancellationWindowStart,
+        ).length,
+        companyAddress: undefined,
         orders: undefined,
-      })),
-      total,
+      };
+    });
+    const filtered = normalized.filter((row) => {
+      if (
+        query.subdistrict &&
+        !row.serviceSubdistrict
+          ?.toLocaleLowerCase()
+          .includes(query.subdistrict.toLocaleLowerCase())
+      )
+        return false;
+      if (
+        query.maxDeclines90Days !== undefined &&
+        row.declineCount90Days > query.maxDeclines90Days
+      )
+        return false;
+      if (
+        query.maxCancellations12Months !== undefined &&
+        row.cancellationCount12Months > query.maxCancellations12Months
+      )
+        return false;
+      return true;
+    });
+    return {
+      rows: hasPostFilters
+        ? filtered.slice((page - 1) * limit, page * limit)
+        : filtered,
+      total: hasPostFilters ? filtered.length : persistedTotal,
       page,
       limit,
     };
@@ -250,13 +314,52 @@ export class AdminService {
         tier: true,
         status: true,
         verified: true,
+        yearsExperience: true,
+        bio: true,
+        description: true,
+        pastExperience: true,
+        pastProjectType: true,
+        companyAddress: true,
+        serviceProvince: true,
+        serviceDistrict: true,
+        servicePostalCode: true,
+        gpsLat: true,
+        gpsLng: true,
         priceList: true,
         aiScore: true,
         aiTier: true,
         aiBreakdown: true,
         aiFlags: true,
         aiCredentialStatus: true,
-        user: { select: { id: true, name: true, email: true } },
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            addresses: {
+              orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
+              take: 3,
+              select: {
+                label: true,
+                province: true,
+                district: true,
+                subdistrict: true,
+                postalCode: true,
+                street: true,
+                building: true,
+                unit: true,
+                latitude: true,
+                longitude: true,
+                isDefault: true,
+              },
+            },
+          },
+        },
+        skills: {
+          orderBy: [{ category: 'asc' }, { name: 'asc' }],
+          select: { category: true, name: true, yearsExperience: true },
+        },
         qualificationSubmissions: {
           orderBy: { version: 'desc' },
           select: {
@@ -268,6 +371,11 @@ export class AdminService {
             reviewerId: true,
             decisionReason: true,
             documents: {
+              where: {
+                isActive: true,
+                lifecycleState: { not: 'DELETE_PENDING' },
+                documentType: { not: 'id-back' },
+              },
               select: {
                 id: true,
                 documentType: true,
@@ -279,6 +387,11 @@ export class AdminService {
                 expiresAt: true,
                 identityNumberLast4: true,
                 identityExpiryDate: true,
+                legalHoldUntil: true,
+                assessmentReasonCodes: true,
+                extractedFields: true,
+                credentialVerification: true,
+                credentialVerifiedAt: true,
               },
               orderBy: { createdAt: 'asc' },
             },

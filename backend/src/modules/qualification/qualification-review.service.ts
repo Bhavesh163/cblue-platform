@@ -29,6 +29,54 @@ import { QualificationReviewCheckDto } from './dto/qualification-review-check.dt
 import { QualificationEvaluationService } from './qualification-evaluation.service';
 const HANDOFF_LEASE_MS = 5 * 60 * 1000;
 const REVIEW_CLAIM_LEASE_MS = 30 * 60 * 1000;
+const REQUIRED_KYC_DOCUMENT_TYPES = ['id-front', 'selfie-with-id'] as const;
+
+function getReviewReadiness(task: {
+  kind: QualificationReviewKind;
+  submission: {
+    status: QualificationSubmissionStatus;
+    documents?: Array<{
+      documentType: string;
+      evidenceStatus: string;
+      lifecycleState: string;
+      isActive: boolean;
+    }>;
+  };
+}) {
+  if (task.kind === QualificationReviewKind.KYC) {
+    const documents = task.submission.documents || [];
+    const requiredEvidence = REQUIRED_KYC_DOCUMENT_TYPES.map((documentType) => {
+      const document = documents.find(
+        (candidate) =>
+          candidate.documentType === documentType &&
+          candidate.isActive &&
+          candidate.lifecycleState === 'READY',
+      );
+      return {
+        documentType,
+        status: document?.evidenceStatus || 'MISSING',
+        ready: document?.evidenceStatus === 'VALIDATED',
+      };
+    });
+    return {
+      canApprove: requiredEvidence.every((item) => item.ready),
+      blockingReason: requiredEvidence.every((item) => item.ready)
+        ? null
+        : 'Validate the ID front and selfie with ID before approving KYC.',
+      requiredEvidence,
+    };
+  }
+
+  const canApprove =
+    task.submission.status === QualificationSubmissionStatus.APPROVED;
+  return {
+    canApprove,
+    blockingReason: canApprove
+      ? null
+      : 'Approve KYC before making a tier decision.',
+    requiredEvidence: [],
+  };
+}
 
 async function queueDecisionNotifications(
   tx: Prisma.TransactionClient,
@@ -81,16 +129,21 @@ export class QualificationReviewService {
   ) {}
 
   async listTasks(status?: QualificationReviewStatus) {
-    const where = status
-      ? { status }
-      : {
-          status: {
-            in: [
-              QualificationReviewStatus.OPEN,
-              QualificationReviewStatus.ASSIGNED,
-            ],
-          },
-        };
+    const where: Prisma.QualificationReviewTaskWhereInput = {
+      status: status || {
+        in: [
+          QualificationReviewStatus.OPEN,
+          QualificationReviewStatus.ASSIGNED,
+        ],
+      },
+      OR: [
+        { kind: QualificationReviewKind.KYC },
+        {
+          kind: QualificationReviewKind.TIER,
+          submission: { status: QualificationSubmissionStatus.APPROVED },
+        },
+      ],
+    };
     const tasks = await this.prisma.qualificationReviewTask.findMany({
       where,
       orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
@@ -142,6 +195,8 @@ export class QualificationReviewService {
                 identityExpiryDate: true,
                 subjectNameHash: true,
                 legalHoldUntil: true,
+                isActive: true,
+                lifecycleState: true,
                 assessmentJob: {
                   select: {
                     status: true,
@@ -220,14 +275,24 @@ export class QualificationReviewService {
     for (const task of tasks) {
       const key = task.submission.fixer.id + ':' + task.kind;
       const current = latestByKind.get(key);
-      if (!current || task.createdAt.getTime() > current.createdAt.getTime())
+      if (
+        !current ||
+        task.submission.version > current.submission.version ||
+        (task.submission.version === current.submission.version &&
+          task.createdAt.getTime() > current.createdAt.getTime())
+      )
         latestByKind.set(key, task);
     }
-    return [...latestByKind.values()].sort(
-      (left, right) =>
-        right.priority - left.priority ||
-        right.createdAt.getTime() - left.createdAt.getTime(),
-    );
+    return [...latestByKind.values()]
+      .sort(
+        (left, right) =>
+          right.priority - left.priority ||
+          right.createdAt.getTime() - left.createdAt.getTime(),
+      )
+      .map((task) => ({
+        ...task,
+        reviewReadiness: getReviewReadiness(task),
+      }));
   }
 
   async assignTask(adminId: string, taskId: string) {
@@ -546,8 +611,7 @@ export class QualificationReviewService {
           },
           select: { documentType: true, evidenceStatus: true },
         });
-        const requiredTypes = ['id-front', 'selfie-with-id'];
-        const allValidated = requiredTypes.every((type) =>
+        const allValidated = REQUIRED_KYC_DOCUMENT_TYPES.every((type) =>
           documents.some(
             (document) =>
               document.documentType === type &&

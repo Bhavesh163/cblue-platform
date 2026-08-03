@@ -1761,14 +1761,6 @@ export class QualificationService {
         submissionId,
         isActive: true,
         lifecycleState: 'READY',
-        submission: {
-          reviewTasks: {
-            some: {
-              status: 'ASSIGNED',
-              assignedTo: adminId,
-            },
-          },
-        },
       },
       select: {
         id: true,

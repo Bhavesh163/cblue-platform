@@ -118,6 +118,7 @@ export default function QualificationEvidenceControls({
   useEffect(() => {
     setUrls({});
     setStatus({});
+    setCompliancePurpose({});
     setComplianceCaseReference({});
     setComplianceLegalHold({});
     setComplianceLegalHoldUntil({});
@@ -377,154 +378,136 @@ export default function QualificationEvidenceControls({
     return <span className="text-slate-500">No evidence documents.</span>;
 
   return (
-    <div className="min-w-[520px] divide-y divide-slate-200">
+    <div className="divide-y divide-slate-200">
       {error && (
-        <p className="mb-2 text-xs font-semibold text-red-700">{error}</p>
+        <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+          {error}
+        </p>
       )}
       {documents.map((document) => (
-        <div key={document.id} className="py-3 first:pt-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="min-w-40 font-semibold text-slate-800">
-              {document.documentType}
-            </span>
-            <span className="text-xs font-semibold text-slate-500">
-              {document.evidenceStatus}
-            </span>
-            <button
-              type="button"
-              onClick={() => void createLink(document.id)}
-              disabled={busy === "link:" + document.id}
-              className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-            >
-              {busy === "link:" + document.id
-                ? "Creating link..."
-                : "Create secure link"}
-            </button>
-            {!readOnly && (
-              <>
+        <div key={document.id} className="py-4 first:pt-0">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-semibold text-slate-900">
+                {document.documentType
+                  .split("-")
+                  .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+                  .join(" ")}
+              </p>
+              <p className="mt-0.5 text-xs font-semibold text-slate-500">
+                Evidence status: {document.evidenceStatus}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void createLink(document.id)}
+                disabled={busy === "link:" + document.id}
+                className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              >
+                {busy === "link:" + document.id
+                  ? "Preparing..."
+                  : "Open securely"}
+              </button>
+              {!readOnly && (
                 <button
                   type="button"
                   onClick={() => void verify(document.id)}
                   disabled={busy === "verify:" + document.id}
-                  className="rounded-lg bg-emerald-700 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
+                  className="rounded-lg border border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-50 disabled:opacity-60"
                 >
                   {busy === "verify:" + document.id
-                    ? "Verifying..."
-                    : "Run server verification"}
+                    ? "Checking..."
+                    : "Refresh assessment"}
                 </button>
-                <input
-                  aria-label={
-                    "Compliance retrieval purpose for " + document.documentType
-                  }
-                  value={compliancePurpose[document.id] || ""}
-                  onChange={(event) =>
-                    setCompliancePurpose((current) => ({
-                      ...current,
-                      [document.id]: event.target.value,
-                    }))
-                  }
-                  placeholder="Regulator/compliance purpose"
-                  className="min-w-56 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs"
-                />
-                <input
-                  aria-label={
-                    "Compliance case reference for " + document.documentType
-                  }
-                  value={complianceCaseReference[document.id] || ""}
-                  onChange={(event) =>
-                    setComplianceCaseReference((current) => ({
-                      ...current,
-                      [document.id]: event.target.value,
-                    }))
-                  }
-                  placeholder="Case reference"
-                  className="min-w-40 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs"
-                />
-                <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(complianceLegalHold[document.id])}
-                    onChange={(event) =>
-                      setComplianceLegalHold((current) => ({
-                        ...current,
-                        [document.id]: event.target.checked,
-                      }))
-                    }
-                  />
-                  Legal hold
-                </label>
-                {complianceLegalHold[document.id] && (
-                  <input
-                    type="date"
-                    aria-label={
-                      "Legal hold end date for " + document.documentType
-                    }
-                    value={complianceLegalHoldUntil[document.id] || ""}
-                    onChange={(event) =>
-                      setComplianceLegalHoldUntil((current) => ({
-                        ...current,
-                        [document.id]: event.target.value,
-                      }))
-                    }
-                    className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs"
-                  />
-                )}
-                <button
-                  type="button"
-                  onClick={() => void createComplianceLink(document.id)}
-                  disabled={busy === "compliance:" + document.id}
-                  className="rounded-lg border border-amber-300 px-2.5 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-60"
+              )}
+              {urls[document.id] && (
+                <a
+                  href={urls[document.id]}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
                 >
-                  {busy === "compliance:" + document.id
-                    ? "Creating..."
-                    : "Compliance access"}
-                </button>
-              </>
-            )}
-            {urls[document.id] && (
-              <a
-                href={urls[document.id]}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
-              >
-                Open document
-              </a>
-            )}
-            {document.assessmentReasonCodes?.length ? (
-              <p className="mt-1 text-xs text-red-700">
-                {document.assessmentReasonCodes.join(", ")}
-              </p>
-            ) : null}
+                  View document
+                </a>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-600">
             {document.identityNumberLast4 ? (
-              <p className="mt-1 text-xs text-slate-500">
-                ID ending {document.identityNumberLast4}
-              </p>
+              <span>ID ending {document.identityNumberLast4}</span>
             ) : null}
             {document.identityExpiryDate ? (
-              <p className="text-xs text-slate-500">
+              <span>
                 Expiry:{" "}
                 {new Date(document.identityExpiryDate).toLocaleDateString()}
-              </p>
+              </span>
+            ) : null}
+            {document.credentialVerification ? (
+              <span>
+                Credential: {document.credentialVerification.status}
+                {document.credentialVerification.issuerName
+                  ? " / " + document.credentialVerification.issuerName
+                  : ""}
+              </span>
             ) : null}
           </div>
-          {document.credentialVerification && (
-            <p className="mt-2 text-xs text-slate-600">
-              Credential review: {document.credentialVerification.status}
-              {document.credentialVerification.issuerName
-                ? " / " + document.credentialVerification.issuerName
-                : ""}
-              {document.credentialVerification.verifiedAt
-                ? " / " +
-                  new Date(
-                    document.credentialVerification.verifiedAt,
-                  ).toLocaleString()
-                : ""}
+          {document.assessmentReasonCodes?.length ? (
+            <p className="mt-2 text-xs font-semibold text-red-700">
+              {document.assessmentReasonCodes.join(", ")}
             </p>
-          )}
+          ) : null}
+
           {!readOnly && (
-            <>
-              <div className="mt-2 grid gap-2 md:grid-cols-[150px_180px_minmax(180px,1fr)_auto]">
+            <div className="mt-3 grid gap-2 md:grid-cols-[160px_minmax(240px,1fr)_auto]">
+              <select
+                aria-label={"Evidence status for " + document.documentType}
+                value={status[document.id] || ""}
+                onChange={(event) =>
+                  setStatus((current) => ({
+                    ...current,
+                    [document.id]: event.target.value as EvidenceStatus,
+                  }))
+                }
+                className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-700"
+              >
+                <option value="">Select status</option>
+                {STATUSES.map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+              <input
+                aria-label={"Evidence reason for " + document.documentType}
+                value={reason[document.id] || ""}
+                onChange={(event) =>
+                  setReason((current) => ({
+                    ...current,
+                    [document.id]: event.target.value,
+                  }))
+                }
+                placeholder="Evidence decision reason"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-700"
+              />
+              <button
+                type="button"
+                onClick={() => void save(document.id)}
+                disabled={busy === "save:" + document.id}
+                className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800 disabled:opacity-60"
+              >
+                {busy === "save:" + document.id ? "Saving..." : "Save evidence"}
+              </button>
+            </div>
+          )}
+
+          {!readOnly && (
+            <details className="mt-3 border-t border-slate-100 pt-3">
+              <summary className="cursor-pointer text-xs font-semibold text-slate-600">
+                Credential verification
+              </summary>
+              <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
                 <select
                   aria-label={"Credential result for " + document.documentType}
                   value={credentialStatus[document.id] || ""}
@@ -534,7 +517,7 @@ export default function QualificationEvidenceControls({
                       [document.id]: event.target.value as CredentialStatus,
                     }))
                   }
-                  className="rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-700"
                 >
                   <option value="">Credential result</option>
                   {CREDENTIAL_STATUSES.map((value) => (
@@ -554,7 +537,7 @@ export default function QualificationEvidenceControls({
                       [document.id]: event.target.value as IssuerType,
                     }))
                   }
-                  className="rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-700"
                 >
                   <option value="">Issuer type</option>
                   {ISSUER_TYPES.map((value) => (
@@ -575,7 +558,7 @@ export default function QualificationEvidenceControls({
                     }))
                   }
                   placeholder="Issuer name"
-                  className="rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-700"
                 />
                 <input
                   aria-label={
@@ -590,7 +573,7 @@ export default function QualificationEvidenceControls({
                     }))
                   }
                   placeholder="Verification method"
-                  className="rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-700"
                 />
                 <input
                   aria-label={
@@ -604,7 +587,7 @@ export default function QualificationEvidenceControls({
                     }))
                   }
                   placeholder="Source reference"
-                  className="rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-700"
                 />
                 <input
                   aria-label={
@@ -620,9 +603,9 @@ export default function QualificationEvidenceControls({
                     }))
                   }
                   placeholder="Project value (THB)"
-                  className="rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-700"
                 />
-                <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                <label className="flex items-center gap-2 px-1 text-xs font-semibold text-slate-700">
                   <input
                     type="checkbox"
                     checked={Boolean(credentialEndorsement[document.id])}
@@ -647,8 +630,8 @@ export default function QualificationEvidenceControls({
                       [document.id]: event.target.value,
                     }))
                   }
-                  placeholder="Credential verification reason"
-                  className="min-w-72 rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
+                  placeholder="Verification reason"
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-700"
                 />
                 <button
                   type="button"
@@ -661,50 +644,85 @@ export default function QualificationEvidenceControls({
                     : "Save credential review"}
                 </button>
               </div>
-              <div className="mt-2 grid gap-2 md:grid-cols-[150px_minmax(220px,1fr)_auto]">
-                <select
-                  aria-label={"Evidence status for " + document.documentType}
-                  value={status[document.id] || ""}
+            </details>
+          )}
+
+          <details className="mt-3 border-t border-slate-100 pt-3">
+            <summary className="cursor-pointer text-xs font-semibold text-slate-600">
+              Regulatory retrieval
+            </summary>
+            <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_180px_auto_160px_auto]">
+              <input
+                aria-label={
+                  "Compliance retrieval purpose for " + document.documentType
+                }
+                value={compliancePurpose[document.id] || ""}
+                onChange={(event) =>
+                  setCompliancePurpose((current) => ({
+                    ...current,
+                    [document.id]: event.target.value,
+                  }))
+                }
+                placeholder="Purpose"
+                className="rounded-lg border border-slate-300 px-3 py-2 text-xs"
+              />
+              <input
+                aria-label={
+                  "Compliance case reference for " + document.documentType
+                }
+                value={complianceCaseReference[document.id] || ""}
+                onChange={(event) =>
+                  setComplianceCaseReference((current) => ({
+                    ...current,
+                    [document.id]: event.target.value,
+                  }))
+                }
+                placeholder="Case reference"
+                className="rounded-lg border border-slate-300 px-3 py-2 text-xs"
+              />
+              <label className="flex items-center gap-2 px-1 text-xs font-semibold text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={Boolean(complianceLegalHold[document.id])}
                   onChange={(event) =>
-                    setStatus((current) => ({
+                    setComplianceLegalHold((current) => ({
                       ...current,
-                      [document.id]: event.target.value as EvidenceStatus,
+                      [document.id]: event.target.checked,
                     }))
                   }
-                  className="rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
-                >
-                  <option value="">Select status</option>
-                  {STATUSES.map((value) => (
-                    <option key={value} value={value}>
-                      {value}
-                    </option>
-                  ))}
-                </select>
+                />
+                Legal hold
+              </label>
+              {complianceLegalHold[document.id] ? (
                 <input
-                  aria-label={"Evidence reason for " + document.documentType}
-                  value={reason[document.id] || ""}
+                  type="date"
+                  aria-label={
+                    "Legal hold end date for " + document.documentType
+                  }
+                  value={complianceLegalHoldUntil[document.id] || ""}
                   onChange={(event) =>
-                    setReason((current) => ({
+                    setComplianceLegalHoldUntil((current) => ({
                       ...current,
                       [document.id]: event.target.value,
                     }))
                   }
-                  placeholder="Evidence decision reason"
-                  className="w-full rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-xs"
                 />
-                <button
-                  type="button"
-                  onClick={() => void save(document.id)}
-                  disabled={busy === "save:" + document.id}
-                  className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800 disabled:opacity-60"
-                >
-                  {busy === "save:" + document.id
-                    ? "Saving..."
-                    : "Save evidence"}
-                </button>
-              </div>
-            </>
-          )}
+              ) : (
+                <span aria-hidden="true" />
+              )}
+              <button
+                type="button"
+                onClick={() => void createComplianceLink(document.id)}
+                disabled={busy === "compliance:" + document.id}
+                className="rounded-lg border border-amber-300 px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-60"
+              >
+                {busy === "compliance:" + document.id
+                  ? "Preparing..."
+                  : "Create audited link"}
+              </button>
+            </div>
+          </details>
         </div>
       ))}
     </div>

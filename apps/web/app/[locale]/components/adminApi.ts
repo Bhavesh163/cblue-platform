@@ -18,7 +18,10 @@ type TokenResponse = {
   refreshToken?: string;
 };
 
-async function readError(response: Response, fallback: string) {
+export async function readAdminResponseError(
+  response: Response,
+  fallback: string,
+) {
   const payload = await response.json().catch(() => null);
   const message = payload?.message;
   if (Array.isArray(message)) return message.join(", ");
@@ -84,7 +87,7 @@ export async function adminRequest<T>(
   }
   if (!response.ok) {
     throw new AdminApiError(
-      await readError(response, "Admin request failed"),
+      await readAdminResponseError(response, "Admin request failed"),
       response.status,
     );
   }

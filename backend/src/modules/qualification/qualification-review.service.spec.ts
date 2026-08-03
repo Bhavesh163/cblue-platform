@@ -113,7 +113,73 @@ describe('QualificationReviewService', () => {
     };
     prisma.qualificationReviewTask.findMany.mockResolvedValue([older, newer]);
 
-    await expect(service.listTasks()).resolves.toEqual([newer, older]);
+    await expect(service.listTasks()).resolves.toEqual([
+      expect.objectContaining({ id: 'newer-task' }),
+      expect.objectContaining({ id: 'older-task' }),
+    ]);
+  });
+
+  it('keeps only the newest submission for the same fixer and review kind', async () => {
+    const stale = {
+      id: 'stale-task',
+      kind: 'KYC',
+      priority: 0,
+      createdAt: new Date('2026-07-30T00:00:00.000Z'),
+      submission: {
+        version: 1,
+        status: 'NEEDS_REVIEW',
+        documents: [],
+        fixer: { id: 'fixer-1' },
+      },
+    };
+    const current = {
+      id: 'current-task',
+      kind: 'KYC',
+      priority: 0,
+      createdAt: new Date('2026-07-29T00:00:00.000Z'),
+      submission: {
+        version: 2,
+        status: 'NEEDS_REVIEW',
+        documents: [
+          {
+            documentType: 'id-front',
+            evidenceStatus: 'VALIDATED',
+            isActive: true,
+            lifecycleState: 'READY',
+          },
+          {
+            documentType: 'selfie-with-id',
+            evidenceStatus: 'UNCHECKED',
+            isActive: true,
+            lifecycleState: 'READY',
+          },
+        ],
+        fixer: { id: 'fixer-1' },
+      },
+    };
+    prisma.qualificationReviewTask.findMany.mockResolvedValue([stale, current]);
+
+    const result = await service.listTasks();
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toEqual(
+      expect.objectContaining({
+        id: 'current-task',
+        reviewReadiness: {
+          canApprove: false,
+          blockingReason:
+            'Validate the ID front and selfie with ID before approving KYC.',
+          requiredEvidence: [
+            { documentType: 'id-front', status: 'VALIDATED', ready: true },
+            {
+              documentType: 'selfie-with-id',
+              status: 'UNCHECKED',
+              ready: false,
+            },
+          ],
+        },
+      }),
+    );
   });
 
   it('atomically assigns only an open task to the maker', async () => {
