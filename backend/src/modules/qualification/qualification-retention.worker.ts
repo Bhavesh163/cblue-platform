@@ -4,6 +4,12 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
+import { Optional } from '@nestjs/common';
+import { NotificationType } from '@prisma/client';
+import {
+  NotificationService,
+  queueNotificationInTransaction,
+} from '../notification/notification.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
 const NOTICE_MONTHS = 11;
@@ -34,7 +40,10 @@ export class QualificationRetentionWorker
   private activeRun: Promise<number> | null = null;
   private stopping = false;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly notifications?: NotificationService,
+  ) {}
 
   onModuleInit(): void {
     this.stopping = false;
@@ -197,12 +206,39 @@ export class QualificationRetentionWorker
         DELETE_MONTHS,
       );
       if (!user.inactiveNoticeAt || !user.inactiveDeleteAt) {
-        await this.prisma.user.update({
-          where: { id: user.id },
-          data: {
-            inactiveNoticeAt: user.inactiveNoticeAt ?? now,
-            inactiveDeleteAt: user.inactiveDeleteAt ?? inactiveDeleteAt,
-          },
+        const shouldNotify = !user.inactiveNoticeAt;
+        await this.prisma.$transaction(async (tx) => {
+          await tx.user.update({
+            where: { id: user.id },
+            data: {
+              inactiveNoticeAt: user.inactiveNoticeAt ?? now,
+              inactiveDeleteAt: user.inactiveDeleteAt ?? inactiveDeleteAt,
+            },
+          });
+          if (shouldNotify && this.notifications) {
+            await queueNotificationInTransaction(tx, {
+              userId: user.id,
+              type: NotificationType.IN_APP,
+              title: 'Account retention reminder',
+              body: 'Your account has been inactive for 11 months. Sign in before the retention date to keep your account and private evidence.',
+              dedupeKey: 'qualification-retention-notice:' + user.id,
+              data: {
+                inactiveDeleteAt: inactiveDeleteAt.toISOString(),
+                retentionMonths: DELETE_MONTHS,
+              },
+            });
+            await queueNotificationInTransaction(tx, {
+              userId: user.id,
+              type: NotificationType.EMAIL,
+              title: 'Account retention reminder',
+              body: 'Your account has been inactive for 11 months. Sign in before the retention date to keep your account and private evidence.',
+              dedupeKey: 'qualification-retention-notice-email:' + user.id,
+              data: {
+                inactiveDeleteAt: inactiveDeleteAt.toISOString(),
+                retentionMonths: DELETE_MONTHS,
+              },
+            });
+          }
         });
       }
       if (now < inactiveDeleteAt) continue;

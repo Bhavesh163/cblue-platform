@@ -174,6 +174,16 @@ describe('QualificationEvaluationService', () => {
           documentType: 'project-completion-certificate',
           evidenceStatus: 'VALIDATED',
           extractedFields: { fields: { projectValue: 2500000 } },
+          credentialVerifications: [
+            {
+              status: 'VERIFIED',
+              issuerType: 'SET_LISTED_COMPANY',
+              issuerName: 'Example Public Company',
+              projectValueBaht: 2500000,
+              corporateEndorsement: true,
+              verifiedAt: new Date('2026-08-02T00:00:00.000Z'),
+            },
+          ],
         },
         {
           id: 'unchecked-project',

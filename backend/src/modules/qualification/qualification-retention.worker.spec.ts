@@ -14,6 +14,9 @@ describe('QualificationRetentionWorker', () => {
     qualificationAuditLog: {
       create: jest.fn(),
     },
+    notification: {
+      createMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
     $transaction: jest.fn(async (callback: (client: any) => unknown) =>
       callback(prisma),
     ),
@@ -76,6 +79,34 @@ describe('QualificationRetentionWorker', () => {
         data: expect.objectContaining({
           action: 'RETENTION_DELETE_SCHEDULED',
         }),
+      }),
+    );
+  });
+  it('queues one in-app and one email notice when inactivity reaches eleven months', async () => {
+    prisma.user.findMany.mockResolvedValue([
+      {
+        id: 'user-2',
+        lastActivityAt: new Date('2025-07-01T00:00:00.000Z'),
+        inactiveNoticeAt: null,
+        inactiveDeleteAt: null,
+        fixer: { qualificationSubmissions: [], orders: [] },
+        orders: [],
+      },
+    ]);
+    const worker = new QualificationRetentionWorker(prisma, {} as never);
+
+    await worker.runBatch();
+
+    expect(prisma.notification.createMany).toHaveBeenCalledTimes(2);
+    expect(prisma.notification.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.arrayContaining([
+          expect.objectContaining({
+            userId: 'user-2',
+            type: 'IN_APP',
+            dedupeKey: 'qualification-retention-notice:user-2',
+          }),
+        ]),
       }),
     );
   });

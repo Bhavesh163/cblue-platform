@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
+import { QualificationSnapshotResponse } from './dto/qualification-snapshot.response.dto';
 
 @Injectable()
 export class QualificationBridgeService {
@@ -13,7 +14,10 @@ export class QualificationBridgeService {
     private readonly config: ConfigService,
   ) {}
 
-  async getSnapshot(legacySubjectId: string, bridgeKey?: string) {
+  async getSnapshot(
+    legacySubjectId: string,
+    bridgeKey?: string,
+  ): Promise<QualificationSnapshotResponse> {
     this.assertBridgeKey(bridgeKey);
     const subject = String(legacySubjectId || '').trim();
     if (!subject) throw new NotFoundException('Qualification not found');
@@ -42,6 +46,22 @@ export class QualificationBridgeService {
                 retentionDeleteAt: true,
                 assessmentReasonCodes: true,
                 createdAt: true,
+                credentialVerifications: {
+                  orderBy: { createdAt: 'desc' },
+                  take: 1,
+                  select: {
+                    status: true,
+                    issuerType: true,
+                    issuerName: true,
+                    credentialType: true,
+                    verificationMethod: true,
+                    externalReference: true,
+                    projectValueBaht: true,
+                    corporateEndorsement: true,
+                    verifiedAt: true,
+                    createdAt: true,
+                  },
+                },
               },
               orderBy: { createdAt: 'asc' },
             },
@@ -161,6 +181,29 @@ export class QualificationBridgeService {
                 : [],
               expiresAt: document.expiresAt,
               createdAt: document.createdAt,
+              credentialVerification: document.credentialVerifications?.[0]
+                ? {
+                    status: document.credentialVerifications?.[0]?.status,
+                    issuerType:
+                      document.credentialVerifications?.[0]?.issuerType,
+                    issuerName:
+                      document.credentialVerifications?.[0]?.issuerName,
+                    credentialType:
+                      document.credentialVerifications?.[0]?.credentialType,
+                    verificationMethod:
+                      document.credentialVerifications?.[0]?.verificationMethod,
+                    externalReference:
+                      document.credentialVerifications?.[0]?.externalReference,
+                    projectValueBaht:
+                      document.credentialVerifications?.[0]?.projectValueBaht,
+                    corporateEndorsement:
+                      document.credentialVerifications?.[0]
+                        ?.corporateEndorsement,
+                    verifiedAt:
+                      document.credentialVerifications?.[0]?.verifiedAt,
+                    createdAt: document.credentialVerifications?.[0]?.createdAt,
+                  }
+                : null,
             })),
             evaluations: submission.evaluations.map((evaluation) => ({
               policyVersion: evaluation.policyVersion,

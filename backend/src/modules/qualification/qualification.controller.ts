@@ -19,12 +19,14 @@ import { CreateQualificationSubmissionDto } from './dto/create-qualification-sub
 import { CreateQualificationDraftDto } from './dto/create-qualification-draft.dto';
 import { QualificationReviewDecisionDto } from './dto/qualification-review-decision.dto';
 import { QualificationEvidenceDecisionDto } from './dto/qualification-evidence-decision.dto';
+import { QualificationCredentialVerificationDto } from './dto/qualification-credential-verification.dto';
 import { QualificationComplianceAccessDto } from './dto/qualification-compliance-access.dto';
 import { QualificationReviewCheckDto } from './dto/qualification-review-check.dto';
 import { UploadQualificationDocumentDto } from './dto/upload-qualification-document.dto';
 import { QualificationEvaluationService } from './qualification-evaluation.service';
 import { QualificationReviewService } from './qualification-review.service';
 import { QualificationService } from './qualification.service';
+import { QualificationCredentialVerificationService } from './qualification-credential-verification.service';
 
 @Controller('qualification')
 @UseGuards(JwtAuthGuard)
@@ -33,6 +35,7 @@ export class QualificationController {
     private readonly qualification: QualificationService,
     private readonly evaluations: QualificationEvaluationService,
     private readonly reviews: QualificationReviewService,
+    private readonly credentialVerifications: QualificationCredentialVerificationService,
   ) {}
 
   @Post('submissions/draft')
@@ -162,6 +165,25 @@ export class QualificationController {
       adminId,
       submissionId,
       documentId,
+    );
+  }
+
+  @Post(
+    'admin/submissions/:submissionId/documents/:documentId/credential-verification',
+  )
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  verifyCredential(
+    @CurrentUser('id') adminId: string,
+    @Param('submissionId') submissionId: string,
+    @Param('documentId') documentId: string,
+    @Body() dto: QualificationCredentialVerificationDto,
+  ) {
+    return this.credentialVerifications.verifyDocument(
+      adminId,
+      submissionId,
+      documentId,
+      dto,
     );
   }
 

@@ -18,6 +18,7 @@ import { QualificationDocumentCleanupWorker } from './qualification-document-cle
 import { QualificationHandoffWorker } from './qualification-handoff.worker';
 import { QualificationRetentionWorker } from './qualification-retention.worker';
 import { QualificationEvidenceAssessmentWorker } from './qualification-evidence-assessment.worker';
+import { QualificationCredentialVerificationService } from './qualification-credential-verification.service';
 
 @Module({
   imports: [NotificationModule],
@@ -40,6 +41,7 @@ import { QualificationEvidenceAssessmentWorker } from './qualification-evidence-
     QualificationHandoffWorker,
     QualificationRetentionWorker,
     QualificationEvidenceAssessmentWorker,
+    QualificationCredentialVerificationService,
   ],
   exports: [
     QualificationPolicyService,
@@ -51,6 +53,7 @@ import { QualificationEvidenceAssessmentWorker } from './qualification-evidence-
     QualificationVerificationService,
     QualificationAssessmentService,
     QualificationRoutingService,
+    QualificationCredentialVerificationService,
   ],
 })
 export class QualificationModule {}

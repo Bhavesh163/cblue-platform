@@ -5,6 +5,14 @@ import { getApiUrl } from "../lib/api";
 import { adminFetchResponse } from "./adminApi";
 
 type EvidenceStatus = "VALIDATED" | "CONTRADICTED" | "INSUFFICIENT" | "EXPIRED";
+type CredentialStatus = "PENDING" | "VERIFIED" | "REJECTED" | "UNVERIFIABLE";
+type IssuerType =
+  | "EDUCATIONAL_INSTITUTION"
+  | "PROFESSIONAL_BODY"
+  | "SET_LISTED_COMPANY"
+  | "INTERNATIONAL_COMPANY"
+  | "GOVERNMENT"
+  | "OTHER";
 type DocumentRow = {
   id: string;
   documentType: string;
@@ -13,6 +21,16 @@ type DocumentRow = {
   identityNumberLast4?: string | null;
   identityExpiryDate?: string | null;
   extractedFields?: Record<string, unknown> | null;
+  credentialVerification?: {
+    status: CredentialStatus;
+    issuerType?: IssuerType | null;
+    issuerName?: string | null;
+    verificationMethod?: string | null;
+    externalReference?: string | null;
+    projectValueBaht?: number | null;
+    corporateEndorsement?: boolean;
+    verifiedAt?: string | null;
+  } | null;
 };
 type Props = {
   token: string;
@@ -27,6 +45,20 @@ const STATUSES: EvidenceStatus[] = [
   "CONTRADICTED",
   "INSUFFICIENT",
   "EXPIRED",
+];
+const CREDENTIAL_STATUSES: CredentialStatus[] = [
+  "PENDING",
+  "VERIFIED",
+  "REJECTED",
+  "UNVERIFIABLE",
+];
+const ISSUER_TYPES: IssuerType[] = [
+  "EDUCATIONAL_INSTITUTION",
+  "PROFESSIONAL_BODY",
+  "SET_LISTED_COMPANY",
+  "INTERNATIONAL_COMPANY",
+  "GOVERNMENT",
+  "OTHER",
 ];
 
 async function readError(response: Response, fallback: string) {
@@ -43,6 +75,30 @@ export default function QualificationEvidenceControls({
 }: Props) {
   const [status, setStatus] = useState<Record<string, EvidenceStatus>>({});
   const [reason, setReason] = useState<Record<string, string>>({});
+  const [credentialStatus, setCredentialStatus] = useState<
+    Record<string, CredentialStatus>
+  >({});
+  const [credentialIssuerType, setCredentialIssuerType] = useState<
+    Record<string, IssuerType>
+  >({});
+  const [credentialIssuerName, setCredentialIssuerName] = useState<
+    Record<string, string>
+  >({});
+  const [credentialMethod, setCredentialMethod] = useState<
+    Record<string, string>
+  >({});
+  const [credentialReference, setCredentialReference] = useState<
+    Record<string, string>
+  >({});
+  const [credentialProjectValue, setCredentialProjectValue] = useState<
+    Record<string, string>
+  >({});
+  const [credentialEndorsement, setCredentialEndorsement] = useState<
+    Record<string, boolean>
+  >({});
+  const [credentialReason, setCredentialReason] = useState<
+    Record<string, string>
+  >({});
   const [compliancePurpose, setCompliancePurpose] = useState<
     Record<string, string>
   >({});
@@ -66,6 +122,14 @@ export default function QualificationEvidenceControls({
     setComplianceLegalHold({});
     setComplianceLegalHoldUntil({});
     setReason({});
+    setCredentialStatus({});
+    setCredentialIssuerType({});
+    setCredentialIssuerName({});
+    setCredentialMethod({});
+    setCredentialReference({});
+    setCredentialProjectValue({});
+    setCredentialEndorsement({});
+    setCredentialReason({});
     setError("");
     if (!submissionId || readOnly) return;
     const timeout = window.setTimeout(() => setUrls({}), 5 * 60 * 1000);
@@ -249,6 +313,66 @@ export default function QualificationEvidenceControls({
     }
   }
 
+  async function saveCredentialVerification(documentId: string) {
+    if (!submissionId) return;
+    const selectedStatus = credentialStatus[documentId];
+    const method = credentialMethod[documentId]?.trim() || "";
+    const decisionReason = credentialReason[documentId]?.trim() || "";
+    if (!selectedStatus || method.length < 3 || decisionReason.length < 10) {
+      setError(
+        "Select a credential result and enter the verification method and reason.",
+      );
+      return;
+    }
+    setBusy("credential:" + documentId);
+    setError("");
+    try {
+      const response = await adminFetchResponse(
+        getApiUrl(
+          "/qualification/admin/submissions/" +
+            submissionId +
+            "/documents/" +
+            documentId +
+            "/credential-verification",
+        ),
+        {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer " + token,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            status: selectedStatus,
+            issuerType: credentialIssuerType[documentId] || undefined,
+            issuerName: credentialIssuerName[documentId]?.trim() || undefined,
+            verificationMethod: method,
+            externalReference:
+              credentialReference[documentId]?.trim() || undefined,
+            projectValueBaht: credentialProjectValue[documentId]
+              ? Number(credentialProjectValue[documentId])
+              : undefined,
+            corporateEndorsement: Boolean(credentialEndorsement[documentId]),
+            reason: decisionReason,
+          }),
+        },
+      );
+      if (!response.ok)
+        throw new Error(
+          await readError(response, "Unable to save credential verification."),
+        );
+      setCredentialReason((current) => ({ ...current, [documentId]: "" }));
+      await onChanged();
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Unable to save credential verification.",
+      );
+    } finally {
+      setBusy("");
+    }
+  }
+
   if (!documents.length)
     return <span className="text-slate-500">No evidence documents.</span>;
 
@@ -384,47 +508,202 @@ export default function QualificationEvidenceControls({
               </p>
             ) : null}
           </div>
+          {document.credentialVerification && (
+            <p className="mt-2 text-xs text-slate-600">
+              Credential review: {document.credentialVerification.status}
+              {document.credentialVerification.issuerName
+                ? " / " + document.credentialVerification.issuerName
+                : ""}
+              {document.credentialVerification.verifiedAt
+                ? " / " +
+                  new Date(
+                    document.credentialVerification.verifiedAt,
+                  ).toLocaleString()
+                : ""}
+            </p>
+          )}
           {!readOnly && (
-            <div className="mt-2 grid gap-2 md:grid-cols-[150px_minmax(220px,1fr)_auto]">
-              <select
-                aria-label={"Evidence status for " + document.documentType}
-                value={status[document.id] || ""}
-                onChange={(event) =>
-                  setStatus((current) => ({
-                    ...current,
-                    [document.id]: event.target.value as EvidenceStatus,
-                  }))
-                }
-                className="rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
-              >
-                <option value="">Select status</option>
-                {STATUSES.map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
-                ))}
-              </select>
-              <input
-                aria-label={"Evidence reason for " + document.documentType}
-                value={reason[document.id] || ""}
-                onChange={(event) =>
-                  setReason((current) => ({
-                    ...current,
-                    [document.id]: event.target.value,
-                  }))
-                }
-                placeholder="Evidence decision reason"
-                className="w-full rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
-              />
-              <button
-                type="button"
-                onClick={() => void save(document.id)}
-                disabled={busy === "save:" + document.id}
-                className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800 disabled:opacity-60"
-              >
-                {busy === "save:" + document.id ? "Saving..." : "Save evidence"}
-              </button>
-            </div>
+            <>
+              <div className="mt-2 grid gap-2 md:grid-cols-[150px_180px_minmax(180px,1fr)_auto]">
+                <select
+                  aria-label={"Credential result for " + document.documentType}
+                  value={credentialStatus[document.id] || ""}
+                  onChange={(event) =>
+                    setCredentialStatus((current) => ({
+                      ...current,
+                      [document.id]: event.target.value as CredentialStatus,
+                    }))
+                  }
+                  className="rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
+                >
+                  <option value="">Credential result</option>
+                  {CREDENTIAL_STATUSES.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  aria-label={
+                    "Credential issuer type for " + document.documentType
+                  }
+                  value={credentialIssuerType[document.id] || ""}
+                  onChange={(event) =>
+                    setCredentialIssuerType((current) => ({
+                      ...current,
+                      [document.id]: event.target.value as IssuerType,
+                    }))
+                  }
+                  className="rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
+                >
+                  <option value="">Issuer type</option>
+                  {ISSUER_TYPES.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  aria-label={
+                    "Credential issuer name for " + document.documentType
+                  }
+                  value={credentialIssuerName[document.id] || ""}
+                  onChange={(event) =>
+                    setCredentialIssuerName((current) => ({
+                      ...current,
+                      [document.id]: event.target.value,
+                    }))
+                  }
+                  placeholder="Issuer name"
+                  className="rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
+                />
+                <input
+                  aria-label={
+                    "Credential verification method for " +
+                    document.documentType
+                  }
+                  value={credentialMethod[document.id] || ""}
+                  onChange={(event) =>
+                    setCredentialMethod((current) => ({
+                      ...current,
+                      [document.id]: event.target.value,
+                    }))
+                  }
+                  placeholder="Verification method"
+                  className="rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
+                />
+                <input
+                  aria-label={
+                    "Credential reference for " + document.documentType
+                  }
+                  value={credentialReference[document.id] || ""}
+                  onChange={(event) =>
+                    setCredentialReference((current) => ({
+                      ...current,
+                      [document.id]: event.target.value,
+                    }))
+                  }
+                  placeholder="Source reference"
+                  className="rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
+                />
+                <input
+                  aria-label={
+                    "Verified project value for " + document.documentType
+                  }
+                  type="number"
+                  min="0"
+                  value={credentialProjectValue[document.id] || ""}
+                  onChange={(event) =>
+                    setCredentialProjectValue((current) => ({
+                      ...current,
+                      [document.id]: event.target.value,
+                    }))
+                  }
+                  placeholder="Project value (THB)"
+                  className="rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
+                />
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(credentialEndorsement[document.id])}
+                    onChange={(event) =>
+                      setCredentialEndorsement((current) => ({
+                        ...current,
+                        [document.id]: event.target.checked,
+                      }))
+                    }
+                  />
+                  Corporate endorsement
+                </label>
+                <input
+                  aria-label={
+                    "Credential verification reason for " +
+                    document.documentType
+                  }
+                  value={credentialReason[document.id] || ""}
+                  onChange={(event) =>
+                    setCredentialReason((current) => ({
+                      ...current,
+                      [document.id]: event.target.value,
+                    }))
+                  }
+                  placeholder="Credential verification reason"
+                  className="min-w-72 rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
+                />
+                <button
+                  type="button"
+                  onClick={() => void saveCredentialVerification(document.id)}
+                  disabled={busy === "credential:" + document.id}
+                  className="rounded-lg bg-sky-700 px-3 py-2 text-xs font-bold text-white hover:bg-sky-800 disabled:opacity-60"
+                >
+                  {busy === "credential:" + document.id
+                    ? "Saving..."
+                    : "Save credential review"}
+                </button>
+              </div>
+              <div className="mt-2 grid gap-2 md:grid-cols-[150px_minmax(220px,1fr)_auto]">
+                <select
+                  aria-label={"Evidence status for " + document.documentType}
+                  value={status[document.id] || ""}
+                  onChange={(event) =>
+                    setStatus((current) => ({
+                      ...current,
+                      [document.id]: event.target.value as EvidenceStatus,
+                    }))
+                  }
+                  className="rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
+                >
+                  <option value="">Select status</option>
+                  {STATUSES.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  aria-label={"Evidence reason for " + document.documentType}
+                  value={reason[document.id] || ""}
+                  onChange={(event) =>
+                    setReason((current) => ({
+                      ...current,
+                      [document.id]: event.target.value,
+                    }))
+                  }
+                  placeholder="Evidence decision reason"
+                  className="w-full rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
+                />
+                <button
+                  type="button"
+                  onClick={() => void save(document.id)}
+                  disabled={busy === "save:" + document.id}
+                  className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800 disabled:opacity-60"
+                >
+                  {busy === "save:" + document.id
+                    ? "Saving..."
+                    : "Save evidence"}
+                </button>
+              </div>
+            </>
           )}
         </div>
       ))}

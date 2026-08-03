@@ -80,6 +80,18 @@ export class QualificationEvaluationService {
             documentType: true,
             evidenceStatus: true,
             extractedFields: true,
+            credentialVerifications: {
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+              select: {
+                status: true,
+                issuerType: true,
+                issuerName: true,
+                projectValueBaht: true,
+                corporateEndorsement: true,
+                verifiedAt: true,
+              },
+            },
           },
         },
       },
@@ -288,6 +300,14 @@ export class QualificationEvaluationService {
       documentType: string;
       evidenceStatus: QualificationEvidenceStatus;
       extractedFields: Prisma.JsonValue | null;
+      credentialVerifications?: Array<{
+        status: string;
+        issuerType: string | null;
+        issuerName: string | null;
+        projectValueBaht: number | null;
+        corporateEndorsement: boolean;
+        verifiedAt: Date | null;
+      }>;
     }>;
   }): QualificationEvidenceInput {
     const documents = submission.documents;
@@ -312,6 +332,8 @@ export class QualificationEvaluationService {
         ? (root.fields as Record<string, unknown>)
         : root;
     };
+    const textValue = (value: unknown): string =>
+      typeof value === 'string' ? value : '';
     const validatedDocuments = documents.filter(
       (document) =>
         document.evidenceStatus === QualificationEvidenceStatus.VALIDATED,
@@ -324,8 +346,8 @@ export class QualificationEvaluationService {
         return true;
       if (document.documentType !== 'portfolio') return false;
       const fields = extracted(document);
-      const detected = String(fields.detectedDocumentType || '').toLowerCase();
-      const level = String(fields.credentialLevel || '').toLowerCase();
+      const detected = textValue(fields.detectedDocumentType).toLowerCase();
+      const level = textValue(fields.credentialLevel).toLowerCase();
       return (
         detected.includes('certificate') ||
         detected.includes('degree') ||
@@ -337,17 +359,38 @@ export class QualificationEvaluationService {
       );
     };
     const credentialDocuments = validatedDocuments.filter(isCredentialEvidence);
-    const corporateVerified =
-      verified('corporate-certificate') > 0 ||
-      verified('project-completion-certificate') >= 2;
-    const millionBahtProjects = validatedDocuments.filter(
+    const latestVerification = (document: (typeof documents)[number]) =>
+      document.credentialVerifications?.[0] || null;
+    const verifiedCorporateEvidence = (
+      document: (typeof documents)[number],
+    ) => {
+      const verification = latestVerification(document);
+      return (
+        verification?.status === 'VERIFIED' &&
+        verification.corporateEndorsement &&
+        ['SET_LISTED_COMPANY', 'INTERNATIONAL_COMPANY', 'GOVERNMENT'].includes(
+          verification.issuerType || '',
+        )
+      );
+    };
+    const verifiedCorporateCompletionCertificates = validatedDocuments.filter(
       (document) =>
         document.documentType === 'project-completion-certificate' &&
-        Number(extracted(document).projectValue || 0) >= 1_000_000,
+        verifiedCorporateEvidence(document),
+    );
+    const verifiedCorporateCertificates = validatedDocuments.filter(
+      (document) =>
+        document.documentType === 'corporate-certificate' &&
+        verifiedCorporateEvidence(document),
+    );
+    const millionBahtProjects = verifiedCorporateCompletionCertificates.filter(
+      (document) =>
+        Number(latestVerification(document)?.projectValueBaht || 0) >=
+        1_000_000,
     ).length;
     const hasEligibleDegree = credentialDocuments.some((document) => {
-      const level = String(
-        extracted(document).credentialLevel || '',
+      const level = textValue(
+        extracted(document).credentialLevel,
       ).toLowerCase();
       return level.includes('master') || level.includes('doctor');
     });
@@ -355,17 +398,22 @@ export class QualificationEvaluationService {
     return {
       yearsExperience: submission.fixer.yearsExperience || 0,
       relatedCertificateCount: credentialDocuments.length,
-      corporateCertificateCount: verified('corporate-certificate'),
-      corporateEndorsedCompletionCertificateCount: verified(
-        'project-completion-certificate',
-      ),
+      corporateCertificateCount: verifiedCorporateCertificates.length,
+      corporateEndorsedCompletionCertificateCount:
+        verifiedCorporateCompletionCertificates.length,
       projectCompletionCertificateCount: verified(
         'project-completion-certificate',
       ),
       millionBahtCompletionCertificateCount: millionBahtProjects,
       hasEligibleMastersOrDoctorate: hasEligibleDegree,
-      hasInternationalAward: verified('international-award') > 0,
-      corporateEvidenceVerified: corporateVerified,
+      hasInternationalAward: validatedDocuments.some(
+        (document) =>
+          document.documentType === 'international-award' &&
+          latestVerification(document)?.status === 'VERIFIED',
+      ),
+      corporateEvidenceVerified:
+        verifiedCorporateCertificates.length > 0 ||
+        verifiedCorporateCompletionCertificates.length >= 2,
     };
   }
 

@@ -102,6 +102,22 @@ enum QualificationRisk {
   HIGH
 }
 
+enum QualificationCredentialVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  UNVERIFIABLE
+}
+
+enum QualificationCredentialIssuerType {
+  EDUCATIONAL_INSTITUTION
+  PROFESSIONAL_BODY
+  SET_LISTED_COMPANY
+  INTERNATIONAL_COMPANY
+  GOVERNMENT
+  OTHER
+}
+
 enum OrderStatus {
   CREATED
   MATCHING
@@ -336,11 +352,11 @@ model Fixer {
 }
 
 model KycSubmission {
-  id                       String                               @id @default(uuid())
+  id                       String                                @id @default(uuid())
   fixerId                  String
-  fixer                    Fixer                                @relation(fields: [fixerId], references: [id], onDelete: Cascade)
+  fixer                    Fixer                                 @relation(fields: [fixerId], references: [id], onDelete: Cascade)
   version                  Int
-  status                   QualificationSubmissionStatus        @default(DRAFT)
+  status                   QualificationSubmissionStatus         @default(DRAFT)
   policyVersion            String
   consentAt                DateTime?
   consentVersion           String?
@@ -349,7 +365,7 @@ model KycSubmission {
   reviewedAt               DateTime?
   reviewerId               String?
   decisionReason           String?
-  failedAttempts           Int                                  @default(0)
+  failedAttempts           Int                                   @default(0)
   lockedUntil              DateTime?
   expiresAt                DateTime?
   documents                KycDocument[]
@@ -357,11 +373,12 @@ model KycSubmission {
   reviewTasks              QualificationReviewTask[]
   tierQualifications       TierQualification[]
   auditLogs                QualificationAuditLog[]
-  createdAt                DateTime                             @default(now())
-  updatedAt                DateTime                             @updatedAt
+  createdAt                DateTime                              @default(now())
+  updatedAt                DateTime                              @updatedAt
   qualificationHandoffs    QualificationHandoff[]
   evidenceAssessmentJobs   QualificationEvidenceAssessmentJob[]
   complianceAccesses       QualificationDocumentAccess[]
+  credentialVerifications  QualificationCredentialVerification[]
 
   @@unique([fixerId, version])
   @@index([status, createdAt])
@@ -371,48 +388,49 @@ model KycSubmission {
 }
 
 model KycDocument {
-  id                     String                              @id @default(uuid())
-  submissionId           String
-  submission             KycSubmission                       @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  documentType           String
-  storageKey             String
-  checksumSha256         String
-  contentType            String
-  sizeBytes              Int
-  encrypted              Boolean                             @default(true)
-  evidenceStatus         QualificationEvidenceStatus         @default(UNCHECKED)
-  isActive               Boolean                             @default(true)
-  lifecycleState         QualificationDocumentLifecycleState @default(PENDING_UPLOAD)
-  objectUploadedAt       DateTime?
-  readyAt                DateTime?
-  objectDeletedAt        DateTime?
-  cleanupAttempts        Int                                 @default(0)
-  cleanupErrorCode       String?
-  cleanupNextAttemptAt   DateTime?
-  cleanupClaimedAt       DateTime?
-  cleanupClaimedBy       String?
-  supersededAt           DateTime?
-  supersededById         String?
-  assessmentReasonCodes  Json?
-  assessedAt             DateTime?
-  extractedFields        Json?
-  identityNumberLast4    String?
-  identityNumberHash     String?
-  subjectNameHash        String?
-  identityExpiryDate     DateTime?
-  legalHoldUntil         DateTime?
-  extractionProvider     String?
-  extractionModel        String?
-  extractedAt            DateTime?
-  extractionErrorCode    String?
-  credentialVerification Json?
-  credentialVerifiedAt   DateTime?
-  expiresAt              DateTime?
-  retentionDeleteAt      DateTime?
-  createdAt              DateTime                            @default(now())
-  updatedAt              DateTime                            @updatedAt
-  complianceAccesses     QualificationDocumentAccess[]
-  assessmentJob          QualificationEvidenceAssessmentJob?
+  id                      String                                @id @default(uuid())
+  submissionId            String
+  submission              KycSubmission                         @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  documentType            String
+  storageKey              String
+  checksumSha256          String
+  contentType             String
+  sizeBytes               Int
+  encrypted               Boolean                               @default(true)
+  evidenceStatus          QualificationEvidenceStatus           @default(UNCHECKED)
+  isActive                Boolean                               @default(true)
+  lifecycleState          QualificationDocumentLifecycleState   @default(PENDING_UPLOAD)
+  objectUploadedAt        DateTime?
+  readyAt                 DateTime?
+  objectDeletedAt         DateTime?
+  cleanupAttempts         Int                                   @default(0)
+  cleanupErrorCode        String?
+  cleanupNextAttemptAt    DateTime?
+  cleanupClaimedAt        DateTime?
+  cleanupClaimedBy        String?
+  supersededAt            DateTime?
+  supersededById          String?
+  assessmentReasonCodes   Json?
+  assessedAt              DateTime?
+  extractedFields         Json?
+  identityNumberLast4     String?
+  identityNumberHash      String?
+  subjectNameHash         String?
+  identityExpiryDate      DateTime?
+  legalHoldUntil          DateTime?
+  extractionProvider      String?
+  extractionModel         String?
+  extractedAt             DateTime?
+  extractionErrorCode     String?
+  credentialVerification  Json?
+  credentialVerifiedAt    DateTime?
+  expiresAt               DateTime?
+  retentionDeleteAt       DateTime?
+  createdAt               DateTime                              @default(now())
+  updatedAt               DateTime                              @updatedAt
+  complianceAccesses      QualificationDocumentAccess[]
+  assessmentJob           QualificationEvidenceAssessmentJob?
+  credentialVerifications QualificationCredentialVerification[]
 
   @@index([submissionId])
   @@index([submissionId, isActive, documentType])
@@ -422,6 +440,32 @@ model KycDocument {
   @@index([identityNumberHash])
   @@index([subjectNameHash])
   @@map("kyc_documents")
+}
+
+model QualificationCredentialVerification {
+  id                   String                                    @id @default(uuid())
+  documentId           String
+  document             KycDocument                               @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  submissionId         String
+  submission           KycSubmission                             @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  status               QualificationCredentialVerificationStatus @default(PENDING)
+  issuerType           QualificationCredentialIssuerType?
+  issuerName           String?
+  credentialType       String?
+  verificationMethod   String
+  externalReference    String?
+  projectValueBaht     Int?
+  corporateEndorsement Boolean                                   @default(false)
+  sourceSnapshotHash   String?
+  reason               String
+  verifiedBy           String
+  verifiedAt           DateTime?
+  createdAt            DateTime                                  @default(now())
+
+  @@index([documentId, createdAt])
+  @@index([submissionId, status, createdAt])
+  @@index([status, createdAt])
+  @@map("qualification_credential_verifications")
 }
 
 model QualificationEvidenceAssessmentJob {
