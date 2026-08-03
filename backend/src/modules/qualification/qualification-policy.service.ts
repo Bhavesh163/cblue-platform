@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { FixerTier } from '@prisma/client';
 
-export const QUALIFICATION_POLICY_VERSION = 'cblue-fixer-qualification-v3';
+export const QUALIFICATION_POLICY_VERSION = 'cblue-fixer-qualification-v4';
 
 export type QualificationEvidenceInput = {
   yearsExperience: number;
@@ -33,7 +33,8 @@ const tierRank: Record<FixerTier, number> = {
 export class QualificationPolicyService {
   calculateTierCeiling(input: QualificationEvidenceInput): TierPolicyDecision {
     const standardQualified =
-      (input.yearsExperience > 3 && input.relatedCertificateCount >= 2) ||
+      input.yearsExperience > 3 ||
+      input.relatedCertificateCount >= 2 ||
       input.corporateCertificateCount >= 1 ||
       input.millionBahtCompletionCertificateCount >= 1;
     const corporateQualified =

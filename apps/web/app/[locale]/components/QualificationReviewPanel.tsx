@@ -70,6 +70,7 @@ type ReviewTask = {
     }>;
     evaluations?: Array<{
       provider: string;
+      policyVersion?: string | null;
       risk?: string | null;
       recommendedTier?: string | null;
       confidence?: number | null;
@@ -96,6 +97,9 @@ type ReviewTask = {
     }>;
   };
 };
+type QualificationDocument = NonNullable<
+  NonNullable<ReviewTask["submission"]>["documents"]
+>[number];
 
 type Props = { token: string; adminId: string };
 
@@ -106,6 +110,8 @@ const TIERS = [
   "SPECIALIST",
   "EXPERT",
 ] as const;
+
+const CURRENT_POLICY_VERSION = "cblue-fixer-qualification-v4";
 
 function allowedTiers(recommended?: string | null) {
   const ceiling = TIERS.indexOf(recommended as (typeof TIERS)[number]);
@@ -128,6 +134,9 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
   const [releasing, setReleasing] = useState("");
   const [deciding, setDeciding] = useState("");
   const [reevaluating, setReevaluating] = useState("");
+  const [autoReevaluated, setAutoReevaluated] = useState<
+    Record<string, boolean>
+  >({});
   const [decision, setDecision] = useState<
     Record<string, "APPROVE" | "REJECT">
   >({});
@@ -174,6 +183,54 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    const staleTask = tasks.find((task) => {
+      const evaluation = task.submission?.evaluations?.find(
+        (item) => item.provider === "DETERMINISTIC_POLICY",
+      );
+      return (
+        task.kind === "TIER" &&
+        task.status === "ASSIGNED" &&
+        task.assignedTo === adminId &&
+        Boolean(task.submission?.id) &&
+        evaluation?.policyVersion !== CURRENT_POLICY_VERSION &&
+        !autoReevaluated[task.id]
+      );
+    });
+    if (!staleTask?.submission?.id) return;
+    setAutoReevaluated((current) => ({ ...current, [staleTask.id]: true }));
+    setReevaluating(staleTask.submission.id);
+    void adminFetchResponse(
+      getApiUrl(
+        "/qualification/admin/submissions/" +
+          staleTask.submission.id +
+          "/re-evaluate",
+      ),
+      {
+        method: "POST",
+        headers: { Authorization: "Bearer " + token },
+      },
+    )
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(
+            await readAdminResponseError(
+              response,
+              "The qualification could not be re-evaluated.",
+            ),
+          );
+        }
+        await load();
+      })
+      .catch((cause: unknown) => {
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "Unable to re-evaluate qualification.",
+        );
+      })
+      .finally(() => setReevaluating(""));
+  }, [adminId, autoReevaluated, load, tasks, token]);
   async function claim(taskId: string) {
     setClaiming(taskId);
     setError("");
@@ -378,8 +435,17 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                   task.submission?.evaluations?.find(
                     (item) => item.provider === "DETERMINISTIC_POLICY",
                   ) || task.submission?.evaluations?.[0];
-                const documents = visibleQualificationDocuments(
+                const allDocuments = visibleQualificationDocuments(
                   task.submission?.documents || [],
+                ) as QualificationDocument[];
+                const documents = allDocuments.filter((document) =>
+                  task.kind === "KYC"
+                    ? ["id-front", "selfie-with-id"].includes(
+                        document.documentType,
+                      )
+                    : !["id-front", "selfie-with-id"].includes(
+                        document.documentType,
+                      ),
                 );
                 const selectedDecision = decision[task.id] || "APPROVE";
                 const approvalBlocked =
@@ -472,7 +538,13 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                             token={token}
                             submissionId={task.submission?.id}
                             documents={documents}
-                            onChanged={load}
+                            onChanged={async () => {
+                              if (task.kind === "TIER" && task.submission?.id) {
+                                await reevaluate(task.submission.id);
+                                return;
+                              }
+                              await load();
+                            }}
                             readOnly={Boolean(task.proposedAt)}
                           />
                         ) : (

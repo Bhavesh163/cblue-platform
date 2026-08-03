@@ -85,6 +85,7 @@ export class QualificationEvaluationService {
               take: 1,
               select: {
                 status: true,
+                credentialType: true,
                 issuerType: true,
                 issuerName: true,
                 projectValueBaht: true,
@@ -300,6 +301,7 @@ export class QualificationEvaluationService {
       extractedFields: Prisma.JsonValue | null;
       credentialVerifications?: Array<{
         status: string;
+        credentialType: string | null;
         issuerType: string | null;
         issuerName: string | null;
         projectValueBaht: number | null;
@@ -336,29 +338,35 @@ export class QualificationEvaluationService {
       (document) =>
         document.evidenceStatus === QualificationEvidenceStatus.VALIDATED,
     );
+    const latestVerification = (document: (typeof documents)[number]) =>
+      document.credentialVerifications?.[0] || null;
     const isCredentialEvidence = (document: (typeof documents)[number]) => {
+      const verification = latestVerification(document);
+      if (verification?.status !== 'VERIFIED') return false;
       if (
         document.documentType === 'education-certificate' ||
         document.documentType === 'professional-certificate'
-      )
+      ) {
         return true;
+      }
       if (document.documentType !== 'portfolio') return false;
-      const fields = extracted(document);
-      const detected = textValue(fields.detectedDocumentType).toLowerCase();
-      const level = textValue(fields.credentialLevel).toLowerCase();
+      const credentialType = textValue(
+        verification.credentialType,
+      ).toLowerCase();
       return (
-        detected.includes('certificate') ||
-        detected.includes('degree') ||
-        detected.includes('diploma') ||
-        detected.includes('toeic') ||
-        level.includes('bachelor') ||
-        level.includes('master') ||
-        level.includes('doctor')
+        ['EDUCATIONAL_INSTITUTION', 'PROFESSIONAL_BODY'].includes(
+          verification.issuerType || '',
+        ) ||
+        credentialType.includes('certificate') ||
+        credentialType.includes('degree') ||
+        credentialType.includes('diploma') ||
+        credentialType.includes('toeic') ||
+        credentialType.includes('bachelor') ||
+        credentialType.includes('master') ||
+        credentialType.includes('doctor')
       );
     };
     const credentialDocuments = validatedDocuments.filter(isCredentialEvidence);
-    const latestVerification = (document: (typeof documents)[number]) =>
-      document.credentialVerifications?.[0] || null;
     const verifiedCorporateEvidence = (
       document: (typeof documents)[number],
     ) => {
@@ -387,9 +395,12 @@ export class QualificationEvaluationService {
         1_000_000,
     ).length;
     const hasEligibleDegree = credentialDocuments.some((document) => {
-      const level = textValue(
-        extracted(document).credentialLevel,
-      ).toLowerCase();
+      const level = [
+        textValue(extracted(document).credentialLevel),
+        textValue(latestVerification(document)?.credentialType),
+      ]
+        .join(' ')
+        .toLowerCase();
       return level.includes('master') || level.includes('doctor');
     });
 

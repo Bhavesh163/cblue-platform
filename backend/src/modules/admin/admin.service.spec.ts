@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AdminService } from './admin.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { FixerStatus, OrderStatus } from '@prisma/client';
 
 describe('AdminService', () => {
@@ -11,6 +11,7 @@ describe('AdminService', () => {
     fixer: Record<string, jest.Mock>;
     order: Record<string, jest.Mock>;
     user: Record<string, jest.Mock>;
+    kycSubmission: Record<string, jest.Mock>;
   };
   let eventEmitter: { emit: jest.Mock };
 
@@ -30,6 +31,9 @@ describe('AdminService', () => {
       },
       user: {
         count: jest.fn(),
+      },
+      kycSubmission: {
+        findFirst: jest.fn(),
       },
     };
     eventEmitter = { emit: jest.fn() };
@@ -117,18 +121,45 @@ describe('AdminService', () => {
     });
   });
   describe('getFixerDirectory', () => {
-    it('returns authoritative service area and recent incident windows', async () => {
+    it('returns normalized service area and participant-authored incidents', async () => {
       const now = new Date();
       prisma.fixer.findMany.mockResolvedValue([
         {
           id: 'fixer-1',
-          companyAddress: { subdistrict: 'Saphan Song' },
+          serviceProvince: null,
+          serviceDistrict: null,
+          servicePostalCode: null,
+          companyAddress: {
+            province: 'Bangkok',
+            district: 'Wang Thonglang',
+            subdistrict: 'Saphan Song',
+            postalCode: '10310',
+          },
           orders: [
             {
+              id: 'order-1',
+              userId: 'customer-1',
               workflowActions: [
-                { action: 'partner-decline', createdAt: now },
-                { action: 'customer-cancel', createdAt: now },
+                {
+                  action: 'partner-decline',
+                  actorUserId: 'user-1',
+                  payload: { reason: 'Schedule conflict' },
+                  createdAt: now,
+                },
+                {
+                  action: 'partner-decline',
+                  actorUserId: 'other-user',
+                  payload: { reason: 'Must not count' },
+                  createdAt: now,
+                },
+                {
+                  action: 'customer-cancel',
+                  actorUserId: 'customer-1',
+                  payload: { reason: 'Scope changed' },
+                  createdAt: now,
+                },
               ],
+              statusHistory: [],
             },
           ],
           qualificationSubmissions: [],
@@ -139,7 +170,9 @@ describe('AdminService', () => {
       prisma.fixer.count.mockResolvedValue(1);
 
       const result = await service.getFixerDirectory({
-        subdistrict: 'Saphan',
+        province: 'Bangkok',
+        district: 'Wang Thonglang',
+        subdistrict: 'Saphan Song',
         maxDeclines90Days: 1,
         maxCancellations12Months: 1,
       });
@@ -147,13 +180,31 @@ describe('AdminService', () => {
       expect(result.rows).toEqual([
         expect.objectContaining({
           id: 'fixer-1',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Wang Thonglang',
           serviceSubdistrict: 'Saphan Song',
+          servicePostalCode: '10310',
           declineCount90Days: 1,
           cancellationCount12Months: 1,
+          recentIncidents: expect.arrayContaining([
+            expect.objectContaining({
+              eventType: 'PARTNER_DECLINE',
+              reason: 'Schedule conflict',
+            }),
+            expect.objectContaining({
+              eventType: 'CUSTOMER_CANCEL',
+              reason: 'Scope changed',
+            }),
+          ]),
         }),
       ]);
       expect(prisma.fixer.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
+          where: expect.objectContaining({
+            AND: expect.arrayContaining([
+              expect.objectContaining({ OR: expect.any(Array) }),
+            ]),
+          }),
           select: expect.objectContaining({
             companyAddress: true,
             orders: expect.any(Object),
@@ -188,6 +239,28 @@ describe('AdminService', () => {
     });
   });
 
+  describe('getAllOrders', () => {
+    it('returns a server-owned budget from persisted order values', async () => {
+      prisma.order.findMany.mockResolvedValue([
+        {
+          id: 'order-1',
+          estimatedPrice: null,
+          finalPrice: null,
+          budgetBreakdown: {
+            items: [{ quantity: 2, unitRate: 1500 }, { total: 2500 }],
+          },
+        },
+      ]);
+      prisma.order.count.mockResolvedValue(1);
+
+      const result = await service.getAllOrders({ page: 1, limit: 20 });
+
+      expect(result.orders[0]).toEqual(
+        expect.objectContaining({ id: 'order-1', budget: 5500 }),
+      );
+    });
+  });
+
   describe('approveFixer', () => {
     it('should throw NotFoundException if fixer not found', async () => {
       prisma.fixer.findUnique.mockResolvedValue(null);
@@ -199,11 +272,29 @@ describe('AdminService', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('should approve fixer and emit event', async () => {
+    it('blocks the legacy approval path when KYC is not approved', async () => {
       prisma.fixer.findUnique.mockResolvedValue({
         id: 'fixer-1',
         userId: 'user-1',
       });
+      prisma.kycSubmission.findFirst.mockResolvedValue({
+        status: 'NEEDS_REVIEW',
+      });
+
+      await expect(
+        service.approveFixer('fixer-1', {
+          status: FixerStatus.APPROVED,
+        }),
+      ).rejects.toThrow(ConflictException);
+      expect(prisma.fixer.update).not.toHaveBeenCalled();
+    });
+
+    it('should approve a KYC-approved fixer and emit event', async () => {
+      prisma.fixer.findUnique.mockResolvedValue({
+        id: 'fixer-1',
+        userId: 'user-1',
+      });
+      prisma.kycSubmission.findFirst.mockResolvedValue({ status: 'APPROVED' });
       prisma.fixer.update.mockResolvedValue({
         id: 'fixer-1',
         status: FixerStatus.APPROVED,
@@ -222,7 +313,6 @@ describe('AdminService', () => {
       );
     });
   });
-
   describe('manualAssign', () => {
     it('should throw if order not found', async () => {
       prisma.order.findUnique.mockResolvedValue(null);

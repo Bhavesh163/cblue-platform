@@ -20,10 +20,11 @@ KYC is a prerequisite for fixer and pro eligibility and is separate from tier cl
 After KYC approval, blue AI evaluates portfolio and credential evidence separately.
 
 - Economy is the baseline.
-- Standard is eligible when the applicant has more than three years of experience and at least two validated related credentials, including qualifying Bachelor, Master, or Doctorate evidence.
+- Standard is eligible when the applicant has more than three years of experience, at least two validated related educational or professional credentials, a validated corporate certificate, or a validated completion certificate for a project worth at least one million baht.
 - Corporate, Specialist, and Expert require the deterministic evidence ceiling and single-administrator administrator approval.
 - A weak portfolio lowers the recommended tier; it does not invalidate otherwise valid KYC.
-- A document uploaded as portfolio may count as credential evidence only after persisted document extraction identifies its credential type and an administrator validates it.
+- A document uploaded as portfolio may count as credential evidence only after an administrator verifies its educational or professional provenance. Automated extraction is advisory and cannot establish credential eligibility by itself.
+- The deterministic recommendation is the maximum tier. An administrator may approve that tier or any lower eligible tier in the same review session.
 
 ## Admin responsibilities
 
@@ -37,4 +38,3 @@ The admin console provides:
 - completed payment revenue by daily, weekly, and monthly periods.
 
 The customer and provider applications receive only server-owned qualification and workflow state through the CBLUE API and the BLUE bridge.
-

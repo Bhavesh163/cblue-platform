@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { getApiUrl } from "../lib/api";
 import { adminFetchResponse, readAdminResponseError } from "./adminApi";
+import {
+  THAI_DISTRICTS,
+  getDistrictsForProvince,
+} from "../lib/thai-address-data";
+import { getSubdistrictsForDistrict } from "../lib/thai-subdistrict-data";
 import QualificationEvidenceControls from "./QualificationEvidenceControls";
 
 type DirectoryRow = {
@@ -23,6 +28,12 @@ type DirectoryRow = {
     finalPrice?: number | string;
   }> | null;
   declineCount90Days?: number;
+  recentIncidents?: Array<{
+    orderId: string;
+    eventType: "PARTNER_DECLINE" | "CUSTOMER_CANCEL";
+    reason?: string | null;
+    createdAt: string;
+  }>;
   cancellationCount12Months?: number;
   user?: {
     name?: string | null;
@@ -99,13 +110,6 @@ type Detail = {
 
 type Props = { token: string };
 
-const TEXT_FILTERS = [
-  ["province", "Province"],
-  ["district", "District"],
-  ["subdistrict", "Subdistrict"],
-  ["service", "Service"],
-] as const;
-
 const NUMBER_FILTERS = [
   ["minRating", "Minimum rating", "0", "5"],
   ["maxDeclines90Days", "Maximum declines (90 days)", "0", undefined],
@@ -129,6 +133,9 @@ function addressValue(detail: Detail, key: string) {
 export default function AdminPartnerDirectory({ token }: Props) {
   const [rows, setRows] = useState<DirectoryRow[]>([]);
   const [selected, setSelected] = useState<Detail | null>(null);
+  const [selectedSummary, setSelectedSummary] = useState<DirectoryRow | null>(
+    null,
+  );
   const [filters, setFilters] = useState({
     province: "",
     district: "",
@@ -139,6 +146,14 @@ export default function AdminPartnerDirectory({ token }: Props) {
     maxDeclines90Days: "",
     maxCancellations12Months: "",
   });
+  const provinceOptions = Object.keys(THAI_DISTRICTS).sort((left, right) =>
+    left.localeCompare(right, "th"),
+  );
+  const districtOptions = getDistrictsForProvince(filters.province);
+  const subdistrictOptions = getSubdistrictsForDistrict(
+    filters.province,
+    filters.district,
+  );
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState("");
   const [error, setError] = useState("");
@@ -183,6 +198,7 @@ export default function AdminPartnerDirectory({ token }: Props) {
 
   async function openDetail(fixerId: string) {
     setDetailLoading(fixerId);
+    setSelectedSummary(rows.find((row) => row.id === fixerId) || null);
     setError("");
     try {
       const response = await adminFetchResponse(
@@ -192,13 +208,14 @@ export default function AdminPartnerDirectory({ token }: Props) {
           headers: { Authorization: "Bearer " + token },
         },
       );
-      if (!response.ok)
+      if (!response.ok) {
         throw new Error(
           await readAdminResponseError(
             response,
             "Unable to load provider detail.",
           ),
         );
+      }
       setSelected((await response.json()) as Detail);
     } catch (cause) {
       setError(
@@ -238,21 +255,84 @@ export default function AdminPartnerDirectory({ token }: Props) {
         </p>
       )}
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {TEXT_FILTERS.map(([key, label]) => (
-          <label key={key} className="text-xs font-semibold text-slate-600">
-            {label}
-            <input
-              value={filters[key as keyof typeof filters]}
-              onChange={(event) =>
-                setFilters((current) => ({
-                  ...current,
-                  [key]: event.target.value,
-                }))
-              }
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900"
-            />
-          </label>
-        ))}
+        <label className="text-xs font-semibold text-slate-600">
+          Province
+          <select
+            value={filters.province}
+            onChange={(event) =>
+              setFilters((current) => ({
+                ...current,
+                province: event.target.value,
+                district: "",
+                subdistrict: "",
+              }))
+            }
+            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900"
+          >
+            <option value="">All provinces</option>
+            {provinceOptions.map((province) => (
+              <option key={province} value={province}>
+                {province}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs font-semibold text-slate-600">
+          District
+          <select
+            value={filters.district}
+            disabled={!filters.province}
+            onChange={(event) =>
+              setFilters((current) => ({
+                ...current,
+                district: event.target.value,
+                subdistrict: "",
+              }))
+            }
+            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900 disabled:bg-slate-100"
+          >
+            <option value="">All districts</option>
+            {districtOptions.map((district) => (
+              <option key={district} value={district}>
+                {district}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs font-semibold text-slate-600">
+          Subdistrict
+          <select
+            value={filters.subdistrict}
+            disabled={!filters.district}
+            onChange={(event) =>
+              setFilters((current) => ({
+                ...current,
+                subdistrict: event.target.value,
+              }))
+            }
+            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900 disabled:bg-slate-100"
+          >
+            <option value="">All subdistricts</option>
+            {subdistrictOptions.map((subdistrict) => (
+              <option key={subdistrict} value={subdistrict}>
+                {subdistrict}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs font-semibold text-slate-600">
+          Service
+          <input
+            value={filters.service}
+            onChange={(event) =>
+              setFilters((current) => ({
+                ...current,
+                service: event.target.value,
+              }))
+            }
+            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900"
+          />
+        </label>
         <label className="text-xs font-semibold text-slate-600">
           Tier
           <select
@@ -374,13 +454,16 @@ export default function AdminPartnerDirectory({ token }: Props) {
                 {displayName(selected)}
               </h3>
               <p className="text-sm text-slate-600">
-                Status {selected.status || "-"} / Tier {selected.tier || "-"} �
+                Status {selected.status || "-"} / Tier {selected.tier || "-"} |
                 KYC {selected.verified ? "approved" : "pending"}
               </p>
             </div>
             <button
               type="button"
-              onClick={() => setSelected(null)}
+              onClick={() => {
+                setSelected(null);
+                setSelectedSummary(null);
+              }}
               className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700"
             >
               Close detail
@@ -420,6 +503,33 @@ export default function AdminPartnerDirectory({ token }: Props) {
                   .join(", ") || "Not recorded"}
               </p>
             </div>
+            {selectedSummary?.recentIncidents?.length ? (
+              <div className="sm:col-span-2 xl:col-span-4">
+                <p className="text-xs font-semibold text-slate-500">
+                  Recent declines and cancellations
+                </p>
+                <div className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
+                  {selectedSummary.recentIncidents.map((incident, index) => (
+                    <div
+                      key={`${incident.orderId}-${incident.eventType}-${incident.createdAt}-${index}`}
+                      className="grid gap-1 px-3 py-2 text-sm md:grid-cols-[180px_1fr_180px]"
+                    >
+                      <span className="font-semibold text-slate-800">
+                        {incident.eventType === "PARTNER_DECLINE"
+                          ? "Partner decline"
+                          : "Customer cancellation"}
+                      </span>
+                      <span className="text-slate-700">
+                        {incident.reason || "No reason supplied"}
+                      </span>
+                      <span className="text-slate-500">
+                        {new Date(incident.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <div className="sm:col-span-2 xl:col-span-4">
               <p className="text-xs font-semibold text-slate-500">Profile</p>
               <p className="text-sm text-slate-800">
@@ -462,7 +572,7 @@ export default function AdminPartnerDirectory({ token }: Props) {
               className="mt-5 rounded-lg border border-slate-200 bg-white p-3"
             >
               <h4 className="font-semibold text-slate-900">
-                Qualification submission v{submission.version} �{" "}
+                Qualification submission v{submission.version} |{" "}
                 {submission.status}
               </h4>
               <p className="mt-1 text-xs text-slate-500">
@@ -484,7 +594,7 @@ export default function AdminPartnerDirectory({ token }: Props) {
                 {submission.evaluations.map((evaluation) => (
                   <p key={evaluation.id}>
                     {evaluation.provider}:{" "}
-                    {evaluation.recommendedTier || "No recommendation"} �
+                    {evaluation.recommendedTier || "No recommendation"} |
                     confidence {evaluation.confidence ?? "-"}
                   </p>
                 ))}

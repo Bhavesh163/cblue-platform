@@ -3,7 +3,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { DemandGapStatus, PaymentStatus, Prisma } from '@prisma/client';
+import {
+  DemandGapStatus,
+  OrderStatus,
+  PaymentStatus,
+  Prisma,
+} from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateDemandGapDto } from './dto/update-demand-gap.dto';
 
@@ -41,6 +46,7 @@ export class AdminOperationsService {
       propertyEvents,
       demandGaps,
       demandOccurrences,
+      orderStatusEvents,
     ] = await Promise.all([
       this.prisma.payment.findMany({
         where: { status: PaymentStatus.COMPLETED, paidAt: { gte: since } },
@@ -143,44 +149,128 @@ export class AdminOperationsService {
           occurredAt: true,
         },
       }),
+      this.prisma.orderStatusHistory.findMany({
+        where: {
+          status: OrderStatus.CANCELLED,
+          createdAt: { gte: since },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 2000,
+        select: {
+          id: true,
+          changedBy: true,
+          note: true,
+          createdAt: true,
+          order: {
+            select: {
+              id: true,
+              userId: true,
+              user: { select: { name: true, email: true } },
+              fixer: {
+                select: {
+                  userId: true,
+                  user: { select: { name: true, email: true } },
+                },
+              },
+            },
+          },
+        },
+      }),
     ]);
 
-    const incidents: IncidentRow[] = [
-      ...fixerActions.map((event) => {
-        const partnerActor = event.order.fixer?.userId === event.actorUserId;
-        const actor = partnerActor ? event.order.fixer?.user : event.order.user;
-        return {
-          id: event.id,
-          reference: event.order.id,
-          workflowType: 'FIXER' as const,
-          eventType:
-            event.action === 'partner-decline'
+    const actionIncidents: IncidentRow[] = [
+      ...fixerActions.flatMap((event) => {
+        const partnerAuthored =
+          event.action === 'partner-decline' &&
+          event.order.fixer?.userId === event.actorUserId;
+        const customerAuthored =
+          event.action === 'customer-cancel' &&
+          event.order.userId === event.actorUserId;
+        if (!partnerAuthored && !customerAuthored) return [];
+        const actor = partnerAuthored
+          ? event.order.fixer?.user
+          : event.order.user;
+        return [
+          {
+            id: event.id,
+            reference: event.order.id,
+            workflowType: 'FIXER' as const,
+            eventType: partnerAuthored
               ? ('PARTNER_DECLINE' as const)
               : ('CUSTOMER_CANCEL' as const),
-          actorId: event.actorUserId,
-          actorName: actor?.name || actor?.email || 'CBLUE user',
-          reason: this.readReason(event.payload),
-          createdAt: event.createdAt,
-        };
+            actorId: event.actorUserId,
+            actorName: actor?.name || actor?.email || 'CBLUE user',
+            reason: this.readReason(event.payload),
+            createdAt: event.createdAt,
+          },
+        ];
       }),
-      ...propertyEvents.map((event) => {
-        const partnerActor = event.inquiry.listerUserId === event.actorId;
-        return {
-          id: event.id,
-          reference: event.inquiry.poNumber,
-          workflowType: 'PROPERTY' as const,
-          eventType:
-            event.action === 'partner-decline'
+      ...propertyEvents.flatMap((event) => {
+        const partnerAuthored =
+          event.action === 'partner-decline' &&
+          event.inquiry.listerUserId === event.actorId;
+        const customerAuthored =
+          event.action === 'customer-cancel' &&
+          event.inquiry.customerId === event.actorId;
+        if (!partnerAuthored && !customerAuthored) return [];
+        return [
+          {
+            id: event.id,
+            reference: event.inquiry.poNumber,
+            workflowType: 'PROPERTY' as const,
+            eventType: partnerAuthored
               ? ('PARTNER_DECLINE' as const)
               : ('CUSTOMER_CANCEL' as const),
-          actorId: event.actorId,
-          actorName: partnerActor
-            ? event.inquiry.listerName
-            : event.inquiry.customerName,
-          reason: event.note?.trim() || this.readReason(event.metadata),
-          createdAt: event.createdAt,
-        };
+            actorId: event.actorId,
+            actorName: partnerAuthored
+              ? event.inquiry.listerName
+              : event.inquiry.customerName,
+            reason: event.note?.trim() || this.readReason(event.metadata),
+            createdAt: event.createdAt,
+          },
+        ];
       }),
+    ];
+    const historyIncidents: IncidentRow[] = orderStatusEvents.flatMap(
+      (event) => {
+        const partnerAuthored = event.order.fixer?.userId === event.changedBy;
+        const customerAuthored = event.order.userId === event.changedBy;
+        if (!event.changedBy || (!partnerAuthored && !customerAuthored))
+          return [];
+        const actor = partnerAuthored
+          ? event.order.fixer?.user
+          : event.order.user;
+        return [
+          {
+            id: event.id,
+            reference: event.order.id,
+            workflowType: 'FIXER' as const,
+            eventType: partnerAuthored
+              ? ('PARTNER_DECLINE' as const)
+              : ('CUSTOMER_CANCEL' as const),
+            actorId: event.changedBy,
+            actorName: actor?.name || actor?.email || 'CBLUE user',
+            reason: this.readStatusReason(event.note),
+            createdAt: event.createdAt,
+          },
+        ];
+      },
+    );
+    const incidentKey = (event: IncidentRow) =>
+      `${event.workflowType}:${event.reference}:${event.eventType}`;
+    const historyByKey = new Map(
+      historyIncidents.map((event) => [incidentKey(event), event]),
+    );
+    const actionKeys = new Set(actionIncidents.map(incidentKey));
+    const incidents = [
+      ...actionIncidents.map((event) => ({
+        ...event,
+        reason:
+          event.reason || historyByKey.get(incidentKey(event))?.reason || null,
+      })),
+      ...historyIncidents.filter(
+        (event) => !actionKeys.has(incidentKey(event)),
+      ),
     ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
     const revenueDetails = payments.map((payment) => ({
@@ -261,6 +351,15 @@ export class AdminOperationsService {
     return null;
   }
 
+  private readStatusReason(note: string | null): string | null {
+    const value = note?.trim();
+    if (!value) return null;
+    const reason = value
+      .replace(/^Customer cancelled\.\s*Reason:\s*/i, '')
+      .replace(/^Partner declined\.\s*Reason:\s*/i, '')
+      .trim();
+    return reason || null;
+  }
   private buildRepeatRisk(incidents: IncidentRow[]) {
     const byActor = new Map<string, IncidentRow[]>();
     for (const incident of incidents) {

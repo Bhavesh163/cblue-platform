@@ -7,6 +7,7 @@ describe('AdminOperationsService', () => {
     payment: { findMany: jest.fn() },
     fixerWorkflowAction: { findMany: jest.fn() },
     propertyInquiryWorkflowEvent: { findMany: jest.fn() },
+    orderStatusHistory: { findMany: jest.fn() },
     unmatchedServiceDemand: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
@@ -22,6 +23,7 @@ describe('AdminOperationsService', () => {
     prisma.payment.findMany.mockResolvedValue([]);
     prisma.fixerWorkflowAction.findMany.mockResolvedValue([]);
     prisma.propertyInquiryWorkflowEvent.findMany.mockResolvedValue([]);
+    prisma.orderStatusHistory.findMany.mockResolvedValue([]);
     prisma.unmatchedServiceDemand.findMany.mockResolvedValue([]);
     prisma.unmatchedServiceDemandOccurrence.findMany.mockResolvedValue([]);
   });
@@ -133,6 +135,99 @@ describe('AdminOperationsService', () => {
     ]);
   });
 
+  it('recovers a customer cancellation reason from persisted status history', async () => {
+    const createdAt = new Date('2026-07-16T12:41:00.000Z');
+    prisma.fixerWorkflowAction.findMany.mockResolvedValue([
+      {
+        id: 'action-1',
+        actorUserId: 'customer-1',
+        action: 'customer-cancel',
+        payload: null,
+        createdAt,
+        order: {
+          id: 'order-1',
+          serviceCategory: 'LANDSCAPING',
+          userId: 'customer-1',
+          user: { name: 'Customer', email: null },
+          fixer: {
+            userId: 'partner-1',
+            user: { name: 'Partner', email: null },
+          },
+        },
+      },
+    ]);
+    prisma.orderStatusHistory.findMany.mockResolvedValue([
+      {
+        id: 'history-1',
+        changedBy: 'customer-1',
+        note: 'Customer cancelled. Reason: Project scope changed',
+        createdAt,
+        order: {
+          id: 'order-1',
+          userId: 'customer-1',
+          user: { name: 'Customer', email: null },
+          fixer: {
+            userId: 'partner-1',
+            user: { name: 'Partner', email: null },
+          },
+        },
+      },
+    ]);
+
+    const result = await service.getOverview(90);
+
+    expect(result.incidents).toEqual([
+      expect.objectContaining({
+        eventType: 'CUSTOMER_CANCEL',
+        actorId: 'customer-1',
+        reason: 'Project scope changed',
+      }),
+    ]);
+  });
+
+  it('ignores incident records not authored by the owning participant', async () => {
+    const createdAt = new Date('2026-07-16T12:41:00.000Z');
+    prisma.fixerWorkflowAction.findMany.mockResolvedValue([
+      {
+        id: 'action-1',
+        actorUserId: 'other-user',
+        action: 'partner-decline',
+        payload: { reason: 'Must not appear' },
+        createdAt,
+        order: {
+          id: 'order-1',
+          serviceCategory: 'LANDSCAPING',
+          userId: 'customer-1',
+          user: { name: 'Customer', email: null },
+          fixer: {
+            userId: 'partner-1',
+            user: { name: 'Partner', email: null },
+          },
+        },
+      },
+    ]);
+    prisma.orderStatusHistory.findMany.mockResolvedValue([
+      {
+        id: 'history-1',
+        changedBy: 'other-user',
+        note: 'Customer cancelled. Reason: Must not appear',
+        createdAt,
+        order: {
+          id: 'order-1',
+          userId: 'customer-1',
+          user: { name: 'Customer', email: null },
+          fixer: {
+            userId: 'partner-1',
+            user: { name: 'Partner', email: null },
+          },
+        },
+      },
+    ]);
+
+    const result = await service.getOverview(90);
+
+    expect(result.incidents).toEqual([]);
+  });
   it('requires an auditable note before closing an unmatched demand gap', async () => {
     prisma.unmatchedServiceDemand.findUnique.mockResolvedValue({ id: 'gap-1' });
 

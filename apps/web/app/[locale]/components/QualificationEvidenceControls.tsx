@@ -502,150 +502,153 @@ export default function QualificationEvidenceControls({
             </div>
           )}
 
-          {!readOnly && (
-            <details className="mt-3 border-t border-slate-100 pt-3">
-              <summary className="cursor-pointer text-xs font-semibold text-slate-600">
-                Credential verification
-              </summary>
-              <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-                <select
-                  aria-label={"Credential result for " + document.documentType}
-                  value={credentialStatus[document.id] || ""}
-                  onChange={(event) =>
-                    setCredentialStatus((current) => ({
-                      ...current,
-                      [document.id]: event.target.value as CredentialStatus,
-                    }))
-                  }
-                  className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-700"
-                >
-                  <option value="">Credential result</option>
-                  {CREDENTIAL_STATUSES.map((value) => (
-                    <option key={value} value={value}>
-                      {value}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  aria-label={
-                    "Credential issuer type for " + document.documentType
-                  }
-                  value={credentialIssuerType[document.id] || ""}
-                  onChange={(event) =>
-                    setCredentialIssuerType((current) => ({
-                      ...current,
-                      [document.id]: event.target.value as IssuerType,
-                    }))
-                  }
-                  className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-700"
-                >
-                  <option value="">Issuer type</option>
-                  {ISSUER_TYPES.map((value) => (
-                    <option key={value} value={value}>
-                      {value}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  aria-label={
-                    "Credential issuer name for " + document.documentType
-                  }
-                  value={credentialIssuerName[document.id] || ""}
-                  onChange={(event) =>
-                    setCredentialIssuerName((current) => ({
-                      ...current,
-                      [document.id]: event.target.value,
-                    }))
-                  }
-                  placeholder="Issuer name"
-                  className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-700"
-                />
-                <input
-                  aria-label={
-                    "Credential verification method for " +
-                    document.documentType
-                  }
-                  value={credentialMethod[document.id] || ""}
-                  onChange={(event) =>
-                    setCredentialMethod((current) => ({
-                      ...current,
-                      [document.id]: event.target.value,
-                    }))
-                  }
-                  placeholder="Verification method"
-                  className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-700"
-                />
-                <input
-                  aria-label={
-                    "Credential reference for " + document.documentType
-                  }
-                  value={credentialReference[document.id] || ""}
-                  onChange={(event) =>
-                    setCredentialReference((current) => ({
-                      ...current,
-                      [document.id]: event.target.value,
-                    }))
-                  }
-                  placeholder="Source reference"
-                  className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-700"
-                />
-                <input
-                  aria-label={
-                    "Verified project value for " + document.documentType
-                  }
-                  type="number"
-                  min="0"
-                  value={credentialProjectValue[document.id] || ""}
-                  onChange={(event) =>
-                    setCredentialProjectValue((current) => ({
-                      ...current,
-                      [document.id]: event.target.value,
-                    }))
-                  }
-                  placeholder="Project value (THB)"
-                  className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-700"
-                />
-                <label className="flex items-center gap-2 px-1 text-xs font-semibold text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(credentialEndorsement[document.id])}
+          {!readOnly &&
+            !["id-front", "selfie-with-id"].includes(document.documentType) && (
+              <details className="mt-3 border-t border-slate-100 pt-3">
+                <summary className="cursor-pointer text-xs font-semibold text-slate-600">
+                  Credential verification
+                </summary>
+                <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+                  <select
+                    aria-label={
+                      "Credential result for " + document.documentType
+                    }
+                    value={credentialStatus[document.id] || ""}
                     onChange={(event) =>
-                      setCredentialEndorsement((current) => ({
+                      setCredentialStatus((current) => ({
                         ...current,
-                        [document.id]: event.target.checked,
+                        [document.id]: event.target.value as CredentialStatus,
                       }))
                     }
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-700"
+                  >
+                    <option value="">Credential result</option>
+                    {CREDENTIAL_STATUSES.map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    aria-label={
+                      "Credential issuer type for " + document.documentType
+                    }
+                    value={credentialIssuerType[document.id] || ""}
+                    onChange={(event) =>
+                      setCredentialIssuerType((current) => ({
+                        ...current,
+                        [document.id]: event.target.value as IssuerType,
+                      }))
+                    }
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-700"
+                  >
+                    <option value="">Issuer type</option>
+                    {ISSUER_TYPES.map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    aria-label={
+                      "Credential issuer name for " + document.documentType
+                    }
+                    value={credentialIssuerName[document.id] || ""}
+                    onChange={(event) =>
+                      setCredentialIssuerName((current) => ({
+                        ...current,
+                        [document.id]: event.target.value,
+                      }))
+                    }
+                    placeholder="Issuer name"
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-700"
                   />
-                  Corporate endorsement
-                </label>
-                <input
-                  aria-label={
-                    "Credential verification reason for " +
-                    document.documentType
-                  }
-                  value={credentialReason[document.id] || ""}
-                  onChange={(event) =>
-                    setCredentialReason((current) => ({
-                      ...current,
-                      [document.id]: event.target.value,
-                    }))
-                  }
-                  placeholder="Verification reason"
-                  className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-700"
-                />
-                <button
-                  type="button"
-                  onClick={() => void saveCredentialVerification(document.id)}
-                  disabled={busy === "credential:" + document.id}
-                  className="rounded-lg bg-sky-700 px-3 py-2 text-xs font-bold text-white hover:bg-sky-800 disabled:opacity-60"
-                >
-                  {busy === "credential:" + document.id
-                    ? "Saving..."
-                    : "Save credential review"}
-                </button>
-              </div>
-            </details>
-          )}
+                  <input
+                    aria-label={
+                      "Credential verification method for " +
+                      document.documentType
+                    }
+                    value={credentialMethod[document.id] || ""}
+                    onChange={(event) =>
+                      setCredentialMethod((current) => ({
+                        ...current,
+                        [document.id]: event.target.value,
+                      }))
+                    }
+                    placeholder="Verification method"
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-700"
+                  />
+                  <input
+                    aria-label={
+                      "Credential reference for " + document.documentType
+                    }
+                    value={credentialReference[document.id] || ""}
+                    onChange={(event) =>
+                      setCredentialReference((current) => ({
+                        ...current,
+                        [document.id]: event.target.value,
+                      }))
+                    }
+                    placeholder="Source reference"
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-700"
+                  />
+                  <input
+                    aria-label={
+                      "Verified project value for " + document.documentType
+                    }
+                    type="number"
+                    min="0"
+                    value={credentialProjectValue[document.id] || ""}
+                    onChange={(event) =>
+                      setCredentialProjectValue((current) => ({
+                        ...current,
+                        [document.id]: event.target.value,
+                      }))
+                    }
+                    placeholder="Project value (THB)"
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-700"
+                  />
+                  <label className="flex items-center gap-2 px-1 text-xs font-semibold text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(credentialEndorsement[document.id])}
+                      onChange={(event) =>
+                        setCredentialEndorsement((current) => ({
+                          ...current,
+                          [document.id]: event.target.checked,
+                        }))
+                      }
+                    />
+                    Corporate endorsement
+                  </label>
+                  <input
+                    aria-label={
+                      "Credential verification reason for " +
+                      document.documentType
+                    }
+                    value={credentialReason[document.id] || ""}
+                    onChange={(event) =>
+                      setCredentialReason((current) => ({
+                        ...current,
+                        [document.id]: event.target.value,
+                      }))
+                    }
+                    placeholder="Verification reason"
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-700"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void saveCredentialVerification(document.id)}
+                    disabled={busy === "credential:" + document.id}
+                    className="rounded-lg bg-sky-700 px-3 py-2 text-xs font-bold text-white hover:bg-sky-800 disabled:opacity-60"
+                  >
+                    {busy === "credential:" + document.id
+                      ? "Saving..."
+                      : "Save credential review"}
+                  </button>
+                </div>
+              </details>
+            )}
 
           <details className="mt-3 border-t border-slate-100 pt-3">
             <summary className="cursor-pointer text-xs font-semibold text-slate-600">

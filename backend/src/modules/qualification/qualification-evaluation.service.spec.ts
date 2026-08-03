@@ -155,7 +155,7 @@ describe('QualificationEvaluationService', () => {
     expect(tx.fixer.update).not.toHaveBeenCalled();
   });
 
-  it('uses only validated extracted degree and project-value evidence in tier inputs', async () => {
+  it('uses only validated, verified credential and project evidence in tier inputs', async () => {
     prisma.kycSubmission.findFirst.mockResolvedValue({
       id: 'submission-evidence',
       status: 'APPROVED',
@@ -178,6 +178,17 @@ describe('QualificationEvaluationService', () => {
           documentType: 'education-certificate',
           evidenceStatus: 'VALIDATED',
           extractedFields: { fields: { credentialLevel: 'master' } },
+          credentialVerifications: [
+            {
+              status: 'VERIFIED',
+              credentialType: 'Master degree',
+              issuerType: 'EDUCATIONAL_INSTITUTION',
+              issuerName: 'Accredited University',
+              projectValueBaht: null,
+              corporateEndorsement: false,
+              verifiedAt: new Date('2026-08-02T00:00:00.000Z'),
+            },
+          ],
         },
         {
           id: 'project',

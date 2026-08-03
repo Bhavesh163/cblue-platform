@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   Prisma,
   FixerStatus,
@@ -70,17 +75,49 @@ export class AdminService {
   }) {
     const page = Math.max(1, query.page || 1);
     const limit = Math.min(20, Math.max(1, query.limit || 20));
+    const locationFilters: Prisma.FixerWhereInput[] = [];
+    const province = query.province?.trim();
+    const district = query.district?.trim();
+    const subdistrict = query.subdistrict?.trim();
+    if (province) {
+      locationFilters.push({
+        OR: [
+          { serviceProvince: { contains: province, mode: 'insensitive' } },
+          {
+            companyAddress: {
+              path: ['province'],
+              string_contains: province,
+            },
+          },
+        ],
+      });
+    }
+    if (district) {
+      locationFilters.push({
+        OR: [
+          { serviceDistrict: { contains: district, mode: 'insensitive' } },
+          {
+            companyAddress: {
+              path: ['district'],
+              string_contains: district,
+            },
+          },
+        ],
+      });
+    }
+    if (subdistrict) {
+      locationFilters.push({
+        companyAddress: {
+          path: ['subdistrict'],
+          string_contains: subdistrict,
+        },
+      });
+    }
     const hasPostFilters =
-      Boolean(query.subdistrict?.trim()) ||
       query.maxDeclines90Days !== undefined ||
       query.maxCancellations12Months !== undefined;
     const where: Prisma.FixerWhereInput = {
-      ...(query.province
-        ? { serviceProvince: { contains: query.province, mode: 'insensitive' } }
-        : {}),
-      ...(query.district
-        ? { serviceDistrict: { contains: query.district, mode: 'insensitive' } }
-        : {}),
+      ...(locationFilters.length ? { AND: locationFilters } : {}),
       ...(query.tier ? { tier: query.tier as FixerTier } : {}),
       ...(query.minRating !== undefined
         ? { rating: { gte: query.minRating } }
@@ -158,12 +195,30 @@ export class AdminService {
           },
           orders: {
             select: {
+              id: true,
+              userId: true,
               workflowActions: {
                 where: {
                   action: { in: ['partner-decline', 'customer-cancel'] },
                   createdAt: { gte: incidentWindowStart },
                 },
-                select: { action: true, createdAt: true },
+                select: {
+                  action: true,
+                  actorUserId: true,
+                  payload: true,
+                  createdAt: true,
+                },
+              },
+              statusHistory: {
+                where: {
+                  status: OrderStatus.CANCELLED,
+                  createdAt: { gte: incidentWindowStart },
+                },
+                select: {
+                  changedBy: true,
+                  note: true,
+                  createdAt: true,
+                },
               },
             },
           },
@@ -171,6 +226,24 @@ export class AdminService {
       }),
       this.prisma.fixer.count({ where }),
     ]);
+    const readReason = (value: Prisma.JsonValue | null): string | null => {
+      if (!value || typeof value !== 'object' || Array.isArray(value))
+        return null;
+      for (const key of ['reason', 'note', 'privateNote']) {
+        const candidate = value[key];
+        if (typeof candidate === 'string' && candidate.trim())
+          return candidate.trim();
+      }
+      return null;
+    };
+    const readStatusReason = (note: string | null): string | null => {
+      const value = note?.trim();
+      if (!value) return null;
+      return value
+        .replace(/^Customer cancelled\.\s*Reason:\s*/i, '')
+        .replace(/^Partner declined\.\s*Reason:\s*/i, '')
+        .trim();
+    };
     const normalized = candidates.map((row) => {
       const address =
         row.companyAddress &&
@@ -178,36 +251,77 @@ export class AdminService {
         !Array.isArray(row.companyAddress)
           ? row.companyAddress
           : null;
-      const serviceSubdistrict =
-        typeof address?.subdistrict === 'string' ? address.subdistrict : null;
-      const workflowActions = row.orders.flatMap(
-        (order) => order.workflowActions,
+      const addressValue = (key: string) => {
+        const value = address?.[key];
+        return typeof value === 'string' && value.trim() ? value.trim() : null;
+      };
+      const recentIncidents = row.orders.flatMap((order) => {
+        const workflowIncidents = order.workflowActions.flatMap((event) => {
+          const partnerAuthored =
+            event.action === 'partner-decline' &&
+            event.actorUserId === row.user.id;
+          const customerAuthored =
+            event.action === 'customer-cancel' &&
+            event.actorUserId === order.userId;
+          if (!partnerAuthored && !customerAuthored) return [];
+          return [
+            {
+              orderId: order.id,
+              eventType: partnerAuthored
+                ? ('PARTNER_DECLINE' as const)
+                : ('CUSTOMER_CANCEL' as const),
+              reason: readReason(event.payload),
+              createdAt: event.createdAt,
+            },
+          ];
+        });
+        const workflowTypes = new Set(
+          workflowIncidents.map((event) => event.eventType),
+        );
+        const historyIncidents = order.statusHistory.flatMap((event) => {
+          const eventType =
+            event.changedBy === row.user.id
+              ? ('PARTNER_DECLINE' as const)
+              : event.changedBy === order.userId
+                ? ('CUSTOMER_CANCEL' as const)
+                : null;
+          if (!eventType || workflowTypes.has(eventType)) return [];
+          return [
+            {
+              orderId: order.id,
+              eventType,
+              reason: readStatusReason(event.note),
+              createdAt: event.createdAt,
+            },
+          ];
+        });
+        return [...workflowIncidents, ...historyIncidents];
+      });
+      recentIncidents.sort(
+        (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
       );
       return {
         ...row,
-        serviceSubdistrict,
-        declineCount90Days: workflowActions.filter(
+        serviceProvince: row.serviceProvince || addressValue('province'),
+        serviceDistrict: row.serviceDistrict || addressValue('district'),
+        serviceSubdistrict: addressValue('subdistrict'),
+        servicePostalCode: row.servicePostalCode || addressValue('postalCode'),
+        declineCount90Days: recentIncidents.filter(
           (event) =>
-            event.action === 'partner-decline' &&
+            event.eventType === 'PARTNER_DECLINE' &&
             event.createdAt >= declineWindowStart,
         ).length,
-        cancellationCount12Months: workflowActions.filter(
+        cancellationCount12Months: recentIncidents.filter(
           (event) =>
-            event.action === 'customer-cancel' &&
+            event.eventType === 'CUSTOMER_CANCEL' &&
             event.createdAt >= cancellationWindowStart,
         ).length,
+        recentIncidents: recentIncidents.slice(0, 20),
         companyAddress: undefined,
         orders: undefined,
       };
     });
     const filtered = normalized.filter((row) => {
-      if (
-        query.subdistrict &&
-        !row.serviceSubdistrict
-          ?.toLocaleLowerCase()
-          .includes(query.subdistrict.toLocaleLowerCase())
-      )
-        return false;
       if (
         query.maxDeclines90Days !== undefined &&
         row.declineCount90Days > query.maxDeclines90Days
@@ -437,6 +551,19 @@ export class AdminService {
     });
     if (!fixer) throw new NotFoundException('Fixer not found');
 
+    if (dto.status === FixerStatus.APPROVED) {
+      const latestSubmission = await this.prisma.kycSubmission.findFirst({
+        where: { fixerId },
+        orderBy: { version: 'desc' },
+        select: { status: true },
+      });
+      if (latestSubmission?.status !== QualificationSubmissionStatus.APPROVED) {
+        throw new ConflictException(
+          'Approved KYC is required before fixer approval',
+        );
+      }
+    }
+
     const updated = await this.prisma.fixer.update({
       where: { id: fixerId },
       data: {
@@ -459,6 +586,64 @@ export class AdminService {
 
   // ── Order management ──
 
+  private readOrderBudget(order: {
+    estimatedPrice: number | null;
+    finalPrice: number | null;
+    budgetBreakdown: Prisma.JsonValue | null;
+  }): number | null {
+    const positiveAmount = (value: unknown): number | null => {
+      const amount =
+        typeof value === 'number'
+          ? value
+          : typeof value === 'string' && value.trim()
+            ? Number(value)
+            : Number.NaN;
+      return Number.isFinite(amount) && amount > 0 ? amount : null;
+    };
+    const estimated = positiveAmount(order.estimatedPrice);
+    if (estimated !== null) return estimated;
+
+    const asObject = (value: unknown): Record<string, unknown> | null =>
+      value !== null && typeof value === 'object' && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : null;
+    const breakdown: unknown = order.budgetBreakdown;
+    const root = asObject(breakdown);
+    const persistedTotal = positiveAmount(root?.total ?? root?.estimatedTotal);
+    if (persistedTotal !== null) return persistedTotal;
+    let items: unknown[] | null = Array.isArray(breakdown)
+      ? (breakdown as unknown[])
+      : null;
+    if (!items && root) {
+      const nestedItems: unknown[] = [
+        root.items,
+        root.budgetBreakdown,
+        root.breakdown,
+        root.lineItems,
+      ];
+      const persistedItems = nestedItems.find((value) => Array.isArray(value));
+      items = Array.isArray(persistedItems)
+        ? (persistedItems as unknown[])
+        : null;
+    }
+    if (items) {
+      const total = items.reduce<number>((sum, item) => {
+        const line = asObject(item);
+        if (!line) return sum;
+        const direct = positiveAmount(
+          line.total ?? line.amount ?? line.lineTotal,
+        );
+        if (direct !== null) return sum + direct;
+        const quantity = positiveAmount(line.quantity) || 0;
+        const unitRate =
+          positiveAmount(line.unitRate ?? line.rate ?? line.unitPrice) || 0;
+        return sum + quantity * unitRate;
+      }, 0);
+      if (total > 0) return total;
+    }
+    return positiveAmount(order.finalPrice);
+  }
+
   async getAllOrders(pagination: PaginationDto) {
     const { page = 1, limit = 20 } = pagination;
     const [orders, total] = await Promise.all([
@@ -476,7 +661,15 @@ export class AdminService {
       this.prisma.order.count(),
     ]);
 
-    return { orders, total, page, limit };
+    return {
+      orders: orders.map((order) => ({
+        ...order,
+        budget: this.readOrderBudget(order),
+      })),
+      total,
+      page,
+      limit,
+    };
   }
 
   async manualAssign(dto: ManualAssignDto, adminId: string) {

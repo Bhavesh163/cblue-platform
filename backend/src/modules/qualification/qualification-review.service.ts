@@ -293,6 +293,7 @@ export class QualificationReviewService {
               select: {
                 id: true,
                 provider: true,
+                policyVersion: true,
                 status: true,
                 risk: true,
                 recommendedTier: true,

@@ -88,4 +88,70 @@ describe('QualificationEvaluationService credential provenance', () => {
     expect(evidence.corporateEndorsedCompletionCertificateCount).toBe(2);
     expect(evidence.millionBahtCompletionCertificateCount).toBe(2);
   });
+  it('counts administrator-verified educational portfolio evidence', () => {
+    const service = new QualificationEvaluationService(
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    const evidence = (
+      service as never as {
+        buildEvidenceInput: (value: unknown) => Record<string, unknown>;
+      }
+    ).buildEvidenceInput({
+      fixer: { yearsExperience: 0 },
+      documents: [
+        {
+          id: 'portfolio-1',
+          documentType: 'portfolio',
+          evidenceStatus: 'VALIDATED',
+          extractedFields: {},
+          credentialVerifications: [
+            {
+              status: 'VERIFIED',
+              credentialType: 'Bachelor degree',
+              issuerType: 'EDUCATIONAL_INSTITUTION',
+              issuerName: 'Accredited University',
+              projectValueBaht: null,
+              corporateEndorsement: false,
+              verifiedAt: new Date('2026-08-03T00:00:00.000Z'),
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(evidence.relatedCertificateCount).toBe(1);
+  });
+
+  it('does not count extracted credential text without persisted verification', () => {
+    const service = new QualificationEvaluationService(
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    const evidence = (
+      service as never as {
+        buildEvidenceInput: (value: unknown) => Record<string, unknown>;
+      }
+    ).buildEvidenceInput({
+      fixer: { yearsExperience: 0 },
+      documents: [
+        {
+          id: 'portfolio-1',
+          documentType: 'portfolio',
+          evidenceStatus: 'VALIDATED',
+          extractedFields: {
+            detectedDocumentType: 'Bachelor degree certificate',
+            credentialLevel: 'Bachelor',
+          },
+          credentialVerifications: [],
+        },
+      ],
+    });
+
+    expect(evidence.relatedCertificateCount).toBe(0);
+  });
 });

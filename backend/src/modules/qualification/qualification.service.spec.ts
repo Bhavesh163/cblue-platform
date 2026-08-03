@@ -49,6 +49,7 @@ describe('QualificationService', () => {
   } as any;
   const prisma = {
     fixer: { findUnique: jest.fn() },
+    user: { findMany: jest.fn() },
     kycSubmission: {
       findFirst: jest.fn(),
       create: jest.fn(),
@@ -287,6 +288,7 @@ describe('QualificationService', () => {
         createdAt,
       },
     ]);
+    prisma.user.findMany.mockResolvedValue([]);
 
     await expect(
       service.listAdminAuditLogs(500, 'submission-1'),
@@ -391,7 +393,7 @@ describe('QualificationService', () => {
 
     expect(result).toEqual(
       expect.objectContaining({
-        sourceVersion: 'cblue-fixer-qualification-v3',
+        sourceVersion: 'cblue-fixer-qualification-v4',
         fixer: expect.objectContaining({
           id: 'fixer-1',
           tier: 'STANDARD',
@@ -1800,7 +1802,7 @@ describe('QualificationService', () => {
     tx.kycSubmission.findFirst.mockResolvedValue({
       id: 'draft-1',
       version: 3,
-      policyVersion: 'cblue-fixer-qualification-v3',
+      policyVersion: 'cblue-fixer-qualification-v4',
       status: 'DRAFT',
     });
 
@@ -1837,5 +1839,40 @@ describe('QualificationService', () => {
         }),
       }),
     );
+  });
+  it('returns the persisted administrator identity for audit events', async () => {
+    const createdAt = new Date('2026-08-03T12:00:00.000Z');
+    prisma.qualificationAuditLog.findMany.mockResolvedValue([
+      {
+        id: 'audit-1',
+        submissionId: 'submission-1',
+        actorId: 'admin-1',
+        action: 'KYC_APPROVED',
+        entityType: 'TierQualification',
+        entityId: 'qualification-1',
+        reason: 'Identity evidence approved',
+        beforeHash: null,
+        afterHash: null,
+        createdAt,
+      },
+    ]);
+    prisma.user.findMany.mockResolvedValue([
+      {
+        id: 'admin-1',
+        name: 'Admin Reviewer',
+        email: 'admin@example.com',
+      },
+    ]);
+
+    await expect(service.listAdminAuditLogs()).resolves.toEqual([
+      expect.objectContaining({
+        id: 'audit-1',
+        actor: {
+          id: 'admin-1',
+          name: 'Admin Reviewer',
+          email: 'admin@example.com',
+        },
+      }),
+    ]);
   });
 });

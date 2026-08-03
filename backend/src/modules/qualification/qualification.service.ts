@@ -1597,7 +1597,7 @@ export class QualificationService {
   }
   async listAdminAuditLogs(limit = 50, submissionId?: string) {
     const safeLimit = Math.min(100, Math.max(1, Math.trunc(limit) || 50));
-    return this.prisma.qualificationAuditLog.findMany({
+    const logs = await this.prisma.qualificationAuditLog.findMany({
       where: submissionId ? { submissionId } : undefined,
       orderBy: { createdAt: 'desc' },
       take: safeLimit,
@@ -1614,6 +1614,22 @@ export class QualificationService {
         createdAt: true,
       },
     });
+    const actorIds = [
+      ...new Set(
+        logs.flatMap((entry) => (entry.actorId ? [entry.actorId] : [])),
+      ),
+    ];
+    const actors = actorIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: actorIds } },
+          select: { id: true, name: true, email: true },
+        })
+      : [];
+    const actorsById = new Map(actors.map((actor) => [actor.id, actor]));
+    return logs.map((entry) => ({
+      ...entry,
+      actor: entry.actorId ? actorsById.get(entry.actorId) || null : null,
+    }));
   }
   async listAdminSubmissions(status?: string) {
     let normalizedStatus: QualificationSubmissionStatus | undefined;
