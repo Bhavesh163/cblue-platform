@@ -10,6 +10,9 @@ export interface QualificationSnapshotResponse {
     aiScore: number | null;
     aiTier: string | null;
     aiCredentialStatus: string | null;
+    publicDisplayName: string | null;
+    verifiedCompanyName: string | null;
+    companyIdentityVerifiedAt: Date | null;
   };
   requiredEvidence: readonly ['id-front', 'selfie-with-id'];
   optionalEvidence: readonly ['company-affidavit'];

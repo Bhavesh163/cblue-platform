@@ -22,6 +22,7 @@ import {
 } from '../notification/notification.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
+  QualificationProviderIdentityType,
   QualificationReviewDecision,
   QualificationReviewDecisionDto,
 } from './dto/qualification-review-decision.dto';
@@ -30,6 +31,27 @@ import { QualificationEvaluationService } from './qualification-evaluation.servi
 const HANDOFF_LEASE_MS = 5 * 60 * 1000;
 const REVIEW_CLAIM_LEASE_MS = 30 * 60 * 1000;
 const REQUIRED_KYC_DOCUMENT_TYPES = ['id-front', 'selfie-with-id'] as const;
+
+function extractedCompanyName(value: Prisma.JsonValue | null): string | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const root = value as Prisma.JsonObject;
+  const nested = root.fields;
+  const fields =
+    nested && typeof nested === 'object' && !Array.isArray(nested)
+      ? (nested as Prisma.JsonObject)
+      : root;
+  const companyName = fields.companyName;
+  return typeof companyName === 'string' && companyName.trim()
+    ? companyName.trim()
+    : null;
+}
+
+function normalizedCompanyName(value: string): string {
+  return value
+    .normalize('NFKC')
+    .toLocaleLowerCase('en')
+    .replace(/[\p{P}\p{S}\s]+/gu, '');
+}
 
 function getReviewReadiness(task: {
   kind: QualificationReviewKind;
@@ -225,7 +247,6 @@ export class QualificationReviewService {
             },
             documents: {
               where: {
-                isActive: true,
                 lifecycleState: { not: 'DELETE_PENDING' },
                 documentType: { not: 'id-back' },
               },
@@ -308,6 +329,7 @@ export class QualificationReviewService {
                 humanReviewRequired: true,
                 findings: {
                   select: {
+                    documentId: true,
                     code: true,
                     severity: true,
                     claim: true,
@@ -481,6 +503,8 @@ export class QualificationReviewService {
       {
         decision: dto.decision,
         approvedTier: dto.approvedTier,
+        providerIdentityType: dto.providerIdentityType,
+        approvedProviderName: dto.approvedProviderName?.trim(),
         reason,
       },
     );
@@ -493,6 +517,8 @@ export class QualificationReviewService {
     directDecision?: {
       decision: QualificationReviewDecision;
       approvedTier?: FixerTier;
+      providerIdentityType?: QualificationProviderIdentityType;
+      approvedProviderName?: string;
       reason: string;
     },
   ) {
@@ -502,7 +528,11 @@ export class QualificationReviewService {
         include: {
           submission: {
             include: {
-              fixer: true,
+              fixer: {
+                include: {
+                  user: { select: { name: true } },
+                },
+              },
               evaluations: {
                 where: { provider: 'DETERMINISTIC_POLICY' },
                 orderBy: { createdAt: 'desc' },
@@ -540,6 +570,17 @@ export class QualificationReviewService {
         }
         if (approved && task.kind === 'KYC' && directDecision.approvedTier) {
           throw new ConflictException('KYC approval cannot include a tier');
+        }
+        if (
+          approved &&
+          task.kind === 'KYC' &&
+          directDecision.providerIdentityType ===
+            QualificationProviderIdentityType.COMPANY &&
+          !directDecision.approvedProviderName
+        ) {
+          throw new ConflictException(
+            'An approved company provider name is required',
+          );
         }
         if (
           approved &&
@@ -670,6 +711,7 @@ export class QualificationReviewService {
       }
 
       const reviewDecision = parseReviewDecision(task.proposedDecision);
+      let verifiedCompanyName: string | null = null;
       if (
         dto.acceptProposal &&
         reviewDecision === QualificationReviewDecision.APPROVE &&
@@ -681,7 +723,11 @@ export class QualificationReviewService {
             isActive: true,
             lifecycleState: 'READY',
           },
-          select: { documentType: true, evidenceStatus: true },
+          select: {
+            documentType: true,
+            evidenceStatus: true,
+            extractedFields: true,
+          },
         });
         const allValidated = REQUIRED_KYC_DOCUMENT_TYPES.every((type) =>
           documents.some(
@@ -694,6 +740,38 @@ export class QualificationReviewService {
           throw new ConflictException(
             'All required KYC evidence must be validated before approval',
           );
+        }
+        if (
+          directDecision?.providerIdentityType ===
+          QualificationProviderIdentityType.COMPANY
+        ) {
+          const affidavit = documents.find(
+            (document) =>
+              document.documentType === 'company-affidavit' &&
+              document.evidenceStatus === 'VALIDATED',
+          );
+          if (!affidavit) {
+            throw new ConflictException(
+              'Validated company evidence is required for a company provider identity',
+            );
+          }
+          const evidenceCompanyName = extractedCompanyName(
+            affidavit.extractedFields,
+          );
+          if (!evidenceCompanyName) {
+            throw new ConflictException(
+              'The validated company evidence does not contain a company name',
+            );
+          }
+          if (
+            normalizedCompanyName(evidenceCompanyName) !==
+            normalizedCompanyName(directDecision.approvedProviderName || '')
+          ) {
+            throw new ConflictException(
+              'The approved company name must match the validated company evidence',
+            );
+          }
+          verifiedCompanyName = evidenceCompanyName;
         }
       }
 
@@ -762,6 +840,28 @@ export class QualificationReviewService {
             status: FixerStatus.APPROVED,
             verified: true,
             tier: FixerTier.ECONOMY,
+            publicDisplayName:
+              directDecision?.providerIdentityType ===
+              QualificationProviderIdentityType.COMPANY
+                ? [task.submission.fixer.user.name, verifiedCompanyName]
+                    .filter(Boolean)
+                    .join(' / ')
+                : null,
+            verifiedCompanyName:
+              directDecision?.providerIdentityType ===
+              QualificationProviderIdentityType.COMPANY
+                ? verifiedCompanyName
+                : null,
+            companyIdentityVerifiedAt:
+              directDecision?.providerIdentityType ===
+              QualificationProviderIdentityType.COMPANY
+                ? checkedAt
+                : null,
+            companyIdentityVerifiedBy:
+              directDecision?.providerIdentityType ===
+              QualificationProviderIdentityType.COMPANY
+                ? checkerId
+                : null,
           },
           select: { id: true, status: true, tier: true, verified: true },
         });
@@ -796,6 +896,10 @@ export class QualificationReviewService {
             metadata: {
               makerId: task.proposedBy,
               approvedTier: FixerTier.ECONOMY,
+              providerIdentityType:
+                directDecision?.providerIdentityType ||
+                QualificationProviderIdentityType.PERSONAL,
+              approvedProviderName: verifiedCompanyName,
             },
           },
         });

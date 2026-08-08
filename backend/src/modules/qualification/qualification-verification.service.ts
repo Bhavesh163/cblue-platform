@@ -26,10 +26,33 @@ type ExtractedCredentialFields = {
   expiresAt: string | null;
   credentialLevel: string | null;
   projectValue: number | null;
+  companyName: string | null;
+  companyRegistrationNumber: string | null;
+  directorNames: string[];
+  authorityHolderName: string | null;
+  authorityType: string | null;
   confidence: number;
 };
 
 const EXTRACTION_KEYS = new Set<keyof ExtractedCredentialFields>([
+  'detectedDocumentType',
+  'documentName',
+  'issuerName',
+  'credentialNumber',
+  'projectName',
+  'projectLocation',
+  'issuedAt',
+  'expiresAt',
+  'credentialLevel',
+  'projectValue',
+  'companyName',
+  'companyRegistrationNumber',
+  'directorNames',
+  'authorityHolderName',
+  'authorityType',
+  'confidence',
+]);
+const REQUIRED_EXTRACTION_KEYS = new Set<keyof ExtractedCredentialFields>([
   'detectedDocumentType',
   'documentName',
   'issuerName',
@@ -61,6 +84,7 @@ export class QualificationVerificationService {
     submissionId: string;
     documentId: string;
     registeredName: string;
+    claimedCompanyName?: string;
   }): Promise<QualificationDocumentAssessment> {
     const document = await this.prisma.kycDocument.findFirst({
       where: { id: input.documentId, submissionId: input.submissionId },
@@ -218,21 +242,38 @@ export class QualificationVerificationService {
           expiresAt: fields.expiresAt,
           credentialLevel: fields.credentialLevel,
           projectValue: fields.projectValue,
+          companyName: fields.companyName,
+          companyRegistrationNumber: fields.companyRegistrationNumber,
+          directorNames: fields.directorNames,
+          authorityHolderName: fields.authorityHolderName,
+          authorityType: fields.authorityType,
           confidence: fields.confidence,
         };
-        const affidavitIdentityContradiction =
-          Boolean(fields.documentName) &&
-          !this.namesMatch(input.registeredName, fields.documentName);
+        const companyNameContradiction =
+          Boolean(input.claimedCompanyName && fields.companyName) &&
+          !this.namesMatch(input.claimedCompanyName || '', fields.companyName);
+        const authorityNames = [
+          ...fields.directorNames,
+          fields.authorityHolderName,
+        ].filter((name): name is string => Boolean(name));
+        const applicantHasAuthority = authorityNames.some((name) =>
+          this.namesMatch(input.registeredName, name),
+        );
         return withIdentity({
           ...result({
-            evidenceStatus: affidavitIdentityContradiction
+            evidenceStatus: companyNameContradiction
               ? 'CONTRADICTED'
               : 'INSUFFICIENT',
             route: 'NEEDS_REVIEW',
             confidence: fields.confidence,
-            reasonCodes: affidavitIdentityContradiction
-              ? ['IDENTITY_CONTRADICTION', 'HUMAN_REVIEW_REQUIRED']
-              : ['AFFIDAVIT_REVIEW_REQUIRED', 'HUMAN_REVIEW_REQUIRED'],
+            reasonCodes: companyNameContradiction
+              ? ['COMPANY_NAME_CONTRADICTION', 'HUMAN_REVIEW_REQUIRED']
+              : applicantHasAuthority
+                ? ['AFFIDAVIT_REVIEW_REQUIRED', 'HUMAN_REVIEW_REQUIRED']
+                : [
+                    'COMPANY_AUTHORITY_REVIEW_REQUIRED',
+                    'HUMAN_REVIEW_REQUIRED',
+                  ],
           }),
           extractedFields: affidavitFields,
         });
@@ -288,6 +329,11 @@ export class QualificationVerificationService {
           expiresAt: fields.expiresAt,
           credentialLevel: fields.credentialLevel,
           projectValue: fields.projectValue,
+          companyName: fields.companyName,
+          companyRegistrationNumber: fields.companyRegistrationNumber,
+          directorNames: fields.directorNames,
+          authorityHolderName: fields.authorityHolderName,
+          authorityType: fields.authorityType,
           confidence: fields.confidence,
         },
       });
@@ -381,6 +427,11 @@ export class QualificationVerificationService {
                   expiresAt: 'YYYY-MM-DD|null',
                   credentialLevel: 'string|null',
                   projectValue: 'number|null',
+                  companyName: 'string|null',
+                  companyRegistrationNumber: 'string|null',
+                  directorNames: 'string[]',
+                  authorityHolderName: 'string|null',
+                  authorityType: 'director|power-of-attorney|consent|null',
                   confidence: 'integer 0..100',
                 },
               }),
@@ -424,7 +475,7 @@ export class QualificationVerificationService {
     const parsed = value as Record<string, unknown>;
     const keys = Object.keys(parsed);
     if (
-      keys.length !== EXTRACTION_KEYS.size ||
+      Array.from(REQUIRED_EXTRACTION_KEYS).some((key) => !keys.includes(key)) ||
       keys.some(
         (key) => !EXTRACTION_KEYS.has(key as keyof ExtractedCredentialFields),
       )
@@ -436,7 +487,7 @@ export class QualificationVerificationService {
 
     const nullableString = (key: keyof ExtractedCredentialFields) => {
       const field = parsed[key];
-      if (field === null) return null;
+      if (field === null || field === undefined) return null;
       if (
         typeof field !== 'string' ||
         field.trim().length === 0 ||
@@ -447,6 +498,28 @@ export class QualificationVerificationService {
         );
       }
       return field.trim();
+    };
+    const stringArray = (key: keyof ExtractedCredentialFields) => {
+      const field = parsed[key];
+      if (field === null || field === undefined) return [];
+      if (!Array.isArray(field) || field.length > 20) {
+        throw new ServiceUnavailableException(
+          `Qualification extraction field ${key} is invalid`,
+        );
+      }
+      if (
+        field.some(
+          (item) =>
+            typeof item !== 'string' ||
+            item.trim().length === 0 ||
+            item.length > 500,
+        )
+      ) {
+        throw new ServiceUnavailableException(
+          `Qualification extraction field ${key} is invalid`,
+        );
+      }
+      return field.map((item) => (item as string).trim());
     };
     const date = (key: 'issuedAt' | 'expiresAt') => {
       const field = nullableString(key);
@@ -511,6 +584,11 @@ export class QualificationVerificationService {
       expiresAt: date('expiresAt'),
       credentialLevel: nullableString('credentialLevel'),
       projectValue,
+      companyName: nullableString('companyName'),
+      companyRegistrationNumber: nullableString('companyRegistrationNumber'),
+      directorNames: stringArray('directorNames'),
+      authorityHolderName: nullableString('authorityHolderName'),
+      authorityType: nullableString('authorityType'),
       confidence,
     };
   }

@@ -486,7 +486,6 @@ export class AdminService {
             decisionReason: true,
             documents: {
               where: {
-                isActive: true,
                 lifecycleState: { not: 'DELETE_PENDING' },
                 documentType: { not: 'id-back' },
               },
@@ -519,6 +518,20 @@ export class AdminService {
                 confidence: true,
                 tierEligibilityScore: true,
                 humanReviewRequired: true,
+                output: true,
+                findings: {
+                  select: {
+                    documentId: true,
+                    code: true,
+                    severity: true,
+                    claim: true,
+                    result: true,
+                    confidence: true,
+                    details: true,
+                    createdAt: true,
+                  },
+                  orderBy: { createdAt: 'desc' },
+                },
                 completedAt: true,
                 createdAt: true,
               },

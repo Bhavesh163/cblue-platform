@@ -15,6 +15,7 @@ import { QualificationVerificationService } from './qualification-verification.s
 import {
   QualificationDocumentAssessment,
   QualificationReasonCode,
+  QualificationVerificationCheck,
 } from './qualification-assessment.types';
 
 const EVIDENCE_STATUSES = new Set([
@@ -30,15 +31,26 @@ const ROUTES = new Set([
   'NEEDS_REVIEW',
   'AI_PRECLEARED',
 ]);
+const CHECK_STATUSES = new Set([
+  'PASS',
+  'FAIL',
+  'INCONCLUSIVE',
+  'NOT_PERFORMED',
+]);
 const REASON_CODES = new Set<QualificationReasonCode>([
   'DOCUMENT_VALID',
   'WRONG_DOCUMENT_TYPE',
   'UNREADABLE_DOCUMENT',
   'EXPIRED_ID',
+  'IDENTITY_CONTRADICTION',
   'INVALID_ID_NUMBER',
   'SELFIE_REVIEW_REQUIRED',
   'AFFIDAVIT_REVIEW_REQUIRED',
   'AFFIDAVIT_EXPIRED',
+  'COMPANY_NAME_CONTRADICTION',
+  'COMPANY_AUTHORITY_REVIEW_REQUIRED',
+  'PORTFOLIO_IDENTITY_CONTRADICTION',
+  'BIOMETRIC_CHECK_NOT_PERFORMED',
   'LIVENESS_FAILED',
   'MISSING_REQUIRED_EVIDENCE',
   'PROVIDER_UNAVAILABLE',
@@ -74,12 +86,40 @@ const ASSESSMENT_KEYS = new Set([
   'identityNumberHash',
   'subjectNameHash',
   'identityExpiryDate',
+  'checks',
 ]);
+
+function isQualificationVerificationCheck(
+  value: unknown,
+): value is QualificationVerificationCheck {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const check = value as Record<string, unknown>;
+  const confidence = check.confidence;
+  const reasonCode = check.reasonCode;
+  return (
+    typeof check.key === 'string' &&
+    check.key.length > 0 &&
+    check.key.length <= 100 &&
+    typeof check.status === 'string' &&
+    CHECK_STATUSES.has(check.status) &&
+    (confidence === null ||
+      (typeof confidence === 'number' &&
+        Number.isInteger(confidence) &&
+        confidence >= 0 &&
+        confidence <= 100)) &&
+    typeof check.note === 'string' &&
+    check.note.length <= 500 &&
+    (reasonCode === null ||
+      (typeof reasonCode === 'string' &&
+        REASON_CODES.has(reasonCode as QualificationReasonCode)))
+  );
+}
 
 type AssessmentInput = {
   submissionId: string;
   documentId: string;
   registeredName: string;
+  claimedCompanyName?: string;
   actorId: string;
   auditAction:
     | 'DOCUMENT_ASSESSED_ON_UPLOAD'
@@ -168,6 +208,10 @@ export class QualificationAssessmentService {
         route: persistedAssessment.route,
         reasonCodes: persistedAssessment.reasonCodes,
         extractedFields: persistedAssessment.extractedFields ?? null,
+        checks: this.verificationChecks(
+          document.documentType,
+          persistedAssessment,
+        ),
       });
       const evaluation = await tx.qualificationEvaluation.create({
         data: {
@@ -188,6 +232,29 @@ export class QualificationAssessmentService {
           inputHash: document.checksumSha256,
           output,
           completedAt,
+          findings: {
+            create: this.verificationChecks(
+              document.documentType,
+              persistedAssessment,
+            ).map((check) => ({
+              documentId: document.id,
+              code: check.key,
+              severity: check.status === 'FAIL' ? 'HIGH' : 'INFO',
+              claim: check.note,
+              result:
+                check.status === 'PASS'
+                  ? 'VALIDATED'
+                  : check.status === 'FAIL'
+                    ? 'CONTRADICTED'
+                    : 'UNCHECKED',
+              confidence: check.confidence,
+              sourceRef: document.id,
+              details: this.json({
+                status: check.status,
+                reasonCode: check.reasonCode,
+              }),
+            })),
+          },
         },
         select: { id: true },
       });
@@ -248,6 +315,7 @@ export class QualificationAssessmentService {
       faceMatchConfidence: null,
       livenessConfidence: null,
       reasonCodes: ['PROVIDER_UNAVAILABLE', 'HUMAN_REVIEW_REQUIRED'],
+      checks: [],
       provider: 'TYPHOON_OCR',
       model: null,
       assessedAt: new Date(),
@@ -319,8 +387,82 @@ export class QualificationAssessmentService {
         typeof assessment.subjectNameHash === 'string') &&
       (assessment.identityExpiryDate === undefined ||
         assessment.identityExpiryDate === null ||
-        assessment.identityExpiryDate instanceof Date)
+        assessment.identityExpiryDate instanceof Date) &&
+      (assessment.checks === undefined ||
+        (Array.isArray(assessment.checks) &&
+          assessment.checks.every(isQualificationVerificationCheck)))
     );
+  }
+
+  private verificationChecks(
+    documentType: string,
+    assessment: QualificationDocumentAssessment,
+  ) {
+    if (assessment.checks?.length) return assessment.checks;
+    const reasons = new Set(assessment.reasonCodes);
+    const unavailable = reasons.has('PROVIDER_UNAVAILABLE');
+    const failed = (...codes: QualificationReasonCode[]) =>
+      codes.find((code) => reasons.has(code)) || null;
+    const check = (
+      key: string,
+      note: string,
+      failureCodes: QualificationReasonCode[],
+    ) => {
+      const reasonCode = failed(...failureCodes);
+      return {
+        key,
+        status: unavailable
+          ? ('INCONCLUSIVE' as const)
+          : reasonCode
+            ? ('FAIL' as const)
+            : reasons.has('DOCUMENT_VALID')
+              ? ('PASS' as const)
+              : ('INCONCLUSIVE' as const),
+        confidence: assessment.confidence,
+        note,
+        reasonCode,
+      };
+    };
+    const checks: QualificationVerificationCheck[] = [
+      check('DOCUMENT_TYPE', 'Document type assessment', [
+        'WRONG_DOCUMENT_TYPE',
+      ]),
+      check('DOCUMENT_READABILITY', 'Document readability assessment', [
+        'UNREADABLE_DOCUMENT',
+      ]),
+    ];
+    if (documentType === 'id-front') {
+      checks.push(
+        check('ID_NUMBER_VALID', 'Thai identity number validation', [
+          'INVALID_ID_NUMBER',
+        ]),
+        check('ID_NOT_EXPIRED', 'Identity document expiry assessment', [
+          'EXPIRED_ID',
+        ]),
+        check('REGISTERED_NAME_MATCH', 'Applicant name consistency', [
+          'IDENTITY_CONTRADICTION',
+        ]),
+      );
+    }
+    if (documentType === 'selfie-with-id') {
+      checks.push(
+        {
+          key: 'FACE_MATCH',
+          status: 'NOT_PERFORMED' as const,
+          confidence: null,
+          note: 'Face comparison requires administrator review',
+          reasonCode: 'BIOMETRIC_CHECK_NOT_PERFORMED' as const,
+        },
+        {
+          key: 'LIVENESS',
+          status: 'NOT_PERFORMED' as const,
+          confidence: null,
+          note: 'Liveness assessment requires a certified verification service',
+          reasonCode: 'BIOMETRIC_CHECK_NOT_PERFORMED' as const,
+        },
+      );
+    }
+    return checks;
   }
 
   private async bindEvidenceIdentity(
@@ -328,10 +470,7 @@ export class QualificationAssessmentService {
     documentType: string,
     assessment: QualificationDocumentAssessment,
   ): Promise<QualificationDocumentAssessment> {
-    if (
-      !assessment.subjectNameHash ||
-      !['portfolio', 'company-affidavit'].includes(documentType)
-    ) {
+    if (!assessment.subjectNameHash || documentType !== 'portfolio') {
       return assessment;
     }
     const identity = await this.prisma.kycDocument.findFirst({
@@ -343,26 +482,77 @@ export class QualificationAssessmentService {
       },
       select: { subjectNameHash: true },
     });
-    if (!identity?.subjectNameHash) {
+    const company = await this.prisma.kycDocument.findFirst({
+      where: {
+        submissionId,
+        documentType: 'company-affidavit',
+        isActive: true,
+        lifecycleState: 'READY',
+      },
+      select: { subjectNameHash: true },
+    });
+    const matchedPersonal =
+      Boolean(identity?.subjectNameHash) &&
+      identity?.subjectNameHash === assessment.subjectNameHash;
+    const matchedCompany =
+      Boolean(company?.subjectNameHash) &&
+      company?.subjectNameHash === assessment.subjectNameHash;
+    if (!identity?.subjectNameHash && !company?.subjectNameHash) {
       return {
         ...assessment,
         route: 'NEEDS_REVIEW',
+        checks: [
+          ...(assessment.checks || []),
+          {
+            key: 'PORTFOLIO_IDENTITY_MATCH',
+            status: 'INCONCLUSIVE',
+            confidence: assessment.confidence,
+            note: 'Portfolio identity could not be linked automatically',
+            reasonCode: null,
+          },
+        ],
         reasonCodes: assessment.reasonCodes.includes('HUMAN_REVIEW_REQUIRED')
           ? assessment.reasonCodes
           : [...assessment.reasonCodes, 'HUMAN_REVIEW_REQUIRED'],
       };
     }
-    if (identity.subjectNameHash !== assessment.subjectNameHash) {
+    if (!matchedPersonal && !matchedCompany) {
       return {
         ...assessment,
         evidenceStatus: 'CONTRADICTED',
         route: 'NEEDS_REVIEW',
-        reasonCodes: assessment.reasonCodes.includes('IDENTITY_CONTRADICTION')
+        checks: [
+          ...(assessment.checks || []),
+          {
+            key: 'PORTFOLIO_IDENTITY_MATCH',
+            status: 'FAIL',
+            confidence: assessment.confidence,
+            note: 'Portfolio identity does not match the applicant or company evidence',
+            reasonCode: 'PORTFOLIO_IDENTITY_CONTRADICTION',
+          },
+        ],
+        reasonCodes: assessment.reasonCodes.includes(
+          'PORTFOLIO_IDENTITY_CONTRADICTION',
+        )
           ? assessment.reasonCodes
-          : ['IDENTITY_CONTRADICTION', ...assessment.reasonCodes],
+          : ['PORTFOLIO_IDENTITY_CONTRADICTION', ...assessment.reasonCodes],
       };
     }
-    return assessment;
+    return {
+      ...assessment,
+      checks: [
+        ...(assessment.checks || []),
+        {
+          key: 'PORTFOLIO_IDENTITY_MATCH',
+          status: 'PASS',
+          confidence: assessment.confidence,
+          note: matchedCompany
+            ? 'Portfolio identity matches the submitted company evidence'
+            : 'Portfolio identity matches the applicant evidence',
+          reasonCode: null,
+        },
+      ],
+    };
   }
 
   private riskFor(assessment: QualificationDocumentAssessment) {

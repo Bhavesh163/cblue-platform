@@ -125,7 +125,7 @@ describe('QualificationVerificationService', () => {
     });
   });
 
-  it('retains affidavit identity fields and flags a registered-name contradiction', async () => {
+  it('retains affidavit identity fields and flags a claimed-company contradiction', async () => {
     prisma.kycDocument.findFirst.mockResolvedValue({
       documentType: 'company-affidavit',
       storageKey: 'qualification/private/affidavit',
@@ -142,6 +142,11 @@ describe('QualificationVerificationService', () => {
       expiresAt: null,
       credentialLevel: null,
       projectValue: null,
+      companyName: 'Example Company Ltd',
+      companyRegistrationNumber: '0100000000000',
+      directorNames: ['Somchai Director'],
+      authorityHolderName: null,
+      authorityType: 'director',
       confidence: 96,
     });
 
@@ -149,15 +154,16 @@ describe('QualificationVerificationService', () => {
       service.assessStoredDocument({
         submissionId: 'submission-1',
         documentId: 'document-1',
-        registeredName: 'Different Registered Name',
+        registeredName: 'Somchai Director',
+        claimedCompanyName: 'Different Company Ltd',
       }),
     ).resolves.toMatchObject({
       evidenceStatus: 'CONTRADICTED',
       route: 'NEEDS_REVIEW',
-      reasonCodes: expect.arrayContaining(['IDENTITY_CONTRADICTION']),
+      reasonCodes: expect.arrayContaining(['COMPANY_NAME_CONTRADICTION']),
       extractedFields: expect.objectContaining({
-        documentName: 'Somchai Director',
-        issuerName: 'Example Company Ltd',
+        companyName: 'Example Company Ltd',
+        directorNames: ['Somchai Director'],
       }),
     });
   });

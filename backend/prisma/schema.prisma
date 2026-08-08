@@ -331,11 +331,15 @@ model Fixer {
   gpsLat             Float?
   gpsLng             Float?
 
-  aiScore            Int?
-  aiTier             String?
-  aiBreakdown        Json?
-  aiFlags            Json?
-  aiCredentialStatus String?
+  aiScore                   Int?
+  aiTier                    String?
+  aiBreakdown               Json?
+  aiFlags                   Json?
+  aiCredentialStatus        String?
+  publicDisplayName         String?
+  verifiedCompanyName       String?
+  companyIdentityVerifiedAt DateTime?
+  companyIdentityVerifiedBy String?
 
   skills                   FixerSkill[]
   availability             FixerAvailability[]

@@ -40,6 +40,9 @@ describe('QualificationBridgeService', () => {
       aiScore: 78,
       aiTier: 'STANDARD',
       aiCredentialStatus: 'verified',
+      publicDisplayName: 'Partner / Example Company Limited',
+      verifiedCompanyName: 'Example Company Limited',
+      companyIdentityVerifiedAt: new Date('2026-07-24T03:00:00.000Z'),
       user: { id: 'user-1', name: 'Partner' },
       qualificationSubmissions: [
         {
@@ -52,6 +55,8 @@ describe('QualificationBridgeService', () => {
             {
               id: 'document-1',
               documentType: 'id-front',
+              isActive: true,
+              lifecycleState: 'READY',
               contentType: 'image/jpeg',
               sizeBytes: 10,
               evidenceStatus: 'VALIDATED',
@@ -60,6 +65,22 @@ describe('QualificationBridgeService', () => {
               expiresAt: null,
               retentionDeleteAt: new Date('2029-07-24T00:00:00.000Z'),
               createdAt: new Date('2026-07-24T00:00:00.000Z'),
+            },
+            {
+              id: 'document-rejected',
+              documentType: 'id-front',
+              isActive: false,
+              lifecycleState: 'READY',
+              contentType: 'image/jpeg',
+              sizeBytes: 10,
+              evidenceStatus: 'CONTRADICTED',
+              assessmentReasonCodes: ['WRONG_DOCUMENT_TYPE'],
+              extractedAt: new Date('2026-07-24T00:00:00.000Z'),
+              credentialVerifiedAt: null,
+              expiresAt: null,
+              retentionDeleteAt: new Date('2029-07-24T00:00:00.000Z'),
+              createdAt: new Date('2026-07-24T00:01:00.000Z'),
+              credentialVerifications: [],
             },
           ],
           evaluations: [
@@ -129,7 +150,17 @@ describe('QualificationBridgeService', () => {
     );
 
     expect(result.sourceVersion).toBe('cblue-fixer-qualification-v3');
+    expect(result.subject.displayName).toBe(
+      'Partner / Example Company Limited',
+    );
     expect(result.fixer.tier).toBe('STANDARD');
+    expect(result.fixer).toEqual(
+      expect.objectContaining({
+        publicDisplayName: 'Partner / Example Company Limited',
+        verifiedCompanyName: 'Example Company Limited',
+        companyIdentityVerifiedAt: new Date('2026-07-24T03:00:00.000Z'),
+      }),
+    );
     expect(result.requiredEvidence).toEqual(['id-front', 'selfie-with-id']);
     expect(result.optionalEvidence).toEqual(['company-affidavit']);
     expect(result.kyc).toEqual(
@@ -159,6 +190,8 @@ describe('QualificationBridgeService', () => {
       }),
     );
     expect(result.submission?.documents[0]).not.toHaveProperty('storageKey');
+    expect(result.submission?.documents).toHaveLength(1);
+    expect(result.kyc.reasonCodes).not.toContain('WRONG_DOCUMENT_TYPE');
     expect(result.submission?.evaluations[0]).not.toHaveProperty('provider');
     expect(JSON.stringify(result)).not.toMatch(
       /storageKey|signedUrl|rawOcr|providerSecret|assignedTo|reviewerId/,

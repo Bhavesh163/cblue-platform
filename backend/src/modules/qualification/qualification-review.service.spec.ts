@@ -2,6 +2,7 @@
 import { ConflictException } from '@nestjs/common';
 import { QualificationReviewService } from './qualification-review.service';
 import {
+  QualificationProviderIdentityType,
   QualificationReviewDecision,
   QualificationReviewDecisionDto,
 } from './dto/qualification-review-decision.dto';
@@ -267,29 +268,15 @@ describe('QualificationReviewService', () => {
   });
 
   it('allows one assigned administrator to finalize a decision', async () => {
-    tx.qualificationReviewTask.findUnique
-      .mockResolvedValueOnce({
-        id: 'task-1',
-        kind: 'TIER',
-        status: 'ASSIGNED',
-        assignedTo: 'maker-1',
-        proposedAt: null,
-        submissionId: 'submission-1',
-        submission,
-      })
-      .mockResolvedValueOnce({
-        id: 'task-1',
-        kind: 'TIER',
-        status: 'ASSIGNED',
-        assignedTo: 'maker-1',
-        proposedAt: new Date(),
-        proposedDecision: 'APPROVE',
-        proposedTier: 'SPECIALIST',
-        proposedReason: 'Evidence supports the proposed specialist tier.',
-        proposedBy: 'maker-1',
-        submissionId: 'submission-1',
-        submission,
-      });
+    tx.qualificationReviewTask.findUnique.mockResolvedValue({
+      id: 'task-1',
+      kind: 'TIER',
+      status: 'ASSIGNED',
+      assignedTo: 'maker-1',
+      proposedAt: null,
+      submissionId: 'submission-1',
+      submission,
+    });
     const dto = {
       decision: QualificationReviewDecision.APPROVE,
       approvedTier: 'SPECIALIST',
@@ -331,6 +318,97 @@ describe('QualificationReviewService', () => {
         }),
       }),
     );
+  });
+
+  it('publishes a verified company provider under the personal and company names', async () => {
+    tx.qualificationReviewTask.findUnique.mockResolvedValue({
+      id: 'task-1',
+      kind: 'KYC',
+      status: 'ASSIGNED',
+      assignedTo: 'admin-1',
+      proposedAt: null,
+      submissionId: 'submission-1',
+      submission: {
+        ...submission,
+        status: 'NEEDS_REVIEW',
+        evaluations: [],
+        fixer: {
+          id: 'fixer-1',
+          status: 'PENDING',
+          tier: 'ECONOMY',
+          verified: false,
+          user: { name: 'Registered Person' },
+        },
+      },
+    });
+    tx.kycDocument.findMany.mockResolvedValue([
+      { documentType: 'id-front', evidenceStatus: 'VALIDATED' },
+      { documentType: 'selfie-with-id', evidenceStatus: 'VALIDATED' },
+      {
+        documentType: 'company-affidavit',
+        evidenceStatus: 'VALIDATED',
+        extractedFields: { companyName: 'Example Company Limited' },
+      },
+    ]);
+
+    await expect(
+      service.decideTask('admin-1', 'task-1', {
+        decision: QualificationReviewDecision.APPROVE,
+        providerIdentityType: QualificationProviderIdentityType.COMPANY,
+        approvedProviderName: 'Example Company Limited',
+        reason: 'Identity and company authority evidence are verified.',
+      }),
+    ).resolves.toEqual(expect.objectContaining({ applied: true }));
+
+    expect(tx.fixer.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          publicDisplayName: 'Registered Person / Example Company Limited',
+          verifiedCompanyName: 'Example Company Limited',
+          companyIdentityVerifiedAt: expect.any(Date),
+          companyIdentityVerifiedBy: 'admin-1',
+        }),
+      }),
+    );
+  });
+
+  it('rejects a company identity name that differs from validated evidence', async () => {
+    tx.qualificationReviewTask.findUnique.mockResolvedValue({
+      id: 'task-1',
+      kind: 'KYC',
+      status: 'ASSIGNED',
+      assignedTo: 'admin-1',
+      proposedAt: null,
+      submissionId: 'submission-1',
+      submission: {
+        ...submission,
+        status: 'NEEDS_REVIEW',
+        evaluations: [],
+        fixer: {
+          id: 'fixer-1',
+          user: { name: 'Registered Person' },
+        },
+      },
+    });
+    tx.kycDocument.findMany.mockResolvedValue([
+      { documentType: 'id-front', evidenceStatus: 'VALIDATED' },
+      { documentType: 'selfie-with-id', evidenceStatus: 'VALIDATED' },
+      {
+        documentType: 'company-affidavit',
+        evidenceStatus: 'VALIDATED',
+        extractedFields: { companyName: 'Evidence Company Limited' },
+      },
+    ]);
+
+    await expect(
+      service.decideTask('admin-1', 'task-1', {
+        decision: QualificationReviewDecision.APPROVE,
+        providerIdentityType: QualificationProviderIdentityType.COMPANY,
+        approvedProviderName: 'Different Company Limited',
+        reason: 'Identity and company authority evidence were reviewed.',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(tx.fixer.update).not.toHaveBeenCalled();
   });
 
   it('rejects a duplicate maker proposal atomically', async () => {
@@ -416,11 +494,11 @@ describe('QualificationReviewService', () => {
     });
     expect(tx.fixer.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: {
+        data: expect.objectContaining({
           status: 'APPROVED',
           verified: true,
           tier: 'ECONOMY',
-        },
+        }),
       }),
     );
     expect(tierEvaluation.evaluateTier).toHaveBeenCalledWith(
@@ -737,7 +815,7 @@ describe('QualificationReviewService', () => {
     ).resolves.toBe('COMPLETED');
     expect(tierEvaluation.evaluateTier).toHaveBeenCalledTimes(2);
   });
-  it('projects only active non-legacy evidence into the live queue', async () => {
+  it('projects current and rejected non-legacy evidence into the review queue', async () => {
     prisma.qualificationReviewTask.findMany.mockResolvedValue([]);
 
     await service.listTasks();
@@ -763,7 +841,6 @@ describe('QualificationReviewService', () => {
             include: expect.objectContaining({
               documents: expect.objectContaining({
                 where: {
-                  isActive: true,
                   lifecycleState: { not: 'DELETE_PENDING' },
                   documentType: { not: 'id-back' },
                 },

@@ -4,7 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import { getApiUrl } from "../lib/api";
 import { adminFetchResponse, readAdminResponseError } from "./adminApi";
 import QualificationEvidenceControls from "./QualificationEvidenceControls";
-import { visibleQualificationDocuments } from "../../../lib/qualificationAdminProjection.mjs";
+import {
+  biometricAssessmentLabel,
+  buildQualificationDecisionPayload,
+  visibleQualificationDocuments,
+} from "../../../lib/qualificationAdminProjection.mjs";
 
 type ReviewTask = {
   id: string;
@@ -49,6 +53,8 @@ type ReviewTask = {
       lifecycleState?: string;
       objectDeletedAt?: string | null;
       extractedFields?: Record<string, unknown> | null;
+      extractedAt?: string | null;
+      createdAt?: string | null;
       identityNumberLast4?: string | null;
       identityExpiryDate?: string | null;
       subjectNameHash?: string | null;
@@ -81,12 +87,16 @@ type ReviewTask = {
       credentialConfidence?: number | null;
       tierEligibilityScore?: number | null;
       findings?: Array<{
+        documentId?: string | null;
         code?: string;
         severity?: string;
         claim?: string;
         result?: string;
         confidence?: number | null;
+        createdAt?: string;
       }>;
+      completedAt?: string | null;
+      createdAt?: string;
     }>;
     auditLogs?: Array<{
       id?: string;
@@ -126,6 +136,25 @@ function displayName(task: ReviewTask) {
   );
 }
 
+function extractedCompanyName(documents: QualificationDocument[]) {
+  const affidavit = documents.find(
+    (document) =>
+      document.documentType === "company-affidavit" &&
+      document.isActive !== false &&
+      document.evidenceStatus === "VALIDATED",
+  );
+  const extracted = affidavit?.extractedFields;
+  if (!extracted || typeof extracted !== "object") return "";
+  const nested = extracted.fields;
+  const fields =
+    nested && typeof nested === "object" && !Array.isArray(nested)
+      ? (nested as Record<string, unknown>)
+      : extracted;
+  return typeof fields.companyName === "string"
+    ? fields.companyName.trim()
+    : "";
+}
+
 export default function QualificationReviewPanel({ token, adminId }: Props) {
   const [tasks, setTasks] = useState<ReviewTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -141,6 +170,9 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
     Record<string, "APPROVE" | "REJECT">
   >({});
   const [approvedTier, setApprovedTier] = useState<Record<string, string>>({});
+  const [providerIdentityType, setProviderIdentityType] = useState<
+    Record<string, "PERSONAL" | "COMPANY">
+  >({});
   const [reason, setReason] = useState<Record<string, string>>({});
   const [expandedTaskId, setExpandedTaskId] = useState("");
 
@@ -298,9 +330,22 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
     );
     const selectedTier =
       approvedTier[task.id] || deterministic?.recommendedTier || "";
+    const selectedIdentityType = providerIdentityType[task.id] || "PERSONAL";
+    const selectedProviderName = extractedCompanyName(
+      (task.submission?.documents || []) as QualificationDocument[],
+    );
     const selectedReason = reason[task.id]?.trim() || "";
     if (selectedReason.length < 10) {
       setError("Enter a decision reason with at least 10 characters.");
+      return;
+    }
+    if (
+      task.kind === "KYC" &&
+      selectedDecision === "APPROVE" &&
+      selectedIdentityType === "COMPANY" &&
+      selectedProviderName.length < 2
+    ) {
+      setError("Enter the approved company provider name.");
       return;
     }
     if (
@@ -323,13 +368,16 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
             Authorization: "Bearer " + token,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            decision: selectedDecision,
-            reason: selectedReason,
-            ...(task.kind !== "KYC" && selectedDecision === "APPROVE"
-              ? { approvedTier: selectedTier }
-              : {}),
-          }),
+          body: JSON.stringify(
+            buildQualificationDecisionPayload({
+              kind: task.kind === "KYC" ? "KYC" : "TIER",
+              decision: selectedDecision,
+              reason: selectedReason,
+              approvedTier: selectedTier,
+              providerIdentityType: selectedIdentityType,
+              approvedProviderName: selectedProviderName,
+            }),
+          ),
         },
       );
       if (!response.ok)
@@ -440,7 +488,11 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                 ) as QualificationDocument[];
                 const documents = allDocuments.filter((document) =>
                   task.kind === "KYC"
-                    ? ["id-front", "selfie-with-id"].includes(
+                    ? [
+                        "id-front",
+                        "selfie-with-id",
+                        "company-affidavit",
+                      ].includes(
                         document.documentType,
                       )
                     : !["id-front", "selfie-with-id"].includes(
@@ -448,6 +500,12 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                       ),
                 );
                 const selectedDecision = decision[task.id] || "APPROVE";
+                const selectedIdentityType =
+                  providerIdentityType[task.id] || "PERSONAL";
+                const submissionFindings =
+                  evaluation?.findings?.filter(
+                    (finding) => !finding.documentId,
+                  ) || [];
                 const approvalBlocked =
                   selectedDecision === "APPROVE" &&
                   !task.reviewReadiness?.canApprove;
@@ -474,7 +532,13 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                       </p>
                     </td>
                     <td className="py-3 pr-4 align-top text-slate-700">
-                      {evaluation?.recommendedTier || "Pending"}
+                      <p className="font-semibold text-slate-800">
+                        Automated assessment
+                      </p>
+                      <p className="mt-1">
+                        Recommendation:{" "}
+                        {evaluation?.recommendedTier || "Pending"}
+                      </p>
                       <p className="mt-1 text-xs text-slate-500">
                         {evaluation?.risk || "-"} risk /{" "}
                         {evaluation?.confidence ?? "-"}% confidence
@@ -488,10 +552,16 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                           {evaluation?.documentAuthenticityConfidence ?? "-"}
                         </span>
                         <span>
-                          Face: {evaluation?.faceMatchConfidence ?? "-"}
+                          Face match:{" "}
+                          {biometricAssessmentLabel(
+                            evaluation?.faceMatchConfidence,
+                          )}
                         </span>
                         <span>
-                          Liveness: {evaluation?.livenessConfidence ?? "-"}
+                          Liveness:{" "}
+                          {biometricAssessmentLabel(
+                            evaluation?.livenessConfidence,
+                          )}
                         </span>
                         <span>
                           Credentials: {evaluation?.credentialConfidence ?? "-"}
@@ -500,9 +570,18 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                           Tier score: {evaluation?.tierEligibilityScore ?? "-"}
                         </span>
                       </div>
-                      {evaluation?.findings?.length ? (
-                        <p className="mt-2 text-xs text-red-700">
-                          {evaluation.findings
+                      {evaluation?.completedAt || evaluation?.createdAt ? (
+                        <p className="mt-2 text-[11px] text-slate-500">
+                          Assessed: {new Date(
+                            evaluation.completedAt ||
+                              evaluation.createdAt ||
+                              "",
+                          ).toLocaleString()}
+                        </p>
+                      ) : null}
+                      {submissionFindings.length ? (
+                        <p className="mt-2 text-xs text-amber-800">
+                          {submissionFindings
                             .slice(0, 5)
                             .map(
                               (finding) =>
@@ -538,6 +617,7 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                             token={token}
                             submissionId={task.submission?.id}
                             documents={documents}
+                            findings={evaluation?.findings || []}
                             onChanged={async () => {
                               if (task.kind === "TIER" && task.submission?.id) {
                                 await reevaluate(task.submission.id);
@@ -678,6 +758,48 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                                 </select>
                               )}
                           </div>
+                          {task.kind === "KYC" &&
+                            selectedDecision === "APPROVE" && (
+                              <div className="grid gap-2 sm:grid-cols-[140px_minmax(180px,1fr)]">
+                                <select
+                                  aria-label={
+                                    "Provider identity type for " +
+                                    displayName(task)
+                                  }
+                                  value={selectedIdentityType}
+                                  onChange={(event) =>
+                                    setProviderIdentityType((current) => ({
+                                      ...current,
+                                      [task.id]: event.target.value as
+                                        | "PERSONAL"
+                                        | "COMPANY",
+                                    }))
+                                  }
+                                  className="rounded-lg border border-slate-300 px-2 py-2 text-xs font-semibold text-slate-700"
+                                >
+                                  <option value="PERSONAL">Personal</option>
+                                  <option value="COMPANY">Company</option>
+                                </select>
+                                {selectedIdentityType === "COMPANY" ? (
+                                  <input
+                                    aria-label={
+                                      "Approved provider name for " +
+                                      displayName(task)
+                                    }
+                                    value={extractedCompanyName(allDocuments)}
+                                    readOnly
+                                    maxLength={200}
+                                    placeholder="Validate the company affidavit first"
+                                    className="w-full rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
+                                  />
+                                ) : (
+                                  <p className="self-center text-xs text-slate-500">
+                                    Provider operates under the approved personal
+                                    identity.
+                                  </p>
+                                )}
+                              </div>
+                            )}
                           <input
                             aria-label={
                               "Decision reason for " + displayName(task)

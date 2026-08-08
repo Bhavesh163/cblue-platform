@@ -34,9 +34,16 @@ export class QualificationBridgeService {
           take: 1,
           include: {
             documents: {
+              where: {
+                isActive: true,
+                lifecycleState: 'READY',
+                documentType: { not: 'id-back' },
+              },
               select: {
                 id: true,
                 documentType: true,
+                isActive: true,
+                lifecycleState: true,
                 contentType: true,
                 sizeBytes: true,
                 evidenceStatus: true,
@@ -131,14 +138,22 @@ export class QualificationBridgeService {
 
     if (!fixer) throw new NotFoundException('Qualification not found');
     const submission = fixer.qualificationSubmissions[0] || null;
+    const bridgeDocuments =
+      submission?.documents.filter(
+        (document) =>
+          document.isActive &&
+          document.lifecycleState === 'READY' &&
+          document.documentType !== 'id-back',
+      ) || [];
     const tierQualification = fixer.tierQualifications[0] || null;
     const reviewTasks = submission?.reviewTasks || [];
     const reviewStatus = {
       kyc: reviewTasks.find((task) => task.kind === 'KYC') || null,
       tier: reviewTasks.find((task) => task.kind === 'TIER') || null,
     };
-    const evidenceStatuses =
-      submission?.documents.map((document) => document.evidenceStatus) || [];
+    const evidenceStatuses = bridgeDocuments.map(
+      (document) => document.evidenceStatus,
+    );
     const kycEvaluation =
       submission?.evaluations.find(
         (evaluation) =>
@@ -153,7 +168,10 @@ export class QualificationBridgeService {
 
     return {
       sourceVersion: 'cblue-fixer-qualification-v3',
-      subject: { id: fixer.user.id, displayName: fixer.user.name || 'Partner' },
+      subject: {
+        id: fixer.user.id,
+        displayName: fixer.publicDisplayName || fixer.user.name || 'Partner',
+      },
       fixer: {
         id: fixer.id,
         status: fixer.status,
@@ -163,6 +181,9 @@ export class QualificationBridgeService {
         aiScore: fixer.aiScore,
         aiTier: fixer.aiTier,
         aiCredentialStatus: fixer.aiCredentialStatus,
+        publicDisplayName: fixer.publicDisplayName,
+        verifiedCompanyName: fixer.verifiedCompanyName,
+        companyIdentityVerifiedAt: fixer.companyIdentityVerifiedAt,
       },
       requiredEvidence: ['id-front', 'selfie-with-id'],
       optionalEvidence: ['company-affidavit'],
@@ -173,7 +194,7 @@ export class QualificationBridgeService {
             status: submission.status,
             policyVersion: submission.policyVersion,
             submittedAt: submission.submittedAt,
-            documents: submission.documents.map((document) => ({
+            documents: bridgeDocuments.map((document) => ({
               documentType: document.documentType,
               evidenceStatus: document.evidenceStatus,
               reasonCodes: Array.isArray(document.assessmentReasonCodes)
@@ -241,7 +262,7 @@ export class QualificationBridgeService {
         humanReviewRequired: kycEvaluation?.humanReviewRequired ?? null,
         reasonCodes: Array.from(
           new Set(
-            (submission?.documents || []).flatMap((document) =>
+            bridgeDocuments.flatMap((document) =>
               Array.isArray(document.assessmentReasonCodes)
                 ? document.assessmentReasonCodes.filter(
                     (value): value is string => typeof value === 'string',

@@ -1,6 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  qualificationAssessmentTimestamp,
+  qualificationDocumentChecks,
+  qualificationFindingsForDocument,
+  qualificationReasonLabels,
+  safeQualificationExtractedFields,
+} from "../../../lib/qualificationAdminProjection.mjs";
 import { getApiUrl } from "../lib/api";
 import { adminFetchResponse } from "./adminApi";
 
@@ -21,6 +28,12 @@ type DocumentRow = {
   identityNumberLast4?: string | null;
   identityExpiryDate?: string | null;
   extractedFields?: Record<string, unknown> | null;
+  extractedAt?: string | null;
+  createdAt?: string | null;
+  assessmentJob?: {
+    status?: string;
+    completedAt?: string | null;
+  } | null;
   credentialVerification?: {
     status: CredentialStatus;
     issuerType?: IssuerType | null;
@@ -34,10 +47,20 @@ type DocumentRow = {
     verifiedAt?: string | null;
   } | null;
 };
+type AutomatedFinding = {
+  documentId?: string | null;
+  code?: string;
+  severity?: string;
+  claim?: string;
+  result?: string;
+  confidence?: number | null;
+  createdAt?: string;
+};
 type Props = {
   token: string;
   submissionId?: string;
   documents: DocumentRow[];
+  findings?: AutomatedFinding[];
   onChanged: () => Promise<void>;
   readOnly?: boolean;
 };
@@ -63,6 +86,20 @@ const ISSUER_TYPES: IssuerType[] = [
   "OTHER",
 ];
 
+function formatTimestamp(value?: string | null) {
+  if (!value) return "";
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+}
+
+function checkToneClass(tone: string) {
+  if (tone === "danger") return "border-red-200 bg-red-50 text-red-800";
+  if (tone === "success")
+    return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  if (tone === "review") return "border-amber-200 bg-amber-50 text-amber-800";
+  return "border-slate-200 bg-slate-50 text-slate-700";
+}
+
 async function readError(response: Response, fallback: string) {
   const payload = await response.json().catch(() => null);
   return typeof payload?.message === "string" ? payload.message : fallback;
@@ -72,6 +109,7 @@ export default function QualificationEvidenceControls({
   token,
   submissionId,
   documents,
+  findings = [],
   onChanged,
   readOnly = false,
 }: Props) {
@@ -419,8 +457,19 @@ export default function QualificationEvidenceControls({
           {error}
         </p>
       )}
-      {documents.map((document) => (
-        <div key={document.id} className="py-4 first:pt-0">
+      {documents.map((document) => {
+        const checks = qualificationDocumentChecks(document);
+        const extractedFields = safeQualificationExtractedFields(document);
+        const documentFindings = qualificationFindingsForDocument(
+          findings,
+          document.id,
+        );
+        const reasonLabels = qualificationReasonLabels(
+          document.assessmentReasonCodes,
+        );
+        const assessmentTimestamp = qualificationAssessmentTimestamp(document);
+        return (
+          <div key={document.id} className="py-4 first:pt-0">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="font-semibold text-slate-900">
@@ -493,9 +542,87 @@ export default function QualificationEvidenceControls({
               </span>
             ) : null}
           </div>
-          {document.assessmentReasonCodes?.length ? (
-            <p className="mt-2 text-xs font-semibold text-red-700">
-              {document.assessmentReasonCodes.join(", ")}
+
+          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-slate-500">
+            {document.createdAt ? (
+              <span>Uploaded: {formatTimestamp(document.createdAt)}</span>
+            ) : null}
+            {document.extractedAt ? (
+              <span>Extracted: {formatTimestamp(document.extractedAt)}</span>
+            ) : null}
+            {assessmentTimestamp ? (
+              <span>
+                Automated assessment: {formatTimestamp(assessmentTimestamp)}
+              </span>
+            ) : (
+              <span>Automated assessment: Not performed</span>
+            )}
+          </div>
+
+          <div className="mt-3 grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
+            {checks.map((check) => (
+              <div
+                key={check.label}
+                className={
+                  "flex items-center justify-between gap-3 rounded border px-2.5 py-1.5 text-[11px] " +
+                  checkToneClass(check.tone)
+                }
+              >
+                <span>{check.label}</span>
+                <span className="font-bold">{check.status}</span>
+              </div>
+            ))}
+          </div>
+
+          {extractedFields.length ? (
+            <dl className="mt-3 grid gap-x-5 gap-y-2 rounded border border-slate-200 bg-slate-50 p-3 text-xs sm:grid-cols-2">
+              {extractedFields.map((field) => (
+                <div key={field.key} className="min-w-0">
+                  <dt className="font-semibold text-slate-500">
+                    {field.label}
+                  </dt>
+                  <dd className="mt-0.5 break-words text-slate-800">
+                    {field.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+
+          {documentFindings.length ? (
+            <div className="mt-3 rounded border border-slate-200 px-3 py-2">
+              <p className="text-xs font-bold text-slate-700">
+                Automated findings
+              </p>
+              <div className="mt-1.5 space-y-1.5">
+                {documentFindings.map(
+                  (finding: AutomatedFinding, index: number) => (
+                    <div
+                      key={`${finding.code || "finding"}-${finding.createdAt || index}`}
+                      className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-xs"
+                    >
+                      <span className="text-slate-700">
+                        {finding.claim || finding.code || "Assessment finding"}
+                      </span>
+                      <span className="font-semibold text-slate-600">
+                        {finding.result || finding.severity || "Recorded"}
+                        {finding.confidence != null
+                          ? ` / ${finding.confidence}%`
+                          : ""}
+                        {finding.createdAt
+                          ? ` / ${formatTimestamp(finding.createdAt)}`
+                          : ""}
+                      </span>
+                    </div>
+                  ),
+                )}
+              </div>
+            </div>
+          ) : null}
+
+          {reasonLabels.length ? (
+            <p className="mt-2 text-xs font-semibold text-amber-800">
+              {reasonLabels.join("; ")}
             </p>
           ) : null}
 
@@ -796,8 +923,9 @@ export default function QualificationEvidenceControls({
               </button>
             </div>
           </details>
-        </div>
-      ))}
+          </div>
+        );
+      })}
     </div>
   );
 }

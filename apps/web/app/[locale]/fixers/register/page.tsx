@@ -82,7 +82,11 @@ function applicantKycReason(code: string): string {
     case "HUMAN_REVIEW_REQUIRED":
       return "Your photo was received and is being checked.";
     case "PROVIDER_UNAVAILABLE":
-      return "We could not complete the check right now. Please try again shortly.";
+      return "Your photo was received and will be reviewed securely.";
+    case "EVIDENCE_REUSED_FOR_DIFFERENT_TYPE":
+      return "Please use two different photos for the identity card and selfie.";
+    case "EVIDENCE_UPLOAD_IN_PROGRESS":
+      return "This photo is already being checked.";
     default:
       return "We could not verify this photo. Please upload a clearer image and try again.";
   }
@@ -90,7 +94,7 @@ function applicantKycReason(code: string): string {
 
 type PersistedEvidenceSlot = {
   documentType: "id-front" | "selfie-with-id";
-  localFile: File;
+  localFile: File | null;
   documentId: string | null;
   uploadState: "idle" | "uploading" | "assessing" | "complete" | "error";
   kycStatus: string | null;
@@ -429,13 +433,63 @@ function FixerRegisterContent() {
         setIsAlreadyFixer(registered);
         setIsRegisteredFixer(registered);
         populateFixerForm(data, fixerProfile);
+        if (registered && isEditMode) {
+          const draftResponse = await fetch(
+            "/api/v1/qualification/submissions/draft",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: "Bearer " + token,
+              },
+              body: JSON.stringify({
+                consentVersion: "cblue-fixer-qualification-v3",
+              }),
+            },
+          );
+          if (draftResponse.ok) {
+            const draft = (await draftResponse.json()) as {
+              id?: string;
+              documents?: Array<{
+                id: string;
+                documentType: string;
+                lifecycleState: string;
+                evidenceStatus: string;
+                assessmentReasonCodes?: string[];
+              }>;
+            };
+            if (draft.id) setQualificationDraftId(draft.id);
+            const persisted = (draft.documents || [])
+              .filter(
+                (document) =>
+                  document.documentType === "id-front" ||
+                  document.documentType === "selfie-with-id",
+              )
+              .map((document) => ({
+                documentType: document.documentType as
+                  | "id-front"
+                  | "selfie-with-id",
+                localFile: null,
+                documentId: document.id,
+                uploadState:
+                  document.lifecycleState === "ASSESSING"
+                    ? ("assessing" as const)
+                    : ("complete" as const),
+                kycStatus: document.evidenceStatus,
+                confidence: null,
+                reasonCodes: document.assessmentReasonCodes || [],
+                message: null,
+              }));
+            setKycSlots(persisted.slice(0, 2));
+          }
+        }
       } catch {
         // ignore
       }
       setCheckingStatus(false);
     }
     checkFixer();
-  }, [locale, populateFixerForm]);
+  }, [isEditMode, locale, populateFixerForm]);
 
   const addPortfolioImages = useCallback(
     async (incoming: File[]) => {
@@ -1260,10 +1314,19 @@ function FixerRegisterContent() {
         );
         if (!response.ok) {
           const detail = await response.json().catch(() => ({}));
+          const code = typeof detail?.code === "string" ? detail.code : "";
+          if (code) throw new KycUploadError(code);
+          const serverMessage = Array.isArray(detail?.message)
+            ? detail.message.join(" ")
+            : typeof detail?.message === "string"
+              ? detail.message
+              : "";
           throw new Error(
-            documentType === "id-front" || documentType === "selfie-with-id"
-              ? "We could not save this photo securely. Please try again."
-              : "We could not save this document securely. Please try again.",
+            serverMessage ||
+              (documentType === "id-front" ||
+              documentType === "selfie-with-id"
+                ? "We could not receive this photo. Please try again."
+                : "We could not receive this document. Please try again."),
           );
         }
         return (await response.json()) as UploadAssessmentResponse;
@@ -1279,9 +1342,13 @@ function FixerRegisterContent() {
               : slot,
           ),
         );
+        const localFile = kycSlots[index]!.localFile;
+        if (!localFile) {
+          throw new Error("Please select the identity photo again.");
+        }
         const uploaded = await uploadEvidence(
           kycTypes[index]!,
-          kycSlots[index]!.localFile,
+          localFile,
         );
         setKycSlots((current) =>
           current.map((slot, slotIndex) =>
@@ -1340,7 +1407,9 @@ function FixerRegisterContent() {
       setSuccess(true);
     } catch (cause) {
       setError(
-        cause instanceof Error
+        cause instanceof KycUploadError
+          ? applicantKycReason(cause.code)
+          : cause instanceof Error
           ? cause.message
           : locale === "th"
             ? "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้"
@@ -2166,11 +2235,17 @@ function FixerRegisterContent() {
                         slot.uploadState === "error" ? "rejected" : "valid";
                       return (
                         <div key={i} className="relative group text-center">
-                          <img
-                            src={URL.createObjectURL(slot.localFile)}
-                            alt={`KYC ${i + 1}`}
-                            className={`w-20 h-20 object-cover rounded-lg border-2 ${status === "valid" ? "border-green-400" : "border-gray-200"}`}
-                          />
+                          {slot.localFile ? (
+                            <img
+                              src={URL.createObjectURL(slot.localFile)}
+                              alt={`KYC ${i + 1}`}
+                              className={`w-20 h-20 object-cover rounded-lg border-2 ${status === "valid" ? "border-green-400" : "border-gray-200"}`}
+                            />
+                          ) : (
+                            <div className="flex h-20 w-20 items-center justify-center rounded-lg border-2 border-slate-300 bg-slate-50 px-2 text-center text-[10px] text-slate-600">
+                              Stored securely
+                            </div>
+                          )}
                           <span className="block text-[10px] text-gray-500 mt-0.5">
                             {kycLabel}
                           </span>

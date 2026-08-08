@@ -130,6 +130,25 @@ export class QualificationService {
           status: QualificationSubmissionStatus.DRAFT,
         },
         orderBy: { version: 'desc' },
+        include: {
+          documents: {
+            where: {
+              isActive: true,
+              lifecycleState: { not: 'DELETE_PENDING' },
+              documentType: { in: ['id-front', 'selfie-with-id'] },
+            },
+            select: {
+              id: true,
+              documentType: true,
+              lifecycleState: true,
+              evidenceStatus: true,
+              assessmentReasonCodes: true,
+              assessedAt: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: 'asc' },
+          },
+        },
       });
       if (draft) {
         if (draft.policyVersion !== QUALIFICATION_POLICY_VERSION) {
@@ -138,6 +157,25 @@ export class QualificationService {
             data: {
               policyVersion: QUALIFICATION_POLICY_VERSION,
               decisionReason: null,
+            },
+            include: {
+              documents: {
+                where: {
+                  isActive: true,
+                  lifecycleState: { not: 'DELETE_PENDING' },
+                  documentType: { in: ['id-front', 'selfie-with-id'] },
+                },
+                select: {
+                  id: true,
+                  documentType: true,
+                  lifecycleState: true,
+                  evidenceStatus: true,
+                  assessmentReasonCodes: true,
+                  assessedAt: true,
+                  createdAt: true,
+                },
+                orderBy: { createdAt: 'asc' },
+              },
             },
           });
         }
@@ -158,6 +196,7 @@ export class QualificationService {
           consentVersion,
           consentRetentionDeleteAt: new Date(Date.now() + CONSENT_RETENTION_MS),
         },
+        include: { documents: true },
       });
     });
   }
@@ -387,7 +426,9 @@ export class QualificationService {
         status: true,
         failedAttempts: true,
         lockedUntil: true,
-        fixer: { select: { user: { select: { name: true } } } },
+        fixer: {
+          select: { user: { select: { name: true, company: true } } },
+        },
       },
     });
     if (!submission) {
@@ -405,6 +446,72 @@ export class QualificationService {
     const checksumSha256 = createHash('sha256')
       .update(file.buffer)
       .digest('hex');
+    const existingEvidence = await this.prisma.kycDocument.findFirst({
+      where: {
+        submissionId: submission.id,
+        checksumSha256,
+        lifecycleState: {
+          in: ['PENDING_UPLOAD', 'UPLOADED', 'ASSESSING', 'READY'],
+        },
+      },
+      select: {
+        id: true,
+        documentType: true,
+        contentType: true,
+        sizeBytes: true,
+        evidenceStatus: true,
+        assessmentReasonCodes: true,
+        extractedFields: true,
+        assessedAt: true,
+        extractionProvider: true,
+        extractionModel: true,
+        createdAt: true,
+        lifecycleState: true,
+      },
+    });
+    if (existingEvidence) {
+      if (existingEvidence.documentType !== documentType) {
+        throw new ConflictException({
+          code: 'EVIDENCE_REUSED_FOR_DIFFERENT_TYPE',
+          message:
+            'The same evidence file cannot be used for two different document types',
+        });
+      }
+      if (existingEvidence.lifecycleState !== 'READY') {
+        throw new ConflictException({
+          code: 'EVIDENCE_UPLOAD_IN_PROGRESS',
+          message: 'This evidence upload is already being processed',
+        });
+      }
+      const evaluation = await this.prisma.qualificationEvaluation.findFirst({
+        where: {
+          submissionId: submission.id,
+          inputHash: checksumSha256,
+          status: 'COMPLETED',
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { confidence: true, output: true },
+      });
+      const output =
+        evaluation?.output &&
+        typeof evaluation.output === 'object' &&
+        !Array.isArray(evaluation.output)
+          ? (evaluation.output as Record<string, unknown>)
+          : null;
+      return {
+        ...existingEvidence,
+        idempotentReplay: true,
+        assessment: output
+          ? {
+              ...output,
+              confidence: evaluation?.confidence ?? null,
+              provider: existingEvidence.extractionProvider,
+              model: existingEvidence.extractionModel,
+              assessedAt: existingEvidence.assessedAt,
+            }
+          : null,
+      };
+    }
     const cleanupId = randomUUID();
     const cleanupReservation = randomUUID();
     let phase:
@@ -471,9 +578,10 @@ export class QualificationService {
           select: { id: true },
         });
         if (duplicate) {
-          throw new ConflictException(
-            'This evidence file was already uploaded',
-          );
+          throw new ConflictException({
+            code: 'EVIDENCE_UPLOAD_IN_PROGRESS',
+            message: 'This evidence upload is already being processed',
+          });
         }
         if (isPortfolio) {
           const existingCount = await tx.kycDocument.count({
@@ -641,6 +749,7 @@ export class QualificationService {
         submissionId: submission.id,
         documentId,
         registeredName: submission.fixer?.user.name || '',
+        claimedCompanyName: submission.fixer?.user.company || undefined,
         actorId: userId,
         auditAction: 'DOCUMENT_ASSESSED_ON_UPLOAD',
       });
@@ -680,18 +789,21 @@ export class QualificationService {
             'Qualification evidence changed during promotion',
           );
         }
-        const previousActive = isKyc
-          ? await tx.kycDocument.findFirst({
-              where: {
-                submissionId: submission.id,
-                documentType,
-                isActive: true,
-                lifecycleState: 'READY',
-                id: { not: documentId },
-              },
-              select: { id: true },
-            })
-          : null;
+        const activateEvidence =
+          assessmentForPromotion.route !== 'NEEDS_RESUBMISSION';
+        const previousActive =
+          isKyc && activateEvidence
+            ? await tx.kycDocument.findFirst({
+                where: {
+                  submissionId: submission.id,
+                  documentType,
+                  isActive: true,
+                  lifecycleState: 'READY',
+                  id: { not: documentId },
+                },
+                select: { id: true },
+              })
+            : null;
         const readyAt = new Date();
         if (previousActive) {
           const superseded = await tx.kycDocument.updateMany({
@@ -721,7 +833,7 @@ export class QualificationService {
             lifecycleState: 'ASSESSING',
           },
           data: {
-            isActive: true,
+            isActive: activateEvidence,
             lifecycleState: 'READY',
             readyAt,
             cleanupErrorCode: null,
@@ -755,6 +867,22 @@ export class QualificationService {
               metadata: {
                 documentType,
                 supersededDocumentId: previousActive.id,
+              },
+            },
+          });
+        }
+        if (!activateEvidence) {
+          await tx.qualificationAuditLog.create({
+            data: {
+              submissionId: submission.id,
+              actorId: userId,
+              action: 'KYC_EVIDENCE_REJECTED_ON_UPLOAD',
+              entityType: 'KycDocument',
+              entityId: documentId,
+              reason: 'Evidence retained for audit but not activated',
+              metadata: {
+                documentType,
+                reasonCodes: assessmentForPromotion.reasonCodes,
               },
             },
           });
@@ -1401,7 +1529,9 @@ export class QualificationService {
         id: true,
         submission: {
           select: {
-            fixer: { select: { user: { select: { name: true } } } },
+            fixer: {
+              select: { user: { select: { name: true, company: true } } },
+            },
             reviewTasks: {
               where: {
                 status: 'ASSIGNED',
@@ -1426,6 +1556,7 @@ export class QualificationService {
       submissionId,
       documentId,
       registeredName: context.submission.fixer.user.name || '',
+      claimedCompanyName: context.submission.fixer.user.company || undefined,
       actorId: adminId,
       auditAction: 'DOCUMENT_VERIFICATION_COMPLETED',
     });
@@ -1656,7 +1787,6 @@ export class QualificationService {
         },
         documents: {
           where: {
-            isActive: true,
             lifecycleState: { not: 'DELETE_PENDING' },
             documentType: { not: 'id-back' },
           },
@@ -1712,6 +1842,20 @@ export class QualificationService {
             risk: true,
             tierEligibilityScore: true,
             humanReviewRequired: true,
+            output: true,
+            findings: {
+              select: {
+                documentId: true,
+                code: true,
+                severity: true,
+                claim: true,
+                result: true,
+                confidence: true,
+                details: true,
+                createdAt: true,
+              },
+              orderBy: { createdAt: 'desc' },
+            },
             createdAt: true,
             completedAt: true,
           },

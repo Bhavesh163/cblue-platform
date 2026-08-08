@@ -129,7 +129,9 @@ export class QualificationEvidenceAssessmentWorker
           where: { id: job.submissionId },
           select: {
             status: true,
-            fixer: { select: { user: { select: { name: true } } } },
+            fixer: {
+              select: { user: { select: { name: true, company: true } } },
+            },
           },
         });
         if (!submission) throw new Error('QUALIFICATION_SUBMISSION_NOT_FOUND');
@@ -137,6 +139,7 @@ export class QualificationEvidenceAssessmentWorker
           submissionId: job.submissionId,
           documentId: job.documentId,
           registeredName: submission.fixer.user.name || '',
+          claimedCompanyName: submission.fixer.user.company || undefined,
           actorId: 'system:qualification-evidence-worker',
           auditAction: 'DOCUMENT_VERIFICATION_COMPLETED',
         });

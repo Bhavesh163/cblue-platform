@@ -8,10 +8,28 @@ export type QualificationReasonCode =
   | 'SELFIE_REVIEW_REQUIRED'
   | 'AFFIDAVIT_REVIEW_REQUIRED'
   | 'AFFIDAVIT_EXPIRED'
+  | 'COMPANY_NAME_CONTRADICTION'
+  | 'COMPANY_AUTHORITY_REVIEW_REQUIRED'
+  | 'PORTFOLIO_IDENTITY_CONTRADICTION'
+  | 'BIOMETRIC_CHECK_NOT_PERFORMED'
   | 'LIVENESS_FAILED'
   | 'MISSING_REQUIRED_EVIDENCE'
   | 'PROVIDER_UNAVAILABLE'
   | 'HUMAN_REVIEW_REQUIRED';
+
+export type QualificationCheckStatus =
+  | 'PASS'
+  | 'FAIL'
+  | 'INCONCLUSIVE'
+  | 'NOT_PERFORMED';
+
+export type QualificationVerificationCheck = {
+  key: string;
+  status: QualificationCheckStatus;
+  confidence: number | null;
+  note: string;
+  reasonCode: QualificationReasonCode | null;
+};
 
 export type QualificationDocumentAssessment = {
   evidenceStatus:
@@ -31,7 +49,8 @@ export type QualificationDocumentAssessment = {
   faceMatchConfidence: number | null;
   livenessConfidence: number | null;
   reasonCodes: QualificationReasonCode[];
-  extractedFields?: Record<string, string | number | null> | null;
+  checks?: QualificationVerificationCheck[];
+  extractedFields?: Record<string, string | number | string[] | null> | null;
   identityNumberLast4?: string | null;
   identityNumberHash?: string | null;
   subjectNameHash?: string | null;

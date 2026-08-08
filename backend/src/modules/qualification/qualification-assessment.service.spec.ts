@@ -22,7 +22,7 @@ describe('QualificationAssessmentService', () => {
   };
   const prisma = {
     kycDocument: { findFirst: jest.fn() },
-    $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) =>
+    $transaction: jest.fn((callback: (client: typeof tx) => unknown) =>
       callback(tx),
     ),
   } as any;
@@ -173,7 +173,7 @@ describe('QualificationAssessmentService', () => {
     const result = await assess();
 
     expect(result.evidenceStatus).toBe('CONTRADICTED');
-    expect(result.reasonCodes).toContain('IDENTITY_CONTRADICTION');
+    expect(result.reasonCodes).toContain('PORTFOLIO_IDENTITY_CONTRADICTION');
     expect(tx.kycDocument.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -190,6 +190,15 @@ describe('QualificationAssessmentService', () => {
       route: 'APPROVED',
       faceMatchConfidence: '99',
       reasonCodes: ['DOCUMENT_VALID', 'INVENTED_REASON'],
+      checks: [
+        {
+          key: 'FACE_MATCH',
+          status: 'CERTIFIED',
+          confidence: 99,
+          note: 'unsupported provider assertion',
+          reasonCode: null,
+        },
+      ],
     } as any);
 
     await expect(assess()).resolves.toMatchObject({
