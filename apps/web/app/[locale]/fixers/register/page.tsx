@@ -196,6 +196,27 @@ function applicantKycReason(code: string, locale: string): string {
   return messages[code] || messages.UPLOAD_FAILED!;
 }
 
+function qualificationFilePreparationError(
+  cause: unknown,
+  locale: string,
+): string {
+  const message = cause instanceof Error ? cause.message : "";
+  const pageLimit = message.includes("more than 50 pages");
+  if (locale === "th") {
+    return pageLimit
+      ? "เอกสารมีมากกว่า 50 หน้า กรุณาแบ่งเอกสารเป็นไฟล์ที่สั้นลงแล้วอัปโหลดอีกครั้ง"
+      : "ไม่สามารถบีบอัดไฟล์นี้ให้มีขนาดไม่เกิน 0.3 MB โดยยังคงอ่านได้ กรุณาใช้ไฟล์ที่ชัดเจนกว่า มีจำนวนหน้าน้อยลง หรือมีความละเอียดต่ำลง";
+  }
+  if (locale === "zh") {
+    return pageLimit
+      ? "文档超过 50 页，请将文档拆分为较短的文件后重新上传。"
+      : "无法在保持清晰可读的同时将此文件压缩至不超过 0.3 MB。请使用更清晰、页数更少或分辨率更低的文件。";
+  }
+  return pageLimit
+    ? "The document has more than 50 pages. Split it into shorter files and upload again."
+    : "We could not compress this file below 0.3 MB while keeping it readable. Use a clearer file with fewer pages or lower resolution.";
+}
+
 type PersistedEvidenceSlot = {
   documentType: "id-front" | "selfie-with-id";
   localFile: File | null;
@@ -626,16 +647,12 @@ function FixerRegisterContent() {
         );
         setPortfolioImages(merged);
       } catch (cause) {
-        setError(
-          cause instanceof Error
-            ? cause.message
-            : "Unable to prepare portfolio images",
-        );
+        setError(qualificationFilePreparationError(cause, locale));
       } finally {
         setPortfolioProcessing(false);
       }
     },
-    [portfolioImages],
+    [locale, portfolioImages],
   );
 
   const prepareCompanyEvidence = useCallback(
@@ -648,15 +665,9 @@ function FixerRegisterContent() {
       setError("");
       try {
         setFile(await prepareQualificationEvidenceFile(file));
-      } catch {
+      } catch (cause) {
         setFile(null);
-        setError(
-          locale === "th"
-            ? "\u0e44\u0e21\u0e48\u0e2a\u0e32\u0e21\u0e32\u0e23\u0e16\u0e40\u0e15\u0e23\u0e35\u0e22\u0e21\u0e40\u0e2d\u0e01\u0e2a\u0e32\u0e23\u0e19\u0e35\u0e49\u0e43\u0e2b\u0e49\u0e21\u0e35\u0e02\u0e19\u0e32\u0e14\u0e44\u0e21\u0e48\u0e40\u0e01\u0e34\u0e19 0.3 MB \u0e42\u0e14\u0e22\u0e22\u0e31\u0e07\u0e04\u0e07\u0e2d\u0e48\u0e32\u0e19\u0e44\u0e14\u0e49 \u0e01\u0e23\u0e38\u0e13\u0e32\u0e43\u0e0a\u0e49\u0e44\u0e1f\u0e25\u0e4c\u0e17\u0e35\u0e48\u0e0a\u0e31\u0e14\u0e40\u0e08\u0e19\u0e2b\u0e23\u0e37\u0e2d\u0e21\u0e35\u0e08\u0e33\u0e19\u0e27\u0e19\u0e2b\u0e19\u0e49\u0e32\u0e19\u0e49\u0e2d\u0e22\u0e25\u0e07"
-            : locale === "zh"
-              ? "\u65e0\u6cd5\u5728\u4fdd\u6301\u6e05\u6670\u53ef\u8bfb\u7684\u540c\u65f6\u5c06\u6b64\u6587\u4ef6\u5904\u7406\u4e3a\u4e0d\u8d85\u8fc7 0.3 MB\u3002\u8bf7\u4f7f\u7528\u66f4\u6e05\u6670\u6216\u9875\u6570\u66f4\u5c11\u7684\u6587\u4ef6\u3002"
-              : "We could not prepare this document below 0.3 MB while keeping it readable. Please use a clearer file or one with fewer pages.",
-        );
+        setError(qualificationFilePreparationError(cause, locale));
       } finally {
         setCompanyEvidenceProcessing(false);
       }
@@ -794,10 +805,18 @@ function FixerRegisterContent() {
           setKycValidating(false);
           return;
         }
+        let preparedFile: File;
+        try {
+          preparedFile = await prepareQualificationEvidenceFile(file);
+        } catch (cause) {
+          setError(qualificationFilePreparationError(cause, locale));
+          setKycValidating(false);
+          return;
+        }
         const documentType = slotIndex === 0 ? "id-front" : "selfie-with-id";
         let uploaded: UploadAssessmentResponse | null = null;
         try {
-          uploaded = await uploadKycImmediately(documentType, file);
+          uploaded = await uploadKycImmediately(documentType, preparedFile);
         } catch (error) {
           setError(
             error instanceof KycUploadError
@@ -831,7 +850,7 @@ function FixerRegisterContent() {
         }
         newSlots.push({
           documentType,
-          localFile: file,
+          localFile: preparedFile,
           documentId: uploaded.id,
           uploadState: "complete",
           kycStatus:
@@ -2443,10 +2462,10 @@ function FixerRegisterContent() {
           <div className="mb-6 w-full rounded-lg border border-slate-200 bg-slate-50 p-4">
             <label className="block text-sm font-semibold text-slate-800">
               {locale === "th"
-                ? "หนังสือรับรองบริษัท (ไม่บังคับ)"
+                ? "หนังสือรับรองบริษัท (หากต้องการสมัครในนามบริษัท)"
                 : locale === "zh"
-                  ? "公司证明（可选）"
-                  : "Company affidavit (optional)"}
+                  ? "公司证明（以公司名义申请时需要）"
+                  : "Company affidavit (required for company applications)"}
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp,application/pdf"
@@ -2468,10 +2487,10 @@ function FixerRegisterContent() {
             )}
             <label className="mt-4 block border-t border-slate-200 pt-4 text-sm font-semibold text-slate-800">
               {locale === "th"
-                ? "\u0e2b\u0e19\u0e31\u0e07\u0e2a\u0e37\u0e2d\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e04\u0e27\u0e32\u0e21\u0e1b\u0e23\u0e30\u0e2a\u0e07\u0e04\u0e4c\u0e08\u0e32\u0e01\u0e01\u0e23\u0e23\u0e21\u0e01\u0e32\u0e23\u0e1a\u0e23\u0e34\u0e29\u0e31\u0e17 (\u0e44\u0e21\u0e48\u0e1a\u0e31\u0e07\u0e04\u0e31\u0e1a)"
+                ? "หนังสือยืนยันความประสงค์จากกรรมการบริษัท (หากต้องการสมัครในนามบริษัท)"
                 : locale === "zh"
-                  ? "\u516c\u53f8\u8463\u4e8b\u7533\u8bf7\u610f\u5411\u4e66\uff08\u53ef\u9009\uff09"
-                  : "Director authorization letter (optional)"}
+                  ? "公司董事申请意向书（以公司名义申请且申请人不是董事时需要）"
+                  : "Director authorization letter (required when a company applicant is not a named director)"}
               <span className="mt-1 block text-xs font-normal text-slate-600">
                 {locale === "th"
                   ? "\u0e43\u0e0a\u0e49\u0e40\u0e21\u0e37\u0e48\u0e2d\u0e1c\u0e39\u0e49\u0e2a\u0e21\u0e31\u0e04\u0e23\u0e44\u0e21\u0e48\u0e43\u0e0a\u0e48\u0e01\u0e23\u0e23\u0e21\u0e01\u0e32\u0e23\u0e17\u0e35\u0e48\u0e21\u0e35\u0e0a\u0e37\u0e48\u0e2d\u0e43\u0e19\u0e2b\u0e19\u0e31\u0e07\u0e2a\u0e37\u0e2d\u0e23\u0e31\u0e1a\u0e23\u0e2d\u0e07 \u0e23\u0e30\u0e1a\u0e38\u0e04\u0e27\u0e32\u0e21\u0e1b\u0e23\u0e30\u0e2a\u0e07\u0e04\u0e4c\u0e2a\u0e21\u0e31\u0e04\u0e23 \u0e1c\u0e39\u0e49\u0e21\u0e35\u0e2d\u0e33\u0e19\u0e32\u0e08\u0e25\u0e07\u0e19\u0e32\u0e21 \u0e41\u0e25\u0e30\u0e2d\u0e35\u0e40\u0e21\u0e25\u0e15\u0e34\u0e14\u0e15\u0e48\u0e2d\u0e02\u0e2d\u0e07\u0e1a\u0e23\u0e34\u0e29\u0e31\u0e17"

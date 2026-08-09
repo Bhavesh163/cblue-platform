@@ -429,6 +429,11 @@ export class QualificationService {
     if (isKyc && !imageContentTypes.has(file.mimetype)) {
       throw new BadRequestException('KYC evidence must be an image');
     }
+    if (isKyc && fileSize > PORTFOLIO_MAX_FILE_BYTES) {
+      throw new BadRequestException(
+        'KYC evidence exceeds 0.3 MB; compress it before upload',
+      );
+    }
     if (!qualificationContentTypes.has(file.mimetype)) {
       throw new BadRequestException(
         'Only PDF, JPEG, PNG, and WebP qualification documents are supported',
@@ -1872,6 +1877,12 @@ export class QualificationService {
             confidence: true,
             risk: true,
             tierEligibilityScore: true,
+            identityConfidence: true,
+            documentAuthenticityConfidence: true,
+            faceMatchConfidence: true,
+            livenessConfidence: true,
+            credentialConfidence: true,
+            deterministicScore: true,
             humanReviewRequired: true,
             output: true,
             findings: {

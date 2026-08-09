@@ -331,10 +331,12 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
     );
     const selectedTier =
       approvedTier[task.id] || deterministic?.recommendedTier || "";
-    const selectedIdentityType = providerIdentityType[task.id] || "PERSONAL";
     const selectedProviderName = extractedCompanyName(
       (task.submission?.documents || []) as QualificationDocument[],
     );
+    const selectedIdentityType =
+      providerIdentityType[task.id] ||
+      (selectedProviderName ? "COMPANY" : "PERSONAL");
     const selectedReason = reason[task.id]?.trim() || "";
     if (selectedReason.length < 10) {
       setError("Enter a decision reason with at least 10 characters.");
@@ -503,7 +505,8 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                   qualificationAssessmentSummary(documents);
                 const selectedDecision = decision[task.id] || "APPROVE";
                 const selectedIdentityType =
-                  providerIdentityType[task.id] || "PERSONAL";
+                  providerIdentityType[task.id] ||
+                  (extractedCompanyName(allDocuments) ? "COMPANY" : "PERSONAL");
                 const submissionFindings =
                   evaluation?.findings?.filter(
                     (finding) => !finding.documentId,

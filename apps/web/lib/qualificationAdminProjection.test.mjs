@@ -4,6 +4,7 @@ import {
   biometricAssessmentLabel,
   buildQualificationDecisionPayload,
   qualificationAssessmentTimestamp,
+  qualificationHistoryDocuments,
   qualificationAssessmentSummary,
   qualificationDocumentChecks,
   qualificationFindingsForDocument,
@@ -43,6 +44,47 @@ test("keeps current evidence and removes retired legacy back-ID records", () => 
   assert.deepEqual(
     result.map((document) => document.id),
     ["front", "selfie"],
+  );
+});
+
+test("qualification history retains inactive assessed evidence but hides ID backs and deleted objects", () => {
+  const documents = qualificationHistoryDocuments([
+    {
+      id: "active",
+      documentType: "id-front",
+      isActive: true,
+      lifecycleState: "READY",
+    },
+    {
+      id: "rejected",
+      documentType: "selfie-with-id",
+      isActive: false,
+      lifecycleState: "READY",
+    },
+    {
+      id: "legacy-back",
+      documentType: "id-back",
+      isActive: false,
+      lifecycleState: "READY",
+    },
+    {
+      id: "deleted",
+      documentType: "portfolio",
+      isActive: false,
+      lifecycleState: "DELETE_PENDING",
+    },
+    {
+      id: "object-deleted",
+      documentType: "portfolio",
+      isActive: false,
+      lifecycleState: "READY",
+      objectDeletedAt: "2026-08-09T00:00:00.000Z",
+    },
+  ]);
+
+  assert.deepEqual(
+    documents.map((document) => document.id),
+    ["active", "rejected"],
   );
 });
 

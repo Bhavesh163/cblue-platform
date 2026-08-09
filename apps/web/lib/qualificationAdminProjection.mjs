@@ -7,6 +7,15 @@ export function visibleQualificationDocuments(documents) {
   );
 }
 
+export function qualificationHistoryDocuments(documents) {
+  return documents.filter(
+    (document) =>
+      document.documentType !== "id-back" &&
+      document.lifecycleState !== "DELETE_PENDING" &&
+      !document.objectDeletedAt,
+  );
+}
+
 const FAILURE_REASONS = new Map([
   ["WRONG_DOCUMENT_TYPE", "Wrong document type"],
   ["UNREADABLE_DOCUMENT", "Document is unreadable"],

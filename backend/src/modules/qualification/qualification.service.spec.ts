@@ -1759,6 +1759,27 @@ describe('QualificationService', () => {
     expect(storage.putPrivateObject).not.toHaveBeenCalled();
   });
 
+  it.each(['id-front', 'selfie-with-id'])(
+    'rejects %s evidence above 0.3 MB before private storage',
+    async (documentType) => {
+      const body = Buffer.concat([
+        Buffer.from([0xff, 0xd8, 0xff]),
+        Buffer.alloc(300 * 1024),
+      ]);
+      await expect(
+        service.uploadDocumentForUser('user-1', 'submission-1', documentType, {
+          originalname: `large-${documentType}.jpg`,
+          mimetype: 'image/jpeg',
+          size: body.length,
+          buffer: body,
+        } as Express.Multer.File),
+      ).rejects.toThrow(
+        'KYC evidence exceeds 0.3 MB; compress it before upload',
+      );
+      expect(storage.putPrivateObject).not.toHaveBeenCalled();
+    },
+  );
+
   it.each(['company-affidavit', 'company-letter-of-intent'])(
     'rejects %s evidence above 0.3 MB before private storage',
     async (documentType) => {

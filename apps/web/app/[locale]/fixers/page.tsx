@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useLocale } from "next-intl";
 import { useRouter } from "next/navigation";
 import PdpaConsent from "../components/PdpaConsent";
+import PartnerQualificationStatus from "../components/PartnerQualificationStatus";
 import {
   computeBudgetBreakdown,
   formatVariationPriceListItem,
@@ -11125,16 +11126,15 @@ function PartnerJobs({
 }) {
   const [variationModal, setVariationModal] = React.useState<any>(null);
   const [variationDesc, setVariationDesc] = React.useState("");
-  const [variationRows, setVariationRows] =
-    React.useState<
-      {
-        item: string;
-        qty: string;
-        unit: string;
-        rate: string;
-        amount: string;
-      }[]
-    >(EMPTY_VAR_ROWS());
+  const [variationRows, setVariationRows] = React.useState<
+    {
+      item: string;
+      qty: string;
+      unit: string;
+      rate: string;
+      amount: string;
+    }[]
+  >(EMPTY_VAR_ROWS());
   const [variationAttachUrls, setVariationAttachUrls] = React.useState<
     string[]
   >([]);
@@ -12885,16 +12885,15 @@ function PartnerRequests({
 }) {
   const [variationModal, setVariationModal] = React.useState<any>(null);
   const [variationDesc, setVariationDesc] = React.useState("");
-  const [variationRows, setVariationRows] =
-    React.useState<
-      {
-        item: string;
-        qty: string;
-        unit: string;
-        rate: string;
-        amount: string;
-      }[]
-    >(EMPTY_VAR_ROWS());
+  const [variationRows, setVariationRows] = React.useState<
+    {
+      item: string;
+      qty: string;
+      unit: string;
+      rate: string;
+      amount: string;
+    }[]
+  >(EMPTY_VAR_ROWS());
   const [variationAttachUrls, setVariationAttachUrls] = React.useState<
     string[]
   >([]);
@@ -15248,89 +15247,12 @@ function PartnerProfile({
         </div>
       </div>
 
-      {/* Qualification status and upgrade path */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden mb-8">
-        <div className="bg-sky-50 px-6 py-4 border-b border-sky-100 flex items-center justify-between">
-          <h3 className="font-bold text-sky-900 flex items-center gap-2">
-            {locale === "th"
-              ? "\u0e2a\u0e16\u0e32\u0e19\u0e30\u0e04\u0e38\u0e13\u0e2a\u0e21\u0e1a\u0e31\u0e15\u0e34"
-              : locale === "zh"
-                ? "\u8d44\u683c\u72b6\u6001"
-                : "Qualification status"}
-          </h3>
-          <span className="text-sm text-sky-700 font-semibold bg-white px-3 py-1 rounded-full shadow-sm">
-            {partner.tier}
-          </span>
-        </div>
-
-        <div className="p-6">
-          <div
-            className={`${partner.credentialStatus === "verified" ? "bg-green-50 border-green-500" : "bg-amber-50 border-amber-500"} border-l-4 p-4 rounded-r-2xl flex items-start gap-4 mb-6`}
-          >
-            <div>
-              <p
-                className={`${partner.credentialStatus === "verified" ? "text-green-800" : "text-amber-800"} font-bold`}
-              >
-                {partner.credentialStatus === "verified"
-                  ? "Identity verified"
-                  : "Identity review pending"}
-              </p>
-              <p
-                className={`${partner.credentialStatus === "verified" ? "text-green-600" : "text-amber-700"} text-sm`}
-              >
-                {partner.credentialStatus === "verified"
-                  ? "Your identity has been approved."
-                  : "Your identity information is being reviewed."}
-              </p>
-            </div>
-          </div>
-
-          <h4 className="font-bold text-gray-800 mb-4">
-            {locale === "th"
-              ? "\u0e2a\u0e16\u0e32\u0e19\u0e30\u0e1b\u0e31\u0e08\u0e08\u0e38\u0e1a\u0e31\u0e19"
-              : locale === "zh"
-                ? "\u5f53\u524d\u72b6\u6001"
-                : "Current status"}
-          </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-            <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
-              <p className="text-xs text-gray-500">Approved tier</p>
-              <p className="font-bold text-gray-800">{partner.tier}</p>
-            </div>
-            <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
-              <p className="text-xs text-gray-500">Account status</p>
-              <p className="font-bold text-gray-800">
-                {partner.credentialStatus === "verified"
-                  ? "Verified"
-                  : "Review in progress"}
-              </p>
-            </div>
-          </div>
-          <div className="bg-sky-50 rounded-xl p-5 border border-sky-100 space-y-4">
-            <div className="flex gap-3">
-              <span className="text-sky-600 text-xl mt-0.5"></span>
-              <div>
-                <p className="font-bold text-sky-900 mb-1">How to upgrade</p>
-                <p className="text-sky-800 text-sm leading-relaxed">
-                  Gain more experience, add portfolio work and certifications,
-                  and maintain good reviews. New evidence is reassessed, and
-                  upper-tier changes take effect after administrator approval.
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <span className="text-sky-600 text-xl mt-0.5"></span>
-              <div>
-                <p className="font-bold text-sky-900 mb-1">Security</p>
-                <p className="text-sky-800 text-sm leading-relaxed">
-                  Your data is encrypted and protected under PDPA. Credentials
-                  are verified to maintain platform integrity.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <PartnerQualificationStatus
+        locale={locale}
+        partnerId={partner.id}
+        fallbackTier={partner.tier}
+        fallbackVerified={partner.credentialStatus === "verified"}
+      />
     </div>
   );
 }

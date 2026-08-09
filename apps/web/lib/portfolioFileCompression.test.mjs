@@ -49,3 +49,15 @@ test("company evidence uses compression before upload", async () => {
     /Images and PDFs are compressed to no more than 0\.3 MB each\./,
   );
 });
+
+test("KYC, company evidence, and portfolio share localized 0.3 MB preparation", async () => {
+  const registerSource = await readFile(registerUrl, "utf8");
+
+  assert.match(registerSource, /prepareQualificationEvidenceFile\(file\)/);
+  assert.match(
+    registerSource,
+    /uploadKycImmediately\(documentType, preparedFile\)/,
+  );
+  assert.match(registerSource, /qualificationFilePreparationError/);
+  assert.match(registerSource, /more than 50 pages/);
+});
