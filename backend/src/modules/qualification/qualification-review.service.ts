@@ -21,6 +21,7 @@ import {
   queueNotificationInTransaction,
 } from '../notification/notification.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { identityNameHash } from './identity-evidence.util';
 import {
   QualificationProviderIdentityType,
   QualificationReviewDecision,
@@ -34,16 +35,45 @@ const REQUIRED_KYC_DOCUMENT_TYPES = ['id-front', 'selfie-with-id'] as const;
 
 function extractedCompanyName(value: Prisma.JsonValue | null): string | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const root = value as Prisma.JsonObject;
+  const root = value;
   const nested = root.fields;
   const fields =
     nested && typeof nested === 'object' && !Array.isArray(nested)
-      ? (nested as Prisma.JsonObject)
+      ? nested
       : root;
   const companyName = fields.companyName;
   return typeof companyName === 'string' && companyName.trim()
     ? companyName.trim()
     : null;
+}
+function extractedEvidenceFields(
+  value: Prisma.JsonValue | null,
+): Prisma.JsonObject {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const root = value;
+  const nested = root.fields;
+  return nested && typeof nested === 'object' && !Array.isArray(nested)
+    ? nested
+    : root;
+}
+
+function extractedString(value: Prisma.JsonObject, key: string): string | null {
+  const field = value[key];
+  return typeof field === 'string' && field.trim() ? field.trim() : null;
+}
+
+function extractedStrings(value: Prisma.JsonObject, key: string): string[] {
+  const field = value[key];
+  return Array.isArray(field)
+    ? field.filter(
+        (item): item is string =>
+          typeof item === 'string' && Boolean(item.trim()),
+      )
+    : [];
+}
+
+function hasValidContactEmail(value: string | null): boolean {
+  return Boolean(value && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value));
 }
 
 function normalizedCompanyName(value: string): string {
@@ -51,6 +81,19 @@ function normalizedCompanyName(value: string): string {
     .normalize('NFKC')
     .toLocaleLowerCase('en')
     .replace(/[\p{P}\p{S}\s]+/gu, '');
+}
+
+function normalizedPersonName(value: string): string {
+  return value
+    .normalize('NFKC')
+    .toLocaleLowerCase('en')
+    .replace(/^(mr|mrs|ms|miss|dr)\.?\s*/u, '')
+    .replace(
+      /^(\u0e19\u0e32\u0e22|\u0e19\u0e32\u0e07\u0e2a\u0e32\u0e27|\u0e19\u0e32\u0e07|\u0e14\u0e23\.)\s*/u,
+      '',
+    )
+    .replace(/(\u5148\u751f|\u5973\u58eb)$/u, '')
+    .replace(/[^\p{L}\p{N}]/gu, '');
 }
 
 function getReviewReadiness(task: {
@@ -727,6 +770,7 @@ export class QualificationReviewService {
             documentType: true,
             evidenceStatus: true,
             extractedFields: true,
+            subjectNameHash: true,
           },
         });
         const allValidated = REQUIRED_KYC_DOCUMENT_TYPES.every((type) =>
@@ -752,7 +796,7 @@ export class QualificationReviewService {
           );
           if (!affidavit) {
             throw new ConflictException(
-              'Validated company evidence is required for a company provider identity',
+              'Validated company affidavit evidence is required for a company provider identity',
             );
           }
           const evidenceCompanyName = extractedCompanyName(
@@ -760,7 +804,7 @@ export class QualificationReviewService {
           );
           if (!evidenceCompanyName) {
             throw new ConflictException(
-              'The validated company evidence does not contain a company name',
+              'The validated company affidavit does not contain a company name',
             );
           }
           if (
@@ -769,6 +813,71 @@ export class QualificationReviewService {
           ) {
             throw new ConflictException(
               'The approved company name must match the validated company evidence',
+            );
+          }
+
+          const affidavitFields = extractedEvidenceFields(
+            affidavit.extractedFields,
+          );
+          const affidavitAuthorityNames = [
+            ...extractedStrings(affidavitFields, 'directorNames'),
+            extractedString(affidavitFields, 'authorityHolderName'),
+          ].filter((name): name is string => Boolean(name));
+          const identitySubjectNameHash = documents.find(
+            (document) => document.documentType === 'id-front',
+          )?.subjectNameHash;
+          if (!identitySubjectNameHash) {
+            throw new ConflictException(
+              'Company approval requires a validated identity name',
+            );
+          }
+          const applicantDirectorAuthorized = affidavitAuthorityNames.some(
+            (name) => identityNameHash(name) === identitySubjectNameHash,
+          );
+
+          const letter = documents.find(
+            (document) =>
+              document.documentType === 'company-letter-of-intent' &&
+              document.evidenceStatus === 'VALIDATED',
+          );
+          const letterFields = letter
+            ? extractedEvidenceFields(letter.extractedFields)
+            : {};
+          const letterCompanyName = extractedString(
+            letterFields,
+            'companyName',
+          );
+          const letterContactEmail = extractedString(
+            letterFields,
+            'contactEmail',
+          );
+          const letterSignatory =
+            extractedString(letterFields, 'authorityHolderName') ||
+            extractedString(letterFields, 'documentName');
+          const authorizedApplicantName = extractedString(
+            letterFields,
+            'authorizedApplicantName',
+          );
+          const letterAuthorized = Boolean(
+            letter &&
+            letterCompanyName &&
+            normalizedCompanyName(letterCompanyName) ===
+              normalizedCompanyName(evidenceCompanyName) &&
+            letterFields.intentToJoinCblue === true &&
+            hasValidContactEmail(letterContactEmail) &&
+            letterSignatory &&
+            authorizedApplicantName &&
+            identityNameHash(authorizedApplicantName) ===
+              identitySubjectNameHash &&
+            affidavitAuthorityNames.some(
+              (name) =>
+                normalizedPersonName(name) ===
+                normalizedPersonName(letterSignatory),
+            ),
+          );
+          if (!applicantDirectorAuthorized && !letterAuthorized) {
+            throw new ConflictException(
+              'Company approval requires either KYC by a named company director or a validated director letter of intent with a contact email',
             );
           }
           verifiedCompanyName = evidenceCompanyName;
@@ -843,9 +952,7 @@ export class QualificationReviewService {
             publicDisplayName:
               directDecision?.providerIdentityType ===
               QualificationProviderIdentityType.COMPANY
-                ? [task.submission.fixer.user.name, verifiedCompanyName]
-                    .filter(Boolean)
-                    .join(' / ')
+                ? verifiedCompanyName
                 : null,
             verifiedCompanyName:
               directDecision?.providerIdentityType ===

@@ -4,6 +4,7 @@ export const QUALIFICATION_DOCUMENT_TYPES = [
   'id-front',
   'selfie-with-id',
   'company-affidavit',
+  'company-letter-of-intent',
   'education-certificate',
   'professional-certificate',
   'corporate-certificate',

@@ -10,6 +10,11 @@ export type QualificationReasonCode =
   | 'AFFIDAVIT_EXPIRED'
   | 'COMPANY_NAME_CONTRADICTION'
   | 'COMPANY_AUTHORITY_REVIEW_REQUIRED'
+  | 'COMPANY_INTENT_MISSING'
+  | 'COMPANY_CONTACT_MISSING'
+  | 'COMPANY_AUTHORITY_CONTRADICTION'
+  | 'COMPANY_APPLICANT_MISSING'
+  | 'COMPANY_APPLICANT_CONTRADICTION'
   | 'PORTFOLIO_IDENTITY_CONTRADICTION'
   | 'BIOMETRIC_CHECK_NOT_PERFORMED'
   | 'LIVENESS_FAILED'
@@ -50,7 +55,10 @@ export type QualificationDocumentAssessment = {
   livenessConfidence: number | null;
   reasonCodes: QualificationReasonCode[];
   checks?: QualificationVerificationCheck[];
-  extractedFields?: Record<string, string | number | string[] | null> | null;
+  extractedFields?: Record<
+    string,
+    string | number | boolean | string[] | null
+  > | null;
   identityNumberLast4?: string | null;
   identityNumberHash?: string | null;
   subjectNameHash?: string | null;

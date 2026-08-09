@@ -219,7 +219,10 @@ describe('QualificationService', () => {
   });
 
   it('persists an admin evidence decision and immutable audit hashes', async () => {
-    tx.qualificationReviewTask.findFirst.mockResolvedValue({ id: 'task-1' });
+    tx.qualificationReviewTask.findFirst.mockResolvedValue({
+      id: 'task-1',
+      kind: 'TIER',
+    });
     tx.kycDocument.findFirst.mockResolvedValue({
       id: 'document-1',
       documentType: 'professional-certificate',
@@ -262,6 +265,32 @@ describe('QualificationService', () => {
         afterHash: expect.stringMatching(/^[a-f0-9]{64}$/),
       }),
     });
+  });
+
+  it.each([
+    ['KYC', 'professional-certificate'],
+    ['TIER', 'id-front'],
+  ])('rejects %s review access to %s evidence', async (kind, documentType) => {
+    tx.qualificationReviewTask.findFirst.mockResolvedValue({
+      id: 'task-1',
+      kind,
+    });
+    tx.kycDocument.findFirst.mockResolvedValue({
+      id: 'document-1',
+      documentType,
+      checksumSha256: 'checksum',
+      evidenceStatus: 'UNCHECKED',
+    });
+
+    await expect(
+      service.reviewDocumentEvidence('admin-1', 'submission-1', 'document-1', {
+        evidenceStatus: 'VALIDATED',
+        reason: 'Evidence source and identity were verified.',
+      }),
+    ).rejects.toThrow(
+      'Qualification evidence must be decided in its assigned review queue',
+    );
+    expect(tx.kycDocument.update).not.toHaveBeenCalled();
   });
 
   it('rejects an evidence decision from an admin who does not own the task', async () => {
@@ -336,6 +365,9 @@ describe('QualificationService', () => {
       tier: 'STANDARD',
       status: 'APPROVED',
       verified: true,
+      publicDisplayName: 'Example Company Limited',
+      verifiedCompanyName: 'Example Company Limited',
+      companyIdentityVerifiedAt: updatedAt,
       aiScore: 78,
       aiTier: 'STANDARD',
       aiCredentialStatus: 'verified',
@@ -402,6 +434,9 @@ describe('QualificationService', () => {
           id: 'fixer-1',
           tier: 'STANDARD',
           status: 'APPROVED',
+          publicDisplayName: 'Example Company Limited',
+          verifiedCompanyName: 'Example Company Limited',
+          companyIdentityVerifiedAt: updatedAt,
         }),
         submission: expect.objectContaining({
           id: 'submission-1',
@@ -1723,6 +1758,27 @@ describe('QualificationService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(storage.putPrivateObject).not.toHaveBeenCalled();
   });
+
+  it.each(['company-affidavit', 'company-letter-of-intent'])(
+    'rejects %s evidence above 0.3 MB before private storage',
+    async (documentType) => {
+      const body = Buffer.concat([
+        Buffer.from('%PDF-1.4\n'),
+        Buffer.alloc(300 * 1024),
+      ]);
+      await expect(
+        service.uploadDocumentForUser('user-1', 'submission-1', documentType, {
+          originalname: `large-${documentType}.pdf`,
+          mimetype: 'application/pdf',
+          size: body.length,
+          buffer: body,
+        } as Express.Multer.File),
+      ).rejects.toThrow(
+        'Company evidence file exceeds 0.3 MB; compress it before upload',
+      );
+      expect(storage.putPrivateObject).not.toHaveBeenCalled();
+    },
+  );
 
   it('enforces the ten-file portfolio limit under a serialized upload lock', async () => {
     prisma.kycSubmission.findFirst.mockResolvedValue({

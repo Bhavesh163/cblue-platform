@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/require-await */
 import { ConflictException } from '@nestjs/common';
+import { identityNameHash } from './identity-evidence.util';
 import { QualificationReviewService } from './qualification-review.service';
 import {
   QualificationProviderIdentityType,
@@ -16,6 +17,7 @@ describe('QualificationReviewService', () => {
     },
     tierQualification: { create: jest.fn() },
     fixer: { update: jest.fn() },
+    user: { update: jest.fn() },
     kycSubmission: { update: jest.fn() },
     kycDocument: { findMany: jest.fn() },
     qualificationAuditLog: { create: jest.fn() },
@@ -49,6 +51,7 @@ describe('QualificationReviewService', () => {
   };
 
   beforeEach(() => {
+    process.env.QUALIFICATION_IDENTITY_HMAC_SECRET = 'test-identity-secret';
     jest.clearAllMocks();
     prisma.qualificationReviewTask.updateMany.mockResolvedValue({ count: 1 });
     tx.qualificationReviewTask.updateMany.mockResolvedValue({ count: 1 });
@@ -62,6 +65,7 @@ describe('QualificationReviewService', () => {
     tx.tierQualification.create.mockResolvedValue({
       id: 'tier-qualification-1',
     });
+    tx.user.update.mockResolvedValue({ id: 'user-1' });
     tx.fixer.update.mockResolvedValue({
       id: 'fixer-1',
       status: 'APPROVED',
@@ -320,7 +324,7 @@ describe('QualificationReviewService', () => {
     );
   });
 
-  it('publishes a verified company provider under the personal and company names', async () => {
+  it('publishes a verified company provider under the verified company name', async () => {
     tx.qualificationReviewTask.findUnique.mockResolvedValue({
       id: 'task-1',
       kind: 'KYC',
@@ -337,17 +341,24 @@ describe('QualificationReviewService', () => {
           status: 'PENDING',
           tier: 'ECONOMY',
           verified: false,
-          user: { name: 'Registered Person' },
+          user: { name: 'Changed Profile Name' },
         },
       },
     });
     tx.kycDocument.findMany.mockResolvedValue([
-      { documentType: 'id-front', evidenceStatus: 'VALIDATED' },
+      {
+        documentType: 'id-front',
+        evidenceStatus: 'VALIDATED',
+        subjectNameHash: identityNameHash('Registered Person'),
+      },
       { documentType: 'selfie-with-id', evidenceStatus: 'VALIDATED' },
       {
         documentType: 'company-affidavit',
         evidenceStatus: 'VALIDATED',
-        extractedFields: { companyName: 'Example Company Limited' },
+        extractedFields: {
+          companyName: 'Example Company Limited',
+          directorNames: ['Registered Person'],
+        },
       },
     ]);
 
@@ -363,13 +374,74 @@ describe('QualificationReviewService', () => {
     expect(tx.fixer.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          publicDisplayName: 'Registered Person / Example Company Limited',
+          publicDisplayName: 'Example Company Limited',
           verifiedCompanyName: 'Example Company Limited',
           companyIdentityVerifiedAt: expect.any(Date),
           companyIdentityVerifiedBy: 'admin-1',
         }),
       }),
     );
+  });
+
+  it('accepts company identity with a validated director authorization letter', async () => {
+    tx.qualificationReviewTask.findUnique.mockResolvedValue({
+      id: 'task-1',
+      kind: 'KYC',
+      status: 'ASSIGNED',
+      assignedTo: 'admin-1',
+      proposedAt: null,
+      submissionId: 'submission-1',
+      submission: {
+        ...submission,
+        status: 'NEEDS_REVIEW',
+        evaluations: [],
+        fixer: {
+          id: 'fixer-1',
+          status: 'PENDING',
+          tier: 'ECONOMY',
+          verified: false,
+          userId: 'user-1',
+          user: { name: 'Applicant Person' },
+        },
+      },
+    });
+    tx.kycDocument.findMany.mockResolvedValue([
+      {
+        documentType: 'id-front',
+        evidenceStatus: 'VALIDATED',
+        subjectNameHash: identityNameHash('Applicant Person'),
+      },
+      { documentType: 'selfie-with-id', evidenceStatus: 'VALIDATED' },
+      {
+        documentType: 'company-affidavit',
+        evidenceStatus: 'VALIDATED',
+        extractedFields: {
+          companyName: 'Example Company Limited',
+          directorNames: ['Director One'],
+        },
+      },
+      {
+        documentType: 'company-letter-of-intent',
+        evidenceStatus: 'VALIDATED',
+        extractedFields: {
+          documentName: 'Director One',
+          authorityHolderName: 'Director One',
+          companyName: 'Example Company Limited',
+          contactEmail: 'director@example.com',
+          intentToJoinCblue: true,
+          authorizedApplicantName: 'Applicant Person',
+        },
+      },
+    ]);
+
+    await expect(
+      service.decideTask('admin-1', 'task-1', {
+        decision: QualificationReviewDecision.APPROVE,
+        providerIdentityType: QualificationProviderIdentityType.COMPANY,
+        approvedProviderName: 'Example Company Limited',
+        reason: 'Director authority and company evidence are verified.',
+      }),
+    ).resolves.toEqual(expect.objectContaining({ applied: true }));
   });
 
   it('rejects a company identity name that differs from validated evidence', async () => {
@@ -391,7 +463,11 @@ describe('QualificationReviewService', () => {
       },
     });
     tx.kycDocument.findMany.mockResolvedValue([
-      { documentType: 'id-front', evidenceStatus: 'VALIDATED' },
+      {
+        documentType: 'id-front',
+        evidenceStatus: 'VALIDATED',
+        subjectNameHash: identityNameHash('Registered Person'),
+      },
       { documentType: 'selfie-with-id', evidenceStatus: 'VALIDATED' },
       {
         documentType: 'company-affidavit',

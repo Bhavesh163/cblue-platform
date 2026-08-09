@@ -670,7 +670,12 @@ export default function QualificationEvidenceControls({
           )}
 
           {!readOnly &&
-            !["id-front", "selfie-with-id"].includes(document.documentType) && (
+            ![
+              "id-front",
+              "selfie-with-id",
+              "company-affidavit",
+              "company-letter-of-intent",
+            ].includes(document.documentType) && (
               <details className="mt-3 border-t border-slate-100 pt-3">
                 <summary className="cursor-pointer text-xs font-semibold text-slate-600">
                   Credential verification

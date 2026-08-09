@@ -7,6 +7,7 @@ import QualificationEvidenceControls from "./QualificationEvidenceControls";
 import {
   biometricAssessmentLabel,
   buildQualificationDecisionPayload,
+  qualificationAssessmentSummary,
   visibleQualificationDocuments,
 } from "../../../lib/qualificationAdminProjection.mjs";
 
@@ -466,9 +467,9 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
         </p>
       )}
       {tasks.length > 0 && (
-        <div className="overflow-x-auto">
+        <div className="max-h-[70vh] overflow-auto">
           <table className="w-full min-w-[980px] text-left text-sm">
-            <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+            <thead className="sticky top-0 z-10 border-b border-slate-200 bg-white text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="py-2 pr-4">Partner / review type</th>
                 <th className="py-2 pr-4">Recommendation</th>
@@ -492,13 +493,14 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                         "id-front",
                         "selfie-with-id",
                         "company-affidavit",
-                      ].includes(
-                        document.documentType,
-                      )
+                        "company-letter-of-intent",
+                      ].includes(document.documentType)
                     : !["id-front", "selfie-with-id"].includes(
                         document.documentType,
                       ),
                 );
+                const assessmentSummary =
+                  qualificationAssessmentSummary(documents);
                 const selectedDecision = decision[task.id] || "APPROVE";
                 const selectedIdentityType =
                   providerIdentityType[task.id] || "PERSONAL";
@@ -539,6 +541,12 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                         Recommendation:{" "}
                         {evaluation?.recommendedTier || "Pending"}
                       </p>
+                      <p className="mt-1 text-xs text-slate-600">
+                        Checks: {assessmentSummary.passed} passed,{" "}
+                        {assessmentSummary.failed} failed,{" "}
+                        {assessmentSummary.review} awaiting review,{" "}
+                        {assessmentSummary.notPerformed} not performed
+                      </p>
                       <p className="mt-1 text-xs text-slate-500">
                         {evaluation?.risk || "-"} risk /{" "}
                         {evaluation?.confidence ?? "-"}% confidence
@@ -572,7 +580,8 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                       </div>
                       {evaluation?.completedAt || evaluation?.createdAt ? (
                         <p className="mt-2 text-[11px] text-slate-500">
-                          Assessed: {new Date(
+                          Assessed:{" "}
+                          {new Date(
                             evaluation.completedAt ||
                               evaluation.createdAt ||
                               "",
@@ -794,8 +803,8 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                                   />
                                 ) : (
                                   <p className="self-center text-xs text-slate-500">
-                                    Provider operates under the approved personal
-                                    identity.
+                                    Provider operates under the approved
+                                    personal identity.
                                   </p>
                                 )}
                               </div>

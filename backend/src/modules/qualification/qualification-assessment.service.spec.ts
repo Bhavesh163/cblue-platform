@@ -184,6 +184,50 @@ describe('QualificationAssessmentService', () => {
     );
   });
 
+  it('persists company authority as inconclusive until administrator review', async () => {
+    prisma.kycDocument.findFirst.mockResolvedValue({
+      id: 'document-1',
+      checksumSha256: 'checksum-1',
+      evidenceStatus: 'UNCHECKED',
+      updatedAt: new Date('2026-07-30T00:00:00.000Z'),
+      documentType: 'company-letter-of-intent',
+    });
+    verification.assessStoredDocument.mockResolvedValue({
+      ...providerAssessment,
+      extractedFields: {
+        companyName: 'Example Company Limited',
+        contactEmail: 'director@example.com',
+        intentToJoinCblue: true,
+        authorizedApplicantName: 'Applicant Person',
+      },
+    });
+
+    await assess();
+
+    expect(tx.qualificationEvaluation.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          findings: {
+            create: expect.arrayContaining([
+              expect.objectContaining({
+                code: 'COMPANY_AUTHORITY',
+                result: 'UNCHECKED',
+                details: expect.objectContaining({
+                  status: 'INCONCLUSIVE',
+                  reasonCode: 'COMPANY_AUTHORITY_REVIEW_REQUIRED',
+                }),
+              }),
+              expect.objectContaining({
+                code: 'AUTHORIZED_APPLICANT',
+                result: 'VALIDATED',
+              }),
+            ]),
+          },
+        }),
+      }),
+    );
+  });
+
   it('fails closed when provider enums, reasons, or nullable scores are malformed', async () => {
     verification.assessStoredDocument.mockResolvedValue({
       ...providerAssessment,

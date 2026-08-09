@@ -785,6 +785,8 @@ describe('FixerService', () => {
       prisma.fixer.findMany.mockResolvedValue([
         {
           id: 'fixer-fitout',
+          publicDisplayName: 'Verified Fitout Company Limited',
+          verifiedCompanyName: 'Verified Fitout Company Limited',
           tier: 'CORPORATE',
           rating: 4.9,
           completedJobs: 24,
@@ -841,6 +843,7 @@ describe('FixerService', () => {
       ) as
         | {
             id: string;
+            alias: string;
             estimatedTotal: number;
             price: number;
             estimatedUnit: string;
@@ -849,6 +852,7 @@ describe('FixerService', () => {
         | undefined;
 
       expect(fitoutCandidate).toBeDefined();
+      expect(fitoutCandidate?.alias).toBe('Verified Fitout Company Limited');
       expect(fitoutCandidate?.estimatedTotal).toBe(1200000);
       expect(fitoutCandidate?.price).toBe(1200000);
       expect(fitoutCandidate?.estimatedUnit).toBe('sqm');

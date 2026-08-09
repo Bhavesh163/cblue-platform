@@ -31,3 +31,21 @@ test("fixer registration promises automatic compression for images and PDFs", as
   assert.match(source, /multiple/);
   assert.match(source, /PORTFOLIO_MAX_FILES/);
 });
+
+test("company evidence uses compression before upload", async () => {
+  const [helperSource, registerSource] = await Promise.all([
+    readFile(helperUrl, "utf8"),
+    readFile(registerUrl, "utf8"),
+  ]);
+
+  assert.match(helperSource, /prepareQualificationEvidenceFile/);
+  assert.match(helperSource, /compressPdfFile\(file, true\)/);
+  assert.match(helperSource, /preserveReadability/);
+  assert.match(registerSource, /prepareCompanyEvidence/);
+  assert.match(registerSource, /setCompanyAffidavit/);
+  assert.match(registerSource, /setCompanyLetterOfIntent/);
+  assert.match(
+    registerSource,
+    /Images and PDFs are compressed to no more than 0\.3 MB each\./,
+  );
+});

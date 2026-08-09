@@ -2689,7 +2689,10 @@ export class FixerService {
         return {
           id: f.id,
           alias:
-            f.user?.company || f.user?.name || `Partner-${f.id.slice(0, 4)}`,
+            f.publicDisplayName ||
+            f.verifiedCompanyName ||
+            f.user?.name ||
+            `Partner-${f.id.slice(0, 4)}`,
           tier: (f.tier || 'economy').toLowerCase(),
           rating: f.rating || 0,
           totalJobs: f.completedJobs || 0,

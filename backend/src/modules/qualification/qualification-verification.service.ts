@@ -31,6 +31,9 @@ type ExtractedCredentialFields = {
   directorNames: string[];
   authorityHolderName: string | null;
   authorityType: string | null;
+  contactEmail: string | null;
+  intentToJoinCblue: boolean | null;
+  authorizedApplicantName: string | null;
   confidence: number;
 };
 
@@ -50,6 +53,9 @@ const EXTRACTION_KEYS = new Set<keyof ExtractedCredentialFields>([
   'directorNames',
   'authorityHolderName',
   'authorityType',
+  'contactEmail',
+  'intentToJoinCblue',
+  'authorizedApplicantName',
   'confidence',
 ]);
 const REQUIRED_EXTRACTION_KEYS = new Set<keyof ExtractedCredentialFields>([
@@ -67,6 +73,10 @@ const REQUIRED_EXTRACTION_KEYS = new Set<keyof ExtractedCredentialFields>([
 ]);
 const IDENTITY_TYPES = new Set(['id-front', 'selfie-with-id']);
 const ID_FRONT_TYPES = new Set(['id-front']);
+const COMPANY_TYPES = new Set([
+  'company-affidavit',
+  'company-letter-of-intent',
+]);
 const DOCUMENT_TYPES = new Set<string>([
   ...QUALIFICATION_DOCUMENT_TYPES,
   'id-back',
@@ -142,8 +152,8 @@ export class QualificationVerificationService {
       );
 
       if (
-        (document.documentType === 'id-front' ||
-          document.documentType === 'selfie-with-id') &&
+        (IDENTITY_TYPES.has(document.documentType) ||
+          COMPANY_TYPES.has(document.documentType)) &&
         fields.detectedDocumentType !== null &&
         fields.detectedDocumentType !== document.documentType
       ) {
@@ -156,7 +166,8 @@ export class QualificationVerificationService {
       }
       if (
         fields.confidence < 70 ||
-        (IDENTITY_TYPES.has(document.documentType) &&
+        ((IDENTITY_TYPES.has(document.documentType) ||
+          COMPANY_TYPES.has(document.documentType)) &&
           fields.detectedDocumentType === null) ||
         (document.documentType === 'id-front' && !fields.documentName)
       ) {
@@ -256,6 +267,10 @@ export class QualificationVerificationService {
           ...fields.directorNames,
           fields.authorityHolderName,
         ].filter((name): name is string => Boolean(name));
+        const affidavitFieldsMissing =
+          !fields.companyName ||
+          !fields.companyRegistrationNumber ||
+          authorityNames.length === 0;
         const applicantHasAuthority = authorityNames.some((name) =>
           this.namesMatch(input.registeredName, name),
         );
@@ -263,7 +278,9 @@ export class QualificationVerificationService {
           ...result({
             evidenceStatus: companyNameContradiction
               ? 'CONTRADICTED'
-              : 'INSUFFICIENT',
+              : affidavitFieldsMissing
+                ? 'INSUFFICIENT'
+                : 'VALIDATED',
             route: 'NEEDS_REVIEW',
             confidence: fields.confidence,
             reasonCodes: companyNameContradiction
@@ -278,11 +295,75 @@ export class QualificationVerificationService {
           extractedFields: affidavitFields,
         });
       }
+      if (document.documentType === 'company-letter-of-intent') {
+        const companyNameContradiction =
+          Boolean(input.claimedCompanyName && fields.companyName) &&
+          !this.namesMatch(input.claimedCompanyName || '', fields.companyName);
+        const contactEmail = fields.contactEmail?.trim().toLowerCase() || null;
+        const contactAvailable = Boolean(
+          contactEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail),
+        );
+        const authorizedApplicantName =
+          fields.authorizedApplicantName?.trim() || null;
+        const applicantContradiction = Boolean(
+          authorizedApplicantName &&
+          !this.namesMatch(input.registeredName, authorizedApplicantName),
+        );
+        const requiredFieldsMissing =
+          !fields.companyName ||
+          fields.intentToJoinCblue !== true ||
+          !contactAvailable ||
+          !authorizedApplicantName;
+        const reasonCodes: QualificationDocumentAssessment['reasonCodes'] = [
+          'DOCUMENT_VALID',
+          'HUMAN_REVIEW_REQUIRED',
+        ];
+        if (!fields.intentToJoinCblue) {
+          reasonCodes.unshift('COMPANY_INTENT_MISSING');
+        }
+        if (!contactAvailable) reasonCodes.unshift('COMPANY_CONTACT_MISSING');
+        if (!authorizedApplicantName) {
+          reasonCodes.unshift('COMPANY_APPLICANT_MISSING');
+        }
+        if (applicantContradiction) {
+          reasonCodes.unshift('COMPANY_APPLICANT_CONTRADICTION');
+        }
+        if (companyNameContradiction) {
+          reasonCodes.unshift('COMPANY_NAME_CONTRADICTION');
+        }
+        return withIdentity({
+          ...result({
+            evidenceStatus:
+              companyNameContradiction || applicantContradiction
+                ? 'CONTRADICTED'
+                : requiredFieldsMissing
+                  ? 'INSUFFICIENT'
+                  : 'VALIDATED',
+            route: 'NEEDS_REVIEW',
+            confidence: fields.confidence,
+            reasonCodes,
+          }),
+          extractedFields: {
+            detectedDocumentType: fields.detectedDocumentType,
+            documentName: fields.documentName,
+            companyName: fields.companyName,
+            companyRegistrationNumber: fields.companyRegistrationNumber,
+            directorNames: fields.directorNames,
+            authorityHolderName: fields.authorityHolderName,
+            authorityType: fields.authorityType,
+            contactEmail,
+            intentToJoinCblue: fields.intentToJoinCblue,
+            authorizedApplicantName,
+            confidence: fields.confidence,
+          },
+        });
+      }
 
       const nameMustMatch =
         document.documentType !== 'portfolio' &&
         document.documentType !== 'selfie-with-id' &&
         document.documentType !== 'company-affidavit' &&
+        document.documentType !== 'company-letter-of-intent' &&
         Boolean(fields.documentName);
       if (
         nameMustMatch &&
@@ -334,6 +415,9 @@ export class QualificationVerificationService {
           directorNames: fields.directorNames,
           authorityHolderName: fields.authorityHolderName,
           authorityType: fields.authorityType,
+          contactEmail: fields.contactEmail,
+          intentToJoinCblue: fields.intentToJoinCblue,
+          authorizedApplicantName: fields.authorizedApplicantName,
           confidence: fields.confidence,
         },
       });
@@ -433,6 +517,9 @@ export class QualificationVerificationService {
                   authorityHolderName: 'string|null',
                   authorityType: 'director|power-of-attorney|consent|null',
                   confidence: 'integer 0..100',
+                  contactEmail: 'string|null',
+                  intentToJoinCblue: 'boolean|null',
+                  authorizedApplicantName: 'string|null',
                 },
               }),
             },
@@ -521,6 +608,16 @@ export class QualificationVerificationService {
       }
       return field.map((item) => (item as string).trim());
     };
+    const nullableBoolean = (key: keyof ExtractedCredentialFields) => {
+      const field = parsed[key];
+      if (field === null || field === undefined) return null;
+      if (typeof field !== 'boolean') {
+        throw new ServiceUnavailableException(
+          `Qualification extraction field ${key} is invalid`,
+        );
+      }
+      return field;
+    };
     const date = (key: 'issuedAt' | 'expiresAt') => {
       const field = nullableString(key);
       if (field === null) return null;
@@ -589,6 +686,9 @@ export class QualificationVerificationService {
       directorNames: stringArray('directorNames'),
       authorityHolderName: nullableString('authorityHolderName'),
       authorityType: nullableString('authorityType'),
+      contactEmail: nullableString('contactEmail'),
+      intentToJoinCblue: nullableBoolean('intentToJoinCblue'),
+      authorizedApplicantName: nullableString('authorizedApplicantName'),
       confidence,
     };
   }
@@ -609,6 +709,11 @@ export class QualificationVerificationService {
       .normalize('NFKC')
       .toLocaleLowerCase('en-US')
       .replace(/^(mr|mrs|ms|miss|dr)\.?\s*/u, '')
+      .replace(
+        /^(\u0e19\u0e32\u0e22|\u0e19\u0e32\u0e07\u0e2a\u0e32\u0e27|\u0e19\u0e32\u0e07|\u0e14\u0e23\.)\s*/u,
+        '',
+      )
+      .replace(/(\u5148\u751f|\u5973\u58eb)$/u, '')
       .replace(/[^\p{L}\p{N}]/gu, '');
   }
 

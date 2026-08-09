@@ -39,7 +39,10 @@ function canvasBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
   });
 }
 
-async function compressPdfFile(file: File): Promise<File> {
+async function compressPdfFile(
+  file: File,
+  preserveReadability = false,
+): Promise<File> {
   const [{ PDFDocument }, pdfjs] = await Promise.all([
     import("pdf-lib"),
     import("pdfjs-dist"),
@@ -50,12 +53,29 @@ async function compressPdfFile(file: File): Promise<File> {
     import.meta.url,
   ).toString();
 
+  const sourceBytes = new Uint8Array(await file.arrayBuffer());
   const loadingTask = pdfjs.getDocument({
-    data: new Uint8Array(await file.arrayBuffer()),
+    data: sourceBytes,
     isEvalSupported: false,
   });
 
   try {
+    const optimized = await PDFDocument.load(sourceBytes, {
+      ignoreEncryption: false,
+      updateMetadata: false,
+    });
+    const optimizedBytes = await optimized.save({
+      addDefaultPage: false,
+      useObjectStreams: true,
+      updateFieldAppearances: false,
+    });
+    if (optimizedBytes.byteLength <= PORTFOLIO_PDF_TARGET_BYTES) {
+      return new File([Uint8Array.from(optimizedBytes)], file.name, {
+        type: PORTFOLIO_PDF_TYPE,
+        lastModified: file.lastModified,
+      });
+    }
+
     const source = await loadingTask.promise;
     if (source.numPages > PORTFOLIO_PDF_MAX_PAGES) {
       throw new Error(
@@ -63,16 +83,21 @@ async function compressPdfFile(file: File): Promise<File> {
       );
     }
 
-    const attempts = [
+    const readableAttempts = [
       { scale: 1.4, quality: 0.82 },
       { scale: 1.2, quality: 0.72 },
       { scale: 1, quality: 0.62 },
       { scale: 0.84, quality: 0.52 },
       { scale: 0.68, quality: 0.42 },
-      { scale: 0.54, quality: 0.32 },
-      { scale: 0.42, quality: 0.24 },
-      { scale: 0.32, quality: 0.18 },
     ];
+    const attempts = preserveReadability
+      ? readableAttempts
+      : [
+          ...readableAttempts,
+          { scale: 0.54, quality: 0.32 },
+          { scale: 0.42, quality: 0.24 },
+          { scale: 0.32, quality: 0.18 },
+        ];
 
     for (const attempt of attempts) {
       const output = await PDFDocument.create();
@@ -142,9 +167,7 @@ async function compressPdfFile(file: File): Promise<File> {
 
 export async function preparePortfolioFile(file: File): Promise<File> {
   if (file.type === PORTFOLIO_PDF_TYPE) {
-    return file.size <= PORTFOLIO_MAX_FILE_BYTES
-      ? file
-      : compressPdfFile(file);
+    return file.size <= PORTFOLIO_MAX_FILE_BYTES ? file : compressPdfFile(file);
   }
   if (!ALLOWED_PORTFOLIO_IMAGE_TYPES.has(file.type)) {
     throw new Error(`${file.name} is not a supported portfolio file`);
@@ -190,4 +213,15 @@ export async function preparePortfolioFile(file: File): Promise<File> {
   }
 
   throw new Error(`${file.name} cannot be compressed below 0.3 MB`);
+}
+
+export async function prepareQualificationEvidenceFile(
+  file: File,
+): Promise<File> {
+  if (file.type === PORTFOLIO_PDF_TYPE) {
+    return file.size <= PORTFOLIO_MAX_FILE_BYTES
+      ? file
+      : compressPdfFile(file, true);
+  }
+  return preparePortfolioFile(file);
 }

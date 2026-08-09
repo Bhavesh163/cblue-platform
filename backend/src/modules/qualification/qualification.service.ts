@@ -9,6 +9,7 @@ import {
 import {
   Prisma,
   QualificationDocumentLifecycleState,
+  QualificationReviewKind,
   QualificationStorageCleanupStatus,
   QualificationSubmissionStatus,
 } from '@prisma/client';
@@ -31,6 +32,11 @@ const PORTFOLIO_MAX_FILES = 10;
 const CONSENT_RETENTION_MS = 3 * 365 * 24 * 60 * 60 * 1000;
 const PORTFOLIO_MAX_FILE_BYTES = 300 * 1024;
 const KYC_DOCUMENT_TYPES = ['id-front', 'selfie-with-id'] as const;
+const KYC_REVIEW_DOCUMENT_TYPES = new Set([
+  ...KYC_DOCUMENT_TYPES,
+  'company-affidavit',
+  'company-letter-of-intent',
+]);
 const UPLOADABLE_SUBMISSION_STATUSES = new Set([
   'DRAFT',
   'NEEDS_RESUBMISSION',
@@ -213,6 +219,9 @@ export class QualificationService {
         tier: true,
         status: true,
         verified: true,
+        publicDisplayName: true,
+        verifiedCompanyName: true,
+        companyIdentityVerifiedAt: true,
         aiScore: true,
         aiTier: true,
         aiCredentialStatus: true,
@@ -294,6 +303,9 @@ export class QualificationService {
         tier: fixer.tier,
         status: fixer.status,
         verified: fixer.verified,
+        publicDisplayName: fixer.publicDisplayName,
+        verifiedCompanyName: fixer.verifiedCompanyName,
+        companyIdentityVerifiedAt: fixer.companyIdentityVerifiedAt,
         updatedAt: fixer.updatedAt,
       },
       ai: {
@@ -393,6 +405,9 @@ export class QualificationService {
     }
     const fileSize = file.buffer.length;
     const isPortfolio = documentType === 'portfolio';
+    const isCompactCompanyEvidence =
+      documentType === 'company-affidavit' ||
+      documentType === 'company-letter-of-intent';
     const isKyc = KYC_DOCUMENT_TYPES.includes(
       documentType as (typeof KYC_DOCUMENT_TYPES)[number],
     );
@@ -404,6 +419,11 @@ export class QualificationService {
     if (isPortfolio && fileSize > PORTFOLIO_MAX_FILE_BYTES) {
       throw new BadRequestException(
         'Portfolio file exceeds 0.3 MB; images must be compressed before upload',
+      );
+    }
+    if (isCompactCompanyEvidence && fileSize > PORTFOLIO_MAX_FILE_BYTES) {
+      throw new BadRequestException(
+        'Company evidence file exceeds 0.3 MB; compress it before upload',
       );
     }
     if (isKyc && !imageContentTypes.has(file.mimetype)) {
@@ -1662,7 +1682,7 @@ export class QualificationService {
           assignedTo: adminId,
           proposedAt: null,
         },
-        select: { id: true },
+        select: { id: true, kind: true },
       });
       if (!reviewTask) {
         throw new ConflictException(
@@ -1689,6 +1709,17 @@ export class QualificationService {
       });
       if (!document)
         throw new NotFoundException('Qualification document not found');
+      const isKycEvidence = KYC_REVIEW_DOCUMENT_TYPES.has(
+        document.documentType,
+      );
+      const taskMatchesDocument =
+        (reviewTask.kind === QualificationReviewKind.KYC && isKycEvidence) ||
+        (reviewTask.kind === QualificationReviewKind.TIER && !isKycEvidence);
+      if (!taskMatchesDocument) {
+        throw new ConflictException(
+          'Qualification evidence must be decided in its assigned review queue',
+        );
+      }
 
       const updated = await tx.kycDocument.update({
         where: { id: document.id },

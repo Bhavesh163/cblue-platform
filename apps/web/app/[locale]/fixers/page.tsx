@@ -3807,6 +3807,7 @@ export default function FixerProPage() {
               userId: user.id || storedPartner?.userId,
               id: user.id || storedPartner?.id,
               name:
+                fixerProfile?.publicDisplayName ||
                 fixerProfile?.contactName ||
                 user.name ||
                 storedPartner?.name ||
@@ -3818,20 +3819,16 @@ export default function FixerProPage() {
                 storedPartner?.phone ||
                 "",
               company:
-                fixerProfile?.companyName || storedPartner?.company || "-",
+                fixerProfile?.verifiedCompanyName ||
+                fixerProfile?.companyName ||
+                storedPartner?.company ||
+                "-",
               status: fixerProfile?.status || storedPartner?.status || "ACTIVE",
-              tier:
-                fixerProfile?.aiTier ||
-                fixerProfile?.tier ||
-                storedPartner?.tier ||
-                "Standard",
-              tierScore: fixerProfile?.aiScore ?? storedPartner?.tierScore,
-              breakdown:
-                fixerProfile?.aiBreakdown || storedPartner?.breakdown || [],
-              flags: fixerProfile?.aiFlags || storedPartner?.flags || [],
-              credentialStatus:
-                fixerProfile?.aiCredentialStatus ||
-                storedPartner?.credentialStatus,
+              tier: fixerProfile?.tier || storedPartner?.tier || "-",
+              tierScore: undefined,
+              breakdown: [],
+              flags: [],
+              credentialStatus: fixerProfile?.verified ? "verified" : "pending",
               createdAt:
                 fixerProfile?.createdAt ||
                 user.createdAt ||
@@ -15251,16 +15248,18 @@ function PartnerProfile({
         </div>
       </div>
 
-      {/* AI Assessment & Upgrade Path */}
+      {/* Qualification status and upgrade path */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden mb-8">
         <div className="bg-sky-50 px-6 py-4 border-b border-sky-100 flex items-center justify-between">
           <h3 className="font-bold text-sky-900 flex items-center gap-2">
-            <span className="text-xl"></span> Qualification status (AI advisory only)
+            {locale === "th"
+              ? "\u0e2a\u0e16\u0e32\u0e19\u0e30\u0e04\u0e38\u0e13\u0e2a\u0e21\u0e1a\u0e31\u0e15\u0e34"
+              : locale === "zh"
+                ? "\u8d44\u683c\u72b6\u6001"
+                : "Qualification status"}
           </h3>
           <span className="text-sm text-sky-700 font-semibold bg-white px-3 py-1 rounded-full shadow-sm">
-            {partner.tierScore == null
-              ? "Assessment pending"
-              : "Legacy advisory score: " + partner.tierScore + "/100"}
+            {partner.tier}
           </span>
         </div>
 
@@ -15273,72 +15272,49 @@ function PartnerProfile({
                 className={`${partner.credentialStatus === "verified" ? "text-green-800" : "text-amber-800"} font-bold`}
               >
                 {partner.credentialStatus === "verified"
-                  ? "Credential evidence reviewed"
-                  : "Credential evidence review pending"}
+                  ? "Identity verified"
+                  : "Identity review pending"}
               </p>
               <p
                 className={`${partner.credentialStatus === "verified" ? "text-green-600" : "text-amber-700"} text-sm`}
               >
                 {partner.credentialStatus === "verified"
-                  ? "The current qualification result is based on persisted CBLUE evidence."
-                  : "The server-owned qualification result appears after required evidence and administrator review are complete."}
+                  ? "Your identity has been approved."
+                  : "Your identity information is being reviewed."}
               </p>
             </div>
           </div>
 
-          <h4 className="font-bold text-gray-800 mb-4">Evaluation Breakdown</h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-            {(Array.isArray(partner.breakdown) ? partner.breakdown : []).map(
-              (item: any, i: number) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100"
-                >
-                  <span className="text-gray-700 font-medium text-sm">
-                    {item.label}
-                  </span>
-                  <span
-                    className={`font-bold ${item.score === item.max ? "text-green-600" : item.score === 0 ? "text-red-500" : "text-amber-600"}`}
-                  >
-                    {item.score}/{item.max}
-                  </span>
-                </div>
-              ),
-            )}
-          </div>
-
-          <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-            <span className="text-lg"></span> AI Verification Results
+          <h4 className="font-bold text-gray-800 mb-4">
+            {locale === "th"
+              ? "\u0e2a\u0e16\u0e32\u0e19\u0e30\u0e1b\u0e31\u0e08\u0e08\u0e38\u0e1a\u0e31\u0e19"
+              : locale === "zh"
+                ? "\u5f53\u524d\u72b6\u6001"
+                : "Current status"}
           </h4>
-          <ul className="space-y-3 mb-8 bg-gray-50 p-5 rounded-xl border border-gray-100">
-            {(Array.isArray(partner.flags) ? partner.flags : []).map(
-              (flag: any, i: number) => (
-                <li key={i} className="flex gap-3">
-                  <span
-                    className={`font-bold ${flag.type === "pass" ? "text-green-500" : flag.type === "fail" ? "text-red-500" : "text-amber-500"}`}
-                  >
-                    {flag.type === "pass"
-                      ? "✓"
-                      : flag.type === "fail"
-                        ? "✕"
-                        : "⚠"}
-                  </span>
-                  <span className="text-gray-700 text-sm">{flag.message}</span>
-                </li>
-              ),
-            )}
-          </ul>
-
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+            <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+              <p className="text-xs text-gray-500">Approved tier</p>
+              <p className="font-bold text-gray-800">{partner.tier}</p>
+            </div>
+            <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+              <p className="text-xs text-gray-500">Account status</p>
+              <p className="font-bold text-gray-800">
+                {partner.credentialStatus === "verified"
+                  ? "Verified"
+                  : "Review in progress"}
+              </p>
+            </div>
+          </div>
           <div className="bg-sky-50 rounded-xl p-5 border border-sky-100 space-y-4">
             <div className="flex gap-3">
               <span className="text-sky-600 text-xl mt-0.5"></span>
               <div>
                 <p className="font-bold text-sky-900 mb-1">How to upgrade</p>
                 <p className="text-sky-800 text-sm leading-relaxed">
-                  Gain more experience, upload portfolio work, update
-                  certifications, and maintain good reviews — blue AI will
-                  automatically re-evaluate and upgrade your tier when you edit
-                  your profile or accumulate work history.
+                  Gain more experience, add portfolio work and certifications,
+                  and maintain good reviews. New evidence is reassessed, and
+                  upper-tier changes take effect after administrator approval.
                 </p>
               </div>
             </div>

@@ -24,9 +24,12 @@ import { QualificationComplianceAccessDto } from './dto/qualification-compliance
 import { QualificationReviewCheckDto } from './dto/qualification-review-check.dto';
 import { UploadQualificationDocumentDto } from './dto/upload-qualification-document.dto';
 import { QualificationEvaluationService } from './qualification-evaluation.service';
+
 import { QualificationReviewService } from './qualification-review.service';
 import { QualificationService } from './qualification.service';
 import { QualificationCredentialVerificationService } from './qualification-credential-verification.service';
+
+const QUALIFICATION_UPLOAD_TRANSPORT_MAX_BYTES = 25 * 1024 * 1024;
 
 @Controller('qualification')
 @UseGuards(JwtAuthGuard)
@@ -73,7 +76,11 @@ export class QualificationController {
   }
 
   @Post('submissions/:submissionId/documents')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { files: 1, fileSize: QUALIFICATION_UPLOAD_TRANSPORT_MAX_BYTES },
+    }),
+  )
   uploadDocument(
     @CurrentUser('id') userId: string,
     @Param('submissionId') submissionId: string,

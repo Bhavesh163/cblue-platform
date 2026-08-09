@@ -14,13 +14,18 @@ const FAILURE_REASONS = new Map([
   ["INVALID_ID_NUMBER", "Identity number is invalid"],
   ["IDENTITY_CONTRADICTION", "Applicant identity does not match"],
   ["COMPANY_NAME_CONTRADICTION", "Company name does not match"],
+  ["COMPANY_AUTHORITY_CONTRADICTION", "Company authority does not match"],
+  ["COMPANY_INTENT_MISSING", "Company application intent is missing"],
+  ["COMPANY_CONTACT_MISSING", "Company contact email is missing"],
+  ["COMPANY_APPLICANT_MISSING", "Authorized applicant is missing"],
+  ["COMPANY_APPLICANT_CONTRADICTION", "Authorized applicant does not match"],
   ["PORTFOLIO_IDENTITY_CONTRADICTION", "Portfolio identity does not match"],
   ["AFFIDAVIT_EXPIRED", "Company affidavit is expired"],
-  ["LIVENESS_FAILED", "Liveness check failed"],
 ]);
 
 const REVIEW_REASONS = new Map([
   ["SELFIE_REVIEW_REQUIRED", "Selfie requires administrator review"],
+  ["LIVENESS_FAILED", "Selfie requires administrator review"],
   ["AFFIDAVIT_REVIEW_REQUIRED", "Company affidavit requires review"],
   ["COMPANY_AUTHORITY_REVIEW_REQUIRED", "Company authority requires review"],
   ["HUMAN_REVIEW_REQUIRED", "Administrator review required"],
@@ -33,6 +38,9 @@ const SAFE_EXTRACTED_FIELDS = [
   ["directorNames", "Directors"],
   ["authorityHolderName", "Authorized person"],
   ["authorityType", "Authority type"],
+  ["contactEmail", "Contact email"],
+  ["intentToJoinCblue", "Application intent"],
+  ["authorizedApplicantName", "Authorized applicant"],
   ["issuerName", "Issuer"],
   ["documentName", "Document name"],
   ["credentialLevel", "Credential level"],
@@ -53,7 +61,8 @@ function extractedRoot(extractedFields) {
 
 function displayExtractedValue(value) {
   if (Array.isArray(value)) return value.filter(Boolean).join(", ");
-  if (typeof value === "number") return String(value);
+  if (typeof value === "number" || typeof value === "boolean")
+    return String(value);
   return typeof value === "string" ? value.trim() : "";
 }
 
@@ -70,6 +79,7 @@ export function safeQualificationExtractedFields(document) {
 
 export function qualificationDocumentChecks(document) {
   const reasons = new Set(document.assessmentReasonCodes || []);
+  const fields = extractedRoot(document.extractedFields);
   const checks = [];
   const add = (label, status, tone = "neutral") =>
     checks.push({ label, status, tone });
@@ -120,11 +130,7 @@ export function qualificationDocumentChecks(document) {
 
   if (document.documentType === "selfie-with-id") {
     add("Face match", "Not performed", "neutral");
-    add(
-      "Liveness",
-      reasons.has("LIVENESS_FAILED") ? "Failed" : "Not performed",
-      reasons.has("LIVENESS_FAILED") ? "danger" : "neutral",
-    );
+    add("Liveness", "Not performed", "neutral");
   }
 
   if (document.documentType === "company-affidavit") {
@@ -148,13 +154,76 @@ export function qualificationDocumentChecks(document) {
       reasons.has("PORTFOLIO_IDENTITY_CONTRADICTION")
         ? "Mismatch found"
         : "Administrator review",
-      reasons.has("PORTFOLIO_IDENTITY_CONTRADICTION")
-        ? "danger"
-        : "review",
+      reasons.has("PORTFOLIO_IDENTITY_CONTRADICTION") ? "danger" : "review",
     );
   }
 
+  if (document.documentType === "company-letter-of-intent") {
+    add(
+      "Application intent",
+      reasons.has("COMPANY_INTENT_MISSING")
+        ? "Missing"
+        : fields.intentToJoinCblue === true
+          ? "Recorded"
+          : "Not recorded",
+      reasons.has("COMPANY_INTENT_MISSING")
+        ? "danger"
+        : fields.intentToJoinCblue === true
+          ? "success"
+          : "neutral",
+    );
+    add(
+      "Contact email",
+      reasons.has("COMPANY_CONTACT_MISSING")
+        ? "Missing"
+        : fields.contactEmail
+          ? "Recorded"
+          : "Not recorded",
+      reasons.has("COMPANY_CONTACT_MISSING")
+        ? "danger"
+        : fields.contactEmail
+          ? "success"
+          : "neutral",
+    );
+    add(
+      "Authorized applicant",
+      reasons.has("COMPANY_APPLICANT_CONTRADICTION")
+        ? "Mismatch found"
+        : reasons.has("COMPANY_APPLICANT_MISSING")
+          ? "Missing"
+          : fields.authorizedApplicantName
+            ? "Recorded"
+            : "Not recorded",
+      reasons.has("COMPANY_APPLICANT_CONTRADICTION") ||
+        reasons.has("COMPANY_APPLICANT_MISSING")
+        ? "danger"
+        : fields.authorizedApplicantName
+          ? "success"
+          : "neutral",
+    );
+    add(
+      "Director authority",
+      reasons.has("COMPANY_AUTHORITY_CONTRADICTION")
+        ? "Mismatch found"
+        : "Administrator review",
+      reasons.has("COMPANY_AUTHORITY_CONTRADICTION") ? "danger" : "review",
+    );
+  }
   return checks;
+}
+
+export function qualificationAssessmentSummary(documents) {
+  const checks = (documents || []).flatMap(qualificationDocumentChecks);
+  return checks.reduce(
+    (summary, check) => {
+      if (check.tone === "success") summary.passed += 1;
+      else if (check.tone === "danger") summary.failed += 1;
+      else if (check.tone === "review") summary.review += 1;
+      else summary.notPerformed += 1;
+      return summary;
+    },
+    { passed: 0, failed: 0, review: 0, notPerformed: 0 },
+  );
 }
 
 export function qualificationReasonLabels(reasonCodes) {

@@ -30,6 +30,7 @@ import Link from "next/link";
 import DatePickerInput from "../../components/DatePickerInput";
 import {
   preparePortfolioFile,
+  prepareQualificationEvidenceFile,
   PORTFOLIO_MAX_FILES,
   PORTFOLIO_MAX_FILE_BYTES,
 } from "../../lib/portfolio-image-compression";
@@ -61,35 +62,138 @@ class KycUploadError extends Error {
   }
 }
 
-function applicantKycReason(code: string): string {
-  switch (code) {
-    case "WRONG_DOCUMENT_TYPE":
-      return "Please upload a clear photo of the front of your identity card.";
-    case "INVALID_ID_NUMBER":
-      return "Please upload a clear, valid identity card photo.";
-    case "EXPIRED_ID":
-      return "This identity card appears to be expired. Please upload a current card.";
-    case "IDENTITY_CONTRADICTION":
-      return "The name on this document does not match the profile name.";
-    case "UNREADABLE_DOCUMENT":
-      return "The image is unclear. Please upload a sharper, well-lit photo.";
-    case "LIVENESS_FAILED":
-      return "The selfie could not be confirmed. Please upload a clear selfie holding your identity card.";
-    case "MISSING_REQUIRED_EVIDENCE":
-      return "Please upload both required identity photos to continue.";
-    case "DOCUMENT_VALID":
-    case "SELFIE_REVIEW_REQUIRED":
-    case "HUMAN_REVIEW_REQUIRED":
-      return "Your photo was received and is being checked.";
-    case "PROVIDER_UNAVAILABLE":
-      return "Your photo was received and will be reviewed securely.";
-    case "EVIDENCE_REUSED_FOR_DIFFERENT_TYPE":
-      return "Please use two different photos for the identity card and selfie.";
-    case "EVIDENCE_UPLOAD_IN_PROGRESS":
-      return "This photo is already being checked.";
-    default:
-      return "We could not verify this photo. Please upload a clearer image and try again.";
+type ApplicantLocale = "en" | "th" | "zh";
+
+const APPLICANT_KYC_MESSAGES: Record<
+  ApplicantLocale,
+  Record<string, string>
+> = {
+  en: {
+    WRONG_DOCUMENT_TYPE:
+      "Please upload a clear photo of the front of your identity card.",
+    INVALID_ID_NUMBER: "Please upload a clear, valid identity card photo.",
+    EXPIRED_ID:
+      "This identity card appears to be expired. Please upload a current card.",
+    IDENTITY_CONTRADICTION:
+      "The name on this document does not match the profile name.",
+    UNREADABLE_DOCUMENT:
+      "The image is unclear. Please upload a sharper, well-lit photo.",
+    LIVENESS_FAILED:
+      "The selfie needs a clearer image for review. Please upload a well-lit selfie holding your identity card.",
+    MISSING_REQUIRED_EVIDENCE:
+      "Please upload both required identity photos to continue.",
+    RECEIVED: "Your photo was received and is being checked.",
+    PROVIDER_UNAVAILABLE:
+      "Your photo was received and will be reviewed securely.",
+    EVIDENCE_REUSED_FOR_DIFFERENT_TYPE:
+      "Please use two different photos for the identity card and selfie.",
+    EVIDENCE_UPLOAD_IN_PROGRESS: "This photo is already being checked.",
+    UPLOAD_FAILED:
+      "We could not save this photo securely. Please upload a clearer image and try again.",
+  },
+  th: {
+    WRONG_DOCUMENT_TYPE:
+      "\u0e01\u0e23\u0e38\u0e13\u0e32\u0e2d\u0e31\u0e1b\u0e42\u0e2b\u0e25\u0e14\u0e20\u0e32\u0e1e\u0e14\u0e49\u0e32\u0e19\u0e2b\u0e19\u0e49\u0e32\u0e1a\u0e31\u0e15\u0e23\u0e1b\u0e23\u0e30\u0e0a\u0e32\u0e0a\u0e19\u0e17\u0e35\u0e48\u0e0a\u0e31\u0e14\u0e40\u0e08\u0e19",
+    INVALID_ID_NUMBER:
+      "\u0e01\u0e23\u0e38\u0e13\u0e32\u0e2d\u0e31\u0e1b\u0e42\u0e2b\u0e25\u0e14\u0e20\u0e32\u0e1e\u0e1a\u0e31\u0e15\u0e23\u0e1b\u0e23\u0e30\u0e0a\u0e32\u0e0a\u0e19\u0e17\u0e35\u0e48\u0e0a\u0e31\u0e14\u0e40\u0e08\u0e19\u0e41\u0e25\u0e30\u0e16\u0e39\u0e01\u0e15\u0e49\u0e2d\u0e07",
+    EXPIRED_ID:
+      "\u0e1a\u0e31\u0e15\u0e23\u0e1b\u0e23\u0e30\u0e0a\u0e32\u0e0a\u0e19\u0e19\u0e35\u0e49\u0e2d\u0e32\u0e08\u0e2b\u0e21\u0e14\u0e2d\u0e32\u0e22\u0e38 \u0e01\u0e23\u0e38\u0e13\u0e32\u0e2d\u0e31\u0e1b\u0e42\u0e2b\u0e25\u0e14\u0e1a\u0e31\u0e15\u0e23\u0e17\u0e35\u0e48\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e2b\u0e21\u0e14\u0e2d\u0e32\u0e22\u0e38",
+    IDENTITY_CONTRADICTION:
+      "\u0e0a\u0e37\u0e48\u0e2d\u0e43\u0e19\u0e40\u0e2d\u0e01\u0e2a\u0e32\u0e23\u0e44\u0e21\u0e48\u0e15\u0e23\u0e07\u0e01\u0e31\u0e1a\u0e0a\u0e37\u0e48\u0e2d\u0e43\u0e19\u0e42\u0e1b\u0e23\u0e44\u0e1f\u0e25\u0e4c",
+    UNREADABLE_DOCUMENT:
+      "\u0e20\u0e32\u0e1e\u0e44\u0e21\u0e48\u0e0a\u0e31\u0e14\u0e40\u0e08\u0e19 \u0e01\u0e23\u0e38\u0e13\u0e32\u0e2d\u0e31\u0e1b\u0e42\u0e2b\u0e25\u0e14\u0e20\u0e32\u0e1e\u0e17\u0e35\u0e48\u0e04\u0e21\u0e0a\u0e31\u0e14\u0e41\u0e25\u0e30\u0e21\u0e35\u0e41\u0e2a\u0e07\u0e40\u0e1e\u0e35\u0e22\u0e07\u0e1e\u0e2d",
+    LIVENESS_FAILED:
+      "\u0e20\u0e32\u0e1e\u0e40\u0e0b\u0e25\u0e1f\u0e35\u0e48\u0e15\u0e49\u0e2d\u0e07\u0e0a\u0e31\u0e14\u0e40\u0e08\u0e19\u0e02\u0e36\u0e49\u0e19\u0e2a\u0e33\u0e2b\u0e23\u0e31\u0e1a\u0e01\u0e32\u0e23\u0e15\u0e23\u0e27\u0e08\u0e2a\u0e2d\u0e1a \u0e01\u0e23\u0e38\u0e13\u0e32\u0e2d\u0e31\u0e1b\u0e42\u0e2b\u0e25\u0e14\u0e20\u0e32\u0e1e\u0e17\u0e35\u0e48\u0e21\u0e35\u0e41\u0e2a\u0e07\u0e40\u0e1e\u0e35\u0e22\u0e07\u0e1e\u0e2d\u0e41\u0e25\u0e30\u0e16\u0e37\u0e2d\u0e1a\u0e31\u0e15\u0e23\u0e1b\u0e23\u0e30\u0e0a\u0e32\u0e0a\u0e19",
+    MISSING_REQUIRED_EVIDENCE:
+      "\u0e01\u0e23\u0e38\u0e13\u0e32\u0e2d\u0e31\u0e1b\u0e42\u0e2b\u0e25\u0e14\u0e20\u0e32\u0e1e\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e15\u0e31\u0e27\u0e15\u0e19\u0e17\u0e31\u0e49\u0e07\u0e2a\u0e2d\u0e07\u0e20\u0e32\u0e1e",
+    RECEIVED:
+      "\u0e44\u0e14\u0e49\u0e23\u0e31\u0e1a\u0e23\u0e39\u0e1b\u0e20\u0e32\u0e1e\u0e41\u0e25\u0e49\u0e27\u0e41\u0e25\u0e30\u0e01\u0e33\u0e25\u0e31\u0e07\u0e15\u0e23\u0e27\u0e08\u0e2a\u0e2d\u0e1a",
+    PROVIDER_UNAVAILABLE:
+      "\u0e44\u0e14\u0e49\u0e23\u0e31\u0e1a\u0e23\u0e39\u0e1b\u0e20\u0e32\u0e1e\u0e41\u0e25\u0e49\u0e27 \u0e41\u0e25\u0e30\u0e08\u0e30\u0e44\u0e14\u0e49\u0e23\u0e31\u0e1a\u0e01\u0e32\u0e23\u0e15\u0e23\u0e27\u0e08\u0e2a\u0e2d\u0e1a\u0e2d\u0e22\u0e48\u0e32\u0e07\u0e1b\u0e25\u0e2d\u0e14\u0e20\u0e31\u0e22",
+    EVIDENCE_REUSED_FOR_DIFFERENT_TYPE:
+      "\u0e01\u0e23\u0e38\u0e13\u0e32\u0e43\u0e0a\u0e49\u0e23\u0e39\u0e1b\u0e04\u0e19\u0e25\u0e30\u0e23\u0e39\u0e1b\u0e2a\u0e33\u0e2b\u0e23\u0e31\u0e1a\u0e1a\u0e31\u0e15\u0e23\u0e1b\u0e23\u0e30\u0e0a\u0e32\u0e0a\u0e19\u0e41\u0e25\u0e30\u0e20\u0e32\u0e1e\u0e40\u0e0b\u0e25\u0e1f\u0e35\u0e48",
+    EVIDENCE_UPLOAD_IN_PROGRESS:
+      "\u0e23\u0e39\u0e1b\u0e20\u0e32\u0e1e\u0e19\u0e35\u0e49\u0e01\u0e33\u0e25\u0e31\u0e07\u0e2d\u0e22\u0e39\u0e48\u0e23\u0e30\u0e2b\u0e27\u0e48\u0e32\u0e07\u0e01\u0e32\u0e23\u0e15\u0e23\u0e27\u0e08\u0e2a\u0e2d\u0e1a",
+    UPLOAD_FAILED:
+      "\u0e44\u0e21\u0e48\u0e2a\u0e32\u0e21\u0e32\u0e23\u0e16\u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e23\u0e39\u0e1b\u0e20\u0e32\u0e1e\u0e44\u0e14\u0e49\u0e2d\u0e22\u0e48\u0e32\u0e07\u0e1b\u0e25\u0e2d\u0e14\u0e20\u0e31\u0e22 \u0e01\u0e23\u0e38\u0e13\u0e32\u0e2d\u0e31\u0e1b\u0e42\u0e2b\u0e25\u0e14\u0e20\u0e32\u0e1e\u0e17\u0e35\u0e48\u0e0a\u0e31\u0e14\u0e40\u0e08\u0e19\u0e02\u0e36\u0e49\u0e19\u0e41\u0e25\u0e30\u0e25\u0e2d\u0e07\u0e2d\u0e35\u0e01\u0e04\u0e23\u0e31\u0e49\u0e07",
+  },
+  zh: {
+    WRONG_DOCUMENT_TYPE:
+      "\u8bf7\u4e0a\u4f20\u6e05\u6670\u7684\u8eab\u4efd\u8bc1\u6b63\u9762\u7167\u7247\u3002",
+    INVALID_ID_NUMBER:
+      "\u8bf7\u4e0a\u4f20\u6e05\u6670\u4e14\u6709\u6548\u7684\u8eab\u4efd\u8bc1\u7167\u7247\u3002",
+    EXPIRED_ID:
+      "\u6b64\u8eab\u4efd\u8bc1\u53ef\u80fd\u5df2\u8fc7\u671f\uff0c\u8bf7\u4e0a\u4f20\u4ecd\u5728\u6709\u6548\u671f\u5185\u7684\u8bc1\u4ef6\u3002",
+    IDENTITY_CONTRADICTION:
+      "\u8bc1\u4ef6\u59d3\u540d\u4e0e\u4e2a\u4eba\u8d44\u6599\u59d3\u540d\u4e0d\u4e00\u81f4\u3002",
+    UNREADABLE_DOCUMENT:
+      "\u56fe\u7247\u4e0d\u6e05\u6670\uff0c\u8bf7\u4e0a\u4f20\u5149\u7ebf\u5145\u8db3\u4e14\u6e05\u6670\u7684\u7167\u7247\u3002",
+    LIVENESS_FAILED:
+      "\u81ea\u62cd\u7167\u9700\u8981\u66f4\u6e05\u6670\u4ee5\u4fbf\u5ba1\u6838\uff0c\u8bf7\u4e0a\u4f20\u5149\u7ebf\u5145\u8db3\u5e76\u624b\u6301\u8eab\u4efd\u8bc1\u7684\u6e05\u6670\u7167\u7247\u3002",
+    MISSING_REQUIRED_EVIDENCE:
+      "\u8bf7\u4e0a\u4f20\u4e24\u5f20\u6240\u9700\u7684\u8eab\u4efd\u9a8c\u8bc1\u7167\u7247\u3002",
+    RECEIVED:
+      "\u7167\u7247\u5df2\u6536\u5230\uff0c\u6b63\u5728\u5ba1\u6838\u3002",
+    PROVIDER_UNAVAILABLE:
+      "\u7167\u7247\u5df2\u6536\u5230\uff0c\u5c06\u8fdb\u884c\u5b89\u5168\u5ba1\u6838\u3002",
+    EVIDENCE_REUSED_FOR_DIFFERENT_TYPE:
+      "\u8eab\u4efd\u8bc1\u7167\u7247\u548c\u81ea\u62cd\u7167\u8bf7\u4f7f\u7528\u4e24\u5f20\u4e0d\u540c\u7684\u7167\u7247\u3002",
+    EVIDENCE_UPLOAD_IN_PROGRESS:
+      "\u8fd9\u5f20\u7167\u7247\u6b63\u5728\u5ba1\u6838\u4e2d\u3002",
+    UPLOAD_FAILED:
+      "\u65e0\u6cd5\u5b89\u5168\u4fdd\u5b58\u7167\u7247\uff0c\u8bf7\u4e0a\u4f20\u66f4\u6e05\u6670\u7684\u7167\u7247\u540e\u91cd\u8bd5\u3002",
+  },
+};
+
+const PREFLIGHT_KYC_MESSAGES: Record<
+  ApplicantLocale,
+  Record<"UNSUPPORTED_IMAGE" | "IMAGE_TOO_SMALL" | "IMAGE_UNREADABLE", string>
+> = {
+  en: {
+    UNSUPPORTED_IMAGE: "Only JPEG, PNG, or WebP images are supported.",
+    IMAGE_TOO_SMALL:
+      "The image is too small. Please use an image of at least 200 x 150 pixels.",
+    IMAGE_UNREADABLE:
+      "We could not read this image file. Please choose another image.",
+  },
+  th: {
+    UNSUPPORTED_IMAGE:
+      "\u0e23\u0e2d\u0e07\u0e23\u0e31\u0e1a\u0e40\u0e09\u0e1e\u0e32\u0e30\u0e44\u0e1f\u0e25\u0e4c JPEG, PNG \u0e2b\u0e23\u0e37\u0e2d WebP",
+    IMAGE_TOO_SMALL:
+      "\u0e20\u0e32\u0e1e\u0e21\u0e35\u0e02\u0e19\u0e32\u0e14\u0e40\u0e25\u0e47\u0e01\u0e40\u0e01\u0e34\u0e19\u0e44\u0e1b \u0e01\u0e23\u0e38\u0e13\u0e32\u0e43\u0e0a\u0e49\u0e20\u0e32\u0e1e\u0e2d\u0e22\u0e48\u0e32\u0e07\u0e19\u0e49\u0e2d\u0e22 200 x 150 \u0e1e\u0e34\u0e01\u0e40\u0e0b\u0e25",
+    IMAGE_UNREADABLE:
+      "\u0e44\u0e21\u0e48\u0e2a\u0e32\u0e21\u0e32\u0e23\u0e16\u0e2d\u0e48\u0e32\u0e19\u0e44\u0e1f\u0e25\u0e4c\u0e20\u0e32\u0e1e\u0e44\u0e14\u0e49 \u0e01\u0e23\u0e38\u0e13\u0e32\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e20\u0e32\u0e1e\u0e43\u0e2b\u0e21\u0e48",
+  },
+  zh: {
+    UNSUPPORTED_IMAGE:
+      "\u4ec5\u652f\u6301 JPEG\u3001PNG \u6216 WebP \u56fe\u7247\u3002",
+    IMAGE_TOO_SMALL:
+      "\u56fe\u7247\u5c3a\u5bf8\u8fc7\u5c0f\uff0c\u8bf7\u4f7f\u7528\u81f3\u5c11 200 x 150 \u50cf\u7d20\u7684\u56fe\u7247\u3002",
+    IMAGE_UNREADABLE:
+      "\u65e0\u6cd5\u8bfb\u53d6\u56fe\u7247\u6587\u4ef6\uff0c\u8bf7\u91cd\u65b0\u9009\u62e9\u56fe\u7247\u3002",
+  },
+};
+
+function preflightKycReason(
+  code: "UNSUPPORTED_IMAGE" | "IMAGE_TOO_SMALL" | "IMAGE_UNREADABLE",
+  locale: string,
+): string {
+  const language: ApplicantLocale =
+    locale === "th" || locale === "zh" ? locale : "en";
+  return PREFLIGHT_KYC_MESSAGES[language][code];
+}
+function applicantKycReason(code: string, locale: string): string {
+  const language: ApplicantLocale =
+    locale === "th" || locale === "zh" ? locale : "en";
+  const messages = APPLICANT_KYC_MESSAGES[language];
+  if (
+    code === "DOCUMENT_VALID" ||
+    code === "SELFIE_REVIEW_REQUIRED" ||
+    code === "HUMAN_REVIEW_REQUIRED"
+  ) {
+    return messages.RECEIVED!;
   }
+  return messages[code] || messages.UPLOAD_FAILED!;
 }
 
 type PersistedEvidenceSlot = {
@@ -223,7 +327,11 @@ function FixerRegisterContent() {
   >(null);
   const [portfolioImages, setPortfolioImages] = useState<File[]>([]);
   const [companyAffidavit, setCompanyAffidavit] = useState<File | null>(null);
+  const [companyLetterOfIntent, setCompanyLetterOfIntent] =
+    useState<File | null>(null);
   const [portfolioProcessing, setPortfolioProcessing] = useState(false);
+  const [companyEvidenceProcessing, setCompanyEvidenceProcessing] =
+    useState(false);
   const [qualificationOutcome, setQualificationOutcome] = useState<{
     submissionId: string;
     status: string;
@@ -530,6 +638,32 @@ function FixerRegisterContent() {
     [portfolioImages],
   );
 
+  const prepareCompanyEvidence = useCallback(
+    async (file: File | null, setFile: (file: File | null) => void) => {
+      if (!file) {
+        setFile(null);
+        return;
+      }
+      setCompanyEvidenceProcessing(true);
+      setError("");
+      try {
+        setFile(await prepareQualificationEvidenceFile(file));
+      } catch {
+        setFile(null);
+        setError(
+          locale === "th"
+            ? "\u0e44\u0e21\u0e48\u0e2a\u0e32\u0e21\u0e32\u0e23\u0e16\u0e40\u0e15\u0e23\u0e35\u0e22\u0e21\u0e40\u0e2d\u0e01\u0e2a\u0e32\u0e23\u0e19\u0e35\u0e49\u0e43\u0e2b\u0e49\u0e21\u0e35\u0e02\u0e19\u0e32\u0e14\u0e44\u0e21\u0e48\u0e40\u0e01\u0e34\u0e19 0.3 MB \u0e42\u0e14\u0e22\u0e22\u0e31\u0e07\u0e04\u0e07\u0e2d\u0e48\u0e32\u0e19\u0e44\u0e14\u0e49 \u0e01\u0e23\u0e38\u0e13\u0e32\u0e43\u0e0a\u0e49\u0e44\u0e1f\u0e25\u0e4c\u0e17\u0e35\u0e48\u0e0a\u0e31\u0e14\u0e40\u0e08\u0e19\u0e2b\u0e23\u0e37\u0e2d\u0e21\u0e35\u0e08\u0e33\u0e19\u0e27\u0e19\u0e2b\u0e19\u0e49\u0e32\u0e19\u0e49\u0e2d\u0e22\u0e25\u0e07"
+            : locale === "zh"
+              ? "\u65e0\u6cd5\u5728\u4fdd\u6301\u6e05\u6670\u53ef\u8bfb\u7684\u540c\u65f6\u5c06\u6b64\u6587\u4ef6\u5904\u7406\u4e3a\u4e0d\u8d85\u8fc7 0.3 MB\u3002\u8bf7\u4f7f\u7528\u66f4\u6e05\u6670\u6216\u9875\u6570\u66f4\u5c11\u7684\u6587\u4ef6\u3002"
+              : "We could not prepare this document below 0.3 MB while keeping it readable. Please use a clearer file or one with fewer pages.",
+        );
+      } finally {
+        setCompanyEvidenceProcessing(false);
+      }
+    },
+    [locale],
+  );
+
   /* Browser preflight only. Authoritative KYC decisions are made server-side. */
   const [kycValidating, setKycValidating] = useState(false);
 
@@ -541,7 +675,7 @@ function FixerRegisterContent() {
       if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
         return {
           valid: false,
-          reason: "Only JPEG, PNG, or WebP images are supported",
+          reason: preflightKycReason("UNSUPPORTED_IMAGE", locale),
         };
       }
 
@@ -554,20 +688,22 @@ function FixerRegisterContent() {
             image.naturalWidth < 200 || image.naturalHeight < 150
               ? {
                   valid: false,
-                  reason:
-                    "Image too small; minimum resolution is 200x150 pixels",
+                  reason: preflightKycReason("IMAGE_TOO_SMALL", locale),
                 }
               : { valid: true },
           );
         };
         image.onerror = () => {
           URL.revokeObjectURL(url);
-          resolve({ valid: false, reason: "Cannot read image file" });
+          resolve({
+            valid: false,
+            reason: preflightKycReason("IMAGE_UNREADABLE", locale),
+          });
         };
         image.src = url;
       });
     },
-    [],
+    [locale],
   );
 
   const uploadKycImmediately = useCallback(
@@ -665,8 +801,8 @@ function FixerRegisterContent() {
         } catch (error) {
           setError(
             error instanceof KycUploadError
-              ? applicantKycReason(error.code)
-              : "We could not save this photo securely. Please try again.",
+              ? applicantKycReason(error.code, locale)
+              : applicantKycReason("UPLOAD_FAILED", locale),
           );
           setKycValidating(false);
           return;
@@ -689,7 +825,7 @@ function FixerRegisterContent() {
           immediateReason === "IDENTITY_CONTRADICTION" ||
           immediateReason === "LIVENESS_FAILED"
         ) {
-          setError(applicantKycReason(immediateReason));
+          setError(applicantKycReason(immediateReason, locale));
           setKycValidating(false);
           return;
         }
@@ -713,7 +849,7 @@ function FixerRegisterContent() {
       }
       setKycValidating(false);
     },
-    [kycSlots.length, validateKycImage, uploadKycImmediately],
+    [kycSlots.length, locale, validateKycImage, uploadKycImmediately],
   );
   /* Camera helpers for KYC */
   const startCamera = async () => {
@@ -1157,8 +1293,14 @@ function FixerRegisterContent() {
       );
       return;
     }
-    if (portfolioProcessing) {
-      setError("Please wait for portfolio image compression to finish");
+    if (portfolioProcessing || companyEvidenceProcessing) {
+      setError(
+        locale === "th"
+          ? "\u0e01\u0e23\u0e38\u0e13\u0e32\u0e23\u0e2d\u0e43\u0e2b\u0e49\u0e23\u0e30\u0e1a\u0e1a\u0e40\u0e15\u0e23\u0e35\u0e22\u0e21\u0e44\u0e1f\u0e25\u0e4c\u0e43\u0e2b\u0e49\u0e40\u0e2a\u0e23\u0e47\u0e08"
+          : locale === "zh"
+            ? "\u8bf7\u7b49\u5f85\u6587\u4ef6\u5904\u7406\u5b8c\u6210\u3002"
+            : "Please wait for file preparation to finish",
+      );
       return;
     }
     setSubmitting(true);
@@ -1316,17 +1458,14 @@ function FixerRegisterContent() {
           const detail = await response.json().catch(() => ({}));
           const code = typeof detail?.code === "string" ? detail.code : "";
           if (code) throw new KycUploadError(code);
-          const serverMessage = Array.isArray(detail?.message)
-            ? detail.message.join(" ")
-            : typeof detail?.message === "string"
-              ? detail.message
-              : "";
           throw new Error(
-            serverMessage ||
-              (documentType === "id-front" ||
-              documentType === "selfie-with-id"
-                ? "We could not receive this photo. Please try again."
-                : "We could not receive this document. Please try again."),
+            documentType === "id-front" || documentType === "selfie-with-id"
+              ? applicantKycReason("UPLOAD_FAILED", locale)
+              : locale === "th"
+                ? "\u0e44\u0e21\u0e48\u0e2a\u0e32\u0e21\u0e32\u0e23\u0e16\u0e23\u0e31\u0e1a\u0e40\u0e2d\u0e01\u0e2a\u0e32\u0e23\u0e19\u0e35\u0e49\u0e44\u0e14\u0e49 \u0e01\u0e23\u0e38\u0e13\u0e32\u0e15\u0e23\u0e27\u0e08\u0e2a\u0e2d\u0e1a\u0e44\u0e1f\u0e25\u0e4c\u0e41\u0e25\u0e49\u0e27\u0e25\u0e2d\u0e07\u0e2d\u0e35\u0e01\u0e04\u0e23\u0e31\u0e49\u0e07"
+                : locale === "zh"
+                  ? "\u65e0\u6cd5\u63a5\u6536\u6b64\u6587\u4ef6\u3002\u8bf7\u68c0\u67e5\u6587\u4ef6\u540e\u91cd\u8bd5\u3002"
+                  : "We could not receive this document. Please check the file and try again.",
           );
         }
         return (await response.json()) as UploadAssessmentResponse;
@@ -1346,10 +1485,7 @@ function FixerRegisterContent() {
         if (!localFile) {
           throw new Error("Please select the identity photo again.");
         }
-        const uploaded = await uploadEvidence(
-          kycTypes[index]!,
-          localFile,
-        );
+        const uploaded = await uploadEvidence(kycTypes[index]!, localFile);
         setKycSlots((current) =>
           current.map((slot, slotIndex) =>
             slotIndex === index
@@ -1364,7 +1500,10 @@ function FixerRegisterContent() {
                   confidence: uploaded.assessment?.confidence ?? null,
                   reasonCodes: uploaded.assessment?.reasonCodes || [],
                   message: uploaded.assessment?.reasonCodes?.[0]
-                    ? applicantKycReason(uploaded.assessment.reasonCodes[0])
+                    ? applicantKycReason(
+                        uploaded.assessment.reasonCodes[0],
+                        locale,
+                      )
                     : null,
                 }
               : slot,
@@ -1373,6 +1512,9 @@ function FixerRegisterContent() {
       }
       if (companyAffidavit) {
         await uploadEvidence("company-affidavit", companyAffidavit);
+      }
+      if (companyLetterOfIntent) {
+        await uploadEvidence("company-letter-of-intent", companyLetterOfIntent);
       }
       for (const portfolioImage of portfolioImages) {
         await uploadEvidence("portfolio", portfolioImage);
@@ -1408,14 +1550,14 @@ function FixerRegisterContent() {
     } catch (cause) {
       setError(
         cause instanceof KycUploadError
-          ? applicantKycReason(cause.code)
+          ? applicantKycReason(cause.code, locale)
           : cause instanceof Error
-          ? cause.message
-          : locale === "th"
-            ? "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้"
-            : locale === "zh"
-              ? "无法连接服务器"
-              : "Cannot connect to server",
+            ? cause.message
+            : locale === "th"
+              ? "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้"
+              : locale === "zh"
+                ? "无法连接服务器"
+                : "Cannot connect to server",
       );
     } finally {
       setSubmitting(false);
@@ -2257,8 +2399,11 @@ function FixerRegisterContent() {
                           {slot.kycStatus && slot.kycStatus !== "VALIDATED" && (
                             <span className="block max-w-28 text-[10px] text-slate-600">
                               {slot.reasonCodes.length > 0
-                                ? applicantKycReason(slot.reasonCodes[0]!)
-                                : "Your photo is being reviewed."}
+                                ? applicantKycReason(
+                                    slot.reasonCodes[0]!,
+                                    locale,
+                                  )
+                                : applicantKycReason("DOCUMENT_VALID", locale)}
                             </span>
                           )}
                           {status === "valid" && (
@@ -2306,16 +2451,74 @@ function FixerRegisterContent() {
                 type="file"
                 accept="image/jpeg,image/png,image/webp,application/pdf"
                 className="mt-2 block w-full text-sm text-slate-600"
+                disabled={companyEvidenceProcessing}
                 onChange={(event) =>
-                  setCompanyAffidavit(event.target.files?.[0] || null)
+                  void prepareCompanyEvidence(
+                    event.target.files?.[0] || null,
+                    setCompanyAffidavit,
+                  )
                 }
               />
             </label>
             {companyAffidavit && (
               <p className="mt-2 text-xs text-slate-500">
-                {companyAffidavit.name}
+                {companyAffidavit.name} (
+                {Math.ceil(companyAffidavit.size / 1024)} KiB)
               </p>
             )}
+            <label className="mt-4 block border-t border-slate-200 pt-4 text-sm font-semibold text-slate-800">
+              {locale === "th"
+                ? "\u0e2b\u0e19\u0e31\u0e07\u0e2a\u0e37\u0e2d\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e04\u0e27\u0e32\u0e21\u0e1b\u0e23\u0e30\u0e2a\u0e07\u0e04\u0e4c\u0e08\u0e32\u0e01\u0e01\u0e23\u0e23\u0e21\u0e01\u0e32\u0e23\u0e1a\u0e23\u0e34\u0e29\u0e31\u0e17 (\u0e44\u0e21\u0e48\u0e1a\u0e31\u0e07\u0e04\u0e31\u0e1a)"
+                : locale === "zh"
+                  ? "\u516c\u53f8\u8463\u4e8b\u7533\u8bf7\u610f\u5411\u4e66\uff08\u53ef\u9009\uff09"
+                  : "Director authorization letter (optional)"}
+              <span className="mt-1 block text-xs font-normal text-slate-600">
+                {locale === "th"
+                  ? "\u0e43\u0e0a\u0e49\u0e40\u0e21\u0e37\u0e48\u0e2d\u0e1c\u0e39\u0e49\u0e2a\u0e21\u0e31\u0e04\u0e23\u0e44\u0e21\u0e48\u0e43\u0e0a\u0e48\u0e01\u0e23\u0e23\u0e21\u0e01\u0e32\u0e23\u0e17\u0e35\u0e48\u0e21\u0e35\u0e0a\u0e37\u0e48\u0e2d\u0e43\u0e19\u0e2b\u0e19\u0e31\u0e07\u0e2a\u0e37\u0e2d\u0e23\u0e31\u0e1a\u0e23\u0e2d\u0e07 \u0e23\u0e30\u0e1a\u0e38\u0e04\u0e27\u0e32\u0e21\u0e1b\u0e23\u0e30\u0e2a\u0e07\u0e04\u0e4c\u0e2a\u0e21\u0e31\u0e04\u0e23 \u0e1c\u0e39\u0e49\u0e21\u0e35\u0e2d\u0e33\u0e19\u0e32\u0e08\u0e25\u0e07\u0e19\u0e32\u0e21 \u0e41\u0e25\u0e30\u0e2d\u0e35\u0e40\u0e21\u0e25\u0e15\u0e34\u0e14\u0e15\u0e48\u0e2d\u0e02\u0e2d\u0e07\u0e1a\u0e23\u0e34\u0e29\u0e31\u0e17"
+                  : locale === "zh"
+                    ? "\u7533\u8bf7\u4eba\u4e0d\u662f\u516c\u53f8\u8bc1\u660e\u6240\u5217\u8463\u4e8b\u65f6\u4f7f\u7528\u3002\u8bf7\u6ce8\u660e\u7533\u8bf7\u610f\u5411\u3001\u6388\u6743\u7b7e\u7f72\u4eba\u53ca\u516c\u53f8\u8054\u7cfb\u90ae\u7bb1\u3002"
+                    : "Use this when the applicant is not a director named in the affidavit. Include the applicant's legal name, application intent, authorized signatory, and company contact email."}
+              </span>
+              <span className="mt-2 block rounded-md bg-white px-3 py-2 text-xs font-normal text-slate-700">
+                {locale === "th"
+                  ? `\u0e0a\u0e37\u0e48\u0e2d\u0e1c\u0e39\u0e49\u0e2a\u0e21\u0e31\u0e04\u0e23: ${form.name || "-"} \u00b7 \u0e2d\u0e35\u0e40\u0e21\u0e25\u0e15\u0e34\u0e14\u0e15\u0e48\u0e2d: ${form.email || "-"}`
+                  : locale === "zh"
+                    ? `\u7533\u8bf7\u4eba\u59d3\u540d\uff1a${form.name || "-"} \u00b7 \u8054\u7cfb\u90ae\u7bb1\uff1a${form.email || "-"}`
+                    : `Applicant legal name: ${form.name || "-"} \u00b7 Contact email: ${form.email || "-"}`}
+              </span>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                className="mt-2 block w-full text-sm text-slate-600"
+                disabled={companyEvidenceProcessing}
+                onChange={(event) =>
+                  void prepareCompanyEvidence(
+                    event.target.files?.[0] || null,
+                    setCompanyLetterOfIntent,
+                  )
+                }
+              />
+            </label>
+            {companyLetterOfIntent && (
+              <p className="mt-2 text-xs text-slate-500">
+                {companyLetterOfIntent.name} (
+                {Math.ceil(companyLetterOfIntent.size / 1024)} KiB)
+              </p>
+            )}
+            <p className="mt-2 text-xs text-slate-600">
+              {locale === "th"
+                ? "\u0e23\u0e30\u0e1a\u0e1a\u0e08\u0e30\u0e1a\u0e35\u0e1a\u0e2d\u0e31\u0e14\u0e23\u0e39\u0e1b\u0e20\u0e32\u0e1e\u0e41\u0e25\u0e30 PDF \u0e43\u0e2b\u0e49\u0e21\u0e35\u0e02\u0e19\u0e32\u0e14\u0e44\u0e21\u0e48\u0e40\u0e01\u0e34\u0e19 0.3 MB \u0e15\u0e48\u0e2d\u0e44\u0e1f\u0e25\u0e4c"
+                : locale === "zh"
+                  ? "\u56fe\u7247\u548c PDF \u5c06\u81ea\u52a8\u538b\u7f29\u81f3\u6bcf\u4e2a\u6587\u4ef6\u4e0d\u8d85\u8fc7 0.3 MB\u3002"
+                  : "Images and PDFs are compressed to no more than 0.3 MB each."}
+            </p>
+            <p className="mt-3 text-xs text-slate-600">
+              {locale === "th"
+                ? "\u0e40\u0e21\u0e37\u0e48\u0e2d\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34\u0e43\u0e19\u0e19\u0e32\u0e21\u0e1a\u0e23\u0e34\u0e29\u0e31\u0e17 \u0e0a\u0e37\u0e48\u0e2d\u0e1a\u0e23\u0e34\u0e29\u0e31\u0e17\u0e17\u0e35\u0e48\u0e15\u0e23\u0e27\u0e08\u0e2a\u0e2d\u0e1a\u0e41\u0e25\u0e49\u0e27\u0e08\u0e30\u0e41\u0e2a\u0e14\u0e07\u0e40\u0e1b\u0e47\u0e19\u0e0a\u0e37\u0e48\u0e2d\u0e1c\u0e39\u0e49\u0e43\u0e2b\u0e49\u0e1a\u0e23\u0e34\u0e01\u0e32\u0e23"
+                : locale === "zh"
+                  ? "\u516c\u53f8\u8eab\u4efd\u83b7\u6279\u540e\uff0c\u5df2\u6838\u5b9e\u7684\u516c\u53f8\u540d\u79f0\u5c06\u4f5c\u4e3a\u670d\u52a1\u5546\u540d\u79f0\u663e\u793a\u3002"
+                  : "After company identity approval, the verified company name becomes the public provider name."}
+            </p>
           </div>
 
           {/* Portfolio */}

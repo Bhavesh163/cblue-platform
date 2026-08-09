@@ -138,7 +138,7 @@ describe('QualificationVerificationService', () => {
       credentialNumber: null,
       projectName: null,
       projectLocation: null,
-      issuedAt: '2026-07-01',
+      issuedAt: new Date().toISOString().slice(0, 10),
       expiresAt: null,
       credentialLevel: null,
       projectValue: null,
@@ -165,6 +165,131 @@ describe('QualificationVerificationService', () => {
         companyName: 'Example Company Ltd',
         directorNames: ['Somchai Director'],
       }),
+    });
+  });
+
+  it('validates a current complete affidavit while retaining administrator review', async () => {
+    prisma.kycDocument.findFirst.mockResolvedValue({
+      documentType: 'company-affidavit',
+      storageKey: 'qualification/private/company-affidavit',
+      contentType: 'application/pdf',
+    });
+    respond({
+      ...validFields,
+      detectedDocumentType: 'company-affidavit',
+      documentName: 'Example Company Limited',
+      issuedAt: new Date().toISOString().slice(0, 10),
+      companyName: 'Example Company Limited',
+      companyRegistrationNumber: '0100000000000',
+      directorNames: ['Somchai Director'],
+      authorityHolderName: 'Somchai Director',
+      authorityType: 'director',
+      contactEmail: null,
+      intentToJoinCblue: null,
+      authorizedApplicantName: null,
+      confidence: 96,
+    });
+
+    await expect(
+      service.assessStoredDocument({
+        submissionId: 'submission-1',
+        documentId: 'document-1',
+        registeredName: 'Somchai Director',
+        claimedCompanyName: 'Example Company Limited',
+      }),
+    ).resolves.toMatchObject({
+      evidenceStatus: 'VALIDATED',
+      route: 'NEEDS_REVIEW',
+      reasonCodes: expect.arrayContaining([
+        'AFFIDAVIT_REVIEW_REQUIRED',
+        'HUMAN_REVIEW_REQUIRED',
+      ]),
+    });
+  });
+
+  it('extracts company application intent and contact for administrator review', async () => {
+    prisma.kycDocument.findFirst.mockResolvedValue({
+      documentType: 'company-letter-of-intent',
+      storageKey: 'qualification/private/company-letter',
+      contentType: 'application/pdf',
+    });
+    respond({
+      detectedDocumentType: 'company-letter-of-intent',
+      documentName: 'Somchai Director',
+      issuerName: 'Example Company Limited',
+      credentialNumber: null,
+      projectName: null,
+      projectLocation: null,
+      issuedAt: new Date().toISOString().slice(0, 10),
+      expiresAt: null,
+      credentialLevel: null,
+      projectValue: null,
+      companyName: 'Example Company Limited',
+      companyRegistrationNumber: '0100000000000',
+      directorNames: ['Somchai Director'],
+      authorityHolderName: 'Somchai Director',
+      authorityType: 'director',
+      contactEmail: 'DIRECTOR@EXAMPLE.COM',
+      intentToJoinCblue: true,
+      authorizedApplicantName: 'Applicant Person',
+      confidence: 94,
+    });
+
+    await expect(
+      service.assessStoredDocument({
+        submissionId: 'submission-1',
+        documentId: 'document-1',
+        registeredName: 'Applicant Person',
+        claimedCompanyName: 'Example Company Limited',
+      }),
+    ).resolves.toMatchObject({
+      evidenceStatus: 'VALIDATED',
+      route: 'NEEDS_REVIEW',
+      reasonCodes: expect.arrayContaining([
+        'DOCUMENT_VALID',
+        'HUMAN_REVIEW_REQUIRED',
+      ]),
+      extractedFields: expect.objectContaining({
+        companyName: 'Example Company Limited',
+        authorityHolderName: 'Somchai Director',
+        contactEmail: 'director@example.com',
+        intentToJoinCblue: true,
+        authorizedApplicantName: 'Applicant Person',
+      }),
+    });
+  });
+
+  it('rejects a director letter that authorizes a different applicant', async () => {
+    prisma.kycDocument.findFirst.mockResolvedValue({
+      documentType: 'company-letter-of-intent',
+      storageKey: 'qualification/private/company-letter',
+      contentType: 'application/pdf',
+    });
+    respond({
+      ...validFields,
+      detectedDocumentType: 'company-letter-of-intent',
+      companyName: 'Example Company Limited',
+      companyRegistrationNumber: '0100000000000',
+      directorNames: ['Somchai Director'],
+      authorityHolderName: 'Somchai Director',
+      authorityType: 'director',
+      contactEmail: 'director@example.com',
+      intentToJoinCblue: true,
+      authorizedApplicantName: 'Different Applicant',
+      confidence: 94,
+    });
+
+    await expect(
+      service.assessStoredDocument({
+        submissionId: 'submission-1',
+        documentId: 'document-1',
+        registeredName: 'Applicant Person',
+        claimedCompanyName: 'Example Company Limited',
+      }),
+    ).resolves.toMatchObject({
+      evidenceStatus: 'CONTRADICTED',
+      route: 'NEEDS_REVIEW',
+      reasonCodes: expect.arrayContaining(['COMPANY_APPLICANT_CONTRADICTION']),
     });
   });
 

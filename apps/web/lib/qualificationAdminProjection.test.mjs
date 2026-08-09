@@ -4,6 +4,7 @@ import {
   biometricAssessmentLabel,
   buildQualificationDecisionPayload,
   qualificationAssessmentTimestamp,
+  qualificationAssessmentSummary,
   qualificationDocumentChecks,
   qualificationFindingsForDocument,
   qualificationReasonLabels,
@@ -58,6 +59,7 @@ test("projects document-specific checks without claiming biometric work", () => 
       "DOCUMENT_VALID",
       "SELFIE_REVIEW_REQUIRED",
       "BIOMETRIC_CHECK_NOT_PERFORMED",
+      "LIVENESS_FAILED",
     ],
   });
 
@@ -145,10 +147,7 @@ test("associates persisted findings and timestamps with their document", () => {
     "2026-08-08T01:05:00.000Z",
   );
   assert.deepEqual(
-    qualificationReasonLabels([
-      "WRONG_DOCUMENT_TYPE",
-      "HUMAN_REVIEW_REQUIRED",
-    ]),
+    qualificationReasonLabels(["WRONG_DOCUMENT_TYPE", "HUMAN_REVIEW_REQUIRED"]),
     ["Wrong document type", "Administrator review required"],
   );
 });
@@ -195,5 +194,57 @@ test("builds the accepted KYC provider identity decision contract", () => {
       reason: "Evidence supports the tier",
       approvedTier: "STANDARD",
     },
+  );
+});
+
+test("summarizes persisted company authorization checks for administrators", () => {
+  const document = {
+    documentType: "company-letter-of-intent",
+    assessmentReasonCodes: [
+      "DOCUMENT_VALID",
+      "COMPANY_CONTACT_MISSING",
+      "HUMAN_REVIEW_REQUIRED",
+    ],
+    extractedFields: {
+      companyName: "Example Company Limited",
+      authorityHolderName: "Director One",
+      contactEmail: null,
+      intentToJoinCblue: true,
+      authorizedApplicantName: "Applicant Person",
+    },
+  };
+
+  assert.deepEqual(
+    safeQualificationExtractedFields(document).map(({ key, value }) => ({
+      key,
+      value,
+    })),
+    [
+      { key: "companyName", value: "Example Company Limited" },
+      { key: "authorityHolderName", value: "Director One" },
+      { key: "intentToJoinCblue", value: "true" },
+      { key: "authorizedApplicantName", value: "Applicant Person" },
+    ],
+  );
+  const summary = qualificationAssessmentSummary([document]);
+  assert.equal(summary.failed, 1);
+  assert.equal(summary.review, 1);
+  assert.ok(summary.passed >= 3);
+});
+
+test("does not count unassessed company letter fields as passed", () => {
+  const checks = qualificationDocumentChecks({
+    documentType: "company-letter-of-intent",
+    assessmentReasonCodes: ["PROVIDER_UNAVAILABLE"],
+    extractedFields: null,
+  });
+
+  assert.equal(
+    checks.find(({ label }) => label === "Application intent")?.status,
+    "Not recorded",
+  );
+  assert.equal(
+    checks.find(({ label }) => label === "Authorized applicant")?.status,
+    "Not recorded",
   );
 });

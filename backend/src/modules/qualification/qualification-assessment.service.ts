@@ -49,6 +49,11 @@ const REASON_CODES = new Set<QualificationReasonCode>([
   'AFFIDAVIT_EXPIRED',
   'COMPANY_NAME_CONTRADICTION',
   'COMPANY_AUTHORITY_REVIEW_REQUIRED',
+  'COMPANY_INTENT_MISSING',
+  'COMPANY_CONTACT_MISSING',
+  'COMPANY_AUTHORITY_CONTRADICTION',
+  'COMPANY_APPLICANT_MISSING',
+  'COMPANY_APPLICANT_CONTRADICTION',
   'PORTFOLIO_IDENTITY_CONTRADICTION',
   'BIOMETRIC_CHECK_NOT_PERFORMED',
   'LIVENESS_FAILED',
@@ -460,6 +465,30 @@ export class QualificationAssessmentService {
           note: 'Liveness assessment requires a certified verification service',
           reasonCode: 'BIOMETRIC_CHECK_NOT_PERFORMED' as const,
         },
+      );
+    }
+    if (documentType === 'company-letter-of-intent') {
+      checks.push(
+        check('COMPANY_INTENT', 'Company application intent', [
+          'COMPANY_INTENT_MISSING',
+        ]),
+        check('COMPANY_CONTACT', 'Company contact email', [
+          'COMPANY_CONTACT_MISSING',
+        ]),
+        check('AUTHORIZED_APPLICANT', 'Authorized applicant', [
+          'COMPANY_APPLICANT_MISSING',
+          'COMPANY_APPLICANT_CONTRADICTION',
+        ]),
+        {
+          key: 'COMPANY_AUTHORITY',
+          status: 'INCONCLUSIVE' as const,
+          confidence: null,
+          note: 'Director authority requires comparison with the validated company affidavit',
+          reasonCode: 'COMPANY_AUTHORITY_REVIEW_REQUIRED' as const,
+        },
+        check('COMPANY_NAME_MATCH', 'Company name consistency', [
+          'COMPANY_NAME_CONTRADICTION',
+        ]),
       );
     }
     return checks;
