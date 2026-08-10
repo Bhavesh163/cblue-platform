@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -19,6 +20,7 @@ import {
   PropertyWorkflowActionDto,
   PropertyWorkflowListingQueryDto,
 } from './dto/property-workflow.dto';
+import { qualificationEligibilitySnapshot } from '../qualification/qualification-eligibility';
 
 const TOTAL_STEPS = 8;
 const SOURCE_VERSION = PROPERTY_WORKFLOW_SOURCE_VERSION;
@@ -93,11 +95,38 @@ export class PropertyWorkflowBridgeService {
     const property = await this.prisma.property.findFirst({
       where: { id: dto.listingId, status: 'ACTIVE' },
       include: {
-        user: { select: { id: true, name: true, email: true } },
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            fixer: {
+              select: {
+                status: true,
+                verified: true,
+                verifiedCompanyName: true,
+                qualificationEligibilityStatus: true,
+                kycValidUntil: true,
+                kycReverificationRequiredAt: true,
+                kycReverificationReasons: true,
+                tierReevaluationRequestedAt: true,
+                tierReevaluationCompletedAt: true,
+              },
+            },
+          },
+        },
         images: { orderBy: { sortOrder: 'asc' } },
       },
     });
     if (!property) throw new NotFoundException('Listing not found');
+    const listerEligibility = property.user.fixer
+      ? qualificationEligibilitySnapshot(property.user.fixer)
+      : null;
+    if (!listerEligibility?.newJobEligible) {
+      throw new ConflictException(
+        'This listing is temporarily unavailable for new inquiries',
+      );
+    }
 
     const reference = await this.nextReference();
     const attachments = (dto.attachments || []).filter(
@@ -190,7 +219,9 @@ export class PropertyWorkflowBridgeService {
     const actor = this.actorFor(inquiry, userId);
     if (!actor) throw new ForbiddenException('Not authorized for this inquiry');
     if (actor === 'admin') {
-      throw new ForbiddenException('Administrators may review but not advance this inquiry');
+      throw new ForbiddenException(
+        'Administrators may review but not advance this inquiry',
+      );
     }
 
     const transition = this.transition(action, actor, inquiry, dto);
@@ -323,7 +354,9 @@ export class PropertyWorkflowBridgeService {
         return {
           status: PropertyInquiryStatus.PAID,
           step: 5,
-          metadata: { freePass: action === 'free-pass' || Boolean(dto.freePass) },
+          metadata: {
+            freePass: action === 'free-pass' || Boolean(dto.freePass),
+          },
         };
       case 'viewing-invite':
         requireActor('customer');
@@ -414,11 +447,11 @@ export class PropertyWorkflowBridgeService {
       PropertyInquiryStatus.COMPLETED,
     ].includes(inquiry.status);
     const events = inquiry.workflowEvents.filter(
-      (event: any) => actor === 'lister' || actor === 'admin' || !event.isPrivate,
-    );
-    const feeEvent = inquiry.workflowEvents.find(
       (event: any) =>
-        ['fee', 'fee-proceed', 'free-pass'].includes(event.action),
+        actor === 'lister' || actor === 'admin' || !event.isPrivate,
+    );
+    const feeEvent = inquiry.workflowEvents.find((event: any) =>
+      ['fee', 'fee-proceed', 'free-pass'].includes(event.action),
     );
     const currentStep = this.currentStep(inquiry.status, inquiry.step);
     const actions = this.actions(
@@ -530,7 +563,12 @@ export class PropertyWorkflowBridgeService {
       feeState: {
         required: inquiry.status === PropertyInquiryStatus.ACCEPTED,
         paid: postFee,
-        freePass: Boolean((feeEvent?.metadata as any)?.freePass),
+        freePass: Boolean(
+          feeEvent?.metadata &&
+          typeof feeEvent.metadata === 'object' &&
+          !Array.isArray(feeEvent.metadata) &&
+          feeEvent.metadata.freePass,
+        ),
       },
       processingFee: this.processingFee(inquiry.property?.tier),
       attachments: inquiry.attachments.map((file: any) => ({
@@ -575,22 +613,23 @@ export class PropertyWorkflowBridgeService {
         createdAt: inquiry.createdAt,
         updatedAt: inquiry.updatedAt,
       },
-      alerts: terminal || actor === 'admin'
-        ? []
-        : workflowEvents
-            .filter((event: any) => Boolean(event.message))
-            .sort(
-              (left: any, right: any) =>
-                new Date(right.createdAt).getTime() -
-                new Date(left.createdAt).getTime(),
-            )
-            .map((event: any) => ({
-              action: event.action,
-              status: event.status,
-              step: event.step,
-              message: event.message,
-              createdAt: event.createdAt,
-            })),
+      alerts:
+        terminal || actor === 'admin'
+          ? []
+          : workflowEvents
+              .filter((event: any) => Boolean(event.message))
+              .sort(
+                (left: any, right: any) =>
+                  new Date(right.createdAt).getTime() -
+                  new Date(left.createdAt).getTime(),
+              )
+              .map((event: any) => ({
+                action: event.action,
+                status: event.status,
+                step: event.step,
+                message: event.message,
+                createdAt: event.createdAt,
+              })),
     };
   }
 
@@ -813,7 +852,10 @@ export class PropertyWorkflowBridgeService {
       LUXURY: 800,
       GRANDEUR: 1000,
     };
-    const normalizedTier = String(tier || 'ECONOMY').trim().toUpperCase();
+    const normalizedTier =
+      typeof tier === 'string' && tier.trim()
+        ? tier.trim().toUpperCase()
+        : 'ECONOMY';
     const amount = fees[normalizedTier] ?? fees.ECONOMY;
     return {
       amount,
@@ -828,11 +870,23 @@ export class PropertyWorkflowBridgeService {
   private locationPresentation(property: any) {
     const latitude = Number(property?.latitude);
     const longitude = Number(property?.longitude);
-    const hasCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude) && !(Math.abs(latitude) < 0.000001 && Math.abs(longitude) < 0.000001);
+    const hasCoordinates =
+      Number.isFinite(latitude) &&
+      Number.isFinite(longitude) &&
+      !(Math.abs(latitude) < 0.000001 && Math.abs(longitude) < 0.000001);
     const storedMode = String(property?.locationMode || '').toUpperCase();
-    const hasGps = storedMode === 'GPS' ? hasCoordinates : storedMode === 'ADMINISTRATIVE' ? false : hasCoordinates;
-    const administrativeDisplay = String(property?.subdistrict || property?.district || property?.province || '').trim();
-    const coordinateDisplay = hasGps ? `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` : '';
+    const hasGps =
+      storedMode === 'GPS'
+        ? hasCoordinates
+        : storedMode === 'ADMINISTRATIVE'
+          ? false
+          : hasCoordinates;
+    const administrativeDisplay = String(
+      property?.subdistrict || property?.district || property?.province || '',
+    ).trim();
+    const coordinateDisplay = hasGps
+      ? `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+      : '';
     return {
       mode: hasGps ? 'gps' : 'administrative',
       coordinates: hasGps ? { latitude, longitude } : null,
@@ -840,7 +894,11 @@ export class PropertyWorkflowBridgeService {
       postalCode: String(property?.postalCode || '').trim(),
       province: String(property?.province || '').trim(),
       modalDisplay: coordinateDisplay || administrativeDisplay,
-      summaryDisplay: hasGps ? [administrativeDisplay, coordinateDisplay].filter(Boolean).join(' \\u00b7 ') : administrativeDisplay,
+      summaryDisplay: hasGps
+        ? [administrativeDisplay, coordinateDisplay]
+            .filter(Boolean)
+            .join(' \\u00b7 ')
+        : administrativeDisplay,
     };
   }
 
@@ -917,11 +975,11 @@ export class PropertyWorkflowBridgeService {
       location: {
         mode: location.mode,
         province: location.province,
-        district: String(property.district || "").trim(),
+        district: String(property.district || '').trim(),
         subdistrict: location.siteSubdistrict,
         siteSubdistrict: location.siteSubdistrict,
         postalCode: location.postalCode,
-        addressLine: String(property.addressLine || "").trim(),
+        addressLine: String(property.addressLine || '').trim(),
         latitude: property.latitude,
         longitude: property.longitude,
       },

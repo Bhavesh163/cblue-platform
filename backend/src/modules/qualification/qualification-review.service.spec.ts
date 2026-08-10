@@ -9,6 +9,7 @@ import {
 } from './dto/qualification-review-decision.dto';
 
 describe('QualificationReviewService', () => {
+  const validIdentityExpiry = new Date('2030-12-31T00:00:00.000Z');
   const tx = {
     qualificationReviewTask: {
       findUnique: jest.fn(),
@@ -74,7 +75,12 @@ describe('QualificationReviewService', () => {
     });
     tx.kycSubmission.update.mockResolvedValue({ id: 'submission-1' });
     tx.kycDocument.findMany.mockResolvedValue([
-      { documentType: 'id-front', evidenceStatus: 'VALIDATED' },
+      {
+        documentType: 'id-front',
+        evidenceStatus: 'VALIDATED',
+        identityExpiryDate: validIdentityExpiry,
+        identityExpiryDate: validIdentityExpiry,
+      },
       { documentType: 'id-back', evidenceStatus: 'VALIDATED' },
       { documentType: 'selfie-with-id', evidenceStatus: 'VALIDATED' },
     ]);
@@ -349,6 +355,7 @@ describe('QualificationReviewService', () => {
       {
         documentType: 'id-front',
         evidenceStatus: 'VALIDATED',
+        identityExpiryDate: validIdentityExpiry,
         subjectNameHash: identityNameHash('Registered Person'),
       },
       { documentType: 'selfie-with-id', evidenceStatus: 'VALIDATED' },
@@ -358,6 +365,18 @@ describe('QualificationReviewService', () => {
         extractedFields: {
           companyName: 'Example Company Limited',
           directorNames: ['Registered Person'],
+        },
+      },
+      {
+        documentType: 'company-letter-of-intent',
+        evidenceStatus: 'VALIDATED',
+        extractedFields: {
+          documentName: 'Registered Person',
+          authorityHolderName: 'Registered Person',
+          companyName: 'Example Company Limited',
+          contactEmail: 'director@example.com',
+          intentToJoinCblue: true,
+          authorizedApplicantName: 'Registered Person',
         },
       },
     ]);
@@ -409,6 +428,7 @@ describe('QualificationReviewService', () => {
       {
         documentType: 'id-front',
         evidenceStatus: 'VALIDATED',
+        identityExpiryDate: validIdentityExpiry,
         subjectNameHash: identityNameHash('Applicant Person'),
       },
       { documentType: 'selfie-with-id', evidenceStatus: 'VALIDATED' },
@@ -466,6 +486,7 @@ describe('QualificationReviewService', () => {
       {
         documentType: 'id-front',
         evidenceStatus: 'VALIDATED',
+        identityExpiryDate: validIdentityExpiry,
         subjectNameHash: identityNameHash('Registered Person'),
       },
       { documentType: 'selfie-with-id', evidenceStatus: 'VALIDATED' },
@@ -627,7 +648,7 @@ describe('QualificationReviewService', () => {
     );
     expect(tx.fixer.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: { tier: 'SPECIALIST' },
+        data: expect.objectContaining({ tier: 'SPECIALIST' }),
       }),
     );
     expect(tx.qualificationAuditLog.create).toHaveBeenCalledWith(
@@ -682,7 +703,13 @@ describe('QualificationReviewService', () => {
         reviewerId: 'checker-2',
       }),
     });
-    expect(tx.fixer.update).not.toHaveBeenCalled();
+    expect(tx.fixer.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          qualificationEligibilityStatus: 'REVERIFICATION_REQUIRED',
+        }),
+      }),
+    );
     expect(tx.tierQualification.create).not.toHaveBeenCalled();
   });
 

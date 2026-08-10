@@ -48,6 +48,19 @@ describe('PropertyInquiryService workflow guards', () => {
           userId: 'lister-1',
           contactName: 'Lister',
           title: 'House',
+          user: {
+            fixer: {
+              status: 'APPROVED',
+              verified: true,
+              verifiedCompanyName: null,
+              qualificationEligibilityStatus: 'ELIGIBLE',
+              kycValidUntil: new Date('2030-12-31T00:00:00.000Z'),
+              kycReverificationRequiredAt: null,
+              kycReverificationReasons: null,
+              tierReevaluationRequestedAt: null,
+              tierReevaluationCompletedAt: null,
+            },
+          },
         }),
       },
       user: {

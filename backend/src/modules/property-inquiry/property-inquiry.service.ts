@@ -3,6 +3,7 @@ import {
   BadRequestException,
   NotFoundException,
   ForbiddenException,
+  ConflictException,
   Logger,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
@@ -16,6 +17,7 @@ import {
   propertyInquiryNotifiedMetadata,
   propertyWorkflowActionMetadata,
 } from './property-workflow-notification';
+import { qualificationEligibilitySnapshot } from '../qualification/qualification-eligibility';
 
 @Injectable()
 export class PropertyInquiryService {
@@ -35,26 +37,56 @@ export class PropertyInquiryService {
     if (!fallbackId) return [] as string[];
 
     try {
-    const user = await this.prisma.user.findUnique({
-      where: { id: fallbackId },
-      select: { id: true, subscriberId: true, email: true },
-    });
-
-    if (!user) {
-      const linkedIds = new Set<string>();
-
-      const bySubscriberId = await this.prisma.user.findMany({
-        where: { subscriberId: fallbackId },
-        select: { id: true },
+      const user = await this.prisma.user.findUnique({
+        where: { id: fallbackId },
+        select: { id: true, subscriberId: true, email: true },
       });
-      bySubscriberId.forEach((item) => linkedIds.add(item.id));
 
-      const normalizedFallbackEmail = this.normalizeEmail(fallbackId);
-      if (normalizedFallbackEmail) {
+      if (!user) {
+        const linkedIds = new Set<string>();
+
+        const bySubscriberId = await this.prisma.user.findMany({
+          where: { subscriberId: fallbackId },
+          select: { id: true },
+        });
+        bySubscriberId.forEach((item) => linkedIds.add(item.id));
+
+        const normalizedFallbackEmail = this.normalizeEmail(fallbackId);
+        if (normalizedFallbackEmail) {
+          const byEmail = await this.prisma.user.findMany({
+            where: {
+              email: {
+                equals: normalizedFallbackEmail,
+                mode: 'insensitive',
+              },
+            },
+            select: { id: true },
+          });
+          byEmail.forEach((item) => linkedIds.add(item.id));
+        }
+
+        if (linkedIds.size === 0) linkedIds.add(fallbackId);
+        return Array.from(linkedIds);
+      }
+
+      const linkedIds = new Set<string>([user.id]);
+
+      if (user.subscriberId) {
+        const bySubscriberId = await this.prisma.user.findMany({
+          where: { subscriberId: user.subscriberId },
+          select: { id: true },
+        });
+        bySubscriberId.forEach((item) => linkedIds.add(item.id));
+      }
+
+      const normalizedEmail = String(user.email || '')
+        .trim()
+        .toLowerCase();
+      if (normalizedEmail) {
         const byEmail = await this.prisma.user.findMany({
           where: {
             email: {
-              equals: normalizedFallbackEmail,
+              equals: normalizedEmail,
               mode: 'insensitive',
             },
           },
@@ -63,37 +95,7 @@ export class PropertyInquiryService {
         byEmail.forEach((item) => linkedIds.add(item.id));
       }
 
-      if (linkedIds.size === 0) linkedIds.add(fallbackId);
       return Array.from(linkedIds);
-    }
-
-    const linkedIds = new Set<string>([user.id]);
-
-    if (user.subscriberId) {
-      const bySubscriberId = await this.prisma.user.findMany({
-        where: { subscriberId: user.subscriberId },
-        select: { id: true },
-      });
-      bySubscriberId.forEach((item) => linkedIds.add(item.id));
-    }
-
-    const normalizedEmail = String(user.email || '')
-      .trim()
-      .toLowerCase();
-    if (normalizedEmail) {
-      const byEmail = await this.prisma.user.findMany({
-        where: {
-          email: {
-            equals: normalizedEmail,
-            mode: 'insensitive',
-          },
-        },
-        select: { id: true },
-      });
-      byEmail.forEach((item) => linkedIds.add(item.id));
-    }
-
-    return Array.from(linkedIds);
     } catch (error) {
       this.logger.warn(
         `Falling back to single linked user id for ${fallbackId}: ${
@@ -109,54 +111,55 @@ export class PropertyInquiryService {
     if (!fallbackId) return [] as string[];
 
     try {
-    const emails = new Set<string>();
-    const addEmail = (value?: string | null) => {
-      const normalized = this.normalizeEmail(value);
-      if (normalized) emails.add(normalized);
-    };
+      const emails = new Set<string>();
+      const addEmail = (value?: string | null) => {
+        const normalized = this.normalizeEmail(value);
+        if (normalized) emails.add(normalized);
+      };
 
-    const requesterIds =
-      linkedIds && linkedIds.length > 0
-        ? linkedIds
-        : await this.resolveLinkedUserIds(fallbackId);
+      const requesterIds =
+        linkedIds && linkedIds.length > 0
+          ? linkedIds
+          : await this.resolveLinkedUserIds(fallbackId);
 
-    if (requesterIds.length > 0) {
-      const users = await this.prisma.user.findMany({
-        where: { id: { in: requesterIds } },
-        select: { email: true, subscriberId: true },
-      });
-
-      const subscriberIds = new Set<string>();
-      users.forEach((item) => {
-        addEmail(item.email);
-        if (item.subscriberId) subscriberIds.add(item.subscriberId);
-      });
-
-      if (subscriberIds.size > 0) {
-        const subscribers = await this.prisma.subscriber.findMany({
-          where: { id: { in: Array.from(subscriberIds) } },
-          select: { email: true },
+      if (requesterIds.length > 0) {
+        const users = await this.prisma.user.findMany({
+          where: { id: { in: requesterIds } },
+          select: { email: true, subscriberId: true },
         });
-        subscribers.forEach((item) => addEmail(item.email));
+
+        const subscriberIds = new Set<string>();
+        users.forEach((item) => {
+          addEmail(item.email);
+          if (item.subscriberId) subscriberIds.add(item.subscriberId);
+        });
+
+        if (subscriberIds.size > 0) {
+          const subscribers = await this.prisma.subscriber.findMany({
+            where: { id: { in: Array.from(subscriberIds) } },
+            select: { email: true },
+          });
+          subscribers.forEach((item) => addEmail(item.email));
+        }
       }
-    }
 
-    const fallbackSubscriber = await this.prisma.subscriber.findUnique({
-      where: { id: fallbackId },
-      select: { email: true },
-    });
-    addEmail(fallbackSubscriber?.email);
+      const fallbackSubscriber = await this.prisma.subscriber.findUnique({
+        where: { id: fallbackId },
+        select: { email: true },
+      });
+      addEmail(fallbackSubscriber?.email);
 
-    if (fallbackId.includes('@')) addEmail(fallbackId);
+      if (fallbackId.includes('@')) addEmail(fallbackId);
 
-    return Array.from(emails);
+      return Array.from(emails);
     } catch (error) {
       this.logger.warn(
         `Falling back to empty linked emails for ${fallbackId}: ${
           error instanceof Error ? error.message : String(error)
         }`,
       );
-      if (fallbackId.includes('@')) return [this.normalizeEmail(fallbackId)].filter(Boolean);
+      if (fallbackId.includes('@'))
+        return [this.normalizeEmail(fallbackId)].filter(Boolean);
       return [];
     }
   }
@@ -342,7 +345,11 @@ export class PropertyInquiryService {
     };
   }
 
-  async updateByPo(poNumber: string, userId: string, dto: UpdatePropertyInquiryDto) {
+  async updateByPo(
+    poNumber: string,
+    userId: string,
+    dto: UpdatePropertyInquiryDto,
+  ) {
     const inquiry = await this.findAuthorizedInquiryByPo(userId, poNumber);
     return this.update(inquiry.id, userId, dto);
   }
@@ -356,10 +363,35 @@ export class PropertyInquiryService {
         userId: true,
         title: true,
         contactName: true,
+        user: {
+          select: {
+            fixer: {
+              select: {
+                status: true,
+                verified: true,
+                verifiedCompanyName: true,
+                qualificationEligibilityStatus: true,
+                kycValidUntil: true,
+                kycReverificationRequiredAt: true,
+                kycReverificationReasons: true,
+                tierReevaluationRequestedAt: true,
+                tierReevaluationCompletedAt: true,
+              },
+            },
+          },
+        },
       },
     });
     if (!property) {
       throw new NotFoundException('Property not found');
+    }
+    const listerEligibility = property.user.fixer
+      ? qualificationEligibilitySnapshot(property.user.fixer)
+      : null;
+    if (!listerEligibility?.newJobEligible) {
+      throw new ConflictException(
+        'This listing is temporarily unavailable for new inquiries',
+      );
     }
 
     // Always derive lister from the property owner for workflow consistency.
@@ -414,78 +446,80 @@ export class PropertyInquiryService {
 
   async findByCustomer(customerId: string) {
     try {
-    const customerIds = await this.resolveLinkedUserIds(customerId);
-    const customerEmails = await this.resolveLinkedEmails(
-      customerId,
-      customerIds,
-    );
-    if (customerIds.length === 0 && customerEmails.length === 0) return [];
+      const customerIds = await this.resolveLinkedUserIds(customerId);
+      const customerEmails = await this.resolveLinkedEmails(
+        customerId,
+        customerIds,
+      );
+      if (customerIds.length === 0 && customerEmails.length === 0) return [];
 
-    const customerEmailFilters = customerEmails.flatMap((email) => [
-      { customerEmail: { equals: email, mode: 'insensitive' as const } },
-      { customer: { email: { equals: email, mode: 'insensitive' as const } } },
-    ]);
+      const customerEmailFilters = customerEmails.flatMap((email) => [
+        { customerEmail: { equals: email, mode: 'insensitive' as const } },
+        {
+          customer: { email: { equals: email, mode: 'insensitive' as const } },
+        },
+      ]);
 
-    const where = {
-      OR: [{ customerId: { in: customerIds } }, ...customerEmailFilters],
-    };
+      const where = {
+        OR: [{ customerId: { in: customerIds } }, ...customerEmailFilters],
+      };
 
-    try {
-      return await this.prisma.propertyInquiry.findMany({
-        where,
-        include: {
-          attachments: { orderBy: { createdAt: 'asc' } },
-          workflowEvents: { orderBy: { createdAt: 'asc' } },
-          property: {
-            select: {
-              id: true,
-              userId: true,
-              title: true,
-              tier: true,
-              price: true,
-              propertyType: true,
-              listingType: true,
-              province: true,
-              district: true,
-              subdistrict: true,
-              addressLine: true,
-              latitude: true,
-              longitude: true,
-              area: true,
-              bedrooms: true,
-              bathrooms: true,
-              images: {
-                select: {
-                  url: true,
-                  key: true,
-                  sortOrder: true,
+      try {
+        return await this.prisma.propertyInquiry.findMany({
+          where,
+          include: {
+            attachments: { orderBy: { createdAt: 'asc' } },
+            workflowEvents: { orderBy: { createdAt: 'asc' } },
+            property: {
+              select: {
+                id: true,
+                userId: true,
+                title: true,
+                tier: true,
+                price: true,
+                propertyType: true,
+                listingType: true,
+                province: true,
+                district: true,
+                subdistrict: true,
+                addressLine: true,
+                latitude: true,
+                longitude: true,
+                area: true,
+                bedrooms: true,
+                bathrooms: true,
+                images: {
+                  select: {
+                    url: true,
+                    key: true,
+                    sortOrder: true,
+                  },
+                  orderBy: { sortOrder: 'asc' },
                 },
-                orderBy: { sortOrder: 'asc' },
               },
             },
           },
-        },
-        orderBy: { updatedAt: 'desc' },
-      });
-    } catch {
-      try {
-        const rows = await this.prisma.propertyInquiry.findMany({
-          where,
-          include: {
-            property: true,
-            attachments: { orderBy: { createdAt: 'asc' } },
-            workflowEvents: { orderBy: { createdAt: 'asc' } },
-          },
           orderBy: { updatedAt: 'desc' },
         });
-        return rows.map((row) => ({
-          ...row,
-          property: row.property ? { ...row.property, images: [] } : null,
-        }));
       } catch {
-        return [];
+        try {
+          const rows = await this.prisma.propertyInquiry.findMany({
+            where,
+            include: {
+              property: true,
+              attachments: { orderBy: { createdAt: 'asc' } },
+              workflowEvents: { orderBy: { createdAt: 'asc' } },
+            },
+            orderBy: { updatedAt: 'desc' },
+          });
+          return rows.map((row) => ({
+            ...row,
+            property: row.property ? { ...row.property, images: [] } : null,
+          }));
+        } catch {
+          return [];
+        }
       }
-    }
     } catch (error) {
       this.logger.warn(
         `Returning empty customer inquiry list after lookup failed for ${customerId}: ${
@@ -498,88 +532,88 @@ export class PropertyInquiryService {
 
   async findByLister(listerUserId: string) {
     try {
-    const listerIds = await this.resolveLinkedUserIds(listerUserId);
-    const listerEmails = await this.resolveLinkedEmails(
-      listerUserId,
-      listerIds,
-    );
-    if (listerIds.length === 0 && listerEmails.length === 0) return [];
+      const listerIds = await this.resolveLinkedUserIds(listerUserId);
+      const listerEmails = await this.resolveLinkedEmails(
+        listerUserId,
+        listerIds,
+      );
+      if (listerIds.length === 0 && listerEmails.length === 0) return [];
 
-    const listerEmailFilters = listerEmails.flatMap((email) => [
-      { lister: { email: { equals: email, mode: 'insensitive' as const } } },
-      {
-        property: {
-          user: {
-            email: { equals: email, mode: 'insensitive' as const },
-          },
-        },
-      },
-    ]);
-
-    const where = {
-      OR: [
-        { listerUserId: { in: listerIds } },
-        { property: { userId: { in: listerIds } } },
-        ...listerEmailFilters,
-      ],
-    };
-
-    try {
-      return await this.prisma.propertyInquiry.findMany({
-        where,
-        include: {
-          attachments: { orderBy: { createdAt: 'asc' } },
-          workflowEvents: { orderBy: { createdAt: 'asc' } },
+      const listerEmailFilters = listerEmails.flatMap((email) => [
+        { lister: { email: { equals: email, mode: 'insensitive' as const } } },
+        {
           property: {
-            select: {
-              id: true,
-              userId: true,
-              title: true,
-              tier: true,
-              price: true,
-              propertyType: true,
-              listingType: true,
-              province: true,
-              district: true,
-              subdistrict: true,
-              addressLine: true,
-              latitude: true,
-              longitude: true,
-              area: true,
-              bedrooms: true,
-              bathrooms: true,
-              images: {
-                select: {
-                  url: true,
-                  key: true,
-                  sortOrder: true,
-                },
-                orderBy: { sortOrder: 'asc' },
-              },
+            user: {
+              email: { equals: email, mode: 'insensitive' as const },
             },
           },
         },
-        orderBy: { updatedAt: 'desc' },
-      });
-    } catch {
+      ]);
+
+      const where = {
+        OR: [
+          { listerUserId: { in: listerIds } },
+          { property: { userId: { in: listerIds } } },
+          ...listerEmailFilters,
+        ],
+      };
+
       try {
-        const rows = await this.prisma.propertyInquiry.findMany({
+        return await this.prisma.propertyInquiry.findMany({
           where,
           include: {
-            property: true,
             attachments: { orderBy: { createdAt: 'asc' } },
             workflowEvents: { orderBy: { createdAt: 'asc' } },
+            property: {
+              select: {
+                id: true,
+                userId: true,
+                title: true,
+                tier: true,
+                price: true,
+                propertyType: true,
+                listingType: true,
+                province: true,
+                district: true,
+                subdistrict: true,
+                addressLine: true,
+                latitude: true,
+                longitude: true,
+                area: true,
+                bedrooms: true,
+                bathrooms: true,
+                images: {
+                  select: {
+                    url: true,
+                    key: true,
+                    sortOrder: true,
+                  },
+                  orderBy: { sortOrder: 'asc' },
+                },
+              },
+            },
           },
           orderBy: { updatedAt: 'desc' },
         });
-        return rows.map((row) => ({
-          ...row,
-          property: row.property ? { ...row.property, images: [] } : null,
-        }));
       } catch {
-        return [];
+        try {
+          const rows = await this.prisma.propertyInquiry.findMany({
+            where,
+            include: {
+              property: true,
+              attachments: { orderBy: { createdAt: 'asc' } },
+              workflowEvents: { orderBy: { createdAt: 'asc' } },
+            },
+            orderBy: { updatedAt: 'desc' },
+          });
+          return rows.map((row) => ({
+            ...row,
+            property: row.property ? { ...row.property, images: [] } : null,
+          }));
+        } catch {
+          return [];
+        }
       }
-    }
     } catch (error) {
       this.logger.warn(
         `Returning empty lister inquiry list after lookup failed for ${listerUserId}: ${
@@ -609,7 +643,10 @@ export class PropertyInquiryService {
     }
 
     const requesterIds = await this.resolveLinkedUserIds(userId);
-    const requesterEmails = await this.resolveLinkedEmails(userId, requesterIds);
+    const requesterEmails = await this.resolveLinkedEmails(
+      userId,
+      requesterIds,
+    );
     const isCustomer =
       requesterIds.includes(inquiry.customerId) ||
       this.hasAnyLinkedEmail(requesterEmails, [
@@ -627,10 +664,16 @@ export class PropertyInquiryService {
     }
 
     const requireCustomer = () => {
-      if (!isCustomer) throw new ForbiddenException('Only the customer may perform this action');
+      if (!isCustomer)
+        throw new ForbiddenException(
+          'Only the customer may perform this action',
+        );
     };
     const requireLister = () => {
-      if (!isLister) throw new ForbiddenException('Only the selected lister may perform this action');
+      if (!isLister)
+        throw new ForbiddenException(
+          'Only the selected lister may perform this action',
+        );
     };
     const requireStatus = (...statuses: PropertyInquiryStatus[]) => {
       if (!statuses.includes(inquiry.status)) {
@@ -677,7 +720,9 @@ export class PropertyInquiryService {
       requireCustomer();
       requireStatus(PropertyInquiryStatus.PAID);
       if (!dto.meetingDate || !dto.meetingTime || !dto.meetingVenue) {
-        throw new BadRequestException('Viewing date, time, and venue are required');
+        throw new BadRequestException(
+          'Viewing date, time, and venue are required',
+        );
       }
       nextStatus = PropertyInquiryStatus.MEETING_SENT;
       nextStep = 7;
@@ -705,7 +750,10 @@ export class PropertyInquiryService {
       nextStep = inquiry.step;
       action = 'customer-cancel';
       reselectedOnce = dto.reselectedOnce ?? inquiry.reselectedOnce;
-    } else if (dto.customerRating !== undefined || dto.listerRating !== undefined) {
+    } else if (
+      dto.customerRating !== undefined ||
+      dto.listerRating !== undefined
+    ) {
       requireStatus(PropertyInquiryStatus.MEETING_CONFIRMED);
       if (dto.customerRating !== undefined) {
         requireCustomer();

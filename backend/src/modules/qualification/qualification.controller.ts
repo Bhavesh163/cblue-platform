@@ -67,6 +67,12 @@ export class QualificationController {
   getStatus(@CurrentUser('id') userId: string) {
     return this.qualification.getStatusForUser(userId);
   }
+
+  @Get('tier-review-target')
+  getTierReviewTarget(@CurrentUser('id') userId: string) {
+    return this.qualification.getTierReviewTargetForUser(userId);
+  }
+
   @Get('submissions/:submissionId')
   getSubmission(
     @CurrentUser('id') userId: string,

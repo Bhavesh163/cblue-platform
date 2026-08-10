@@ -20,6 +20,11 @@ import FormData from 'form-data';
 import { normalizeThaiGpsLocation } from '../../common/thai-gps-location';
 import { canonicalizeServiceText } from './service-intent-registry';
 import { parseRequestedServices } from './multilingual-service-request-parser';
+import {
+  mergeReverificationReasons,
+  qualificationEligibleFixerWhere,
+  type QualificationReverificationReason,
+} from '../qualification/qualification-eligibility';
 
 export interface SelectedFixer {
   id: string;
@@ -1213,6 +1218,11 @@ export class FixerService {
 
   async updateMyFixerProfile(userId: string, dto: RegisterFixerDto) {
     const fixer = await this.getFixerByUserId(userId);
+    const existingUser = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, phone: true },
+    });
+    if (!existingUser) throw new NotFoundException('User not found');
 
     const serviceLocation = normalizeThaiGpsLocation({
       province: dto.address?.province,
@@ -1222,6 +1232,65 @@ export class FixerService {
       latitude: dto.gpsCoords?.lat,
       longitude: dto.gpsCoords?.lng,
     });
+
+    const normalizeText = (value: unknown) =>
+      (typeof value === 'string' || typeof value === 'number'
+        ? String(value)
+        : ''
+      )
+        .trim()
+        .toLowerCase();
+    const normalizePhone = (value: unknown) =>
+      (typeof value === 'string' || typeof value === 'number'
+        ? String(value)
+        : ''
+      ).replace(/\D+/g, '');
+    const normalizeJson = (value: unknown): string => {
+      if (Array.isArray(value)) {
+        return '[' + value.map((item) => normalizeJson(item)).join(',') + ']';
+      }
+      if (value && typeof value === 'object') {
+        const record = value as Record<string, unknown>;
+        return (
+          '{' +
+          Object.keys(record)
+            .sort()
+            .map(
+              (key) => JSON.stringify(key) + ':' + normalizeJson(record[key]),
+            )
+            .join(',') +
+          '}'
+        );
+      }
+      return JSON.stringify(value ?? null);
+    };
+    const reasons: QualificationReverificationReason[] = [];
+    if (normalizeText(existingUser.email) !== normalizeText(dto.email)) {
+      reasons.push('EMAIL_CHANGED');
+    }
+    if (normalizePhone(existingUser.phone) !== normalizePhone(dto.phone)) {
+      reasons.push('PHONE_CHANGED');
+    }
+    if (
+      normalizeJson(fixer.companyAddress) !==
+      normalizeJson(dto.companyAddress ?? null)
+    ) {
+      reasons.push('ADDRESS_CHANGED');
+    }
+    if (
+      normalizeText(fixer.serviceProvince) !==
+        normalizeText(serviceLocation.province) ||
+      normalizeText(fixer.serviceDistrict) !==
+        normalizeText(serviceLocation.district) ||
+      normalizeText(fixer.servicePostalCode) !==
+        normalizeText(serviceLocation.postalCode) ||
+      Number(fixer.travelRadius) !== Number(dto.travelRadius) ||
+      Number(fixer.gpsLat ?? 0) !== Number(dto.gpsCoords?.lat ?? 0) ||
+      Number(fixer.gpsLng ?? 0) !== Number(dto.gpsCoords?.lng ?? 0)
+    ) {
+      reasons.push('SERVICE_AREA_CHANGED');
+    }
+    const reverificationRequired = fixer.verified && reasons.length > 0;
 
     await this.prisma.user.update({
       where: { id: userId },
@@ -1270,6 +1339,19 @@ export class FixerService {
           JSON.stringify(tierEvaluation.flags),
         ) as Prisma.InputJsonValue,
         aiCredentialStatus: tierEvaluation.credentialStatus,
+        ...(reverificationRequired
+          ? {
+              qualificationEligibilityStatus:
+                'REVERIFICATION_REQUIRED' as const,
+              kycReverificationRequiredAt:
+                fixer.kycReverificationRequiredAt ?? new Date(),
+              kycReverificationReasons: mergeReverificationReasons(
+                fixer.kycReverificationReasons,
+                reasons,
+              ),
+              kycExpiryWarningSentAt: null,
+            }
+          : {}),
       },
     });
 
@@ -2414,6 +2496,7 @@ export class FixerService {
   ): Promise<SelectedFixer[]> {
     try {
       const allFixers = await this.prisma.fixer.findMany({
+        where: qualificationEligibleFixerWhere(new Date()),
         include: { user: true, skills: true },
       });
 

@@ -353,6 +353,19 @@ function FixerRegisterContent() {
   const [portfolioProcessing, setPortfolioProcessing] = useState(false);
   const [companyEvidenceProcessing, setCompanyEvidenceProcessing] =
     useState(false);
+  const [qualificationEligibility, setQualificationEligibility] = useState<{
+    status:
+      | "PENDING"
+      | "ELIGIBLE"
+      | "EXPIRING"
+      | "REVERIFICATION_REQUIRED"
+      | "EXPIRED";
+    newJobEligible: boolean;
+    kycValidUntil: string | null;
+    daysUntilExpiry: number | null;
+    companyPartner: boolean;
+    tierReevaluationPending: boolean;
+  } | null>(null);
   const [qualificationOutcome, setQualificationOutcome] = useState<{
     submissionId: string;
     status: string;
@@ -562,6 +575,18 @@ function FixerRegisterContent() {
         setIsAlreadyFixer(registered);
         setIsRegisteredFixer(registered);
         populateFixerForm(data, fixerProfile);
+        if (registered) {
+          const statusResponse = await fetch("/api/v1/qualification/status", {
+            cache: "no-store",
+            headers: { Authorization: "Bearer " + token },
+          });
+          if (statusResponse.ok) {
+            const statusPayload = (await statusResponse.json()) as {
+              eligibility?: typeof qualificationEligibility;
+            };
+            setQualificationEligibility(statusPayload.eligibility ?? null);
+          }
+        }
         if (registered && isEditMode) {
           const draftResponse = await fetch(
             "/api/v1/qualification/submissions/draft",
@@ -1243,7 +1268,12 @@ function FixerRegisterContent() {
       setError(t("skillError"));
       return;
     }
-    if (kycSlots.length < 2) {
+    const knownKycRequired =
+      !isRegisteredFixer ||
+      qualificationEligibility?.status === "PENDING" ||
+      qualificationEligibility?.status === "REVERIFICATION_REQUIRED" ||
+      qualificationEligibility?.status === "EXPIRED";
+    if (knownKycRequired && kycSlots.length < 2) {
       setError(
         locale === "th"
           ? "กรุณาอัปโหลด KYC ให้ครบ 2 รูป (ด้านหน้าและเซลฟี่คู่บัตร)"
@@ -1432,8 +1462,91 @@ function FixerRegisterContent() {
         return;
       }
 
+      const wasRegisteredFixer = isRegisteredFixer;
       setIsRegisteredFixer(true);
       setIsAlreadyFixer(true);
+
+      const statusAfterProfile = await fetch("/api/v1/qualification/status", {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!statusAfterProfile.ok) {
+        throw new Error("Unable to confirm identity verification status");
+      }
+      const statusPayload = (await statusAfterProfile.json()) as {
+        eligibility?: typeof qualificationEligibility;
+      };
+      const eligibility = statusPayload.eligibility ?? null;
+      setQualificationEligibility(eligibility);
+      const requiresKyc =
+        !wasRegisteredFixer ||
+        eligibility?.status === "PENDING" ||
+        eligibility?.status === "REVERIFICATION_REQUIRED" ||
+        eligibility?.status === "EXPIRED";
+      if (!requiresKyc) {
+        if (portfolioImages.length > 0) {
+          const targetResponse = await fetch(
+            "/api/v1/qualification/tier-review-target",
+            {
+              cache: "no-store",
+              headers: { Authorization: `Bearer ${token}` },
+            },
+          );
+          if (!targetResponse.ok) {
+            throw new Error("Unable to start the tier review");
+          }
+          const target = (await targetResponse.json()) as {
+            submission?: { id?: string };
+          };
+          const targetId = target.submission?.id;
+          if (!targetId) throw new Error("Unable to start the tier review");
+          for (const portfolioImage of portfolioImages) {
+            const body = new globalThis.FormData();
+            body.append("documentType", "portfolio");
+            body.append("file", portfolioImage);
+            const response = await fetch(
+              `/api/v1/qualification/submissions/${targetId}/documents`,
+              {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}` },
+                body,
+              },
+            );
+            if (!response.ok) {
+              throw new Error("Unable to submit qualification evidence");
+            }
+          }
+          setQualificationOutcome({
+            submissionId: targetId,
+            status: "TIER_REVIEW",
+            reviewRequired: true,
+            recommendedTier: "ECONOMY",
+          });
+        }
+        setSuccess(true);
+        return;
+      }
+      if (kycSlots.length < 2) {
+        throw new Error(
+          locale === "th"
+            ? "บันทึกการเปลี่ยนแปลงแล้ว กรุณาอัปโหลดรูปยืนยันตัวตน 2 รูปเพื่อรับโอกาสงานใหม่"
+            : locale === "zh"
+              ? "更改已保存。请上传两张身份验证照片以继续接收新工作机会。"
+              : "Changes were saved. Upload both identity photos to continue receiving new opportunities.",
+        );
+      }
+      if (
+        eligibility?.companyPartner &&
+        (!companyAffidavit || !companyLetterOfIntent)
+      ) {
+        throw new Error(
+          locale === "th"
+            ? "พาร์ทเนอร์บริษัทต้องส่งหนังสือรับรองบริษัทและหนังสือแสดงเจตจำนงของกรรมการฉบับใหม่"
+            : locale === "zh"
+              ? "公司合作伙伴必须提交最新的公司证明和董事意向书。"
+              : "Company partners must submit a current company affidavit and director letter of intent.",
+        );
+      }
 
       const createQualification = await fetch(
         "/api/v1/qualification/submissions/draft",
@@ -2238,6 +2351,38 @@ function FixerRegisterContent() {
                   ? "身份验证 (KYC)"
                   : "Identity Verification (KYC)"}
             </legend>
+            {qualificationEligibility?.status === "EXPIRING" ||
+            qualificationEligibility?.status === "EXPIRED" ||
+            qualificationEligibility?.status === "REVERIFICATION_REQUIRED" ? (
+              <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+                <p className="font-semibold">
+                  {qualificationEligibility.status === "EXPIRING"
+                    ? locale === "th"
+                      ? "การยืนยันตัวตนใกล้หมดอายุ"
+                      : locale === "zh"
+                        ? "身份验证即将到期"
+                        : "Identity verification expires soon"
+                    : locale === "th"
+                      ? "ต้องอัปเดตการยืนยันตัวตน"
+                      : locale === "zh"
+                        ? "需要更新身份验证"
+                        : "Identity verification update required"}
+                </p>
+                <p className="mt-1 leading-6">
+                  {qualificationEligibility.companyPartner
+                    ? locale === "th"
+                      ? "กรุณาส่งรูปด้านหน้าบัตร เซลฟี่คู่บัตร หนังสือรับรองบริษัท และหนังสือแสดงเจตจำนงของกรรมการฉบับใหม่ เพื่อรับโอกาสงานใหม่อย่างต่อเนื่อง"
+                      : locale === "zh"
+                        ? "请提交新的身份证正面照片、手持证件自拍照、公司证明和董事意向书，以继续接收新工作机会。"
+                        : "Submit a current ID front, selfie with ID, company affidavit, and director letter of intent to continue receiving new opportunities."
+                    : locale === "th"
+                      ? "กรุณาส่งรูปด้านหน้าบัตรและเซลฟี่คู่บัตรฉบับใหม่ เพื่อรับโอกาสงานใหม่อย่างต่อเนื่อง"
+                      : locale === "zh"
+                        ? "请提交新的身份证正面照片和手持证件自拍照，以继续接收新工作机会。"
+                        : "Submit a current ID front and selfie with ID to continue receiving new opportunities."}
+                </p>
+              </div>
+            ) : null}
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">

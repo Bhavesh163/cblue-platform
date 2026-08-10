@@ -4,6 +4,7 @@ import { OrderStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrderService } from '../order/order.service';
 import { TIER_MULTIPLIERS, MATCHING_WEIGHTS } from '../../common/constants';
+import { qualificationEligibleFixerWhere } from '../qualification/qualification-eligibility';
 
 export interface MatchingResult {
   fixerId: string;
@@ -75,7 +76,7 @@ export class MatchingService {
 
     const fixers = await this.prisma.fixer.findMany({
       where: {
-        status: 'APPROVED',
+        ...qualificationEligibleFixerWhere(new Date()),
         skills: {
           some: { category: serviceCategory },
         },

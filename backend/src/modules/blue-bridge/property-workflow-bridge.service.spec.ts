@@ -31,7 +31,22 @@ const property = {
       isPrimary: true,
     },
   ],
-  user: { id: 'lister-1', name: 'Lister', email: 'lister@example.com' },
+  user: {
+    id: 'lister-1',
+    name: 'Lister',
+    email: 'lister@example.com',
+    fixer: {
+      status: 'APPROVED',
+      verified: true,
+      verifiedCompanyName: null,
+      qualificationEligibilityStatus: 'ELIGIBLE',
+      kycValidUntil: new Date('2027-07-12T00:00:00.000Z'),
+      kycReverificationRequiredAt: null,
+      kycReverificationReasons: [],
+      tierReevaluationRequestedAt: null,
+      tierReevaluationCompletedAt: null,
+    },
+  },
 };
 
 function inquiry(status = PropertyInquiryStatus.NOTIFY_SENT) {
@@ -121,13 +136,11 @@ describe('PropertyWorkflowBridgeService', () => {
     const stored = inquiry();
     const prisma = {
       user: {
-        findUnique: jest
-          .fn()
-          .mockResolvedValue({
-            id: 'customer-1',
-            name: 'Customer',
-            email: 'customer@example.com',
-          }),
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'customer-1',
+          name: 'Customer',
+          email: 'customer@example.com',
+        }),
       },
       property: { findFirst: jest.fn().mockResolvedValue(property) },
       propertyInquiry: {
@@ -171,7 +184,8 @@ describe('PropertyWorkflowBridgeService', () => {
     expectAuthoritativeSnapshot(listerSnapshot);
     expect(customerSnapshot.currentStep).toBe(4);
     expect(listerSnapshot.currentStep).toBe(4);
-    const createData = (prisma.propertyInquiry.create as jest.Mock).mock.calls[0][0].data;
+    const createData = (prisma.propertyInquiry.create as jest.Mock).mock
+      .calls[0][0].data;
     expect(createData.workflowEvents.create).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ action: 'match-selected', step: 1 }),
@@ -359,15 +373,13 @@ describe('PropertyWorkflowBridgeService', () => {
 
   it('returns only persisted public listing fields', async () => {
     const propertyService = {
-      search: jest
-        .fn()
-        .mockResolvedValue({
-          properties: [property],
-          total: 1,
-          page: 1,
-          limit: 20,
-          totalPages: 1,
-        }),
+      search: jest.fn().mockResolvedValue({
+        properties: [property],
+        total: 1,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
+      }),
     } as unknown as PropertyService;
     const service = new PropertyWorkflowBridgeService(
       {} as PrismaService,
@@ -496,7 +508,13 @@ describe('PropertyWorkflowBridgeService', () => {
     [PropertyInquiryStatus.COMPLETED, 'customer-1', null, null, null],
   ])(
     'returns the authoritative next action for %s',
-    async (status, userId, nextActionStep, nextActionLabel, nextActionOwner) => {
+    async (
+      status,
+      userId,
+      nextActionStep,
+      nextActionLabel,
+      nextActionOwner,
+    ) => {
       const stored = inquiry(status as PropertyInquiryStatus);
       const prisma = {
         propertyInquiry: { findUnique: jest.fn().mockResolvedValue(stored) },
@@ -505,7 +523,10 @@ describe('PropertyWorkflowBridgeService', () => {
         search: jest.fn(),
       } as unknown as PropertyService);
 
-      const snapshot = await service.snapshot(stored.poNumber, userId as string);
+      const snapshot = await service.snapshot(
+        stored.poNumber,
+        userId as string,
+      );
 
       expectAuthoritativeSnapshot(snapshot);
       expect(snapshot).toEqual(
@@ -573,7 +594,10 @@ describe('PropertyWorkflowBridgeService', () => {
         search: jest.fn(),
       } as unknown as PropertyService);
 
-      const snapshot = await service.snapshot(stored.poNumber, userId as string);
+      const snapshot = await service.snapshot(
+        stored.poNumber,
+        userId as string,
+      );
 
       expect(snapshot.actions).toEqual(
         expect.arrayContaining(
@@ -840,18 +864,8 @@ describe('PropertyWorkflowBridgeService', () => {
   });
 
   it.each([
-    [
-      PropertyInquiryStatus.NOTIFY_SENT,
-      'lister-1',
-      'partner-accept',
-      {},
-    ],
-    [
-      PropertyInquiryStatus.MEETING_SENT,
-      'lister-1',
-      'viewing-confirm',
-      {},
-    ],
+    [PropertyInquiryStatus.NOTIFY_SENT, 'lister-1', 'partner-accept', {}],
+    [PropertyInquiryStatus.MEETING_SENT, 'lister-1', 'viewing-confirm', {}],
   ])(
     'persists participant notifications for %s via %s',
     async (beforeStatus, userId, action, dto) => {
@@ -948,14 +962,56 @@ describe('PropertyWorkflowBridgeService', () => {
   });
 
   it.each([
-    [PropertyInquiryStatus.NOTIFY_SENT, 3, 'customer-1', 'active', [], 'lister'],
-    [PropertyInquiryStatus.NOTIFY_SENT, 3, 'lister-1', 'request', ['partner-accept', 'partner-decline'], 'lister'],
-    [PropertyInquiryStatus.ACCEPTED, 4, 'customer-1', 'request', ['fee-proceed', 'free-pass'], 'customer'],
+    [
+      PropertyInquiryStatus.NOTIFY_SENT,
+      3,
+      'customer-1',
+      'active',
+      [],
+      'lister',
+    ],
+    [
+      PropertyInquiryStatus.NOTIFY_SENT,
+      3,
+      'lister-1',
+      'request',
+      ['partner-accept', 'partner-decline'],
+      'lister',
+    ],
+    [
+      PropertyInquiryStatus.ACCEPTED,
+      4,
+      'customer-1',
+      'request',
+      ['fee-proceed', 'free-pass'],
+      'customer',
+    ],
     [PropertyInquiryStatus.ACCEPTED, 4, 'lister-1', 'active', [], 'customer'],
-    [PropertyInquiryStatus.PAID, 5, 'customer-1', 'request', ['viewing-invite'], 'customer'],
+    [
+      PropertyInquiryStatus.PAID,
+      5,
+      'customer-1',
+      'request',
+      ['viewing-invite'],
+      'customer',
+    ],
     [PropertyInquiryStatus.PAID, 5, 'lister-1', 'active', [], 'customer'],
-    [PropertyInquiryStatus.MEETING_SENT, 7, 'customer-1', 'active', [], 'lister'],
-    [PropertyInquiryStatus.MEETING_SENT, 7, 'lister-1', 'request', ['viewing-confirm'], 'lister'],
+    [
+      PropertyInquiryStatus.MEETING_SENT,
+      7,
+      'customer-1',
+      'active',
+      [],
+      'lister',
+    ],
+    [
+      PropertyInquiryStatus.MEETING_SENT,
+      7,
+      'lister-1',
+      'request',
+      ['viewing-confirm'],
+      'lister',
+    ],
   ])(
     'projects %s activity for %s from the primary action owner',
     async (status, step, userId, bucket, expectedPrimaryActions, nextOwner) => {
@@ -970,7 +1026,10 @@ describe('PropertyWorkflowBridgeService', () => {
       const service = new PropertyWorkflowBridgeService(prisma, {
         search: jest.fn(),
       } as unknown as PropertyService);
-      const snapshot = await service.snapshot(stored.poNumber, userId as string);
+      const snapshot = await service.snapshot(
+        stored.poNumber,
+        userId as string,
+      );
       const primaryActions = snapshot.availableActions.filter(
         (key: string) => key !== 'customer-cancel',
       );
@@ -981,11 +1040,38 @@ describe('PropertyWorkflowBridgeService', () => {
   );
 
   it.each([
-    ['customer-1', 5, null, 'lister-1', 'rate-partner', 'rate-customer', 'lister', 'Rate customer'],
-    ['lister-1', null, 4, 'customer-1', 'rate-customer', 'rate-partner', 'customer', 'Rate lister'],
+    [
+      'customer-1',
+      5,
+      null,
+      'lister-1',
+      'rate-partner',
+      'rate-customer',
+      'lister',
+      'Rate customer',
+    ],
+    [
+      'lister-1',
+      null,
+      4,
+      'customer-1',
+      'rate-customer',
+      'rate-partner',
+      'customer',
+      'Rate lister',
+    ],
   ])(
     'removes the submitted rating action and assigns the remaining rating',
-    async (ratedUserId, customerRating, listerRating, pendingUserId, completedAction, pendingAction, pendingOwner, pendingLabel) => {
+    async (
+      ratedUserId,
+      customerRating,
+      listerRating,
+      pendingUserId,
+      completedAction,
+      pendingAction,
+      pendingOwner,
+      pendingLabel,
+    ) => {
       const stored = {
         ...inquiry(PropertyInquiryStatus.MEETING_CONFIRMED),
         status: PropertyInquiryStatus.MEETING_CONFIRMED,
@@ -999,8 +1085,14 @@ describe('PropertyWorkflowBridgeService', () => {
       const service = new PropertyWorkflowBridgeService(prisma, {
         search: jest.fn(),
       } as unknown as PropertyService);
-      const ratedSnapshot = await service.snapshot(stored.poNumber, ratedUserId as string);
-      const pendingSnapshot = await service.snapshot(stored.poNumber, pendingUserId as string);
+      const ratedSnapshot = await service.snapshot(
+        stored.poNumber,
+        ratedUserId as string,
+      );
+      const pendingSnapshot = await service.snapshot(
+        stored.poNumber,
+        pendingUserId as string,
+      );
       expect(ratedSnapshot.availableActions).not.toContain(completedAction);
       expect(ratedSnapshot.activityBucket).toBe('history');
       expect(ratedSnapshot.nextActionOwner).toBe(pendingOwner);
@@ -1169,36 +1261,38 @@ describe('PropertyWorkflowBridgeService', () => {
     const emptyService = new PropertyWorkflowBridgeService(emptyPrisma, {
       search: jest.fn(),
     } as unknown as PropertyService);
-    const emptySnapshot = await emptyService.snapshot(empty.poNumber, 'customer-1');
+    const emptySnapshot = await emptyService.snapshot(
+      empty.poNumber,
+      'customer-1',
+    );
     expect(emptySnapshot.uploadedFiles).toEqual([]);
   });
 });
 
+it('returns complete non-private listing details and media aliases', async () => {
+  const stored = inquiry();
+  const prisma = {
+    propertyInquiry: { findUnique: jest.fn().mockResolvedValue(stored) },
+  } as unknown as PrismaService;
+  const service = new PropertyWorkflowBridgeService(prisma, {
+    search: jest.fn(),
+  } as unknown as PropertyService);
 
-  it('returns complete non-private listing details and media aliases', async () => {
-    const stored = inquiry();
-    const prisma = {
-      propertyInquiry: { findUnique: jest.fn().mockResolvedValue(stored) },
-    } as unknown as PrismaService;
-    const service = new PropertyWorkflowBridgeService(prisma, {
-      search: jest.fn(),
-    } as unknown as PropertyService);
+  const snapshot = await service.snapshot(stored.poNumber, 'customer-1');
 
-    const snapshot = await service.snapshot(stored.poNumber, "customer-1");
-
-    expect(snapshot.listing).toEqual(
-      expect.objectContaining({
-        title: property.title,
-        propertyType: property.propertyType,
-        listingType: property.listingType,
-        siteSubdistrict: property.subdistrict,
-        locationSummary: expect.stringContaining(property.subdistrict),
-        attachments: expect.arrayContaining([
-          expect.objectContaining({ url: property.images[0].url }),
-        ]),
-        images: expect.arrayContaining([
-          expect.objectContaining({ url: property.images[0].url }),
-        ]),
-      }),
-    );
-  });
+  expect(snapshot.listing).toEqual(
+    expect.objectContaining({
+      title: property.title,
+      propertyType: property.propertyType,
+      listingType: property.listingType,
+      siteSubdistrict: property.subdistrict,
+      locationSummary: expect.stringContaining(property.subdistrict),
+      attachments: expect.arrayContaining([
+        expect.objectContaining({ url: property.images[0].url }),
+      ]),
+      images: expect.arrayContaining([
+        expect.objectContaining({ url: property.images[0].url }),
+      ]),
+    }),
+  );
+});

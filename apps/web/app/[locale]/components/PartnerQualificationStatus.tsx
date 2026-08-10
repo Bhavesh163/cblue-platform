@@ -13,6 +13,18 @@ type QualificationSnapshot = {
     submittedAt?: string | null;
     reviewedAt?: string | null;
   } | null;
+  eligibility?: {
+    status?:
+      | "PENDING"
+      | "ELIGIBLE"
+      | "EXPIRING"
+      | "REVERIFICATION_REQUIRED"
+      | "EXPIRED";
+    newJobEligible?: boolean;
+    kycValidUntil?: string | null;
+    daysUntilExpiry?: number | null;
+    tierReevaluationPending?: boolean;
+  } | null;
   tierQualification?: {
     approvedTier?: string | null;
     recommendedTier?: string | null;
@@ -25,6 +37,7 @@ type Props = {
   fallbackTier?: string | null;
   fallbackVerified?: boolean;
   partnerId?: string | null;
+  variant?: "full" | "compact";
 };
 
 type Copy = {
@@ -50,6 +63,11 @@ type Copy = {
   upgradeBody: string;
   securityTitle: string;
   securityBody: string;
+  expiring: string;
+  expired: string;
+  reverify: string;
+  eligible: string;
+  tierReview: string;
 };
 
 const COPY: Record<"en" | "th" | "zh", Copy> = {
@@ -82,6 +100,11 @@ const COPY: Record<"en" | "th" | "zh", Copy> = {
     securityTitle: "Privacy and security",
     securityBody:
       "Your qualification evidence is stored privately, access is audited, and retention is managed under the CBLUE privacy policy.",
+    expiring: "Identity verification expires soon",
+    expired: "Identity verification has expired",
+    reverify: "Identity verification update required",
+    eligible: "Eligible for new opportunities",
+    tierReview: "Tier review in progress",
   },
   th: {
     heading: "สถานะคุณสมบัติ",
@@ -112,6 +135,11 @@ const COPY: Record<"en" | "th" | "zh", Copy> = {
     securityTitle: "ความเป็นส่วนตัวและความปลอดภัย",
     securityBody:
       "หลักฐานคุณสมบัติถูกจัดเก็บแบบส่วนตัว การเข้าถึงมีบันทึกตรวจสอบ และระยะเวลาจัดเก็บเป็นไปตามนโยบายความเป็นส่วนตัวของ CBLUE",
+    expiring: "การยืนยันตัวตนใกล้หมดอายุ",
+    expired: "การยืนยันตัวตนหมดอายุแล้ว",
+    reverify: "ต้องอัปเดตการยืนยันตัวตน",
+    eligible: "พร้อมรับโอกาสงานใหม่",
+    tierReview: "กำลังตรวจสอบการปรับระดับ",
   },
   zh: {
     heading: "资格状态",
@@ -138,6 +166,11 @@ const COPY: Record<"en" | "th" | "zh", Copy> = {
     securityTitle: "隐私与安全",
     securityBody:
       "您的资格证明以私密方式存储，访问均有审计记录，保留期限依照 CBLUE 隐私政策管理。",
+    expiring: "身份验证即将到期",
+    expired: "身份验证已过期",
+    reverify: "需要更新身份验证",
+    eligible: "可接收新工作机会",
+    tierReview: "等级审核中",
   },
 };
 
@@ -149,6 +182,31 @@ function statusPresentation(
   snapshot: QualificationSnapshot | null,
   copy: Copy,
 ) {
+  const eligibility = snapshot?.eligibility;
+  if (eligibility?.status === "EXPIRED") {
+    return {
+      title: copy.expired,
+      body: copy.updateBody,
+      status: copy.expired,
+      approved: false,
+    };
+  }
+  if (eligibility?.status === "REVERIFICATION_REQUIRED") {
+    return {
+      title: copy.reverify,
+      body: copy.updateBody,
+      status: copy.reverify,
+      approved: false,
+    };
+  }
+  if (eligibility?.status === "EXPIRING") {
+    return {
+      title: copy.expiring,
+      body: copy.expiring,
+      status: copy.expiring,
+      approved: true,
+    };
+  }
   if (snapshot?.fixer?.verified) {
     return {
       title: copy.approvedTitle,
@@ -195,6 +253,7 @@ export default function PartnerQualificationStatus({
   fallbackTier,
   fallbackVerified = false,
   partnerId,
+  variant = "full",
 }: Props) {
   const [snapshot, setSnapshot] = useState<QualificationSnapshot | null>(null);
 
@@ -232,6 +291,45 @@ export default function PartnerQualificationStatus({
     effectiveSnapshot.fixer?.tier ||
     fallbackTier ||
     "-";
+  const eligibility = effectiveSnapshot.eligibility;
+
+  if (variant === "compact") {
+    const expiry = eligibility?.kycValidUntil
+      ? new Intl.DateTimeFormat(language(locale), {
+          dateStyle: "medium",
+        }).format(new Date(eligibility.kycValidUntil))
+      : null;
+    return (
+      <div className="mt-3 flex w-full flex-wrap items-center gap-2">
+        <span className="rounded-md bg-sky-100 px-3 py-1 text-xs font-bold text-sky-800">
+          {tier}
+        </span>
+        <span
+          className={`rounded-md px-3 py-1 text-xs font-bold ${
+            eligibility?.newJobEligible
+              ? "bg-emerald-100 text-emerald-800"
+              : "bg-amber-100 text-amber-900"
+          }`}
+        >
+          {eligibility?.status === "EXPIRING"
+            ? copy.expiring
+            : eligibility?.status === "EXPIRED"
+              ? copy.expired
+              : eligibility?.status === "REVERIFICATION_REQUIRED"
+                ? copy.reverify
+                : eligibility?.newJobEligible
+                  ? copy.eligible
+                  : presentation.status}
+          {expiry && eligibility?.status === "EXPIRING" ? `: ${expiry}` : ""}
+        </span>
+        {eligibility?.tierReevaluationPending ? (
+          <span className="rounded-md bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
+            {copy.tierReview}
+          </span>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <section className="mb-8 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">

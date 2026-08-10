@@ -14,6 +14,7 @@ import {
   getThaiGpsLocationBounds,
   normalizeThaiGpsLocation,
 } from '../../common/thai-gps-location';
+import { qualificationEligibleFixerWhere } from '../qualification/qualification-eligibility';
 
 @Injectable()
 export class PropertyService {
@@ -510,17 +511,25 @@ export class PropertyService {
   }) {
     const latitude = Number(input.latitude);
     const longitude = Number(input.longitude);
-    return Number.isFinite(latitude) && Number.isFinite(longitude) && !(Math.abs(latitude) < 0.000001 && Math.abs(longitude) < 0.000001);
+    return (
+      Number.isFinite(latitude) &&
+      Number.isFinite(longitude) &&
+      !(Math.abs(latitude) < 0.000001 && Math.abs(longitude) < 0.000001)
+    );
   }
 
   private resolveLocationMode(input: {
-    locationMode?: PropertyLocationMode | string | null;
+    locationMode?: string | null;
     latitude?: number | string | null;
     longitude?: number | string | null;
   }) {
-    if (input.locationMode === PropertyLocationMode.GPS) return PropertyLocationMode.GPS;
-    if (input.locationMode === PropertyLocationMode.ADMINISTRATIVE) return PropertyLocationMode.ADMINISTRATIVE;
-    return this.hasValidGpsCoordinates(input) ? PropertyLocationMode.GPS : PropertyLocationMode.ADMINISTRATIVE;
+    if (input.locationMode === PropertyLocationMode.GPS)
+      return PropertyLocationMode.GPS;
+    if (input.locationMode === PropertyLocationMode.ADMINISTRATIVE)
+      return PropertyLocationMode.ADMINISTRATIVE;
+    return this.hasValidGpsCoordinates(input)
+      ? PropertyLocationMode.GPS
+      : PropertyLocationMode.ADMINISTRATIVE;
   }
 
   private assertResolvedGpsLocation(input: {
@@ -529,8 +538,14 @@ export class PropertyService {
     province?: string | null;
     subdistrict?: string | null;
   }) {
-    if (!this.hasValidGpsCoordinates(input) || !String(input.province || '').trim() || !String(input.subdistrict || '').trim()) {
-      throw new BadRequestException('GPS location could not be resolved. Please detect the location again or select the administrative location.');
+    if (
+      !this.hasValidGpsCoordinates(input) ||
+      !String(input.province || '').trim() ||
+      !String(input.subdistrict || '').trim()
+    ) {
+      throw new BadRequestException(
+        'GPS location could not be resolved. Please detect the location again or select the administrative location.',
+      );
     }
   }
 
@@ -542,7 +557,7 @@ export class PropertyService {
       postalCode?: string | null;
       latitude?: number | string | null;
       longitude?: number | string | null;
-      locationMode?: PropertyLocationMode | string | null;
+      locationMode?: string | null;
     } | null,
   >(property: T): T {
     if (!property) return property;
@@ -586,7 +601,8 @@ export class PropertyService {
 
       const normalizedLocation = normalizeThaiGpsLocation(dto);
       const locationMode = this.resolveLocationMode(dto);
-      if (dto.locationMode === PropertyLocationMode.GPS) this.assertResolvedGpsLocation({ ...dto, ...normalizedLocation });
+      if (dto.locationMode === PropertyLocationMode.GPS)
+        this.assertResolvedGpsLocation({ ...dto, ...normalizedLocation });
 
       // Verify the user exists before attempting insert (prevents FK constraint 500)
       const userExists = await this.prisma.user.findUnique({
@@ -616,8 +632,10 @@ export class PropertyService {
           subdistrict: normalizedLocation.subdistrict,
           postalCode: normalizedLocation.postalCode,
           addressLine: dto.addressLine,
-          latitude: locationMode === PropertyLocationMode.GPS ? dto.latitude : null,
-          longitude: locationMode === PropertyLocationMode.GPS ? dto.longitude : null,
+          latitude:
+            locationMode === PropertyLocationMode.GPS ? dto.latitude : null,
+          longitude:
+            locationMode === PropertyLocationMode.GPS ? dto.longitude : null,
           locationMode,
           contactName: dto.contactName,
           contactPhone: dto.contactPhone,
@@ -970,6 +988,11 @@ export class PropertyService {
     const where: Prisma.PropertyWhereInput = {
       status: 'ACTIVE',
       NOT: this.publicPropertyVisibilityExclusions(),
+      user: {
+        fixer: {
+          is: qualificationEligibleFixerWhere(new Date()),
+        },
+      },
     };
 
     if (dto.propertyType) where.propertyType = dto.propertyType;
@@ -1236,9 +1259,20 @@ export class PropertyService {
     const locationInput = { ...property, ...scalarData };
     const locationMode = this.resolveLocationMode(locationInput);
     const normalizedLocation = normalizeThaiGpsLocation(locationInput);
-    if (scalarData.locationMode === PropertyLocationMode.GPS) this.assertResolvedGpsLocation({ ...locationInput, ...normalizedLocation });
-    const scalarUpdateData: Record<string, unknown> = { ...scalarData, ...normalizedLocation, locationMode };
-    if (locationMode === PropertyLocationMode.ADMINISTRATIVE) { scalarUpdateData.latitude = null; scalarUpdateData.longitude = null; }
+    if (scalarData.locationMode === PropertyLocationMode.GPS)
+      this.assertResolvedGpsLocation({
+        ...locationInput,
+        ...normalizedLocation,
+      });
+    const scalarUpdateData: Record<string, unknown> = {
+      ...scalarData,
+      ...normalizedLocation,
+      locationMode,
+    };
+    if (locationMode === PropertyLocationMode.ADMINISTRATIVE) {
+      scalarUpdateData.latitude = null;
+      scalarUpdateData.longitude = null;
+    }
     if (scalarData.features !== undefined) {
       scalarUpdateData.features = scalarData.features as Prisma.InputJsonValue;
     } else {

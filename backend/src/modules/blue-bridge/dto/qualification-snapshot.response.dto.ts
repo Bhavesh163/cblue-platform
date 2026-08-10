@@ -1,5 +1,5 @@
 export interface QualificationSnapshotResponse {
-  sourceVersion: 'cblue-fixer-qualification-v3';
+  sourceVersion: 'cblue-fixer-qualification-v6';
   subject: { id: string; displayName: string };
   fixer: {
     id: string;
@@ -14,8 +14,9 @@ export interface QualificationSnapshotResponse {
     verifiedCompanyName: string | null;
     companyIdentityVerifiedAt: Date | null;
   };
-  requiredEvidence: readonly ['id-front', 'selfie-with-id'];
-  optionalEvidence: readonly ['company-affidavit'];
+  requiredEvidence: readonly string[];
+  optionalEvidence: readonly string[];
+  eligibility: Record<string, unknown>;
   submission: Record<string, unknown> | null;
   reviewStatus: {
     kyc: Record<string, unknown> | null;

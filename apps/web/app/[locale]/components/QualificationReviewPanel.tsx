@@ -37,6 +37,8 @@ type ReviewTask = {
   submission?: {
     id?: string;
     status?: string;
+    purpose?: "INITIAL_KYC" | "KYC_REVERIFICATION";
+    reverificationReasons?: string[];
     fixer?: {
       priceList?: Array<{
         service?: string;
@@ -44,6 +46,12 @@ type ReviewTask = {
         finalPrice?: number | string;
       }> | null;
       user?: { name?: string | null; email?: string | null } | null;
+      qualificationEligibilityStatus?: string;
+      kycValidUntil?: string | null;
+      kycReverificationRequiredAt?: string | null;
+      kycReverificationReasons?: string[];
+      tierReevaluationRequestedAt?: string | null;
+      tierReevaluationCompletedAt?: string | null;
     } | null;
     documents?: Array<{
       id: string;
@@ -135,6 +143,31 @@ function displayName(task: ReviewTask) {
     task.submission?.fixer?.user?.email ||
     "Partner"
   );
+}
+
+const REVERIFICATION_REASON_LABELS: Record<string, string> = {
+  ID_EXPIRED: "Identity document expired",
+  ID_EXPIRING: "Identity document renewal",
+  ID_REPLACED: "Identity evidence replaced",
+  EMAIL_CHANGED: "Email address changed",
+  PHONE_CHANGED: "Phone number changed",
+  ADDRESS_CHANGED: "Official address changed",
+  SERVICE_AREA_CHANGED: "Service area changed",
+  MISSING_ID_EXPIRY: "Identity expiry date required",
+};
+
+function reverificationSummary(task: ReviewTask): string | null {
+  if (task.submission?.purpose !== "KYC_REVERIFICATION") return null;
+  const reasons = Array.from(
+    new Set([
+      ...(task.submission.reverificationReasons || []),
+      ...(task.submission.fixer?.kycReverificationReasons || []),
+    ]),
+  );
+  if (!reasons.length) return "Identity renewal";
+  return reasons
+    .map((reason) => REVERIFICATION_REASON_LABELS[reason] || reason)
+    .join(", ");
 }
 
 function extractedCompanyName(documents: QualificationDocument[]) {
@@ -520,6 +553,7 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                   !task.proposedAt;
                 const expanded =
                   assignedToCurrent && expandedTaskId === task.id;
+                const renewalSummary = reverificationSummary(task);
                 return (
                   <tr
                     key={task.id}
@@ -535,6 +569,11 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                         {task.kind === "KYC" ? "KYC review" : "Tier review"} /{" "}
                         {task.submission?.status || "REVIEW"}
                       </p>
+                      {renewalSummary ? (
+                        <p className="mt-1 max-w-sm text-xs font-normal leading-5 text-amber-800">
+                          Re-verification: {renewalSummary}
+                        </p>
+                      ) : null}
                     </td>
                     <td className="py-3 pr-4 align-top text-slate-700">
                       <p className="font-semibold text-slate-800">

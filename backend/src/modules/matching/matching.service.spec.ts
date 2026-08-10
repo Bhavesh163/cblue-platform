@@ -47,6 +47,17 @@ describe('MatchingService', () => {
 
       const result = await service.findMatches('Plumbing', 'addr-1');
       expect(result).toEqual([]);
+      expect(prisma.fixer.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            status: 'APPROVED',
+            verified: true,
+            qualificationEligibilityStatus: 'ELIGIBLE',
+            kycReverificationRequiredAt: null,
+            kycValidUntil: { gt: expect.any(Date) },
+          }),
+        }),
+      );
     });
 
     it('should score and rank fixers correctly', async () => {

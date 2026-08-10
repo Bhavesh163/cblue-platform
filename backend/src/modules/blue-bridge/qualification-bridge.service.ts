@@ -6,6 +6,12 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { QualificationSnapshotResponse } from './dto/qualification-snapshot.response.dto';
+import {
+  COMPANY_KYC_DOCUMENT_TYPES,
+  PERSONAL_KYC_DOCUMENT_TYPES,
+  QUALIFICATION_SOURCE_VERSION,
+  qualificationEligibilitySnapshot,
+} from '../qualification/qualification-eligibility';
 
 @Injectable()
 export class QualificationBridgeService {
@@ -146,6 +152,7 @@ export class QualificationBridgeService {
           document.documentType !== 'id-back',
       ) || [];
     const tierQualification = fixer.tierQualifications[0] || null;
+    const eligibility = qualificationEligibilitySnapshot(fixer);
     const reviewTasks = submission?.reviewTasks || [];
     const reviewStatus = {
       kyc: reviewTasks.find((task) => task.kind === 'KYC') || null,
@@ -167,7 +174,7 @@ export class QualificationBridgeService {
       ) || null;
 
     return {
-      sourceVersion: 'cblue-fixer-qualification-v3',
+      sourceVersion: QUALIFICATION_SOURCE_VERSION,
       subject: {
         id: fixer.user.id,
         displayName: fixer.publicDisplayName || fixer.user.name || 'Partner',
@@ -185,8 +192,13 @@ export class QualificationBridgeService {
         verifiedCompanyName: fixer.verifiedCompanyName,
         companyIdentityVerifiedAt: fixer.companyIdentityVerifiedAt,
       },
-      requiredEvidence: ['id-front', 'selfie-with-id'],
-      optionalEvidence: ['company-affidavit'],
+      requiredEvidence: eligibility.companyPartner
+        ? COMPANY_KYC_DOCUMENT_TYPES
+        : PERSONAL_KYC_DOCUMENT_TYPES,
+      optionalEvidence: eligibility.companyPartner
+        ? ['portfolio']
+        : ['company-affidavit', 'company-letter-of-intent', 'portfolio'],
+      eligibility,
       submission: submission
         ? {
             id: submission.id,

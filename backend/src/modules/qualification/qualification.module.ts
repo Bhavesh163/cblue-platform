@@ -19,6 +19,7 @@ import { QualificationHandoffWorker } from './qualification-handoff.worker';
 import { QualificationRetentionWorker } from './qualification-retention.worker';
 import { QualificationEvidenceAssessmentWorker } from './qualification-evidence-assessment.worker';
 import { QualificationCredentialVerificationService } from './qualification-credential-verification.service';
+import { QualificationExpiryWorker } from './qualification-expiry.worker';
 
 @Module({
   imports: [NotificationModule],
@@ -42,6 +43,7 @@ import { QualificationCredentialVerificationService } from './qualification-cred
     QualificationRetentionWorker,
     QualificationEvidenceAssessmentWorker,
     QualificationCredentialVerificationService,
+    QualificationExpiryWorker,
   ],
   exports: [
     QualificationPolicyService,

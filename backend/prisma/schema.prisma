@@ -43,6 +43,17 @@ enum QualificationSubmissionStatus {
   AI_PRECLEARED
 }
 
+enum QualificationEligibilityStatus {
+  PENDING
+  ELIGIBLE
+  REVERIFICATION_REQUIRED
+}
+
+enum QualificationSubmissionPurpose {
+  INITIAL_KYC
+  KYC_REVERIFICATION
+}
+
 enum QualificationEvaluationStatus {
   QUEUED
   RUNNING
@@ -331,15 +342,22 @@ model Fixer {
   gpsLat             Float?
   gpsLng             Float?
 
-  aiScore                   Int?
-  aiTier                    String?
-  aiBreakdown               Json?
-  aiFlags                   Json?
-  aiCredentialStatus        String?
-  publicDisplayName         String?
-  verifiedCompanyName       String?
-  companyIdentityVerifiedAt DateTime?
-  companyIdentityVerifiedBy String?
+  aiScore                        Int?
+  aiTier                         String?
+  aiBreakdown                    Json?
+  aiFlags                        Json?
+  aiCredentialStatus             String?
+  publicDisplayName              String?
+  verifiedCompanyName            String?
+  companyIdentityVerifiedAt      DateTime?
+  companyIdentityVerifiedBy      String?
+  qualificationEligibilityStatus QualificationEligibilityStatus @default(PENDING)
+  kycValidUntil                  DateTime?
+  kycReverificationRequiredAt    DateTime?
+  kycReverificationReasons       Json?
+  kycExpiryWarningSentAt         DateTime?
+  tierReevaluationRequestedAt    DateTime?
+  tierReevaluationCompletedAt    DateTime?
 
   skills                   FixerSkill[]
   availability             FixerAvailability[]
@@ -362,6 +380,8 @@ model KycSubmission {
   version                  Int
   status                   QualificationSubmissionStatus         @default(DRAFT)
   policyVersion            String
+  purpose                  QualificationSubmissionPurpose        @default(INITIAL_KYC)
+  reverificationReasons    Json?
   consentAt                DateTime?
   consentVersion           String?
   consentRetentionDeleteAt DateTime?

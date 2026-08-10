@@ -29,6 +29,7 @@ import {
 } from './dto/qualification-review-decision.dto';
 import { QualificationReviewCheckDto } from './dto/qualification-review-check.dto';
 import { QualificationEvaluationService } from './qualification-evaluation.service';
+import { mergeReverificationReasons } from './qualification-eligibility';
 const HANDOFF_LEASE_MS = 5 * 60 * 1000;
 const REVIEW_CLAIM_LEASE_MS = 30 * 60 * 1000;
 const REQUIRED_KYC_DOCUMENT_TYPES = ['id-front', 'selfie-with-id'] as const;
@@ -755,6 +756,7 @@ export class QualificationReviewService {
 
       const reviewDecision = parseReviewDecision(task.proposedDecision);
       let verifiedCompanyName: string | null = null;
+      let approvedKycExpiry: Date | null = null;
       if (
         dto.acceptProposal &&
         reviewDecision === QualificationReviewDecision.APPROVE &&
@@ -771,6 +773,7 @@ export class QualificationReviewService {
             evidenceStatus: true,
             extractedFields: true,
             subjectNameHash: true,
+            identityExpiryDate: true,
           },
         });
         const allValidated = REQUIRED_KYC_DOCUMENT_TYPES.every((type) =>
@@ -785,6 +788,16 @@ export class QualificationReviewService {
             'All required KYC evidence must be validated before approval',
           );
         }
+        const identityDocument = documents.find(
+          (document) => document.documentType === 'id-front',
+        );
+        const identityExpiryDate = identityDocument?.identityExpiryDate;
+        if (!identityExpiryDate || identityExpiryDate <= checkedAt) {
+          throw new ConflictException(
+            'A validated, unexpired identity document expiry date is required',
+          );
+        }
+        approvedKycExpiry = identityExpiryDate;
         if (
           directDecision?.providerIdentityType ===
           QualificationProviderIdentityType.COMPANY
@@ -831,10 +844,6 @@ export class QualificationReviewService {
               'Company approval requires a validated identity name',
             );
           }
-          const applicantDirectorAuthorized = affidavitAuthorityNames.some(
-            (name) => identityNameHash(name) === identitySubjectNameHash,
-          );
-
           const letter = documents.find(
             (document) =>
               document.documentType === 'company-letter-of-intent' &&
@@ -875,9 +884,9 @@ export class QualificationReviewService {
                 normalizedPersonName(letterSignatory),
             ),
           );
-          if (!applicantDirectorAuthorized && !letterAuthorized) {
+          if (!letterAuthorized) {
             throw new ConflictException(
-              'Company approval requires either KYC by a named company director or a validated director letter of intent with a contact email',
+              'Company approval requires a validated company affidavit and director letter of intent with a contact email',
             );
           }
           verifiedCompanyName = evidenceCompanyName;
@@ -930,6 +939,11 @@ export class QualificationReviewService {
       }
 
       if (approved && task.kind === 'KYC') {
+        if (!approvedKycExpiry) {
+          throw new ConflictException(
+            'A validated identity expiry date is required for approval',
+          );
+        }
         const tierQualification = await tx.tierQualification.create({
           data: {
             fixerId: task.submission.fixerId,
@@ -969,6 +983,11 @@ export class QualificationReviewService {
               QualificationProviderIdentityType.COMPANY
                 ? checkerId
                 : null,
+            qualificationEligibilityStatus: 'ELIGIBLE',
+            kycValidUntil: approvedKycExpiry,
+            kycReverificationRequiredAt: null,
+            kycReverificationReasons: Prisma.JsonNull,
+            kycExpiryWarningSentAt: null,
           },
           select: { id: true, status: true, tier: true, verified: true },
         });
@@ -979,6 +998,8 @@ export class QualificationReviewService {
             reviewedAt: checkedAt,
             reviewerId: checkerId,
             decisionReason: task.proposedReason,
+            expiresAt: approvedKycExpiry,
+            reverificationReasons: Prisma.JsonNull,
           },
         });
         const updatedTask = await tx.qualificationReviewTask.update({
@@ -1053,6 +1074,19 @@ export class QualificationReviewService {
             decisionReason: task.proposedReason,
           },
         });
+        if (task.submission.fixer.verified) {
+          await tx.fixer.update({
+            where: { id: task.submission.fixerId },
+            data: {
+              qualificationEligibilityStatus: 'REVERIFICATION_REQUIRED',
+              kycReverificationRequiredAt: checkedAt,
+              kycReverificationReasons: mergeReverificationReasons(
+                task.submission.fixer.kycReverificationReasons,
+                ['ADMIN_RESUBMISSION_REQUIRED'],
+              ),
+            },
+          });
+        }
         const updatedTask = await tx.qualificationReviewTask.update({
           where: { id: taskId },
           data: {
@@ -1099,6 +1133,10 @@ export class QualificationReviewService {
         };
       }
       if (!approved && task.kind === 'TIER') {
+        await tx.fixer.update({
+          where: { id: task.submission.fixerId },
+          data: { tierReevaluationCompletedAt: checkedAt },
+        });
         const updatedTask = await tx.qualificationReviewTask.update({
           where: { id: taskId },
           data: {
@@ -1156,7 +1194,10 @@ export class QualificationReviewService {
       });
       const fixer = await tx.fixer.update({
         where: { id: task.submission.fixerId },
-        data: { tier: approvedTier as FixerTier },
+        data: {
+          tier: approvedTier as FixerTier,
+          tierReevaluationCompletedAt: checkedAt,
+        },
         select: { id: true, status: true, tier: true, verified: true },
       });
 

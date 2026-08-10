@@ -10496,25 +10496,13 @@ function PartnerOverview({
                     : "Active"}
               </span>
             </div>
-            <div className="flex gap-2 mt-2">
-              <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold">
-                {partner.tier || "Standard Tier"}
-              </span>
-              <span className="px-3 py-1 bg-sky-100 text-sky-700 rounded-full text-xs font-bold">
-                {locale === "th"
-                  ? "ยืนยันแล้ว"
-                  : locale === "zh"
-                    ? "已验证"
-                    : "Verified"}
-              </span>
-              <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-bold">
-                {locale === "th"
-                  ? "KYC ✓ ยืนยันแล้ว"
-                  : locale === "zh"
-                    ? "KYC ✓ 已验证"
-                    : "KYC ✓"}
-              </span>
-            </div>
+            <PartnerQualificationStatus
+              locale={locale}
+              fallbackTier={partner.tier}
+              fallbackVerified={partner.credentialStatus === "verified"}
+              partnerId={partner.id}
+              variant="compact"
+            />
           </div>
         )}
 

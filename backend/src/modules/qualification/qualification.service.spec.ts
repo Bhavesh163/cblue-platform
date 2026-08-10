@@ -1824,10 +1824,11 @@ describe('QualificationService', () => {
     expect(storage.putPrivateObject).not.toHaveBeenCalled();
   });
 
-  it('does not route a qualification submission without all three active READY KYC types', async () => {
+  it('does not route a qualification submission without both active READY KYC types', async () => {
     tx.kycSubmission.findFirst.mockResolvedValue({
       id: 'submission-1',
       status: 'DRAFT',
+      fixer: { verifiedCompanyName: null },
       documents: [
         {
           documentType: 'id-front',
@@ -1877,6 +1878,7 @@ describe('QualificationService', () => {
     tx.kycSubmission.findFirst.mockResolvedValue({
       id: 'submission-1',
       status: 'DRAFT',
+      fixer: { verifiedCompanyName: null },
       documents: [
         {
           documentType: 'id-front',
@@ -2075,6 +2077,7 @@ describe('QualificationService', () => {
       version: 3,
       policyVersion: 'cblue-fixer-qualification-v4',
       status: 'DRAFT',
+      fixer: { verifiedCompanyName: null },
       documents: [{ id: 'document-1', documentType: 'id-front' }],
     });
     tx.kycSubmission.update.mockResolvedValue({
@@ -2082,6 +2085,7 @@ describe('QualificationService', () => {
       version: 3,
       policyVersion: 'cblue-fixer-qualification-v5',
       status: 'DRAFT',
+      fixer: { verifiedCompanyName: null },
       documents: [{ id: 'document-1', documentType: 'id-front' }],
     });
 

@@ -43,6 +43,12 @@ describe('QualificationBridgeService', () => {
       publicDisplayName: 'Partner / Example Company Limited',
       verifiedCompanyName: 'Example Company Limited',
       companyIdentityVerifiedAt: new Date('2026-07-24T03:00:00.000Z'),
+      qualificationEligibilityStatus: 'ELIGIBLE',
+      kycValidUntil: new Date('2030-12-31T00:00:00.000Z'),
+      kycReverificationRequiredAt: null,
+      kycReverificationReasons: null,
+      tierReevaluationRequestedAt: null,
+      tierReevaluationCompletedAt: null,
       user: { id: 'user-1', name: 'Partner' },
       qualificationSubmissions: [
         {
@@ -149,7 +155,7 @@ describe('QualificationBridgeService', () => {
       'bridge-secret',
     );
 
-    expect(result.sourceVersion).toBe('cblue-fixer-qualification-v3');
+    expect(result.sourceVersion).toBe('cblue-fixer-qualification-v6');
     expect(result.subject.displayName).toBe(
       'Partner / Example Company Limited',
     );
@@ -161,8 +167,16 @@ describe('QualificationBridgeService', () => {
         companyIdentityVerifiedAt: new Date('2026-07-24T03:00:00.000Z'),
       }),
     );
-    expect(result.requiredEvidence).toEqual(['id-front', 'selfie-with-id']);
-    expect(result.optionalEvidence).toEqual(['company-affidavit']);
+    expect(result.requiredEvidence).toEqual([
+      'id-front',
+      'selfie-with-id',
+      'company-affidavit',
+      'company-letter-of-intent',
+    ]);
+    expect(result.optionalEvidence).toEqual(['portfolio']);
+    expect(result.eligibility).toEqual(
+      expect.objectContaining({ status: 'ELIGIBLE', newJobEligible: true }),
+    );
     expect(result.kyc).toEqual(
       expect.objectContaining({
         status: 'NEEDS_REVIEW',

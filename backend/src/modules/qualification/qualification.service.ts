@@ -27,6 +27,13 @@ import { QualificationEvidenceDecisionDto } from './dto/qualification-evidence-d
 import { QualificationComplianceAccessDto } from './dto/qualification-compliance-access.dto';
 import { QualificationAssessmentService } from './qualification-assessment.service';
 import { QualificationRoutingService } from './qualification-routing.service';
+import {
+  COMPANY_KYC_DOCUMENT_TYPES,
+  mergeReverificationReasons,
+  PERSONAL_KYC_DOCUMENT_TYPES,
+  qualificationEligibilitySnapshot,
+  type QualificationReverificationReason,
+} from './qualification-eligibility';
 
 const PORTFOLIO_MAX_FILES = 10;
 const CONSENT_RETENTION_MS = 3 * 365 * 24 * 60 * 60 * 1000;
@@ -126,7 +133,11 @@ export class QualificationService {
       );
       const fixer = await tx.fixer.findUnique({
         where: { userId },
-        select: { id: true },
+        select: {
+          id: true,
+          qualificationEligibilityStatus: true,
+          kycReverificationReasons: true,
+        },
       });
       if (!fixer) throw new NotFoundException('Fixer profile not found');
 
@@ -157,11 +168,22 @@ export class QualificationService {
         },
       });
       if (draft) {
-        if (draft.policyVersion !== QUALIFICATION_POLICY_VERSION) {
+        const requiresReverification =
+          fixer.qualificationEligibilityStatus === 'REVERIFICATION_REQUIRED';
+        if (
+          draft.policyVersion !== QUALIFICATION_POLICY_VERSION ||
+          (requiresReverification && draft.purpose !== 'KYC_REVERIFICATION')
+        ) {
           return tx.kycSubmission.update({
             where: { id: draft.id },
             data: {
               policyVersion: QUALIFICATION_POLICY_VERSION,
+              purpose: requiresReverification
+                ? 'KYC_REVERIFICATION'
+                : draft.purpose,
+              reverificationReasons: requiresReverification
+                ? (fixer.kycReverificationReasons ?? Prisma.JsonNull)
+                : (draft.reverificationReasons ?? Prisma.JsonNull),
               decisionReason: null,
             },
             include: {
@@ -198,6 +220,14 @@ export class QualificationService {
           version: (latest?.version ?? 0) + 1,
           status: QualificationSubmissionStatus.DRAFT,
           policyVersion: QUALIFICATION_POLICY_VERSION,
+          purpose:
+            fixer.qualificationEligibilityStatus === 'REVERIFICATION_REQUIRED'
+              ? 'KYC_REVERIFICATION'
+              : 'INITIAL_KYC',
+          reverificationReasons:
+            fixer.qualificationEligibilityStatus === 'REVERIFICATION_REQUIRED'
+              ? (fixer.kycReverificationReasons ?? Prisma.JsonNull)
+              : undefined,
           consentAt: new Date(),
           consentVersion,
           consentRetentionDeleteAt: new Date(Date.now() + CONSENT_RETENTION_MS),
@@ -222,6 +252,12 @@ export class QualificationService {
         publicDisplayName: true,
         verifiedCompanyName: true,
         companyIdentityVerifiedAt: true,
+        qualificationEligibilityStatus: true,
+        kycValidUntil: true,
+        kycReverificationRequiredAt: true,
+        kycReverificationReasons: true,
+        tierReevaluationRequestedAt: true,
+        tierReevaluationCompletedAt: true,
         aiScore: true,
         aiTier: true,
         aiCredentialStatus: true,
@@ -296,6 +332,7 @@ export class QualificationService {
     const evaluation = submission?.evaluations[0] ?? null;
     const reviewTask = submission?.reviewTasks[0] ?? null;
     const tierQualification = fixer.tierQualifications[0] ?? null;
+    const eligibility = qualificationEligibilitySnapshot(fixer);
     return {
       sourceVersion: QUALIFICATION_POLICY_VERSION,
       fixer: {
@@ -327,8 +364,48 @@ export class QualificationService {
       evaluation,
       reviewTask,
       tierQualification,
+      eligibility,
     };
   }
+
+  async getTierReviewTargetForUser(userId: string) {
+    const fixer = await this.prisma.fixer.findUnique({
+      where: { userId },
+      select: {
+        id: true,
+        status: true,
+        verified: true,
+        verifiedCompanyName: true,
+        qualificationEligibilityStatus: true,
+        kycValidUntil: true,
+        kycReverificationRequiredAt: true,
+        kycReverificationReasons: true,
+        tierReevaluationRequestedAt: true,
+        tierReevaluationCompletedAt: true,
+        qualificationSubmissions: {
+          where: { status: QualificationSubmissionStatus.APPROVED },
+          orderBy: { version: 'desc' },
+          take: 1,
+          select: { id: true, status: true, version: true },
+        },
+      },
+    });
+    if (!fixer) throw new NotFoundException('Fixer profile not found');
+    const eligibility = qualificationEligibilitySnapshot(fixer);
+    if (!eligibility.newJobEligible) {
+      throw new ConflictException(
+        'Identity re-verification must be completed before a tier review',
+      );
+    }
+    const submission = fixer.qualificationSubmissions[0];
+    if (!submission) {
+      throw new ConflictException(
+        'An approved identity submission is required before a tier review',
+      );
+    }
+    return { submission, eligibility };
+  }
+
   async getSubmissionForUser(userId: string, submissionId: string) {
     const submission = await this.prisma.kycSubmission.findFirst({
       where: { id: submissionId, fixer: { userId } },
@@ -449,17 +526,28 @@ export class QualificationService {
         id: true,
         fixerId: true,
         status: true,
+        purpose: true,
         failedAttempts: true,
         lockedUntil: true,
         fixer: {
-          select: { user: { select: { name: true, company: true } } },
+          select: {
+            verified: true,
+            verifiedCompanyName: true,
+            qualificationEligibilityStatus: true,
+            kycReverificationReasons: true,
+            user: { select: { name: true, company: true } },
+          },
         },
       },
     });
     if (!submission) {
       throw new NotFoundException('Qualification submission not found');
     }
-    this.assertUploadableSubmission(submission.status, submission.lockedUntil);
+    this.assertUploadableSubmission(
+      submission.status,
+      submission.lockedUntil,
+      documentType,
+    );
 
     const documentId = randomUUID();
     const storageKey = [
@@ -591,6 +679,7 @@ export class QualificationService {
         this.assertUploadableSubmission(
           liveSubmission.status,
           liveSubmission.lockedUntil,
+          documentType,
         );
         const duplicate = await tx.kycDocument.findFirst({
           where: {
@@ -729,9 +818,33 @@ export class QualificationService {
               submissionId: submission.id,
               status: 'QUEUED',
               nextAttemptAt: readyAt,
-              eligibleAt: null,
+              eligibleAt:
+                isPortfolio &&
+                submission.status === QualificationSubmissionStatus.APPROVED
+                  ? readyAt
+                  : null,
             },
           });
+          if (
+            isPortfolio &&
+            submission.status === QualificationSubmissionStatus.APPROVED
+          ) {
+            await tx.fixer.update({
+              where: { id: submission.fixerId },
+              data: { tierReevaluationRequestedAt: readyAt },
+            });
+            await tx.qualificationAuditLog.create({
+              data: {
+                submissionId: submission.id,
+                actorId: userId,
+                action: 'TIER_REEVALUATION_REQUESTED',
+                entityType: 'Fixer',
+                entityId: submission.fixerId,
+                reason: 'New portfolio evidence submitted for tier review',
+                metadata: { documentId },
+              },
+            });
+          }
           const resolvedCleanupIntent =
             await tx.qualificationStorageCleanupIntent.deleteMany({
               where: {
@@ -800,6 +913,7 @@ export class QualificationService {
         this.assertUploadableSubmission(
           liveSubmission.status,
           liveSubmission.lockedUntil,
+          documentType,
         );
         const staged = await tx.kycDocument.findUnique({
           where: { id: documentId },
@@ -893,6 +1007,32 @@ export class QualificationService {
                 documentType,
                 supersededDocumentId: previousActive.id,
               },
+            },
+          });
+        }
+        if (activateEvidence && submission.fixer?.verified) {
+          const reason: QualificationReverificationReason =
+            documentType === 'id-front'
+              ? 'ID_REPLACED'
+              : 'ADMIN_RESUBMISSION_REQUIRED';
+          const reasons = mergeReverificationReasons(
+            submission.fixer.kycReverificationReasons,
+            [reason],
+          );
+          await tx.fixer.update({
+            where: { id: submission.fixerId },
+            data: {
+              qualificationEligibilityStatus: 'REVERIFICATION_REQUIRED',
+              kycReverificationRequiredAt: readyAt,
+              kycReverificationReasons: reasons,
+              kycExpiryWarningSentAt: null,
+            },
+          });
+          await tx.kycSubmission.update({
+            where: { id: submission.id },
+            data: {
+              purpose: 'KYC_REVERIFICATION',
+              reverificationReasons: reasons,
             },
           });
         }
@@ -1006,8 +1146,15 @@ export class QualificationService {
   private assertUploadableSubmission(
     status: string,
     lockedUntil: Date | null,
+    documentType: string,
   ): void {
-    if (!UPLOADABLE_SUBMISSION_STATUSES.has(status)) {
+    const approvedPortfolioUpload =
+      status === QualificationSubmissionStatus.APPROVED &&
+      documentType === 'portfolio';
+    if (
+      !UPLOADABLE_SUBMISSION_STATUSES.has(status) &&
+      !approvedPortfolioUpload
+    ) {
       throw new ConflictException(
         'Documents can only be added before qualification review',
       );
@@ -1598,6 +1745,7 @@ export class QualificationService {
         const submission = await tx.kycSubmission.findFirst({
           where: { id: submissionId, fixer: { userId } },
           include: {
+            fixer: { select: { verifiedCompanyName: true } },
             documents: {
               select: {
                 documentType: true,
@@ -1625,7 +1773,15 @@ export class QualificationService {
         const documentTypes = new Set(
           activeDocuments.map((document) => document.documentType),
         );
-        const missingKyc = KYC_DOCUMENT_TYPES.filter(
+        const companyEvidenceRequested = Boolean(
+          submission.fixer?.verifiedCompanyName ||
+          documentTypes.has('company-affidavit') ||
+          documentTypes.has('company-letter-of-intent'),
+        );
+        const requiredKyc = companyEvidenceRequested
+          ? COMPANY_KYC_DOCUMENT_TYPES
+          : PERSONAL_KYC_DOCUMENT_TYPES;
+        const missingKyc = requiredKyc.filter(
           (documentType) => !documentTypes.has(documentType),
         );
         if (missingKyc.length > 0) {
@@ -1818,6 +1974,12 @@ export class QualificationService {
           select: {
             id: true,
             priceList: true,
+            qualificationEligibilityStatus: true,
+            kycValidUntil: true,
+            kycReverificationRequiredAt: true,
+            kycReverificationReasons: true,
+            tierReevaluationRequestedAt: true,
+            tierReevaluationCompletedAt: true,
             user: { select: { id: true, email: true, name: true } },
           },
         },
@@ -1936,12 +2098,24 @@ export class QualificationService {
       id: submission.id,
       version: submission.version,
       status: submission.status,
+      purpose: submission.purpose,
+      reverificationReasons: submission.reverificationReasons,
       policyVersion: submission.policyVersion,
       submittedAt: submission.submittedAt,
       fixer: submission.fixer
         ? {
             id: submission.fixer.id,
             user: submission.fixer.user,
+            qualificationEligibilityStatus:
+              submission.fixer.qualificationEligibilityStatus,
+            kycValidUntil: submission.fixer.kycValidUntil,
+            kycReverificationRequiredAt:
+              submission.fixer.kycReverificationRequiredAt,
+            kycReverificationReasons: submission.fixer.kycReverificationReasons,
+            tierReevaluationRequestedAt:
+              submission.fixer.tierReevaluationRequestedAt,
+            tierReevaluationCompletedAt:
+              submission.fixer.tierReevaluationCompletedAt,
           }
         : null,
       priceList: submission.fixer?.priceList || [],

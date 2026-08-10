@@ -30,8 +30,10 @@ describe('FixerService', () => {
         findUnique: jest.fn(),
         findMany: jest.fn(),
         create: jest.fn(),
+        update: jest.fn(),
       },
       user: {
+        findUnique: jest.fn(),
         update: jest.fn(),
       },
       fixerSkill: {
@@ -3233,6 +3235,64 @@ describe('FixerService', () => {
           }),
         );
       },
+    );
+  });
+
+  it('requires re-verification after a verified partner changes contact details', async () => {
+    const fixer = {
+      id: 'fixer-1',
+      verified: true,
+      companyAddress: { houseNumber: '1' },
+      serviceProvince: 'กรุงเทพมหานคร',
+      serviceDistrict: 'วัฒนา',
+      servicePostalCode: '10110',
+      travelRadius: 10,
+      gpsLat: null,
+      gpsLng: null,
+      kycReverificationRequiredAt: null,
+      kycReverificationReasons: null,
+    };
+    prisma.fixer.findUnique
+      .mockResolvedValueOnce(fixer)
+      .mockResolvedValueOnce({ ...fixer, user: {}, skills: [] });
+    prisma.user.findUnique.mockResolvedValue({
+      email: 'old@example.com',
+      phone: '0811111111',
+    });
+    prisma.user.update.mockResolvedValue({ id: 'user-1' });
+    prisma.fixer.update.mockResolvedValue(fixer);
+    jest.spyOn(service as any, 'evaluateFixerTier').mockResolvedValue({
+      score: 50,
+      tier: 'Economy',
+      breakdown: [],
+      flags: [],
+      credentialStatus: 'partial',
+    });
+
+    await service.updateMyFixerProfile('user-1', {
+      name: 'Partner',
+      email: 'new@example.com',
+      phone: '0822222222',
+      travelRadius: 10,
+      companyAddress: { houseNumber: '1' },
+      address: {
+        province: 'กรุงเทพมหานคร',
+        district: 'วัฒนา',
+        postalCode: '10110',
+      },
+      skills: [],
+    } as never);
+
+    expect(prisma.fixer.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          qualificationEligibilityStatus: 'REVERIFICATION_REQUIRED',
+          kycReverificationReasons: expect.arrayContaining([
+            'EMAIL_CHANGED',
+            'PHONE_CHANGED',
+          ]),
+        }),
+      }),
     );
   });
 });
