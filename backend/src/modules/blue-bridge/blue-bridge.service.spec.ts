@@ -90,7 +90,7 @@ describe('BlueBridgeService', () => {
     });
     expect(result.detailRows).toContainEqual({
       label: 'Project Location',
-      value: '13.793951, 100.609606',
+      value: 'Saphansong · 13.793951, 100.609606',
     });
     expect(result.budgetBreakdown).toEqual([
       {
