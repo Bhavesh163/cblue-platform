@@ -9,6 +9,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  MaxLength,
   Max,
   Min,
   ValidateNested,
@@ -78,6 +79,18 @@ export class PropertyWorkflowAttachmentDto {
 }
 
 export class CreatePropertyWorkflowInquiryDto {
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(200)
+  legacySubjectId?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(200)
+  idempotencyKey?: string;
+
   @IsString()
   @IsNotEmpty()
   listingId!: string;

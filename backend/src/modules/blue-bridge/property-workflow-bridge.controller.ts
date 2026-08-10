@@ -1,13 +1,17 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
+  Headers,
   Param,
   Post,
   Query,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
 import { UserRole } from '@prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import {
@@ -27,11 +31,30 @@ export class PropertyWorkflowBridgeController {
   }
 
   @Post('inquiries')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(OptionalJwtAuthGuard)
   createInquiry(
-    @CurrentUser('id') userId: string,
+    @Headers('x-blue-bridge-key') bridgeKey: string | undefined,
+    @Headers('idempotency-key') headerIdempotencyKey: string | undefined,
+    @CurrentUser('id') userId: string | undefined,
     @Body() dto: CreatePropertyWorkflowInquiryDto,
   ) {
+    if (bridgeKey) {
+      if (!dto.legacySubjectId && !userId) {
+        throw new BadRequestException(
+          'A linked subject or verified CBLUE customer token is required',
+        );
+      }
+      return this.workflow.createBridgeInquiry(
+        dto.legacySubjectId,
+        dto,
+        bridgeKey,
+        headerIdempotencyKey,
+        userId,
+      );
+    }
+    if (!userId) {
+      throw new UnauthorizedException('Authentication required');
+    }
     return this.workflow.createInquiry(userId, dto);
   }
 

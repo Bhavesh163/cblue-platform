@@ -5,7 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Prisma } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { BlueWorkflowDetailResponse } from './blue-bridge.controller';
 
@@ -721,13 +721,45 @@ export class BlueBridgeService {
     };
   }
 
-  private assertBridgeKey(providedKey?: string): void {
+  public assertBridgeKey(providedKey?: string): void {
     const expectedKey = String(
       this.config.get<string>('blueBridge.apiKey') || '',
     ).trim();
     if (!expectedKey || String(providedKey || '').trim() !== expectedKey) {
       throw new UnauthorizedException('Invalid BLUE bridge key');
     }
+  }
+
+  async resolveBridgeCustomer(legacySubjectId: string) {
+    const subject = String(legacySubjectId || '').trim();
+    if (!subject) {
+      throw new UnauthorizedException('Customer identity is required');
+    }
+
+    const linkedUserIds = await this.resolveLinkedUserIds(subject);
+    const customer = await this.prisma.user.findFirst({
+      where: {
+        id: { in: linkedUserIds },
+        role: UserRole.USER,
+        isActive: true,
+      },
+      select: { id: true, name: true, email: true, role: true },
+    });
+    if (!customer) {
+      throw new UnauthorizedException('CBLUE customer is not linked');
+    }
+    return customer;
+  }
+
+  async resolveAuthenticatedCustomer(userId: string) {
+    const customer = await this.prisma.user.findFirst({
+      where: { id: userId, role: UserRole.USER, isActive: true },
+      select: { id: true, name: true, email: true, role: true },
+    });
+    if (!customer) {
+      throw new UnauthorizedException('CBLUE customer is not authorized');
+    }
+    return customer;
   }
 
   private async resolveLinkedUserIds(

@@ -1269,6 +1269,158 @@ describe('PropertyWorkflowBridgeService', () => {
   });
 });
 
+describe('PropertyWorkflowBridgeService BLUE inquiry contract', () => {
+  it('rejects an invalid BLUE bridge key before resolving a customer', async () => {
+    const bridge = {
+      assertBridgeKey: jest.fn(() => {
+        throw new Error('Invalid BLUE bridge key');
+      }),
+      resolveBridgeCustomer: jest.fn(),
+    };
+    const service = new PropertyWorkflowBridgeService(
+      {} as PrismaService,
+      {} as PropertyService,
+      undefined,
+      bridge as any,
+    );
+
+    await expect(
+      service.createBridgeInquiry(
+        'ghiscafe@gmail.com',
+        { listingId: property.id },
+        'wrong-key',
+      ),
+    ).rejects.toThrow('Invalid BLUE bridge key');
+    expect(bridge.resolveBridgeCustomer).not.toHaveBeenCalled();
+  });
+
+  it('uses the BLUE bridge key and linked customer subject to create a Step 3 snapshot', async () => {
+    const stored = inquiry();
+    const bridge = {
+      assertBridgeKey: jest.fn(),
+      resolveBridgeCustomer: jest.fn().mockResolvedValue({
+        id: 'customer-1',
+        name: 'Customer',
+        email: 'customer@example.com',
+        role: 'USER',
+      }),
+    };
+    const prisma = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'customer-1',
+          name: 'Customer',
+          email: 'customer@example.com',
+        }),
+      },
+      property: { findFirst: jest.fn().mockResolvedValue(property) },
+      propertyInquiry: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce(null)
+          .mockResolvedValue(stored),
+        create: jest
+          .fn()
+          .mockResolvedValue({ id: stored.id, poNumber: stored.poNumber }),
+      },
+    } as unknown as PrismaService;
+    const service = new PropertyWorkflowBridgeService(
+      prisma,
+      { search: jest.fn() } as unknown as PropertyService,
+      undefined,
+      bridge as any,
+    );
+
+    const snapshot = await service.createBridgeInquiry(
+      'ghiscafe@gmail.com',
+      {
+        listingId: property.id,
+        requestDetails: 'Please arrange an office viewing.',
+        idempotencyKey: 'blue-inquiry-1',
+      },
+      'bridge-key',
+    );
+
+    expect(bridge.assertBridgeKey).toHaveBeenCalledWith('bridge-key');
+    expect(bridge.resolveBridgeCustomer).toHaveBeenCalledWith(
+      'ghiscafe@gmail.com',
+    );
+    expect(prisma.propertyInquiry.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          customerId: 'customer-1',
+          propertyId: property.id,
+          listerUserId: property.userId,
+          idempotencyKey: 'blue-inquiry-1',
+        }),
+      }),
+    );
+    expect(snapshot).toEqual(
+      expect.objectContaining({
+        poNumber: stored.poNumber,
+        currentStep: 3,
+        totalSteps: 8,
+        listing: expect.objectContaining({ title: property.title }),
+        uploadedFiles: expect.any(Array),
+        workflowEvents: expect.any(Array),
+        actions: expect.any(Array),
+        alerts: expect.any(Array),
+      }),
+    );
+  });
+
+  it('returns the persisted inquiry for a repeated idempotency key without creating another inquiry', async () => {
+    const stored = inquiry();
+    const bridge = {
+      assertBridgeKey: jest.fn(),
+      resolveBridgeCustomer: jest.fn().mockResolvedValue({
+        id: 'customer-1',
+        name: 'Customer',
+        email: 'customer@example.com',
+        role: 'USER',
+      }),
+    };
+    const prisma = {
+      propertyInquiry: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValueOnce({
+            poNumber: stored.poNumber,
+            propertyId: property.id,
+            requestDetails: stored.requestDetails,
+          })
+          .mockResolvedValueOnce(stored),
+        create: jest.fn(),
+      },
+    } as unknown as PrismaService;
+    const service = new PropertyWorkflowBridgeService(
+      prisma,
+      { search: jest.fn() } as unknown as PropertyService,
+      undefined,
+      bridge as any,
+    );
+
+    const snapshot = await service.createBridgeInquiry(
+      'ghiscafe@gmail.com',
+      {
+        listingId: property.id,
+        requestDetails: stored.requestDetails || undefined,
+      },
+      'bridge-key',
+      'repeatable-inquiry-1',
+    );
+
+    expect(prisma.propertyInquiry.create).not.toHaveBeenCalled();
+    expect(snapshot).toEqual(
+      expect.objectContaining({
+        poNumber: stored.poNumber,
+        currentStep: 3,
+      }),
+    );
+  });
+});
+
 it('returns complete non-private listing details and media aliases', async () => {
   const stored = inquiry();
   const prisma = {

@@ -4,6 +4,8 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { PropertyInquiryStatus, Prisma, UserRole } from '@prisma/client';
 import { randomInt } from 'crypto';
@@ -21,6 +23,7 @@ import {
   PropertyWorkflowListingQueryDto,
 } from './dto/property-workflow.dto';
 import { qualificationEligibilitySnapshot } from '../qualification/qualification-eligibility';
+import { BlueBridgeService } from './blue-bridge.service';
 
 const TOTAL_STEPS = 8;
 const SOURCE_VERSION = PROPERTY_WORKFLOW_SOURCE_VERSION;
@@ -60,6 +63,7 @@ export class PropertyWorkflowBridgeService {
     private readonly prisma: PrismaService,
     private readonly propertyService: PropertyService,
     private readonly propertyInquiryService?: PropertyInquiryService,
+    @Optional() private readonly bridge?: BlueBridgeService,
   ) {}
 
   async listings(query: PropertyWorkflowListingQueryDto) {
@@ -129,6 +133,7 @@ export class PropertyWorkflowBridgeService {
     }
 
     const reference = await this.nextReference();
+    const idempotencyKey = this.normalizedIdempotencyKey(dto.idempotencyKey);
     const attachments = (dto.attachments || []).filter(
       (file) => file.url && file.key,
     );
@@ -144,6 +149,7 @@ export class PropertyWorkflowBridgeService {
           .toLowerCase(),
         listerName: property.user.name || property.contactName,
         requestDetails: String(dto.requestDetails || '').trim() || null,
+        idempotencyKey,
         status: PropertyInquiryStatus.NOTIFY_SENT,
         step: 4,
         ...(attachments.length > 0
@@ -190,6 +196,114 @@ export class PropertyWorkflowBridgeService {
     });
 
     return this.snapshot(inquiry.poNumber, customer.id);
+  }
+
+  async createBridgeInquiry(
+    legacySubjectId: string | undefined,
+    dto: CreatePropertyWorkflowInquiryDto,
+    bridgeKey?: string,
+    headerIdempotencyKey?: string,
+    authenticatedUserId?: string,
+  ) {
+    if (!this.bridge) {
+      throw new UnauthorizedException('BLUE bridge is not configured');
+    }
+    this.bridge.assertBridgeKey(bridgeKey);
+    const customer = legacySubjectId
+      ? await this.bridge.resolveBridgeCustomer(legacySubjectId)
+      : authenticatedUserId
+        ? await this.bridge.resolveAuthenticatedCustomer(authenticatedUserId)
+        : null;
+    if (!customer) {
+      throw new UnauthorizedException('A verified CBLUE customer is required');
+    }
+    const idempotencyKey = this.normalizedIdempotencyKey(
+      headerIdempotencyKey || dto.idempotencyKey,
+    );
+    const bridgeDto = {
+      ...dto,
+      idempotencyKey: idempotencyKey || undefined,
+    };
+
+    if (idempotencyKey) {
+      const existing = await this.findIdempotentInquiry(
+        customer.id,
+        idempotencyKey,
+      );
+      if (existing) {
+        this.assertSameInquiryRequest(existing, bridgeDto);
+        return this.customerBridgeSnapshot(
+          await this.snapshot(existing.poNumber, customer.id),
+        );
+      }
+    }
+
+    try {
+      const snapshot = await this.createInquiry(customer.id, bridgeDto);
+      return this.customerBridgeSnapshot(snapshot);
+    } catch (error) {
+      if (
+        idempotencyKey &&
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const existing = await this.findIdempotentInquiry(
+          customer.id,
+          idempotencyKey,
+        );
+        if (existing) {
+          this.assertSameInquiryRequest(existing, bridgeDto);
+          return this.customerBridgeSnapshot(
+            await this.snapshot(existing.poNumber, customer.id),
+          );
+        }
+      }
+      throw error;
+    }
+  }
+
+  private normalizedIdempotencyKey(value?: string) {
+    const key = String(value || '').trim();
+    return key ? key.slice(0, 200) : null;
+  }
+
+  private async findIdempotentInquiry(
+    customerId: string,
+    idempotencyKey: string,
+  ) {
+    return this.prisma.propertyInquiry.findUnique({
+      where: {
+        customerId_idempotencyKey: { customerId, idempotencyKey },
+      },
+      select: {
+        poNumber: true,
+        propertyId: true,
+        requestDetails: true,
+      },
+    });
+  }
+
+  private assertSameInquiryRequest(
+    existing: { propertyId: string; requestDetails: string | null },
+    dto: CreatePropertyWorkflowInquiryDto,
+  ) {
+    const existingDetails = String(existing.requestDetails || '').trim();
+    const requestedDetails = String(dto.requestDetails || '').trim();
+    if (
+      existing.propertyId !== dto.listingId ||
+      existingDetails !== requestedDetails
+    ) {
+      throw new ConflictException(
+        'Idempotency key was already used for a different inquiry',
+      );
+    }
+  }
+
+  private customerBridgeSnapshot(snapshot: any) {
+    return {
+      ...snapshot,
+      currentStep: 3,
+    };
   }
 
   async snapshot(reference: string, userId: string, callerRole?: UserRole) {

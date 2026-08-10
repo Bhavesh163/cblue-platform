@@ -1090,6 +1090,7 @@ model PropertyInquiry {
   listerRating    Int?
   listerComment   String?
   reselectedOnce  Boolean                        @default(false)
+  idempotencyKey  String?
   createdAt       DateTime                       @default(now())
   updatedAt       DateTime                       @updatedAt
   attachments     PropertyInquiryAttachment[]
@@ -1098,6 +1099,7 @@ model PropertyInquiry {
   @@index([customerId])
   @@index([listerUserId])
   @@index([propertyId])
+  @@unique([customerId, idempotencyKey])
   @@map("property_inquiries")
 }
 
