@@ -35,6 +35,7 @@ const property = {
     id: 'lister-1',
     name: 'Lister',
     email: 'lister@example.com',
+    isActive: true,
     fixer: {
       status: 'APPROVED',
       verified: true,

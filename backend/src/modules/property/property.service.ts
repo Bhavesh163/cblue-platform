@@ -14,7 +14,6 @@ import {
   getThaiGpsLocationBounds,
   normalizeThaiGpsLocation,
 } from '../../common/thai-gps-location';
-import { qualificationEligibleFixerWhere } from '../qualification/qualification-eligibility';
 
 @Injectable()
 export class PropertyService {
@@ -989,9 +988,7 @@ export class PropertyService {
       status: 'ACTIVE',
       NOT: this.publicPropertyVisibilityExclusions(),
       user: {
-        fixer: {
-          is: qualificationEligibleFixerWhere(new Date()),
-        },
+        isActive: true,
       },
     };
 

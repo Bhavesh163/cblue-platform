@@ -22,7 +22,6 @@ import {
   PropertyWorkflowActionDto,
   PropertyWorkflowListingQueryDto,
 } from './dto/property-workflow.dto';
-import { qualificationEligibilitySnapshot } from '../qualification/qualification-eligibility';
 import { BlueBridgeService } from './blue-bridge.service';
 
 const TOTAL_STEPS = 8;
@@ -104,29 +103,14 @@ export class PropertyWorkflowBridgeService {
             id: true,
             name: true,
             email: true,
-            fixer: {
-              select: {
-                status: true,
-                verified: true,
-                verifiedCompanyName: true,
-                qualificationEligibilityStatus: true,
-                kycValidUntil: true,
-                kycReverificationRequiredAt: true,
-                kycReverificationReasons: true,
-                tierReevaluationRequestedAt: true,
-                tierReevaluationCompletedAt: true,
-              },
-            },
+            isActive: true,
           },
         },
         images: { orderBy: { sortOrder: 'asc' } },
       },
     });
     if (!property) throw new NotFoundException('Listing not found');
-    const listerEligibility = property.user.fixer
-      ? qualificationEligibilitySnapshot(property.user.fixer)
-      : null;
-    if (!listerEligibility?.newJobEligible) {
+    if (!property.user.isActive) {
       throw new ConflictException(
         'This listing is temporarily unavailable for new inquiries',
       );

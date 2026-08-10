@@ -289,6 +289,78 @@ describe('PropertyService', () => {
       );
     });
 
+    it('includes active property listings owned by a non-fixer account', async () => {
+      prisma.property.findMany.mockResolvedValue([
+        {
+          id: 'ghis-listing-1',
+          userId: 'ghis-user',
+          propertyType: 'TOWNHOUSE',
+          listingType: 'SALE',
+          status: 'ACTIVE',
+          title: 'Townhouse for Sale/Rent at Fountain circle in Hat Yai',
+          description: 'Active public listing',
+          price: 7500000,
+          area: null,
+          bedrooms: 3,
+          bathrooms: 2,
+          floors: null,
+          province: 'สงขลา',
+          district: 'หาดใหญ่',
+          subdistrict: '',
+          postalCode: '',
+          addressLine: 'วงเวียนน้ำพุ',
+          latitude: null,
+          longitude: null,
+          contactName: 'Ghis Cafe',
+          contactPhone: null,
+          contactEmail: 'ghiscafe@gmail.com',
+          features: [],
+          yearBuilt: null,
+          tier: 'STANDARD',
+          images: [],
+          createdAt: new Date('2026-08-02T14:32:00.000Z'),
+          updatedAt: new Date('2026-08-02T14:32:00.000Z'),
+        },
+      ]);
+      prisma.property.count.mockResolvedValue(1);
+
+      const result = await service.search({ limit: '20' } as any);
+
+      expect(result.properties).toEqual([
+        expect.objectContaining({
+          id: 'ghis-listing-1',
+          contactEmail: 'ghiscafe@gmail.com',
+        }),
+      ]);
+      expect(prisma.property.findMany.mock.calls[0][0].where.user).toEqual({
+        isActive: true,
+      });
+    });
+
+    it('keeps GPS-backed listings searchable through their authoritative location bounds', async () => {
+      prisma.property.findMany.mockResolvedValue([]);
+      prisma.property.count.mockResolvedValue(0);
+
+      await service.search({
+        province: 'กรุงเทพมหานคร',
+        district: 'วังทองหลาง',
+        subdistrict: 'สะพานสอง',
+      } as any);
+
+      const where = prisma.property.findMany.mock.calls[0][0].where;
+      expect(where.AND).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            OR: expect.arrayContaining([
+              expect.objectContaining({
+                latitude: expect.objectContaining({ gte: expect.any(Number) }),
+              }),
+            ]),
+          }),
+        ]),
+      );
+    });
+
     it('should fall back to a legacy-safe property select when newer schema fields are missing', async () => {
       prisma.property.findMany
         .mockRejectedValueOnce(
