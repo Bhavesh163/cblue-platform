@@ -4,6 +4,8 @@ import {
   Controller,
   Get,
   Headers,
+  HttpCode,
+  HttpStatus,
   Param,
   Post,
   Query,
@@ -31,6 +33,7 @@ export class PropertyWorkflowBridgeController {
   }
 
   @Post('inquiries')
+  @HttpCode(HttpStatus.CREATED)
   @UseGuards(OptionalJwtAuthGuard)
   createInquiry(
     @Headers('x-blue-bridge-key') bridgeKey: string | undefined,

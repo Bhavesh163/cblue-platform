@@ -386,7 +386,10 @@ describe('PropertyWorkflowBridgeService', () => {
       {} as PrismaService,
       propertyService,
     );
-    const result = await service.listings({ page: 1, limit: 20 });
+    const result = await service.listings({ page: 1, limit: 20, bedrooms: 4 });
+    expect(propertyService.search).toHaveBeenCalledWith(
+      expect.objectContaining({ bedrooms: 4 }),
+    );
     expect(result.listings).toHaveLength(1);
     expect(result.listings[0]).not.toHaveProperty('contact');
     expect(result.listings[0].location.mode).toBe('gps');

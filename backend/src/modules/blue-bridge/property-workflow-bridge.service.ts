@@ -77,6 +77,7 @@ export class PropertyWorkflowBridgeService {
       subdistrict: query.subdistrict,
       minPrice: query.minPrice,
       maxPrice: query.maxPrice,
+      bedrooms: query.bedrooms,
       keyword: query.keyword,
     });
     return {

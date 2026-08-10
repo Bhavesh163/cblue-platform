@@ -60,6 +60,12 @@ export class PropertyWorkflowListingQueryDto {
   maxPrice?: number;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  bedrooms?: number;
+
+  @IsOptional()
   @IsString()
   keyword?: string;
 }
