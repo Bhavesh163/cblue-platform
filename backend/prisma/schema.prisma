@@ -338,6 +338,7 @@ model Fixer {
   priceList          Json? // [{service, unit, finalPrice}]
   serviceProvince    String? // primary service area province
   serviceDistrict    String? // primary service area district
+  serviceSubdistrict String? // primary service area subdistrict
   servicePostalCode  String? // primary service area postal code
   gpsLat             Float?
   gpsLng             Float?

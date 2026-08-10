@@ -834,7 +834,7 @@ describe('BlueBridgeService workflow activities', () => {
     });
   });
 
-  it('does not derive a missing meeting or subdistrict from description text or GPS coordinates', async () => {
+  it('derives a missing subdistrict from persisted GPS coordinates but not description text', async () => {
     const { service } = createService(
       ['partner-1'],
       workflowOrder({
@@ -861,7 +861,7 @@ describe('BlueBridgeService workflow activities', () => {
     });
 
     expect(result.meeting).toBeNull();
-    expect(result.siteSubdistrict).toBe('');
+    expect(result.siteSubdistrict).toBe('สะพานสอง');
   });
 
   it('lets the selected partner read the persisted customer chat message', async () => {

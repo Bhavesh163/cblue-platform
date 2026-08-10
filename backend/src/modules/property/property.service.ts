@@ -560,8 +560,15 @@ export class PropertyService {
     } | null,
   >(property: T): T {
     if (!property) return property;
-    const normalizedLocation = normalizeThaiGpsLocation(property);
-    const next = { ...property };
+    const isAdministrative =
+      String(property.locationMode || "").toUpperCase() === "ADMINISTRATIVE";
+    const normalizedLocation = isAdministrative
+      ? property
+      : normalizeThaiGpsLocation(property);
+    const next = {
+      ...property,
+      ...(isAdministrative ? { latitude: null, longitude: null } : {}),
+    };
     if (!next.province && normalizedLocation.province)
       next.province = normalizedLocation.province;
     if (!next.district && normalizedLocation.district)

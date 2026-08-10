@@ -699,6 +699,7 @@ export default function FixerResults({
       bookingType,
     });
     if (effectiveBookingAddress?.postalCode) params.set("postalCode", effectiveBookingAddress.postalCode);
+    if (effectiveBookingAddress?.subdistrict) params.set("subdistrict", effectiveBookingAddress.subdistrict);
     if (hasUsableGps) {
       params.set("latitude", String(latitude));
       params.set("longitude", String(longitude));
@@ -706,7 +707,7 @@ export default function FixerResults({
     if (description) params.set("description", description);
     if (nominateId) params.set("nominateId", nominateId);
     return params.toString();
-  }, [effectiveBookingAddress?.district, effectiveBookingAddress?.postalCode, effectiveBookingAddress?.province, description, service, bookingType, hasUsableGps, latitude, longitude]);
+  }, [effectiveBookingAddress?.district, effectiveBookingAddress?.postalCode, effectiveBookingAddress?.province, effectiveBookingAddress?.subdistrict, description, service, bookingType, hasUsableGps, latitude, longitude]);
   const ensureOrderAddressId = async (token: string) => {
     // Allow creation if at least one geographic field is provided OR GPS coordinates
     const hasGeo = effectiveBookingAddress?.province || effectiveBookingAddress?.district || effectiveBookingAddress?.subdistrict;

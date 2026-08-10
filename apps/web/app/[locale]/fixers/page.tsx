@@ -15583,6 +15583,7 @@ function PartnerProperties({
       addressLine,
       latitude: toNumberOrUndefined(raw?.latitude ?? raw?.address?.latitude),
       longitude: toNumberOrUndefined(raw?.longitude ?? raw?.address?.longitude),
+      locationMode: String(raw?.locationMode || raw?.address?.locationMode || "").toUpperCase(),
       contactName: String(raw?.contactName || "").trim(),
       contactPhone: String(raw?.contactPhone || "").trim(),
       contactEmail: String(raw?.contactEmail || "").trim(),
@@ -16215,6 +16216,7 @@ function PartnerProperties({
             const qualityScore = getQualityScore(p);
             const complianceHints = getComplianceHints(p);
             const mapCoordinates =
+              String(p.locationMode || "").toUpperCase() !== "ADMINISTRATIVE" &&
               Number.isFinite(Number(p.latitude)) &&
               Number.isFinite(Number(p.longitude))
                 ? `${Number(p.latitude).toFixed(6)}, ${Number(p.longitude).toFixed(6)}`

@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Prisma, UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { normalizeThaiGpsLocation } from '../../common/thai-gps-location';
 import type { BlueWorkflowDetailResponse } from './blue-bridge.controller';
 
 interface WorkflowDetailInput {
@@ -891,9 +892,21 @@ export function projectPersistedFixerMeeting(order: {
 }
 
 function persistedSubdistrict(
-  address: { subdistrict?: unknown } | null | undefined,
+  address: { subdistrict?: unknown; latitude?: unknown; longitude?: unknown; province?: unknown; district?: unknown; postalCode?: unknown; locationMode?: unknown } | null | undefined,
 ): string {
-  return stringValue(address?.subdistrict);
+  if (String(address?.locationMode || "").toUpperCase() === "ADMINISTRATIVE") {
+    return stringValue(address?.subdistrict);
+  }
+  return normalizeThaiGpsLocation(
+    address as {
+      province?: string | null;
+      district?: string | null;
+      subdistrict?: string | null;
+      postalCode?: string | null;
+      latitude?: number | string | null;
+      longitude?: number | string | null;
+    },
+  ).subdistrict;
 }
 
 interface PersistedVariationItem {
@@ -1726,30 +1739,43 @@ function formatLocation(address: {
   district: string;
   province: string;
   postalCode: string;
+  locationMode?: string | null;
   latitude?: number | null;
   longitude?: number | null;
 }): string {
-  if (
-    typeof address.latitude === 'number' &&
-    typeof address.longitude === 'number'
-  ) {
-    return `${address.latitude}, ${address.longitude}`;
+  const normalized =
+    String(address.locationMode || "").toUpperCase() === "ADMINISTRATIVE"
+      ? address
+      : { ...address, ...normalizeThaiGpsLocation(address) };
+  const latitude = Number(normalized.latitude);
+  const longitude = Number(normalized.longitude);
+  const hasGps =
+    String(address.locationMode || "").toUpperCase() !== "ADMINISTRATIVE" &&
+    Number.isFinite(latitude) &&
+    Number.isFinite(longitude) &&
+    !(Math.abs(latitude) < 0.000001 && Math.abs(longitude) < 0.000001);
+  if (hasGps) {
+    return [
+      normalized.subdistrict || normalized.district || normalized.province,
+      `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+    ]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+      .join(" \u00b7 ");
   }
-
   return [
-    address.unit,
-    address.building,
-    address.street,
-    address.subdistrict,
-    address.district,
-    address.province,
-    address.postalCode,
+    normalized.unit,
+    normalized.building,
+    normalized.street,
+    normalized.subdistrict,
+    normalized.district,
+    normalized.province,
+    normalized.postalCode,
   ]
-    .map((value) => String(value || '').trim())
+    .map((value) => String(value || "").trim())
     .filter(Boolean)
-    .join(', ');
+    .join(", ");
 }
-
 function stripWorkflowPrefix(description: string): string {
   return description
     .replace(/^PO-\d{4}-\d+\s*\|\s*/i, '')

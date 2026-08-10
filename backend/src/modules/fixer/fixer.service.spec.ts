@@ -783,6 +783,44 @@ describe('FixerService', () => {
   });
 
   describe('matchFixers', () => {
+    it('matches a fixer by the resolved service subdistrict', async () => {
+      prisma.fixer.findMany.mockResolvedValue([
+        {
+          id: 'saphan-song-fixer',
+          tier: 'STANDARD',
+          rating: 4.5,
+          completedJobs: 3,
+          yearsExperience: 4,
+          description: 'Office fit-out team',
+          bio: 'Office fit-out team',
+          serviceProvince: 'Bangkok',
+          serviceDistrict: 'Wang Thonglang',
+          serviceSubdistrict: 'Saphan Song',
+          servicePostalCode: '10310',
+          priceList: [],
+          user: { name: 'Saphan Song Fixer', company: null },
+          skills: [{ category: 'project', name: 'fit-out' }],
+        },
+      ]);
+
+      const result = await service.matchFixers(
+        'project',
+        'Wang Thonglang',
+        'Bangkok',
+        'office fit-out',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'Saphan Song',
+      );
+
+      expect(result.map((candidate: { id: string }) => candidate.id)).toContain(
+        'saphan-song-fixer',
+      );
+    });
+
     it('should use quantity-aware price list matching for fit-out projects', async () => {
       prisma.fixer.findMany.mockResolvedValue([
         {

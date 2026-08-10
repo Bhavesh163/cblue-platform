@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useTranslations, useLocale } from "next-intl";
 import { useParams } from "next/navigation";
+import { propertySummaryLocation } from "../../../../lib/propertyWorkflowProjection";
 
 
 interface PropertyDetail {
@@ -35,7 +36,6 @@ interface PropertyDetail {
 }
 
 const PLACEHOLDER_PROPERTY_IMAGE = "/images/scenic-house.jpg";
-const PLACEHOLDER_LOCATION_PATTERN = /^--\s*select/i;
 
 function isLikelyValidImageDataPayload(payload: string) {
   const compact = String(payload || "").replace(/\s+/g, "");
@@ -92,42 +92,10 @@ function extractImageUrlCandidate(image: any) {
   return image.url || image.key || image.imageUrl || image.publicUrl || image.src || "";
 }
 
-function cleanLocationPart(value: unknown) {
-  const text = String(value || "").trim();
-  if (!text || PLACEHOLDER_LOCATION_PATTERN.test(text)) return "";
-  return text;
-}
-
-function normalizeCoordinate(value: unknown) {
-  if (value === null || value === undefined || value === "") return null;
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : null;
-}
-
-function hasValidGpsCoordinatePair(latitude: number | null, longitude: number | null) {
-  if (latitude === null || longitude === null) return false;
-  if (Math.abs(latitude) < 0.000001 && Math.abs(longitude) < 0.000001) return false;
-  return true;
-}
-
 function getPropertySiteLocation(property: Partial<PropertyDetail>) {
-  const parts = [
-    cleanLocationPart(property.addressLine),
-    cleanLocationPart(property.subdistrict),
-    cleanLocationPart(property.district),
-    cleanLocationPart(property.province),
-  ].filter(Boolean);
-  const locationLabel = parts.join(", " );
-  if (locationLabel) return locationLabel;
-
-  const latitude = normalizeCoordinate(property.latitude);
-  const longitude = normalizeCoordinate(property.longitude);
-  if (latitude !== null && longitude !== null && hasValidGpsCoordinatePair(latitude, longitude)) {
-    return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
-  }
-
-  return "Unknown";
+  return propertySummaryLocation(property);
 }
+
 
 export default function PropertyDetailPage() {
   const t = useTranslations("realEstate");

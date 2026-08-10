@@ -23,6 +23,7 @@ import {
   PropertyWorkflowListingQueryDto,
 } from './dto/property-workflow.dto';
 import { BlueBridgeService } from './blue-bridge.service';
+import { normalizeThaiGpsLocation } from '../../common/thai-gps-location';
 
 const TOTAL_STEPS = 8;
 const SOURCE_VERSION = PROPERTY_WORKFLOW_SOURCE_VERSION;
@@ -966,40 +967,39 @@ export class PropertyWorkflowBridgeService {
   // action modals and combine the persisted subdistrict with coordinates on
   // summary surfaces. Administrative listings never expose stale coordinates.
   private locationPresentation(property: any) {
-    const latitude = Number(property?.latitude);
-    const longitude = Number(property?.longitude);
+    const storedMode = String(property?.locationMode || "").toUpperCase();
+    const normalized = normalizeThaiGpsLocation(property || {});
+    const source =
+      storedMode === "ADMINISTRATIVE"
+        ? { ...property, latitude: null, longitude: null }
+        : { ...property, ...normalized };
+    const latitude = Number(source?.latitude);
+    const longitude = Number(source?.longitude);
     const hasCoordinates =
       Number.isFinite(latitude) &&
       Number.isFinite(longitude) &&
       !(Math.abs(latitude) < 0.000001 && Math.abs(longitude) < 0.000001);
-    const storedMode = String(property?.locationMode || '').toUpperCase();
-    const hasGps =
-      storedMode === 'GPS'
-        ? hasCoordinates
-        : storedMode === 'ADMINISTRATIVE'
-          ? false
-          : hasCoordinates;
+    const hasGps = storedMode === "ADMINISTRATIVE" ? false : hasCoordinates;
     const administrativeDisplay = String(
-      property?.subdistrict || property?.district || property?.province || '',
+      source?.subdistrict || source?.district || source?.province || "",
     ).trim();
     const coordinateDisplay = hasGps
       ? `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
-      : '';
+      : "";
+    const display = hasGps
+      ? [administrativeDisplay, coordinateDisplay].filter(Boolean).join(" \u00b7 ")
+      : administrativeDisplay;
     return {
-      mode: hasGps ? 'gps' : 'administrative',
+      mode: hasGps ? "gps" : "administrative",
       coordinates: hasGps ? { latitude, longitude } : null,
-      siteSubdistrict: String(property?.subdistrict || '').trim(),
-      postalCode: String(property?.postalCode || '').trim(),
-      province: String(property?.province || '').trim(),
-      modalDisplay: coordinateDisplay || administrativeDisplay,
-      summaryDisplay: hasGps
-        ? [administrativeDisplay, coordinateDisplay]
-            .filter(Boolean)
-            .join(' \\u00b7 ')
-        : administrativeDisplay,
+      siteSubdistrict: String(source?.subdistrict || "").trim(),
+      district: String(source?.district || "").trim(),
+      postalCode: String(source?.postalCode || "").trim(),
+      province: String(source?.province || "").trim(),
+      modalDisplay: display,
+      summaryDisplay: display,
     };
   }
-
   // Deduplicated combined file list: listing media first, inquiry attachments
   // second. Deduplicates by id, then key, then url so BLUE can consume one
   // authoritative list without guessing file sources. Never parses filenames or
@@ -1073,13 +1073,13 @@ export class PropertyWorkflowBridgeService {
       location: {
         mode: location.mode,
         province: location.province,
-        district: String(property.district || '').trim(),
+        district: location.district,
         subdistrict: location.siteSubdistrict,
         siteSubdistrict: location.siteSubdistrict,
         postalCode: location.postalCode,
         addressLine: String(property.addressLine || '').trim(),
-        latitude: property.latitude,
-        longitude: property.longitude,
+        latitude: location.coordinates?.latitude ?? null,
+        longitude: location.coordinates?.longitude ?? null,
       },
       attachments,
       images: attachments,

@@ -102,6 +102,7 @@ export class FixerController {
     @Query('latitude') latitude?: string,
     @Query('longitude') longitude?: string,
     @Query('bookingType') bookingType?: string,
+    @Query('subdistrict') subdistrict?: string,
   ) {
     return this.fixerService.matchFixers(
       service,
@@ -113,6 +114,7 @@ export class FixerController {
       latitude,
       longitude,
       bookingType,
+      subdistrict,
     );
   }
 

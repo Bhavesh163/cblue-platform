@@ -1118,10 +1118,11 @@ describe('PropertyWorkflowBridgeService', () => {
       mode: 'gps',
       coordinates: { latitude: 13.79, longitude: 100.61 },
       siteSubdistrict: 'Saphansong',
+      district: 'Wang Thonglang',
       postalCode: '10310',
       province: 'Bangkok',
-      modalDisplay: '13.790000, 100.610000',
-      summaryDisplay: 'Saphansong \\u00b7 13.790000, 100.610000',
+      modalDisplay: 'Saphansong \u00b7 13.790000, 100.610000',
+      summaryDisplay: 'Saphansong · 13.790000, 100.610000',
     });
   });
 
@@ -1153,6 +1154,7 @@ describe('PropertyWorkflowBridgeService', () => {
         mode: 'administrative',
         coordinates: null,
         siteSubdistrict: 'Saphan Song',
+        district: 'Wang Thonglang',
         postalCode: '10310',
         province: 'Bangkok',
         modalDisplay: 'Saphan Song',

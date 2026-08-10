@@ -1067,6 +1067,7 @@ export class FixerService {
           : undefined,
         serviceProvince: serviceLocation.province,
         serviceDistrict: serviceLocation.district,
+        serviceSubdistrict: serviceLocation.subdistrict,
         servicePostalCode: serviceLocation.postalCode,
         gpsLat: dto.gpsCoords?.lat,
         gpsLng: dto.gpsCoords?.lng,
@@ -1327,6 +1328,7 @@ export class FixerService {
           : Prisma.JsonNull,
         serviceProvince: serviceLocation.province,
         serviceDistrict: serviceLocation.district,
+        serviceSubdistrict: serviceLocation.subdistrict,
         servicePostalCode: serviceLocation.postalCode,
         gpsLat: dto.gpsCoords?.lat,
         gpsLng: dto.gpsCoords?.lng,
@@ -2217,6 +2219,7 @@ export class FixerService {
     fixer: {
       serviceProvince?: string | null;
       serviceDistrict?: string | null;
+      serviceSubdistrict?: string | null;
       servicePostalCode?: string | null;
     },
     district: string,
@@ -2224,19 +2227,23 @@ export class FixerService {
     postalCode?: string,
     service = '',
     bookingType?: string,
+    subdistrict?: string,
   ): boolean {
     const normalizedProvince = this.normalizeSearchText(province);
     const normalizedDistrict = this.normalizeSearchText(district);
     const normalizedPostalCode = String(postalCode || '').trim();
+    const normalizedSubdistrict = this.normalizeSearchText(subdistrict || '');
+    const autoSubdistrict = !normalizedSubdistrict || normalizedSubdistrict === 'auto';
     const autoProvince = !normalizedProvince || normalizedProvince === 'auto';
     const autoDistrict = !normalizedDistrict || normalizedDistrict === 'auto';
     const autoPostalCode =
       !normalizedPostalCode || normalizedPostalCode === 'auto';
 
-    if (autoProvince && autoDistrict && autoPostalCode) return true;
+    if (autoProvince && autoDistrict && autoSubdistrict && autoPostalCode) return true;
 
     const fixerProvince = this.normalizeSearchText(fixer.serviceProvince || '');
     const fixerDistrict = this.normalizeSearchText(fixer.serviceDistrict || '');
+    const fixerSubdistrict = this.normalizeSearchText(fixer.serviceSubdistrict || '');
     const fixerPostalCode = String(fixer.servicePostalCode || '').trim();
 
     if (!autoPostalCode && fixerPostalCode === normalizedPostalCode) {
@@ -2249,6 +2256,13 @@ export class FixerService {
       fixerProvince !== normalizedProvince
     ) {
       return false;
+    }
+
+    if (!autoSubdistrict && fixerSubdistrict && fixerSubdistrict !== normalizedSubdistrict) {
+      return false;
+    }
+    if (!autoSubdistrict && fixerSubdistrict === normalizedSubdistrict) {
+      return true;
     }
 
     const hasExactProvinceMatch =
@@ -2493,6 +2507,7 @@ export class FixerService {
     latitude?: number | string,
     longitude?: number | string,
     bookingType?: string,
+    subdistrict?: string,
   ): Promise<SelectedFixer[]> {
     try {
       const allFixers = await this.prisma.fixer.findMany({
@@ -2525,6 +2540,7 @@ export class FixerService {
                   postalCode,
                   service,
                   bookingType,
+                  subdistrict,
                 )),
           )
         : allFixers.filter((fixer) =>
@@ -2535,6 +2551,7 @@ export class FixerService {
               postalCode,
               service,
               bookingType,
+              subdistrict,
             ),
           );
       console.log(
