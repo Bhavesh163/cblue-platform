@@ -37,6 +37,23 @@ describe('parseRequestedServices', () => {
     },
   );
 
+  it('extracts construction and a common Thai website spelling from the reported request', () => {
+    expect(
+      parseRequestedServices('ก่อสร้าง 500 ตารางเมตร และ ทำเวบไซต์ 20 หน้า'),
+    ).toEqual([
+      expect.objectContaining({
+        canonicalKey: 'construction',
+        quantity: 500,
+        unit: 'sqm',
+      }),
+      expect.objectContaining({
+        canonicalKey: 'website',
+        quantity: 20,
+        unit: 'page',
+      }),
+    ]);
+  });
+
   it('supports quantities before services and compact Thai conjunctions', () => {
     const result = parseRequestedServices(
       '1000ตร.ม.ตกแต่งภายในและ100ตร.ม.ก่อสร้างอาคารพร้อม10หน้าพัฒนาเว็บไซต์',

@@ -19,6 +19,7 @@ describe('FixerService', () => {
     fixerSkill: Record<string, jest.Mock>;
     fixerAvailability: Record<string, jest.Mock>;
     image: Record<string, jest.Mock>;
+    order: Record<string, jest.Mock>;
   };
   let eventEmitter: { emit: jest.Mock };
   let configService: { get: jest.Mock };
@@ -50,6 +51,9 @@ describe('FixerService', () => {
       image: {
         create: jest.fn(),
         findMany: jest.fn(),
+      },
+      order: {
+        findFirst: jest.fn(),
       },
     };
     eventEmitter = { emit: jest.fn() };
@@ -1415,7 +1419,7 @@ describe('FixerService', () => {
         expect(ids).not.toContain('far-fitout');
       }
     });
-    it('lets Typhoon reorder only deterministic Top-8 candidate ids', async () => {
+    it('keeps deterministic Top-8 slots while accepting factual AI audit notes', async () => {
       enableTyphoonReview();
       httpService.post.mockReturnValue(
         of({
@@ -1550,9 +1554,9 @@ describe('FixerService', () => {
       );
 
       expect(result.map((candidate: { id: string }) => candidate.id)).toEqual([
-        'premium-fitout',
         'budget-fitout',
         'standard-fitout',
+        'premium-fitout',
       ]);
       expect(
         result.map((candidate: { id: string }) => candidate.id),
@@ -1560,8 +1564,8 @@ describe('FixerService', () => {
       expect(
         result.map((candidate: { id: string }) => candidate.id),
       ).not.toContain('digital-only');
-      expect(result[0]?.selectedReason).toContain('blue AI: Best balance');
-      expect((result[0] as any)?.matchTrace?.typhoon).toEqual(
+      expect(result[2]?.selectedReason).toContain('blue AI: Best balance');
+      expect((result[2] as any)?.matchTrace?.typhoon).toEqual(
         expect.objectContaining({
           applied: true,
           note: expect.stringContaining('Best balance'),
@@ -3274,6 +3278,177 @@ describe('FixerService', () => {
         );
       },
     );
+    it('matches the reported Thai mixed-service GPS request within the provider travel radius', async () => {
+      prisma.fixer.findMany.mockResolvedValue([
+        {
+          id: 'gps-mixed-service',
+          tier: 'ECONOMY',
+          rating: 4.9,
+          completedJobs: 12,
+          yearsExperience: 8,
+          travelRadius: 60,
+          description: 'Construction and website delivery',
+          pastProjectType: 'construction website',
+          bio: 'Build and digital team',
+          serviceProvince: 'กรุงเทพมหานคร',
+          serviceDistrict: 'วังทองหลาง',
+          serviceSubdistrict: 'สะพานสอง',
+          servicePostalCode: '10310',
+          gpsLat: 14.29409,
+          gpsLng: 100.60963,
+          priceList: [
+            {
+              service: 'Construction',
+              quantity: '1',
+              unit: 'sq.m.',
+              finalPrice: '20000',
+            },
+            {
+              service: 'Website development',
+              quantity: '1',
+              unit: 'page',
+              finalPrice: '1000',
+            },
+          ],
+          user: { name: 'GPS Mixed Service Partner' },
+          skills: [
+            { category: 'project', name: 'construction' },
+            { category: 'project', name: 'website development' },
+          ],
+        },
+      ]);
+
+      const result = await service.matchFixers(
+        'household',
+        'วังทองหลาง',
+        'กรุงเทพมหานคร',
+        'ก่อสร้าง 500 ตารางเมตร และ ทำเวบไซต์ 20 หน้า',
+        undefined,
+        '10310',
+        13.79409,
+        100.60963,
+        'household',
+        'สะพานสอง',
+        'economy',
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual(
+        expect.objectContaining({
+          id: 'gps-mixed-service',
+          estimatedTotal: 10020000,
+          estimatedBreakdown: [
+            {
+              service: 'Construction',
+              qty: 500,
+              unit: 'sq.m.',
+              unitRate: 20000,
+              total: 10000000,
+            },
+            {
+              service: 'Website development',
+              qty: 20,
+              unit: 'page',
+              unitRate: 1000,
+              total: 20000,
+            },
+          ],
+        }),
+      );
+    });
+
+    it('applies the authoritative tier-aware eight-slot policy and persisted returning partner', async () => {
+      const candidate = (
+        id: string,
+        tier: 'ECONOMY' | 'STANDARD',
+        price: number,
+        rating: number,
+        completedJobs: number,
+      ) => ({
+        id,
+        tier,
+        rating,
+        completedJobs,
+        yearsExperience: 5,
+        travelRadius: 20,
+        description: 'Construction team',
+        pastProjectType: 'construction',
+        bio: 'Construction team',
+        serviceProvince: 'กรุงเทพมหานคร',
+        serviceDistrict: 'วังทองหลาง',
+        serviceSubdistrict: 'สะพานสอง',
+        servicePostalCode: '10310',
+        gpsLat: 13.79409,
+        gpsLng: 100.60963,
+        priceList: [
+          {
+            service: 'Construction',
+            quantity: '1',
+            unit: 'sq.m.',
+            finalPrice: String(price),
+          },
+        ],
+        user: { name: id },
+        skills: [{ category: 'project', name: 'construction' }],
+      });
+
+      prisma.fixer.findMany.mockResolvedValue([
+        candidate('economy-cheapest', 'ECONOMY', 100, 4, 5),
+        candidate('economy-second', 'ECONOMY', 110, 4.1, 6),
+        candidate('economy-rated-second', 'ECONOMY', 300, 4.8, 30),
+        candidate('economy-rated-first', 'ECONOMY', 400, 4.9, 25),
+        candidate('standard-cheapest', 'STANDARD', 1000, 4.6, 20),
+        candidate('standard-rated', 'STANDARD', 1100, 5, 40),
+        candidate('returning', 'ECONOMY', 500, 3.5, 2),
+        candidate('nominated', 'ECONOMY', 600, 3.4, 1),
+      ]);
+      prisma.order.findFirst.mockResolvedValue({ fixerId: 'returning' });
+
+      const result = await service.matchFixers(
+        'household',
+        'วังทองหลาง',
+        'กรุงเทพมหานคร',
+        'ก่อสร้าง 1 ตารางเมตร',
+        'nominated',
+        '10310',
+        13.79409,
+        100.60963,
+        'household',
+        'สะพานสอง',
+        'economy',
+        'customer-user-id',
+      );
+
+      expect(result.map((item) => item.id)).toEqual([
+        'economy-cheapest',
+        'economy-second',
+        'economy-rated-first',
+        'economy-rated-second',
+        'standard-cheapest',
+        'standard-rated',
+        'returning',
+        'nominated',
+      ]);
+      expect(result.map((item) => item.selectedReason)).toEqual([
+        '💰 Cheapest in area',
+        '💰 Ranked 2nd Cheapest',
+        '⭐ Highest Rated',
+        '⭐ Highly Recommended',
+        '🏆 Cheapest of upper tier',
+        '🏆 Highest rated of upper tier',
+        '🔄 Returning partner',
+        '👤 Customer nomination',
+      ]);
+      expect(result[6]?.alias).toBe('★ returning');
+      expect(prisma.order.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            userId: 'customer-user-id',
+            status: 'COMPLETED',
+          }),
+        }),
+      );
+    });
   });
 
   it('requires re-verification after a verified partner changes contact details', async () => {

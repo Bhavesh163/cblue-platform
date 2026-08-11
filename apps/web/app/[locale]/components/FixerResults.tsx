@@ -705,9 +705,10 @@ export default function FixerResults({
       params.set("longitude", String(longitude));
     }
     if (description) params.set("description", description);
+    if (tier) params.set("tier", tier);
     if (nominateId) params.set("nominateId", nominateId);
     return params.toString();
-  }, [effectiveBookingAddress?.district, effectiveBookingAddress?.postalCode, effectiveBookingAddress?.province, effectiveBookingAddress?.subdistrict, description, service, bookingType, hasUsableGps, latitude, longitude]);
+  }, [effectiveBookingAddress?.district, effectiveBookingAddress?.postalCode, effectiveBookingAddress?.province, effectiveBookingAddress?.subdistrict, description, service, tier, bookingType, hasUsableGps, latitude, longitude]);
   const ensureOrderAddressId = async (token: string) => {
     // Allow creation if at least one geographic field is provided OR GPS coordinates
     const hasGeo = effectiveBookingAddress?.province || effectiveBookingAddress?.district || effectiveBookingAddress?.subdistrict;
@@ -806,7 +807,10 @@ export default function FixerResults({
     if (isResolvingGpsOnlyLocation) return;
 
     // Try fetching real candidates from the backend AI Top-8 algorithm
-    fetch(`/api/v1/fixers/match?${buildMatchQuery()}`)
+    const token = localStorage.getItem("subscriber_token");
+    fetch(`/api/v1/fixers/match?${buildMatchQuery()}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
         if (data && Array.isArray(data) && data.length > 0) {
@@ -2493,7 +2497,10 @@ export default function FixerResults({
     
     try {
       const url = `/api/v1/fixers/match?${buildMatchQuery(nominateId)}`;
-      const res = await fetch(url);
+      const token = localStorage.getItem("subscriber_token");
+      const res = await fetch(url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
       if (res.ok) {
         const data = await res.json();
         const nominated = data.find((f: any) => f.id === nominateId || f.id.endsWith(nominateId) || f.alias.toLowerCase().includes(nominateId.toLowerCase()));

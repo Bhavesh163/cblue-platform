@@ -22,6 +22,7 @@ import { AddSkillDto } from './dto/add-skill.dto';
 import { SetAvailabilityDto } from './dto/set-availability.dto';
 import { UploadKycDto } from './dto/upload-kyc.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @Controller('fixers')
@@ -92,6 +93,7 @@ export class FixerController {
   }
 
   @Get('match')
+  @UseGuards(OptionalJwtAuthGuard)
   matchFixers(
     @Query('service') service: string,
     @Query('district') district: string,
@@ -103,6 +105,8 @@ export class FixerController {
     @Query('longitude') longitude?: string,
     @Query('bookingType') bookingType?: string,
     @Query('subdistrict') subdistrict?: string,
+    @Query('tier') tier?: string,
+    @CurrentUser('id') customerUserId?: string,
   ) {
     return this.fixerService.matchFixers(
       service,
@@ -115,6 +119,8 @@ export class FixerController {
       longitude,
       bookingType,
       subdistrict,
+      tier,
+      customerUserId,
     );
   }
 
