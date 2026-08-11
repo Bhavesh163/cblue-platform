@@ -42,6 +42,9 @@ test("admin evidence review captures structured identity facts without exposing 
   assert.match(source, /Name matches the applicant/);
   assert.match(source, /Faces match on manual comparison/);
   assert.match(source, /does not claim an\s+automated liveness result/);
+  assert.match(source, /Save ID review/);
+  assert.match(source, /Save selfie review/);
+  assert.match(source, /KYC approval uses saved evidence only/);
   assert.doesNotMatch(source, /identityNumberHash/);
 });
 

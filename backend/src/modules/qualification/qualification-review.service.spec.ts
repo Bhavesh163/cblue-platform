@@ -10,6 +10,25 @@ import {
 
 describe('QualificationReviewService', () => {
   const validIdentityExpiry = new Date('2030-12-31T00:00:00.000Z');
+  const validatedIdentityReview = {
+    identityNumberHash: 'protected-identity-hash',
+    identityNumberLast4: '3450',
+    identityExpiryDate: validIdentityExpiry,
+    assessmentReasonCodes: [
+      'ADMIN_DOCUMENT_TYPE_CONFIRMED',
+      'ADMIN_READABILITY_CONFIRMED',
+      'ADMIN_APPLICANT_NAME_CONFIRMED',
+      'ADMIN_ID_UNEXPIRED_CONFIRMED',
+    ],
+  };
+  const validatedSelfieReview = {
+    assessmentReasonCodes: [
+      'ADMIN_DOCUMENT_TYPE_CONFIRMED',
+      'ADMIN_READABILITY_CONFIRMED',
+      'ADMIN_FACE_MATCH_CONFIRMED',
+      'ADMIN_SELFIE_REVIEW_COMPLETED',
+    ],
+  };
   const tx = {
     qualificationReviewTask: {
       findUnique: jest.fn(),
@@ -78,11 +97,14 @@ describe('QualificationReviewService', () => {
       {
         documentType: 'id-front',
         evidenceStatus: 'VALIDATED',
-        identityExpiryDate: validIdentityExpiry,
-        identityExpiryDate: validIdentityExpiry,
+        ...validatedIdentityReview,
       },
       { documentType: 'id-back', evidenceStatus: 'VALIDATED' },
-      { documentType: 'selfie-with-id', evidenceStatus: 'VALIDATED' },
+      {
+        documentType: 'selfie-with-id',
+        evidenceStatus: 'VALIDATED',
+        ...validatedSelfieReview,
+      },
     ]);
     tx.qualificationAuditLog.create.mockResolvedValue({ id: 'audit-1' });
     tx.notification.createMany.mockResolvedValue({ count: 1 });
@@ -170,6 +192,7 @@ describe('QualificationReviewService', () => {
           {
             documentType: 'id-front',
             evidenceStatus: 'VALIDATED',
+            ...validatedIdentityReview,
             isActive: true,
             lifecycleState: 'READY',
           },
@@ -208,6 +231,106 @@ describe('QualificationReviewService', () => {
           ],
         },
       }),
+    );
+  });
+
+  it('blocks KYC approval when validated evidence is missing the persisted ID review', async () => {
+    prisma.qualificationReviewTask.findMany.mockResolvedValue([
+      {
+        id: 'kyc-task',
+        kind: 'KYC',
+        priority: 20,
+        createdAt: new Date('2026-08-11T10:00:00.000Z'),
+        submission: {
+          id: 'submission-kyc',
+          version: 2,
+          status: 'NEEDS_REVIEW',
+          documents: [
+            {
+              documentType: 'id-front',
+              evidenceStatus: 'VALIDATED',
+              assessmentReasonCodes: [],
+              identityNumberLast4: null,
+              identityNumberHash: null,
+              identityExpiryDate: null,
+              isActive: true,
+              lifecycleState: 'READY',
+              createdAt: new Date('2026-08-11T09:00:00.000Z'),
+            },
+            {
+              documentType: 'selfie-with-id',
+              evidenceStatus: 'VALIDATED',
+              assessmentReasonCodes: [
+                'ADMIN_DOCUMENT_TYPE_CONFIRMED',
+                'ADMIN_READABILITY_CONFIRMED',
+                'ADMIN_FACE_MATCH_CONFIRMED',
+                'ADMIN_SELFIE_REVIEW_COMPLETED',
+              ],
+              isActive: true,
+              lifecycleState: 'READY',
+              createdAt: new Date('2026-08-11T09:05:00.000Z'),
+            },
+          ],
+          fixer: {
+            id: 'fixer-kyc',
+            qualificationSubmissions: [{ id: 'submission-kyc', version: 2 }],
+          },
+        },
+      },
+    ]);
+
+    const result = await service.listTasks();
+
+    expect(result[0]?.reviewReadiness).toEqual(
+      expect.objectContaining({
+        canApprove: false,
+        blockingReason:
+          'Save the ID review with the protected identity number, a future expiry date, and all identity checks before approving KYC.',
+      }),
+    );
+  });
+  it('rejects final KYC approval when validated status lacks the saved ID review', async () => {
+    tx.qualificationReviewTask.findUnique.mockResolvedValue({
+      id: 'task-1',
+      kind: 'KYC',
+      status: 'ASSIGNED',
+      assignedTo: 'admin-1',
+      proposedAt: null,
+      submissionId: 'submission-1',
+      submission: {
+        ...submission,
+        status: 'NEEDS_REVIEW',
+        evaluations: [],
+        fixer: {
+          id: 'fixer-1',
+          status: 'PENDING',
+          tier: 'ECONOMY',
+          verified: false,
+          user: { name: 'Applicant Person' },
+        },
+      },
+    });
+    tx.kycDocument.findMany.mockResolvedValue([
+      {
+        documentType: 'id-front',
+        evidenceStatus: 'VALIDATED',
+        identityExpiryDate: validIdentityExpiry,
+      },
+      {
+        documentType: 'selfie-with-id',
+        evidenceStatus: 'VALIDATED',
+        ...validatedSelfieReview,
+      },
+    ]);
+
+    await expect(
+      service.decideTask('admin-1', 'task-1', {
+        decision: QualificationReviewDecision.APPROVE,
+        providerIdentityType: QualificationProviderIdentityType.PERSONAL,
+        reason: 'Identity evidence appears ready for final approval.',
+      }),
+    ).rejects.toThrow(
+      'A protected Thai identity number is required before KYC approval',
     );
   });
 
@@ -355,10 +478,14 @@ describe('QualificationReviewService', () => {
       {
         documentType: 'id-front',
         evidenceStatus: 'VALIDATED',
-        identityExpiryDate: validIdentityExpiry,
+        ...validatedIdentityReview,
         subjectNameHash: identityNameHash('Registered Person'),
       },
-      { documentType: 'selfie-with-id', evidenceStatus: 'VALIDATED' },
+      {
+        documentType: 'selfie-with-id',
+        evidenceStatus: 'VALIDATED',
+        ...validatedSelfieReview,
+      },
       {
         documentType: 'company-affidavit',
         evidenceStatus: 'VALIDATED',
@@ -428,10 +555,14 @@ describe('QualificationReviewService', () => {
       {
         documentType: 'id-front',
         evidenceStatus: 'VALIDATED',
-        identityExpiryDate: validIdentityExpiry,
+        ...validatedIdentityReview,
         subjectNameHash: identityNameHash('Applicant Person'),
       },
-      { documentType: 'selfie-with-id', evidenceStatus: 'VALIDATED' },
+      {
+        documentType: 'selfie-with-id',
+        evidenceStatus: 'VALIDATED',
+        ...validatedSelfieReview,
+      },
       {
         documentType: 'company-affidavit',
         evidenceStatus: 'VALIDATED',
@@ -486,10 +617,14 @@ describe('QualificationReviewService', () => {
       {
         documentType: 'id-front',
         evidenceStatus: 'VALIDATED',
-        identityExpiryDate: validIdentityExpiry,
+        ...validatedIdentityReview,
         subjectNameHash: identityNameHash('Registered Person'),
       },
-      { documentType: 'selfie-with-id', evidenceStatus: 'VALIDATED' },
+      {
+        documentType: 'selfie-with-id',
+        evidenceStatus: 'VALIDATED',
+        ...validatedSelfieReview,
+      },
       {
         documentType: 'company-affidavit',
         evidenceStatus: 'VALIDATED',

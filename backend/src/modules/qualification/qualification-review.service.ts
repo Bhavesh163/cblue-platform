@@ -33,6 +33,62 @@ import { mergeReverificationReasons } from './qualification-eligibility';
 const HANDOFF_LEASE_MS = 5 * 60 * 1000;
 const REVIEW_CLAIM_LEASE_MS = 30 * 60 * 1000;
 const REQUIRED_KYC_DOCUMENT_TYPES = ['id-front', 'selfie-with-id'] as const;
+const REQUIRED_ID_REVIEW_CODES = [
+  'ADMIN_DOCUMENT_TYPE_CONFIRMED',
+  'ADMIN_READABILITY_CONFIRMED',
+  'ADMIN_APPLICANT_NAME_CONFIRMED',
+  'ADMIN_ID_UNEXPIRED_CONFIRMED',
+] as const;
+const REQUIRED_SELFIE_REVIEW_CODES = [
+  'ADMIN_DOCUMENT_TYPE_CONFIRMED',
+  'ADMIN_READABILITY_CONFIRMED',
+  'ADMIN_FACE_MATCH_CONFIRMED',
+  'ADMIN_SELFIE_REVIEW_COMPLETED',
+] as const;
+
+type ReviewReadinessDocument = {
+  documentType: string;
+  evidenceStatus: string;
+  lifecycleState: string;
+  isActive: boolean;
+  assessmentReasonCodes?: Prisma.JsonValue | null;
+  identityNumberLast4?: string | null;
+  identityExpiryDate?: Date | null;
+  createdAt?: Date;
+};
+
+function evidenceReasonCodes(value: Prisma.JsonValue | null | undefined) {
+  return new Set(
+    Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === 'string')
+      : [],
+  );
+}
+
+function hasRequiredEvidenceCodes(
+  value: Prisma.JsonValue | null | undefined,
+  requiredCodes: readonly string[],
+): boolean {
+  const codes = evidenceReasonCodes(value);
+  return requiredCodes.every((code) => codes.has(code));
+}
+
+function latestReadyDocument(
+  documents: ReviewReadinessDocument[],
+  documentType: string,
+): ReviewReadinessDocument | undefined {
+  return documents
+    .filter(
+      (document) =>
+        document.documentType === documentType &&
+        document.isActive &&
+        document.lifecycleState === 'READY',
+    )
+    .sort(
+      (left, right) =>
+        (right.createdAt?.getTime() || 0) - (left.createdAt?.getTime() || 0),
+    )[0];
+}
 
 function extractedCompanyName(value: Prisma.JsonValue | null): string | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -101,34 +157,56 @@ function getReviewReadiness(task: {
   kind: QualificationReviewKind;
   submission: {
     status: QualificationSubmissionStatus;
-    documents?: Array<{
-      documentType: string;
-      evidenceStatus: string;
-      lifecycleState: string;
-      isActive: boolean;
-    }>;
+    documents?: ReviewReadinessDocument[];
   };
 }) {
   if (task.kind === 'KYC') {
     const documents = task.submission.documents || [];
-    const requiredEvidence = REQUIRED_KYC_DOCUMENT_TYPES.map((documentType) => {
-      const document = documents.find(
-        (candidate) =>
-          candidate.documentType === documentType &&
-          candidate.isActive &&
-          candidate.lifecycleState === 'READY',
-      );
-      return {
-        documentType,
-        status: document?.evidenceStatus || 'MISSING',
-        ready: document?.evidenceStatus === 'VALIDATED',
-      };
-    });
+    const idFront = latestReadyDocument(documents, 'id-front');
+    const selfie = latestReadyDocument(documents, 'selfie-with-id');
+    const now = new Date();
+    const idReviewReady = Boolean(
+      idFront?.evidenceStatus === 'VALIDATED' &&
+      idFront.identityNumberLast4 &&
+      idFront.identityExpiryDate &&
+      idFront.identityExpiryDate > now &&
+      hasRequiredEvidenceCodes(
+        idFront.assessmentReasonCodes,
+        REQUIRED_ID_REVIEW_CODES,
+      ),
+    );
+    const selfieReviewReady = Boolean(
+      selfie?.evidenceStatus === 'VALIDATED' &&
+      hasRequiredEvidenceCodes(
+        selfie.assessmentReasonCodes,
+        REQUIRED_SELFIE_REVIEW_CODES,
+      ),
+    );
+    const requiredEvidence = [
+      {
+        documentType: 'id-front',
+        status: idFront?.evidenceStatus || 'MISSING',
+        ready: idReviewReady,
+      },
+      {
+        documentType: 'selfie-with-id',
+        status: selfie?.evidenceStatus || 'MISSING',
+        ready: selfieReviewReady,
+      },
+    ];
+    const evidenceStatusesValidated =
+      idFront?.evidenceStatus === 'VALIDATED' &&
+      selfie?.evidenceStatus === 'VALIDATED';
+    const blockingReason = !evidenceStatusesValidated
+      ? 'Validate the ID front and selfie with ID before approving KYC.'
+      : !idReviewReady
+        ? 'Save the ID review with the protected identity number, a future expiry date, and all identity checks before approving KYC.'
+        : !selfieReviewReady
+          ? 'Save the selfie review with all manual comparison checks before approving KYC.'
+          : null;
     return {
-      canApprove: requiredEvidence.every((item) => item.ready),
-      blockingReason: requiredEvidence.every((item) => item.ready)
-        ? null
-        : 'Validate the ID front and selfie with ID before approving KYC.',
+      canApprove: idReviewReady && selfieReviewReady,
+      blockingReason,
       requiredEvidence,
     };
   }
@@ -771,10 +849,15 @@ export class QualificationReviewService {
           select: {
             documentType: true,
             evidenceStatus: true,
+            assessmentReasonCodes: true,
             extractedFields: true,
             subjectNameHash: true,
+            identityNumberHash: true,
+            identityNumberLast4: true,
             identityExpiryDate: true,
+            createdAt: true,
           },
+          orderBy: { createdAt: 'desc' },
         });
         const allValidated = REQUIRED_KYC_DOCUMENT_TYPES.every((type) =>
           documents.some(
@@ -791,10 +874,42 @@ export class QualificationReviewService {
         const identityDocument = documents.find(
           (document) => document.documentType === 'id-front',
         );
-        const identityExpiryDate = identityDocument?.identityExpiryDate;
+        if (
+          !identityDocument?.identityNumberHash ||
+          !identityDocument.identityNumberLast4
+        ) {
+          throw new ConflictException(
+            'A protected Thai identity number is required before KYC approval',
+          );
+        }
+        if (
+          !hasRequiredEvidenceCodes(
+            identityDocument.assessmentReasonCodes,
+            REQUIRED_ID_REVIEW_CODES,
+          )
+        ) {
+          throw new ConflictException(
+            'All administrator identity checks must be saved before KYC approval',
+          );
+        }
+        const identityExpiryDate = identityDocument.identityExpiryDate;
         if (!identityExpiryDate || identityExpiryDate <= checkedAt) {
           throw new ConflictException(
             'A validated, unexpired identity document expiry date is required',
+          );
+        }
+        const selfieDocument = documents.find(
+          (document) => document.documentType === 'selfie-with-id',
+        );
+        if (
+          !selfieDocument ||
+          !hasRequiredEvidenceCodes(
+            selfieDocument.assessmentReasonCodes,
+            REQUIRED_SELFIE_REVIEW_CODES,
+          )
+        ) {
+          throw new ConflictException(
+            'All administrator selfie checks must be saved before KYC approval',
           );
         }
         approvedKycExpiry = identityExpiryDate;

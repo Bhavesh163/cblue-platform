@@ -847,6 +847,11 @@ export default function QualificationEvidenceControls({
                   The complete ID number is protected after validation. Only the
                   final four digits remain visible.
                 </p>
+                <p className="mt-2 text-xs font-semibold text-amber-800">
+                  Enter the identity facts, confirm all four checks, then select
+                  Save ID review. KYC approval uses saved evidence only.
+                </p>
+
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   {ID_REVIEW_CHECKS.map((check) => (
                     <label
@@ -903,6 +908,10 @@ export default function QualificationEvidenceControls({
                   This records an administrator comparison. It does not claim an
                   automated liveness result.
                 </p>
+                <p className="mt-2 text-xs font-semibold text-amber-800">
+                  Confirm all four checks, then select Save selfie review. KYC
+                  approval uses saved evidence only.
+                </p>
               </fieldset>
             ) : null}
 
@@ -944,9 +953,13 @@ export default function QualificationEvidenceControls({
                 disabled={busy === "save:" + document.id}
                 className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800 disabled:opacity-60"
               >
-                  {busy === "save:" + document.id
-                    ? "Saving..."
-                    : "Save evidence"}
+                {busy === "save:" + document.id
+                  ? "Saving..."
+                  : document.documentType === "id-front"
+                    ? "Save ID review"
+                    : document.documentType === "selfie-with-id"
+                      ? "Save selfie review"
+                      : "Save evidence"}
               </button>
             </div>
           )}
