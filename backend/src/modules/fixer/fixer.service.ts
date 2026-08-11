@@ -2267,6 +2267,13 @@ export class FixerService {
     );
     const fixerPostalCode = String(fixer.servicePostalCode || '').trim();
 
+    const hasPersistedServiceArea = Boolean(
+      fixerProvince || fixerDistrict || fixerSubdistrict || fixerPostalCode,
+    );
+    if (!hasPersistedServiceArea) {
+      return false;
+    }
+
     if (!autoPostalCode && fixerPostalCode === normalizedPostalCode) {
       return true;
     }
@@ -3014,13 +3021,7 @@ export class FixerService {
       const matchedPool = formattedPool.filter(
         (partner) => partner.matchScore > 0,
       );
-      const serviceIntentTerms = this.getServiceIntentTerms(searchTerms);
-      const rankingPool =
-        matchedPool.length > 0
-          ? matchedPool
-          : serviceIntentTerms.length > 0
-            ? []
-            : formattedPool;
+      const rankingPool = matchedPool;
       if (rankingPool.length === 0) {
         await this.safelyPersistMatchDemand(
           {
@@ -3037,24 +3038,6 @@ export class FixerService {
         );
         return [];
       }
-      const maxImportantMatchedCount = Math.max(
-        0,
-        ...rankingPool.map((partner) => partner.importantMatchedCount || 0),
-      );
-      const comparisonPool =
-        maxImportantMatchedCount > 0
-          ? rankingPool.filter(
-              (partner) =>
-                (partner.importantMatchedCount || 0) ===
-                maxImportantMatchedCount,
-            )
-          : rankingPool;
-
-      const isUpperTier = (tier: string) =>
-        normalizedSelectedTier
-          ? this.tierRank(tier) > minimumTierRank
-          : ['corporate', 'specialist', 'expert'].includes(tier);
-
       const results: RankedFixer[] = [];
       const usedIds = new Set<string>();
       const matchesNomination = (partner: RankedFixer, rawId: string) => {
@@ -3099,53 +3082,22 @@ export class FixerService {
         }
       };
 
-      const byPrice = [...comparisonPool].sort(
-        (a, b) => a.comparisonTotal - b.comparisonTotal || a.price - b.price,
+      const rankedCandidates = [...rankingPool].sort(
+        (a, b) =>
+          b.importantMatchedCount - a.importantMatchedCount ||
+          a.comparisonTotal - b.comparisonTotal ||
+          b.rating - a.rating ||
+          this.tierRank(a.tier) - this.tierRank(b.tier) ||
+          b.totalJobs - a.totalJobs ||
+          a.id.localeCompare(b.id),
       );
-      pick(byPrice.find(isAvailableForRankedSlot), '💰 Cheapest in area');
-      pick(byPrice.find(isAvailableForRankedSlot), '💰 Ranked 2nd Cheapest');
-
-      const selectedTierCandidates = normalizedSelectedTier
-        ? comparisonPool.filter(
-            (candidate) => candidate.tier === normalizedSelectedTier,
-          )
-        : comparisonPool;
-      const upperTiers = comparisonPool.filter((candidate) =>
-        isUpperTier(candidate.tier),
-      );
-      const selectedBySatisfaction = [...selectedTierCandidates].sort(
-        (a, b) => b.rating - a.rating || b.totalJobs - a.totalJobs,
-      );
-      const upperBySatisfaction = [...upperTiers].sort(
-        (a, b) => b.rating - a.rating || b.totalJobs - a.totalJobs,
-      );
-      const satisfactionCandidates = [
-        ...selectedBySatisfaction,
-        ...upperBySatisfaction,
-      ];
-      pick(
-        satisfactionCandidates.find(isAvailableForRankedSlot),
-        '⭐ Highest Rated',
-      );
-      pick(
-        satisfactionCandidates.find(isAvailableForRankedSlot),
-        '⭐ Highly Recommended',
-      );
-      const upperByPrice = [...upperTiers].sort((a, b) => a.price - b.price);
-      if (upperByPrice.length > 0)
+      for (const candidate of rankedCandidates) {
+        if (results.length >= 6) break;
         pick(
-          upperByPrice.find(isAvailableForRankedSlot),
-          '🏆 Cheapest of upper tier',
+          isAvailableForRankedSlot(candidate) ? candidate : undefined,
+          'Matched requested service',
         );
-
-      const upperBySat = [...upperTiers].sort(
-        (a, b) => b.rating - a.rating || b.totalJobs - a.totalJobs,
-      );
-      if (upperBySat.length > 0)
-        pick(
-          upperBySat.find(isAvailableForRankedSlot),
-          '🏆 Highest rated of upper tier',
-        );
+      }
 
       if (returning && !usedIds.has(returning.id)) {
         returning.alias = `★ ${returning.alias}`;
@@ -3153,12 +3105,6 @@ export class FixerService {
       }
 
       if (nominated) pick(nominated, '👤 Customer nomination');
-
-      const remaining = rankingPool.filter((p) => !usedIds.has(p.id));
-      for (const r of remaining) {
-        if (results.length >= 8) break;
-        pick(r, '💡 Suggested Candidate');
-      }
 
       const deterministicTop8 = results.slice(0, 8);
       const typhoonTop8Review = await this.requestTyphoonTop8Review(

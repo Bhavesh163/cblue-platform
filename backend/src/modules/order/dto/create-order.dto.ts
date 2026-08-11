@@ -89,7 +89,7 @@ export class CreateOrderDto {
 
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(50)
+  @ArrayMaxSize(30)
   @ValidateNested({ each: true })
   @Type(() => OrderBudgetBreakdownItemDto)
   budgetBreakdown?: OrderBudgetBreakdownItemDto[];

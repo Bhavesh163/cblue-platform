@@ -12,7 +12,7 @@ The service must never receive bearer tokens, partner identity documents, or sec
 2. CBLUE normalizes GPS coordinates to administrative areas and resolves eligible providers from persisted records.
 3. The matching-intelligence sidecar analyzes service text with the authoritative service catalogue.
 4. CBLUE validates every returned canonical key, confidence, unit, and quantity before merging it with the deterministic parser.
-5. CBLUE calculates prices from persisted provider price-list rows and applies the server-owned eight-slot policy.
+5. CBLUE calculates up to 30 matched budget lines from persisted provider price-list rows and applies the server-owned priority order.
 6. CBLUE persists unmatched demand when no eligible provider remains.
 7. BLUE may normalize and display CBLUE's response but must not recompute matching decisions.
 
@@ -38,6 +38,19 @@ The canonical service registry is versioned by a content hash. New services, syn
 - The sidecar endpoint requires a deployment-generated internal key and is not published on a host port.
 - Request text, credentials, and response bodies are not written to access logs.
 
+## Authoritative Ranking
+
+Service match and location coverage are hard eligibility gates, not weighted preferences. A provider must offer at least one canonical service requested in the customer description and must be within the persisted GPS travel radius or an authoritative structured service area.
+
+CBLUE then selects up to six general candidates in this order:
+
+1. greater coverage of the highest-value requested service group;
+2. lower comparable price calculated from matched persisted price-list rows;
+3. higher rating, then completed-job count;
+4. the requested tier before progressively higher eligible tiers.
+
+If fewer than six providers cover the highest-value service group, CBLUE fills the remaining positions with providers that match other requested services and pass the same location, qualification, and minimum-tier gates. Returning and customer-nominated providers may occupy positions seven and eight only when they pass those same hard gates.
+
 ## Availability
 
 CBLUE applies a strict timeout, bounded cache, and circuit breaker to sidecar calls. If the sidecar is unavailable or returns an invalid contract, the deterministic multilingual parser remains active. Database or eligibility failures return a service-unavailable response and are not misreported as zero matching supply.
@@ -46,7 +59,7 @@ The deployment starts and health-checks the private sidecar before a candidate b
 
 ## Semantic Retrieval Gate
 
-Dense multilingual retrieval is a separate, measured expansion, not an implicit production dependency. BGE-M3 or an equivalent multilingual embedding model may be introduced behind the same validated contract only when it runs on a dedicated inference service and passes the offline benchmark in shadow mode.
+BGE-M3 is not active in the current production engine. Production currently uses the private exact-and-fuzzy multilingual pipeline described above. Dense multilingual retrieval is a separate, measured expansion: BGE-M3 or an equivalent multilingual embedding model may be introduced behind the same validated contract only when it runs on a dedicated inference service and passes the offline benchmark in shadow mode.
 
 Promotion from shadow mode requires all of the following:
 
@@ -63,7 +76,7 @@ Semantic results remain candidate service intents only. CBLUE continues to own a
 
 - intent precision and recall by language and service;
 - eligible-provider recall at eight;
-- Top-8 slot policy correctness;
+- authoritative eligibility and priority-order correctness;
 - zero-result rate by service and administrative area;
 - unmatched-demand volume by service and location;
 - false-positive location and tier rate;
@@ -78,6 +91,6 @@ Alerts should distinguish genuine zero supply from parser uncertainty and infras
 - Add or update canonical aliases in the service registry.
 - Add exact, typo, ambiguous, quantity, and mixed-language tests.
 - Verify GPS and administrative-area eligibility tests.
-- Verify selected-tier and all eight slot tests.
+- Verify service match, persisted area/radius, six-candidate fill, value, price, rating, tier, returning-partner, and nomination tests.
 - Run Python lint and tests, NestJS lint and tests, backend build, Docker build, and Compose validation.
 - Deploy the sidecar and candidate backend together, then monitor matching and fallback metrics.

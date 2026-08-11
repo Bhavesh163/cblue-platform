@@ -1663,7 +1663,7 @@ describe('FixerService', () => {
         }),
       );
     });
-    it('should include Bangkok project providers in another district when GPS is absent', async () => {
+    it('excludes providers whose persisted location cannot establish service range', async () => {
       prisma.fixer.findMany.mockResolvedValue([
         {
           id: 'suppadesh',
@@ -1757,7 +1757,7 @@ describe('FixerService', () => {
       );
 
       const ids = result.map((candidate: { id: string }) => candidate.id);
-      expect(ids).toEqual(expect.arrayContaining(['suppadesh', 'bhavesh']));
+      expect(ids).toEqual(['suppadesh']);
       expect(ids).not.toContain('gatoru');
     });
 
@@ -3448,6 +3448,145 @@ describe('FixerService', () => {
       );
     });
 
+    it('fills six ranked candidates only from matched in-range services while preserving high-value priority', async () => {
+      const candidate = (
+        id: string,
+        tier: 'ECONOMY' | 'STANDARD',
+        offeredService: 'Construction' | 'Website development',
+        unitPrice: number,
+        options: {
+          gps?: boolean;
+          inRange?: boolean;
+          persistedArea?: boolean;
+          rating?: number;
+        } = {},
+      ) => {
+        const hasGps = options.gps !== false;
+        const hasArea = options.persistedArea !== false;
+        return {
+          id,
+          tier,
+          rating: options.rating ?? 4.5,
+          completedJobs: 10,
+          yearsExperience: 5,
+          travelRadius: 20,
+          description: offeredService,
+          pastProjectType: 'project',
+          bio: offeredService,
+          serviceProvince: hasArea ? 'กรุงเทพมหานคร' : null,
+          serviceDistrict: hasArea ? 'วังทองหลาง' : null,
+          serviceSubdistrict: hasArea ? 'สะพานสอง' : null,
+          servicePostalCode: hasArea ? '10310' : null,
+          gpsLat: hasGps
+            ? options.inRange === false
+              ? 15.79409
+              : 13.79409
+            : null,
+          gpsLng: hasGps ? 100.60963 : null,
+          priceList: [
+            {
+              service: offeredService,
+              quantity: '1',
+              unit: offeredService === 'Construction' ? 'sq.m.' : 'page',
+              finalPrice: String(unitPrice),
+            },
+          ],
+          user: { name: id },
+          skills: [{ category: 'project', name: offeredService }],
+        };
+      };
+
+      prisma.fixer.findMany.mockResolvedValue([
+        candidate('construction-important', 'ECONOMY', 'Construction', 20000),
+        candidate(
+          'website-upper-cheapest',
+          'STANDARD',
+          'Website development',
+          900,
+        ),
+        candidate(
+          'website-economy-cheapest',
+          'ECONOMY',
+          'Website development',
+          1000,
+        ),
+        candidate(
+          'website-upper-second',
+          'STANDARD',
+          'Website development',
+          1100,
+        ),
+        candidate(
+          'website-economy-second',
+          'ECONOMY',
+          'Website development',
+          1200,
+        ),
+        candidate(
+          'website-upper-third',
+          'STANDARD',
+          'Website development',
+          1300,
+        ),
+        candidate(
+          'website-out-of-range',
+          'STANDARD',
+          'Website development',
+          100,
+          { inRange: false },
+        ),
+        candidate(
+          'website-without-area',
+          'ECONOMY',
+          'Website development',
+          50,
+          { gps: false, persistedArea: false },
+        ),
+      ]);
+
+      const result = await service.matchFixers(
+        'household',
+        'วังทองหลาง',
+        'กรุงเทพมหานคร',
+        'ก่อสร้าง 500 ตารางเมตร และ ทำเวบไซต์ 20 หน้า',
+        undefined,
+        '10310',
+        13.79409,
+        100.60963,
+        'household',
+        'สะพานสอง',
+        'economy',
+      );
+
+      expect(result.map((item) => item.id)).toEqual([
+        'construction-important',
+        'website-upper-cheapest',
+        'website-economy-cheapest',
+        'website-upper-second',
+        'website-economy-second',
+        'website-upper-third',
+      ]);
+      expect(result).toHaveLength(6);
+      expect(
+        result.every(
+          (item) => item.selectedReason === 'Matched requested service',
+        ),
+      ).toBe(true);
+      expect(result.map((item) => item.id)).not.toContain(
+        'website-out-of-range',
+      );
+      expect(result.map((item) => item.id)).not.toContain(
+        'website-without-area',
+      );
+      expect(result[0]?.estimatedBreakdown).toEqual([
+        expect.objectContaining({
+          service: 'Construction',
+          qty: 500,
+          total: 10000000,
+        }),
+      ]);
+    });
+
     it('applies the authoritative tier-aware eight-slot policy and persisted returning partner', async () => {
       const candidate = (
         id: string,
@@ -3513,20 +3652,20 @@ describe('FixerService', () => {
       expect(result.map((item) => item.id)).toEqual([
         'economy-cheapest',
         'economy-second',
-        'economy-rated-first',
         'economy-rated-second',
+        'economy-rated-first',
         'standard-cheapest',
         'standard-rated',
         'returning',
         'nominated',
       ]);
       expect(result.map((item) => item.selectedReason)).toEqual([
-        '💰 Cheapest in area',
-        '💰 Ranked 2nd Cheapest',
-        '⭐ Highest Rated',
-        '⭐ Highly Recommended',
-        '🏆 Cheapest of upper tier',
-        '🏆 Highest rated of upper tier',
+        'Matched requested service',
+        'Matched requested service',
+        'Matched requested service',
+        'Matched requested service',
+        'Matched requested service',
+        'Matched requested service',
         '🔄 Returning partner',
         '👤 Customer nomination',
       ]);
