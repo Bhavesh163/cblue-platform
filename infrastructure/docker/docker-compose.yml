@@ -1,5 +1,4 @@
 services:
-
   postgres:
     image: postgres:15
     environment:
@@ -47,6 +46,26 @@ services:
       timeout: 10s
       retries: 5
 
+  matching-intelligence:
+    build:
+      context: ../../backend/matching-intelligence
+      dockerfile: Dockerfile
+    environment:
+      MATCHING_INTELLIGENCE_API_KEY: ${MATCHING_INTELLIGENCE_API_KEY:?Set MATCHING_INTELLIGENCE_API_KEY}
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
   backend:
     image: ghcr.io/${GITHUB_REPOSITORY:-cblue}/backend:latest
     build:
@@ -54,7 +73,7 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3002:3002"
-      
+
     environment:
       DATABASE_URL: postgresql://admin:${POSTGRES_PASSWORD:-NewPass456!}@postgres:5432/cblue
       REDIS_HOST: redis
@@ -75,6 +94,9 @@ services:
       MAILJET_SENDER_EMAIL: ${MAILJET_SENDER_EMAIL:-noreply@lblue.tech}
       RESET_PASSWORD_DEBUG_HEADER: ${RESET_PASSWORD_DEBUG_HEADER:-true}
       FRONTEND_URL: ${FRONTEND_URL:-https://cblue.co.th}
+      MATCHING_INTELLIGENCE_MODE: active
+      MATCHING_INTELLIGENCE_URL: http://matching-intelligence:8080
+      MATCHING_INTELLIGENCE_API_KEY: ${MATCHING_INTELLIGENCE_API_KEY:?Set MATCHING_INTELLIGENCE_API_KEY}
     depends_on:
       postgres:
         condition: service_started
@@ -82,9 +104,12 @@ services:
         condition: service_started
       rabbitmq:
         condition: service_started
+      matching-intelligence:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3002/api/v1/health || exit 1"]
+      test:
+        ["CMD-SHELL", "wget -qO- http://127.0.0.1:3002/api/v1/health || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10

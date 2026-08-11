@@ -4,6 +4,7 @@ import {
   ConflictException,
   BadRequestException,
   Logger,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
@@ -30,6 +31,7 @@ import {
   qualificationEligibleFixerWhere,
   type QualificationReverificationReason,
 } from '../qualification/qualification-eligibility';
+import { MatchingIntelligenceService } from './matching-intelligence.service';
 
 export interface SelectedFixer {
   id: string;
@@ -56,6 +58,17 @@ const MATCHABLE_TIER_ORDER = [
 type MatchableTier = (typeof MATCHABLE_TIER_ORDER)[number];
 
 type PriceListRow = Record<string, unknown>;
+
+type MatchDemandInput = {
+  service: string;
+  district: string;
+  province: string;
+  description?: string;
+  postalCode?: string;
+  latitude?: number | string;
+  longitude?: number | string;
+  bookingType?: string;
+};
 
 type EstimatedBreakdownItem = {
   service: string;
@@ -241,6 +254,7 @@ export class FixerService {
     private eventEmitter: EventEmitter2,
     private configService: ConfigService,
     private httpService: HttpService,
+    private matchingIntelligence: MatchingIntelligenceService,
   ) {}
 
   private scoreBounded(value: number, max: number): number {
@@ -2427,16 +2441,7 @@ export class FixerService {
   }
 
   private async persistMatchDemand(
-    input: {
-      service: string;
-      district: string;
-      province: string;
-      description?: string;
-      postalCode?: string;
-      latitude?: number | string;
-      longitude?: number | string;
-      bookingType?: string;
-    },
+    input: MatchDemandInput,
     matchCount: number,
   ) {
     const demandStore = this.prisma.unmatchedServiceDemand;
@@ -2558,6 +2563,21 @@ export class FixerService {
     });
   }
 
+  private async safelyPersistMatchDemand(
+    input: MatchDemandInput,
+    matchCount: number,
+  ): Promise<void> {
+    try {
+      await this.persistMatchDemand(input, matchCount);
+    } catch (error) {
+      this.logger.warn(
+        `Unable to persist matching demand analytics (${
+          error instanceof Error ? error.name : 'storage failure'
+        })`,
+      );
+    }
+  }
+
   async matchFixers(
     service: string,
     district: string,
@@ -2583,8 +2603,8 @@ export class FixerService {
       const hasCustomerGps = customerLat !== null && customerLng !== null;
       const matchRadiusKm = this.resolveMatchRadiusKm(service, bookingType);
 
-      console.log(
-        `[matchFixers] Input district: ${district}, province: ${province}, gps: ${hasCustomerGps ? `${customerLat},${customerLng}` : 'none'}, allFixers length = ${allFixers.length}`,
+      this.logger.debug(
+        `Matching eligibility loaded ${allFixers.length} providers`,
       );
       const pool = hasCustomerGps
         ? allFixers.filter(
@@ -2625,12 +2645,12 @@ export class FixerService {
         ? pool.filter((fixer) => this.tierRank(fixer.tier) >= minimumTierRank)
         : pool;
 
-      console.log(
-        `[matchFixers] After ${hasCustomerGps ? 'provider travel radius' : 'service area'} and tier eligibility, pool length = ${tierEligiblePool.length}`,
+      this.logger.debug(
+        `Matching eligibility retained ${tierEligiblePool.length} providers`,
       );
 
       if (tierEligiblePool.length === 0) {
-        await this.persistMatchDemand(
+        await this.safelyPersistMatchDemand(
           {
             service,
             district,
@@ -2648,21 +2668,47 @@ export class FixerService {
 
       const customerQty = this.extractQuantityFromDescription(description);
       const parsedRequestedServices = parseRequestedServices(description || '');
+      const intelligence = await this.matchingIntelligence.analyze(
+        [service, description].filter(Boolean).join('\n'),
+      );
+      const parsedCanonicalKeys = new Set(
+        parsedRequestedServices.map((item) => item.canonicalKey),
+      );
+      const intelligencePairs = (intelligence?.intents || [])
+        .filter(
+          (intent) =>
+            !parsedCanonicalKeys.has(intent.canonicalKey) &&
+            intent.quantity !== null,
+        )
+        .map((intent) => ({
+          qty: intent.quantity as number,
+          contextTerms: [intent.canonicalKey],
+          canonicalKey: intent.canonicalKey,
+        }));
       const serviceQtyPairs =
-        parsedRequestedServices.length > 0
-          ? parsedRequestedServices.map((item) => ({
-              qty: item.quantity,
-              contextTerms: [item.canonicalKey],
-              canonicalKey: item.canonicalKey,
-            }))
+        parsedRequestedServices.length > 0 || intelligencePairs.length > 0
+          ? [
+              ...parsedRequestedServices.map((item) => ({
+                qty: item.quantity,
+                contextTerms: [item.canonicalKey],
+                canonicalKey: item.canonicalKey,
+              })),
+              ...intelligencePairs,
+            ]
           : this.extractAllServiceQtyPairs(description).map((item) => ({
               ...item,
               canonicalKey: undefined as string | undefined,
             }));
-      const requestedCanonicalKeys = new Set(
-        parsedRequestedServices.map((item) => item.canonicalKey),
-      );
-      const searchTerms = this.buildSearchTerms(service, description);
+      const requestedCanonicalKeys = new Set([
+        ...parsedCanonicalKeys,
+        ...(intelligence?.intents.map((item) => item.canonicalKey) || []),
+      ]);
+      const searchTerms = [
+        ...new Set([
+          ...this.buildSearchTerms(service, description),
+          ...requestedCanonicalKeys,
+        ]),
+      ];
 
       const formattedPool = tierEligiblePool.map((f): RankedFixer => {
         let basePrice = 0;
@@ -2687,6 +2733,20 @@ export class FixerService {
         const list: PriceListRow[] = Array.isArray(rawPriceList)
           ? (rawPriceList as PriceListRow[])
           : [];
+
+        const providerCanonicalKeys = new Set(
+          [
+            ...f.skills.flatMap((skill) => [skill.category, skill.name]),
+            ...list.map((item) =>
+              typeof item.service === 'string' ? item.service : '',
+            ),
+          ]
+            .map((value) => canonicalizeServiceText(String(value || ''))?.key)
+            .filter((value): value is string => Boolean(value)),
+        );
+        const hasCanonicalProfileMatch = [...requestedCanonicalKeys].some(
+          (key) => providerCanonicalKeys.has(key),
+        );
 
         const estimatedBreakdownMeta: MatchedBreakdownItem[] = [];
         if (list.length > 0) {
@@ -2845,11 +2905,14 @@ export class FixerService {
           profileText,
           searchTerms,
         );
+        const deterministicProfileScore = hasCanonicalProfileMatch
+          ? 100
+          : fallbackProfileScore;
         const overallScore =
           estimatedBreakdownMeta.length > 0
-            ? Math.max(matchedScore, fallbackProfileScore)
-            : list.length === 0
-              ? fallbackProfileScore
+            ? Math.max(matchedScore, deterministicProfileScore)
+            : list.length === 0 || hasCanonicalProfileMatch
+              ? deterministicProfileScore
               : 0;
         const minListedPrice = list.reduce((min, item) => {
           const value = Number(item.finalPrice) || 0;
@@ -2959,7 +3022,7 @@ export class FixerService {
             ? []
             : formattedPool;
       if (rankingPool.length === 0) {
-        await this.persistMatchDemand(
+        await this.safelyPersistMatchDemand(
           {
             service,
             district,
@@ -3129,7 +3192,7 @@ export class FixerService {
         );
       }
 
-      await this.persistMatchDemand(
+      await this.safelyPersistMatchDemand(
         {
           service,
           district,
@@ -3158,8 +3221,14 @@ export class FixerService {
         return partner;
       });
     } catch (error) {
-      console.error('[matchFixers] error', error);
-      return [];
+      this.logger.error(
+        `Fixer matching failed (${
+          error instanceof Error ? error.name : 'unexpected failure'
+        })`,
+      );
+      throw new ServiceUnavailableException(
+        'Matching is temporarily unavailable. Please try again.',
+      );
     }
   }
 

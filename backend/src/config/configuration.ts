@@ -123,4 +123,20 @@ export default () => ({
     baseUrl: process.env.TYPHOON_BASE_URL || 'https://api.opentyphoon.ai/v1',
     model: process.env.TYPHOON_MODEL || 'typhoon-v2.5-30b-a3b-instruct',
   },
+  matchingIntelligence: {
+    mode: process.env.MATCHING_INTELLIGENCE_MODE || 'off',
+    url: process.env.MATCHING_INTELLIGENCE_URL || '',
+    apiKey: process.env.MATCHING_INTELLIGENCE_API_KEY || '',
+    timeoutMs: parseInt(
+      process.env.MATCHING_INTELLIGENCE_TIMEOUT_MS ?? '1200',
+      10,
+    ),
+    minimumConfidence:
+      Number(process.env.MATCHING_INTELLIGENCE_MINIMUM_CONFIDENCE ?? '0.86') ||
+      0.86,
+    semanticMinimumConfidence:
+      Number(
+        process.env.MATCHING_INTELLIGENCE_SEMANTIC_MINIMUM_CONFIDENCE ?? '0.90',
+      ) || 0.9,
+  },
 });

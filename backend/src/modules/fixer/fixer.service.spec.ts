@@ -8,8 +8,10 @@ import {
   ConflictException,
   NotFoundException,
   BadRequestException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { of } from 'rxjs';
+import { MatchingIntelligenceService } from './matching-intelligence.service';
 
 describe('FixerService', () => {
   let service: FixerService;
@@ -24,6 +26,7 @@ describe('FixerService', () => {
   let eventEmitter: { emit: jest.Mock };
   let configService: { get: jest.Mock };
   let httpService: { post: jest.Mock };
+  let matchingIntelligence: { analyze: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
@@ -59,6 +62,7 @@ describe('FixerService', () => {
     eventEmitter = { emit: jest.fn() };
     configService = { get: jest.fn() };
     httpService = { post: jest.fn() };
+    matchingIntelligence = { analyze: jest.fn().mockResolvedValue(null) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -67,6 +71,10 @@ describe('FixerService', () => {
         { provide: EventEmitter2, useValue: eventEmitter },
         { provide: ConfigService, useValue: configService },
         { provide: HttpService, useValue: httpService },
+        {
+          provide: MatchingIntelligenceService,
+          useValue: matchingIntelligence,
+        },
       ],
     }).compile();
 
@@ -787,6 +795,18 @@ describe('FixerService', () => {
   });
 
   describe('matchFixers', () => {
+    it('does not report an infrastructure failure as a valid zero-result match', async () => {
+      prisma.fixer.findMany.mockRejectedValue(new Error('database offline'));
+
+      await expect(
+        service.matchFixers(
+          'household',
+          '??????????',
+          '?????????????',
+          '???????? 1 ???',
+        ),
+      ).rejects.toBeInstanceOf(ServiceUnavailableException);
+    });
     it('matches a fixer by the resolved service subdistrict', async () => {
       prisma.fixer.findMany.mockResolvedValue([
         {
@@ -3354,6 +3374,77 @@ describe('FixerService', () => {
             },
           ],
         }),
+      );
+    });
+
+    it('uses validated multilingual intelligence without changing authoritative eligibility or pricing', async () => {
+      matchingIntelligence.analyze.mockResolvedValue({
+        language: 'thai',
+        semanticApplied: true,
+        engineVersion: 'test-engine',
+        intents: [
+          {
+            canonicalKey: 'construction',
+            confidence: 0.96,
+            method: 'semantic',
+            quantity: 500,
+            unit: 'sqm',
+          },
+        ],
+      });
+      prisma.fixer.findMany.mockResolvedValue([
+        {
+          id: 'semantic-construction-partner',
+          tier: 'ECONOMY',
+          rating: 4.8,
+          completedJobs: 20,
+          yearsExperience: 10,
+          travelRadius: 20,
+          description: 'Commercial delivery team',
+          pastProjectType: 'projects',
+          bio: 'Commercial delivery team',
+          serviceProvince: '?????????????',
+          serviceDistrict: '??????????',
+          serviceSubdistrict: '????????',
+          servicePostalCode: '10310',
+          gpsLat: 13.79409,
+          gpsLng: 100.60963,
+          priceList: [
+            {
+              service: 'Construction',
+              quantity: '1',
+              unit: 'sq.m.',
+              finalPrice: '20000',
+            },
+          ],
+          user: { name: 'Construction Partner' },
+          skills: [{ category: 'project', name: 'construction' }],
+        },
+      ]);
+
+      const result = await service.matchFixers(
+        'household',
+        '??????????',
+        '?????????????',
+        '????????????????????? 500 ?????????',
+        undefined,
+        '10310',
+        13.79409,
+        100.60963,
+        'household',
+        '????????',
+        'economy',
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual(
+        expect.objectContaining({
+          id: 'semantic-construction-partner',
+          estimatedTotal: 10000000,
+        }),
+      );
+      expect(matchingIntelligence.analyze).toHaveBeenCalledWith(
+        expect.stringContaining('????????????????????? 500 ?????????'),
       );
     });
 

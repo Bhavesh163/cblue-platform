@@ -8,12 +8,12 @@ on:
   push:
     branches: [main, develop]
     paths:
-      - 'backend/**'
-      - 'infrastructure/**'
-      - '.github/workflows/backend-ci.yml'
+      - "backend/**"
+      - "infrastructure/**"
+      - ".github/workflows/backend-ci.yml"
   pull_request:
     branches: [main]
-    paths: ['backend/**']
+    paths: ["backend/**"]
   workflow_dispatch:
 
 jobs:
@@ -53,8 +53,14 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: 'npm'
+          cache: "npm"
           cache-dependency-path: backend/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: backend/matching-intelligence/requirements-dev.txt
 
       - run: npm ci
 
@@ -65,6 +71,15 @@ jobs:
       - run: npm test
 
       - run: npm run build
+
+      - name: Install matching intelligence dependencies
+        run: pip install -r matching-intelligence/requirements-dev.txt
+
+      - name: Lint matching intelligence
+        run: python -m ruff check matching-intelligence
+
+      - name: Test matching intelligence
+        run: python -m pytest -q matching-intelligence
 
   docker:
     needs: test
@@ -113,6 +128,17 @@ jobs:
             ghcr.io/${{ env.REPO }}/backend:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Build and push matching intelligence image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend/matching-intelligence
+          push: true
+          tags: |
+            ghcr.io/${{ env.REPO }}/matching-intelligence:${{ github.sha }}
+            ghcr.io/${{ env.REPO }}/matching-intelligence:latest
+          cache-from: type=gha,scope=matching-intelligence
+          cache-to: type=gha,mode=max,scope=matching-intelligence
 
   deploy:
     needs: [test, docker]
@@ -246,11 +272,13 @@ jobs:
             REPO_LC=$(echo "$GH_REPO" | tr '[:upper:]' '[:lower:]')
             export GITHUB_REPOSITORY="$REPO_LC"
             IMAGE="ghcr.io/$REPO_LC/backend:latest"
+            MATCHING_IMAGE="ghcr.io/$REPO_LC/matching-intelligence:latest"
 
             docker image prune -f || true
             df -h
             free -m
             PULLED_IMAGE=false
+            PULLED_MATCHING_IMAGE=false
             if echo "$GH_TOKEN" | docker login ghcr.io -u github --password-stdin 2>&1; then
               echo "✅ Logged in to GHCR"
               # 90-minute timeout on pull — the droplet has extremely slow bandwidth
@@ -260,6 +288,13 @@ jobs:
                 PULLED_IMAGE=true
               else
                 echo "⚠️ Pull timed out or failed after 90m"
+              fi
+              echo "Pulling matching intelligence image (30m timeout)..."
+              if timeout 1800 docker pull "$MATCHING_IMAGE" 2>&1; then
+                echo "Pulled matching intelligence image from GHCR"
+                PULLED_MATCHING_IMAGE=true
+              else
+                echo "Matching intelligence image pull timed out or failed after 30m"
               fi
             else
               echo "⚠️ GHCR login failed"
@@ -271,6 +306,16 @@ jobs:
                 echo "✅ Found existing local image"
               else
                 echo "❌ No local image found and pull failed — cannot deploy"
+                exit 1
+              fi
+            fi
+
+            if [ "$PULLED_MATCHING_IMAGE" = "false" ]; then
+              echo "Using existing local matching intelligence image"
+              if docker images "$MATCHING_IMAGE" --format "{{.ID}}" | head -1 | grep -q .; then
+                echo "Found existing local matching intelligence image"
+              else
+                echo "No local matching intelligence image found and pull failed; cannot deploy"
                 exit 1
               fi
             fi
@@ -436,6 +481,39 @@ jobs:
             NETWORK=$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{printf "%s\n" $k}}{{end}}' "$POSTGRES_CONTAINER" 2>/dev/null | head -1)
             if [ -z "$NETWORK" ]; then NETWORK="bridge"; fi
             echo "Using network: $NETWORK"
+
+            MATCHING_INTELLIGENCE_API_KEY_RUNTIME=$(openssl rand -hex 32)
+            if [ -z "$MATCHING_INTELLIGENCE_API_KEY_RUNTIME" ]; then
+              echo "Could not create the internal matching service credential"
+              exit 1
+            fi
+
+            echo "Deploying private matching intelligence service..."
+            docker rm -f cblue_matching_intelligence 2>/dev/null || true
+            docker run -d --name cblue_matching_intelligence \
+              --network "$NETWORK" \
+              --restart unless-stopped \
+              -e MATCHING_INTELLIGENCE_API_KEY="$MATCHING_INTELLIGENCE_API_KEY_RUNTIME" \
+              "$MATCHING_IMAGE" 2>&1 || {
+                echo "Failed to start matching intelligence service"
+                exit 1
+              }
+
+            MATCHING_READY=false
+            for i in $(seq 1 18); do
+              if docker exec cblue_matching_intelligence python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)" >/dev/null 2>&1; then
+                MATCHING_READY=true
+                break
+              fi
+              sleep 5
+            done
+            if [ "$MATCHING_READY" != "true" ]; then
+              echo "Matching intelligence service did not become healthy"
+              docker logs --tail=80 cblue_matching_intelligence 2>&1 || true
+              exit 1
+            fi
+            echo "Matching intelligence service is healthy"
+
             docker run -d --name cblue_backend_candidate \
                 --network "$NETWORK" \
                 --restart unless-stopped \
@@ -459,6 +537,10 @@ jobs:
                 -e TYPHOON_API_KEY="$TYPHOON_API_KEY_RUNTIME" \
                 -e TYPHOON_BASE_URL="$TYPHOON_BASE_URL_RUNTIME" \
                 -e TYPHOON_MODEL="$TYPHOON_MODEL_RUNTIME" \
+                -e MATCHING_INTELLIGENCE_MODE=active \
+                -e MATCHING_INTELLIGENCE_URL=http://cblue_matching_intelligence:8080 \
+                -e MATCHING_INTELLIGENCE_API_KEY="$MATCHING_INTELLIGENCE_API_KEY_RUNTIME" \
+                -e MATCHING_INTELLIGENCE_TIMEOUT_MS=1200 \
                 -e SPACES_ENDPOINT="$SPACES_ENDPOINT_RUNTIME" \
                 -e SPACES_KEY="$SPACES_KEY_RUNTIME" \
                 -e SPACES_SECRET="$SPACES_SECRET_RUNTIME" \
@@ -632,6 +714,10 @@ jobs:
                 -e TYPHOON_API_KEY="$TYPHOON_API_KEY_RUNTIME" \
                 -e TYPHOON_BASE_URL="$TYPHOON_BASE_URL_RUNTIME" \
                 -e TYPHOON_MODEL="$TYPHOON_MODEL_RUNTIME" \
+                -e MATCHING_INTELLIGENCE_MODE=active \
+                -e MATCHING_INTELLIGENCE_URL=http://cblue_matching_intelligence:8080 \
+                -e MATCHING_INTELLIGENCE_API_KEY="$MATCHING_INTELLIGENCE_API_KEY_RUNTIME" \
+                -e MATCHING_INTELLIGENCE_TIMEOUT_MS=1200 \
                 -e SPACES_ENDPOINT="$SPACES_ENDPOINT_RUNTIME" \
                 -e SPACES_KEY="$SPACES_KEY_RUNTIME" \
                 -e SPACES_SECRET="$SPACES_SECRET_RUNTIME" \
