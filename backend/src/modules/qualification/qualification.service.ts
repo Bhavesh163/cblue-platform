@@ -34,6 +34,11 @@ import {
   qualificationEligibilitySnapshot,
   type QualificationReverificationReason,
 } from './qualification-eligibility';
+import {
+  hasValidThaiNationalId,
+  identityMetadata,
+  normalizeThaiDigits,
+} from './identity-evidence.util';
 
 const PORTFOLIO_MAX_FILES = 10;
 const CONSENT_RETENTION_MS = 3 * 365 * 24 * 60 * 60 * 1000;
@@ -52,6 +57,14 @@ const UPLOADABLE_SUBMISSION_STATUSES = new Set([
 const CLEANUP_BASE_BACKOFF_MS = 30_000;
 const CLEANUP_MAX_BACKOFF_MS = 60 * 60 * 1000;
 const CLEANUP_CLAIM_STALE_MS = 5 * 60 * 1000;
+const ADMIN_EVIDENCE_REASON_CODES = new Set([
+  'ADMIN_DOCUMENT_TYPE_CONFIRMED',
+  'ADMIN_READABILITY_CONFIRMED',
+  'ADMIN_APPLICANT_NAME_CONFIRMED',
+  'ADMIN_ID_UNEXPIRED_CONFIRMED',
+  'ADMIN_FACE_MATCH_CONFIRMED',
+  'ADMIN_SELFIE_REVIEW_COMPLETED',
+]);
 
 function detectQualificationContentType(buffer: Buffer): string | null {
   if (
@@ -1866,6 +1879,10 @@ export class QualificationService {
           documentType: true,
           checksumSha256: true,
           evidenceStatus: true,
+          assessmentReasonCodes: true,
+          identityNumberLast4: true,
+          identityNumberHash: true,
+          identityExpiryDate: true,
         },
       });
       if (!document)
@@ -1881,16 +1898,143 @@ export class QualificationService {
           'Qualification evidence must be decided in its assigned review queue',
         );
       }
+      if (
+        document.documentType !== 'id-front' &&
+        (dto.identityNumber || dto.identityExpiryDate)
+      ) {
+        throw new BadRequestException(
+          'Identity number and expiry may only be recorded for ID front evidence',
+        );
+      }
+      if (
+        document.documentType !== 'selfie-with-id' &&
+        (dto.faceMatchConfirmed || dto.selfieReviewCompleted)
+      ) {
+        throw new BadRequestException(
+          'Face comparison may only be recorded for selfie evidence',
+        );
+      }
+
+      const reviewedAt = new Date();
+      let identityNumberLast4 = document.identityNumberLast4;
+      let identityNumberHash = document.identityNumberHash;
+      let identityExpiryDate = document.identityExpiryDate;
+      if (dto.identityExpiryDate) {
+        const expiryValue = /^\d{4}-\d{2}-\d{2}$/.test(dto.identityExpiryDate)
+          ? `${dto.identityExpiryDate}T23:59:59.999Z`
+          : dto.identityExpiryDate;
+        identityExpiryDate = new Date(expiryValue);
+        if (Number.isNaN(identityExpiryDate.getTime())) {
+          throw new BadRequestException('Identity expiry date is invalid');
+        }
+      }
+      if (dto.identityNumber) {
+        const normalizedIdentityNumber = normalizeThaiDigits(
+          dto.identityNumber,
+        );
+        if (!hasValidThaiNationalId(normalizedIdentityNumber)) {
+          throw new BadRequestException(
+            'Thai identity number failed checksum validation',
+          );
+        }
+        const protectedIdentity = identityMetadata(
+          normalizedIdentityNumber,
+          identityExpiryDate,
+        );
+        if (!protectedIdentity.identityNumberHash) {
+          throw new ServiceUnavailableException(
+            'Identity protection is not configured',
+          );
+        }
+        identityNumberLast4 = protectedIdentity.identityNumberLast4;
+        identityNumberHash = protectedIdentity.identityNumberHash;
+      }
+
+      if (
+        dto.evidenceStatus === 'VALIDATED' &&
+        document.documentType === 'id-front'
+      ) {
+        if (
+          !dto.documentTypeConfirmed ||
+          !dto.documentReadable ||
+          !dto.applicantNameMatches ||
+          !dto.identityUnexpiredConfirmed
+        ) {
+          throw new ConflictException(
+            'Confirm document type, readability, applicant name, and unexpired status',
+          );
+        }
+        if (!identityNumberHash || !identityNumberLast4) {
+          throw new ConflictException(
+            'A checksum-valid Thai identity number is required',
+          );
+        }
+        if (!identityExpiryDate || identityExpiryDate <= reviewedAt) {
+          throw new ConflictException(
+            'A future identity document expiry date is required',
+          );
+        }
+      }
+      if (
+        dto.evidenceStatus === 'VALIDATED' &&
+        document.documentType === 'selfie-with-id' &&
+        (!dto.documentTypeConfirmed ||
+          !dto.documentReadable ||
+          !dto.faceMatchConfirmed ||
+          !dto.selfieReviewCompleted)
+      ) {
+        throw new ConflictException(
+          'Confirm selfie evidence, readability, face comparison, and manual review',
+        );
+      }
+
+      const existingReasonCodes = Array.isArray(document.assessmentReasonCodes)
+        ? document.assessmentReasonCodes.filter(
+            (value): value is string => typeof value === 'string',
+          )
+        : [];
+      const assessmentReasonCodes = existingReasonCodes.filter(
+        (code) => !ADMIN_EVIDENCE_REASON_CODES.has(code),
+      );
+      const addManualCode = (confirmed: boolean | undefined, code: string) => {
+        if (confirmed) assessmentReasonCodes.push(code);
+      };
+      addManualCode(dto.documentTypeConfirmed, 'ADMIN_DOCUMENT_TYPE_CONFIRMED');
+      addManualCode(dto.documentReadable, 'ADMIN_READABILITY_CONFIRMED');
+      addManualCode(dto.applicantNameMatches, 'ADMIN_APPLICANT_NAME_CONFIRMED');
+      addManualCode(
+        dto.identityUnexpiredConfirmed,
+        'ADMIN_ID_UNEXPIRED_CONFIRMED',
+      );
+      addManualCode(dto.faceMatchConfirmed, 'ADMIN_FACE_MATCH_CONFIRMED');
+      addManualCode(dto.selfieReviewCompleted, 'ADMIN_SELFIE_REVIEW_COMPLETED');
+
+      const updateData: Prisma.KycDocumentUpdateInput = {
+        evidenceStatus: dto.evidenceStatus,
+        assessmentReasonCodes: assessmentReasonCodes as Prisma.InputJsonValue,
+        assessedAt: reviewedAt,
+        ...(document.documentType === 'id-front'
+          ? {
+              identityNumberLast4,
+              identityNumberHash,
+              identityExpiryDate,
+            }
+          : {}),
+      };
 
       const updated = await tx.kycDocument.update({
         where: { id: document.id },
-        data: { evidenceStatus: dto.evidenceStatus },
+        data: updateData,
         select: {
           id: true,
           documentType: true,
           contentType: true,
           sizeBytes: true,
           evidenceStatus: true,
+          assessmentReasonCodes: true,
+          identityNumberLast4: true,
+          identityExpiryDate: true,
+          assessedAt: true,
           expiresAt: true,
           createdAt: true,
           isActive: true,
@@ -1907,12 +2051,38 @@ export class QualificationService {
           entityId: document.id,
           reason,
           beforeHash: createHash('sha256')
-            .update(document.evidenceStatus)
+            .update(
+              JSON.stringify({
+                evidenceStatus: document.evidenceStatus,
+                identityNumberLast4: document.identityNumberLast4,
+                identityExpiryDate:
+                  document.identityExpiryDate?.toISOString() || null,
+                manualReviewCodes: existingReasonCodes.filter((code) =>
+                  ADMIN_EVIDENCE_REASON_CODES.has(code),
+                ),
+              }),
+            )
             .digest('hex'),
           afterHash: createHash('sha256')
-            .update(dto.evidenceStatus)
+            .update(
+              JSON.stringify({
+                evidenceStatus: dto.evidenceStatus,
+                identityNumberLast4,
+                identityExpiryDate: identityExpiryDate?.toISOString() || null,
+                manualReviewCodes: assessmentReasonCodes.filter((code) =>
+                  ADMIN_EVIDENCE_REASON_CODES.has(code),
+                ),
+              }),
+            )
             .digest('hex'),
-          metadata: { documentType: document.documentType },
+          metadata: {
+            documentType: document.documentType,
+            identityNumberLast4,
+            identityExpiryDate: identityExpiryDate?.toISOString() || null,
+            manualReviewCodes: assessmentReasonCodes.filter((code) =>
+              ADMIN_EVIDENCE_REASON_CODES.has(code),
+            ),
+          },
         },
       });
       return updated;

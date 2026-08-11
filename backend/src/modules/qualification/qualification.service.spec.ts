@@ -266,6 +266,109 @@ describe('QualificationService', () => {
       }),
     });
   });
+  it('persists a protected manual ID review without auditing the full number', async () => {
+    const previousSecret = process.env.QUALIFICATION_IDENTITY_HMAC_SECRET;
+    process.env.QUALIFICATION_IDENTITY_HMAC_SECRET = 'test-identity-secret';
+    tx.qualificationReviewTask.findFirst.mockResolvedValue({
+      id: 'task-1',
+      kind: 'KYC',
+    });
+    tx.kycDocument.findFirst.mockResolvedValue({
+      id: 'document-front',
+      documentType: 'id-front',
+      checksumSha256: 'checksum',
+      evidenceStatus: 'UNCHECKED',
+      assessmentReasonCodes: ['PROVIDER_UNAVAILABLE'],
+      identityNumberLast4: null,
+      identityNumberHash: null,
+      identityExpiryDate: null,
+    });
+    tx.kycDocument.update.mockImplementation(({ data }: any) => ({
+      id: 'document-front',
+      documentType: 'id-front',
+      ...data,
+    }));
+    tx.qualificationAuditLog.create.mockResolvedValue({ id: 'audit-1' });
+
+    try {
+      await expect(
+        service.reviewDocumentEvidence(
+          'admin-1',
+          'submission-1',
+          'document-front',
+          {
+            evidenceStatus: 'VALIDATED',
+            reason: 'Identity and expiry were checked against the document.',
+            identityNumber: '1101700203450',
+            identityExpiryDate: '2030-10-15',
+            documentTypeConfirmed: true,
+            documentReadable: true,
+            applicantNameMatches: true,
+            identityUnexpiredConfirmed: true,
+          },
+        ),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          evidenceStatus: 'VALIDATED',
+          identityNumberLast4: '3450',
+          identityExpiryDate: new Date('2030-10-15T23:59:59.999Z'),
+        }),
+      );
+      expect(tx.kycDocument.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            identityNumberLast4: '3450',
+            identityNumberHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+            assessmentReasonCodes: expect.arrayContaining([
+              'ADMIN_DOCUMENT_TYPE_CONFIRMED',
+              'ADMIN_READABILITY_CONFIRMED',
+              'ADMIN_APPLICANT_NAME_CONFIRMED',
+              'ADMIN_ID_UNEXPIRED_CONFIRMED',
+            ]),
+          }),
+        }),
+      );
+      expect(
+        JSON.stringify(tx.qualificationAuditLog.create.mock.calls.at(-1)),
+      ).not.toContain('1101700203450');
+    } finally {
+      if (previousSecret === undefined)
+        delete process.env.QUALIFICATION_IDENTITY_HMAC_SECRET;
+      else process.env.QUALIFICATION_IDENTITY_HMAC_SECRET = previousSecret;
+    }
+  });
+
+  it('does not infer identity expiry or checks from an administrator note', async () => {
+    tx.qualificationReviewTask.findFirst.mockResolvedValue({
+      id: 'task-1',
+      kind: 'KYC',
+    });
+    tx.kycDocument.findFirst.mockResolvedValue({
+      id: 'document-front',
+      documentType: 'id-front',
+      checksumSha256: 'checksum',
+      evidenceStatus: 'UNCHECKED',
+      assessmentReasonCodes: [],
+      identityNumberLast4: null,
+      identityNumberHash: null,
+      identityExpiryDate: null,
+    });
+
+    await expect(
+      service.reviewDocumentEvidence(
+        'admin-1',
+        'submission-1',
+        'document-front',
+        {
+          evidenceStatus: 'VALIDATED',
+          reason: 'ID card is valid and expires on 15 October 2030.',
+        },
+      ),
+    ).rejects.toThrow(
+      'Confirm document type, readability, applicant name, and unexpired status',
+    );
+    expect(tx.kycDocument.update).not.toHaveBeenCalled();
+  });
 
   it.each([
     ['KYC', 'professional-certificate'],

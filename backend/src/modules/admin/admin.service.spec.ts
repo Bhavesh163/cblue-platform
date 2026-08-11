@@ -169,6 +169,7 @@ describe('AdminService', () => {
           qualificationSubmissions: [],
           skills: [],
           user: { id: 'user-1', name: 'Provider' },
+          _count: { orders: 7, reviews: 5 },
         },
       ]);
       prisma.fixer.count.mockResolvedValue(1);
@@ -190,6 +191,8 @@ describe('AdminService', () => {
           servicePostalCode: '10310',
           declineCount90Days: 1,
           cancellationCount12Months: 1,
+          completedJobs: 7,
+          reviewCount: 5,
           matchingEligibility: expect.objectContaining({
             status: 'PENDING',
             newJobEligible: false,
@@ -229,6 +232,9 @@ describe('AdminService', () => {
         user: { id: 'user-1', name: 'Provider', addresses: [] },
         skills: [],
         qualificationSubmissions: [],
+        _count: { orders: 12, reviews: 9 },
+        orders: [],
+        reviews: [],
       });
 
       await expect(
@@ -470,27 +476,45 @@ describe('AdminService', () => {
   });
 
   describe('getFraudFlags', () => {
-    it('should return fraud flags from multiple sources', async () => {
-      // suspiciousRatings
+    it('flags only a rating that disagrees with persisted reviews', async () => {
       prisma.fixer.findMany
         .mockResolvedValueOnce([
           {
             id: 'fixer-1',
-            rating: 5.0,
-            completedJobs: 1,
+            rating: 5,
+            reviews: [{ rating: 3 }, { rating: 3 }],
             user: { id: 'user-1', phone: '+66811111111', name: 'Suspect' },
           },
         ])
-        // noSkillFixers
         .mockResolvedValueOnce([])
-        // unverifiedActive
         .mockResolvedValueOnce([])
-        // suspiciousResponseTime
         .mockResolvedValueOnce([]);
 
       const result = await service.getFraudFlags();
+
       expect(result.total).toBe(1);
-      expect(result.flags[0].type).toBe('SUSPICIOUS_RATING');
+      expect(result.flags[0].type).toBe('RATING_INTEGRITY_MISMATCH');
+      expect(result.flags[0].detail).toContain('persisted review average 3.00');
+    });
+
+    it('does not flag the default five-star value when no review exists', async () => {
+      prisma.fixer.findMany
+        .mockResolvedValueOnce([
+          {
+            id: 'fixer-legacy',
+            rating: 5,
+            reviews: [],
+            user: { id: 'user-legacy', name: 'Legacy Provider' },
+          },
+        ])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+
+      await expect(service.getFraudFlags()).resolves.toEqual({
+        flags: [],
+        total: 0,
+      });
     });
   });
 });

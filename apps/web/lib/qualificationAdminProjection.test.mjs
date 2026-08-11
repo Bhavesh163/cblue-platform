@@ -126,6 +126,53 @@ test("projects document-specific checks without claiming biometric work", () => 
   assert.equal(biometricAssessmentLabel(null), "Not performed");
   assert.equal(biometricAssessmentLabel(91), "91%");
 });
+test("projects persisted administrator checks without claiming liveness", () => {
+  const idChecks = qualificationDocumentChecks({
+    documentType: "id-front",
+    assessmentReasonCodes: [
+      "PROVIDER_UNAVAILABLE",
+      "ADMIN_DOCUMENT_TYPE_CONFIRMED",
+      "ADMIN_READABILITY_CONFIRMED",
+      "ADMIN_APPLICANT_NAME_CONFIRMED",
+      "ADMIN_ID_UNEXPIRED_CONFIRMED",
+    ],
+    identityNumberLast4: "3450",
+    identityExpiryDate: "2030-10-15",
+  });
+  const selfieChecks = qualificationDocumentChecks({
+    documentType: "selfie-with-id",
+    assessmentReasonCodes: [
+      "ADMIN_DOCUMENT_TYPE_CONFIRMED",
+      "ADMIN_READABILITY_CONFIRMED",
+      "ADMIN_FACE_MATCH_CONFIRMED",
+      "ADMIN_SELFIE_REVIEW_COMPLETED",
+    ],
+  });
+
+  assert.equal(
+    idChecks.find(({ label }) => label === "Expiry")?.status,
+    "Confirmed unexpired",
+  );
+  assert.equal(
+    idChecks.find(({ label }) => label === "Applicant name")?.status,
+    "Confirmed",
+  );
+  assert.equal(
+    selfieChecks.find(({ label }) => label === "Face match")?.status,
+    "Confirmed by administrator",
+  );
+  assert.equal(
+    selfieChecks.find(({ label }) => label === "Liveness")?.status,
+    "Not performed",
+  );
+  assert.deepEqual(
+    qualificationReasonLabels([
+      "ADMIN_FACE_MATCH_CONFIRMED",
+      "HUMAN_REVIEW_REQUIRED",
+    ]),
+    ["Administrator review required"],
+  );
+});
 
 test("projects only non-sensitive extracted affidavit and company fields", () => {
   const result = safeQualificationExtractedFields({

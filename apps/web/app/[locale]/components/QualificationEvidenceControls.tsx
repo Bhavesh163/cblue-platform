@@ -56,6 +56,14 @@ type AutomatedFinding = {
   confidence?: number | null;
   createdAt?: string;
 };
+type ManualReviewChecks = {
+  documentTypeConfirmed: boolean;
+  documentReadable: boolean;
+  applicantNameMatches: boolean;
+  identityUnexpiredConfirmed: boolean;
+  faceMatchConfirmed: boolean;
+  selfieReviewCompleted: boolean;
+};
 type Props = {
   token: string;
   submissionId?: string;
@@ -84,6 +92,30 @@ const ISSUER_TYPES: IssuerType[] = [
   "INTERNATIONAL_COMPANY",
   "GOVERNMENT",
   "OTHER",
+];
+const ID_REVIEW_CHECKS: ReadonlyArray<{
+  key: keyof ManualReviewChecks;
+  label: string;
+}> = [
+  { key: "documentTypeConfirmed", label: "Thai ID front confirmed" },
+  { key: "documentReadable", label: "Document is clear and readable" },
+  { key: "applicantNameMatches", label: "Name matches the applicant" },
+  {
+    key: "identityUnexpiredConfirmed",
+    label: "Expiry date is in the future",
+  },
+];
+const SELFIE_REVIEW_CHECKS: ReadonlyArray<{
+  key: keyof ManualReviewChecks;
+  label: string;
+}> = [
+  { key: "documentTypeConfirmed", label: "Selfie with ID confirmed" },
+  { key: "documentReadable", label: "Face and ID portrait are clear" },
+  { key: "faceMatchConfirmed", label: "Faces match on manual comparison" },
+  {
+    key: "selfieReviewCompleted",
+    label: "Manual selfie review completed",
+  },
 ];
 
 function formatTimestamp(value?: string | null) {
@@ -115,6 +147,15 @@ export default function QualificationEvidenceControls({
 }: Props) {
   const [status, setStatus] = useState<Record<string, EvidenceStatus>>({});
   const [reason, setReason] = useState<Record<string, string>>({});
+  const [identityNumber, setIdentityNumber] = useState<Record<string, string>>(
+    {},
+  );
+  const [identityExpiryDate, setIdentityExpiryDate] = useState<
+    Record<string, string>
+  >({});
+  const [manualChecks, setManualChecks] = useState<
+    Record<string, ManualReviewChecks>
+  >({});
   const [credentialStatus, setCredentialStatus] = useState<
     Record<string, CredentialStatus>
   >({});
@@ -163,7 +204,45 @@ export default function QualificationEvidenceControls({
 
   useEffect(() => {
     setUrls({});
-    setStatus({});
+    setStatus(
+      Object.fromEntries(
+        documents.flatMap((document) =>
+          STATUSES.includes(document.evidenceStatus as EvidenceStatus)
+            ? [[document.id, document.evidenceStatus as EvidenceStatus]]
+            : [],
+        ),
+      ),
+    );
+    setIdentityNumber({});
+    setIdentityExpiryDate(
+      Object.fromEntries(
+        documents.flatMap((document) =>
+          document.identityExpiryDate
+            ? [[document.id, document.identityExpiryDate.slice(0, 10)]]
+            : [],
+        ),
+      ),
+    );
+    setManualChecks(
+      Object.fromEntries(
+        documents.map((document) => {
+          const codes = new Set(document.assessmentReasonCodes || []);
+          return [
+            document.id,
+            {
+              documentTypeConfirmed: codes.has("ADMIN_DOCUMENT_TYPE_CONFIRMED"),
+              documentReadable: codes.has("ADMIN_READABILITY_CONFIRMED"),
+              applicantNameMatches: codes.has("ADMIN_APPLICANT_NAME_CONFIRMED"),
+              identityUnexpiredConfirmed: codes.has(
+                "ADMIN_ID_UNEXPIRED_CONFIRMED",
+              ),
+              faceMatchConfirmed: codes.has("ADMIN_FACE_MATCH_CONFIRMED"),
+              selfieReviewCompleted: codes.has("ADMIN_SELFIE_REVIEW_COMPLETED"),
+            },
+          ];
+        }),
+      ),
+    );
     setCompliancePurpose({});
     setComplianceCaseReference({});
     setComplianceLegalHold({});
@@ -326,6 +405,26 @@ export default function QualificationEvidenceControls({
     }
   }
 
+  function updateManualCheck(
+    documentId: string,
+    key: keyof ManualReviewChecks,
+    checked: boolean,
+  ) {
+    setManualChecks((current) => ({
+      ...current,
+      [documentId]: {
+        documentTypeConfirmed: false,
+        documentReadable: false,
+        applicantNameMatches: false,
+        identityUnexpiredConfirmed: false,
+        faceMatchConfirmed: false,
+        selfieReviewCompleted: false,
+        ...current[documentId],
+        [key]: checked,
+      },
+    }));
+  }
+
   async function save(documentId: string) {
     if (!submissionId || !status[documentId]) {
       setError("Select an evidence status.");
@@ -334,6 +433,49 @@ export default function QualificationEvidenceControls({
     const decisionReason = reason[documentId]?.trim() || "";
     if (decisionReason.length < 10) {
       setError("Enter an evidence reason with at least 10 characters.");
+      return;
+    }
+    const document = documents.find((item) => item.id === documentId);
+    if (!document) {
+      setError("Evidence document is no longer available.");
+      return;
+    }
+    const checks = manualChecks[documentId] || {
+      documentTypeConfirmed: false,
+      documentReadable: false,
+      applicantNameMatches: false,
+      identityUnexpiredConfirmed: false,
+      faceMatchConfirmed: false,
+      selfieReviewCompleted: false,
+    };
+    if (
+      status[documentId] === "VALIDATED" &&
+      document.documentType === "id-front"
+    ) {
+      if (
+        (!identityNumber[documentId]?.trim() &&
+          !document.identityNumberLast4) ||
+        !identityExpiryDate[documentId] ||
+        !checks.documentTypeConfirmed ||
+        !checks.documentReadable ||
+        !checks.applicantNameMatches ||
+        !checks.identityUnexpiredConfirmed
+      ) {
+        setError(
+          "Record the ID number and expiry, then confirm all identity checks.",
+        );
+        return;
+      }
+    }
+    if (
+      status[documentId] === "VALIDATED" &&
+      document.documentType === "selfie-with-id" &&
+      (!checks.documentTypeConfirmed ||
+        !checks.documentReadable ||
+        !checks.faceMatchConfirmed ||
+        !checks.selfieReviewCompleted)
+    ) {
+      setError("Confirm all selfie and face comparison checks.");
       return;
     }
     setBusy("save:" + documentId);
@@ -356,6 +498,26 @@ export default function QualificationEvidenceControls({
           body: JSON.stringify({
             evidenceStatus: status[documentId],
             reason: decisionReason,
+            ...(document.documentType === "id-front"
+              ? {
+                  identityNumber:
+                    identityNumber[documentId]?.trim() || undefined,
+                  identityExpiryDate:
+                    identityExpiryDate[documentId] || undefined,
+                  documentTypeConfirmed: checks.documentTypeConfirmed,
+                  documentReadable: checks.documentReadable,
+                  applicantNameMatches: checks.applicantNameMatches,
+                  identityUnexpiredConfirmed: checks.identityUnexpiredConfirmed,
+                }
+              : {}),
+            ...(document.documentType === "selfie-with-id"
+              ? {
+                  documentTypeConfirmed: checks.documentTypeConfirmed,
+                  documentReadable: checks.documentReadable,
+                  faceMatchConfirmed: checks.faceMatchConfirmed,
+                  selfieReviewCompleted: checks.selfieReviewCompleted,
+                }
+              : {}),
           }),
         },
       );
@@ -468,6 +630,14 @@ export default function QualificationEvidenceControls({
           document.assessmentReasonCodes,
         );
         const assessmentTimestamp = qualificationAssessmentTimestamp(document);
+        const reviewChecks = manualChecks[document.id] || {
+          documentTypeConfirmed: false,
+          documentReadable: false,
+          applicantNameMatches: false,
+          identityUnexpiredConfirmed: false,
+          faceMatchConfirmed: false,
+          selfieReviewCompleted: false,
+        };
         return (
           <div key={document.id} className="py-4 first:pt-0">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -602,7 +772,9 @@ export default function QualificationEvidenceControls({
                       className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-xs"
                     >
                       <span className="text-slate-700">
-                        {finding.claim || finding.code || "Assessment finding"}
+                          {finding.claim ||
+                            finding.code ||
+                            "Assessment finding"}
                       </span>
                       <span className="font-semibold text-slate-600">
                         {finding.result || finding.severity || "Recorded"}
@@ -625,6 +797,114 @@ export default function QualificationEvidenceControls({
               {reasonLabels.join("; ")}
             </p>
           ) : null}
+
+            {!readOnly && document.documentType === "id-front" ? (
+              <fieldset className="mt-3 border border-slate-200 bg-slate-50 p-3">
+                <legend className="px-1 text-xs font-bold text-slate-800">
+                  Administrator identity review
+                </legend>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="text-xs font-semibold text-slate-700">
+                    Thai ID number
+                    <input
+                      aria-label="Thai ID number"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      maxLength={30}
+                      value={identityNumber[document.id] || ""}
+                      onChange={(event) =>
+                        setIdentityNumber((current) => ({
+                          ...current,
+                          [document.id]: event.target.value,
+                        }))
+                      }
+                      placeholder={
+                        document.identityNumberLast4
+                          ? "Already recorded, ending " +
+                            document.identityNumberLast4
+                          : "13-digit ID number"
+                      }
+                      className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 font-normal text-slate-900"
+                    />
+                  </label>
+                  <label className="text-xs font-semibold text-slate-700">
+                    ID expiry date
+                    <input
+                      aria-label="ID expiry date"
+                      type="date"
+                      value={identityExpiryDate[document.id] || ""}
+                      onChange={(event) =>
+                        setIdentityExpiryDate((current) => ({
+                          ...current,
+                          [document.id]: event.target.value,
+                        }))
+                      }
+                      className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 font-normal text-slate-900"
+                    />
+                  </label>
+                </div>
+                <p className="mt-2 text-xs text-slate-600">
+                  The complete ID number is protected after validation. Only the
+                  final four digits remain visible.
+                </p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {ID_REVIEW_CHECKS.map((check) => (
+                    <label
+                      key={check.key}
+                      className="flex items-center gap-2 text-xs text-slate-700"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={reviewChecks[check.key]}
+                        onChange={(event) =>
+                          updateManualCheck(
+                            document.id,
+                            check.key,
+                            event.target.checked,
+                          )
+                        }
+                        className="size-4 accent-emerald-700"
+                      />
+                      <span>{check.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            ) : null}
+
+            {!readOnly && document.documentType === "selfie-with-id" ? (
+              <fieldset className="mt-3 border border-slate-200 bg-slate-50 p-3">
+                <legend className="px-1 text-xs font-bold text-slate-800">
+                  Administrator selfie review
+                </legend>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {SELFIE_REVIEW_CHECKS.map((check) => (
+                    <label
+                      key={check.key}
+                      className="flex items-center gap-2 text-xs text-slate-700"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={reviewChecks[check.key]}
+                        onChange={(event) =>
+                          updateManualCheck(
+                            document.id,
+                            check.key,
+                            event.target.checked,
+                          )
+                        }
+                        className="size-4 accent-emerald-700"
+                      />
+                      <span>{check.label}</span>
+                    </label>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-slate-600">
+                  This records an administrator comparison. It does not claim an
+                  automated liveness result.
+                </p>
+              </fieldset>
+            ) : null}
 
           {!readOnly && (
             <div className="mt-3 grid gap-2 md:grid-cols-[160px_minmax(240px,1fr)_auto]">
@@ -664,7 +944,9 @@ export default function QualificationEvidenceControls({
                 disabled={busy === "save:" + document.id}
                 className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800 disabled:opacity-60"
               >
-                {busy === "save:" + document.id ? "Saving..." : "Save evidence"}
+                  {busy === "save:" + document.id
+                    ? "Saving..."
+                    : "Save evidence"}
               </button>
             </div>
           )}
@@ -736,7 +1018,9 @@ export default function QualificationEvidenceControls({
                     className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-700"
                   />
                   <input
-                    aria-label={"Credential type for " + document.documentType}
+                      aria-label={
+                        "Credential type for " + document.documentType
+                      }
                     value={credentialType[document.id] || ""}
                     onChange={(event) =>
                       setCredentialType((current) => ({
@@ -840,7 +1124,9 @@ export default function QualificationEvidenceControls({
                   />
                   <button
                     type="button"
-                    onClick={() => void saveCredentialVerification(document.id)}
+                      onClick={() =>
+                        void saveCredentialVerification(document.id)
+                      }
                     disabled={busy === "credential:" + document.id}
                     className="rounded-lg bg-sky-700 px-3 py-2 text-xs font-bold text-white hover:bg-sky-800 disabled:opacity-60"
                   >

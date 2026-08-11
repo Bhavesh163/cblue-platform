@@ -14,6 +14,14 @@ const registerUrl = new URL(
   "../app/[locale]/fixers/register/page.tsx",
   import.meta.url,
 );
+const evidenceControlsUrl = new URL(
+  "../app/[locale]/components/QualificationEvidenceControls.tsx",
+  import.meta.url,
+);
+const partnerDirectoryUrl = new URL(
+  "../app/[locale]/components/AdminPartnerDirectory.tsx",
+  import.meta.url,
+);
 
 test("admin history exposes persisted automated outcomes without private identity fields", async () => {
   const source = await readFile(historyUrl, "utf8");
@@ -25,6 +33,25 @@ test("admin history exposes persisted automated outcomes without private identit
   assert.match(source, /max-h-\[75vh\] overflow-auto/);
   assert.doesNotMatch(source, /identityNumberHash/);
   assert.doesNotMatch(source, /storageKey/);
+});
+test("admin evidence review captures structured identity facts without exposing hashes", async () => {
+  const source = await readFile(evidenceControlsUrl, "utf8");
+
+  assert.match(source, /Thai ID number/);
+  assert.match(source, /ID expiry date/);
+  assert.match(source, /Name matches the applicant/);
+  assert.match(source, /Faces match on manual comparison/);
+  assert.match(source, /does not claim an\s+automated liveness result/);
+  assert.doesNotMatch(source, /identityNumberHash/);
+});
+
+test("provider directory presents persisted completion and review history", async () => {
+  const source = await readFile(partnerDirectoryUrl, "utf8");
+
+  assert.match(source, /Work history/);
+  assert.match(source, /Completed service history/);
+  assert.match(source, /Recent persisted reviews/);
+  assert.match(source, /reviewCount/);
 });
 
 test("partner profile reads authoritative qualification status with Thai and Chinese copy", async () => {

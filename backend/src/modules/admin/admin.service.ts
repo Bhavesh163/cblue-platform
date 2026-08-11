@@ -20,6 +20,12 @@ import { qualificationEligibilitySnapshot } from '../qualification/qualification
 import { ApproveFixerDto } from './dto/approve-fixer.dto';
 import { ManualAssignDto } from './dto/manual-assign.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
+const AUTHORITATIVE_COMPLETION_WHERE: Prisma.OrderWhereInput = {
+  OR: [
+    { status: OrderStatus.COMPLETED },
+    { workflowActions: { some: { action: 'confirm-completion' } } },
+  ],
+};
 
 @Injectable()
 export class AdminService {
@@ -174,6 +180,12 @@ export class AdminService {
           createdAt: true,
           updatedAt: true,
           user: { select: { id: true, name: true, email: true, phone: true } },
+          _count: {
+            select: {
+              orders: { where: AUTHORITATIVE_COMPLETION_WHERE },
+              reviews: true,
+            },
+          },
           skills: {
             select: { category: true, name: true, yearsExperience: true },
           },
@@ -310,8 +322,14 @@ export class AdminService {
       recentIncidents.sort(
         (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
       );
+      const authoritativeCompletedJobs = Math.max(
+        row._count.orders,
+        row._count.reviews,
+      );
       return {
         ...row,
+        completedJobs: authoritativeCompletedJobs,
+        reviewCount: row._count.reviews,
         serviceProvince: row.serviceProvince || addressValue('province'),
         serviceDistrict: row.serviceDistrict || addressValue('district'),
         serviceSubdistrict: addressValue('subdistrict'),
@@ -336,6 +354,7 @@ export class AdminService {
         recentIncidents: recentIncidents.slice(0, 20),
         companyAddress: undefined,
         orders: undefined,
+        _count: undefined,
       };
     });
     const filtered = normalized.filter((row) => {
@@ -443,6 +462,7 @@ export class AdminService {
       select: {
         id: true,
         tier: true,
+        rating: true,
         status: true,
         verified: true,
         verifiedCompanyName: true,
@@ -497,6 +517,43 @@ export class AdminService {
         skills: {
           orderBy: [{ category: 'asc' }, { name: 'asc' }],
           select: { category: true, name: true, yearsExperience: true },
+        },
+        _count: {
+          select: {
+            orders: { where: AUTHORITATIVE_COMPLETION_WHERE },
+            reviews: true,
+          },
+        },
+        reviews: {
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+          select: {
+            id: true,
+            rating: true,
+            comment: true,
+            createdAt: true,
+            order: {
+              select: {
+                id: true,
+                serviceCategory: true,
+                status: true,
+                updatedAt: true,
+              },
+            },
+          },
+        },
+        orders: {
+          where: AUTHORITATIVE_COMPLETION_WHERE,
+          orderBy: { updatedAt: 'desc' },
+          take: 20,
+          select: {
+            id: true,
+            serviceCategory: true,
+            status: true,
+            estimatedPrice: true,
+            finalPrice: true,
+            updatedAt: true,
+          },
         },
         qualificationSubmissions: {
           orderBy: { version: 'desc' },
@@ -579,8 +636,11 @@ export class AdminService {
       },
     });
     if (!fixer) throw new NotFoundException('Fixer not found');
+    const { _count, ...detail } = fixer;
     return {
-      ...fixer,
+      ...detail,
+      completedJobs: Math.max(_count.orders, _count.reviews),
+      reviewCount: _count.reviews,
       matchingEligibility: qualificationEligibilitySnapshot(fixer),
     };
   }
@@ -775,14 +835,33 @@ export class AdminService {
   // ── Fraud detection ──
 
   async getFraudFlags() {
-    // 1. Fixers with suspiciously high ratings but very few completed jobs
-    const suspiciousRatings = await this.prisma.fixer.findMany({
+    // Ratings are evidence-backed only when persisted reviews exist.
+    const ratingCandidates = await this.prisma.fixer.findMany({
       where: {
         rating: { gte: 4.9 },
-        completedJobs: { lt: 3 },
         status: FixerStatus.APPROVED,
       },
-      include: { user: { select: { id: true, phone: true, name: true } } },
+      select: {
+        id: true,
+        rating: true,
+        user: { select: { id: true, phone: true, name: true } },
+        reviews: { select: { rating: true } },
+      },
+    });
+    const ratingIntegrityFlags = ratingCandidates.flatMap((fixer) => {
+      if (!fixer.reviews.length) return [];
+      const persistedAverage =
+        fixer.reviews.reduce((sum, review) => sum + review.rating, 0) /
+        fixer.reviews.length;
+      if (Math.abs(fixer.rating - persistedAverage) < 0.05) return [];
+      return [
+        {
+          fixerId: fixer.id,
+          user: fixer.user,
+          type: 'RATING_INTEGRITY_MISMATCH' as const,
+          detail: `Stored rating ${fixer.rating.toFixed(2)} differs from persisted review average ${persistedAverage.toFixed(2)} across ${fixer.reviews.length} reviews`,
+        },
+      ];
     });
 
     // 2. Approved fixers with zero skills (incomplete/fake registrations)
@@ -803,23 +882,30 @@ export class AdminService {
       include: { user: { select: { id: true, phone: true, name: true } } },
     });
 
-    // 4. Fixers with abnormally fast response times (possible bot behaviour)
-    const suspiciousResponseTime = await this.prisma.fixer.findMany({
+    // 4. Fixers with abnormally fast response times and persisted work history.
+    const responseTimeCandidates = await this.prisma.fixer.findMany({
       where: {
         responseTime: { lt: 1 },
-        completedJobs: { gt: 0 },
         status: FixerStatus.APPROVED,
       },
-      include: { user: { select: { id: true, phone: true, name: true } } },
+      select: {
+        id: true,
+        responseTime: true,
+        user: { select: { id: true, phone: true, name: true } },
+        _count: {
+          select: {
+            orders: { where: AUTHORITATIVE_COMPLETION_WHERE },
+            reviews: true,
+          },
+        },
+      },
     });
+    const suspiciousResponseTime = responseTimeCandidates.filter(
+      (fixer) => Math.max(fixer._count.orders, fixer._count.reviews) > 0,
+    );
 
     const flags = [
-      ...suspiciousRatings.map((f) => ({
-        fixerId: f.id,
-        user: f.user,
-        type: 'SUSPICIOUS_RATING' as const,
-        detail: `Rating ${f.rating} with only ${f.completedJobs} completed jobs`,
-      })),
+      ...ratingIntegrityFlags,
       ...noSkillFixers.map((f) => ({
         fixerId: f.id,
         user: f.user,

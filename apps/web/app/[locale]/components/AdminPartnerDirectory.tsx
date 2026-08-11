@@ -25,6 +25,7 @@ type DirectoryRow = {
   verified?: boolean;
   rating?: number | null;
   completedJobs?: number | null;
+  reviewCount?: number;
   yearsExperience?: number | null;
   serviceProvince?: string | null;
   serviceDistrict?: string | null;
@@ -76,6 +77,29 @@ type Detail = {
   tier?: string | null;
   status?: string | null;
   verified?: boolean;
+  rating?: number | null;
+  completedJobs?: number;
+  reviewCount?: number;
+  orders?: Array<{
+    id: string;
+    serviceCategory: string;
+    status: string;
+    estimatedPrice?: number | null;
+    finalPrice?: number | null;
+    updatedAt: string;
+  }>;
+  reviews?: Array<{
+    id: string;
+    rating: number;
+    comment?: string | null;
+    createdAt: string;
+    order: {
+      id: string;
+      serviceCategory: string;
+      status: string;
+      updatedAt: string;
+    };
+  }>;
   yearsExperience?: number | null;
   bio?: string | null;
   description?: string | null;
@@ -403,7 +427,7 @@ export default function AdminPartnerDirectory({ token }: Props) {
         ))}
       </div>
       <div className="mt-4 overflow-x-auto">
-        <table className="w-full min-w-[1240px] text-left text-sm">
+        <table className="w-full min-w-[1360px] text-left text-sm">
           <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
             <tr>
               <th className="py-2 pr-4">Provider</th>
@@ -411,6 +435,7 @@ export default function AdminPartnerDirectory({ token }: Props) {
               <th className="py-2 pr-4">Services</th>
               <th className="py-2 pr-4">Tier</th>
               <th className="py-2 pr-4">Rating</th>
+              <th className="py-2 pr-4">Work history</th>
               <th className="py-2 pr-4">New jobs</th>
               <th className="py-2 pr-4">Incidents</th>
               <th className="py-2 pr-4">Detail</th>
@@ -446,7 +471,14 @@ export default function AdminPartnerDirectory({ token }: Props) {
                   {row.tier || "-"}
                 </td>
                 <td className="py-3 pr-4 align-top text-slate-600">
-                  {row.rating ?? "-"} / 5
+                  {row.reviewCount ? `${row.rating ?? "-"} / 5` : "Not rated"}
+                </td>
+                <td className="py-3 pr-4 align-top text-slate-600">
+                  <span className="font-semibold text-slate-800">
+                    {row.completedJobs || 0} completed
+                  </span>
+                  <br />
+                  {row.reviewCount || 0} persisted reviews
                 </td>
                 <td className="py-3 pr-4 align-top">
                   <span
@@ -526,6 +558,32 @@ export default function AdminPartnerDirectory({ token }: Props) {
               <p className="text-xs font-semibold text-slate-500">Experience</p>
               <p className="text-sm text-slate-800">
                 {selected.yearsExperience ?? "Not recorded"} years
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-500">
+                Completed projects
+              </p>
+              <p className="text-sm font-semibold text-slate-800">
+                {selected.completedJobs || 0}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-500">
+                Persisted reviews
+              </p>
+              <p className="text-sm font-semibold text-slate-800">
+                {selected.reviewCount || 0}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-500">
+                Customer rating
+              </p>
+              <p className="text-sm font-semibold text-slate-800">
+                {selected.reviewCount
+                  ? `${selected.rating ?? "-"} / 5`
+                  : "Not rated"}
               </p>
             </div>
             <div>
@@ -610,6 +668,69 @@ export default function AdminPartnerDirectory({ token }: Props) {
               </p>
             </div>
           </div>
+          {(selected.orders || []).length ? (
+            <div className="mt-5">
+              <h4 className="font-semibold text-slate-900">
+                Completed service history
+              </h4>
+              <div className="mt-2 overflow-x-auto border border-slate-200">
+                <table className="w-full min-w-[720px] text-left text-sm">
+                  <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-3 py-2">Service</th>
+                      <th className="px-3 py-2">Status</th>
+                      <th className="px-3 py-2">Record</th>
+                      <th className="px-3 py-2">Completed</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {(selected.orders || []).map((order) => (
+                      <tr key={order.id}>
+                        <td className="px-3 py-2 font-semibold text-slate-800">
+                          {order.serviceCategory}
+                        </td>
+                        <td className="px-3 py-2 text-slate-600">
+                          {order.status}
+                        </td>
+                        <td className="px-3 py-2 font-mono text-xs text-slate-600">
+                          {order.id}
+                        </td>
+                        <td className="px-3 py-2 text-slate-600">
+                          {new Date(order.updatedAt).toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : null}
+          {(selected.reviews || []).length ? (
+            <div className="mt-5">
+              <h4 className="font-semibold text-slate-900">
+                Recent persisted reviews
+              </h4>
+              <div className="mt-2 divide-y divide-slate-100 border border-slate-200">
+                {(selected.reviews || []).map((review) => (
+                  <div
+                    key={review.id}
+                    className="grid gap-1 px-3 py-2 text-sm md:grid-cols-[180px_100px_1fr_180px]"
+                  >
+                    <span className="font-semibold text-slate-800">
+                      {review.order.serviceCategory}
+                    </span>
+                    <span className="text-slate-700">{review.rating} / 5</span>
+                    <span className="text-slate-600">
+                      {review.comment || "No written comment"}
+                    </span>
+                    <span className="text-slate-500">
+                      {new Date(review.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
           <h4 className="mt-4 font-semibold text-slate-900">
             Proposed price list
           </h4>

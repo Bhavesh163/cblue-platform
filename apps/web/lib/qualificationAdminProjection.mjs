@@ -95,9 +95,13 @@ export function qualificationDocumentChecks(document) {
 
   if (reasons.has("PROVIDER_UNAVAILABLE")) {
     add("Automated assessment", "Not performed", "neutral");
-  } else if (reasons.has("WRONG_DOCUMENT_TYPE")) {
+  }
+  if (reasons.has("WRONG_DOCUMENT_TYPE")) {
     add("Document type", "Failed", "danger");
-  } else if (reasons.has("DOCUMENT_VALID")) {
+  } else if (
+    reasons.has("DOCUMENT_VALID") ||
+    reasons.has("ADMIN_DOCUMENT_TYPE_CONFIRMED")
+  ) {
     add("Document type", "Passed", "success");
   } else {
     add("Document type", "Not recorded", "neutral");
@@ -105,8 +109,13 @@ export function qualificationDocumentChecks(document) {
 
   if (reasons.has("UNREADABLE_DOCUMENT")) {
     add("Readability", "Failed", "danger");
-  } else if (reasons.has("DOCUMENT_VALID")) {
+  } else if (
+    reasons.has("DOCUMENT_VALID") ||
+    reasons.has("ADMIN_READABILITY_CONFIRMED")
+  ) {
     add("Readability", "Passed", "success");
+  } else {
+    add("Readability", "Not recorded", "neutral");
   }
 
   if (document.documentType === "id-front") {
@@ -123,22 +132,47 @@ export function qualificationDocumentChecks(document) {
       "Expiry",
       reasons.has("EXPIRED_ID")
         ? "Expired"
-        : document.identityExpiryDate
-          ? "Recorded"
-          : "Not recorded",
-      reasons.has("EXPIRED_ID") ? "danger" : "neutral",
+        : reasons.has("ADMIN_ID_UNEXPIRED_CONFIRMED")
+          ? "Confirmed unexpired"
+          : document.identityExpiryDate
+            ? "Recorded"
+            : "Not recorded",
+      reasons.has("EXPIRED_ID")
+        ? "danger"
+        : reasons.has("ADMIN_ID_UNEXPIRED_CONFIRMED")
+          ? "success"
+          : "neutral",
     );
     add(
       "Applicant name",
       reasons.has("IDENTITY_CONTRADICTION")
         ? "Mismatch found"
-        : "Administrator review",
-      reasons.has("IDENTITY_CONTRADICTION") ? "danger" : "review",
+        : reasons.has("ADMIN_APPLICANT_NAME_CONFIRMED")
+          ? "Confirmed"
+          : "Administrator review",
+      reasons.has("IDENTITY_CONTRADICTION")
+        ? "danger"
+        : reasons.has("ADMIN_APPLICANT_NAME_CONFIRMED")
+          ? "success"
+          : "review",
     );
   }
 
   if (document.documentType === "selfie-with-id") {
-    add("Face match", "Not performed", "neutral");
+    add(
+      "Face match",
+      reasons.has("ADMIN_FACE_MATCH_CONFIRMED")
+        ? "Confirmed by administrator"
+        : "Not performed",
+      reasons.has("ADMIN_FACE_MATCH_CONFIRMED") ? "success" : "neutral",
+    );
+    add(
+      "Selfie review",
+      reasons.has("ADMIN_SELFIE_REVIEW_COMPLETED")
+        ? "Completed"
+        : "Administrator review",
+      reasons.has("ADMIN_SELFIE_REVIEW_COMPLETED") ? "success" : "review",
+    );
     add("Liveness", "Not performed", "neutral");
   }
 
@@ -237,7 +271,9 @@ export function qualificationAssessmentSummary(documents) {
 
 export function qualificationReasonLabels(reasonCodes) {
   return (reasonCodes || [])
-    .filter((code) => code !== "DOCUMENT_VALID")
+    .filter(
+      (code) => code !== "DOCUMENT_VALID" && !String(code).startsWith("ADMIN_"),
+    )
     .map(
       (code) =>
         FAILURE_REASONS.get(code) ||
