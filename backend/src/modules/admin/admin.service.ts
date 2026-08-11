@@ -9,12 +9,14 @@ import {
   FixerStatus,
   FixerTier,
   OrderStatus,
+  QualificationEligibilityStatus,
   QualificationReviewKind,
   QualificationReviewStatus,
   QualificationSubmissionStatus,
 } from '@prisma/client';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
+import { qualificationEligibilitySnapshot } from '../qualification/qualification-eligibility';
 import { ApproveFixerDto } from './dto/approve-fixer.dto';
 import { ManualAssignDto } from './dto/manual-assign.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
@@ -151,6 +153,13 @@ export class AdminService {
           tier: true,
           status: true,
           verified: true,
+          verifiedCompanyName: true,
+          qualificationEligibilityStatus: true,
+          kycValidUntil: true,
+          kycReverificationRequiredAt: true,
+          kycReverificationReasons: true,
+          tierReevaluationRequestedAt: true,
+          tierReevaluationCompletedAt: true,
           rating: true,
           completedJobs: true,
           yearsExperience: true,
@@ -245,6 +254,7 @@ export class AdminService {
         .trim();
     };
     const normalized = candidates.map((row) => {
+      const eligibility = qualificationEligibilitySnapshot(row, now);
       const address =
         row.companyAddress &&
         typeof row.companyAddress === 'object' &&
@@ -316,6 +326,13 @@ export class AdminService {
             event.eventType === 'CUSTOMER_CANCEL' &&
             event.createdAt >= cancellationWindowStart,
         ).length,
+        matchingEligibility: {
+          status: eligibility.status,
+          newJobEligible: eligibility.newJobEligible,
+          kycValidUntil: eligibility.kycValidUntil,
+          daysUntilExpiry: eligibility.daysUntilExpiry,
+          reasons: eligibility.reasons,
+        },
         recentIncidents: recentIncidents.slice(0, 20),
         companyAddress: undefined,
         orders: undefined,
@@ -428,6 +445,13 @@ export class AdminService {
         tier: true,
         status: true,
         verified: true,
+        verifiedCompanyName: true,
+        qualificationEligibilityStatus: true,
+        kycValidUntil: true,
+        kycReverificationRequiredAt: true,
+        kycReverificationReasons: true,
+        tierReevaluationRequestedAt: true,
+        tierReevaluationCompletedAt: true,
         yearsExperience: true,
         bio: true,
         description: true,
@@ -555,7 +579,10 @@ export class AdminService {
       },
     });
     if (!fixer) throw new NotFoundException('Fixer not found');
-    return fixer;
+    return {
+      ...fixer,
+      matchingEligibility: qualificationEligibilitySnapshot(fixer),
+    };
   }
 
   async approveFixer(fixerId: string, dto: ApproveFixerDto) {
@@ -564,25 +591,55 @@ export class AdminService {
     });
     if (!fixer) throw new NotFoundException('Fixer not found');
 
+    let updateData: Prisma.FixerUpdateInput = {
+      status: dto.status,
+      verified: false,
+    };
     if (dto.status === FixerStatus.APPROVED) {
       const latestSubmission = await this.prisma.kycSubmission.findFirst({
         where: { fixerId },
         orderBy: { version: 'desc' },
-        select: { status: true },
+        select: {
+          status: true,
+          documents: {
+            where: {
+              documentType: 'id-front',
+              isActive: true,
+              lifecycleState: 'READY',
+              evidenceStatus: 'VALIDATED',
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { identityExpiryDate: true },
+          },
+        },
       });
       if (latestSubmission?.status !== QualificationSubmissionStatus.APPROVED) {
         throw new ConflictException(
           'Approved KYC is required before fixer approval',
         );
       }
+      const kycValidUntil =
+        latestSubmission.documents[0]?.identityExpiryDate ?? null;
+      if (!kycValidUntil || kycValidUntil <= new Date()) {
+        throw new ConflictException(
+          'Unexpired validated ID evidence is required before fixer approval',
+        );
+      }
+      updateData = {
+        status: FixerStatus.APPROVED,
+        verified: true,
+        qualificationEligibilityStatus: QualificationEligibilityStatus.ELIGIBLE,
+        kycValidUntil,
+        kycReverificationRequiredAt: null,
+        kycReverificationReasons: Prisma.JsonNull,
+        kycExpiryWarningSentAt: null,
+      };
     }
 
     const updated = await this.prisma.fixer.update({
       where: { id: fixerId },
-      data: {
-        status: dto.status,
-        verified: dto.status === FixerStatus.APPROVED,
-      },
+      data: updateData,
       include: { user: true },
     });
 

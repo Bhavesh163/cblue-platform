@@ -3,7 +3,11 @@ import { AdminService } from './admin.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import { FixerStatus, OrderStatus } from '@prisma/client';
+import {
+  FixerStatus,
+  OrderStatus,
+  QualificationEligibilityStatus,
+} from '@prisma/client';
 
 describe('AdminService', () => {
   let service: AdminService;
@@ -186,6 +190,10 @@ describe('AdminService', () => {
           servicePostalCode: '10310',
           declineCount90Days: 1,
           cancellationCount12Months: 1,
+          matchingEligibility: expect.objectContaining({
+            status: 'PENDING',
+            newJobEligible: false,
+          }),
           recentIncidents: expect.arrayContaining([
             expect.objectContaining({
               eventType: 'PARTNER_DECLINE',
@@ -294,7 +302,11 @@ describe('AdminService', () => {
         id: 'fixer-1',
         userId: 'user-1',
       });
-      prisma.kycSubmission.findFirst.mockResolvedValue({ status: 'APPROVED' });
+      const identityExpiryDate = new Date(Date.now() + 86_400_000);
+      prisma.kycSubmission.findFirst.mockResolvedValue({
+        status: 'APPROVED',
+        documents: [{ identityExpiryDate }],
+      });
       prisma.fixer.update.mockResolvedValue({
         id: 'fixer-1',
         status: FixerStatus.APPROVED,
@@ -307,10 +319,59 @@ describe('AdminService', () => {
       });
 
       expect(result.status).toBe(FixerStatus.APPROVED);
+      expect(prisma.fixer.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: FixerStatus.APPROVED,
+            verified: true,
+            qualificationEligibilityStatus:
+              QualificationEligibilityStatus.ELIGIBLE,
+            kycValidUntil: identityExpiryDate,
+            kycReverificationRequiredAt: null,
+          }),
+        }),
+      );
       expect(eventEmitter.emit).toHaveBeenCalledWith(
         'fixer.status_changed',
         expect.objectContaining({ fixerId: 'fixer-1' }),
       );
+    });
+    it('keeps a fixer paused when approved KYC has an expired ID date', async () => {
+      prisma.fixer.findUnique.mockResolvedValue({
+        id: 'fixer-1',
+        userId: 'user-1',
+      });
+      prisma.kycSubmission.findFirst.mockResolvedValue({
+        status: 'APPROVED',
+        documents: [{ identityExpiryDate: new Date(Date.now() - 86_400_000) }],
+      });
+
+      await expect(
+        service.approveFixer('fixer-1', {
+          status: FixerStatus.APPROVED,
+        }),
+      ).rejects.toThrow(
+        'Unexpired validated ID evidence is required before fixer approval',
+      );
+      expect(prisma.fixer.update).not.toHaveBeenCalled();
+    });
+
+    it('keeps a fixer paused when approved KYC has no ID expiry date', async () => {
+      prisma.fixer.findUnique.mockResolvedValue({
+        id: 'fixer-1',
+        userId: 'user-1',
+      });
+      prisma.kycSubmission.findFirst.mockResolvedValue({
+        status: 'APPROVED',
+        documents: [{ identityExpiryDate: null }],
+      });
+
+      await expect(
+        service.approveFixer('fixer-1', {
+          status: FixerStatus.APPROVED,
+        }),
+      ).rejects.toThrow(ConflictException);
+      expect(prisma.fixer.update).not.toHaveBeenCalled();
     });
   });
   describe('manualAssign', () => {

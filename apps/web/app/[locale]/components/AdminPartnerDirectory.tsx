@@ -10,6 +10,14 @@ import {
 import { getSubdistrictsForDistrict } from "../lib/thai-subdistrict-data";
 import QualificationEvidenceControls from "./QualificationEvidenceControls";
 
+type MatchingEligibility = {
+  status: string;
+  newJobEligible: boolean;
+  kycValidUntil?: string | null;
+  daysUntilExpiry?: number | null;
+  reasons?: string[];
+};
+
 type DirectoryRow = {
   id: string;
   tier?: string | null;
@@ -22,6 +30,7 @@ type DirectoryRow = {
   serviceDistrict?: string | null;
   serviceSubdistrict?: string | null;
   servicePostalCode?: string | null;
+  matchingEligibility?: MatchingEligibility;
   priceList?: Array<{
     service?: string;
     unit?: string;
@@ -76,6 +85,7 @@ type Detail = {
   serviceProvince?: string | null;
   serviceDistrict?: string | null;
   servicePostalCode?: string | null;
+  matchingEligibility?: MatchingEligibility;
   skills?: Array<{
     category?: string | null;
     name?: string | null;
@@ -128,6 +138,23 @@ function displayName(row: DirectoryRow | Detail) {
 function addressValue(detail: Detail, key: string) {
   const value = detail.companyAddress?.[key];
   return typeof value === "string" && value.trim() ? value : "";
+}
+
+function eligibilityLabel(eligibility?: MatchingEligibility) {
+  if (eligibility?.newJobEligible) return "Eligible";
+  if (eligibility?.status === "EXPIRED") return "ID expired";
+  if (eligibility?.status === "REVERIFICATION_REQUIRED")
+    return "KYC renewal required";
+  return "KYC pending";
+}
+
+function eligibilityReason(reason: string) {
+  const labels: Record<string, string> = {
+    ID_EXPIRED: "ID expired",
+    MISSING_ID_EXPIRY: "ID expiry not verified",
+    ADMIN_RESUBMISSION_REQUIRED: "Resubmission requested",
+  };
+  return labels[reason] || reason.toLowerCase().replaceAll("_", " ");
 }
 
 export default function AdminPartnerDirectory({ token }: Props) {
@@ -376,7 +403,7 @@ export default function AdminPartnerDirectory({ token }: Props) {
         ))}
       </div>
       <div className="mt-4 overflow-x-auto">
-        <table className="w-full min-w-[1100px] text-left text-sm">
+        <table className="w-full min-w-[1240px] text-left text-sm">
           <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
             <tr>
               <th className="py-2 pr-4">Provider</th>
@@ -384,6 +411,7 @@ export default function AdminPartnerDirectory({ token }: Props) {
               <th className="py-2 pr-4">Services</th>
               <th className="py-2 pr-4">Tier</th>
               <th className="py-2 pr-4">Rating</th>
+              <th className="py-2 pr-4">New jobs</th>
               <th className="py-2 pr-4">Incidents</th>
               <th className="py-2 pr-4">Detail</th>
             </tr>
@@ -420,6 +448,17 @@ export default function AdminPartnerDirectory({ token }: Props) {
                 <td className="py-3 pr-4 align-top text-slate-600">
                   {row.rating ?? "-"} / 5
                 </td>
+                <td className="py-3 pr-4 align-top">
+                  <span
+                    className={
+                      row.matchingEligibility?.newJobEligible
+                        ? "font-semibold text-emerald-700"
+                        : "font-semibold text-amber-700"
+                    }
+                  >
+                    {eligibilityLabel(row.matchingEligibility)}
+                  </span>
+                </td>
                 <td className="py-3 pr-4 align-top text-slate-600">
                   Declines (90 days): {row.declineCount90Days || 0}
                   <br />
@@ -455,7 +494,8 @@ export default function AdminPartnerDirectory({ token }: Props) {
               </h3>
               <p className="text-sm text-slate-600">
                 Status {selected.status || "-"} / Tier {selected.tier || "-"} |
-                KYC {selected.verified ? "approved" : "pending"}
+                KYC {selected.verified ? "approved" : "pending"} | New jobs{" "}
+                {eligibilityLabel(selected.matchingEligibility)}
               </p>
             </div>
             <button
@@ -502,6 +542,27 @@ export default function AdminPartnerDirectory({ token }: Props) {
                   .filter(Boolean)
                   .join(", ") || "Not recorded"}
               </p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-500">
+                Matching eligibility
+              </p>
+              <p className="text-sm text-slate-800">
+                {eligibilityLabel(selected.matchingEligibility)}
+              </p>
+              {selected.matchingEligibility?.kycValidUntil ? (
+                <p className="text-xs text-slate-500">
+                  KYC valid until{" "}
+                  {new Date(
+                    selected.matchingEligibility.kycValidUntil,
+                  ).toLocaleDateString()}
+                </p>
+              ) : null}
+              {(selected.matchingEligibility?.reasons || []).map((reason) => (
+                <p key={reason} className="text-xs text-amber-700">
+                  {eligibilityReason(reason)}
+                </p>
+              ))}
             </div>
             {selectedSummary?.recentIncidents?.length ? (
               <div className="sm:col-span-2 xl:col-span-4">
