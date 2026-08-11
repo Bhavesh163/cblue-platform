@@ -82,3 +82,16 @@ test("company-application evidence copy is explicit in all supported languages",
     /Director authorization letter \(required when a company applicant is not a named director\)/,
   );
 });
+
+test("first-time registration stages KYC until the fixer profile exists", async () => {
+  const source = await readFile(registerUrl, "utf8");
+
+  assert.match(source, /shouldUploadKycImmediately/);
+  assert.match(source, /isRegisteredFixer,/);
+  assert.match(source, /documentId: null,/);
+  assert.match(source, /uploadState: "idle",/);
+  assert.match(source, /requiresQualificationContinuation/);
+  assert.match(source, /qualificationSubmissionStatus/);
+  assert.match(source, /!qualificationNeedsContinuation/);
+  assert.doesNotMatch(source, /Fixer profile not found/);
+});

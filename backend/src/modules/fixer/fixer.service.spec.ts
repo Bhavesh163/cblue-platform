@@ -16,6 +16,7 @@ import { MatchingIntelligenceService } from './matching-intelligence.service';
 describe('FixerService', () => {
   let service: FixerService;
   let prisma: {
+    $transaction: jest.Mock;
     fixer: Record<string, jest.Mock>;
     user: Record<string, jest.Mock>;
     fixerSkill: Record<string, jest.Mock>;
@@ -30,6 +31,9 @@ describe('FixerService', () => {
 
   beforeEach(async () => {
     prisma = {
+      $transaction: jest.fn((operation: (tx: unknown) => unknown) =>
+        operation(prisma),
+      ),
       fixer: {
         findUnique: jest.fn(),
         findMany: jest.fn(),
@@ -156,11 +160,12 @@ describe('FixerService', () => {
         travelRadius: 15,
       });
 
-      expect(result!.id).toBe('fixer-1');
+      expect(result.id).toBe('fixer-1');
       expect(eventEmitter.emit).toHaveBeenCalledWith(
         'fixer.registered',
         expect.objectContaining({ fixerId: 'fixer-1' }),
       );
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     });
   });
 

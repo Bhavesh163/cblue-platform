@@ -1047,12 +1047,6 @@ export class FixerService {
       throw new ConflictException('User is already registered as a fixer');
     }
 
-    // Update user role
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { role: 'FIXER' },
-    });
-
     const serviceLocation = normalizeThaiGpsLocation({
       province: dto.address?.province,
       district: dto.address?.district,
@@ -1065,61 +1059,89 @@ export class FixerService {
       dto as RegisterFixerWithEvidence,
     );
 
-    const fixer = await this.prisma.fixer.create({
-      data: {
-        userId,
-        tier: 'ECONOMY',
-        status: 'PENDING',
-        pastProjectType: dto.pastProjectType,
-        yearsExperience: dto.yearsExperience,
-        travelRadius: dto.travelRadius,
-        availableStartDate: dto.scheduledDate,
-        companyAddress: dto.companyAddress
-          ? (JSON.parse(
-              JSON.stringify(dto.companyAddress),
-            ) as Prisma.InputJsonValue)
-          : undefined,
-        priceList: dto.priceList
-          ? (JSON.parse(JSON.stringify(dto.priceList)) as Prisma.InputJsonValue)
-          : undefined,
-        serviceProvince: serviceLocation.province,
-        serviceDistrict: serviceLocation.district,
-        serviceSubdistrict: serviceLocation.subdistrict,
-        servicePostalCode: serviceLocation.postalCode,
-        gpsLat: dto.gpsCoords?.lat,
-        gpsLng: dto.gpsCoords?.lng,
-        aiScore: tierEvaluation.score,
-        aiTier: tierEvaluation.tier,
-        aiBreakdown: JSON.parse(
-          JSON.stringify(tierEvaluation.breakdown),
-        ) as Prisma.InputJsonValue,
-        aiFlags: JSON.parse(
-          JSON.stringify(tierEvaluation.flags),
-        ) as Prisma.InputJsonValue,
-        aiCredentialStatus: tierEvaluation.credentialStatus,
-      },
-      include: { user: true },
-    });
+    try {
+      const fixer = await this.prisma.$transaction(async (transaction) => {
+        await transaction.user.update({
+          where: { id: userId },
+          data: { role: 'FIXER' },
+        });
 
-    // Bulk-create skills if provided
-    if (dto.skills && dto.skills.length > 0) {
-      await this.prisma.fixerSkill.createMany({
-        data: dto.skills.map((s) => ({
-          fixerId: fixer.id,
-          category: s.category,
-          name: s.name,
-        })),
-        skipDuplicates: true,
+        const createdFixer = await transaction.fixer.create({
+          data: {
+            userId,
+            tier: 'ECONOMY',
+            status: 'PENDING',
+            pastProjectType: dto.pastProjectType,
+            yearsExperience: dto.yearsExperience,
+            travelRadius: dto.travelRadius,
+            availableStartDate: dto.scheduledDate,
+            companyAddress: dto.companyAddress
+              ? (JSON.parse(
+                  JSON.stringify(dto.companyAddress),
+                ) as Prisma.InputJsonValue)
+              : undefined,
+            priceList: dto.priceList
+              ? (JSON.parse(
+                  JSON.stringify(dto.priceList),
+                ) as Prisma.InputJsonValue)
+              : undefined,
+            serviceProvince: serviceLocation.province,
+            serviceDistrict: serviceLocation.district,
+            serviceSubdistrict: serviceLocation.subdistrict,
+            servicePostalCode: serviceLocation.postalCode,
+            gpsLat: dto.gpsCoords?.lat,
+            gpsLng: dto.gpsCoords?.lng,
+            aiScore: tierEvaluation.score,
+            aiTier: tierEvaluation.tier,
+            aiBreakdown: JSON.parse(
+              JSON.stringify(tierEvaluation.breakdown),
+            ) as Prisma.InputJsonValue,
+            aiFlags: JSON.parse(
+              JSON.stringify(tierEvaluation.flags),
+            ) as Prisma.InputJsonValue,
+            aiCredentialStatus: tierEvaluation.credentialStatus,
+          },
+          include: { user: true },
+        });
+
+        if (dto.skills && dto.skills.length > 0) {
+          await transaction.fixerSkill.createMany({
+            data: dto.skills.map((skill) => ({
+              fixerId: createdFixer.id,
+              category: skill.category,
+              name: skill.name,
+            })),
+            skipDuplicates: true,
+          });
+        }
+
+        return transaction.fixer.findUnique({
+          where: { id: createdFixer.id },
+          include: { user: true, skills: true },
+        });
       });
+
+      if (!fixer) {
+        throw new ServiceUnavailableException(
+          'Fixer registration could not be completed',
+        );
+      }
+
+      this.eventEmitter.emit('fixer.registered', {
+        fixerId: fixer.id,
+        userId,
+      });
+
+      return fixer;
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException('User is already registered as a fixer');
+      }
+      throw error;
     }
-
-    this.eventEmitter.emit('fixer.registered', { fixerId: fixer.id, userId });
-
-    // Re-fetch with skills included
-    return this.prisma.fixer.findUnique({
-      where: { id: fixer.id },
-      include: { user: true, skills: true },
-    });
   }
 
   async getProfile(fixerId: string) {

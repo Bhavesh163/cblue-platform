@@ -34,6 +34,11 @@ import {
   PORTFOLIO_MAX_FILES,
   PORTFOLIO_MAX_FILE_BYTES,
 } from "../../lib/portfolio-image-compression";
+import {
+  isQualificationReviewInProgress,
+  requiresQualificationContinuation,
+  shouldUploadKycImmediately,
+} from "../../../../lib/fixerRegistrationFlow";
 
 interface PriceRow {
   service: string;
@@ -228,6 +233,20 @@ type PersistedEvidenceSlot = {
   message: string | null;
 };
 
+type QualificationEligibility = {
+  status:
+    | "PENDING"
+    | "ELIGIBLE"
+    | "EXPIRING"
+    | "REVERIFICATION_REQUIRED"
+    | "EXPIRED";
+  newJobEligible: boolean;
+  kycValidUntil: string | null;
+  daysUntilExpiry: number | null;
+  companyPartner: boolean;
+  tierReevaluationPending: boolean;
+};
+
 interface FormData {
   name: string;
   email: string;
@@ -353,19 +372,10 @@ function FixerRegisterContent() {
   const [portfolioProcessing, setPortfolioProcessing] = useState(false);
   const [companyEvidenceProcessing, setCompanyEvidenceProcessing] =
     useState(false);
-  const [qualificationEligibility, setQualificationEligibility] = useState<{
-    status:
-      | "PENDING"
-      | "ELIGIBLE"
-      | "EXPIRING"
-      | "REVERIFICATION_REQUIRED"
-      | "EXPIRED";
-    newJobEligible: boolean;
-    kycValidUntil: string | null;
-    daysUntilExpiry: number | null;
-    companyPartner: boolean;
-    tierReevaluationPending: boolean;
-  } | null>(null);
+  const [qualificationEligibility, setQualificationEligibility] =
+    useState<QualificationEligibility | null>(null);
+  const [qualificationSubmissionStatus, setQualificationSubmissionStatus] =
+    useState<string | null>(null);
   const [qualificationOutcome, setQualificationOutcome] = useState<{
     submissionId: string;
     status: string;
@@ -575,19 +585,42 @@ function FixerRegisterContent() {
         setIsAlreadyFixer(registered);
         setIsRegisteredFixer(registered);
         populateFixerForm(data, fixerProfile);
+        let loadedEligibility: QualificationEligibility | null = null;
+        let loadedSubmissionStatus: string | null = null;
         if (registered) {
           const statusResponse = await fetch("/api/v1/qualification/status", {
             cache: "no-store",
             headers: { Authorization: "Bearer " + token },
           });
-          if (statusResponse.ok) {
-            const statusPayload = (await statusResponse.json()) as {
-              eligibility?: typeof qualificationEligibility;
-            };
-            setQualificationEligibility(statusPayload.eligibility ?? null);
+          if (!statusResponse.ok) {
+            setError(
+              locale === "th"
+                ? "ไม่สามารถตรวจสอบสถานะใบสมัครได้ กรุณาลองใหม่"
+                : locale === "zh"
+                  ? "无法确认您的申请状态，请重试。"
+                  : "Unable to confirm your application status. Please retry.",
+            );
+            setCheckingStatus(false);
+            return;
           }
+          const statusPayload = (await statusResponse.json()) as {
+            eligibility?: QualificationEligibility;
+            submission?: { status?: string } | null;
+          };
+          loadedEligibility = statusPayload.eligibility ?? null;
+          loadedSubmissionStatus = statusPayload.submission?.status ?? null;
+          setQualificationEligibility(loadedEligibility);
+          setQualificationSubmissionStatus(loadedSubmissionStatus);
         }
-        if (registered && isEditMode) {
+        if (
+          registered &&
+          ((isEditMode &&
+            !isQualificationReviewInProgress(loadedSubmissionStatus)) ||
+            requiresQualificationContinuation(
+              loadedEligibility?.status,
+              loadedSubmissionStatus,
+            ))
+        ) {
           const draftResponse = await fetch(
             "/api/v1/qualification/submissions/draft",
             {
@@ -839,53 +872,71 @@ function FixerRegisterContent() {
           return;
         }
         const documentType = slotIndex === 0 ? "id-front" : "selfie-with-id";
-        let uploaded: UploadAssessmentResponse | null = null;
-        try {
-          uploaded = await uploadKycImmediately(documentType, preparedFile);
-        } catch (error) {
-          setError(
-            error instanceof KycUploadError
-              ? applicantKycReason(error.code, locale)
-              : applicantKycReason("UPLOAD_FAILED", locale),
-          );
-          setKycValidating(false);
-          return;
-        }
-        const immediateReason = uploaded.assessment?.reasonCodes?.find((code) =>
-          [
-            "WRONG_DOCUMENT_TYPE",
-            "INVALID_ID_NUMBER",
-            "UNREADABLE_DOCUMENT",
-            "EXPIRED_ID",
-            "IDENTITY_CONTRADICTION",
-            "LIVENESS_FAILED",
-          ].includes(code),
-        );
-        if (
-          immediateReason === "WRONG_DOCUMENT_TYPE" ||
-          immediateReason === "INVALID_ID_NUMBER" ||
-          immediateReason === "UNREADABLE_DOCUMENT" ||
-          immediateReason === "EXPIRED_ID" ||
-          immediateReason === "IDENTITY_CONTRADICTION" ||
-          immediateReason === "LIVENESS_FAILED"
-        ) {
-          setError(applicantKycReason(immediateReason, locale));
-          setKycValidating(false);
-          return;
-        }
-        newSlots.push({
-          documentType,
-          localFile: preparedFile,
-          documentId: uploaded.id,
-          uploadState: "complete",
-          kycStatus:
-            uploaded?.assessment?.evidenceStatus ||
-            uploaded?.assessment?.route ||
-            null,
-          confidence: uploaded?.assessment?.confidence ?? null,
-          reasonCodes: uploaded?.assessment?.reasonCodes || [],
-          message: null,
+        const uploadImmediately = shouldUploadKycImmediately({
+          isRegisteredFixer,
+          hasAccessToken: Boolean(localStorage.getItem("subscriber_token")),
         });
+        if (uploadImmediately) {
+          let uploaded: UploadAssessmentResponse;
+          try {
+            uploaded = await uploadKycImmediately(documentType, preparedFile);
+          } catch (error) {
+            setError(
+              error instanceof KycUploadError
+                ? applicantKycReason(error.code, locale)
+                : applicantKycReason("UPLOAD_FAILED", locale),
+            );
+            setKycValidating(false);
+            return;
+          }
+          const immediateReason = uploaded.assessment?.reasonCodes?.find(
+            (code) =>
+              [
+                "WRONG_DOCUMENT_TYPE",
+                "INVALID_ID_NUMBER",
+                "UNREADABLE_DOCUMENT",
+                "EXPIRED_ID",
+                "IDENTITY_CONTRADICTION",
+                "LIVENESS_FAILED",
+              ].includes(code),
+          );
+          if (
+            immediateReason === "WRONG_DOCUMENT_TYPE" ||
+            immediateReason === "INVALID_ID_NUMBER" ||
+            immediateReason === "UNREADABLE_DOCUMENT" ||
+            immediateReason === "EXPIRED_ID" ||
+            immediateReason === "IDENTITY_CONTRADICTION" ||
+            immediateReason === "LIVENESS_FAILED"
+          ) {
+            setError(applicantKycReason(immediateReason, locale));
+            setKycValidating(false);
+            return;
+          }
+          newSlots.push({
+            documentType,
+            localFile: preparedFile,
+            documentId: uploaded.id,
+            uploadState: "complete",
+            kycStatus:
+              uploaded?.assessment?.evidenceStatus ||
+              uploaded?.assessment?.route ||
+              null,
+            confidence: uploaded?.assessment?.confidence ?? null,
+            reasonCodes: uploaded?.assessment?.reasonCodes || [],
+            message: null,
+          });
+        } else {
+          newSlots.push({
+            documentType,
+            localFile: preparedFile,
+            documentId: null,
+            uploadState: "idle",
+            kycStatus: null,
+            confidence: null,
+            reasonCodes: [],
+            message: null,
+          });
+        }
       }
 
       if (newSlots.length > 0) {
@@ -893,7 +944,13 @@ function FixerRegisterContent() {
       }
       setKycValidating(false);
     },
-    [kycSlots.length, locale, validateKycImage, uploadKycImmediately],
+    [
+      isRegisteredFixer,
+      kycSlots.length,
+      locale,
+      validateKycImage,
+      uploadKycImmediately,
+    ],
   );
   /* Camera helpers for KYC */
   const startCamera = async () => {
@@ -1270,9 +1327,10 @@ function FixerRegisterContent() {
     }
     const knownKycRequired =
       !isRegisteredFixer ||
-      qualificationEligibility?.status === "PENDING" ||
-      qualificationEligibility?.status === "REVERIFICATION_REQUIRED" ||
-      qualificationEligibility?.status === "EXPIRED";
+      requiresQualificationContinuation(
+        qualificationEligibility?.status,
+        qualificationSubmissionStatus,
+      );
     if (knownKycRequired && kycSlots.length < 2) {
       setError(
         locale === "th"
@@ -1474,15 +1532,19 @@ function FixerRegisterContent() {
         throw new Error("Unable to confirm identity verification status");
       }
       const statusPayload = (await statusAfterProfile.json()) as {
-        eligibility?: typeof qualificationEligibility;
+        eligibility?: QualificationEligibility;
+        submission?: { status?: string } | null;
       };
       const eligibility = statusPayload.eligibility ?? null;
+      const submissionStatus = statusPayload.submission?.status ?? null;
       setQualificationEligibility(eligibility);
+      setQualificationSubmissionStatus(submissionStatus);
       const requiresKyc =
         !wasRegisteredFixer ||
-        eligibility?.status === "PENDING" ||
-        eligibility?.status === "REVERIFICATION_REQUIRED" ||
-        eligibility?.status === "EXPIRED";
+        requiresQualificationContinuation(
+          eligibility?.status,
+          submissionStatus,
+        );
       if (!requiresKyc) {
         if (portfolioImages.length > 0) {
           const targetResponse = await fetch(
@@ -1696,6 +1758,10 @@ function FixerRegisterContent() {
     }
   }
 
+  const qualificationNeedsContinuation = requiresQualificationContinuation(
+    qualificationEligibility?.status,
+    qualificationSubmissionStatus,
+  );
   if (!mounted || checkingStatus)
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -1703,7 +1769,12 @@ function FixerRegisterContent() {
       </div>
     );
 
-  if (isAlreadyFixer && !success && !isEditMode) {
+  if (
+    isAlreadyFixer &&
+    !success &&
+    !isEditMode &&
+    !qualificationNeedsContinuation
+  ) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-10 max-w-lg text-center">
