@@ -44,8 +44,63 @@ describe('qualification eligibility', () => {
     expect(qualificationEligibleFixerWhere(new Date())).toEqual(
       expect.objectContaining({
         verified: true,
-        qualificationEligibilityStatus: 'ELIGIBLE',
-        kycReverificationRequiredAt: null,
+        qualificationEligibilityStatus: {
+          in: ['ELIGIBLE', 'REVERIFICATION_REQUIRED'],
+        },
+      }),
+    );
+  });
+
+  it('keeps an approved partner eligible while sensitive profile changes await re-verification', () => {
+    const result = qualificationEligibilitySnapshot(
+      {
+        ...base,
+        qualificationEligibilityStatus: 'REVERIFICATION_REQUIRED',
+        kycReverificationRequiredAt: new Date('2026-08-12T00:00:00.000Z'),
+        kycReverificationReasons: ['PHONE_CHANGED'],
+      },
+      new Date('2026-08-12T01:00:00.000Z'),
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        status: 'REVERIFICATION_REQUIRED',
+        newJobEligible: true,
+        reasons: ['PHONE_CHANGED'],
+      }),
+    );
+  });
+
+  it('still blocks an expired identity when profile re-verification is also pending', () => {
+    const result = qualificationEligibilitySnapshot(
+      {
+        ...base,
+        qualificationEligibilityStatus: 'REVERIFICATION_REQUIRED',
+        kycValidUntil: new Date('2026-08-11T00:00:00.000Z'),
+        kycReverificationRequiredAt: new Date('2026-08-10T00:00:00.000Z'),
+        kycReverificationReasons: ['PHONE_CHANGED'],
+      },
+      new Date('2026-08-12T00:00:00.000Z'),
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({ status: 'EXPIRED', newJobEligible: false }),
+    );
+  });
+
+  it('blocks an administrator-suspended partner without erasing KYC approval', () => {
+    const result = qualificationEligibilitySnapshot({
+      ...base,
+      status: 'SUSPENDED',
+      suspendedAt: new Date('2026-08-12T00:00:00.000Z'),
+      suspensionReason: 'Customer safety complaint under review',
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        status: 'SUSPENDED',
+        newJobEligible: false,
+        suspensionReason: 'Customer safety complaint under review',
       }),
     );
   });

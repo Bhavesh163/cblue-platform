@@ -52,8 +52,9 @@ describe('MatchingService', () => {
           where: expect.objectContaining({
             status: 'APPROVED',
             verified: true,
-            qualificationEligibilityStatus: 'ELIGIBLE',
-            kycReverificationRequiredAt: null,
+            qualificationEligibilityStatus: {
+              in: ['ELIGIBLE', 'REVERIFICATION_REQUIRED'],
+            },
             kycValidUntil: { gt: expect.any(Date) },
           }),
         }),

@@ -40,7 +40,8 @@ export type QualificationEligibilitySnapshot = {
     | 'ELIGIBLE'
     | 'EXPIRING'
     | 'REVERIFICATION_REQUIRED'
-    | 'EXPIRED';
+    | 'EXPIRED'
+    | 'SUSPENDED';
   newJobEligible: boolean;
   kycValidUntil: Date | null;
   warningStartsAt: Date | null;
@@ -52,6 +53,8 @@ export type QualificationEligibilitySnapshot = {
   tierReevaluationPending: boolean;
   tierReevaluationRequestedAt: Date | null;
   tierReevaluationCompletedAt: Date | null;
+  suspendedAt: Date | null;
+  suspensionReason: string | null;
 };
 
 export function qualificationEligibleFixerWhere(
@@ -60,8 +63,12 @@ export function qualificationEligibleFixerWhere(
   return {
     status: FixerStatus.APPROVED,
     verified: true,
-    qualificationEligibilityStatus: QualificationEligibilityStatus.ELIGIBLE,
-    kycReverificationRequiredAt: null,
+    qualificationEligibilityStatus: {
+      in: [
+        QualificationEligibilityStatus.ELIGIBLE,
+        QualificationEligibilityStatus.REVERIFICATION_REQUIRED,
+      ],
+    },
     kycValidUntil: { gt: now },
   };
 }
@@ -99,6 +106,8 @@ export function qualificationEligibilitySnapshot(
     kycReverificationReasons: Prisma.JsonValue | null;
     tierReevaluationRequestedAt: Date | null;
     tierReevaluationCompletedAt: Date | null;
+    suspendedAt?: Date | null;
+    suspensionReason?: string | null;
   },
   now = new Date(),
 ): QualificationEligibilitySnapshot {
@@ -126,6 +135,27 @@ export function qualificationEligibilitySnapshot(
     (!fixer.tierReevaluationCompletedAt ||
       fixer.tierReevaluationCompletedAt < fixer.tierReevaluationRequestedAt),
   );
+  const suspendedAt = fixer.suspendedAt ?? null;
+  const suspensionReason = fixer.suspensionReason?.trim() || null;
+
+  if (fixer.status === FixerStatus.SUSPENDED) {
+    return {
+      status: 'SUSPENDED',
+      newJobEligible: false,
+      kycValidUntil: validUntil,
+      warningStartsAt,
+      daysUntilExpiry,
+      reverificationRequiredAt: fixer.kycReverificationRequiredAt,
+      reasons,
+      requiredEvidence,
+      companyPartner,
+      tierReevaluationPending,
+      tierReevaluationRequestedAt: fixer.tierReevaluationRequestedAt,
+      tierReevaluationCompletedAt: fixer.tierReevaluationCompletedAt,
+      suspendedAt,
+      suspensionReason,
+    };
+  }
 
   if (
     fixer.status !== FixerStatus.APPROVED ||
@@ -146,27 +176,8 @@ export function qualificationEligibilitySnapshot(
       tierReevaluationPending,
       tierReevaluationRequestedAt: fixer.tierReevaluationRequestedAt,
       tierReevaluationCompletedAt: fixer.tierReevaluationCompletedAt,
-    };
-  }
-
-  if (
-    fixer.qualificationEligibilityStatus ===
-      QualificationEligibilityStatus.REVERIFICATION_REQUIRED ||
-    fixer.kycReverificationRequiredAt
-  ) {
-    return {
-      status: 'REVERIFICATION_REQUIRED',
-      newJobEligible: false,
-      kycValidUntil: validUntil,
-      warningStartsAt,
-      daysUntilExpiry,
-      reverificationRequiredAt: fixer.kycReverificationRequiredAt,
-      reasons,
-      requiredEvidence,
-      companyPartner,
-      tierReevaluationPending,
-      tierReevaluationRequestedAt: fixer.tierReevaluationRequestedAt,
-      tierReevaluationCompletedAt: fixer.tierReevaluationCompletedAt,
+      suspendedAt,
+      suspensionReason,
     };
   }
 
@@ -187,6 +198,31 @@ export function qualificationEligibilitySnapshot(
       tierReevaluationPending,
       tierReevaluationRequestedAt: fixer.tierReevaluationRequestedAt,
       tierReevaluationCompletedAt: fixer.tierReevaluationCompletedAt,
+      suspendedAt,
+      suspensionReason,
+    };
+  }
+
+  if (
+    fixer.qualificationEligibilityStatus ===
+      QualificationEligibilityStatus.REVERIFICATION_REQUIRED ||
+    fixer.kycReverificationRequiredAt
+  ) {
+    return {
+      status: 'REVERIFICATION_REQUIRED',
+      newJobEligible: true,
+      kycValidUntil: validUntil,
+      warningStartsAt,
+      daysUntilExpiry,
+      reverificationRequiredAt: fixer.kycReverificationRequiredAt,
+      reasons,
+      requiredEvidence,
+      companyPartner,
+      tierReevaluationPending,
+      tierReevaluationRequestedAt: fixer.tierReevaluationRequestedAt,
+      tierReevaluationCompletedAt: fixer.tierReevaluationCompletedAt,
+      suspendedAt,
+      suspensionReason,
     };
   }
 
@@ -204,5 +240,7 @@ export function qualificationEligibilitySnapshot(
     tierReevaluationPending,
     tierReevaluationRequestedAt: fixer.tierReevaluationRequestedAt,
     tierReevaluationCompletedAt: fixer.tierReevaluationCompletedAt,
+    suspendedAt,
+    suspensionReason,
   };
 }

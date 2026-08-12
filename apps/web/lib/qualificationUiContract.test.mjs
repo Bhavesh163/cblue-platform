@@ -65,6 +65,9 @@ test("partner profile reads authoritative qualification status with Thai and Chi
   assert.match(source, /资格状态/);
   assert.match(source, /NEEDS_RESUBMISSION/);
   assert.match(source, /NEEDS_MORE_EVIDENCE/);
+  assert.match(source, /SUSPENDED/);
+  assert.match(source, /suspensionReason/);
+  assert.match(source, /Your approved partner status remains active/);
   assert.doesNotMatch(source, /Typhoon/i);
 });
 
@@ -90,10 +93,54 @@ test("first-time registration stages KYC until the fixer profile exists", async 
   assert.match(source, /isRegisteredFixer,/);
   assert.match(source, /documentId: null,/);
   assert.match(source, /qualification\/evidence-preflight/);
+  assert.match(source, /ensureInlineAuthentication/);
+  assert.match(source, /await ensureInlineAuthentication\(\)/);
   assert.match(source, /screened\.reasonCodes/);
   assert.match(source, /requiresQualificationContinuation/);
   assert.match(source, /qualificationSubmissionStatus/);
   assert.match(source, /!qualificationNeedsContinuation/);
   assert.doesNotMatch(source, /Fixer profile not found/);
   assert.doesNotMatch(source, /Typhoon/i);
+});
+
+test("embedded registration accepts existing customers and creates new accounts", async () => {
+  const source = await readFile(registerUrl, "utf8");
+  const helperStart = source.indexOf("const ensureInlineAuthentication");
+  const helperEnd = source.indexOf("/* Browser preflight only", helperStart);
+  const helper = source.slice(helperStart, helperEnd);
+
+  assert.ok(helperStart >= 0 && helperEnd > helperStart);
+  assert.ok(
+    helper.indexOf('"/api/v1/subscription/login"') <
+      helper.indexOf("validateNewAccountPassword()"),
+  );
+  assert.match(helper, /"\/api\/v1\/subscription\/register"/);
+  assert.match(helper, /form\.password !== form\.confirmPassword/);
+  assert.match(helper, /localStorage\.setItem\("subscriber_token"/);
+});
+
+test("customer-only sessions resolve to the public partner page", async () => {
+  const partnerPageUrl = new URL(
+    "../app/[locale]/fixers/page.tsx",
+    import.meta.url,
+  );
+  const source = await readFile(partnerPageUrl, "utf8");
+
+  assert.match(source, /confirmedMissing: profile === null/);
+  assert.match(source, /const showPartnerDashboard =/);
+  assert.match(source, /showPartnerDashboard \? \(/);
+  assert.doesNotMatch(
+    source,
+    /isSubscribed\s*&&\s*partnerAccessChecked\s*&&\s*!hasPartnerAccess\s*&&/,
+  );
+});
+
+test("provider directory exposes a reasoned administrator suspension control", async () => {
+  const source = await readFile(partnerDirectoryUrl, "utf8");
+
+  assert.match(source, /Suspend from new matching/);
+  assert.match(source, /Restore new matching/);
+  assert.match(source, /suspensionReason/);
+  assert.match(source, /"suspend"/);
+  assert.match(source, /"resume"/);
 });

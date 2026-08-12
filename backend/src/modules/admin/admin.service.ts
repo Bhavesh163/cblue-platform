@@ -9,6 +9,7 @@ import {
   FixerStatus,
   FixerTier,
   OrderStatus,
+  NotificationType,
   QualificationEligibilityStatus,
   QualificationReviewKind,
   QualificationReviewStatus,
@@ -166,6 +167,9 @@ export class AdminService {
           kycReverificationReasons: true,
           tierReevaluationRequestedAt: true,
           tierReevaluationCompletedAt: true,
+          suspendedAt: true,
+          suspendedById: true,
+          suspensionReason: true,
           rating: true,
           completedJobs: true,
           yearsExperience: true,
@@ -472,6 +476,9 @@ export class AdminService {
         kycReverificationReasons: true,
         tierReevaluationRequestedAt: true,
         tierReevaluationCompletedAt: true,
+        suspendedAt: true,
+        suspendedById: true,
+        suspensionReason: true,
         yearsExperience: true,
         bio: true,
         description: true,
@@ -929,29 +936,121 @@ export class AdminService {
     return { flags, total: flags.length };
   }
 
-  async suspendFixer(fixerId: string, reason: string) {
+  async suspendFixer(fixerId: string, adminId: string, reason: string) {
     const fixer = await this.prisma.fixer.findUnique({
       where: { id: fixerId },
     });
     if (!fixer) throw new NotFoundException('Fixer not found');
 
-    const updated = await this.prisma.fixer.update({
-      where: { id: fixerId },
-      data: {
-        status: FixerStatus.SUSPENDED,
-        verified: false,
-      },
-      include: { user: true },
+    const suspendedAt = new Date();
+    const suspensionReason = reason.trim();
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const suspended = await tx.fixer.update({
+        where: { id: fixerId },
+        data: {
+          status: FixerStatus.SUSPENDED,
+          suspendedAt,
+          suspendedById: adminId,
+          suspensionReason,
+        },
+        include: { user: true },
+      });
+      await tx.notification.createMany({
+        data: [
+          {
+            userId: fixer.userId,
+            type: NotificationType.IN_APP,
+            title: 'Partner profile paused',
+            body: `Your partner profile is paused from receiving new opportunities. Reason: ${suspensionReason}`,
+            data: {
+              fixerId,
+              reason: suspensionReason,
+              suspendedAt: suspendedAt.toISOString(),
+            },
+            dedupeKey: `fixer-suspended:${fixerId}:${suspendedAt.getTime()}`,
+          },
+        ],
+        skipDuplicates: true,
+      });
+      return suspended;
     });
 
-    this.logger.warn(`Fixer ${fixerId} suspended. Reason: ${reason}`);
+    this.logger.warn(
+      `Fixer ${fixerId} suspended by ${adminId}. Reason: ${suspensionReason}`,
+    );
 
     this.eventEmitter.emit('fixer.suspended', {
       fixerId,
       userId: fixer.userId,
-      reason,
+      adminId,
+      reason: suspensionReason,
+      suspendedAt,
     });
 
+    return updated;
+  }
+
+  async resumeFixer(fixerId: string, adminId: string, reason: string) {
+    const fixer = await this.prisma.fixer.findUnique({
+      where: { id: fixerId },
+    });
+    if (!fixer) throw new NotFoundException('Fixer not found');
+    if (fixer.status !== FixerStatus.SUSPENDED) {
+      throw new ConflictException('Fixer is not suspended');
+    }
+    if (
+      !fixer.verified ||
+      !fixer.kycValidUntil ||
+      fixer.kycValidUntil <= new Date()
+    ) {
+      throw new ConflictException(
+        'Current approved identity verification is required before restoring new matching',
+      );
+    }
+
+    const resumedAt = new Date();
+    const resumeReason = reason.trim();
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const resumed = await tx.fixer.update({
+        where: { id: fixerId },
+        data: {
+          status: FixerStatus.APPROVED,
+          suspendedAt: null,
+          suspendedById: null,
+          suspensionReason: null,
+        },
+        include: { user: true },
+      });
+      await tx.notification.createMany({
+        data: [
+          {
+            userId: fixer.userId,
+            type: NotificationType.IN_APP,
+            title: 'Partner profile restored',
+            body: `Your partner profile can receive new opportunities again. Reason: ${resumeReason}`,
+            data: {
+              fixerId,
+              reason: resumeReason,
+              resumedAt: resumedAt.toISOString(),
+            },
+            dedupeKey: `fixer-resumed:${fixerId}:${resumedAt.getTime()}`,
+          },
+        ],
+        skipDuplicates: true,
+      });
+      return resumed;
+    });
+
+    this.logger.log(
+      `Fixer ${fixerId} restored by ${adminId}. Reason: ${resumeReason}`,
+    );
+    this.eventEmitter.emit('fixer.resumed', {
+      fixerId,
+      userId: fixer.userId,
+      adminId,
+      reason: resumeReason,
+      resumedAt,
+    });
     return updated;
   }
 

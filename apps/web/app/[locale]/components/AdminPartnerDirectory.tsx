@@ -23,6 +23,9 @@ type DirectoryRow = {
   tier?: string | null;
   status?: string | null;
   verified?: boolean;
+  suspendedAt?: string | null;
+  suspendedById?: string | null;
+  suspensionReason?: string | null;
   rating?: number | null;
   completedJobs?: number | null;
   reviewCount?: number;
@@ -77,6 +80,9 @@ type Detail = {
   tier?: string | null;
   status?: string | null;
   verified?: boolean;
+  suspendedAt?: string | null;
+  suspendedById?: string | null;
+  suspensionReason?: string | null;
   rating?: number | null;
   completedJobs?: number;
   reviewCount?: number;
@@ -165,10 +171,14 @@ function addressValue(detail: Detail, key: string) {
 }
 
 function eligibilityLabel(eligibility?: MatchingEligibility) {
+  if (eligibility?.status === "SUSPENDED") return "Suspended";
+  if (
+    eligibility?.newJobEligible &&
+    eligibility.status === "REVERIFICATION_REQUIRED"
+  )
+    return "Eligible, profile review pending";
   if (eligibility?.newJobEligible) return "Eligible";
   if (eligibility?.status === "EXPIRED") return "ID expired";
-  if (eligibility?.status === "REVERIFICATION_REQUIRED")
-    return "KYC renewal required";
   return "KYC pending";
 }
 
@@ -208,6 +218,8 @@ export default function AdminPartnerDirectory({ token }: Props) {
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState("");
   const [error, setError] = useState("");
+  const [suspensionReason, setSuspensionReason] = useState("");
+  const [suspensionUpdating, setSuspensionUpdating] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -267,7 +279,9 @@ export default function AdminPartnerDirectory({ token }: Props) {
           ),
         );
       }
-      setSelected((await response.json()) as Detail);
+      const detail = (await response.json()) as Detail;
+      setSelected(detail);
+      setSuspensionReason("");
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -279,6 +293,53 @@ export default function AdminPartnerDirectory({ token }: Props) {
     }
   }
 
+  async function updateSuspension(action: "suspend" | "resume") {
+    if (!selected) return;
+    const reason = suspensionReason.trim();
+    if (reason.length < 10) {
+      setError("Enter a clear reason of at least 10 characters.");
+      return;
+    }
+    setSuspensionUpdating(true);
+    setError("");
+    try {
+      const response = await adminFetchResponse(
+        getApiUrl(`/admin/fixers/${selected.id}/${action}`),
+        {
+          method: "PUT",
+          headers: {
+            Authorization: "Bearer " + token,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ reason }),
+        },
+      );
+      if (!response.ok) {
+        throw new Error(
+          await readAdminResponseError(
+            response,
+            action === "suspend"
+              ? "Unable to suspend this provider."
+              : "Unable to restore this provider.",
+          ),
+        );
+      }
+      const fixerId = selected.id;
+      setSuspensionReason("");
+      await load();
+      await openDetail(fixerId);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : action === "suspend"
+            ? "Unable to suspend this provider."
+            : "Unable to restore this provider.",
+      );
+    } finally {
+      setSuspensionUpdating(false);
+    }
+  }
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
@@ -535,11 +596,75 @@ export default function AdminPartnerDirectory({ token }: Props) {
               onClick={() => {
                 setSelected(null);
                 setSelectedSummary(null);
+                setSuspensionReason("");
               }}
               className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700"
             >
               Close detail
             </button>
+          </div>
+          <div className="mt-5 border-y border-slate-200 bg-slate-50 px-4 py-4">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <h4 className="font-semibold text-slate-900">
+                  New matching access
+                </h4>
+                <p className="mt-1 text-sm text-slate-600">
+                  Suspension stops new matching without erasing the approved KYC
+                  record.
+                </p>
+                {selected.status === "SUSPENDED" ? (
+                  <div className="mt-3 text-sm text-red-800">
+                    <p className="font-semibold">
+                      {selected.suspensionReason ||
+                        "No suspension reason recorded"}
+                    </p>
+                    {selected.suspendedAt ? (
+                      <p className="mt-1 text-xs text-red-700">
+                        Paused {new Date(selected.suspendedAt).toLocaleString()}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+              <div className="w-full max-w-xl">
+                <label className="block text-xs font-semibold text-slate-600">
+                  {selected.status === "SUSPENDED"
+                    ? "Restoration reason"
+                    : "Suspension reason"}
+                  <textarea
+                    value={suspensionReason}
+                    onChange={(event) =>
+                      setSuspensionReason(event.target.value)
+                    }
+                    rows={2}
+                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900"
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={
+                    suspensionUpdating || suspensionReason.trim().length < 10
+                  }
+                  onClick={() =>
+                    void updateSuspension(
+                      selected.status === "SUSPENDED" ? "resume" : "suspend",
+                    )
+                  }
+                  className={`mt-2 rounded-lg px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50 ${
+                    selected.status === "SUSPENDED"
+                      ? "bg-emerald-700 hover:bg-emerald-800"
+                      : "bg-red-700 hover:bg-red-800"
+                  }`}
+                >
+                  {suspensionUpdating
+                    ? "Saving..."
+                    : selected.status === "SUSPENDED"
+                      ? "Restore new matching"
+                      : "Suspend from new matching"}
+                </button>
+              </div>
+            </div>
           </div>
           <div className="mt-5 grid gap-x-6 gap-y-3 border-y border-slate-200 py-4 sm:grid-cols-2 xl:grid-cols-4">
             <div>

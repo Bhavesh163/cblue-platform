@@ -129,8 +129,18 @@ export class AdminController {
   @Put('fixers/:fixerId/suspend')
   suspendFixer(
     @Param('fixerId') fixerId: string,
+    @CurrentUser('id') adminId: string,
     @Body() dto: SuspendFixerDto,
   ) {
-    return this.adminService.suspendFixer(fixerId, dto.reason);
+    return this.adminService.suspendFixer(fixerId, adminId, dto.reason);
+  }
+
+  @Put('fixers/:fixerId/resume')
+  resumeFixer(
+    @Param('fixerId') fixerId: string,
+    @CurrentUser('id') adminId: string,
+    @Body() dto: SuspendFixerDto,
+  ) {
+    return this.adminService.resumeFixer(fixerId, adminId, dto.reason);
   }
 }

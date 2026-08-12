@@ -3733,7 +3733,11 @@ export default function FixerProPage() {
           const activeToken = attempt.token || authToken;
           if (response?.ok) {
             const profile = await response.json().catch(() => null);
-            return { token: activeToken, profile, confirmedMissing: false };
+            return {
+              token: activeToken,
+              profile,
+              confirmedMissing: profile === null,
+            };
           }
           return {
             token: activeToken,
@@ -4278,6 +4282,7 @@ export default function FixerProPage() {
 
   const isSubscribed = !!partner;
   const hasPartnerAccess = partnerAccessChecked && (isFixer || isLister);
+  const showPartnerDashboard = isSubscribed && hasPartnerAccess;
 
   const mappedOrders = orders
     .map((o) => {
@@ -9694,7 +9699,7 @@ export default function FixerProPage() {
                     : "Manage jobs, requests, chat, earnings, and profile"}
               </p>
             </div>
-            {partner ? (
+            {showPartnerDashboard ? (
               <div className="flex items-center gap-3 bg-white/10 backdrop-blur rounded-xl px-4 py-2.5">
                 <div className="w-10 h-10 rounded-full bg-purple-400/30 flex items-center justify-center text-white font-bold">
                   {partner.name?.charAt(0) || "P"}
@@ -9728,7 +9733,7 @@ export default function FixerProPage() {
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 -mt-6 relative z-10 pb-12">
         {/* Not logged in CTA */}
-        {!isSubscribed && !loading && (
+        {!showPartnerDashboard && partnerAccessChecked && !loading && (
           <div className="bg-gradient-to-r from-purple-600 to-indigo-700 rounded-2xl p-8 mb-8 text-white shadow-xl">
             <div className="flex flex-col md:flex-row items-center justify-between gap-6">
               <div>
@@ -9774,40 +9779,7 @@ export default function FixerProPage() {
         )}
 
         {/* Main Content Area */}
-        {isSubscribed &&
-          partnerAccessChecked &&
-          !hasPartnerAccess &&
-          !loading && (
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 mb-8 text-center max-w-2xl mx-auto">
-              <div className="text-5xl mb-4">👷‍♂️</div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">
-                {locale === "th"
-                  ? "คุณยังไม่ได้ลงทะเบียนเป็นพาร์ทเนอร์"
-                  : locale === "zh"
-                    ? "您尚未注册成为合作伙伴"
-                    : "You are not yet a registered Partner"}
-              </h2>
-              <p className="text-gray-500 mb-6">
-                {locale === "th"
-                  ? "สมัครเข้าร่วมกับ CBLUE วันนี้เพื่อรับงานและเพิ่มรายได้ของคุณ"
-                  : locale === "zh"
-                    ? "立即注册CBLUE，开始接单并增加您的收入。"
-                    : "Register with CBLUE today to start receiving jobs and growing your income."}
-              </p>
-              <Link
-                href={`fixers/register`}
-                className="inline-block px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition shadow-lg"
-              >
-                {locale === "th"
-                  ? "ลงทะเบียนเลย"
-                  : locale === "zh"
-                    ? "立即注册"
-                    : "Register Now"}
-              </Link>
-            </div>
-          )}
-
-        {isSubscribed && partnerAccessChecked && hasPartnerAccess && (
+        {showPartnerDashboard && (
           <>
             <div className="flex gap-1 bg-white rounded-xl shadow-sm border border-gray-200 p-1.5 mb-6 overflow-x-auto">
               {tabs.map((tab) => (
@@ -9919,8 +9891,7 @@ export default function FixerProPage() {
         <div className="my-10 border-t border-gray-200" />
 
         {/* Registration Cards */}
-        {(!isSubscribed || (partnerAccessChecked && !hasPartnerAccess)) &&
-          !loading && (
+        {!showPartnerDashboard && partnerAccessChecked && !loading && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               {/* Register as Fixer & Pro */}
               <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition">

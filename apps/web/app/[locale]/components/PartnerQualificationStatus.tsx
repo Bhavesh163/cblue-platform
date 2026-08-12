@@ -19,11 +19,14 @@ type QualificationSnapshot = {
       | "ELIGIBLE"
       | "EXPIRING"
       | "REVERIFICATION_REQUIRED"
-      | "EXPIRED";
+      | "EXPIRED"
+      | "SUSPENDED";
     newJobEligible?: boolean;
     kycValidUntil?: string | null;
     daysUntilExpiry?: number | null;
     tierReevaluationPending?: boolean;
+    suspendedAt?: string | null;
+    suspensionReason?: string | null;
   } | null;
   tierQualification?: {
     approvedTier?: string | null;
@@ -64,6 +67,9 @@ type Copy = {
   securityTitle: string;
   securityBody: string;
   expiring: string;
+  reverifyBody: string;
+  suspended: string;
+  suspendedBody: string;
   expired: string;
   reverify: string;
   eligible: string;
@@ -104,6 +110,11 @@ const COPY: Record<"en" | "th" | "zh", Copy> = {
     expired: "Identity verification has expired",
     reverify: "Identity verification update required",
     eligible: "Eligible for new opportunities",
+    reverifyBody:
+      "Your approved partner status remains active for new opportunities while we review your updated information.",
+    suspended: "Partner profile paused",
+    suspendedBody:
+      "Your partner profile cannot receive new opportunities until an administrator restores it.",
     tierReview: "Tier review in progress",
   },
   th: {
@@ -138,6 +149,11 @@ const COPY: Record<"en" | "th" | "zh", Copy> = {
     expiring: "การยืนยันตัวตนใกล้หมดอายุ",
     expired: "การยืนยันตัวตนหมดอายุแล้ว",
     reverify: "ต้องอัปเดตการยืนยันตัวตน",
+    reverifyBody:
+      "สถานะพาร์ทเนอร์ที่ได้รับอนุมัติยังคงพร้อมรับโอกาสงานใหม่ระหว่างที่เราตรวจสอบข้อมูลที่อัปเดต",
+    suspended: "ระงับโปรไฟล์พาร์ทเนอร์ชั่วคราว",
+    suspendedBody:
+      "โปรไฟล์พาร์ทเนอร์ไม่สามารถรับโอกาสงานใหม่ได้จนกว่าผู้ดูแลระบบจะเปิดใช้งานอีกครั้ง",
     eligible: "พร้อมรับโอกาสงานใหม่",
     tierReview: "กำลังตรวจสอบการปรับระดับ",
   },
@@ -169,6 +185,10 @@ const COPY: Record<"en" | "th" | "zh", Copy> = {
     expiring: "身份验证即将到期",
     expired: "身份验证已过期",
     reverify: "需要更新身份验证",
+    reverifyBody:
+      "在我们审核您更新的资料期间，已批准的合作伙伴状态仍可接收新工作机会。",
+    suspended: "合作伙伴资料已暂停",
+    suspendedBody: "管理员恢复您的合作伙伴资料前，您无法接收新的工作机会。",
     eligible: "可接收新工作机会",
     tierReview: "等级审核中",
   },
@@ -183,6 +203,16 @@ function statusPresentation(
   copy: Copy,
 ) {
   const eligibility = snapshot?.eligibility;
+  if (eligibility?.status === "SUSPENDED") {
+    return {
+      title: copy.suspended,
+      body: eligibility.suspensionReason
+        ? `${copy.suspendedBody} ${eligibility.suspensionReason}`
+        : copy.suspendedBody,
+      status: copy.suspended,
+      approved: false,
+    };
+  }
   if (eligibility?.status === "EXPIRED") {
     return {
       title: copy.expired,
@@ -194,9 +224,9 @@ function statusPresentation(
   if (eligibility?.status === "REVERIFICATION_REQUIRED") {
     return {
       title: copy.reverify,
-      body: copy.updateBody,
+      body: copy.reverifyBody,
       status: copy.reverify,
-      approved: false,
+      approved: true,
     };
   }
   if (eligibility?.status === "EXPIRING") {
@@ -315,11 +345,13 @@ export default function PartnerQualificationStatus({
             ? copy.expiring
             : eligibility?.status === "EXPIRED"
               ? copy.expired
-              : eligibility?.status === "REVERIFICATION_REQUIRED"
-                ? copy.reverify
-                : eligibility?.newJobEligible
-                  ? copy.eligible
-                  : presentation.status}
+              : eligibility?.status === "SUSPENDED"
+                ? copy.suspended
+                : eligibility?.status === "REVERIFICATION_REQUIRED"
+                  ? copy.reverify
+                  : eligibility?.newJobEligible
+                    ? copy.eligible
+                    : presentation.status}
           {expiry && eligibility?.status === "EXPIRING" ? `: ${expiry}` : ""}
         </span>
         {eligibility?.tierReevaluationPending ? (

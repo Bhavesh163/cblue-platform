@@ -753,6 +753,220 @@ function FixerRegisterContent() {
     [locale],
   );
 
+  const ensureInlineAuthentication = useCallback(async (): Promise<
+    string | null
+  > => {
+    const existingToken = localStorage.getItem("subscriber_token");
+    if (existingToken) return existingToken;
+
+    if (!form.email || !/\S+@\S+\.\S+/.test(form.email)) {
+      setError(
+        locale === "th"
+          ? "กรุณากรอกอีเมลที่ถูกต้อง"
+          : locale === "zh"
+            ? "请输入有效的电子邮件"
+            : "Please enter a valid email address",
+      );
+      return null;
+    }
+    if (!form.password) {
+      setError(
+        locale === "th"
+          ? "กรุณากรอกรหัสผ่าน"
+          : locale === "zh"
+            ? "请输入密码"
+            : "Please enter your password",
+      );
+      return null;
+    }
+    const validateNewAccountPassword = (): boolean => {
+      if (form.password.length < 8) {
+        setError(
+          locale === "th"
+            ? "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร"
+            : locale === "zh"
+              ? "密码至少8个字符"
+              : "Password must be at least 8 characters",
+        );
+        return false;
+      }
+      if (
+        !/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{}|;:'",.<>?/`~])/.test(
+          form.password,
+        )
+      ) {
+        setError(
+          locale === "th"
+            ? "รหัสผ่านต้องมีตัวพิมพ์เล็ก ตัวพิมพ์ใหญ่ ตัวเลข และอักขระพิเศษ"
+            : locale === "zh"
+              ? "密码必须包含小写字母、大写字母、数字和特殊字符"
+              : "Password must contain uppercase, lowercase, number, and special character",
+        );
+        return false;
+      }
+      if (form.password !== form.confirmPassword) {
+        setError(
+          locale === "th"
+            ? "รหัสผ่านไม่ตรงกัน"
+            : locale === "zh"
+              ? "密码不匹配"
+              : "Passwords do not match",
+        );
+        return false;
+      }
+      return true;
+    };
+
+    const saveSession = (payload: {
+      accessToken: string;
+      subscriber: { name: string; email?: string };
+    }) => {
+      localStorage.setItem("subscriber_token", payload.accessToken);
+      localStorage.setItem("subscriber", JSON.stringify(payload.subscriber));
+      setSubscriber(payload.subscriber);
+      return payload.accessToken;
+    };
+
+    try {
+      if (authMode === "register") {
+        const existingAccountResponse = await fetch(
+          "/api/v1/subscription/login",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: form.email.toLowerCase(),
+              password: form.password,
+            }),
+          },
+        );
+        if (existingAccountResponse.ok) {
+          setAuthMode("login");
+          return saveSession(await existingAccountResponse.json());
+        }
+        if (existingAccountResponse.status === 429) {
+          setError(
+            locale === "th"
+              ? "คำขอมากเกินไป กรุณารอสักครู่แล้วลองใหม่"
+              : locale === "zh"
+                ? "请求过多，请稍后再试"
+                : "Too many requests. Please wait a moment and try again.",
+          );
+          return null;
+        }
+        if ([500, 502, 503, 530].includes(existingAccountResponse.status)) {
+          setError(
+            locale === "th"
+              ? "ระบบกำลังปรับปรุง กรุณาลองใหม่ในอีกสักครู่"
+              : locale === "zh"
+                ? "系统正在维护中，请稍后再试"
+                : "Service temporarily unavailable. Please try again shortly.",
+          );
+          return null;
+        }
+        if (!validateNewAccountPassword()) return null;
+      }
+
+      const endpoint =
+        authMode === "login"
+          ? "/api/v1/subscription/login"
+          : "/api/v1/subscription/register";
+      const body =
+        authMode === "login"
+          ? { email: form.email.toLowerCase(), password: form.password }
+          : {
+              name: form.name || form.email,
+              email: form.email.toLowerCase(),
+              phone: form.phone,
+              company: form.company || undefined,
+              password: form.password,
+            };
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (response.ok) {
+        return saveSession(await response.json());
+      }
+      if (response.status === 409 && authMode === "register") {
+        const loginResponse = await fetch("/api/v1/subscription/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: form.email.toLowerCase(),
+            password: form.password,
+          }),
+        });
+        if (loginResponse.ok) {
+          setAuthMode("login");
+          return saveSession(await loginResponse.json());
+        }
+        setError(
+          locale === "th"
+            ? "อีเมลนี้ลงทะเบียนแล้ว กรุณาเข้าสู่ระบบด้วยรหัสผ่านที่ถูกต้อง"
+            : locale === "zh"
+              ? "此电子邮件已注册，请使用正确的密码登录"
+              : "This email is already registered. Please log in with the correct password.",
+        );
+        return null;
+      }
+      if (response.status === 429) {
+        setError(
+          locale === "th"
+            ? "คำขอมากเกินไป กรุณารอสักครู่แล้วลองใหม่"
+            : locale === "zh"
+              ? "请求过多，请稍后再试"
+              : "Too many requests. Please wait a moment and try again.",
+        );
+        return null;
+      }
+      if ([403, 500, 502, 503, 530].includes(response.status)) {
+        setError(
+          locale === "th"
+            ? "ระบบกำลังปรับปรุง กรุณาลองใหม่ในอีกสักครู่"
+            : locale === "zh"
+              ? "系统正在维护中，请稍后再试"
+              : "Service temporarily unavailable. Please try again shortly.",
+        );
+        return null;
+      }
+      const payload = (await response.json().catch(() => null)) as {
+        message?: string | string[];
+      } | null;
+      const message = Array.isArray(payload?.message)
+        ? payload.message.join(", ")
+        : payload?.message;
+      setError(
+        message ||
+          (locale === "th"
+            ? "เข้าสู่ระบบ/สมัครสมาชิกล้มเหลว"
+            : locale === "zh"
+              ? "登录/注册失败"
+              : "Login/Register failed"),
+      );
+      return null;
+    } catch {
+      setError(
+        locale === "th"
+          ? "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้"
+          : locale === "zh"
+            ? "无法连接服务器"
+            : "Cannot connect to server",
+      );
+      return null;
+    }
+  }, [
+    authMode,
+    form.company,
+    form.confirmPassword,
+    form.email,
+    form.name,
+    form.password,
+    form.phone,
+    locale,
+  ]);
+
   /* Browser preflight only. Authoritative KYC decisions are made server-side. */
   const [kycValidating, setKycValidating] = useState(false);
 
@@ -896,6 +1110,11 @@ function FixerRegisterContent() {
       if (files.length === 0) return;
       setKycValidating(true);
       setError("");
+      const authenticatedToken = await ensureInlineAuthentication();
+      if (!authenticatedToken) {
+        setKycValidating(false);
+        return;
+      }
       const currentCount = kycSlots.length;
       const newSlots: PersistedEvidenceSlot[] = [];
 
@@ -1023,6 +1242,7 @@ function FixerRegisterContent() {
       setKycValidating(false);
     },
     [
+      ensureInlineAuthentication,
       isRegisteredFixer,
       kycSlots.length,
       locale,
@@ -1237,161 +1457,7 @@ function FixerRegisterContent() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    // Inline auth — if not logged in, validate & create/login account via backend
-    if (!subscriber) {
-      if (!form.email || !/\S+@\S+\.\S+/.test(form.email)) {
-        setError(
-          locale === "th"
-            ? "กรุณากรอกอีเมลที่ถูกต้อง"
-            : locale === "zh"
-              ? "请输入有效的电子邮件"
-              : "Please enter a valid email address",
-        );
-        return;
-      }
-      if (!form.password || form.password.length < 8) {
-        setError(
-          locale === "th"
-            ? "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร"
-            : locale === "zh"
-              ? "密码至少8个字符"
-              : "Password must be at least 8 characters",
-        );
-        return;
-      }
-      if (
-        !/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{}|;:'",.<>?/`~])/.test(
-          form.password,
-        )
-      ) {
-        setError(
-          locale === "th"
-            ? "รหัสผ่านต้องมีตัวพิมพ์เล็ก ตัวพิมพ์ใหญ่ ตัวเลข และอักขระพิเศษ"
-            : locale === "zh"
-              ? "密码必须包含小写字母、大写字母、数字和特殊字符"
-              : "Password must contain uppercase, lowercase, number, and special character",
-        );
-        return;
-      }
-      if (authMode === "register" && form.password !== form.confirmPassword) {
-        setError(
-          locale === "th"
-            ? "รหัสผ่านไม่ตรงกัน"
-            : locale === "zh"
-              ? "密码不匹配"
-              : "Passwords do not match",
-        );
-        return;
-      }
-      try {
-        const endpoint =
-          authMode === "login"
-            ? "/api/v1/subscription/login"
-            : "/api/v1/subscription/register";
-        const body =
-          authMode === "login"
-            ? { email: form.email.toLowerCase(), password: form.password }
-            : {
-                name: form.name || form.email,
-                email: form.email.toLowerCase(),
-                phone: form.phone,
-                company: form.company || undefined,
-                password: form.password,
-              };
-        const authRes = await fetch(endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        if (!authRes.ok) {
-          const errData = await authRes.json().catch(() => ({ message: "" }));
-          if (
-            authRes.status === 403 ||
-            authRes.status === 500 ||
-            authRes.status === 502 ||
-            authRes.status === 530 ||
-            authRes.status === 503
-          ) {
-            setError(
-              locale === "th"
-                ? "ระบบกำลังปรับปรุง กรุณาลองใหม่ในอีกสักครู่"
-                : locale === "zh"
-                  ? "系统正在维护中，请稍后再试"
-                  : "Service temporarily unavailable. Please try again shortly.",
-            );
-            return;
-          }
-          if (authRes.status === 429) {
-            setError(
-              locale === "th"
-                ? "คำขอมากเกินไป กรุณารอสักครู่แล้วลองใหม่"
-                : locale === "zh"
-                  ? "请求过多，请稍后再试"
-                  : "Too many requests. Please wait a moment and try again.",
-            );
-            return;
-          }
-          // Auto-fallback: if register returns 409 (email exists), retry as login
-          if (authRes.status === 409 && authMode === "register") {
-            const loginRes = await fetch("/api/v1/subscription/login", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                email: form.email.toLowerCase(),
-                password: form.password,
-              }),
-            });
-            if (loginRes.ok) {
-              const loginData = await loginRes.json();
-              localStorage.setItem("subscriber_token", loginData.accessToken);
-              localStorage.setItem(
-                "subscriber",
-                JSON.stringify(loginData.subscriber),
-              );
-              setSubscriber(loginData.subscriber);
-              setAuthMode("login");
-            } else {
-              setError(
-                locale === "th"
-                  ? "อีเมลนี้ลงทะเบียนแล้ว กรุณาเข้าสู่ระบบด้วยรหัสผ่านที่ถูกต้อง"
-                  : locale === "zh"
-                    ? "此电子邮件已注册，请使用正确的密码登录"
-                    : "This email is already registered. Please log in with the correct password.",
-              );
-              return;
-            }
-          } else {
-            const msg = Array.isArray(errData.message)
-              ? errData.message.join(", ")
-              : errData.message ||
-                (locale === "th"
-                  ? "เข้าสู่ระบบ/สมัครสมาชิกล้มเหลว"
-                  : locale === "zh"
-                    ? "登录/注册失败"
-                    : "Login/Register failed");
-            setError(msg);
-            return;
-          }
-        } else {
-          const authData = await authRes.json();
-          localStorage.setItem("subscriber_token", authData.accessToken);
-          localStorage.setItem(
-            "subscriber",
-            JSON.stringify(authData.subscriber),
-          );
-          setSubscriber(authData.subscriber);
-        }
-      } catch {
-        setError(
-          locale === "th"
-            ? "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้"
-            : locale === "zh"
-              ? "无法连接服务器"
-              : "Cannot connect to server",
-        );
-        return;
-      }
-    }
+    if (!(await ensureInlineAuthentication())) return;
     if (!form.consent) {
       setError(t("consent"));
       return;

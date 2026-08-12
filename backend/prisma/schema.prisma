@@ -359,6 +359,9 @@ model Fixer {
   kycExpiryWarningSentAt         DateTime?
   tierReevaluationRequestedAt    DateTime?
   tierReevaluationCompletedAt    DateTime?
+  suspendedAt                    DateTime?
+  suspendedById                  String?
+  suspensionReason               String?
 
   skills                   FixerSkill[]
   availability             FixerAvailability[]

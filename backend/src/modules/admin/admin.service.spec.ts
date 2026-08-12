@@ -16,6 +16,8 @@ describe('AdminService', () => {
     order: Record<string, jest.Mock>;
     user: Record<string, jest.Mock>;
     kycSubmission: Record<string, jest.Mock>;
+    notification: Record<string, jest.Mock>;
+    $transaction: jest.Mock;
   };
   let eventEmitter: { emit: jest.Mock };
 
@@ -39,7 +41,15 @@ describe('AdminService', () => {
       kycSubmission: {
         findFirst: jest.fn(),
       },
+      notification: {
+        createMany: jest.fn(),
+      },
+      $transaction: jest.fn(),
     };
+    prisma.$transaction.mockImplementation(
+      async (callback: (tx: typeof prisma) => Promise<unknown>) =>
+        callback(prisma),
+    );
     eventEmitter = { emit: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -443,33 +453,100 @@ describe('AdminService', () => {
       prisma.fixer.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.suspendFixer('bad-id', 'Fraud detected'),
+        service.suspendFixer('bad-id', 'admin-1', 'Fraud detected'),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('should suspend fixer and emit event', async () => {
+    it('suspends matching without erasing approved KYC and persists a notice', async () => {
       prisma.fixer.findUnique.mockResolvedValue({
         id: 'fixer-1',
         userId: 'user-1',
+        status: FixerStatus.APPROVED,
+        verified: true,
       });
       prisma.fixer.update.mockResolvedValue({
         id: 'fixer-1',
         status: FixerStatus.SUSPENDED,
-        verified: false,
+        verified: true,
         user: { id: 'user-1' },
       });
+      prisma.notification.createMany.mockResolvedValue({ count: 1 });
 
       const result = await service.suspendFixer(
         'fixer-1',
+        'admin-1',
         'Fraudulent activity detected',
       );
 
       expect(result.status).toBe(FixerStatus.SUSPENDED);
+      expect(prisma.fixer.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: FixerStatus.SUSPENDED,
+            suspendedById: 'admin-1',
+            suspensionReason: 'Fraudulent activity detected',
+          }),
+        }),
+      );
+      expect(prisma.fixer.update.mock.calls[0][0].data).not.toHaveProperty(
+        'verified',
+      );
+      expect(prisma.notification.createMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: [
+            expect.objectContaining({
+              userId: 'user-1',
+              title: 'Partner profile paused',
+            }),
+          ],
+        }),
+      );
       expect(eventEmitter.emit).toHaveBeenCalledWith(
         'fixer.suspended',
         expect.objectContaining({
           fixerId: 'fixer-1',
+          adminId: 'admin-1',
           reason: 'Fraudulent activity detected',
+        }),
+      );
+    });
+
+    it('restores a suspended partner only when approved KYC remains valid', async () => {
+      prisma.fixer.findUnique.mockResolvedValue({
+        id: 'fixer-1',
+        userId: 'user-1',
+        status: FixerStatus.SUSPENDED,
+        verified: true,
+        kycValidUntil: new Date('2026-09-30T00:00:00.000Z'),
+      });
+      prisma.fixer.update.mockResolvedValue({
+        id: 'fixer-1',
+        status: FixerStatus.APPROVED,
+        verified: true,
+        user: { id: 'user-1' },
+      });
+      prisma.notification.createMany.mockResolvedValue({ count: 1 });
+
+      await expect(
+        service.resumeFixer('fixer-1', 'admin-1', 'Complaint review completed'),
+      ).resolves.toEqual(
+        expect.objectContaining({ status: FixerStatus.APPROVED }),
+      );
+      expect(prisma.fixer.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: FixerStatus.APPROVED,
+            suspendedAt: null,
+            suspendedById: null,
+            suspensionReason: null,
+          }),
+        }),
+      );
+      expect(prisma.notification.createMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: [
+            expect.objectContaining({ title: 'Partner profile restored' }),
+          ],
         }),
       );
     });
