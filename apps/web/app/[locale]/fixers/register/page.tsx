@@ -216,22 +216,38 @@ function applicantKycReason(code: string, locale: string): string {
 function qualificationFilePreparationError(
   cause: unknown,
   locale: string,
+  maximumSize = "0.3 MB",
 ): string {
   const message = cause instanceof Error ? cause.message : "";
   const pageLimit = message.includes("more than 50 pages");
+  const unreadablePdf =
+    message.includes("valid, unlocked PDF") ||
+    message.includes("could not be compressed. Check that it is a valid");
   if (locale === "th") {
-    return pageLimit
-      ? "เอกสารมีมากกว่า 50 หน้า กรุณาแบ่งเอกสารเป็นไฟล์ที่สั้นลงแล้วอัปโหลดอีกครั้ง"
-      : "ไม่สามารถบีบอัดไฟล์นี้ให้มีขนาดไม่เกิน 0.3 MB โดยยังคงอ่านได้ กรุณาใช้ไฟล์ที่ชัดเจนกว่า มีจำนวนหน้าน้อยลง หรือมีความละเอียดต่ำลง";
+    if (pageLimit) {
+      return "เอกสารมีมากกว่า 50 หน้า กรุณาแบ่งเอกสารเป็นไฟล์ที่สั้นลงแล้วอัปโหลดอีกครั้ง";
+    }
+    if (unreadablePdf) {
+      return "ไม่สามารถอ่านไฟล์ PDF นี้ได้ กรุณาใช้ไฟล์ PDF ที่เปิดได้และไม่ได้ป้องกันด้วยรหัสผ่าน";
+    }
+    return `ไม่สามารถบีบอัดไฟล์นี้ให้มีขนาดไม่เกิน ${maximumSize} โดยยังคงอ่านได้ กรุณาใช้ไฟล์ที่ชัดเจนกว่า มีจำนวนหน้าน้อยลง หรือมีความละเอียดต่ำลง`;
   }
   if (locale === "zh") {
-    return pageLimit
-      ? "文档超过 50 页，请将文档拆分为较短的文件后重新上传。"
-      : "无法在保持清晰可读的同时将此文件压缩至不超过 0.3 MB。请使用更清晰、页数更少或分辨率更低的文件。";
+    if (pageLimit) {
+      return "文档超过 50 页，请将文档拆分为较短的文件后重新上传。";
+    }
+    if (unreadablePdf) {
+      return "无法读取此 PDF。请选择可正常打开且未受密码保护的 PDF。";
+    }
+    return `无法在保持清晰可读的同时将此文件压缩至不超过 ${maximumSize}。请使用更清晰、页数更少或分辨率更低的文件。`;
   }
-  return pageLimit
-    ? "The document has more than 50 pages. Split it into shorter files and upload again."
-    : "We could not compress this file below 0.3 MB while keeping it readable. Use a clearer file with fewer pages or lower resolution.";
+  if (pageLimit) {
+    return "The document has more than 50 pages. Split it into shorter files and upload again.";
+  }
+  if (unreadablePdf) {
+    return "We could not read this PDF. Select a PDF that opens normally and is not password protected.";
+  }
+  return `We could not compress this file below ${maximumSize} while keeping it readable. Use a clearer file with fewer pages or lower resolution.`;
 }
 
 function companyAffidavitLabel(locale: string): string {
@@ -895,7 +911,11 @@ function FixerRegisterContent() {
             " (" +
             file.name +
             "): " +
-            qualificationFilePreparationError(cause, locale),
+            qualificationFilePreparationError(
+              cause,
+              locale,
+              documentType === "company-affidavit" ? "1 MB" : "0.3 MB",
+            ),
         );
       } finally {
         setCompanyEvidenceProcessing(false);

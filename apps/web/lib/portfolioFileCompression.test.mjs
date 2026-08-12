@@ -64,9 +64,26 @@ test("KYC, company evidence, and portfolio share localized 0.3 MB preparation", 
 
 test("company affidavits retain a readable fallback up to 1 MB", async () => {
   const source = await readFile(helperUrl, "utf8");
+  const fallbackStart = source.indexOf(
+    "export async function prepareCompanyAffidavitFile",
+  );
+  const fallbackSource = source.slice(fallbackStart);
 
   assert.match(source, /COMPANY_AFFIDAVIT_MAX_FILE_BYTES = 1024 \* 1024/);
   assert.match(source, /prepareCompanyAffidavitFile/);
   assert.match(source, /compressPdfFile\(file, true\)/);
   assert.match(source, /file\.size > COMPANY_AFFIDAVIT_MAX_FILE_BYTES/);
+  assert.match(fallbackSource, /await validateReadablePdf\(file\)/);
+  assert.doesNotMatch(fallbackSource, /PDFDocument\.load/);
+});
+
+test("company affidavit errors use its 1 MB limit and identify unreadable PDFs", async () => {
+  const source = await readFile(registerUrl, "utf8");
+
+  assert.match(
+    source,
+    /documentType === "company-affidavit" \? "1 MB" : "0\.3 MB"/,
+  );
+  assert.match(source, /valid, unlocked PDF/);
+  assert.match(source, /ไม่สามารถอ่านไฟล์ PDF นี้ได้/);
 });

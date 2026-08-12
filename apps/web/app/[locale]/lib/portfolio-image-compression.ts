@@ -11,6 +11,50 @@ const ALLOWED_PORTFOLIO_IMAGE_TYPES = new Set([
 ]);
 const PORTFOLIO_PDF_TYPE = "application/pdf";
 
+function configurePdfWorker(pdfjs: typeof import("pdfjs-dist")): void {
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+    "pdfjs-dist/build/pdf.worker.min.mjs",
+    import.meta.url,
+  ).toString();
+}
+
+async function validateReadablePdf(file: File): Promise<void> {
+  const pdfjs = await import("pdfjs-dist");
+  configurePdfWorker(pdfjs);
+
+  const loadingTask = pdfjs.getDocument({
+    data: new Uint8Array(await file.arrayBuffer()),
+    isEvalSupported: false,
+  });
+
+  try {
+    const source = await loadingTask.promise;
+    if (source.numPages < 1) {
+      throw new Error(`${file.name} has no readable pages`);
+    }
+    if (source.numPages > PORTFOLIO_PDF_MAX_PAGES) {
+      throw new Error(
+        `${file.name} has more than ${PORTFOLIO_PDF_MAX_PAGES} pages`,
+      );
+    }
+
+    const firstPage = await source.getPage(1);
+    const viewport = firstPage.getViewport({ scale: 1 });
+    if (viewport.width <= 0 || viewport.height <= 0) {
+      throw new Error(`${file.name} has no readable pages`);
+    }
+  } catch (cause) {
+    if (cause instanceof Error && cause.message.includes("more than")) {
+      throw cause;
+    }
+    throw new Error(
+      `${file.name} is not a valid, unlocked PDF that can be reviewed.`,
+    );
+  } finally {
+    await loadingTask.destroy();
+  }
+}
+
 function loadImage(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
@@ -49,10 +93,7 @@ async function compressPdfFile(
     import("pdfjs-dist"),
   ]);
 
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-    "pdfjs-dist/build/pdf.worker.min.mjs",
-    import.meta.url,
-  ).toString();
+  configurePdfWorker(pdfjs);
 
   const sourceBytes = new Uint8Array(await file.arrayBuffer());
   const loadingTask = pdfjs.getDocument({
@@ -242,15 +283,7 @@ export async function prepareCompanyAffidavitFile(file: File): Promise<File> {
       throw compressionError;
     }
 
-    try {
-      const { PDFDocument } = await import("pdf-lib");
-      await PDFDocument.load(new Uint8Array(await file.arrayBuffer()), {
-        ignoreEncryption: false,
-        updateMetadata: false,
-      });
-      return file;
-    } catch {
-      throw compressionError;
-    }
+    await validateReadablePdf(file);
+    return file;
   }
 }
