@@ -136,6 +136,7 @@ describe('FixerService', () => {
             servicePostalCode: '10110',
             gpsLat: 13.736717,
             gpsLng: 100.560062,
+            contactPhone: undefined,
           }),
         }),
       );
@@ -3850,5 +3851,11 @@ describe('FixerService', () => {
       where: { id: 'user-1' },
       data: expect.objectContaining({ role: 'ADMIN' }),
     });
+    expect(prisma.user.update.mock.calls.at(-1)?.[0].data).not.toHaveProperty(
+      'phone',
+    );
+    expect(prisma.fixer.update.mock.calls.at(-1)?.[0].data.contactPhone).toBe(
+      '081-985-2846',
+    );
   });
 });

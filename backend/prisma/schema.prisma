@@ -334,6 +334,7 @@ model Fixer {
   pastExperience     String? // narrative of past work
   pastProjectType    String? // type of past projects
   availableStartDate String? // desired start date for service
+  contactPhone       String? // provider contact; separate from unique login identity
   companyAddress     Json? // snapshot of company address
   priceList          Json? // [{service, unit, finalPrice}]
   serviceProvince    String? // primary service area province

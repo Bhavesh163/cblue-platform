@@ -1082,6 +1082,7 @@ export class FixerService {
             yearsExperience: dto.yearsExperience,
             travelRadius: dto.travelRadius,
             availableStartDate: dto.scheduledDate,
+            contactPhone: dto.phone,
             companyAddress: dto.companyAddress
               ? (JSON.parse(
                   JSON.stringify(dto.companyAddress),
@@ -1210,7 +1211,7 @@ export class FixerService {
     const evaluationInput: RegisterFixerWithEvidence = {
       name: fixer.user?.name || undefined,
       email: fixer.user?.email || undefined,
-      phone: fixer.user?.phone || undefined,
+      phone: fixer.contactPhone || fixer.user?.phone || undefined,
       company: fixer.user?.company || undefined,
       bio: fixer.bio || undefined,
       description: fixer.description || undefined,
@@ -1323,7 +1324,10 @@ export class FixerService {
     if (normalizeText(existingUser.email) !== normalizeText(dto.email)) {
       reasons.push('EMAIL_CHANGED');
     }
-    if (normalizePhone(existingUser.phone) !== normalizePhone(dto.phone)) {
+    if (
+      normalizePhone(fixer.contactPhone ?? existingUser.phone) !==
+      normalizePhone(dto.phone)
+    ) {
       reasons.push('PHONE_CHANGED');
     }
     if (
@@ -1354,7 +1358,6 @@ export class FixerService {
       data: {
         name: dto.name,
         email: dto.email,
-        phone: dto.phone,
         company: dto.company,
         role: existingUser.role === 'ADMIN' ? 'ADMIN' : 'FIXER',
       },
@@ -1374,6 +1377,7 @@ export class FixerService {
         yearsExperience: dto.yearsExperience,
         travelRadius: dto.travelRadius,
         availableStartDate: dto.scheduledDate,
+        contactPhone: dto.phone,
         companyAddress: dto.companyAddress
           ? (JSON.parse(
               JSON.stringify(dto.companyAddress),

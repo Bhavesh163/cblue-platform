@@ -30,6 +30,7 @@ type DirectoryRow = {
   completedJobs?: number | null;
   reviewCount?: number;
   yearsExperience?: number | null;
+  contactPhone?: string | null;
   serviceProvince?: string | null;
   serviceDistrict?: string | null;
   serviceSubdistrict?: string | null;
@@ -107,6 +108,7 @@ type Detail = {
     };
   }>;
   yearsExperience?: number | null;
+  contactPhone?: string | null;
   bio?: string | null;
   description?: string | null;
   pastExperience?: string | null;
@@ -508,7 +510,10 @@ export default function AdminPartnerDirectory({ token }: Props) {
                 <td className="py-3 pr-4 align-top font-semibold text-slate-900">
                   {displayName(row)}
                   <p className="mt-1 text-xs font-normal text-slate-500">
-                    {row.user?.email || row.user?.phone || ""}
+                    {row.user?.email ||
+                      row.contactPhone ||
+                      row.user?.phone ||
+                      ""}
                   </p>
                 </td>
                 <td className="py-3 pr-4 align-top text-slate-600">
@@ -676,7 +681,9 @@ export default function AdminPartnerDirectory({ token }: Props) {
             <div>
               <p className="text-xs font-semibold text-slate-500">Phone</p>
               <p className="text-sm text-slate-800">
-                {selected.user?.phone || "Not recorded"}
+                {selected.contactPhone ||
+                  selected.user?.phone ||
+                  "Not recorded"}
               </p>
             </div>
             <div>

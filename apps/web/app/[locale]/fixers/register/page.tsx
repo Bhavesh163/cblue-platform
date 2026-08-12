@@ -607,7 +607,7 @@ function FixerRegisterContent() {
       ...prev,
       name: user?.name || prev.name,
       email: user?.email || prev.email,
-      phone: user?.phone || prev.phone,
+      phone: fixer?.contactPhone || user?.phone || prev.phone,
       company: fixer?.user?.company || user?.company || prev.company,
       bio: fixer?.bio || "",
       yearsExperience:
