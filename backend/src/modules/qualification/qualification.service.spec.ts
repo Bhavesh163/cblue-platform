@@ -40,6 +40,7 @@ describe('QualificationService', () => {
     qualificationEvidenceAssessmentJob: {
       create: jest.fn(),
       updateMany: jest.fn(),
+      createMany: jest.fn(),
     },
     qualificationStorageCleanupIntent: {
       deleteMany: jest.fn(),
@@ -131,6 +132,9 @@ describe('QualificationService', () => {
     tx.kycSubmission.findUnique.mockResolvedValue({ status: 'DRAFT' });
     tx.qualificationStorageCleanupIntent.deleteMany.mockResolvedValue({
       count: 1,
+    });
+    tx.qualificationEvidenceAssessmentJob.createMany.mockResolvedValue({
+      count: 0,
     });
     prisma.qualificationEvidenceAssessmentJob.create.mockResolvedValue({
       id: 'job-1',
@@ -779,7 +783,11 @@ describe('QualificationService', () => {
         size: 4,
         buffer: Buffer.from([0xff, 0xd8, 0xff, 0x11]),
       } as Express.Multer.File),
-    ).rejects.toThrow('upload failed');
+    ).rejects.toMatchObject({
+      response: {
+        code: 'OBJECT_UPLOAD_FAILED',
+      },
+    });
 
     expect(prisma.kycDocument.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -934,7 +942,11 @@ describe('QualificationService', () => {
         size: 4,
         buffer: Buffer.from([0xff, 0xd8, 0xff, 0x13]),
       } as Express.Multer.File),
-    ).rejects.toThrow('promotion failed before commit');
+    ).rejects.toMatchObject({
+      response: {
+        code: 'DOCUMENT_PROMOTION_FAILED',
+      },
+    });
 
     const staged = tx.kycDocument.create.mock.calls[0][0].data;
     expect(prisma.kycDocument.findFirst).toHaveBeenCalledWith({
@@ -1736,7 +1748,11 @@ describe('QualificationService', () => {
         size: 4,
         buffer: Buffer.from([0xff, 0xd8, 0xff, 0x02]),
       } as Express.Multer.File),
-    ).rejects.toThrow('assessment persistence failed');
+    ).rejects.toMatchObject({
+      response: {
+        code: 'DOCUMENT_ASSESSMENT_FAILED',
+      },
+    });
 
     const reserved =
       prisma.qualificationStorageCleanupIntent.createMany.mock.calls[0][0].data;
@@ -1778,7 +1794,11 @@ describe('QualificationService', () => {
         size: 4,
         buffer: Buffer.from([0xff, 0xd8, 0xff, 0x03]),
       } as Express.Multer.File),
-    ).rejects.toThrow('document persistence failed');
+    ).rejects.toMatchObject({
+      response: {
+        code: 'DOCUMENT_STAGE_FAILED',
+      },
+    });
 
     expect(storage.putPrivateObject).not.toHaveBeenCalled();
     expect(storage.deletePrivateObject).not.toHaveBeenCalled();
@@ -2084,6 +2104,7 @@ describe('QualificationService', () => {
       fixer: { verifiedCompanyName: null },
       documents: [
         {
+          id: 'id-front-document',
           documentType: 'id-front',
           sizeBytes: 100,
           contentType: 'image/jpeg',
@@ -2091,6 +2112,7 @@ describe('QualificationService', () => {
           lifecycleState: 'READY',
         },
         {
+          id: 'id-back-document',
           documentType: 'id-back',
           sizeBytes: 100,
           contentType: 'image/jpeg',
@@ -2098,6 +2120,7 @@ describe('QualificationService', () => {
           lifecycleState: 'READY',
         },
         {
+          id: 'selfie-document',
           documentType: 'selfie-with-id',
           sizeBytes: 100,
           contentType: 'image/jpeg',
@@ -2105,6 +2128,7 @@ describe('QualificationService', () => {
           lifecycleState: 'READY',
         },
         {
+          id: 'portfolio-image-document',
           documentType: 'portfolio',
           sizeBytes: 250 * 1024,
           contentType: 'image/jpeg',
@@ -2112,6 +2136,7 @@ describe('QualificationService', () => {
           lifecycleState: 'READY',
         },
         {
+          id: 'portfolio-pdf-document',
           documentType: 'portfolio',
           sizeBytes: 200 * 1024,
           contentType: 'application/pdf',
@@ -2130,7 +2155,106 @@ describe('QualificationService', () => {
       'user-1',
     );
     expect(policy.evaluate).not.toHaveBeenCalled();
+    expect(
+      tx.qualificationEvidenceAssessmentJob.createMany,
+    ).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          documentId: 'portfolio-image-document',
+          submissionId: 'submission-1',
+          status: 'QUEUED',
+          eligibleAt: expect.any(Date),
+        }),
+        expect.objectContaining({
+          documentId: 'portfolio-pdf-document',
+          submissionId: 'submission-1',
+          status: 'QUEUED',
+          eligibleAt: expect.any(Date),
+        }),
+      ],
+      skipDuplicates: true,
+    });
   });
+
+  it('queues both company documents atomically when the applicant submits', async () => {
+    tx.kycSubmission.findFirst.mockResolvedValue({
+      id: 'submission-1',
+      status: 'DRAFT',
+      fixer: { verifiedCompanyName: null },
+      documents: [
+        {
+          id: 'id-front-document',
+          documentType: 'id-front',
+          sizeBytes: 100,
+          contentType: 'image/jpeg',
+          isActive: true,
+          lifecycleState: 'READY',
+        },
+        {
+          id: 'selfie-document',
+          documentType: 'selfie-with-id',
+          sizeBytes: 100,
+          contentType: 'image/jpeg',
+          isActive: true,
+          lifecycleState: 'READY',
+        },
+        {
+          id: 'company-affidavit-document',
+          documentType: 'company-affidavit',
+          sizeBytes: 608 * 1024,
+          contentType: 'application/pdf',
+          isActive: true,
+          lifecycleState: 'READY',
+        },
+        {
+          id: 'company-letter-document',
+          documentType: 'company-letter-of-intent',
+          sizeBytes: 22 * 1024,
+          contentType: 'application/pdf',
+          isActive: true,
+          lifecycleState: 'READY',
+        },
+      ],
+    });
+
+    await expect(
+      service.submitForUser('user-1', 'submission-1'),
+    ).resolves.toEqual(expect.objectContaining({ status: 'NEEDS_REVIEW' }));
+
+    expect(
+      tx.qualificationEvidenceAssessmentJob.createMany,
+    ).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          documentId: 'company-affidavit-document',
+          submissionId: 'submission-1',
+          status: 'QUEUED',
+          eligibleAt: expect.any(Date),
+        }),
+        expect.objectContaining({
+          documentId: 'company-letter-document',
+          submissionId: 'submission-1',
+          status: 'QUEUED',
+          eligibleAt: expect.any(Date),
+        }),
+      ],
+      skipDuplicates: true,
+    });
+    expect(
+      tx.qualificationEvidenceAssessmentJob.updateMany,
+    ).toHaveBeenCalledWith({
+      where: {
+        submissionId: 'submission-1',
+        status: 'QUEUED',
+        eligibleAt: null,
+      },
+      data: {
+        eligibleAt: expect.any(Date),
+        nextAttemptAt: expect.any(Date),
+      },
+    });
+  });
+
   it('creates a short-lived admin review URL and audit record', async () => {
     prisma.kycDocument.findFirst.mockResolvedValue({
       id: 'document-1',
@@ -2196,7 +2320,7 @@ describe('QualificationService', () => {
     });
   });
 
-  it('atomically promotes portfolio evidence and creates its assessment job', async () => {
+  it('atomically promotes draft portfolio evidence for assessment at submit', async () => {
     prisma.kycSubmission.findFirst.mockResolvedValue({
       id: 'submission-1',
       fixerId: 'fixer-1',
@@ -2232,18 +2356,11 @@ describe('QualificationService', () => {
       } as Express.Multer.File),
     ).resolves.toEqual(expect.objectContaining({ assessmentPending: true }));
 
-    expect(tx.qualificationEvidenceAssessmentJob.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        documentId: expect.any(String),
-        submissionId: 'submission-1',
-        status: 'QUEUED',
-        eligibleAt: null,
-      }),
-    });
+    expect(tx.qualificationEvidenceAssessmentJob.create).not.toHaveBeenCalled();
     expect(tx.qualificationStorageCleanupIntent.deleteMany).toHaveBeenCalled();
     expect(tx.qualificationAuditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        action: 'EVIDENCE_ASSESSMENT_QUEUED',
+        action: 'EVIDENCE_STAGED_FOR_SUBMISSION',
         entityType: 'KycDocument',
       }),
     });

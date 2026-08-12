@@ -11,6 +11,14 @@ const recaptchaUrl = new URL(
   "../app/[locale]/components/ReCaptcha.tsx",
   import.meta.url,
 );
+const compressionUrl = new URL(
+  "../app/[locale]/lib/portfolio-image-compression.ts",
+  import.meta.url,
+);
+const adminRoleMigrationUrl = new URL(
+  "../../../backend/prisma/migrations/20260812193000_restore_suppadesh_admin_role/migration.sql",
+  import.meta.url,
+);
 
 test("company evidence upload failures identify the affected document", async () => {
   const source = await readFile(registerUrl, "utf8");
@@ -18,6 +26,36 @@ test("company evidence upload failures identify the affected document", async ()
   assert.match(source, /companyEvidenceUploadError/);
   assert.match(source, /companyAffidavitLabel/);
   assert.match(source, /companyLetterOfIntentLabel/);
+});
+
+test("company PDF preparation does not start a worker before lossless compression is evaluated", async () => {
+  const source = await readFile(compressionUrl, "utf8");
+  const optimizedCheck = source.indexOf(
+    "optimizedBytes.byteLength <= PORTFOLIO_PDF_TARGET_BYTES",
+  );
+  const workerStart = source.indexOf(
+    "loadingTask = pdfjs.getDocument",
+    optimizedCheck,
+  );
+
+  assert.ok(optimizedCheck >= 0);
+  assert.ok(workerStart > optimizedCheck);
+});
+
+test("company evidence preparation is serialized before form submission", async () => {
+  const source = await readFile(registerUrl, "utf8");
+
+  assert.match(source, /companyEvidencePreparationQueueRef/);
+  assert.match(source, /companyEvidencePreparationQueueRef\.current\.then/);
+  assert.match(source, /companyEvidenceProcessingCount > 0/);
+});
+
+test("admin repair updates only the existing authorized account", async () => {
+  const source = await readFile(adminRoleMigrationUrl, "utf8");
+
+  assert.match(source, /lower\(email\) = 'suppadesh@hotmail\.com'/);
+  assert.match(source, /role = 'ADMIN'::"UserRole"/);
+  assert.doesNotMatch(source, /INSERT INTO "users"/);
 });
 
 test("admin OTP retries clear the consumed token and reset the widget", async () => {

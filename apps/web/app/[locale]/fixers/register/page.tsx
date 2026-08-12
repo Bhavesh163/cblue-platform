@@ -530,8 +530,12 @@ function FixerRegisterContent() {
   const [companyLetterOfIntent, setCompanyLetterOfIntent] =
     useState<File | null>(null);
   const [portfolioProcessing, setPortfolioProcessing] = useState(false);
-  const [companyEvidenceProcessing, setCompanyEvidenceProcessing] =
-    useState(false);
+  const [companyEvidenceProcessingCount, setCompanyEvidenceProcessingCount] =
+    useState(0);
+  const companyEvidencePreparationQueueRef = useRef<Promise<void>>(
+    Promise.resolve(),
+  );
+  const companyEvidenceProcessing = companyEvidenceProcessingCount > 0;
   const [qualificationEligibility, setQualificationEligibility] =
     useState<QualificationEligibility | null>(null);
   const [qualificationSubmissionStatus, setQualificationSubmissionStatus] =
@@ -892,14 +896,22 @@ function FixerRegisterContent() {
         setFile(null);
         return;
       }
-      setCompanyEvidenceProcessing(true);
+      setCompanyEvidenceProcessingCount((count) => count + 1);
       setError("");
+      const preparation = companyEvidencePreparationQueueRef.current.then(
+        async () => {
+          setFile(
+            documentType === "company-affidavit"
+              ? await prepareCompanyAffidavitFile(file)
+              : await prepareQualificationEvidenceFile(file),
+          );
+        },
+      );
+      companyEvidencePreparationQueueRef.current = preparation.catch(
+        () => undefined,
+      );
       try {
-        setFile(
-          documentType === "company-affidavit"
-            ? await prepareCompanyAffidavitFile(file)
-            : await prepareQualificationEvidenceFile(file),
-        );
+        await preparation;
       } catch (cause) {
         setFile(null);
         const label =
@@ -918,7 +930,7 @@ function FixerRegisterContent() {
             ),
         );
       } finally {
-        setCompanyEvidenceProcessing(false);
+        setCompanyEvidenceProcessingCount((count) => Math.max(0, count - 1));
       }
     },
     [locale],

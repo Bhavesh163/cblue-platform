@@ -901,19 +901,20 @@ export class QualificationService {
               },
             });
           }
-          await tx.qualificationEvidenceAssessmentJob.create({
-            data: {
-              documentId,
-              submissionId: submission.id,
-              status: 'QUEUED',
-              nextAttemptAt: readyAt,
-              eligibleAt:
-                isPortfolio &&
-                submission.status === QualificationSubmissionStatus.APPROVED
-                  ? readyAt
-                  : null,
-            },
-          });
+          if (
+            isPortfolio &&
+            submission.status === QualificationSubmissionStatus.APPROVED
+          ) {
+            await tx.qualificationEvidenceAssessmentJob.create({
+              data: {
+                documentId,
+                submissionId: submission.id,
+                status: 'QUEUED',
+                nextAttemptAt: readyAt,
+                eligibleAt: readyAt,
+              },
+            });
+          }
           if (
             isPortfolio &&
             submission.status === QualificationSubmissionStatus.APPROVED
@@ -952,10 +953,18 @@ export class QualificationService {
             data: {
               submissionId: submission.id,
               actorId: userId,
-              action: 'EVIDENCE_ASSESSMENT_QUEUED',
+              action:
+                isPortfolio &&
+                submission.status === QualificationSubmissionStatus.APPROVED
+                  ? 'EVIDENCE_ASSESSMENT_QUEUED'
+                  : 'EVIDENCE_STAGED_FOR_SUBMISSION',
               entityType: 'KycDocument',
               entityId: documentId,
-              reason: 'Evidence promoted and queued for assessment',
+              reason:
+                isPortfolio &&
+                submission.status === QualificationSubmissionStatus.APPROVED
+                  ? 'Evidence promoted and queued for assessment'
+                  : 'Evidence promoted and awaits submission',
               metadata: { documentType },
             },
           });
@@ -1229,7 +1238,19 @@ export class QualificationService {
           : `Qualification upload failed document=${documentId} submission=${submission.id} code=${errorCode}`,
         error instanceof Error ? error.name : 'UnknownError',
       );
-      throw error;
+      if (
+        error instanceof BadRequestException ||
+        error instanceof ConflictException ||
+        error instanceof NotFoundException ||
+        error instanceof ServiceUnavailableException
+      ) {
+        throw error;
+      }
+      throw new ServiceUnavailableException({
+        code: errorCode,
+        message:
+          'Qualification evidence could not be saved. Submit this file again.',
+      });
     }
   }
   private assertUploadableSubmission(
@@ -1840,6 +1861,7 @@ export class QualificationService {
                 documentType: true,
                 sizeBytes: true,
                 contentType: true,
+                id: true,
                 isActive: true,
                 lifecycleState: true,
               },
@@ -1896,18 +1918,36 @@ export class QualificationService {
             'Every portfolio item must be a PDF or image no larger than 0.3 MB',
           );
         }
-      });
-
-      await this.prisma.qualificationEvidenceAssessmentJob.updateMany({
-        where: {
-          submissionId,
-          status: 'QUEUED',
-          eligibleAt: null,
-        },
-        data: {
-          eligibleAt: new Date(),
-          nextAttemptAt: new Date(),
-        },
+        const readyAt = new Date();
+        const deferredDocuments = activeDocuments.filter(
+          (document) =>
+            document.documentType !== 'id-front' &&
+            document.documentType !== 'id-back' &&
+            document.documentType !== 'selfie-with-id',
+        );
+        if (deferredDocuments.length > 0) {
+          await tx.qualificationEvidenceAssessmentJob.createMany({
+            data: deferredDocuments.map((document) => ({
+              documentId: document.id,
+              submissionId,
+              status: 'QUEUED' as const,
+              nextAttemptAt: readyAt,
+              eligibleAt: readyAt,
+            })),
+            skipDuplicates: true,
+          });
+        }
+        await tx.qualificationEvidenceAssessmentJob.updateMany({
+          where: {
+            submissionId,
+            status: 'QUEUED',
+            eligibleAt: null,
+          },
+          data: {
+            eligibleAt: readyAt,
+            nextAttemptAt: readyAt,
+          },
+        });
       });
       return await this.routing.routeSubmission(submissionId, userId);
     } catch (error) {

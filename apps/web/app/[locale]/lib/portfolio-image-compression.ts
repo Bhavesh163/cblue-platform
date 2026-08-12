@@ -96,10 +96,7 @@ async function compressPdfFile(
   configurePdfWorker(pdfjs);
 
   const sourceBytes = new Uint8Array(await file.arrayBuffer());
-  const loadingTask = pdfjs.getDocument({
-    data: sourceBytes,
-    isEvalSupported: false,
-  });
+  let loadingTask: ReturnType<typeof pdfjs.getDocument> | null = null;
 
   try {
     const optimized = await PDFDocument.load(sourceBytes, {
@@ -118,6 +115,10 @@ async function compressPdfFile(
       });
     }
 
+    loadingTask = pdfjs.getDocument({
+      data: sourceBytes,
+      isEvalSupported: false,
+    });
     const source = await loadingTask.promise;
     if (source.numPages > PORTFOLIO_PDF_MAX_PAGES) {
       throw new Error(
@@ -201,7 +202,9 @@ async function compressPdfFile(
       `${file.name} could not be compressed. Check that it is a valid, unlocked PDF.`,
     );
   } finally {
-    await loadingTask.destroy();
+    if (loadingTask) {
+      await loadingTask.destroy();
+    }
   }
 
   throw new Error(`${file.name} cannot be compressed below 0.3 MB`);
