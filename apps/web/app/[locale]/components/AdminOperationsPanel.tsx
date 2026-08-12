@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getApiUrl } from "../lib/api";
+import { adminFetchResponse, readAdminResponseError } from "./adminApi";
 
 type DemandGap = {
   id: string;
@@ -96,7 +97,7 @@ const dateTime = new Intl.DateTimeFormat("en-GB", {
   timeStyle: "short",
 });
 
-export default function AdminOperationsPanel({ token }: { token: string }) {
+export default function AdminOperationsPanel() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -108,12 +109,18 @@ export default function AdminOperationsPanel({ token }: { token: string }) {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(
+      const response = await adminFetchResponse(
         getApiUrl("/admin/operations/overview?days=90"),
-        { cache: "no-store", headers: { Authorization: "Bearer " + token } },
+        { cache: "no-store" },
       );
-      if (!response.ok)
-        throw new Error("Unable to load operational analytics.");
+      if (!response.ok) {
+        throw new Error(
+          await readAdminResponseError(
+            response,
+            "Unable to load operational analytics.",
+          ),
+        );
+      }
       setOverview((await response.json()) as Overview);
     } catch (cause) {
       setError(
@@ -124,7 +131,7 @@ export default function AdminOperationsPanel({ token }: { token: string }) {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, []);
 
   useEffect(() => {
     void load();
@@ -158,15 +165,22 @@ export default function AdminOperationsPanel({ token }: { token: string }) {
     setUpdating(gap.id);
     setError("");
     try {
-      const response = await fetch(getApiUrl("/admin/demand-gaps/" + gap.id), {
-        method: "PUT",
-        headers: {
-          Authorization: "Bearer " + token,
-          "Content-Type": "application/json",
+      const response = await adminFetchResponse(
+        getApiUrl("/admin/demand-gaps/" + gap.id),
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status, ...(note ? { note } : {}) }),
         },
-        body: JSON.stringify({ status, ...(note ? { note } : {}) }),
-      });
-      if (!response.ok) throw new Error("Unable to update the demand gap.");
+      );
+      if (!response.ok) {
+        throw new Error(
+          await readAdminResponseError(
+            response,
+            "Unable to update the demand gap.",
+          ),
+        );
+      }
       await load();
     } catch (cause) {
       setError(
@@ -272,7 +286,7 @@ export default function AdminOperationsPanel({ token }: { token: string }) {
           )}
         </div>
         {!!overview?.revenue.details.length && (
-          <div className="mt-5 overflow-x-auto">
+          <div className="mt-5 max-h-[480px] overflow-auto">
             <table className="min-w-[980px] w-full text-left text-sm">
               <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
                 <tr>
@@ -355,7 +369,7 @@ export default function AdminOperationsPanel({ token }: { token: string }) {
           </div>
         )}
         {overview?.demandGaps.length ? (
-          <div className="overflow-x-auto">
+          <div className="max-h-[560px] overflow-auto">
             <table className="min-w-[1180px] w-full text-left text-sm">
               <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
                 <tr>
@@ -452,73 +466,77 @@ export default function AdminOperationsPanel({ token }: { token: string }) {
           Counts are grouped from persisted workflow events; no client-side
           reconstruction.
         </p>
-        <div
-          className="mt-4 flex min-h-36 items-end gap-2 overflow-x-auto border-b border-slate-200 pb-2"
-          aria-label="daily decline and cancellation chart"
-        >
-          {(overview?.incidentSeries.daily || []).map((row) => {
-            const maxTotal = Math.max(
-              1,
-              ...(overview?.incidentSeries.daily || []).map(
-                (item) => item.total,
-              ),
-            );
-            return (
-              <div
-                key={row.period}
-                className="flex min-w-20 flex-1 flex-col items-center justify-end gap-1"
-              >
-                <span className="text-[11px] font-semibold text-slate-700">
-                  {row.total}
-                </span>
+        <div className="max-h-[560px] overflow-y-auto pr-1">
+          <div
+            className="mt-4 flex min-h-36 items-end gap-2 overflow-x-auto border-b border-slate-200 pb-2"
+            aria-label="daily decline and cancellation chart"
+          >
+            {(overview?.incidentSeries.daily || []).map((row) => {
+              const maxTotal = Math.max(
+                1,
+                ...(overview?.incidentSeries.daily || []).map(
+                  (item) => item.total,
+                ),
+              );
+              return (
                 <div
-                  className="w-full max-w-16 rounded-t bg-amber-500"
-                  style={{
-                    height: Math.max(
-                      4,
-                      Math.round((row.total / maxTotal) * 90),
-                    ),
-                  }}
-                />
-                <span className="text-[10px] text-slate-600">{row.period}</span>
-              </div>
-            );
-          })}
-        </div>
-        <div className="mt-4 overflow-x-auto">
-          <table className="min-w-[760px] w-full text-left text-sm">
-            <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="py-2 pr-4">Period</th>
-                <th className="py-2 pr-4">Partner declines</th>
-                <th className="py-2 pr-4">Customer cancellations</th>
-                <th className="py-2 text-right">Total</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {(overview?.incidentSeries.daily || []).map((row) => (
-                <tr key={row.period}>
-                  <td className="py-3 pr-4 font-semibold text-slate-800">
-                    {row.period}
-                  </td>
-                  <td className="py-3 pr-4 text-slate-700">
-                    {row.partnerDeclines}
-                  </td>
-                  <td className="py-3 pr-4 text-slate-700">
-                    {row.customerCancellations}
-                  </td>
-                  <td className="py-3 text-right font-semibold text-slate-900">
+                  key={row.period}
+                  className="flex min-w-20 flex-1 flex-col items-center justify-end gap-1"
+                >
+                  <span className="text-[11px] font-semibold text-slate-700">
                     {row.total}
-                  </td>
+                  </span>
+                  <div
+                    className="w-full max-w-16 rounded-t bg-amber-500"
+                    style={{
+                      height: Math.max(
+                        4,
+                        Math.round((row.total / maxTotal) * 90),
+                      ),
+                    }}
+                  />
+                  <span className="text-[10px] text-slate-600">
+                    {row.period}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-4 overflow-x-auto">
+            <table className="min-w-[760px] w-full text-left text-sm">
+              <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="py-2 pr-4">Period</th>
+                  <th className="py-2 pr-4">Partner declines</th>
+                  <th className="py-2 pr-4">Customer cancellations</th>
+                  <th className="py-2 text-right">Total</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          {!overview?.incidentSeries.daily.length && (
-            <p className="py-4 text-sm text-slate-500">
-              No persisted incidents in this reporting window.
-            </p>
-          )}
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {(overview?.incidentSeries.daily || []).map((row) => (
+                  <tr key={row.period}>
+                    <td className="py-3 pr-4 font-semibold text-slate-800">
+                      {row.period}
+                    </td>
+                    <td className="py-3 pr-4 text-slate-700">
+                      {row.partnerDeclines}
+                    </td>
+                    <td className="py-3 pr-4 text-slate-700">
+                      {row.customerCancellations}
+                    </td>
+                    <td className="py-3 text-right font-semibold text-slate-900">
+                      {row.total}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!overview?.incidentSeries.daily.length && (
+              <p className="py-4 text-sm text-slate-500">
+                No persisted incidents in this reporting window.
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
@@ -530,7 +548,7 @@ export default function AdminOperationsPanel({ token }: { token: string }) {
             automatically.
           </p>
           {overview?.repeatRisk.length ? (
-            <div className="space-y-3">
+            <div className="max-h-[480px] space-y-3 overflow-y-auto pr-1">
               {overview.repeatRisk.slice(0, 12).map((risk) => (
                 <div key={risk.actorId} className="rounded-lg bg-slate-50 p-3">
                   <div className="flex justify-between gap-3">

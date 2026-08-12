@@ -28,6 +28,8 @@ import { QualificationEvaluationService } from './qualification-evaluation.servi
 import { QualificationReviewService } from './qualification-review.service';
 import { QualificationService } from './qualification.service';
 import { QualificationCredentialVerificationService } from './qualification-credential-verification.service';
+import { QualificationVerificationService } from './qualification-verification.service';
+import { PreflightQualificationDocumentDto } from './dto/preflight-qualification-document.dto';
 
 const QUALIFICATION_UPLOAD_TRANSPORT_MAX_BYTES = 25 * 1024 * 1024;
 
@@ -39,6 +41,7 @@ export class QualificationController {
     private readonly evaluations: QualificationEvaluationService,
     private readonly reviews: QualificationReviewService,
     private readonly credentialVerifications: QualificationCredentialVerificationService,
+    private readonly verification: QualificationVerificationService,
   ) {}
 
   @Post('submissions/draft')
@@ -96,6 +99,24 @@ export class QualificationController {
     return this.qualification.uploadDocumentForUser(
       userId,
       submissionId,
+      dto.documentType,
+      file,
+    );
+  }
+
+  @Post('evidence-preflight')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { files: 1, fileSize: QUALIFICATION_UPLOAD_TRANSPORT_MAX_BYTES },
+    }),
+  )
+  preflightEvidence(
+    @CurrentUser('id') userId: string,
+    @Body() dto: PreflightQualificationDocumentDto,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return this.verification.assessUploadForUser(
+      userId,
       dto.documentType,
       file,
     );

@@ -1285,24 +1285,32 @@ export class FixerService {
         ? String(value)
         : ''
       ).replace(/\D+/g, '');
-    const normalizeJson = (value: unknown): string => {
-      if (Array.isArray(value)) {
-        return '[' + value.map((item) => normalizeJson(item)).join(',') + ']';
-      }
-      if (value && typeof value === 'object') {
-        const record = value as Record<string, unknown>;
-        return (
-          '{' +
-          Object.keys(record)
-            .sort()
-            .map(
-              (key) => JSON.stringify(key) + ':' + normalizeJson(record[key]),
-            )
-            .join(',') +
-          '}'
-        );
-      }
-      return JSON.stringify(value ?? null);
+    const normalizeAddress = (value: unknown): string => {
+      const record =
+        value && typeof value === 'object' && !Array.isArray(value)
+          ? (value as Record<string, unknown>)
+          : {};
+      return JSON.stringify(
+        [
+          'houseNumber',
+          'building',
+          'floor',
+          'road',
+          'soi',
+          'province',
+          'district',
+          'subdistrict',
+          'postalCode',
+        ].map((key) => normalizeText(record[key])),
+      );
+    };
+    const sameCoordinate = (
+      persisted: number | null,
+      submitted: number | undefined,
+    ) => {
+      if (persisted === null && submitted === undefined) return true;
+      if (persisted === null || submitted === undefined) return false;
+      return Math.abs(persisted - submitted) < 0.000001;
     };
     const reasons: QualificationReverificationReason[] = [];
     if (normalizeText(existingUser.email) !== normalizeText(dto.email)) {
@@ -1312,8 +1320,8 @@ export class FixerService {
       reasons.push('PHONE_CHANGED');
     }
     if (
-      normalizeJson(fixer.companyAddress) !==
-      normalizeJson(dto.companyAddress ?? null)
+      normalizeAddress(fixer.companyAddress) !==
+      normalizeAddress(dto.companyAddress)
     ) {
       reasons.push('ADDRESS_CHANGED');
     }
@@ -1322,11 +1330,13 @@ export class FixerService {
         normalizeText(serviceLocation.province) ||
       normalizeText(fixer.serviceDistrict) !==
         normalizeText(serviceLocation.district) ||
+      normalizeText(fixer.serviceSubdistrict) !==
+        normalizeText(serviceLocation.subdistrict) ||
       normalizeText(fixer.servicePostalCode) !==
         normalizeText(serviceLocation.postalCode) ||
       Number(fixer.travelRadius) !== Number(dto.travelRadius) ||
-      Number(fixer.gpsLat ?? 0) !== Number(dto.gpsCoords?.lat ?? 0) ||
-      Number(fixer.gpsLng ?? 0) !== Number(dto.gpsCoords?.lng ?? 0)
+      !sameCoordinate(fixer.gpsLat, dto.gpsCoords?.lat) ||
+      !sameCoordinate(fixer.gpsLng, dto.gpsCoords?.lng)
     ) {
       reasons.push('SERVICE_AREA_CHANGED');
     }

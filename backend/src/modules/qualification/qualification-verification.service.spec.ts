@@ -1,7 +1,10 @@
 import { QualificationVerificationService } from './qualification-verification.service';
 
 describe('QualificationVerificationService', () => {
-  const prisma = { kycDocument: { findFirst: jest.fn() } } as any;
+  const prisma = {
+    kycDocument: { findFirst: jest.fn() },
+    user: { findUnique: jest.fn() },
+  } as any;
   const storage = { getPrivateObject: jest.fn() } as any;
   const configValues: Record<string, string> = {
     'typhoon.apiKey': 'private-typhoon-key',
@@ -35,6 +38,9 @@ describe('QualificationVerificationService', () => {
       contentType: 'image/jpeg',
     });
     storage.getPrivateObject.mockResolvedValue(Buffer.from('private-document'));
+    prisma.user.findUnique.mockResolvedValue({
+      name: 'Suppadesh Fungprasertsuk',
+    });
   });
 
   afterEach(() => jest.restoreAllMocks());
@@ -123,6 +129,46 @@ describe('QualificationVerificationService', () => {
       livenessConfidence: null,
       reasonCodes: ['DOCUMENT_VALID', 'HUMAN_REVIEW_REQUIRED'],
     });
+  });
+
+  it('rejects a non-document image during authenticated applicant preflight', async () => {
+    jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ text: '' }), { status: 200 }),
+      );
+
+    await expect(
+      service.assessUploadForUser('user-1', 'id-front', {
+        buffer: Buffer.from([0xff, 0xd8, 0xff, 0x01]),
+        mimetype: 'image/jpeg',
+        size: 4,
+      } as Express.Multer.File),
+    ).resolves.toEqual({
+      evidenceStatus: 'INSUFFICIENT',
+      route: 'NEEDS_RESUBMISSION',
+      confidence: null,
+      reasonCodes: ['UNREADABLE_DOCUMENT'],
+    });
+  });
+
+  it('returns a sanitized preflight result for a readable identity document', async () => {
+    respond(validFields);
+
+    const assessment = await service.assessUploadForUser('user-1', 'id-front', {
+      buffer: Buffer.from([0xff, 0xd8, 0xff, 0x01]),
+      mimetype: 'image/jpeg',
+      size: 4,
+    } as Express.Multer.File);
+
+    expect(assessment).toEqual({
+      evidenceStatus: 'INSUFFICIENT',
+      route: 'NEEDS_REVIEW',
+      confidence: 96,
+      reasonCodes: ['DOCUMENT_VALID', 'HUMAN_REVIEW_REQUIRED'],
+    });
+    expect(assessment).not.toHaveProperty('provider');
+    expect(assessment).not.toHaveProperty('model');
   });
 
   it('retains affidavit identity fields and flags a claimed-company contradiction', async () => {

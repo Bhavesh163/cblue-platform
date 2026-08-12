@@ -426,9 +426,9 @@ export default function AdminPartnerDirectory({ token }: Props) {
           </label>
         ))}
       </div>
-      <div className="mt-4 overflow-x-auto">
+      <div className="mt-4 max-h-[560px] overflow-auto">
         <table className="w-full min-w-[1360px] text-left text-sm">
-          <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+          <thead className="sticky top-0 z-10 border-b border-slate-200 bg-white text-xs uppercase tracking-wide text-slate-500">
             <tr>
               <th className="py-2 pr-4">Provider</th>
               <th className="py-2 pr-4">Area</th>

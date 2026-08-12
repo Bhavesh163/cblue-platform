@@ -57,6 +57,12 @@ type UploadAssessmentResponse = {
     evidenceStatus?: string;
   };
 };
+type KycPreflightResponse = {
+  evidenceStatus: string;
+  route: string;
+  confidence: number | null;
+  reasonCodes: string[];
+};
 class KycUploadError extends Error {
   readonly code: string;
 
@@ -93,6 +99,7 @@ const APPLICANT_KYC_MESSAGES: Record<
     EVIDENCE_REUSED_FOR_DIFFERENT_TYPE:
       "Please use two different photos for the identity card and selfie.",
     EVIDENCE_UPLOAD_IN_PROGRESS: "This photo is already being checked.",
+    AUTH_REQUIRED: "Please sign in before checking identity photos.",
     UPLOAD_FAILED:
       "We could not save this photo securely. Please upload a clearer image and try again.",
   },
@@ -119,6 +126,8 @@ const APPLICANT_KYC_MESSAGES: Record<
       "\u0e01\u0e23\u0e38\u0e13\u0e32\u0e43\u0e0a\u0e49\u0e23\u0e39\u0e1b\u0e04\u0e19\u0e25\u0e30\u0e23\u0e39\u0e1b\u0e2a\u0e33\u0e2b\u0e23\u0e31\u0e1a\u0e1a\u0e31\u0e15\u0e23\u0e1b\u0e23\u0e30\u0e0a\u0e32\u0e0a\u0e19\u0e41\u0e25\u0e30\u0e20\u0e32\u0e1e\u0e40\u0e0b\u0e25\u0e1f\u0e35\u0e48",
     EVIDENCE_UPLOAD_IN_PROGRESS:
       "\u0e23\u0e39\u0e1b\u0e20\u0e32\u0e1e\u0e19\u0e35\u0e49\u0e01\u0e33\u0e25\u0e31\u0e07\u0e2d\u0e22\u0e39\u0e48\u0e23\u0e30\u0e2b\u0e27\u0e48\u0e32\u0e07\u0e01\u0e32\u0e23\u0e15\u0e23\u0e27\u0e08\u0e2a\u0e2d\u0e1a",
+    AUTH_REQUIRED:
+      "\u0e01\u0e23\u0e38\u0e13\u0e32\u0e40\u0e02\u0e49\u0e32\u0e2a\u0e39\u0e48\u0e23\u0e30\u0e1a\u0e1a\u0e01\u0e48\u0e2d\u0e19\u0e15\u0e23\u0e27\u0e08\u0e2a\u0e2d\u0e1a\u0e23\u0e39\u0e1b\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e15\u0e31\u0e27\u0e15\u0e19",
     UPLOAD_FAILED:
       "\u0e44\u0e21\u0e48\u0e2a\u0e32\u0e21\u0e32\u0e23\u0e16\u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e23\u0e39\u0e1b\u0e20\u0e32\u0e1e\u0e44\u0e14\u0e49\u0e2d\u0e22\u0e48\u0e32\u0e07\u0e1b\u0e25\u0e2d\u0e14\u0e20\u0e31\u0e22 \u0e01\u0e23\u0e38\u0e13\u0e32\u0e2d\u0e31\u0e1b\u0e42\u0e2b\u0e25\u0e14\u0e20\u0e32\u0e1e\u0e17\u0e35\u0e48\u0e0a\u0e31\u0e14\u0e40\u0e08\u0e19\u0e02\u0e36\u0e49\u0e19\u0e41\u0e25\u0e30\u0e25\u0e2d\u0e07\u0e2d\u0e35\u0e01\u0e04\u0e23\u0e31\u0e49\u0e07",
   },
@@ -145,6 +154,8 @@ const APPLICANT_KYC_MESSAGES: Record<
       "\u8eab\u4efd\u8bc1\u7167\u7247\u548c\u81ea\u62cd\u7167\u8bf7\u4f7f\u7528\u4e24\u5f20\u4e0d\u540c\u7684\u7167\u7247\u3002",
     EVIDENCE_UPLOAD_IN_PROGRESS:
       "\u8fd9\u5f20\u7167\u7247\u6b63\u5728\u5ba1\u6838\u4e2d\u3002",
+    AUTH_REQUIRED:
+      "\u8bf7\u5148\u767b\u5f55\uff0c\u518d\u68c0\u67e5\u8eab\u4efd\u7167\u7247\u3002",
     UPLOAD_FAILED:
       "\u65e0\u6cd5\u5b89\u5168\u4fdd\u5b58\u7167\u7247\uff0c\u8bf7\u4e0a\u4f20\u66f4\u6e05\u6670\u7684\u7167\u7247\u540e\u91cd\u8bd5\u3002",
   },
@@ -431,6 +442,14 @@ function FixerRegisterContent() {
       ? `${normalizedDate.slice(8, 10)}/${normalizedDate.slice(5, 7)}/${normalizedDate.slice(0, 4)}`
       : "";
 
+    const persistedLatitude = Number(fixer?.gpsLat);
+    const persistedLongitude = Number(fixer?.gpsLng);
+    setGpsCoords(
+      Number.isFinite(persistedLatitude) && Number.isFinite(persistedLongitude)
+        ? { lat: persistedLatitude, lng: persistedLongitude }
+        : null,
+    );
+
     setForm((prev) => ({
       ...prev,
       name: user?.name || prev.name,
@@ -457,6 +476,7 @@ function FixerRegisterContent() {
         : [],
       province: fixer?.serviceProvince || "",
       district: fixer?.serviceDistrict || "",
+      addressText: fixer?.serviceSubdistrict || "",
       postalCode: fixer?.servicePostalCode || "",
       scheduledDate: displayDate,
       description: fixer?.description || "",
@@ -842,6 +862,35 @@ function FixerRegisterContent() {
     [qualificationDraftId],
   );
 
+  const preflightKyc = useCallback(
+    async (
+      documentType: "id-front" | "selfie-with-id",
+      file: File,
+    ): Promise<KycPreflightResponse> => {
+      const token = localStorage.getItem("subscriber_token");
+      if (!token) {
+        throw new KycUploadError("AUTH_REQUIRED");
+      }
+      const body = new globalThis.FormData();
+      body.append("documentType", documentType);
+      body.append("file", file);
+      const response = await fetch("/api/v1/qualification/evidence-preflight", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + token },
+        body,
+      });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as {
+          code?: string;
+        } | null;
+        if (payload?.code) throw new KycUploadError(payload.code);
+        throw new Error("Unable to check this identity photo.");
+      }
+      return (await response.json()) as KycPreflightResponse;
+    },
+    [],
+  );
+
   const addKycImagesWithValidation = useCallback(
     async (files: File[]) => {
       if (files.length === 0) return;
@@ -926,15 +975,44 @@ function FixerRegisterContent() {
             message: null,
           });
         } else {
+          let screened: KycPreflightResponse;
+          try {
+            screened = await preflightKyc(documentType, preparedFile);
+          } catch (error) {
+            setError(
+              error instanceof KycUploadError
+                ? applicantKycReason(error.code, locale)
+                : applicantKycReason("UPLOAD_FAILED", locale),
+            );
+            setKycValidating(false);
+            return;
+          }
+          const correctionReason = screened.reasonCodes.find((code) =>
+            [
+              "WRONG_DOCUMENT_TYPE",
+              "INVALID_ID_NUMBER",
+              "UNREADABLE_DOCUMENT",
+              "EXPIRED_ID",
+              "IDENTITY_CONTRADICTION",
+              "LIVENESS_FAILED",
+            ].includes(code),
+          );
+          if (correctionReason) {
+            setError(applicantKycReason(correctionReason, locale));
+            setKycValidating(false);
+            return;
+          }
           newSlots.push({
             documentType,
             localFile: preparedFile,
             documentId: null,
-            uploadState: "idle",
-            kycStatus: null,
-            confidence: null,
-            reasonCodes: [],
-            message: null,
+            uploadState: "complete",
+            kycStatus: screened.evidenceStatus || screened.route,
+            confidence: screened.confidence,
+            reasonCodes: screened.reasonCodes,
+            message: screened.reasonCodes[0]
+              ? applicantKycReason(screened.reasonCodes[0], locale)
+              : null,
           });
         }
       }
@@ -948,6 +1026,7 @@ function FixerRegisterContent() {
       isRegisteredFixer,
       kycSlots.length,
       locale,
+      preflightKyc,
       validateKycImage,
       uploadKycImmediately,
     ],
@@ -2609,14 +2688,22 @@ function FixerRegisterContent() {
                               ? "手持证件自拍"
                               : "Selfie with ID";
                       const status =
-                        slot.uploadState === "error" ? "rejected" : "valid";
+                        slot.uploadState === "error"
+                          ? "rejected"
+                          : slot.kycStatus === "VALIDATED"
+                            ? "valid"
+                            : "pending";
                       return (
                         <div key={i} className="relative group text-center">
                           {slot.localFile ? (
                             <img
                               src={URL.createObjectURL(slot.localFile)}
                               alt={`KYC ${i + 1}`}
-                              className={`w-20 h-20 object-cover rounded-lg border-2 ${status === "valid" ? "border-green-400" : "border-gray-200"}`}
+                              className={`h-20 w-20 rounded-lg border-2 object-cover ${
+                                status === "valid"
+                                  ? "border-green-400"
+                                  : "border-sky-300"
+                              }`}
                             />
                           ) : (
                             <div className="flex h-20 w-20 items-center justify-center rounded-lg border-2 border-slate-300 bg-slate-50 px-2 text-center text-[10px] text-slate-600">

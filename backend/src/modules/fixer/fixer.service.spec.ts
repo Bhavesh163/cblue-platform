@@ -3743,4 +3743,81 @@ describe('FixerService', () => {
       }),
     );
   });
+
+  it('keeps a verified partner eligible after a price-list-only profile update', async () => {
+    const fixer = {
+      id: 'fixer-1',
+      verified: true,
+      companyAddress: {
+        houseNumber: '86/6',
+        building: '',
+        province: 'กรุงเทพมหานคร',
+        district: 'วังทองหลาง',
+        subdistrict: 'สะพานสอง',
+        postalCode: '10310',
+      },
+      serviceProvince: 'กรุงเทพมหานคร',
+      serviceDistrict: 'วังทองหลาง',
+      serviceSubdistrict: 'สะพานสอง',
+      servicePostalCode: '10310',
+      travelRadius: 100,
+      gpsLat: 13.79409,
+      gpsLng: 100.60963,
+      kycReverificationRequiredAt: null,
+      kycReverificationReasons: null,
+    };
+    prisma.fixer.findUnique
+      .mockResolvedValueOnce(fixer)
+      .mockResolvedValueOnce({ ...fixer, user: {}, skills: [] });
+    prisma.user.findUnique.mockResolvedValue({
+      email: 'partner@example.com',
+      phone: '0819852846',
+    });
+    prisma.user.update.mockResolvedValue({ id: 'user-1' });
+    prisma.fixer.update.mockResolvedValue(fixer);
+    jest.spyOn(service as any, 'evaluateFixerTier').mockResolvedValue({
+      score: 50,
+      tier: 'Economy',
+      breakdown: [],
+      flags: [],
+      credentialStatus: 'partial',
+    });
+
+    await service.updateMyFixerProfile('user-1', {
+      name: 'Partner',
+      email: 'partner@example.com',
+      phone: '081-985-2846',
+      travelRadius: 100,
+      companyAddress: {
+        houseNumber: '86/6',
+        province: ' กรุงเทพมหานคร ',
+        district: 'วังทองหลาง',
+        subdistrict: 'สะพานสอง',
+        postalCode: '10310',
+      },
+      address: {
+        province: 'กรุงเทพมหานคร',
+        district: 'วังทองหลาง',
+        subdistrict: 'สะพานสอง',
+        postalCode: '10310',
+      },
+      gpsCoords: { lat: 13.7940904, lng: 100.6096304 },
+      priceList: [
+        {
+          service: 'Website Development',
+          unit: 'page',
+          finalPrice: '1200',
+        },
+      ],
+      skills: [],
+    } as never);
+
+    expect(prisma.fixer.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.not.objectContaining({
+          qualificationEligibilityStatus: 'REVERIFICATION_REQUIRED',
+        }),
+      }),
+    );
+  });
 });

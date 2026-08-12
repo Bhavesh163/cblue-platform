@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getApiUrl } from "../lib/api";
+import { adminFetchResponse, readAdminResponseError } from "./adminApi";
 
 type AuditEntry = {
   id: string;
@@ -19,9 +20,7 @@ type AuditEntry = {
   createdAt: string;
 };
 
-type Props = { token: string };
-
-export default function QualificationAuditPanel({ token }: Props) {
+export default function QualificationAuditPanel() {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -30,15 +29,20 @@ export default function QualificationAuditPanel({ token }: Props) {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(
+      const response = await adminFetchResponse(
         getApiUrl("/qualification/admin/audit?limit=50"),
         {
           cache: "no-store",
-          headers: { Authorization: "Bearer " + token },
         },
       );
-      if (!response.ok)
-        throw new Error("Unable to load qualification audit events.");
+      if (!response.ok) {
+        throw new Error(
+          await readAdminResponseError(
+            response,
+            "Unable to load qualification audit events.",
+          ),
+        );
+      }
       const payload = (await response.json()) as unknown;
       setEntries(Array.isArray(payload) ? payload : []);
     } catch (cause) {
@@ -50,7 +54,7 @@ export default function QualificationAuditPanel({ token }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, []);
 
   useEffect(() => {
     void load();
@@ -87,9 +91,9 @@ export default function QualificationAuditPanel({ token }: Props) {
         </p>
       )}
       {entries.length > 0 && (
-        <div className="overflow-x-auto">
+        <div className="max-h-[480px] overflow-auto">
           <table className="min-w-full text-left text-sm">
-            <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+            <thead className="sticky top-0 z-10 border-b border-slate-200 bg-white text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="py-2 pr-4">Time</th>
                 <th className="py-2 pr-4">Action</th>

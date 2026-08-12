@@ -89,9 +89,11 @@ test("first-time registration stages KYC until the fixer profile exists", async 
   assert.match(source, /shouldUploadKycImmediately/);
   assert.match(source, /isRegisteredFixer,/);
   assert.match(source, /documentId: null,/);
-  assert.match(source, /uploadState: "idle",/);
+  assert.match(source, /qualification\/evidence-preflight/);
+  assert.match(source, /screened\.reasonCodes/);
   assert.match(source, /requiresQualificationContinuation/);
   assert.match(source, /qualificationSubmissionStatus/);
   assert.match(source, /!qualificationNeedsContinuation/);
   assert.doesNotMatch(source, /Fixer profile not found/);
+  assert.doesNotMatch(source, /Typhoon/i);
 });

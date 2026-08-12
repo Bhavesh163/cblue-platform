@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
@@ -81,6 +82,39 @@ const DOCUMENT_TYPES = new Set<string>([
   ...QUALIFICATION_DOCUMENT_TYPES,
   'id-back',
 ]);
+const KYC_PREFLIGHT_MAX_BYTES = 300 * 1024;
+const KYC_PREFLIGHT_TYPES = new Set(['id-front', 'selfie-with-id']);
+const KYC_IMAGE_CONTENT_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+]);
+
+class QualificationUnusableEvidenceError extends Error {}
+
+function detectImageContentType(buffer: Buffer): string | null {
+  if (
+    buffer.length >= 3 &&
+    buffer[0] === 0xff &&
+    buffer[1] === 0xd8 &&
+    buffer[2] === 0xff
+  )
+    return 'image/jpeg';
+  if (
+    buffer.length >= 8 &&
+    buffer
+      .subarray(0, 8)
+      .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+  )
+    return 'image/png';
+  if (
+    buffer.length >= 12 &&
+    buffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
+    buffer.subarray(8, 12).toString('ascii') === 'WEBP'
+  )
+    return 'image/webp';
+  return null;
+}
 
 @Injectable()
 export class QualificationVerificationService {
@@ -89,6 +123,119 @@ export class QualificationVerificationService {
     private readonly config: ConfigService,
     private readonly storage: QualificationStorageService,
   ) {}
+
+  async assessUploadForUser(
+    userId: string,
+    documentType: 'id-front' | 'selfie-with-id',
+    file?: Express.Multer.File,
+  ) {
+    if (!file?.buffer || file.size <= 0) {
+      throw new BadRequestException('A non-empty identity photo is required');
+    }
+    if (!KYC_PREFLIGHT_TYPES.has(documentType)) {
+      throw new BadRequestException('Unsupported identity evidence type');
+    }
+    if (
+      file.buffer.length > KYC_PREFLIGHT_MAX_BYTES ||
+      !KYC_IMAGE_CONTENT_TYPES.has(file.mimetype) ||
+      detectImageContentType(file.buffer) !== file.mimetype
+    ) {
+      throw new BadRequestException(
+        'Identity evidence must be a valid JPEG, PNG, or WebP image no larger than 0.3 MB',
+      );
+    }
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+
+    const result = (
+      evidenceStatus: QualificationDocumentAssessment['evidenceStatus'],
+      route: QualificationDocumentAssessment['route'],
+      confidence: number | null,
+      reasonCodes: QualificationDocumentAssessment['reasonCodes'],
+    ) => ({ evidenceStatus, route, confidence, reasonCodes });
+    const unavailable = () =>
+      result('UNCHECKED', 'NEEDS_REVIEW', null, [
+        'PROVIDER_UNAVAILABLE',
+        'HUMAN_REVIEW_REQUIRED',
+      ]);
+
+    try {
+      const apiKey =
+        this.config.get<string>('typhoon.apiKey') ||
+        process.env.TYPHOON_API_KEY ||
+        '';
+      if (!apiKey) return unavailable();
+      const ocrText = await this.extractText(
+        file.buffer,
+        file.mimetype,
+        documentType,
+        apiKey,
+      );
+      const fields = await this.extractFields(ocrText, documentType, apiKey);
+      if (
+        fields.detectedDocumentType !== null &&
+        fields.detectedDocumentType !== documentType
+      ) {
+        return result('INSUFFICIENT', 'NEEDS_RESUBMISSION', fields.confidence, [
+          'WRONG_DOCUMENT_TYPE',
+        ]);
+      }
+      if (
+        fields.confidence < 70 ||
+        fields.detectedDocumentType === null ||
+        (documentType === 'id-front' && !fields.documentName)
+      ) {
+        return result('INSUFFICIENT', 'NEEDS_RESUBMISSION', fields.confidence, [
+          'UNREADABLE_DOCUMENT',
+        ]);
+      }
+      if (documentType === 'id-front') {
+        const identityNumber = normalizeThaiDigits(fields.credentialNumber);
+        if (
+          identityNumber.length !== 13 ||
+          !hasValidThaiNationalId(identityNumber)
+        ) {
+          return result(
+            'INSUFFICIENT',
+            'NEEDS_RESUBMISSION',
+            fields.confidence,
+            ['INVALID_ID_NUMBER'],
+          );
+        }
+        const expiresAt = fields.expiresAt
+          ? new Date(`${fields.expiresAt}T00:00:00.000Z`)
+          : null;
+        if (expiresAt && expiresAt < new Date()) {
+          return result('EXPIRED', 'NEEDS_RESUBMISSION', fields.confidence, [
+            'EXPIRED_ID',
+          ]);
+        }
+        if (!this.namesMatch(user.name || '', fields.documentName)) {
+          return result('CONTRADICTED', 'NEEDS_REVIEW', fields.confidence, [
+            'IDENTITY_CONTRADICTION',
+            'HUMAN_REVIEW_REQUIRED',
+          ]);
+        }
+      }
+      return result('INSUFFICIENT', 'NEEDS_REVIEW', fields.confidence, [
+        'DOCUMENT_VALID',
+        ...(documentType === 'selfie-with-id'
+          ? (['SELFIE_REVIEW_REQUIRED'] as const)
+          : []),
+        'HUMAN_REVIEW_REQUIRED',
+      ]);
+    } catch (error) {
+      if (error instanceof QualificationUnusableEvidenceError) {
+        return result('INSUFFICIENT', 'NEEDS_RESUBMISSION', null, [
+          'UNREADABLE_DOCUMENT',
+        ]);
+      }
+      return unavailable();
+    }
+  }
 
   async assessStoredDocument(input: {
     submissionId: string;
@@ -421,7 +568,15 @@ export class QualificationVerificationService {
           confidence: fields.confidence,
         },
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof QualificationUnusableEvidenceError) {
+        return result({
+          evidenceStatus: 'INSUFFICIENT',
+          route: 'NEEDS_RESUBMISSION',
+          confidence: null,
+          reasonCodes: ['UNREADABLE_DOCUMENT'],
+        });
+      }
       return unavailable();
     }
   }
@@ -456,9 +611,7 @@ export class QualificationVerificationService {
     const payload = (await response.json()) as unknown;
     const text = this.findText(payload).trim();
     if (!text || text.startsWith('[blue AI OCR error:')) {
-      throw new ServiceUnavailableException(
-        'Qualification OCR returned no usable text',
-      );
+      throw new QualificationUnusableEvidenceError();
     }
     return text.slice(0, 20000);
   }

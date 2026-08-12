@@ -615,11 +615,11 @@ export default function AdminPage() {
 
         <AdminPartnerDirectory token={token} />
 
-        <QualificationAuditPanel token={token} />
+        <QualificationAuditPanel />
 
         <QualificationHistoryPanel token={token} />
 
-        <AdminOperationsPanel token={token} />
+        <AdminOperationsPanel />
 
         {consoleError && (
           <div
@@ -753,7 +753,7 @@ export default function AdminPage() {
               </p>
             </div>
             {fraudFlags.length ? (
-              <div className="space-y-3">
+              <div className="max-h-[480px] space-y-3 overflow-y-auto pr-1">
                 {fraudFlags.map((flag, index) => (
                   <div
                     key={(flag.fixerId || "flag") + String(index)}
@@ -794,9 +794,9 @@ export default function AdminPage() {
               </p>
             </div>
             {orders.length ? (
-              <div className="overflow-x-auto">
+              <div className="max-h-[480px] overflow-auto">
                 <table className="min-w-full text-left text-sm">
-                  <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                  <thead className="sticky top-0 z-10 border-b border-slate-200 bg-white text-xs uppercase tracking-wide text-slate-500">
                     <tr>
                       <th className="py-2 pr-3">PO / Order</th>
                       <th className="py-2 pr-3">Customer</th>
