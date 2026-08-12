@@ -43,6 +43,7 @@ import {
 const PORTFOLIO_MAX_FILES = 10;
 const CONSENT_RETENTION_MS = 3 * 365 * 24 * 60 * 60 * 1000;
 const PORTFOLIO_MAX_FILE_BYTES = 300 * 1024;
+const COMPANY_AFFIDAVIT_MAX_FILE_BYTES = 1024 * 1024;
 const KYC_DOCUMENT_TYPES = ['id-front', 'selfie-with-id'] as const;
 const KYC_REVIEW_DOCUMENT_TYPES = new Set([
   ...KYC_DOCUMENT_TYPES,
@@ -501,6 +502,8 @@ export class QualificationService {
     }
     const fileSize = file.buffer.length;
     const isPortfolio = documentType === 'portfolio';
+    const isCompanyAffidavit = documentType === 'company-affidavit';
+    const isCompanyLetter = documentType === 'company-letter-of-intent';
     const isCompactCompanyEvidence =
       documentType === 'company-affidavit' ||
       documentType === 'company-letter-of-intent';
@@ -517,9 +520,12 @@ export class QualificationService {
         'Portfolio file exceeds 0.3 MB; images must be compressed before upload',
       );
     }
-    if (isCompactCompanyEvidence && fileSize > PORTFOLIO_MAX_FILE_BYTES) {
+    if (isCompanyAffidavit && fileSize > COMPANY_AFFIDAVIT_MAX_FILE_BYTES) {
+      throw new BadRequestException('Company affidavit exceeds 1 MB');
+    }
+    if (isCompanyLetter && fileSize > PORTFOLIO_MAX_FILE_BYTES) {
       throw new BadRequestException(
-        'Company evidence file exceeds 0.3 MB; compress it before upload',
+        'Company letter of intent exceeds 0.3 MB; compress it before upload',
       );
     }
     if (isKyc && !imageContentTypes.has(file.mimetype)) {
@@ -729,6 +735,22 @@ export class QualificationService {
           if (existingCount >= PORTFOLIO_MAX_FILES) {
             throw new ConflictException('Maximum 10 portfolio files allowed');
           }
+        } else if (isCompactCompanyEvidence) {
+          const uploadInProgress = await tx.kycDocument.count({
+            where: {
+              submissionId: submission.id,
+              documentType,
+              lifecycleState: {
+                in: ['PENDING_UPLOAD', 'UPLOADED', 'ASSESSING'],
+              },
+            },
+          });
+          if (uploadInProgress >= 1) {
+            throw new ConflictException({
+              code: 'EVIDENCE_UPLOAD_IN_PROGRESS',
+              message: 'This evidence upload is already being processed',
+            });
+          }
         } else if (!isKyc) {
           const existingCount = await tx.kycDocument.count({
             where: {
@@ -812,6 +834,38 @@ export class QualificationService {
               'Qualification evidence changed during promotion',
             );
           }
+          const previousActive = isCompactCompanyEvidence
+            ? await tx.kycDocument.findFirst({
+                where: {
+                  submissionId: submission.id,
+                  documentType,
+                  isActive: true,
+                  lifecycleState: 'READY',
+                  id: { not: documentId },
+                },
+                select: { id: true },
+              })
+            : null;
+          if (previousActive) {
+            const superseded = await tx.kycDocument.updateMany({
+              where: {
+                id: previousActive.id,
+                submissionId: submission.id,
+                isActive: true,
+                lifecycleState: 'READY',
+              },
+              data: {
+                isActive: false,
+                supersededAt: readyAt,
+                supersededById: documentId,
+              },
+            });
+            if (superseded.count !== 1) {
+              throw new ConflictException(
+                'Active company evidence changed during replacement',
+              );
+            }
+          }
           const promoted = await tx.kycDocument.updateMany({
             where: {
               id: documentId,
@@ -830,6 +884,22 @@ export class QualificationService {
             throw new ConflictException(
               'Qualification evidence could not be activated',
             );
+          }
+          if (previousActive) {
+            await tx.qualificationAuditLog.create({
+              data: {
+                submissionId: submission.id,
+                actorId: userId,
+                action: 'COMPANY_EVIDENCE_SUPERSEDED',
+                entityType: 'KycDocument',
+                entityId: documentId,
+                reason: 'Company evidence replacement activated',
+                metadata: {
+                  documentType,
+                  supersededDocumentId: previousActive.id,
+                },
+              },
+            });
           }
           await tx.qualificationEvidenceAssessmentJob.create({
             data: {

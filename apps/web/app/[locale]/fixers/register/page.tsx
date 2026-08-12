@@ -29,6 +29,7 @@ import GpsResolvedLocation from "../../components/GpsResolvedLocation";
 import Link from "next/link";
 import DatePickerInput from "../../components/DatePickerInput";
 import {
+  prepareCompanyAffidavitFile,
   preparePortfolioFile,
   prepareQualificationEvidenceFile,
   PORTFOLIO_MAX_FILES,
@@ -231,6 +232,138 @@ function qualificationFilePreparationError(
   return pageLimit
     ? "The document has more than 50 pages. Split it into shorter files and upload again."
     : "We could not compress this file below 0.3 MB while keeping it readable. Use a clearer file with fewer pages or lower resolution.";
+}
+
+function companyAffidavitLabel(locale: string): string {
+  if (locale === "th") return "หนังสือรับรองบริษัท";
+  if (locale === "zh") return "公司证明";
+  return "Company affidavit";
+}
+
+function companyLetterOfIntentLabel(locale: string): string {
+  if (locale === "th") return "หนังสือยืนยันความประสงค์จากกรรมการบริษัท";
+  if (locale === "zh") return "公司董事申请意向书";
+  return "Director authorization letter";
+}
+
+function companyEvidenceUploadError(
+  documentType: "company-affidavit" | "company-letter-of-intent",
+  fileName: string,
+  status: number,
+  serverMessage: string,
+  locale: string,
+): string {
+  const label =
+    documentType === "company-affidavit"
+      ? companyAffidavitLabel(locale)
+      : companyLetterOfIntentLabel(locale);
+  const normalizedMessage = serverMessage.toLowerCase();
+  const isProcessing =
+    status === 409 &&
+    (normalizedMessage.includes("progress") ||
+      normalizedMessage.includes("processed"));
+  const isTooLarge =
+    status === 413 ||
+    normalizedMessage.includes("exceeds") ||
+    normalizedMessage.includes("too large");
+  const isInvalidFile =
+    status === 400 &&
+    (normalizedMessage.includes("content") ||
+      normalizedMessage.includes("supported") ||
+      normalizedMessage.includes("non-empty"));
+
+  if (locale === "th") {
+    if (isProcessing) {
+      return (
+        label +
+        " (" +
+        fileName +
+        ") กำลังได้รับการตรวจสอบ กรุณารอสักครู่แล้วส่งอีกครั้ง"
+      );
+    }
+    if (isTooLarge) {
+      return documentType === "company-affidavit"
+        ? label +
+            " (" +
+            fileName +
+            ") ยังมีขนาดเกิน 1 MB หลังบีบอัด กรุณาใช้ไฟล์ที่มีขนาดเล็กลง"
+        : label +
+            " (" +
+            fileName +
+            ") ยังมีขนาดเกิน 0.3 MB หลังบีบอัด กรุณาใช้ไฟล์ที่มีขนาดเล็กลง";
+    }
+    if (isInvalidFile) {
+      return (
+        label +
+        " (" +
+        fileName +
+        ") ไม่ใช่ไฟล์ PDF หรือรูปภาพที่อ่านได้ กรุณาเลือกไฟล์ใหม่"
+      );
+    }
+    return (
+      "ไม่สามารถบันทึก" +
+      label +
+      " (" +
+      fileName +
+      ") ได้ กรุณาลองส่งไฟล์นี้อีกครั้ง"
+    );
+  }
+  if (locale === "zh") {
+    if (isProcessing) {
+      return label + "（" + fileName + "）正在审核中，请稍候再试。";
+    }
+    if (isTooLarge) {
+      const limit = documentType === "company-affidavit" ? "1 MB" : "0.3 MB";
+      return (
+        label +
+        "（" +
+        fileName +
+        "）压缩后仍超过 " +
+        limit +
+        "，请使用较小的文件。"
+      );
+    }
+    if (isInvalidFile) {
+      return (
+        label + "（" + fileName + "）不是可读取的 PDF 或图片，请选择其他文件。"
+      );
+    }
+    return "无法保存" + label + "（" + fileName + "），请重新提交此文件。";
+  }
+  if (isProcessing) {
+    return (
+      label +
+      " (" +
+      fileName +
+      ") is being checked. Wait a moment and submit again."
+    );
+  }
+  if (isTooLarge) {
+    const limit = documentType === "company-affidavit" ? "1 MB" : "0.3 MB";
+    return (
+      label +
+      " (" +
+      fileName +
+      ") is still above " +
+      limit +
+      " after compression. Use a smaller file."
+    );
+  }
+  if (isInvalidFile) {
+    return (
+      label +
+      " (" +
+      fileName +
+      ") is not a readable PDF or image. Select another file."
+    );
+  }
+  return (
+    "We could not save " +
+    label.toLowerCase() +
+    " (" +
+    fileName +
+    "). Submit this file again."
+  );
 }
 
 type PersistedEvidenceSlot = {
@@ -734,7 +867,11 @@ function FixerRegisterContent() {
   );
 
   const prepareCompanyEvidence = useCallback(
-    async (file: File | null, setFile: (file: File | null) => void) => {
+    async (
+      file: File | null,
+      setFile: (file: File | null) => void,
+      documentType: "company-affidavit" | "company-letter-of-intent",
+    ) => {
       if (!file) {
         setFile(null);
         return;
@@ -742,10 +879,24 @@ function FixerRegisterContent() {
       setCompanyEvidenceProcessing(true);
       setError("");
       try {
-        setFile(await prepareQualificationEvidenceFile(file));
+        setFile(
+          documentType === "company-affidavit"
+            ? await prepareCompanyAffidavitFile(file)
+            : await prepareQualificationEvidenceFile(file),
+        );
       } catch (cause) {
         setFile(null);
-        setError(qualificationFilePreparationError(cause, locale));
+        const label =
+          documentType === "company-affidavit"
+            ? companyAffidavitLabel(locale)
+            : companyLetterOfIntentLabel(locale);
+        setError(
+          label +
+            " (" +
+            file.name +
+            "): " +
+            qualificationFilePreparationError(cause, locale),
+        );
       } finally {
         setCompanyEvidenceProcessing(false);
       }
@@ -1796,7 +1947,28 @@ function FixerRegisterContent() {
         if (!response.ok) {
           const detail = await response.json().catch(() => ({}));
           const code = typeof detail?.code === "string" ? detail.code : "";
-          if (code) throw new KycUploadError(code);
+          const message =
+            typeof detail?.message === "string" ? detail.message : "";
+          if (
+            code &&
+            (documentType === "id-front" || documentType === "selfie-with-id")
+          ) {
+            throw new KycUploadError(code);
+          }
+          if (
+            documentType === "company-affidavit" ||
+            documentType === "company-letter-of-intent"
+          ) {
+            throw new Error(
+              companyEvidenceUploadError(
+                documentType,
+                file.name,
+                response.status,
+                message || code,
+                locale,
+              ),
+            );
+          }
           throw new Error(
             documentType === "id-front" || documentType === "selfie-with-id"
               ? applicantKycReason("UPLOAD_FAILED", locale)
@@ -2844,6 +3016,7 @@ function FixerRegisterContent() {
                   void prepareCompanyEvidence(
                     event.target.files?.[0] || null,
                     setCompanyAffidavit,
+                    "company-affidavit",
                   )
                 }
               />
@@ -2883,6 +3056,7 @@ function FixerRegisterContent() {
                   void prepareCompanyEvidence(
                     event.target.files?.[0] || null,
                     setCompanyLetterOfIntent,
+                    "company-letter-of-intent",
                   )
                 }
               />
@@ -2895,10 +3069,10 @@ function FixerRegisterContent() {
             )}
             <p className="mt-2 text-xs text-slate-600">
               {locale === "th"
-                ? "\u0e23\u0e30\u0e1a\u0e1a\u0e08\u0e30\u0e1a\u0e35\u0e1a\u0e2d\u0e31\u0e14\u0e23\u0e39\u0e1b\u0e20\u0e32\u0e1e\u0e41\u0e25\u0e30 PDF \u0e43\u0e2b\u0e49\u0e21\u0e35\u0e02\u0e19\u0e32\u0e14\u0e44\u0e21\u0e48\u0e40\u0e01\u0e34\u0e19 0.3 MB \u0e15\u0e48\u0e2d\u0e44\u0e1f\u0e25\u0e4c"
+                ? "ระบบจะบีบอัดรูปภาพและ PDF ก่อนส่ง ไฟล์ทั่วไปต้องไม่เกิน 0.3 MB ส่วนหนังสือรับรองบริษัทที่ยังอ่านได้อาจมีขนาดได้ไม่เกิน 1 MB"
                 : locale === "zh"
-                  ? "\u56fe\u7247\u548c PDF \u5c06\u81ea\u52a8\u538b\u7f29\u81f3\u6bcf\u4e2a\u6587\u4ef6\u4e0d\u8d85\u8fc7 0.3 MB\u3002"
-                  : "Images and PDFs are compressed to no more than 0.3 MB each."}
+                  ? "图片和 PDF 会在提交前压缩。一般文件不得超过 0.3 MB；清晰可读的公司证明可不超过 1 MB。"
+                  : "Images and PDFs are compressed before submission. General files must be no more than 0.3 MB; a readable company affidavit may be up to 1 MB."}
             </p>
             <p className="mt-3 text-xs text-slate-600">
               {locale === "th"

@@ -265,6 +265,7 @@ export default function AdminPage() {
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [recaptchaToken, setRecaptchaToken] = useState("");
+  const [recaptchaResetKey, setRecaptchaResetKey] = useState(0);
   const [otpSent, setOtpSent] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
@@ -388,6 +389,8 @@ export default function AdminPage() {
       setOtpSent(true);
       setOtp("");
     } catch (error) {
+      setRecaptchaToken("");
+      setRecaptchaResetKey((current) => current + 1);
       setAuthError(
         error instanceof Error ? error.message : "Unable to send admin OTP.",
       );
@@ -509,6 +512,7 @@ export default function AdminPage() {
                 </div>
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                   <ReCaptcha
+                    resetKey={recaptchaResetKey}
                     onVerify={setRecaptchaToken}
                     onExpire={() => setRecaptchaToken("")}
                   />
@@ -559,6 +563,7 @@ export default function AdminPage() {
                     setOtpSent(false);
                     setOtp("");
                     setRecaptchaToken("");
+                    setRecaptchaResetKey((current) => current + 1);
                   }}
                   className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                 >

@@ -46,7 +46,7 @@ test("company evidence uses compression before upload", async () => {
   assert.match(registerSource, /setCompanyLetterOfIntent/);
   assert.match(
     registerSource,
-    /Images and PDFs are compressed to no more than 0\.3 MB each\./,
+    /General files must be no more than 0\.3 MB; a readable company affidavit may be up to 1 MB\./,
   );
 });
 
@@ -60,4 +60,13 @@ test("KYC, company evidence, and portfolio share localized 0.3 MB preparation", 
   );
   assert.match(registerSource, /qualificationFilePreparationError/);
   assert.match(registerSource, /more than 50 pages/);
+});
+
+test("company affidavits retain a readable fallback up to 1 MB", async () => {
+  const source = await readFile(helperUrl, "utf8");
+
+  assert.match(source, /COMPANY_AFFIDAVIT_MAX_FILE_BYTES = 1024 \* 1024/);
+  assert.match(source, /prepareCompanyAffidavitFile/);
+  assert.match(source, /compressPdfFile\(file, true\)/);
+  assert.match(source, /file\.size > COMPANY_AFFIDAVIT_MAX_FILE_BYTES/);
 });

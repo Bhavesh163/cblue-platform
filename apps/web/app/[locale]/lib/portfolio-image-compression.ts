@@ -1,5 +1,6 @@
 export const PORTFOLIO_MAX_FILES = 10;
 export const PORTFOLIO_MAX_FILE_BYTES = 300 * 1024;
+export const COMPANY_AFFIDAVIT_MAX_FILE_BYTES = 1024 * 1024;
 
 const PORTFOLIO_PDF_TARGET_BYTES = 292 * 1024;
 const PORTFOLIO_PDF_MAX_PAGES = 50;
@@ -224,4 +225,32 @@ export async function prepareQualificationEvidenceFile(
       : compressPdfFile(file, true);
   }
   return preparePortfolioFile(file);
+}
+
+export async function prepareCompanyAffidavitFile(file: File): Promise<File> {
+  if (file.type !== PORTFOLIO_PDF_TYPE) {
+    return prepareQualificationEvidenceFile(file);
+  }
+  if (file.size <= PORTFOLIO_MAX_FILE_BYTES) {
+    return file;
+  }
+
+  try {
+    return await compressPdfFile(file, true);
+  } catch (compressionError) {
+    if (file.size > COMPANY_AFFIDAVIT_MAX_FILE_BYTES) {
+      throw compressionError;
+    }
+
+    try {
+      const { PDFDocument } = await import("pdf-lib");
+      await PDFDocument.load(new Uint8Array(await file.arrayBuffer()), {
+        ignoreEncryption: false,
+        updateMetadata: false,
+      });
+      return file;
+    } catch {
+      throw compressionError;
+    }
+  }
 }

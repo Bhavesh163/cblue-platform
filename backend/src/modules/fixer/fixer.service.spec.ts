@@ -41,7 +41,7 @@ describe('FixerService', () => {
         update: jest.fn(),
       },
       user: {
-        findUnique: jest.fn(),
+        findUnique: jest.fn().mockResolvedValue({ role: 'USER' }),
         update: jest.fn(),
       },
       fixerSkill: {
@@ -166,6 +166,32 @@ describe('FixerService', () => {
         expect.objectContaining({ fixerId: 'fixer-1' }),
       );
       expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('preserves ADMIN authority when an administrator registers a fixer profile', async () => {
+      const createdFixer = {
+        id: 'fixer-admin',
+        userId: 'admin-1',
+        user: { id: 'admin-1', role: 'ADMIN' },
+        skills: [],
+      };
+      prisma.fixer.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(createdFixer);
+      prisma.user.findUnique.mockResolvedValue({ role: 'ADMIN' });
+      prisma.user.update.mockResolvedValue({ id: 'admin-1', role: 'ADMIN' });
+      prisma.fixer.create.mockResolvedValue(createdFixer);
+
+      await service.register('admin-1', {
+        bio: 'Administrator and verified provider',
+        yearsExperience: 10,
+        travelRadius: 100,
+      });
+
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'admin-1' },
+        data: { role: 'ADMIN' },
+      });
     });
   });
 
@@ -3772,6 +3798,7 @@ describe('FixerService', () => {
     prisma.user.findUnique.mockResolvedValue({
       email: 'partner@example.com',
       phone: '0819852846',
+      role: 'ADMIN',
     });
     prisma.user.update.mockResolvedValue({ id: 'user-1' });
     prisma.fixer.update.mockResolvedValue(fixer);
@@ -3819,5 +3846,9 @@ describe('FixerService', () => {
         }),
       }),
     );
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: expect.objectContaining({ role: 'ADMIN' }),
+    });
   });
 });

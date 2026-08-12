@@ -1061,9 +1061,16 @@ export class FixerService {
 
     try {
       const fixer = await this.prisma.$transaction(async (transaction) => {
+        const account = await transaction.user.findUnique({
+          where: { id: userId },
+          select: { role: true },
+        });
+        if (!account) {
+          throw new NotFoundException('User not found');
+        }
         await transaction.user.update({
           where: { id: userId },
-          data: { role: 'FIXER' },
+          data: { role: account.role === 'ADMIN' ? 'ADMIN' : 'FIXER' },
         });
 
         const createdFixer = await transaction.fixer.create({
@@ -1260,7 +1267,7 @@ export class FixerService {
     const fixer = await this.getFixerByUserId(userId);
     const existingUser = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { email: true, phone: true },
+      select: { email: true, phone: true, role: true },
     });
     if (!existingUser) throw new NotFoundException('User not found');
 
@@ -1349,7 +1356,7 @@ export class FixerService {
         email: dto.email,
         phone: dto.phone,
         company: dto.company,
-        role: 'FIXER',
+        role: existingUser.role === 'ADMIN' ? 'ADMIN' : 'FIXER',
       },
     });
 

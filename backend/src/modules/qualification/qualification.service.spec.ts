@@ -1883,7 +1883,86 @@ describe('QualificationService', () => {
     },
   );
 
-  it.each(['company-affidavit', 'company-letter-of-intent'])(
+  it.each([
+    ['company-affidavit', 700 * 1024],
+    ['company-letter-of-intent', 250 * 1024],
+  ] as const)(
+    'accepts and supersedes readable %s evidence within its limit',
+    async (documentType, fileSize) => {
+      prisma.kycSubmission.findFirst.mockResolvedValue({
+        id: 'submission-1',
+        fixerId: 'fixer-1',
+        status: 'DRAFT',
+        failedAttempts: 0,
+        lockedUntil: null,
+        fixer: {
+          verified: false,
+          verifiedCompanyName: null,
+          qualificationEligibilityStatus: 'PENDING',
+          kycReverificationReasons: null,
+          user: {
+            name: 'Suppadesh Fungprasertsuk',
+            company: 'Construction Blue Co., Ltd.',
+          },
+        },
+      });
+      tx.kycDocument.count.mockResolvedValue(0);
+      tx.kycDocument.findFirst.mockImplementation(({ where }: any) =>
+        where.checksumSha256
+          ? null
+          : {
+              id: `old-${documentType}`,
+              documentType,
+              isActive: true,
+              lifecycleState: 'READY',
+            },
+      );
+      tx.kycDocument.create.mockImplementation(({ data }: any) => ({
+        id: data.id,
+        documentType: data.documentType,
+        contentType: data.contentType,
+        sizeBytes: data.sizeBytes,
+        evidenceStatus: 'UNCHECKED',
+        expiresAt: null,
+        createdAt: new Date('2026-08-12T00:00:00.000Z'),
+      }));
+      tx.kycDocument.findUnique.mockResolvedValue({
+        id: 'replacement-company-evidence',
+        isActive: false,
+        lifecycleState: 'UPLOADED',
+      });
+
+      const body = Buffer.concat([
+        Buffer.from('%PDF-1.4\\n'),
+        Buffer.alloc(fileSize),
+      ]);
+      await expect(
+        service.uploadDocumentForUser('user-1', 'submission-1', documentType, {
+          originalname: `${documentType}.pdf`,
+          mimetype: 'application/pdf',
+          size: body.length,
+          buffer: body,
+        } as Express.Multer.File),
+      ).resolves.toEqual(expect.objectContaining({ id: expect.any(String) }));
+
+      const replacementId = tx.kycDocument.create.mock.calls.at(-1)[0].data.id;
+      expect(tx.kycDocument.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: `old-${documentType}`,
+          submissionId: 'submission-1',
+          isActive: true,
+          lifecycleState: 'READY',
+        },
+        data: {
+          isActive: false,
+          supersededAt: expect.any(Date),
+          supersededById: replacementId,
+        },
+      });
+    },
+  );
+
+  it.each(['company-letter-of-intent'])(
     'rejects %s evidence above 0.3 MB before private storage',
     async (documentType) => {
       const body = Buffer.concat([
@@ -1898,11 +1977,32 @@ describe('QualificationService', () => {
           buffer: body,
         } as Express.Multer.File),
       ).rejects.toThrow(
-        'Company evidence file exceeds 0.3 MB; compress it before upload',
+        'Company letter of intent exceeds 0.3 MB; compress it before upload',
       );
       expect(storage.putPrivateObject).not.toHaveBeenCalled();
     },
   );
+
+  it('rejects a company affidavit above 1 MB before private storage', async () => {
+    const body = Buffer.concat([
+      Buffer.from('%PDF-1.4\n'),
+      Buffer.alloc(1024 * 1024),
+    ]);
+    await expect(
+      service.uploadDocumentForUser(
+        'user-1',
+        'submission-1',
+        'company-affidavit',
+        {
+          originalname: 'oversized-company-affidavit.pdf',
+          mimetype: 'application/pdf',
+          size: body.length,
+          buffer: body,
+        } as Express.Multer.File,
+      ),
+    ).rejects.toThrow('Company affidavit exceeds 1 MB');
+    expect(storage.putPrivateObject).not.toHaveBeenCalled();
+  });
 
   it('enforces the ten-file portfolio limit under a serialized upload lock', async () => {
     prisma.kycSubmission.findFirst.mockResolvedValue({

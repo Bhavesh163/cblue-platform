@@ -11,7 +11,7 @@ declare global {
           sitekey: string;
           callback: (token: string) => void;
           "expired-callback": () => void;
-        }
+        },
       ) => number;
       reset: (widgetId: number) => void;
     };
@@ -22,15 +22,22 @@ declare global {
 interface ReCaptchaProps {
   onVerify: (token: string) => void;
   onExpire: () => void;
+  resetKey?: number;
 }
 
 const RECAPTCHA_SITE_KEY =
-  process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI";
+  process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY ||
+  "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI";
 
-export default function ReCaptcha({ onVerify, onExpire }: ReCaptchaProps) {
+export default function ReCaptcha({
+  onVerify,
+  onExpire,
+  resetKey,
+}: ReCaptchaProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<number | null>(null);
   const renderedRef = useRef(false);
+  const lastResetKeyRef = useRef(resetKey);
 
   const renderWidget = useCallback(() => {
     if (
@@ -68,6 +75,16 @@ export default function ReCaptcha({ onVerify, onExpire }: ReCaptchaProps) {
       window.onRecaptchaLoad = undefined;
     };
   }, [renderWidget]);
+
+  useEffect(() => {
+    if (resetKey === undefined || resetKey === lastResetKeyRef.current) {
+      return;
+    }
+    lastResetKeyRef.current = resetKey;
+    if (widgetIdRef.current !== null && window.grecaptcha) {
+      window.grecaptcha.reset(widgetIdRef.current);
+    }
+  }, [resetKey]);
 
   return <div ref={containerRef} />;
 }
