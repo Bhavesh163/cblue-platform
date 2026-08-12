@@ -6,12 +6,17 @@ import { NotFoundException } from '@nestjs/common';
 describe('UserService', () => {
   let service: UserService;
   let prisma: {
+    $transaction: jest.Mock;
     user: Record<string, jest.Mock>;
     address: Record<string, jest.Mock>;
+    fixer: Record<string, jest.Mock>;
+    subscriber: Record<string, jest.Mock>;
+    refreshSession: Record<string, jest.Mock>;
   };
 
   beforeEach(async () => {
     prisma = {
+      $transaction: jest.fn(),
       user: {
         findUnique: jest.fn(),
         update: jest.fn(),
@@ -24,7 +29,14 @@ describe('UserService', () => {
         updateMany: jest.fn(),
         delete: jest.fn(),
       },
+      fixer: { updateMany: jest.fn() },
+      subscriber: { update: jest.fn() },
+      refreshSession: { updateMany: jest.fn() },
     };
+    prisma.$transaction.mockImplementation(
+      async (callback: (tx: typeof prisma) => Promise<unknown>) =>
+        callback(prisma),
+    );
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [UserService, { provide: PrismaService, useValue: prisma }],
@@ -425,6 +437,60 @@ describe('UserService', () => {
 
       const result = await service.deleteAddress('user-1', 'addr-1');
       expect(result.id).toBe('addr-1');
+    });
+  });
+
+  describe('deleteAccount', () => {
+    it('atomically anonymizes both identities and revokes every session', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-1',
+        subscriberId: 'subscriber-1',
+      });
+      prisma.user.update.mockResolvedValue({ id: 'user-1' });
+      prisma.fixer.updateMany.mockResolvedValue({ count: 1 });
+      prisma.subscriber.update.mockResolvedValue({ id: 'subscriber-1' });
+      prisma.refreshSession.updateMany.mockResolvedValue({ count: 2 });
+
+      await expect(service.deleteAccount('user-1')).resolves.toEqual(
+        expect.objectContaining({ success: true }),
+      );
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(prisma.refreshSession.updateMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1', revokedAt: null },
+        data: {
+          revokedAt: expect.any(Date),
+          revocationReason: 'ACCOUNT_DELETED',
+        },
+      });
+      expect(prisma.subscriber.update).toHaveBeenCalledWith({
+        where: { id: 'subscriber-1' },
+        data: expect.objectContaining({
+          status: 'CANCELLED',
+          name: 'Deleted User',
+          phone: '',
+          company: null,
+          resetToken: null,
+          resetTokenExpiry: null,
+        }),
+      });
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: expect.objectContaining({
+          isActive: false,
+          name: 'Deleted User',
+          phone: null,
+          company: null,
+        }),
+      });
+      expect(prisma.fixer.updateMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+        data: expect.objectContaining({
+          status: 'REJECTED',
+          verified: false,
+          qualificationEligibilityStatus: 'PENDING',
+        }),
+      });
     });
   });
 });

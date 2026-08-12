@@ -2,6 +2,7 @@ import { getApiUrl } from "../lib/api";
 
 const ADMIN_TOKEN_KEY = "cblue_admin_token";
 const ADMIN_REFRESH_TOKEN_KEY = "cblue_admin_refresh_token";
+export const ADMIN_SESSION_EXPIRED_EVENT = "cblue:admin-session-expired";
 
 export class AdminApiError extends Error {
   readonly status?: number;
@@ -44,6 +45,11 @@ async function rotateAdminToken() {
   return tokens.accessToken;
 }
 
+function expireAdminSession() {
+  clearAdminTokens();
+  window.dispatchEvent(new Event(ADMIN_SESSION_EXPIRED_EVENT));
+}
+
 export async function adminFetchResponse(
   input: RequestInfo | URL,
   init: RequestInit = {},
@@ -57,10 +63,17 @@ export async function adminFetchResponse(
       },
     });
   const token = window.localStorage.getItem(ADMIN_TOKEN_KEY) || "";
+  if (!token) {
+    expireAdminSession();
+    return new Response(null, { status: 401 });
+  }
   let response = await request(token);
   if (response.status === 401) {
     const rotatedToken = await rotateAdminToken();
     if (rotatedToken) response = await request(rotatedToken);
+  }
+  if (response.status === 401 || response.status === 403) {
+    expireAdminSession();
   }
   return response;
 }
@@ -80,10 +93,17 @@ export async function adminRequest<T>(
     });
 
   const token = window.localStorage.getItem(ADMIN_TOKEN_KEY) || "";
+  if (!token) {
+    expireAdminSession();
+    throw new AdminApiError("Admin session expired", 401);
+  }
   let response = await request(token);
   if (response.status === 401) {
     const rotatedToken = await rotateAdminToken();
     if (rotatedToken) response = await request(rotatedToken);
+  }
+  if (response.status === 401 || response.status === 403) {
+    expireAdminSession();
   }
   if (!response.ok) {
     throw new AdminApiError(

@@ -13,6 +13,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import {
   DemandGapStatus,
   FixerTier,
+  NotificationType,
   OrderStatus,
   Prisma,
 } from '@prisma/client';
@@ -31,6 +32,7 @@ import {
   qualificationEligibleFixerWhere,
   type QualificationReverificationReason,
 } from '../qualification/qualification-eligibility';
+import { queueNotificationInTransaction } from '../notification/notification.service';
 import { MatchingIntelligenceService } from './matching-intelligence.service';
 
 export interface SelectedFixer {
@@ -1123,6 +1125,26 @@ export class FixerService {
           });
         }
 
+        const notification = {
+          userId,
+          title: 'Identity verification required',
+          body: 'Complete and submit your identity verification before your profile can receive new opportunities.',
+          data: {
+            fixerId: createdFixer.id,
+            eligibilityStatus: 'PENDING',
+          },
+        };
+        await queueNotificationInTransaction(transaction, {
+          ...notification,
+          type: NotificationType.IN_APP,
+          dedupeKey: 'fixer-registration-in-app:' + createdFixer.id,
+        });
+        await queueNotificationInTransaction(transaction, {
+          ...notification,
+          type: NotificationType.EMAIL,
+          dedupeKey: 'fixer-registration-email:' + createdFixer.id,
+        });
+
         return transaction.fixer.findUnique({
           where: { id: createdFixer.id },
           include: { user: true, skills: true },
@@ -1352,6 +1374,8 @@ export class FixerService {
       reasons.push('SERVICE_AREA_CHANGED');
     }
     const reverificationRequired = fixer.verified && reasons.length > 0;
+    const newlyRequiresReverification =
+      reverificationRequired && !fixer.kycReverificationRequiredAt;
 
     await this.prisma.user.update({
       where: { id: userId },
@@ -1429,6 +1453,31 @@ export class FixerService {
           name: skill.name,
         })),
         skipDuplicates: true,
+      });
+    }
+
+    if (newlyRequiresReverification) {
+      await this.prisma.$transaction(async (tx) => {
+        const notification = {
+          userId,
+          title: 'Profile verification update required',
+          body: 'Your existing approved profile remains eligible for new opportunities while you complete and submit the requested identity update.',
+          data: {
+            fixerId: fixer.id,
+            eligibilityStatus: 'REVERIFICATION_REQUIRED',
+            reasons,
+          },
+        };
+        await queueNotificationInTransaction(tx, {
+          ...notification,
+          type: NotificationType.IN_APP,
+          dedupeKey: 'fixer-reverification-in-app:' + fixer.id,
+        });
+        await queueNotificationInTransaction(tx, {
+          ...notification,
+          type: NotificationType.EMAIL,
+          dedupeKey: 'fixer-reverification-email:' + fixer.id,
+        });
       });
     }
 

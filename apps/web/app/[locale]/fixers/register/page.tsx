@@ -40,6 +40,11 @@ import {
   requiresQualificationContinuation,
   shouldUploadKycImmediately,
 } from "../../../../lib/fixerRegistrationFlow";
+import {
+  clearSubscriberSession,
+  fetchWithSubscriberSession,
+  validateSubscriberSession,
+} from "../../../../lib/subscriberSession";
 
 interface PriceRow {
   service: string;
@@ -72,6 +77,19 @@ class KycUploadError extends Error {
     this.name = "KycUploadError";
     this.code = code;
   }
+}
+
+async function authenticatedSubscriberRequest(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  token?: string | null,
+): Promise<Response> {
+  const response = await fetchWithSubscriberSession(input, init, token);
+  if (!response || response.status === 401 || response.status === 403) {
+    clearSubscriberSession();
+    throw new KycUploadError("AUTH_REQUIRED");
+  }
+  return response;
 }
 
 type ApplicantLocale = "en" | "th" | "zh";
@@ -711,13 +729,19 @@ function FixerRegisterContent() {
   useEffect(() => {
     async function checkFixer() {
       try {
-        const token = localStorage.getItem("subscriber_token");
+        const storedToken = localStorage.getItem("subscriber_token");
+        if (!storedToken) {
+          setCheckingStatus(false);
+          return;
+        }
+        const token = await validateSubscriberSession(storedToken);
         if (!token) {
+          setSubscriber(null);
           setCheckingStatus(false);
           return;
         }
 
-        const res = await fetch("/api/v1/users/me", {
+        const res = await authenticatedSubscriberRequest("/api/v1/users/me", {
           headers: { Authorization: "Bearer " + token },
         });
         if (!res.ok) {
@@ -733,9 +757,12 @@ function FixerRegisterContent() {
         }
         const data = await res.json();
 
-        const fixerRes = await fetch("/api/v1/fixers/me", {
-          headers: { Authorization: "Bearer " + token },
-        });
+        const fixerRes = await authenticatedSubscriberRequest(
+          "/api/v1/fixers/me",
+          {
+            headers: { Authorization: "Bearer " + token },
+          },
+        );
 
         let fixerProfile = null;
         if (fixerRes.ok) {
@@ -761,10 +788,13 @@ function FixerRegisterContent() {
         let loadedEligibility: QualificationEligibility | null = null;
         let loadedSubmissionStatus: string | null = null;
         if (registered) {
-          const statusResponse = await fetch("/api/v1/qualification/status", {
-            cache: "no-store",
-            headers: { Authorization: "Bearer " + token },
-          });
+          const statusResponse = await authenticatedSubscriberRequest(
+            "/api/v1/qualification/status",
+            {
+              cache: "no-store",
+              headers: { Authorization: "Bearer " + token },
+            },
+          );
           if (!statusResponse.ok) {
             setError(
               locale === "th"
@@ -794,13 +824,12 @@ function FixerRegisterContent() {
               loadedSubmissionStatus,
             ))
         ) {
-          const draftResponse = await fetch(
+          const draftResponse = await authenticatedSubscriberRequest(
             "/api/v1/qualification/submissions/draft",
             {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                Authorization: "Bearer " + token,
               },
               body: JSON.stringify({
                 consentVersion: "cblue-fixer-qualification-v3",
@@ -940,7 +969,11 @@ function FixerRegisterContent() {
     string | null
   > => {
     const existingToken = localStorage.getItem("subscriber_token");
-    if (existingToken) return existingToken;
+    if (existingToken) {
+      const activeToken = await validateSubscriberSession(existingToken);
+      if (activeToken) return activeToken;
+      setSubscriber(null);
+    }
 
     if (!form.email || !/\S+@\S+\.\S+/.test(form.email)) {
       setError(
@@ -1204,7 +1237,7 @@ function FixerRegisterContent() {
       try {
         let draftId = qualificationDraftId;
         if (!draftId) {
-          const draftResponse = await fetch(
+          const draftResponse = await authenticatedSubscriberRequest(
             "/api/v1/qualification/submissions/draft",
             {
               method: "POST",
@@ -1230,11 +1263,10 @@ function FixerRegisterContent() {
         const body = new globalThis.FormData();
         body.append("documentType", documentType);
         body.append("file", file);
-        const response = await fetch(
+        const response = await authenticatedSubscriberRequest(
           "/api/v1/qualification/submissions/" + draftId + "/documents",
           {
             method: "POST",
-            headers: { Authorization: "Bearer " + token },
             body,
           },
         );
@@ -1271,11 +1303,13 @@ function FixerRegisterContent() {
       const body = new globalThis.FormData();
       body.append("documentType", documentType);
       body.append("file", file);
-      const response = await fetch("/api/v1/qualification/evidence-preflight", {
-        method: "POST",
-        headers: { Authorization: "Bearer " + token },
-        body,
-      });
+      const response = await authenticatedSubscriberRequest(
+        "/api/v1/qualification/evidence-preflight",
+        {
+          method: "POST",
+          body,
+        },
+      );
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as {
           code?: string;
@@ -1537,21 +1571,28 @@ function FixerRegisterContent() {
   const handleRecaptchaExpire = useCallback(() => setRecaptchaToken(""), []);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("subscriber");
-      if (stored) {
+    const restore = async () => {
+      try {
+        const stored = localStorage.getItem("subscriber");
+        const token = localStorage.getItem("subscriber_token");
+        if (!stored || !token || !(await validateSubscriberSession(token))) {
+          setSubscriber(null);
+          return;
+        }
         const parsed = JSON.parse(stored);
         setSubscriber(parsed);
-        setForm((prev) => ({
-          ...prev,
-          name: parsed.name || prev.name,
-          email: parsed.email || prev.email,
-          phone: parsed.phone || prev.phone,
+        setForm((previous) => ({
+          ...previous,
+          name: parsed.name || previous.name,
+          email: parsed.email || previous.email,
+          phone: parsed.phone || previous.phone,
         }));
+      } catch {
+        clearSubscriberSession();
+        setSubscriber(null);
       }
-    } catch {
-      /* ignore */
-    }
+    };
+    void restore();
   }, []);
 
   function handleChange(
@@ -1640,7 +1681,8 @@ function FixerRegisterContent() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!(await ensureInlineAuthentication())) return;
+    const authenticatedToken = await ensureInlineAuthentication();
+    if (!authenticatedToken) return;
     if (!form.consent) {
       setError(t("consent"));
       return;
@@ -1742,7 +1784,7 @@ function FixerRegisterContent() {
     setError("");
 
     try {
-      const token = localStorage.getItem("subscriber_token");
+      const token = authenticatedToken;
       const payload = {
         name: form.name,
         email: form.email,
@@ -1803,7 +1845,7 @@ function FixerRegisterContent() {
       const fixerEndpoint = isRegisteredFixer
         ? "/api/v1/fixers/me"
         : "/api/v1/fixers/register";
-      const regRes = await fetch(fixerEndpoint, {
+      const regRes = await authenticatedSubscriberRequest(fixerEndpoint, {
         method: isRegisteredFixer ? "PUT" : "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1852,10 +1894,13 @@ function FixerRegisterContent() {
       setIsRegisteredFixer(true);
       setIsAlreadyFixer(true);
 
-      const statusAfterProfile = await fetch("/api/v1/qualification/status", {
-        cache: "no-store",
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const statusAfterProfile = await authenticatedSubscriberRequest(
+        "/api/v1/qualification/status",
+        {
+          cache: "no-store",
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
       if (!statusAfterProfile.ok) {
         throw new Error("Unable to confirm identity verification status");
       }
@@ -1875,7 +1920,7 @@ function FixerRegisterContent() {
         );
       if (!requiresKyc) {
         if (portfolioImages.length > 0) {
-          const targetResponse = await fetch(
+          const targetResponse = await authenticatedSubscriberRequest(
             "/api/v1/qualification/tier-review-target",
             {
               cache: "no-store",
@@ -1894,7 +1939,7 @@ function FixerRegisterContent() {
             const body = new globalThis.FormData();
             body.append("documentType", "portfolio");
             body.append("file", portfolioImage);
-            const response = await fetch(
+            const response = await authenticatedSubscriberRequest(
               `/api/v1/qualification/submissions/${targetId}/documents`,
               {
                 method: "POST",
@@ -1938,7 +1983,7 @@ function FixerRegisterContent() {
         );
       }
 
-      const createQualification = await fetch(
+      const createQualification = await authenticatedSubscriberRequest(
         "/api/v1/qualification/submissions/draft",
         {
           method: "POST",
@@ -1968,7 +2013,7 @@ function FixerRegisterContent() {
         const body = new globalThis.FormData();
         body.append("documentType", documentType);
         body.append("file", file);
-        const response = await fetch(
+        const response = await authenticatedSubscriberRequest(
           `/api/v1/qualification/submissions/${qualification.id}/documents`,
           {
             method: "POST",
@@ -2063,7 +2108,7 @@ function FixerRegisterContent() {
         await uploadEvidence("portfolio", portfolioImage);
       }
 
-      const finalizeQualification = await fetch(
+      const finalizeQualification = await authenticatedSubscriberRequest(
         `/api/v1/qualification/submissions/${qualification.id}/submit`,
         {
           method: "POST",
@@ -2654,8 +2699,7 @@ function FixerRegisterContent() {
                 <button
                   type="button"
                   onClick={() => {
-                    localStorage.removeItem("subscriber");
-                    localStorage.removeItem("subscriber_token");
+                    clearSubscriberSession();
                     setSubscriber(null);
                   }}
                   className="ml-auto text-xs text-gray-400 hover:text-red-500"

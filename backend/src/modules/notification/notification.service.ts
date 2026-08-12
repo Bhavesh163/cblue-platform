@@ -315,12 +315,25 @@ export class NotificationService {
   }
 
   @OnEvent('fixer.registered')
-  async onFixerRegistered(payload: { userId: string }) {
-    await this.send({
+  async onFixerRegistered(payload: { fixerId: string; userId: string }) {
+    const notification = {
       userId: payload.userId,
-      type: NotificationType.PUSH,
-      title: 'Registration Received',
-      body: 'Your fixer registration is under review. We will notify you once approved.',
+      title: 'Identity verification required',
+      body: 'Complete and submit your identity verification before your profile can receive new opportunities.',
+      data: {
+        fixerId: payload.fixerId,
+        eligibilityStatus: 'PENDING',
+      },
+    };
+    await this.send({
+      ...notification,
+      type: NotificationType.IN_APP,
+      dedupeKey: 'fixer-registration-in-app:' + payload.fixerId,
+    });
+    await this.send({
+      ...notification,
+      type: NotificationType.EMAIL,
+      dedupeKey: 'fixer-registration-email:' + payload.fixerId,
     });
   }
 

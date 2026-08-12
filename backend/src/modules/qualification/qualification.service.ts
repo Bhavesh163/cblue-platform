@@ -1197,10 +1197,13 @@ export class QualificationService {
       if (
         authoritative?.isActive &&
         authoritative.lifecycleState === 'READY' &&
-        document &&
-        persistedAssessment
+        document
       ) {
-        return { ...document, assessment: persistedAssessment };
+        return {
+          ...document,
+          assessment: persistedAssessment,
+          ...(!isKyc ? { assessmentPending: true } : {}),
+        };
       }
 
       if (cleanupIntent) {

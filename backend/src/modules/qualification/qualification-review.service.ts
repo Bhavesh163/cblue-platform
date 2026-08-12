@@ -327,6 +327,9 @@ export class QualificationReviewService {
 
   async listTasks(status?: QualificationReviewStatus) {
     const where: Prisma.QualificationReviewTaskWhereInput = {
+      submission: {
+        fixer: { user: { isActive: true } },
+      },
       status: status || {
         in: [
           QualificationReviewStatus.OPEN,

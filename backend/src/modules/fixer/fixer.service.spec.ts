@@ -23,6 +23,7 @@ describe('FixerService', () => {
     fixerAvailability: Record<string, jest.Mock>;
     image: Record<string, jest.Mock>;
     order: Record<string, jest.Mock>;
+    notification: Record<string, jest.Mock>;
   };
   let eventEmitter: { emit: jest.Mock };
   let configService: { get: jest.Mock };
@@ -61,6 +62,9 @@ describe('FixerService', () => {
       },
       order: {
         findFirst: jest.fn(),
+      },
+      notification: {
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
     };
     eventEmitter = { emit: jest.fn() };
@@ -166,6 +170,26 @@ describe('FixerService', () => {
         'fixer.registered',
         expect.objectContaining({ fixerId: 'fixer-1' }),
       );
+      expect(prisma.notification.createMany).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({
+            userId: 'user-1',
+            type: 'IN_APP',
+            dedupeKey: 'fixer-registration-in-app:fixer-1',
+          }),
+        ],
+        skipDuplicates: true,
+      });
+      expect(prisma.notification.createMany).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({
+            userId: 'user-1',
+            type: 'EMAIL',
+            dedupeKey: 'fixer-registration-email:fixer-1',
+          }),
+        ],
+        skipDuplicates: true,
+      });
       expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     });
 

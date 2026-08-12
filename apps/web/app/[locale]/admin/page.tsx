@@ -18,6 +18,7 @@ import AdminOperationsPanel from "../components/AdminOperationsPanel";
 import QualificationAuditPanel from "../components/QualificationAuditPanel";
 import QualificationHistoryPanel from "../components/QualificationHistoryPanel";
 import {
+  ADMIN_SESSION_EXPIRED_EVENT,
   adminRequest,
   clearAdminTokens,
   persistAdminTokens,
@@ -298,6 +299,22 @@ export default function AdminPage() {
     setOrders([]);
     setFraudFlags([]);
   }, []);
+
+  useEffect(() => {
+    const handleExpiredAdminSession = () => {
+      clearAdminSession();
+      setAuthError("Admin session expired. Please log in again.");
+    };
+    window.addEventListener(
+      ADMIN_SESSION_EXPIRED_EVENT,
+      handleExpiredAdminSession,
+    );
+    return () =>
+      window.removeEventListener(
+        ADMIN_SESSION_EXPIRED_EVENT,
+        handleExpiredAdminSession,
+      );
+  }, [clearAdminSession]);
 
   const loadConsole = useCallback(
     async (_nextToken: string) => {

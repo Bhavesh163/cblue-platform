@@ -25,6 +25,7 @@ describe('AdminService', () => {
     prisma = {
       fixer: {
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
         findMany: jest.fn(),
         update: jest.fn(),
         count: jest.fn(),
@@ -76,14 +77,10 @@ describe('AdminService', () => {
       expect(prisma.fixer.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            OR: expect.arrayContaining([
-              { status: FixerStatus.PENDING },
-              expect.objectContaining({
-                qualificationSubmissions: expect.objectContaining({
-                  some: expect.any(Object),
-                }),
-              }),
-            ]),
+            user: { isActive: true },
+            qualificationSubmissions: expect.objectContaining({
+              some: expect.any(Object),
+            }),
           }),
         }),
       );
@@ -119,6 +116,7 @@ describe('AdminService', () => {
       expect(prisma.fixer.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
+            user: { isActive: true },
             status: FixerStatus.APPROVED,
             tier: { in: ['CORPORATE', 'SPECIALIST', 'EXPERT'] },
           }),
@@ -222,6 +220,7 @@ describe('AdminService', () => {
       expect(prisma.fixer.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
+            user: { isActive: true },
             AND: expect.arrayContaining([
               expect.objectContaining({ OR: expect.any(Array) }),
             ]),
@@ -237,7 +236,7 @@ describe('AdminService', () => {
 
   describe('getFixerQualificationDetail', () => {
     it('returns the persisted provider detail selected for admin review', async () => {
-      prisma.fixer.findUnique.mockResolvedValue({
+      prisma.fixer.findFirst.mockResolvedValue({
         id: 'fixer-1',
         user: { id: 'user-1', name: 'Provider', addresses: [] },
         skills: [],
@@ -250,9 +249,9 @@ describe('AdminService', () => {
       await expect(
         service.getFixerQualificationDetail('fixer-1'),
       ).resolves.toEqual(expect.objectContaining({ id: 'fixer-1' }));
-      expect(prisma.fixer.findUnique).toHaveBeenCalledWith(
+      expect(prisma.fixer.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'fixer-1' },
+          where: { id: 'fixer-1', user: { isActive: true } },
           select: expect.objectContaining({
             companyAddress: true,
             skills: expect.any(Object),

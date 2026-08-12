@@ -234,6 +234,50 @@ describe('SubscriptionService', () => {
       ).rejects.toThrow('Invalid email or password');
     });
 
+    it('rejects an inactive bridged user without revealing account deletion', async () => {
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      prismaService.subscriber.findUnique.mockResolvedValue({
+        id: 'sub-deleted',
+        email: 'deleted@example.com',
+        phone: '',
+        name: 'Deleted User',
+        company: null,
+        status: 'ACTIVE',
+        passwordHash: 'hash',
+      });
+      prismaService.user.findUnique.mockResolvedValue({
+        id: 'user-deleted',
+        email: 'deleted@example.com',
+        subscriberId: 'sub-deleted',
+        isActive: false,
+      });
+
+      await expect(
+        service.login({
+          email: 'deleted@example.com',
+          password: 'correct-password',
+        }),
+      ).rejects.toThrow('Invalid email or password');
+      expect(jwtService.signAsync).not.toHaveBeenCalled();
+    });
+
+    it('uses the same generic response for cancelled subscriber credentials', async () => {
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      prismaService.subscriber.findUnique.mockResolvedValue({
+        id: 'sub-cancelled',
+        email: 'cancelled@example.com',
+        passwordHash: 'hash',
+        status: 'CANCELLED',
+      });
+
+      await expect(
+        service.login({
+          email: 'cancelled@example.com',
+          password: 'correct-password',
+        }),
+      ).rejects.toThrow('Invalid email or password');
+    });
+
     it('should create a bridge without phone when phone uniqueness blocks it', async () => {
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
       prismaService.subscriber.findUnique.mockResolvedValue({

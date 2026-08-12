@@ -7,6 +7,11 @@ const registerUrl = new URL(
   import.meta.url,
 );
 const adminUrl = new URL("../app/[locale]/admin/page.tsx", import.meta.url);
+const adminApiUrl = new URL(
+  "../app/[locale]/components/adminApi.ts",
+  import.meta.url,
+);
+const subscriberSessionUrl = new URL("./subscriberSession.ts", import.meta.url);
 const recaptchaUrl = new URL(
   "../app/[locale]/components/ReCaptcha.tsx",
   import.meta.url,
@@ -71,8 +76,45 @@ test("admin OTP retries clear the consumed token and reset the widget", async ()
   );
   assert.match(adminSource, /resetKey=\{recaptchaResetKey\}/);
   assert.match(recaptchaSource, /resetKey\?: number/);
+
   assert.match(
     recaptchaSource,
     /window\.grecaptcha\.reset\(widgetIdRef\.current\)/,
+  );
+});
+
+test("protected registration requests use the refreshable subscriber session", async () => {
+  const [registerSource, sessionSource] = await Promise.all([
+    readFile(registerUrl, "utf8"),
+    readFile(subscriberSessionUrl, "utf8"),
+  ]);
+
+  assert.match(registerSource, /authenticatedSubscriberRequest/);
+  assert.doesNotMatch(
+    registerSource,
+    /await fetch\((?:fixerEndpoint|["'`]\/api\/v1\/(?:users\/me|fixers\/me|qualification))/,
+  );
+  assert.match(sessionSource, /refreshSubscriberSession\(token\)/);
+  assert.match(sessionSource, /clearSubscriberSession\(\)/);
+});
+
+test("an unrecoverable admin authorization failure expires the shared console session", async () => {
+  const [adminSource, adminApiSource] = await Promise.all([
+    readFile(adminUrl, "utf8"),
+    readFile(adminApiUrl, "utf8"),
+  ]);
+
+  assert.match(
+    adminApiSource,
+    /ADMIN_SESSION_EXPIRED_EVENT = "cblue:admin-session-expired"/,
+  );
+  assert.match(
+    adminApiSource,
+    /response\.status === 401 \|\| response\.status === 403/,
+  );
+  assert.match(adminApiSource, /window\.dispatchEvent/);
+  assert.match(
+    adminSource,
+    /window\.addEventListener\(\s*ADMIN_SESSION_EXPIRED_EVENT/,
   );
 });

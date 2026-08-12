@@ -126,6 +126,7 @@ export class AdminService {
       query.maxDeclines90Days !== undefined ||
       query.maxCancellations12Months !== undefined;
     const where: Prisma.FixerWhereInput = {
+      user: { isActive: true },
       ...(locationFilters.length ? { AND: locationFilters } : {}),
       ...(query.tier ? { tier: query.tier as FixerTier } : {}),
       ...(query.minRating !== undefined
@@ -388,32 +389,28 @@ export class AdminService {
   async getPendingFixers(pagination: PaginationDto) {
     const { page = 1, limit = 20 } = pagination;
     const where = {
-      OR: [
-        { status: FixerStatus.PENDING },
-        {
-          qualificationSubmissions: {
+      user: { isActive: true },
+      qualificationSubmissions: {
+        some: {
+          status: {
+            in: [
+              QualificationSubmissionStatus.NEEDS_REVIEW,
+              QualificationSubmissionStatus.AI_PRECLEARED,
+            ],
+          },
+          reviewTasks: {
             some: {
+              kind: QualificationReviewKind.KYC,
               status: {
                 in: [
-                  QualificationSubmissionStatus.NEEDS_REVIEW,
-                  QualificationSubmissionStatus.AI_PRECLEARED,
+                  QualificationReviewStatus.OPEN,
+                  QualificationReviewStatus.ASSIGNED,
                 ],
-              },
-              reviewTasks: {
-                some: {
-                  kind: QualificationReviewKind.KYC,
-                  status: {
-                    in: [
-                      QualificationReviewStatus.OPEN,
-                      QualificationReviewStatus.ASSIGNED,
-                    ],
-                  },
-                },
               },
             },
           },
         },
-      ],
+      },
     };
     const [fixers, total] = await Promise.all([
       this.prisma.fixer.findMany({
@@ -434,6 +431,7 @@ export class AdminService {
   async getTierReviewFixers(pagination: PaginationDto) {
     const { page = 1, limit = 20 } = pagination;
     const where = {
+      user: { isActive: true },
       status: FixerStatus.APPROVED,
       tier: {
         in: [FixerTier.CORPORATE, FixerTier.SPECIALIST, FixerTier.EXPERT],
@@ -462,8 +460,8 @@ export class AdminService {
     };
   }
   async getFixerQualificationDetail(fixerId: string) {
-    const fixer = await this.prisma.fixer.findUnique({
-      where: { id: fixerId },
+    const fixer = await this.prisma.fixer.findFirst({
+      where: { id: fixerId, user: { isActive: true } },
       select: {
         id: true,
         tier: true,

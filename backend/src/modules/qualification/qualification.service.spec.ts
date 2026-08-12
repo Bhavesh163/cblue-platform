@@ -879,6 +879,75 @@ describe('QualificationService', () => {
     );
   });
 
+  it('returns a persisted director authorization letter when promotion acknowledgement is lost', async () => {
+    prisma.kycSubmission.findFirst.mockResolvedValue({
+      id: 'submission-1',
+      fixerId: 'fixer-1',
+      status: 'DRAFT',
+      failedAttempts: 0,
+      lockedUntil: null,
+      fixer: {
+        verified: false,
+        kycReverificationReasons: [],
+        user: { name: 'Registered Name', company: 'Annova Company Limited' },
+      },
+    });
+    tx.kycDocument.findUnique.mockResolvedValue({
+      id: 'director-letter-document',
+      isActive: false,
+      lifecycleState: 'UPLOADED',
+    });
+    tx.kycDocument.create.mockImplementation(({ data }: any) => ({
+      id: data.id,
+      documentType: data.documentType,
+      contentType: data.contentType,
+      sizeBytes: data.sizeBytes,
+      evidenceStatus: 'UNCHECKED',
+      expiresAt: null,
+      createdAt: new Date('2026-08-13T00:00:00.000Z'),
+    }));
+    let transactionCall = 0;
+    prisma.$transaction.mockImplementation(
+      async (callback: (client: any) => unknown) => {
+        transactionCall += 1;
+        const result = await callback(tx);
+        if (transactionCall === 2) {
+          throw new Error('promotion commit acknowledgement lost');
+        }
+        return result;
+      },
+    );
+    prisma.kycDocument.findUnique.mockResolvedValue({
+      id: 'director-letter-document',
+      submissionId: 'submission-1',
+      storageKey: 'opaque-key',
+      isActive: true,
+      lifecycleState: 'READY',
+    });
+
+    await expect(
+      service.uploadDocumentForUser(
+        'user-1',
+        'submission-1',
+        'company-letter-of-intent',
+        {
+          originalname: 'director-authorization.pdf',
+          mimetype: 'application/pdf',
+          size: 8,
+          buffer: Buffer.from('%PDF-1.7'),
+        } as Express.Multer.File,
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        documentType: 'company-letter-of-intent',
+        assessment: null,
+        assessmentPending: true,
+      }),
+    );
+
+    expect(assessment.assessDocument).not.toHaveBeenCalled();
+    expect(storage.deletePrivateObject).not.toHaveBeenCalled();
+  });
   it('persists independent cleanup when the submission and document were cascade-deleted', async () => {
     prisma.kycSubmission.findFirst.mockResolvedValue({
       id: 'submission-1',

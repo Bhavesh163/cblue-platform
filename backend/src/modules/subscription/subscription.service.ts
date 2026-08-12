@@ -220,13 +220,13 @@ export class SubscriptionService {
       subscriber.status === 'SUSPENDED' ||
       subscriber.status === 'CANCELLED'
     ) {
-      throw new UnauthorizedException('Account is suspended or cancelled');
+      throw new UnauthorizedException('Invalid email or password');
     }
 
     // Bridge: find or create User record for this subscriber
     const user = await this.ensureUserBridge(subscriber);
-    if (!user) {
-      throw new UnauthorizedException('Could not resolve your account session');
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('Invalid email or password');
     }
 
     const tokens = await this.generateTokenBundle(
@@ -276,6 +276,12 @@ export class SubscriptionService {
     const subscriber = await this.resolveSubscriberForUser(user, payload);
     if (!subscriber) {
       throw new UnauthorizedException('Subscriber account not found');
+    }
+    if (
+      subscriber.status === 'SUSPENDED' ||
+      subscriber.status === 'CANCELLED'
+    ) {
+      throw new UnauthorizedException('Session expired. Please log in again.');
     }
 
     if (!user.subscriberId || user.subscriberId !== subscriber.id) {

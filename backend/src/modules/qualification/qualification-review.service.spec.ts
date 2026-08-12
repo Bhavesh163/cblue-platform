@@ -1061,6 +1061,9 @@ describe('QualificationReviewService', () => {
     expect(prisma.qualificationReviewTask.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
+          submission: {
+            fixer: { user: { isActive: true } },
+          },
           OR: [
             {
               kind: 'KYC',

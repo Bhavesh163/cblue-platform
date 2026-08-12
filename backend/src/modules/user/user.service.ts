@@ -408,29 +408,61 @@ export class UserService {
   }
 
   async deleteAccount(userId: string) {
-    const ts = Date.now();
-    await this.prisma.user.update({
+    const account = await this.prisma.user.findUnique({
       where: { id: userId },
-      data: {
-        name: 'Deleted User',
-        email: `deleted_${userId}_${ts}@cblue.co.th`,
-        phone: null,
-        company: null,
-        isActive: false,
-      },
+      select: { id: true, subscriberId: true },
     });
-    // optionally deactivate fixer if exists
-    const fixer = await this.prisma.fixer.findUnique({ where: { userId } });
-    if (fixer) {
-      await this.prisma.fixer.update({
+    if (!account) throw new NotFoundException('User not found');
+
+    const deletedAt = new Date();
+    const timestamp = deletedAt.getTime();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.refreshSession.updateMany({
+        where: { userId, revokedAt: null },
+        data: {
+          revokedAt: deletedAt,
+          revocationReason: 'ACCOUNT_DELETED',
+        },
+      });
+      await tx.fixer.updateMany({
         where: { userId },
         data: {
           bio: null,
           description: null,
           status: 'REJECTED',
+          verified: false,
+          qualificationEligibilityStatus: 'PENDING',
+          suspendedAt: deletedAt,
+          suspensionReason: 'Account deleted',
         },
       });
-    }
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          name: 'Deleted User',
+          email: `deleted_${userId}_${timestamp}@cblue.co.th`,
+          phone: null,
+          company: null,
+          isActive: false,
+        },
+      });
+      if (account.subscriberId) {
+        await tx.subscriber.update({
+          where: { id: account.subscriberId },
+          data: {
+            email: `deleted_subscriber_${account.subscriberId}_${timestamp}@cblue.co.th`,
+            name: 'Deleted User',
+            phone: '',
+            company: null,
+            status: 'CANCELLED',
+            serviceCategory: null,
+            description: null,
+            resetToken: null,
+            resetTokenExpiry: null,
+          },
+        });
+      }
+    });
     return { success: true, message: 'Account deleted via PDPA' };
   }
 }
