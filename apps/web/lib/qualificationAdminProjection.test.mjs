@@ -321,6 +321,31 @@ test("summarizes persisted company authorization checks for administrators", () 
   assert.ok(summary.passed >= 3);
 });
 
+test("shows persisted company application intent and contact email", () => {
+  const document = {
+    documentType: "company-letter-of-intent",
+    extractedFields: {
+      companyName: "Example Company Limited",
+      contactEmail: "director@example.com",
+      intentToJoinCblue: true,
+      authorizedApplicantName: "Applicant Person",
+    },
+  };
+
+  assert.deepEqual(
+    safeQualificationExtractedFields(document).map(({ label, value }) => ({
+      label,
+      value,
+    })),
+    [
+      { label: "Company name", value: "Example Company Limited" },
+      { label: "Contact email", value: "director@example.com" },
+      { label: "Application intent", value: "true" },
+      { label: "Authorized applicant", value: "Applicant Person" },
+    ],
+  );
+});
+
 test("does not count unassessed company letter fields as passed", () => {
   const checks = qualificationDocumentChecks({
     documentType: "company-letter-of-intent",

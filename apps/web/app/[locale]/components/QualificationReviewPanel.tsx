@@ -503,7 +503,7 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
       )}
       {tasks.length > 0 && (
         <div className="max-h-[70vh] overflow-auto">
-          <table className="w-full min-w-[980px] text-left text-sm">
+          <table className="w-full min-w-[1200px] text-left text-sm">
             <thead className="sticky top-0 z-10 border-b border-slate-200 bg-white text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="py-2 pr-4">Partner / review type</th>
@@ -522,18 +522,26 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                 const allDocuments = visibleQualificationDocuments(
                   task.submission?.documents || [],
                 ) as QualificationDocument[];
-                const documents = allDocuments.filter((document) =>
-                  task.kind === "KYC"
-                    ? [
-                        "id-front",
-                        "selfie-with-id",
-                        "company-affidavit",
-                        "company-letter-of-intent",
-                      ].includes(document.documentType)
-                    : !["id-front", "selfie-with-id"].includes(
-                        document.documentType,
-                      ),
+                const identityDocuments = allDocuments.filter((document) =>
+                  ["id-front", "selfie-with-id"].includes(
+                    document.documentType,
+                  ),
                 );
+                const companyDocuments = allDocuments.filter((document) =>
+                  ["company-affidavit", "company-letter-of-intent"].includes(
+                    document.documentType,
+                  ),
+                );
+                const qualificationDocuments = allDocuments.filter(
+                  (document) =>
+                    !["id-front", "selfie-with-id"].includes(
+                      document.documentType,
+                    ),
+                );
+                const documents =
+                  task.kind === "KYC"
+                    ? [...identityDocuments, ...companyDocuments]
+                    : qualificationDocuments;
                 const assessmentSummary =
                   qualificationAssessmentSummary(documents);
                 const selectedDecision = decision[task.id] || "APPROVE";
@@ -664,23 +672,77 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                         {task.status === "ASSIGNED" &&
                         task.assignedTo === adminId &&
                         expanded ? (
-                          <QualificationEvidenceControls
-                            token={token}
-                            submissionId={task.submission?.id}
-                            documents={documents}
-                            findings={evaluation?.findings || []}
-                            onChanged={async () => {
-                              if (task.kind === "TIER" && task.submission?.id) {
-                                await reevaluate(task.submission.id);
-                                return;
-                              }
-                              await load();
-                            }}
-                            readOnly={Boolean(task.proposedAt)}
-                          />
+                          task.kind === "KYC" ? (
+                            <div className="space-y-5">
+                              <section
+                                aria-labelledby={`identity-evidence-${task.id}`}
+                              >
+                                <h3
+                                  id={`identity-evidence-${task.id}`}
+                                  className="mb-2 text-sm font-bold text-slate-900"
+                                >
+                                  Identity evidence
+                                </h3>
+                                <QualificationEvidenceControls
+                                  token={token}
+                                  submissionId={task.submission?.id}
+                                  documents={identityDocuments}
+                                  findings={evaluation?.findings || []}
+                                  onChanged={load}
+                                  readOnly={Boolean(task.proposedAt)}
+                                />
+                              </section>
+                              {companyDocuments.length > 0 ? (
+                                <section
+                                  aria-labelledby={`company-evidence-${task.id}`}
+                                  className="border-t border-slate-200 pt-4"
+                                >
+                                  <h3
+                                    id={`company-evidence-${task.id}`}
+                                    className="text-sm font-bold text-slate-900"
+                                  >
+                                    Company evidence
+                                  </h3>
+                                  <p className="mb-2 mt-1 text-xs leading-5 text-slate-600">
+                                    Review the company affidavit and
+                                    authorization letter. Saved application
+                                    intent and contact email appear with the
+                                    letter.
+                                  </p>
+                                  <QualificationEvidenceControls
+                                    token={token}
+                                    submissionId={task.submission?.id}
+                                    documents={companyDocuments}
+                                    findings={evaluation?.findings || []}
+                                    onChanged={load}
+                                    readOnly={Boolean(task.proposedAt)}
+                                  />
+                                </section>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <QualificationEvidenceControls
+                              token={token}
+                              submissionId={task.submission?.id}
+                              documents={qualificationDocuments}
+                              findings={evaluation?.findings || []}
+                              onChanged={async () => {
+                                if (task.submission?.id) {
+                                  await reevaluate(task.submission.id);
+                                }
+                              }}
+                              readOnly={Boolean(task.proposedAt)}
+                            />
+                          )
                         ) : (
                           <span>
-                            {documents.length} document(s).{" "}
+                            {task.kind === "KYC"
+                              ? `${identityDocuments.length} identity document(s)${
+                                  companyDocuments.length
+                                    ? `, ${companyDocuments.length} company document(s)`
+                                    : ""
+                                }.`
+                              : `${qualificationDocuments.length} document(s).`}{" "}
                             {assignedToCurrent
                               ? "Open details to review evidence."
                               : "Start review to inspect evidence."}
