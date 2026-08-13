@@ -66,6 +66,20 @@ const ADMIN_EVIDENCE_REASON_CODES = new Set([
   'ADMIN_FACE_MATCH_CONFIRMED',
   'ADMIN_SELFIE_REVIEW_COMPLETED',
 ]);
+const TRANSIENT_PERSISTENCE_ERROR_CODES = new Set([
+  'P1001',
+  'P1002',
+  'P1008',
+  'P1017',
+  'P2024',
+  'P2028',
+  'P2034',
+]);
+const PERSISTENCE_RETRY_DELAYS_MS = [100, 300] as const;
+const QUALIFICATION_TRANSACTION_OPTIONS = {
+  maxWait: 5_000,
+  timeout: 15_000,
+} as const;
 
 function detectQualificationContentType(buffer: Buffer): string | null {
   if (
@@ -622,7 +636,10 @@ export class QualificationService {
             'The same evidence file cannot be used for two different document types',
         });
       }
-      if (!existingEvidence.isActive || existingEvidence.lifecycleState !== 'READY') {
+      if (
+        !existingEvidence.isActive ||
+        existingEvidence.lifecycleState !== 'READY'
+      ) {
         throw new ConflictException({
           code: 'EVIDENCE_UPLOAD_IN_PROGRESS',
           message: 'This evidence upload is already being processed',
@@ -692,7 +709,7 @@ export class QualificationService {
       const reservedCleanupIntent = cleanupIntent;
 
       phase = 'STAGE';
-      document = await this.prisma.$transaction(async (tx) => {
+      document = await this.runQualificationTransaction(async (tx) => {
         await tx.$executeRawUnsafe(
           'SELECT pg_advisory_xact_lock(hashtext($1))',
           submission.id,
@@ -805,7 +822,7 @@ export class QualificationService {
             createdAt: true,
           },
         });
-      });
+      }, 'document stage');
 
       phase = 'UPLOAD';
       await this.storage.putPrivateObject({
@@ -829,7 +846,7 @@ export class QualificationService {
       if (!isKyc) {
         phase = 'PROMOTION';
         const readyAt = new Date();
-        await this.prisma.$transaction(async (tx) => {
+        await this.runQualificationTransaction(async (tx) => {
           await tx.$executeRawUnsafe(
             'SELECT pg_advisory_xact_lock(hashtext($1))',
             submission.id,
@@ -967,7 +984,7 @@ export class QualificationService {
               metadata: { documentType },
             },
           });
-        });
+        }, 'document promotion');
         await this.completeStorageCleanupIntentAfterPromotion(
           reservedCleanupIntent.id,
           storageKey,
@@ -996,7 +1013,7 @@ export class QualificationService {
 
       const assessmentForPromotion = persistedAssessment;
       phase = 'PROMOTION';
-      await this.prisma.$transaction(async (tx) => {
+      await this.runQualificationTransaction(async (tx) => {
         await tx.$executeRawUnsafe(
           'SELECT pg_advisory_xact_lock(hashtext($1))',
           submission.id,
@@ -1168,7 +1185,7 @@ export class QualificationService {
             'Qualification storage ownership changed during promotion',
           );
         }
-      });
+      }, 'assessed document promotion');
 
       return { ...document, assessment: persistedAssessment };
     } catch (error) {
@@ -1313,6 +1330,61 @@ export class QualificationService {
         error instanceof Error ? error.name : 'UnknownError',
       );
     }
+  }
+
+  private async runQualificationTransaction<T>(
+    operation: (tx: Prisma.TransactionClient) => Promise<T>,
+    operationName: string,
+  ): Promise<T> {
+    return this.withTransientPersistenceRetry(
+      () =>
+        this.prisma.$transaction(operation, QUALIFICATION_TRANSACTION_OPTIONS),
+      operationName,
+    );
+  }
+
+  private async withTransientPersistenceRetry<T>(
+    operation: () => Promise<T>,
+    operationName: string,
+  ): Promise<T> {
+    let lastError: unknown;
+    for (
+      let attempt = 0;
+      attempt <= PERSISTENCE_RETRY_DELAYS_MS.length;
+      attempt += 1
+    ) {
+      try {
+        return await operation();
+      } catch (error) {
+        lastError = error;
+        const errorCode = this.persistenceErrorCode(error);
+        const delayMs = PERSISTENCE_RETRY_DELAYS_MS[attempt];
+        if (!errorCode || delayMs === undefined) {
+          throw error;
+        }
+        this.logger.warn(
+          'Qualification ' +
+            operationName +
+            ' retrying transient persistence failure code=' +
+            errorCode,
+        );
+        await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+    throw lastError instanceof Error
+      ? lastError
+      : new Error('Qualification ' + operationName + ' failed');
+  }
+
+  private persistenceErrorCode(error: unknown): string | null {
+    if (typeof error !== 'object' || error === null || !('code' in error)) {
+      return null;
+    }
+    const code = (error as { code?: unknown }).code;
+    return typeof code === 'string' &&
+      TRANSIENT_PERSISTENCE_ERROR_CODES.has(code)
+      ? code
+      : null;
   }
 
   private async transitionLifecycleOrConfirm(

@@ -2116,7 +2116,9 @@ describe('QualificationService', () => {
     );
 
     expect(storage.putPrivateObject).toHaveBeenCalled();
-    expect(tx.qualificationStorageCleanupIntent.deleteMany).not.toHaveBeenCalled();
+    expect(
+      tx.qualificationStorageCleanupIntent.deleteMany,
+    ).not.toHaveBeenCalled();
     expect(tx.kycDocument.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -2648,5 +2650,66 @@ describe('QualificationService', () => {
         },
       }),
     ]);
+  });
+  it('retries transient staging transactions before failing the upload', async () => {
+    prisma.kycSubmission.findFirst.mockResolvedValue({
+      id: 'submission-1',
+      fixerId: 'fixer-1',
+      status: 'DRAFT',
+      failedAttempts: 0,
+      lockedUntil: null,
+      fixer: {
+        verified: false,
+        kycReverificationReasons: [],
+        user: { name: 'Registered Name', company: 'Annova Company Limited' },
+      },
+    });
+    tx.kycDocument.create.mockImplementation(({ data }: any) => ({
+      id: data.id,
+      documentType: data.documentType,
+      contentType: data.contentType,
+      sizeBytes: data.sizeBytes,
+      evidenceStatus: 'UNCHECKED',
+      expiresAt: null,
+      createdAt: new Date('2026-08-13T00:00:00.000Z'),
+    }));
+    tx.kycDocument.findUnique.mockResolvedValue({
+      id: 'staged-document',
+      isActive: false,
+      lifecycleState: 'UPLOADED',
+    });
+    let transactionCalls = 0;
+    prisma.$transaction.mockImplementation(
+      (callback: (client: any) => unknown) => {
+        transactionCalls += 1;
+        if (transactionCalls === 1) {
+          throw Object.assign(new Error('transaction timeout'), {
+            code: 'P2028',
+          });
+        }
+        return callback(tx);
+      },
+    );
+
+    await expect(
+      service.uploadDocumentForUser(
+        'user-1',
+        'submission-1',
+        'company-letter-of-intent',
+        {
+          originalname: 'director-authorization.pdf',
+          mimetype: 'application/pdf',
+          size: 8,
+          buffer: Buffer.from('%PDF-1.7'),
+        } as Express.Multer.File,
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        documentType: 'company-letter-of-intent',
+        assessment: null,
+        assessmentPending: true,
+      }),
+    );
+    expect(transactionCalls).toBe(3);
   });
 });
