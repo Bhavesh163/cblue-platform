@@ -611,13 +611,21 @@ export class PropertyService {
         this.assertResolvedGpsLocation({ ...dto, ...normalizedLocation });
 
       // Verify the user exists before attempting insert (prevents FK constraint 500)
-      const userExists = await this.prisma.user.findUnique({
+      const userProfile = await this.prisma.user.findUnique({
         where: { id: userId },
-        select: { id: true },
+        select: { id: true, name: true, email: true, phone: true },
       });
-      if (!userExists) {
+      if (!userProfile) {
         throw new NotFoundException(
           'User account not found. Please log out and log in again.',
+        );
+      }
+      const contactName = userProfile.name?.trim() || '';
+      const contactEmail = userProfile.email?.trim().toLowerCase() || '';
+      const contactPhone = userProfile.phone?.trim() || '';
+      if (!contactName || !contactEmail || !contactPhone) {
+        throw new BadRequestException(
+          'Complete your name, email, and phone in your profile before listing a property.',
         );
       }
       const property = await this.prisma.property.create({
@@ -643,9 +651,9 @@ export class PropertyService {
           longitude:
             locationMode === PropertyLocationMode.GPS ? dto.longitude : null,
           locationMode,
-          contactName: dto.contactName,
-          contactPhone: dto.contactPhone,
-          contactEmail: dto.contactEmail,
+          contactName,
+          contactPhone,
+          contactEmail,
           features: dto.features as Prisma.InputJsonValue,
           yearBuilt: dto.yearBuilt,
         },

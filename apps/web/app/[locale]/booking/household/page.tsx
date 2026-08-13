@@ -14,6 +14,7 @@ import GpsDetectButton from "../../components/GpsDetectButton";
 import GpsResolvedLocation from "../../components/GpsResolvedLocation";
 import FixerResults from "../../components/FixerResults";
 import DatePickerInput from "../../components/DatePickerInput";
+import PasswordInput from "../../components/PasswordInput";
 
 
 
@@ -468,14 +469,14 @@ function HouseholdBookingContent() {
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       {locale === "th" ? "รหัสผ่าน" : locale === "zh" ? "密码" : "Password"} <span className="text-red-500">*</span>
                     </label>
-                    <input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none" placeholder="••••••••" />
+                    <PasswordInput locale={locale} value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} autoComplete={authMode === "login" ? "current-password" : "new-password"} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none" placeholder="••••••••" />
                   </div>
                   {authMode === "register" && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         {locale === "th" ? "ยืนยันรหัสผ่าน" : locale === "zh" ? "确认密码" : "Confirm Password"} <span className="text-red-500">*</span>
                       </label>
-                      <input type="password" value={authConfirmPassword} onChange={(e) => setAuthConfirmPassword(e.target.value)} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none" placeholder="••••••••" />
+                      <PasswordInput locale={locale} value={authConfirmPassword} onChange={(e) => setAuthConfirmPassword(e.target.value)} autoComplete="new-password" className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none" placeholder="••••••••" />
                     </div>
                   )}
                 </div>

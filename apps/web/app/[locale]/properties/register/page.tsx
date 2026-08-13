@@ -10,9 +10,26 @@ import { getSubdistrictsForDistrict, lookupByPostalCode } from "../../lib/thai-s
 import GpsDetectButton from "../../components/GpsDetectButton";
 import GpsResolvedLocation from "../../components/GpsResolvedLocation";
 import { normalizeGpsAddressForSubmit } from "../../lib/gps-location-normalization";
-import { clearSubscriberSession, refreshSubscriberSession } from "../../../../lib/subscriberSession";
+import { clearSubscriberSession, fetchWithSubscriberSession, refreshSubscriberSession } from "../../../../lib/subscriberSession";
 const PROPERTY_TYPES = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "APARTMENT", "OFFICE", "WAREHOUSE", "SHOPHOUSE"] as const;
 
+type AuthenticatedContact = {
+  name: string;
+  email?: string;
+  phone?: string;
+  role?: string;
+};
+
+function readContactProfile(value: unknown): AuthenticatedContact | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const name = typeof record.name === "string" ? record.name.trim() : "";
+  const email = typeof record.email === "string" ? record.email.trim() : "";
+  const phone = typeof record.phone === "string" ? record.phone.trim() : "";
+  const role = typeof record.role === "string" ? record.role : undefined;
+  if (!name || !email) return null;
+  return { name, email, phone, role };
+}
 
 
 export default function PropertyRegisterPage() {
@@ -28,7 +45,7 @@ export default function PropertyRegisterPage() {
   const [consentChecked, setConsentChecked] = useState(false);
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locationType, setLocationType] = useState<"gps" | "dropdown" | "address">("dropdown");
-  const [subscriber, setSubscriber] = useState<{ name: string; email?: string; role?: string } | null>(null);
+  const [subscriber, setSubscriber] = useState<AuthenticatedContact | null>(null);
   const [authMode, setAuthMode] = useState<"login" | "register">("register");
   const [propImages, setPropImages] = useState<File[]>([]);
   const sessionExpiredMessage = locale === "th"
@@ -170,19 +187,53 @@ export default function PropertyRegisterPage() {
           return;
         }
 
-        const parsed = JSON.parse(stored);
+        const parsed = readContactProfile(JSON.parse(stored) as unknown);
+        if (!parsed) {
+          clearSubscriberSession();
+          if (active) setSubscriber(null);
+          return;
+        }
         if (!active) return;
         setSubscriber(parsed);
         setForm((prev) => ({
           ...prev,
-          contactName: parsed.name || prev.contactName,
-          contactEmail: parsed.email || prev.contactEmail,
+          contactName: parsed.name,
+          contactPhone: parsed.phone || "",
+          contactEmail: parsed.email || "",
         }));
 
-        const refreshedToken = await refreshSubscriberSession(token);
-        if (!refreshedToken && active) {
-          setSubscriber(null);
+        const profileResponse = await fetchWithSubscriberSession(
+          "/api/v1/users/me",
+          { cache: "no-store" },
+          token,
+        );
+        if (!active) return;
+        if (!profileResponse?.ok) {
+          if (profileResponse?.status === 401 || profileResponse?.status === 403) {
+            clearSubscriberSession();
+            setSubscriber(null);
+          } else {
+            setError(
+              locale === "th"
+                ? "ไม่สามารถโหลดข้อมูลติดต่อจากโปรไฟล์ได้ กรุณาลองใหม่อีกครั้ง"
+                : locale === "zh"
+                  ? "无法从个人资料加载联系信息，请重试。"
+                  : "We could not load contact details from your profile. Please try again.",
+            );
+          }
+          return;
         }
+        const profile = readContactProfile(
+          (await profileResponse.json().catch(() => null)) as unknown,
+        );
+        if (!profile) throw new Error("Invalid profile response");
+        setSubscriber(profile);
+        setForm((prev) => ({
+          ...prev,
+          contactName: profile.name,
+          contactPhone: profile.phone || "",
+          contactEmail: profile.email || "",
+        }));
       } catch {
         clearSubscriberSession();
         if (active) setSubscriber(null);
@@ -193,7 +244,7 @@ export default function PropertyRegisterPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [locale]);
 
   const [form, setForm] = useState({
     propertyType: "",
@@ -324,7 +375,16 @@ export default function PropertyRegisterPage() {
         const authData = await authRes.json();
         localStorage.setItem("subscriber_token", authData.accessToken);
         localStorage.setItem("subscriber", JSON.stringify(authData.subscriber));
-        setSubscriber(authData.subscriber);
+        const authenticatedContact = readContactProfile(authData.subscriber);
+        setSubscriber(authenticatedContact);
+        if (authenticatedContact) {
+          setForm((prev) => ({
+            ...prev,
+            contactName: authenticatedContact.name,
+            contactPhone: authenticatedContact.phone || prev.contactPhone,
+            contactEmail: authenticatedContact.email || prev.contactEmail,
+          }));
+        }
         window.dispatchEvent(new Event("storage"));
       } catch {
         setError(locale === "th" ? "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้" : locale === "zh" ? "无法连接服务器" : "Cannot connect to server");
@@ -471,7 +531,7 @@ export default function PropertyRegisterPage() {
       propertyType: "", listingType: "", tier: "STANDARD", title: "", description: "", price: "", area: "",
       bedrooms: "", bathrooms: "", floors: "", yearBuilt: "", houseNumber: "", floor: "", building: "", road: "", soi: "",
       province: "", district: "", subdistrict: "", postalCode: "", addressLine: "",
-      contactName: "", contactEmail: "", contactPhone: "",
+      contactName: subscriber?.name || "", contactEmail: subscriber?.email || "", contactPhone: subscriber?.phone || "",
       password: "", confirmPassword: ""
     }); window.scrollTo(0,0); }} className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition shadow-sm">
               {locale === "th" ? "ลงประกาศเพิ่ม" : "List Another"}
@@ -517,7 +577,7 @@ export default function PropertyRegisterPage() {
                     <p className="font-semibold text-green-700">{locale === "th" ? "เข้าสู่ระบบแล้ว" : locale === "zh" ? "已登录" : "Logged In"}</p>
                     <p className="text-sm text-gray-500">{subscriber.name}{subscriber.email ? ` (${subscriber.email})` : ""}</p>
                   </div>
-                  <button type="button" onClick={() => { localStorage.removeItem("subscriber"); localStorage.removeItem("subscriber_token"); setSubscriber(null); }} className="ml-auto text-xs text-gray-400 hover:text-red-500">
+                  <button type="button" onClick={() => { clearSubscriberSession(); setSubscriber(null); setForm((prev) => ({ ...prev, contactName: "", contactPhone: "", contactEmail: "" })); }} className="ml-auto text-xs text-gray-400 hover:text-red-500">
                     {locale === "th" ? "ออกจากระบบ" : locale === "zh" ? "退出" : "Log Out"}
                   </button>
                 </div>
@@ -922,6 +982,14 @@ export default function PropertyRegisterPage() {
               </legend>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                {subscriber ? (
+                  <p className="sm:col-span-2 text-xs text-gray-600">
+                    {locale === "th" ? "ข้อมูลติดต่อนี้มาจากโปรไฟล์ของคุณ" : locale === "zh" ? "这些联系信息来自您的个人资料。" : "These contact details come from your profile."}{" "}
+                    <Link href={`${prefix}/dashboard`} className="font-semibold text-green-700 hover:underline">
+                      {locale === "th" ? "แก้ไขในโปรไฟล์" : locale === "zh" ? "在个人资料中编辑" : "Edit in profile"}
+                    </Link>
+                  </p>
+                ) : null}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">{t("contactName")} <span className="text-red-500">*</span></label>
                   <input
@@ -929,7 +997,8 @@ export default function PropertyRegisterPage() {
                     name="contactName" required
                     value={form.contactName}
                     onChange={handleChange}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
+                    readOnly={Boolean(subscriber)}
+                    className={`w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500 ${subscriber ? "bg-gray-50 text-gray-700" : ""}`}
                   />
                 </div>
                 <div>
@@ -940,7 +1009,8 @@ export default function PropertyRegisterPage() {
                     name="contactPhone" required
                     value={form.contactPhone}
                     onChange={handleChange}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
+                    readOnly={Boolean(subscriber)}
+                    className={`w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500 ${subscriber ? "bg-gray-50 text-gray-700" : ""}`}
                   />
                 </div>
                 <div>
@@ -951,7 +1021,8 @@ export default function PropertyRegisterPage() {
                     name="contactEmail" required
                     value={form.contactEmail}
                     onChange={handleChange}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500"
+                    readOnly={Boolean(subscriber)}
+                    className={`w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500 ${subscriber ? "bg-gray-50 text-gray-700" : ""}`}
                   />
                 </div>
               </div>

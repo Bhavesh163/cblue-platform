@@ -21,7 +21,12 @@ describe('PropertyService', () => {
       },
       $transaction: jest.fn((cb) => Promise.resolve(cb(prisma))),
       user: {
-        findUnique: jest.fn(),
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'user-1',
+          name: 'Owner',
+          email: 'owner@example.com',
+          phone: '+66812345678',
+        }),
         findMany: jest.fn(),
       },
       subscriber: {
@@ -46,7 +51,6 @@ describe('PropertyService', () => {
 
   describe('create', () => {
     it('normalizes GPS-only property location before persisting', async () => {
-      prisma.user.findUnique.mockResolvedValue({ id: 'user-1' });
       prisma.property.create.mockResolvedValue({ id: 'property-1' });
 
       await service.create({ id: 'user-1', email: 'owner@example.com' }, {
@@ -82,7 +86,6 @@ describe('PropertyService', () => {
   });
 
     it('persists administrative mode without stale GPS coordinates', async () => {
-      prisma.user.findUnique.mockResolvedValue({ id: 'user-1' });
       prisma.property.create.mockResolvedValue({ id: 'property-2' });
       await service.create({ id: 'user-1', email: 'owner@example.com' }, {
         propertyType: 'HOUSE', listingType: 'RENT', title: 'Administrative listing', price: 40000,
@@ -94,7 +97,6 @@ describe('PropertyService', () => {
     });
 
     it('rejects explicit GPS mode when administrative matching fields are unresolved', async () => {
-      prisma.user.findUnique.mockResolvedValue({ id: 'user-1' });
       await expect(service.create({ id: 'user-1', email: 'owner@example.com' }, {
         propertyType: 'LAND', listingType: 'SALE', title: 'Unresolved GPS listing', price: 1000000,
         province: '', district: '', subdistrict: '', postalCode: '', latitude: 18.5, longitude: 98.5,
@@ -102,6 +104,40 @@ describe('PropertyService', () => {
       } as never)).rejects.toThrow('GPS location could not be resolved');
       expect(prisma.property.create).not.toHaveBeenCalled();
     });
+
+  it('persists contact details from the authenticated user profile', async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      name: 'Profile Owner',
+      email: 'profile@example.com',
+      phone: '+66819999999',
+    });
+    prisma.property.create.mockResolvedValue({ id: 'property-3' });
+
+    await service.create({ id: 'user-1', email: 'profile@example.com' }, {
+      propertyType: 'HOUSE',
+      listingType: 'SALE',
+      title: 'Authoritative contact listing',
+      price: 5000000,
+      province: 'กรุงเทพมหานคร',
+      district: 'วังทองหลาง',
+      subdistrict: 'สะพานสอง',
+      postalCode: '10310',
+      contactName: 'Changed in request',
+      contactPhone: '+66000000000',
+      contactEmail: 'changed@example.com',
+    } as never);
+
+    expect(prisma.property.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          contactName: 'Profile Owner',
+          contactPhone: '+66819999999',
+          contactEmail: 'profile@example.com',
+        }),
+      }),
+    );
+  });
 
   describe('update', () => {
     it('normalizes GPS-only property location before updating', async () => {

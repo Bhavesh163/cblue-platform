@@ -22,6 +22,14 @@ const propertyRegisterPage = readFileSync(
   new URL("../app/[locale]/properties/register/page.tsx", import.meta.url),
   "utf8",
 );
+const fixerRegisterPage = readFileSync(
+  new URL("../app/[locale]/fixers/register/page.tsx", import.meta.url),
+  "utf8",
+);
+const passwordInput = readFileSync(
+  new URL("../app/[locale]/components/PasswordInput.tsx", import.meta.url),
+  "utf8",
+);
 const realEstatePage = readFileSync(
   new URL("../app/[locale]/properties/page.tsx", import.meta.url),
   "utf8",
@@ -168,6 +176,34 @@ test("all three booking forms resolve GPS address fields during submit", () => {
     assert.ok(submitBody.includes("await normalizeGpsAddressForSubmit(gpsCoords"));
     assert.match(submitBody, /resolvedSubmitAddress/);
   }
+});
+
+test("embedded fixer and booking authentication exposes accessible password visibility controls", () => {
+  assert.match(passwordInput, /aria-label=\{label\}/);
+  assert.match(passwordInput, /aria-pressed=\{visible\}/);
+  assert.match(passwordInput, /type=\{visible \? "text" : "password"\}/);
+  assert.ok((fixerRegisterPage.match(/<PasswordInput/g) || []).length >= 2);
+
+  for (const relativePath of [
+    "../app/[locale]/booking/household/page.tsx",
+    "../app/[locale]/booking/project/page.tsx",
+    "../app/[locale]/booking/professional/page.tsx",
+  ]) {
+    const page = readFileSync(new URL(relativePath, import.meta.url), "utf8");
+    assert.ok((page.match(/<PasswordInput/g) || []).length >= 2);
+  }
+});
+
+test("logged-in property contact fields use the authoritative profile and remain read-only", () => {
+  assert.match(propertyRegisterPage, /fetchWithSubscriberSession\(/);
+  assert.match(propertyRegisterPage, /["']\/api\/v1\/users\/me["']/);
+  assert.match(propertyRegisterPage, /contactPhone: profile\.phone/);
+  assert.equal(
+    (propertyRegisterPage.match(/readOnly=\{Boolean\(subscriber\)\}/g) || [])
+      .length,
+    3,
+  );
+  assert.match(propertyRegisterPage, /These contact details come from your profile/);
 });
 
 test("partner meeting confirmation awaits the authoritative action snapshot", () => {

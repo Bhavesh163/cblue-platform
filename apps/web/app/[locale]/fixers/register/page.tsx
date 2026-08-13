@@ -28,6 +28,7 @@ import GpsDetectButton from "../../components/GpsDetectButton";
 import GpsResolvedLocation from "../../components/GpsResolvedLocation";
 import Link from "next/link";
 import DatePickerInput from "../../components/DatePickerInput";
+import PasswordInput from "../../components/PasswordInput";
 import {
   prepareCompanyAffidavitFile,
   preparePortfolioFile,
@@ -2777,12 +2778,13 @@ function FixerRegisterContent() {
                           ? "密码"
                           : "Password"}
                     </label>
-                    <input
+                    <PasswordInput
                       id="password"
                       name="password"
-                      type="password"
+                      locale={locale}
                       value={form.password}
                       onChange={handleChange}
+                      autoComplete={authMode === "login" ? "current-password" : "new-password"}
                       className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none"
                       placeholder="••••••••"
                     />
@@ -2799,12 +2801,13 @@ function FixerRegisterContent() {
                             ? "确认密码"
                             : "Confirm Password"}
                       </label>
-                      <input
+                      <PasswordInput
                         id="confirmPassword"
                         name="confirmPassword"
-                        type="password"
+                        locale={locale}
                         value={form.confirmPassword}
                         onChange={handleChange}
+                        autoComplete="new-password"
                         className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none"
                         placeholder="••••••••"
                       />
