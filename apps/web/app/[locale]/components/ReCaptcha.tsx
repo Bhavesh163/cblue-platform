@@ -70,10 +70,6 @@ export default function ReCaptcha({
       script.defer = true;
       document.head.appendChild(script);
     }
-
-    return () => {
-      window.onRecaptchaLoad = undefined;
-    };
   }, [renderWidget]);
 
   useEffect(() => {

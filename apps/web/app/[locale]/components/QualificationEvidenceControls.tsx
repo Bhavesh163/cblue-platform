@@ -63,6 +63,17 @@ type ManualReviewChecks = {
   identityUnexpiredConfirmed: boolean;
   faceMatchConfirmed: boolean;
   selfieReviewCompleted: boolean;
+  companyNameMatches: boolean;
+  companyAuthorityConfirmed: boolean;
+};
+type CompanyEvidenceFields = {
+  companyName: string;
+  companyRegistrationNumber: string;
+  directorNames: string;
+  authorityHolderName: string;
+  contactEmail: string;
+  intentToJoinCblue: boolean;
+  authorizedApplicantName: string;
 };
 type Props = {
   token: string;
@@ -132,6 +143,33 @@ function checkToneClass(tone: string) {
   return "border-slate-200 bg-slate-50 text-slate-700";
 }
 
+function extractedCompanyEvidence(
+  document: DocumentRow,
+): CompanyEvidenceFields {
+  const extracted = document.extractedFields;
+  const nested = extracted?.fields;
+  const fields =
+    nested && typeof nested === "object" && !Array.isArray(nested)
+      ? (nested as Record<string, unknown>)
+      : extracted || {};
+  const text = (key: string) =>
+    typeof fields[key] === "string" ? fields[key].trim() : "";
+  const directorNames = Array.isArray(fields.directorNames)
+    ? fields.directorNames
+        .filter((value): value is string => typeof value === "string")
+        .join("\n")
+    : "";
+  return {
+    companyName: text("companyName"),
+    companyRegistrationNumber: text("companyRegistrationNumber"),
+    directorNames,
+    authorityHolderName: text("authorityHolderName"),
+    contactEmail: text("contactEmail"),
+    intentToJoinCblue: fields.intentToJoinCblue === true,
+    authorizedApplicantName: text("authorizedApplicantName"),
+  };
+}
+
 async function readError(response: Response, fallback: string) {
   const payload = await response.json().catch(() => null);
   return typeof payload?.message === "string" ? payload.message : fallback;
@@ -155,6 +193,9 @@ export default function QualificationEvidenceControls({
   >({});
   const [manualChecks, setManualChecks] = useState<
     Record<string, ManualReviewChecks>
+  >({});
+  const [companyEvidence, setCompanyEvidence] = useState<
+    Record<string, CompanyEvidenceFields>
   >({});
   const [credentialStatus, setCredentialStatus] = useState<
     Record<string, CredentialStatus>
@@ -238,9 +279,27 @@ export default function QualificationEvidenceControls({
               ),
               faceMatchConfirmed: codes.has("ADMIN_FACE_MATCH_CONFIRMED"),
               selfieReviewCompleted: codes.has("ADMIN_SELFIE_REVIEW_COMPLETED"),
+              companyNameMatches: codes.has("ADMIN_COMPANY_NAME_CONFIRMED"),
+              companyAuthorityConfirmed: codes.has(
+                "ADMIN_COMPANY_AUTHORITY_CONFIRMED",
+              ),
             },
           ];
         }),
+      ),
+    );
+    setCompanyEvidence(
+      Object.fromEntries(
+        documents
+          .filter((document) =>
+            ["company-affidavit", "company-letter-of-intent"].includes(
+              document.documentType,
+            ),
+          )
+          .map((document) => [
+            document.id,
+            extractedCompanyEvidence(document),
+          ]),
       ),
     );
     setCompliancePurpose({});
@@ -419,8 +478,31 @@ export default function QualificationEvidenceControls({
         identityUnexpiredConfirmed: false,
         faceMatchConfirmed: false,
         selfieReviewCompleted: false,
+        companyNameMatches: false,
+        companyAuthorityConfirmed: false,
         ...current[documentId],
         [key]: checked,
+      },
+    }));
+  }
+
+  function updateCompanyEvidence(
+    documentId: string,
+    key: keyof CompanyEvidenceFields,
+    value: string | boolean,
+  ) {
+    setCompanyEvidence((current) => ({
+      ...current,
+      [documentId]: {
+        companyName: "",
+        companyRegistrationNumber: "",
+        directorNames: "",
+        authorityHolderName: "",
+        contactEmail: "",
+        intentToJoinCblue: false,
+        authorizedApplicantName: "",
+        ...current[documentId],
+        [key]: value,
       },
     }));
   }
@@ -447,6 +529,17 @@ export default function QualificationEvidenceControls({
       identityUnexpiredConfirmed: false,
       faceMatchConfirmed: false,
       selfieReviewCompleted: false,
+      companyNameMatches: false,
+      companyAuthorityConfirmed: false,
+    };
+    const company = companyEvidence[documentId] || {
+      companyName: "",
+      companyRegistrationNumber: "",
+      directorNames: "",
+      authorityHolderName: "",
+      contactEmail: "",
+      intentToJoinCblue: false,
+      authorizedApplicantName: "",
     };
     if (
       status[documentId] === "VALIDATED" &&
@@ -476,6 +569,40 @@ export default function QualificationEvidenceControls({
         !checks.selfieReviewCompleted)
     ) {
       setError("Confirm all selfie and face comparison checks.");
+      return;
+    }
+    if (
+      status[documentId] === "VALIDATED" &&
+      document.documentType === "company-affidavit" &&
+      (!company.companyName.trim() ||
+        (!company.directorNames.trim() &&
+          !company.authorityHolderName.trim()) ||
+        !checks.documentTypeConfirmed ||
+        !checks.documentReadable ||
+        !checks.companyNameMatches ||
+        !checks.companyAuthorityConfirmed)
+    ) {
+      setError(
+        "Record the company name and authority, then confirm all affidavit checks.",
+      );
+      return;
+    }
+    if (
+      status[documentId] === "VALIDATED" &&
+      document.documentType === "company-letter-of-intent" &&
+      (!company.companyName.trim() ||
+        !company.authorityHolderName.trim() ||
+        !company.contactEmail.trim() ||
+        !company.intentToJoinCblue ||
+        !company.authorizedApplicantName.trim() ||
+        !checks.documentTypeConfirmed ||
+        !checks.documentReadable ||
+        !checks.companyNameMatches ||
+        !checks.companyAuthorityConfirmed)
+    ) {
+      setError(
+        "Record the company, applicant, signatory, contact email, and application intent, then confirm all authorization checks.",
+      );
       return;
     }
     setBusy("save:" + documentId);
@@ -516,6 +643,30 @@ export default function QualificationEvidenceControls({
                   documentReadable: checks.documentReadable,
                   faceMatchConfirmed: checks.faceMatchConfirmed,
                   selfieReviewCompleted: checks.selfieReviewCompleted,
+                }
+              : {}),
+            ...(["company-affidavit", "company-letter-of-intent"].includes(
+              document.documentType,
+            )
+              ? {
+                  companyName: company.companyName.trim() || undefined,
+                  companyRegistrationNumber:
+                    company.companyRegistrationNumber.trim() || undefined,
+                  directorNames: company.directorNames
+                    .split(/[\n,]+/)
+                    .map((value) => value.trim())
+                    .filter(Boolean),
+                  authorityHolderName:
+                    company.authorityHolderName.trim() || undefined,
+                  contactEmail: company.contactEmail.trim() || undefined,
+                  intentToJoinCblue: company.intentToJoinCblue,
+                  authorizedApplicantName:
+                    company.authorizedApplicantName.trim() || undefined,
+                  documentTypeConfirmed: checks.documentTypeConfirmed,
+                  documentReadable: checks.documentReadable,
+                  companyNameMatches: checks.companyNameMatches,
+                  companyAuthorityConfirmed:
+                    checks.companyAuthorityConfirmed,
                 }
               : {}),
           }),
@@ -637,6 +788,17 @@ export default function QualificationEvidenceControls({
           identityUnexpiredConfirmed: false,
           faceMatchConfirmed: false,
           selfieReviewCompleted: false,
+          companyNameMatches: false,
+          companyAuthorityConfirmed: false,
+        };
+        const company = companyEvidence[document.id] || {
+          companyName: "",
+          companyRegistrationNumber: "",
+          directorNames: "",
+          authorityHolderName: "",
+          contactEmail: "",
+          intentToJoinCblue: false,
+          authorizedApplicantName: "",
         };
         return (
           <div key={document.id} className="py-4 first:pt-0">
@@ -915,6 +1077,209 @@ export default function QualificationEvidenceControls({
               </fieldset>
             ) : null}
 
+            {!readOnly && document.documentType === "company-affidavit" ? (
+              <fieldset className="mt-3 border border-slate-200 bg-slate-50 p-3">
+                <legend className="px-1 text-xs font-bold text-slate-800">
+                  Administrator company affidavit review
+                </legend>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <label className="text-xs font-semibold text-slate-700 md:col-span-2">
+                    Approved company provider name
+                    <input
+                      value={company.companyName}
+                      onChange={(event) =>
+                        updateCompanyEvidence(
+                          document.id,
+                          "companyName",
+                          event.target.value,
+                        )
+                      }
+                      maxLength={200}
+                      className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 font-normal text-slate-900"
+                    />
+                  </label>
+                  <label className="text-xs font-semibold text-slate-700">
+                    Company registration number
+                    <input
+                      value={company.companyRegistrationNumber}
+                      onChange={(event) =>
+                        updateCompanyEvidence(
+                          document.id,
+                          "companyRegistrationNumber",
+                          event.target.value,
+                        )
+                      }
+                      maxLength={100}
+                      className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 font-normal text-slate-900"
+                    />
+                  </label>
+                  <label className="text-xs font-semibold text-slate-700">
+                    Authorized person
+                    <input
+                      value={company.authorityHolderName}
+                      onChange={(event) =>
+                        updateCompanyEvidence(
+                          document.id,
+                          "authorityHolderName",
+                          event.target.value,
+                        )
+                      }
+                      maxLength={200}
+                      className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 font-normal text-slate-900"
+                    />
+                  </label>
+                  <label className="text-xs font-semibold text-slate-700 md:col-span-2 xl:col-span-4">
+                    Directors named in the affidavit
+                    <textarea
+                      value={company.directorNames}
+                      onChange={(event) =>
+                        updateCompanyEvidence(
+                          document.id,
+                          "directorNames",
+                          event.target.value,
+                        )
+                      }
+                      rows={2}
+                      placeholder="One director per line"
+                      className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 font-normal text-slate-900"
+                    />
+                  </label>
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                  {[
+                    ["documentTypeConfirmed", "Company affidavit confirmed"],
+                    ["documentReadable", "Document is clear and readable"],
+                    ["companyNameMatches", "Company name matches the affidavit"],
+                    ["companyAuthorityConfirmed", "Company authority is recorded"],
+                  ].map(([key, label]) => (
+                    <label key={key} className="flex items-center gap-2 text-xs text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={reviewChecks[key as keyof ManualReviewChecks]}
+                        onChange={(event) =>
+                          updateManualCheck(
+                            document.id,
+                            key as keyof ManualReviewChecks,
+                            event.target.checked,
+                          )
+                        }
+                        className="size-4 accent-emerald-700"
+                      />
+                      <span>{label}</span>
+                    </label>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs font-semibold text-amber-800">
+                  Save this review before approving a company provider.
+                </p>
+              </fieldset>
+            ) : null}
+
+            {!readOnly && document.documentType === "company-letter-of-intent" ? (
+              <fieldset className="mt-3 border border-slate-200 bg-slate-50 p-3">
+                <legend className="px-1 text-xs font-bold text-slate-800">
+                  Administrator director authorization review
+                </legend>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <label className="text-xs font-semibold text-slate-700">
+                    Company name
+                    <input
+                      value={company.companyName}
+                      onChange={(event) =>
+                        updateCompanyEvidence(document.id, "companyName", event.target.value)
+                      }
+                      maxLength={200}
+                      className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 font-normal text-slate-900"
+                    />
+                  </label>
+                  <label className="text-xs font-semibold text-slate-700">
+                    Authorized applicant
+                    <input
+                      value={company.authorizedApplicantName}
+                      onChange={(event) =>
+                        updateCompanyEvidence(
+                          document.id,
+                          "authorizedApplicantName",
+                          event.target.value,
+                        )
+                      }
+                      maxLength={200}
+                      className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 font-normal text-slate-900"
+                    />
+                  </label>
+                  <label className="text-xs font-semibold text-slate-700">
+                    Authorized signatory
+                    <input
+                      value={company.authorityHolderName}
+                      onChange={(event) =>
+                        updateCompanyEvidence(
+                          document.id,
+                          "authorityHolderName",
+                          event.target.value,
+                        )
+                      }
+                      maxLength={200}
+                      className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 font-normal text-slate-900"
+                    />
+                  </label>
+                  <label className="text-xs font-semibold text-slate-700">
+                    Company contact email
+                    <input
+                      type="email"
+                      value={company.contactEmail}
+                      onChange={(event) =>
+                        updateCompanyEvidence(document.id, "contactEmail", event.target.value)
+                      }
+                      maxLength={254}
+                      className="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 font-normal text-slate-900"
+                    />
+                  </label>
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+                  {[
+                    ["documentTypeConfirmed", "Director authorization letter confirmed"],
+                    ["documentReadable", "Document is clear and readable"],
+                    ["companyNameMatches", "Company name matches the affidavit"],
+                    ["companyAuthorityConfirmed", "Signatory authority matches the affidavit"],
+                  ].map(([key, label]) => (
+                    <label key={key} className="flex items-center gap-2 text-xs text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={reviewChecks[key as keyof ManualReviewChecks]}
+                        onChange={(event) =>
+                          updateManualCheck(
+                            document.id,
+                            key as keyof ManualReviewChecks,
+                            event.target.checked,
+                          )
+                        }
+                        className="size-4 accent-emerald-700"
+                      />
+                      <span>{label}</span>
+                    </label>
+                  ))}
+                  <label className="flex items-center gap-2 text-xs text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={company.intentToJoinCblue}
+                      onChange={(event) =>
+                        updateCompanyEvidence(
+                          document.id,
+                          "intentToJoinCblue",
+                          event.target.checked,
+                        )
+                      }
+                      className="size-4 accent-emerald-700"
+                    />
+                    <span>Application intent is explicit</span>
+                  </label>
+                </div>
+                <p className="mt-2 text-xs font-semibold text-amber-800">
+                  Save this review before approving a company provider.
+                </p>
+              </fieldset>
+            ) : null}
+
           {!readOnly && (
             <div className="mt-3 grid gap-2 md:grid-cols-[160px_minmax(240px,1fr)_auto]">
               <select
@@ -959,6 +1324,10 @@ export default function QualificationEvidenceControls({
                     ? "Save ID review"
                     : document.documentType === "selfie-with-id"
                       ? "Save selfie review"
+                      : document.documentType === "company-affidavit"
+                        ? "Save affidavit review"
+                        : document.documentType === "company-letter-of-intent"
+                          ? "Save authorization review"
                       : "Save evidence"}
               </button>
             </div>

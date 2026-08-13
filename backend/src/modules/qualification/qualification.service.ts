@@ -37,6 +37,7 @@ import {
 import {
   hasValidThaiNationalId,
   identityMetadata,
+  identityNameHash,
   normalizeThaiDigits,
 } from './identity-evidence.util';
 
@@ -65,6 +66,9 @@ const ADMIN_EVIDENCE_REASON_CODES = new Set([
   'ADMIN_ID_UNEXPIRED_CONFIRMED',
   'ADMIN_FACE_MATCH_CONFIRMED',
   'ADMIN_SELFIE_REVIEW_COMPLETED',
+  'ADMIN_COMPANY_NAME_CONFIRMED',
+  'ADMIN_COMPANY_AUTHORITY_CONFIRMED',
+  'ADMIN_COMPANY_INTENT_CONFIRMED',
 ]);
 const TRANSIENT_PERSISTENCE_ERROR_CODES = new Set([
   'P1001',
@@ -2110,6 +2114,15 @@ export class QualificationService {
           identityNumberLast4: true,
           identityNumberHash: true,
           identityExpiryDate: true,
+          subjectNameHash: true,
+          extractedFields: true,
+          submission: {
+            select: {
+              fixer: {
+                select: { user: { select: { name: true } } },
+              },
+            },
+          },
         },
       });
       if (!document)
@@ -2141,11 +2154,79 @@ export class QualificationService {
           'Face comparison may only be recorded for selfie evidence',
         );
       }
+      const isCompanyAffidavit = document.documentType === 'company-affidavit';
+      const isCompanyLetter =
+        document.documentType === 'company-letter-of-intent';
+      const isCompanyEvidence = isCompanyAffidavit || isCompanyLetter;
+      const hasCompanyReviewInput = Boolean(
+        dto.companyName ||
+        dto.companyRegistrationNumber ||
+        dto.directorNames?.length ||
+        dto.authorityHolderName ||
+        dto.contactEmail ||
+        dto.intentToJoinCblue !== undefined ||
+        dto.authorizedApplicantName ||
+        dto.companyNameMatches !== undefined ||
+        dto.companyAuthorityConfirmed !== undefined,
+      );
+      if (!isCompanyEvidence && hasCompanyReviewInput) {
+        throw new BadRequestException(
+          'Company review facts may only be recorded for company evidence',
+        );
+      }
+
+      const companyName = dto.companyName?.trim() || null;
+      const companyRegistrationNumber =
+        dto.companyRegistrationNumber?.trim() || null;
+      const directorNames = Array.from(
+        new Set(
+          (dto.directorNames || []).map((name) => name.trim()).filter(Boolean),
+        ),
+      );
+      const authorityHolderName = dto.authorityHolderName?.trim() || null;
+      const contactEmail = dto.contactEmail?.trim().toLowerCase() || null;
+      const authorizedApplicantName =
+        dto.authorizedApplicantName?.trim() || null;
+      if (contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) {
+        throw new BadRequestException('Company contact email is invalid');
+      }
+      if (
+        dto.evidenceStatus === 'VALIDATED' &&
+        isCompanyAffidavit &&
+        (!dto.documentTypeConfirmed ||
+          !dto.documentReadable ||
+          !dto.companyNameMatches ||
+          !dto.companyAuthorityConfirmed ||
+          !companyName ||
+          (!directorNames.length && !authorityHolderName))
+      ) {
+        throw new ConflictException(
+          'Record the company name and authority, then confirm all affidavit checks',
+        );
+      }
+      if (
+        dto.evidenceStatus === 'VALIDATED' &&
+        isCompanyLetter &&
+        (!dto.documentTypeConfirmed ||
+          !dto.documentReadable ||
+          !dto.companyNameMatches ||
+          !dto.companyAuthorityConfirmed ||
+          !companyName ||
+          !authorityHolderName ||
+          !contactEmail ||
+          dto.intentToJoinCblue !== true ||
+          !authorizedApplicantName)
+      ) {
+        throw new ConflictException(
+          'Record the company, applicant, signatory, contact email, and application intent, then confirm all authorization checks',
+        );
+      }
 
       const reviewedAt = new Date();
       let identityNumberLast4 = document.identityNumberLast4;
       let identityNumberHash = document.identityNumberHash;
       let identityExpiryDate = document.identityExpiryDate;
+      let subjectNameHash = document.subjectNameHash;
       if (dto.identityExpiryDate) {
         const expiryValue = /^\d{4}-\d{2}-\d{2}$/.test(dto.identityExpiryDate)
           ? `${dto.identityExpiryDate}T23:59:59.999Z`
@@ -2175,6 +2256,18 @@ export class QualificationService {
         }
         identityNumberLast4 = protectedIdentity.identityNumberLast4;
         identityNumberHash = protectedIdentity.identityNumberHash;
+      }
+      if (
+        document.documentType === 'id-front' &&
+        dto.applicantNameMatches &&
+        !subjectNameHash
+      ) {
+        subjectNameHash = identityNameHash(document.submission.fixer.user.name);
+        if (!subjectNameHash) {
+          throw new ServiceUnavailableException(
+            'Identity protection is not configured',
+          );
+        }
       }
 
       if (
@@ -2235,16 +2328,86 @@ export class QualificationService {
       );
       addManualCode(dto.faceMatchConfirmed, 'ADMIN_FACE_MATCH_CONFIRMED');
       addManualCode(dto.selfieReviewCompleted, 'ADMIN_SELFIE_REVIEW_COMPLETED');
+      addManualCode(dto.companyNameMatches, 'ADMIN_COMPANY_NAME_CONFIRMED');
+      addManualCode(
+        dto.companyAuthorityConfirmed,
+        'ADMIN_COMPANY_AUTHORITY_CONFIRMED',
+      );
+      addManualCode(dto.intentToJoinCblue, 'ADMIN_COMPANY_INTENT_CONFIRMED');
+
+      const currentExtractedRoot =
+        document.extractedFields &&
+        typeof document.extractedFields === 'object' &&
+        !Array.isArray(document.extractedFields)
+          ? document.extractedFields
+          : {};
+      const currentExtractedFields =
+        currentExtractedRoot.fields &&
+        typeof currentExtractedRoot.fields === 'object' &&
+        !Array.isArray(currentExtractedRoot.fields)
+          ? currentExtractedRoot.fields
+          : currentExtractedRoot;
+      const companyReviewFields: Prisma.JsonObject = {};
+      if (companyName) companyReviewFields.companyName = companyName;
+      if (companyRegistrationNumber) {
+        companyReviewFields.companyRegistrationNumber =
+          companyRegistrationNumber;
+      }
+      if (directorNames.length)
+        companyReviewFields.directorNames = directorNames;
+      if (authorityHolderName) {
+        companyReviewFields.authorityHolderName = authorityHolderName;
+      }
+      if (contactEmail) companyReviewFields.contactEmail = contactEmail;
+      if (dto.intentToJoinCblue !== undefined) {
+        companyReviewFields.intentToJoinCblue = dto.intentToJoinCblue;
+      }
+      if (authorizedApplicantName) {
+        companyReviewFields.authorizedApplicantName = authorizedApplicantName;
+      }
+      const mergedExtractedFields: Prisma.InputJsonValue | undefined =
+        isCompanyEvidence
+          ? {
+              ...currentExtractedRoot,
+              fields: {
+                ...currentExtractedFields,
+                ...companyReviewFields,
+              },
+              adminReview: {
+                reviewedAt: reviewedAt.toISOString(),
+                reviewerId: adminId,
+              },
+            }
+          : undefined;
+      const beforeCompanyReviewHash = isCompanyEvidence
+        ? createHash('sha256')
+            .update(JSON.stringify(currentExtractedFields))
+            .digest('hex')
+        : null;
+      const afterCompanyReviewHash = isCompanyEvidence
+        ? createHash('sha256')
+            .update(
+              JSON.stringify({
+                ...currentExtractedFields,
+                ...companyReviewFields,
+              }),
+            )
+            .digest('hex')
+        : null;
 
       const updateData: Prisma.KycDocumentUpdateInput = {
         evidenceStatus: dto.evidenceStatus,
         assessmentReasonCodes: assessmentReasonCodes as Prisma.InputJsonValue,
         assessedAt: reviewedAt,
+        ...(mergedExtractedFields
+          ? { extractedFields: mergedExtractedFields }
+          : {}),
         ...(document.documentType === 'id-front'
           ? {
               identityNumberLast4,
               identityNumberHash,
               identityExpiryDate,
+              subjectNameHash,
             }
           : {}),
       };
@@ -2261,6 +2424,8 @@ export class QualificationService {
           assessmentReasonCodes: true,
           identityNumberLast4: true,
           identityExpiryDate: true,
+          subjectNameHash: true,
+          extractedFields: true,
           assessedAt: true,
           expiresAt: true,
           createdAt: true,
@@ -2284,6 +2449,7 @@ export class QualificationService {
                 identityNumberLast4: document.identityNumberLast4,
                 identityExpiryDate:
                   document.identityExpiryDate?.toISOString() || null,
+                companyReviewHash: beforeCompanyReviewHash,
                 manualReviewCodes: existingReasonCodes.filter((code) =>
                   ADMIN_EVIDENCE_REASON_CODES.has(code),
                 ),
@@ -2296,6 +2462,7 @@ export class QualificationService {
                 evidenceStatus: dto.evidenceStatus,
                 identityNumberLast4,
                 identityExpiryDate: identityExpiryDate?.toISOString() || null,
+                companyReviewHash: afterCompanyReviewHash,
                 manualReviewCodes: assessmentReasonCodes.filter((code) =>
                   ADMIN_EVIDENCE_REASON_CODES.has(code),
                 ),
@@ -2306,6 +2473,10 @@ export class QualificationService {
             documentType: document.documentType,
             identityNumberLast4,
             identityExpiryDate: identityExpiryDate?.toISOString() || null,
+            companyReviewFields: isCompanyEvidence
+              ? Object.keys(companyReviewFields)
+              : [],
+            companyReviewHash: afterCompanyReviewHash,
             manualReviewCodes: assessmentReasonCodes.filter((code) =>
               ADMIN_EVIDENCE_REASON_CODES.has(code),
             ),

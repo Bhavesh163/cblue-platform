@@ -45,6 +45,16 @@ const REQUIRED_SELFIE_REVIEW_CODES = [
   'ADMIN_FACE_MATCH_CONFIRMED',
   'ADMIN_SELFIE_REVIEW_COMPLETED',
 ] as const;
+const REQUIRED_COMPANY_AFFIDAVIT_REVIEW_CODES = [
+  'ADMIN_DOCUMENT_TYPE_CONFIRMED',
+  'ADMIN_READABILITY_CONFIRMED',
+  'ADMIN_COMPANY_NAME_CONFIRMED',
+  'ADMIN_COMPANY_AUTHORITY_CONFIRMED',
+] as const;
+const REQUIRED_COMPANY_LETTER_REVIEW_CODES = [
+  ...REQUIRED_COMPANY_AFFIDAVIT_REVIEW_CODES,
+  'ADMIN_COMPANY_INTENT_CONFIRMED',
+] as const;
 
 type ReviewReadinessDocument = {
   documentType: string;
@@ -930,6 +940,16 @@ export class QualificationReviewService {
               'Validated company affidavit evidence is required for a company provider identity',
             );
           }
+          if (
+            !hasRequiredEvidenceCodes(
+              affidavit.assessmentReasonCodes,
+              REQUIRED_COMPANY_AFFIDAVIT_REVIEW_CODES,
+            )
+          ) {
+            throw new ConflictException(
+              'All administrator company affidavit checks must be saved before KYC approval',
+            );
+          }
           const evidenceCompanyName = extractedCompanyName(
             affidavit.extractedFields,
           );
@@ -987,6 +1007,10 @@ export class QualificationReviewService {
           );
           const letterAuthorized = Boolean(
             letter &&
+            hasRequiredEvidenceCodes(
+              letter.assessmentReasonCodes,
+              REQUIRED_COMPANY_LETTER_REVIEW_CODES,
+            ) &&
             letterCompanyName &&
             normalizedCompanyName(letterCompanyName) ===
               normalizedCompanyName(evidenceCompanyName) &&

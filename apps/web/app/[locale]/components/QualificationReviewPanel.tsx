@@ -189,6 +189,43 @@ function extractedCompanyName(documents: QualificationDocument[]) {
     : "";
 }
 
+function hasCompanyEvidence(documents: QualificationDocument[]) {
+  return documents.some(
+    (document) =>
+      ["company-affidavit", "company-letter-of-intent"].includes(
+        document.documentType,
+      ) && document.isActive !== false,
+  );
+}
+
+const COMPANY_AFFIDAVIT_REVIEW_CODES = [
+  "ADMIN_DOCUMENT_TYPE_CONFIRMED",
+  "ADMIN_READABILITY_CONFIRMED",
+  "ADMIN_COMPANY_NAME_CONFIRMED",
+  "ADMIN_COMPANY_AUTHORITY_CONFIRMED",
+];
+const COMPANY_LETTER_REVIEW_CODES = [
+  ...COMPANY_AFFIDAVIT_REVIEW_CODES,
+  "ADMIN_COMPANY_INTENT_CONFIRMED",
+];
+
+function companyReviewIsSaved(documents: QualificationDocument[]) {
+  const ready = (documentType: string, requiredCodes: string[]) => {
+    const document = documents.find(
+      (item) =>
+        item.documentType === documentType &&
+        item.isActive !== false &&
+        item.evidenceStatus === "VALIDATED",
+    );
+    const codes = new Set(document?.assessmentReasonCodes || []);
+    return Boolean(document && requiredCodes.every((code) => codes.has(code)));
+  };
+  return (
+    ready("company-affidavit", COMPANY_AFFIDAVIT_REVIEW_CODES) &&
+    ready("company-letter-of-intent", COMPANY_LETTER_REVIEW_CODES)
+  );
+}
+
 export default function QualificationReviewPanel({ token, adminId }: Props) {
   const [tasks, setTasks] = useState<ReviewTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -206,6 +243,9 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
   const [approvedTier, setApprovedTier] = useState<Record<string, string>>({});
   const [providerIdentityType, setProviderIdentityType] = useState<
     Record<string, "PERSONAL" | "COMPANY">
+  >({});
+  const [approvedProviderName, setApprovedProviderName] = useState<
+    Record<string, string>
   >({});
   const [reason, setReason] = useState<Record<string, string>>({});
   const [expandedTaskId, setExpandedTaskId] = useState("");
@@ -364,12 +404,14 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
     );
     const selectedTier =
       approvedTier[task.id] || deterministic?.recommendedTier || "";
-    const selectedProviderName = extractedCompanyName(
-      (task.submission?.documents || []) as QualificationDocument[],
-    );
+    const taskDocuments = (task.submission?.documents ||
+      []) as QualificationDocument[];
+    const selectedProviderName =
+      approvedProviderName[task.id]?.trim() ||
+      extractedCompanyName(taskDocuments);
     const selectedIdentityType =
       providerIdentityType[task.id] ||
-      (selectedProviderName ? "COMPANY" : "PERSONAL");
+      (hasCompanyEvidence(taskDocuments) ? "COMPANY" : "PERSONAL");
     const selectedReason = reason[task.id]?.trim() || "";
     if (selectedReason.length < 10) {
       setError("Enter a decision reason with at least 10 characters.");
@@ -547,14 +589,23 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                 const selectedDecision = decision[task.id] || "APPROVE";
                 const selectedIdentityType =
                   providerIdentityType[task.id] ||
-                  (extractedCompanyName(allDocuments) ? "COMPANY" : "PERSONAL");
+                  (hasCompanyEvidence(allDocuments) ? "COMPANY" : "PERSONAL");
                 const submissionFindings =
                   evaluation?.findings?.filter(
                     (finding) => !finding.documentId,
                   ) || [];
                 const approvalBlocked =
                   selectedDecision === "APPROVE" &&
-                  !task.reviewReadiness?.canApprove;
+                  (!task.reviewReadiness?.canApprove ||
+                    (task.kind === "KYC" &&
+                      selectedIdentityType === "COMPANY" &&
+                      !companyReviewIsSaved(allDocuments)));
+                const approvalBlockingReason =
+                  task.kind === "KYC" &&
+                  selectedIdentityType === "COMPANY" &&
+                  !companyReviewIsSaved(allDocuments)
+                    ? "Save the company affidavit and director authorization reviews before approving KYC."
+                    : task.reviewReadiness?.blockingReason;
                 const assignedToCurrent =
                   task.status === "ASSIGNED" &&
                   task.assignedTo === adminId &&
@@ -894,17 +945,32 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                                   <option value="COMPANY">Company</option>
                                 </select>
                                 {selectedIdentityType === "COMPANY" ? (
-                                  <input
-                                    aria-label={
-                                      "Approved provider name for " +
-                                      displayName(task)
-                                    }
-                                    value={extractedCompanyName(allDocuments)}
-                                    readOnly
-                                    maxLength={200}
-                                    placeholder="Validate the company affidavit first"
-                                    className="w-full rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
-                                  />
+                                  <label className="text-xs font-semibold text-slate-700">
+                                    Approved company provider name
+                                    <input
+                                      aria-label={
+                                        "Approved provider name for " +
+                                        displayName(task)
+                                      }
+                                      value={
+                                        approvedProviderName[task.id] ??
+                                        extractedCompanyName(allDocuments)
+                                      }
+                                      onChange={(event) =>
+                                        setApprovedProviderName((current) => ({
+                                          ...current,
+                                          [task.id]: event.target.value,
+                                        }))
+                                      }
+                                      maxLength={200}
+                                      placeholder="Enter the name shown in the validated affidavit"
+                                      className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-xs font-normal text-slate-700"
+                                    />
+                                    <span className="mt-1 block font-normal text-slate-500">
+                                      This must match the saved company
+                                      affidavit review.
+                                    </span>
+                                  </label>
                                 ) : (
                                   <p className="self-center text-xs text-slate-500">
                                     Provider operates under the approved
@@ -927,10 +993,9 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                             placeholder="Decision reason (10+ characters)"
                             className="w-full rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-700"
                           />
-                          {approvalBlocked &&
-                          task.reviewReadiness?.blockingReason ? (
+                          {approvalBlocked && approvalBlockingReason ? (
                             <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                              {task.reviewReadiness.blockingReason}
+                              {approvalBlockingReason}
                             </p>
                           ) : null}
                           <button

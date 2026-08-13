@@ -286,6 +286,11 @@ describe('QualificationService', () => {
       identityNumberLast4: null,
       identityNumberHash: null,
       identityExpiryDate: null,
+      subjectNameHash: null,
+      extractedFields: null,
+      submission: {
+        fixer: { user: { name: 'Suppadesh Fungprasertsuk' } },
+      },
     });
     tx.kycDocument.update.mockImplementation(({ data }: any) => ({
       id: 'document-front',
@@ -372,6 +377,74 @@ describe('QualificationService', () => {
       'Confirm document type, readability, applicant name, and unexpired status',
     );
     expect(tx.kycDocument.update).not.toHaveBeenCalled();
+  });
+
+  it('persists structured company affidavit facts for human-reviewed approval', async () => {
+    tx.qualificationReviewTask.findFirst.mockResolvedValue({
+      id: 'task-1',
+      kind: 'KYC',
+    });
+    tx.kycDocument.findFirst.mockResolvedValue({
+      id: 'company-document',
+      documentType: 'company-affidavit',
+      checksumSha256: 'checksum',
+      evidenceStatus: 'UNCHECKED',
+      assessmentReasonCodes: ['PROVIDER_UNAVAILABLE'],
+      identityNumberLast4: null,
+      identityNumberHash: null,
+      identityExpiryDate: null,
+      subjectNameHash: null,
+      extractedFields: null,
+      submission: { fixer: { user: { name: 'Applicant Person' } } },
+    });
+    tx.kycDocument.update.mockImplementation(({ data }: any) => ({
+      id: 'company-document',
+      documentType: 'company-affidavit',
+      ...data,
+    }));
+    tx.qualificationAuditLog.create.mockResolvedValue({ id: 'audit-1' });
+
+    await expect(
+      service.reviewDocumentEvidence(
+        'admin-1',
+        'submission-1',
+        'company-document',
+        {
+          evidenceStatus: 'VALIDATED',
+          reason: 'Company registration and director authority were verified.',
+          documentTypeConfirmed: true,
+          documentReadable: true,
+          companyName: 'Example Company Limited',
+          companyRegistrationNumber: '0105559999999',
+          directorNames: ['Director One'],
+          companyNameMatches: true,
+          companyAuthorityConfirmed: true,
+        },
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({ evidenceStatus: 'VALIDATED' }),
+    );
+
+    expect(tx.kycDocument.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          assessmentReasonCodes: expect.arrayContaining([
+            'ADMIN_DOCUMENT_TYPE_CONFIRMED',
+            'ADMIN_READABILITY_CONFIRMED',
+            'ADMIN_COMPANY_NAME_CONFIRMED',
+            'ADMIN_COMPANY_AUTHORITY_CONFIRMED',
+          ]),
+          extractedFields: expect.objectContaining({
+            fields: expect.objectContaining({
+              companyName: 'Example Company Limited',
+              companyRegistrationNumber: '0105559999999',
+              directorNames: ['Director One'],
+            }),
+            adminReview: expect.objectContaining({ reviewerId: 'admin-1' }),
+          }),
+        }),
+      }),
+    );
   });
 
   it.each([

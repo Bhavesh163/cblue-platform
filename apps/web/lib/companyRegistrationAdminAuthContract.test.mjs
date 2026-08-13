@@ -113,6 +113,8 @@ test("an unrecoverable admin authorization failure expires the shared console se
     /response\.status === 401 \|\| response\.status === 403/,
   );
   assert.match(adminApiSource, /window\.dispatchEvent/);
+  assert.match(adminApiSource, /adminTokenRotation/);
+  assert.match(adminApiSource, /performAdminTokenRotation\(\)\.finally/);
   assert.match(
     adminSource,
     /window\.addEventListener\(\s*ADMIN_SESSION_EXPIRED_EVENT/,

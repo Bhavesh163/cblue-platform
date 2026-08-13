@@ -1,10 +1,14 @@
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsDateString,
+  IsEmail,
   IsIn,
   IsOptional,
   IsString,
   Matches,
+  MaxLength,
   MinLength,
 } from 'class-validator';
 
@@ -58,4 +62,49 @@ export class QualificationEvidenceDecisionDto {
   @IsOptional()
   @IsBoolean()
   selfieReviewCompleted?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  @MaxLength(200)
+  companyName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  companyRegistrationNumber?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  @MaxLength(200, { each: true })
+  directorNames?: string[];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  authorityHolderName?: string;
+
+  @IsOptional()
+  @IsEmail()
+  @MaxLength(254)
+  contactEmail?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  intentToJoinCblue?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  authorizedApplicantName?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  companyNameMatches?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  companyAuthorityConfirmed?: boolean;
 }

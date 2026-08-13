@@ -45,6 +45,14 @@ test("admin evidence review captures structured identity facts without exposing 
   assert.match(source, /Save ID review/);
   assert.match(source, /Save selfie review/);
   assert.match(source, /KYC approval uses saved evidence only/);
+  assert.match(source, /Administrator company affidavit review/);
+  assert.match(source, /Approved company provider name/);
+  assert.match(source, /Directors named in the affidavit/);
+  assert.match(source, /Administrator director authorization review/);
+  assert.match(source, /Company contact email/);
+  assert.match(source, /Application intent is explicit/);
+  assert.match(source, /Save affidavit review/);
+  assert.match(source, /Save authorization review/);
   assert.doesNotMatch(source, /identityNumberHash/);
 });
 

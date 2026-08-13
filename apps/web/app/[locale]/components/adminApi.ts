@@ -19,6 +19,8 @@ type TokenResponse = {
   refreshToken?: string;
 };
 
+let adminTokenRotation: Promise<string | null> | null = null;
+
 export async function readAdminResponseError(
   response: Response,
   fallback: string,
@@ -29,7 +31,7 @@ export async function readAdminResponseError(
   return typeof message === "string" && message.trim() ? message : fallback;
 }
 
-async function rotateAdminToken() {
+async function performAdminTokenRotation() {
   const refreshToken = window.sessionStorage.getItem(ADMIN_REFRESH_TOKEN_KEY);
   if (!refreshToken) return null;
   const response = await fetch(getApiUrl("/auth/refresh"), {
@@ -43,6 +45,15 @@ async function rotateAdminToken() {
   window.localStorage.setItem(ADMIN_TOKEN_KEY, tokens.accessToken);
   window.sessionStorage.setItem(ADMIN_REFRESH_TOKEN_KEY, tokens.refreshToken);
   return tokens.accessToken;
+}
+
+async function rotateAdminToken() {
+  if (!adminTokenRotation) {
+    adminTokenRotation = performAdminTokenRotation().finally(() => {
+      adminTokenRotation = null;
+    });
+  }
+  return adminTokenRotation;
 }
 
 function expireAdminSession() {

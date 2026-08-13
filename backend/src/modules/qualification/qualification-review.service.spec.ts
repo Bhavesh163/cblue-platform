@@ -489,6 +489,12 @@ describe('QualificationReviewService', () => {
       {
         documentType: 'company-affidavit',
         evidenceStatus: 'VALIDATED',
+        assessmentReasonCodes: [
+          'ADMIN_DOCUMENT_TYPE_CONFIRMED',
+          'ADMIN_READABILITY_CONFIRMED',
+          'ADMIN_COMPANY_NAME_CONFIRMED',
+          'ADMIN_COMPANY_AUTHORITY_CONFIRMED',
+        ],
         extractedFields: {
           companyName: 'Example Company Limited',
           directorNames: ['Registered Person'],
@@ -497,6 +503,13 @@ describe('QualificationReviewService', () => {
       {
         documentType: 'company-letter-of-intent',
         evidenceStatus: 'VALIDATED',
+        assessmentReasonCodes: [
+          'ADMIN_DOCUMENT_TYPE_CONFIRMED',
+          'ADMIN_READABILITY_CONFIRMED',
+          'ADMIN_COMPANY_NAME_CONFIRMED',
+          'ADMIN_COMPANY_AUTHORITY_CONFIRMED',
+          'ADMIN_COMPANY_INTENT_CONFIRMED',
+        ],
         extractedFields: {
           documentName: 'Registered Person',
           authorityHolderName: 'Registered Person',
@@ -566,21 +579,38 @@ describe('QualificationReviewService', () => {
       {
         documentType: 'company-affidavit',
         evidenceStatus: 'VALIDATED',
+        assessmentReasonCodes: [
+          'ADMIN_DOCUMENT_TYPE_CONFIRMED',
+          'ADMIN_READABILITY_CONFIRMED',
+          'ADMIN_COMPANY_NAME_CONFIRMED',
+          'ADMIN_COMPANY_AUTHORITY_CONFIRMED',
+        ],
         extractedFields: {
-          companyName: 'Example Company Limited',
-          directorNames: ['Director One'],
+          fields: {
+            companyName: 'Example Company Limited',
+            directorNames: ['Director One'],
+          },
         },
       },
       {
         documentType: 'company-letter-of-intent',
         evidenceStatus: 'VALIDATED',
+        assessmentReasonCodes: [
+          'ADMIN_DOCUMENT_TYPE_CONFIRMED',
+          'ADMIN_READABILITY_CONFIRMED',
+          'ADMIN_COMPANY_NAME_CONFIRMED',
+          'ADMIN_COMPANY_AUTHORITY_CONFIRMED',
+          'ADMIN_COMPANY_INTENT_CONFIRMED',
+        ],
         extractedFields: {
-          documentName: 'Director One',
-          authorityHolderName: 'Director One',
-          companyName: 'Example Company Limited',
-          contactEmail: 'director@example.com',
-          intentToJoinCblue: true,
-          authorizedApplicantName: 'Applicant Person',
+          fields: {
+            documentName: 'Director One',
+            authorityHolderName: 'Director One',
+            companyName: 'Example Company Limited',
+            contactEmail: 'director@example.com',
+            intentToJoinCblue: true,
+            authorizedApplicantName: 'Applicant Person',
+          },
         },
       },
     ]);
