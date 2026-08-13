@@ -24,6 +24,7 @@ import {
 } from './dto/property-workflow.dto';
 import { BlueBridgeService } from './blue-bridge.service';
 import { normalizeThaiGpsLocation } from '../../common/thai-gps-location';
+import { providerDisplayName } from '../../common/provider-display-name';
 
 const TOTAL_STEPS = 8;
 const SOURCE_VERSION = PROPERTY_WORKFLOW_SOURCE_VERSION;
@@ -106,6 +107,12 @@ export class PropertyWorkflowBridgeService {
             name: true,
             email: true,
             isActive: true,
+            fixer: {
+              select: {
+                publicDisplayName: true,
+                verifiedCompanyName: true,
+              },
+            },
           },
         },
         images: { orderBy: { sortOrder: 'asc' } },
@@ -133,7 +140,10 @@ export class PropertyWorkflowBridgeService {
         customerEmail: String(customer.email || '')
           .trim()
           .toLowerCase(),
-        listerName: property.user.name || property.contactName,
+        listerName:
+          providerDisplayName(property.user.fixer, '') ||
+          property.user.name ||
+          property.contactName,
         requestDetails: String(dto.requestDetails || '').trim() || null,
         idempotencyKey,
         status: PropertyInquiryStatus.NOTIFY_SENT,
@@ -1089,7 +1099,9 @@ export class PropertyWorkflowBridgeService {
       ...(includeContact
         ? {
             contact: {
-              name: property.contactName,
+              name:
+                providerDisplayName(property.user?.fixer, '') ||
+                property.contactName,
               phone: property.contactPhone,
               email: property.contactEmail,
             },

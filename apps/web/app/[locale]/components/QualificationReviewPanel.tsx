@@ -409,9 +409,10 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
     const selectedProviderName =
       approvedProviderName[task.id]?.trim() ||
       extractedCompanyName(taskDocuments);
-    const selectedIdentityType =
-      providerIdentityType[task.id] ||
-      (hasCompanyEvidence(taskDocuments) ? "COMPANY" : "PERSONAL");
+    const companyEvidencePresent = hasCompanyEvidence(taskDocuments);
+    const selectedIdentityType = companyEvidencePresent
+      ? "COMPANY"
+      : providerIdentityType[task.id] || "PERSONAL";
     const selectedReason = reason[task.id]?.trim() || "";
     if (selectedReason.length < 10) {
       setError("Enter a decision reason with at least 10 characters.");
@@ -587,9 +588,10 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                 const assessmentSummary =
                   qualificationAssessmentSummary(documents);
                 const selectedDecision = decision[task.id] || "APPROVE";
-                const selectedIdentityType =
-                  providerIdentityType[task.id] ||
-                  (hasCompanyEvidence(allDocuments) ? "COMPANY" : "PERSONAL");
+                const companyEvidencePresent = hasCompanyEvidence(allDocuments);
+                const selectedIdentityType = companyEvidencePresent
+                  ? "COMPANY"
+                  : providerIdentityType[task.id] || "PERSONAL";
                 const submissionFindings =
                   evaluation?.findings?.filter(
                     (finding) => !finding.documentId,
@@ -934,6 +936,7 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                                     displayName(task)
                                   }
                                   value={selectedIdentityType}
+                                  disabled={companyEvidencePresent}
                                   onChange={(event) =>
                                     setProviderIdentityType((current) => ({
                                       ...current,
@@ -942,7 +945,7 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                                         | "COMPANY",
                                     }))
                                   }
-                                  className="rounded-lg border border-slate-300 px-2 py-2 text-xs font-semibold text-slate-700"
+                                  className="rounded-lg border border-slate-300 px-2 py-2 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-600"
                                 >
                                   <option value="PERSONAL">Personal</option>
                                   <option value="COMPANY">Company</option>

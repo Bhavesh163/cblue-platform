@@ -21,6 +21,7 @@ import { qualificationEligibilitySnapshot } from '../qualification/qualification
 import { ApproveFixerDto } from './dto/approve-fixer.dto';
 import { ManualAssignDto } from './dto/manual-assign.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
+import { providerDisplayName } from '../../common/provider-display-name';
 const AUTHORITATIVE_COMPLETION_WHERE: Prisma.OrderWhereInput = {
   OR: [
     { status: OrderStatus.COMPLETED },
@@ -161,6 +162,7 @@ export class AdminService {
           tier: true,
           status: true,
           verified: true,
+          publicDisplayName: true,
           verifiedCompanyName: true,
           qualificationEligibilityStatus: true,
           kycValidUntil: true,
@@ -334,6 +336,7 @@ export class AdminService {
       );
       return {
         ...row,
+        displayName: providerDisplayName(row),
         completedJobs: authoritativeCompletedJobs,
         reviewCount: row._count.reviews,
         serviceProvince: row.serviceProvince || addressValue('province'),
@@ -468,6 +471,7 @@ export class AdminService {
         rating: true,
         status: true,
         verified: true,
+        publicDisplayName: true,
         verifiedCompanyName: true,
         qualificationEligibilityStatus: true,
         kycValidUntil: true,
@@ -646,6 +650,7 @@ export class AdminService {
     const { _count, ...detail } = fixer;
     return {
       ...detail,
+      displayName: providerDisplayName(detail),
       completedJobs: Math.max(_count.orders, _count.reviews),
       reviewCount: _count.reviews,
       matchingEligibility: qualificationEligibilitySnapshot(fixer),

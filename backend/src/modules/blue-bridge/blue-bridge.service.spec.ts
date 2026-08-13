@@ -58,6 +58,16 @@ describe('BlueBridgeService', () => {
             },
           ],
           user: { name: 'Bhisashmintra', email: 'customer@example.com' },
+          fixer: {
+            userId: 'partner-user-1',
+            publicDisplayName: 'Construction Blue',
+            verifiedCompanyName: 'Construction Blue',
+            user: {
+              id: 'partner-user-1',
+              name: 'Bhavesh Fungprasertsuk',
+              email: 'construction_blue@hotmail.com',
+            },
+          },
           address: {
             unit: null,
             building: null,
@@ -87,6 +97,10 @@ describe('BlueBridgeService', () => {
     expect(result.detailRows[0]).toEqual({
       label: 'Customer',
       value: 'Bhisashmintra',
+    });
+    expect(result.partner).toEqual({
+      id: 'partner-user-1',
+      displayName: 'Construction Blue',
     });
     expect(result.detailRows).toContainEqual({
       label: 'Project Location',
@@ -529,7 +543,8 @@ describe('BlueBridgeService', () => {
             status,
             statusHistory: [{ status, note, createdAt: stateChangedAt }],
             review: reviewAt ? { createdAt: new Date(reviewAt) } : null,
-            description: 'PO-2607-1234 | This text must not control lifecycle placement',
+            description:
+              'PO-2607-1234 | This text must not control lifecycle placement',
             budgetBreakdown: null,
             user: { name: 'Customer', email: 'customer@example.com' },
             address: {
@@ -564,7 +579,9 @@ describe('BlueBridgeService', () => {
         expect(result[terminalField]).toBe(
           reviewAt || stateChangedAt.toISOString(),
         );
-        expect(result.archivedAt).toBe(reviewAt || stateChangedAt.toISOString());
+        expect(result.archivedAt).toBe(
+          reviewAt || stateChangedAt.toISOString(),
+        );
       } else {
         expect(result.archivedAt).toBeNull();
         expect(result.cancelledAt).toBeNull();

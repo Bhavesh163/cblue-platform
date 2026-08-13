@@ -5,6 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { OrderService } from '../order/order.service';
 import { TIER_MULTIPLIERS, MATCHING_WEIGHTS } from '../../common/constants';
 import { qualificationEligibleFixerWhere } from '../qualification/qualification-eligibility';
+import { providerDisplayName } from '../../common/provider-display-name';
 
 export interface MatchingResult {
   fixerId: string;
@@ -113,7 +114,7 @@ export class MatchingService {
 
       return {
         fixerId: fixer.id,
-        fixerName: fixer.user.name || fixer.user.phone || 'Unknown',
+        fixerName: providerDisplayName(fixer, 'Unknown'),
         score: Math.round(totalScore * 100) / 100,
         distance: null,
         rating: fixer.rating,

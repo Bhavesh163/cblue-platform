@@ -138,6 +138,8 @@ describe('AdminService', () => {
       prisma.fixer.findMany.mockResolvedValue([
         {
           id: 'fixer-1',
+          publicDisplayName: 'Construction Blue',
+          verifiedCompanyName: 'Construction Blue',
           serviceProvince: null,
           serviceDistrict: null,
           servicePostalCode: null,
@@ -193,6 +195,7 @@ describe('AdminService', () => {
       expect(result.rows).toEqual([
         expect.objectContaining({
           id: 'fixer-1',
+          displayName: 'Construction Blue',
           serviceProvince: 'Bangkok',
           serviceDistrict: 'Wang Thonglang',
           serviceSubdistrict: 'Saphan Song',

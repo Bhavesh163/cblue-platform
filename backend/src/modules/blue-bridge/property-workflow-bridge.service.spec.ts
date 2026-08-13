@@ -39,7 +39,8 @@ const property = {
     fixer: {
       status: 'APPROVED',
       verified: true,
-      verifiedCompanyName: null,
+      publicDisplayName: 'Construction Blue',
+      verifiedCompanyName: 'Construction Blue',
       qualificationEligibilityStatus: 'ELIGIBLE',
       kycValidUntil: new Date('2027-07-12T00:00:00.000Z'),
       kycReverificationRequiredAt: null,
@@ -176,6 +177,7 @@ describe('PropertyWorkflowBridgeService', () => {
           propertyId: property.id,
           customerId: 'customer-1',
           listerUserId: 'lister-1',
+          listerName: 'Construction Blue',
           status: PropertyInquiryStatus.NOTIFY_SENT,
           step: 4,
         }),

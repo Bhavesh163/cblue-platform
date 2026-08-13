@@ -70,6 +70,8 @@ describe('MatchingService', () => {
       prisma.fixer.findMany.mockResolvedValue([
         {
           id: 'fixer-1',
+          publicDisplayName: 'Verified Company Limited',
+          verifiedCompanyName: 'Verified Company Limited',
           user: { name: 'Fix A', phone: '0812345678' },
           rating: 5,
           tier: 'EXPERT',
@@ -96,6 +98,7 @@ describe('MatchingService', () => {
       expect(result.length).toBe(2);
       // Higher-rated expert should score higher
       expect(result[0].fixerId).toBe('fixer-1');
+      expect(result[0].fixerName).toBe('Verified Company Limited');
       expect(result[0].score).toBeGreaterThan(result[1].score);
     });
   });

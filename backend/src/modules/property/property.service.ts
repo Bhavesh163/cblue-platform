@@ -613,14 +613,29 @@ export class PropertyService {
       // Verify the user exists before attempting insert (prevents FK constraint 500)
       const userProfile = await this.prisma.user.findUnique({
         where: { id: userId },
-        select: { id: true, name: true, email: true, phone: true },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          fixer: {
+            select: {
+              publicDisplayName: true,
+              verifiedCompanyName: true,
+            },
+          },
+        },
       });
       if (!userProfile) {
         throw new NotFoundException(
           'User account not found. Please log out and log in again.',
         );
       }
-      const contactName = userProfile.name?.trim() || '';
+      const contactName =
+        userProfile.fixer?.publicDisplayName?.trim() ||
+        userProfile.fixer?.verifiedCompanyName?.trim() ||
+        userProfile.name?.trim() ||
+        '';
       const contactEmail = userProfile.email?.trim().toLowerCase() || '';
       const contactPhone = userProfile.phone?.trim() || '';
       if (!contactName || !contactEmail || !contactPhone) {
@@ -1068,6 +1083,16 @@ export class PropertyService {
           orderBy: { createdAt: 'desc' },
           include: {
             images: { orderBy: { sortOrder: 'asc' } },
+            user: {
+              select: {
+                fixer: {
+                  select: {
+                    publicDisplayName: true,
+                    verifiedCompanyName: true,
+                  },
+                },
+              },
+            },
           },
         }),
         this.prisma.property.count({ where }),

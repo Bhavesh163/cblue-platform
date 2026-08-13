@@ -20,6 +20,9 @@ type MatchingEligibility = {
 
 type DirectoryRow = {
   id: string;
+  displayName?: string | null;
+  publicDisplayName?: string | null;
+  verifiedCompanyName?: string | null;
   tier?: string | null;
   status?: string | null;
   verified?: boolean;
@@ -72,6 +75,9 @@ type DirectoryRow = {
 };
 
 type Detail = {
+  displayName?: string | null;
+  publicDisplayName?: string | null;
+  verifiedCompanyName?: string | null;
   user?: {
     name?: string | null;
     email?: string | null;
@@ -164,7 +170,15 @@ const NUMBER_FILTERS = [
 ] as const;
 
 function displayName(row: DirectoryRow | Detail) {
-  return row.user?.name || row.user?.email || row.user?.phone || row.id;
+  return (
+    row.displayName ||
+    row.publicDisplayName ||
+    row.verifiedCompanyName ||
+    row.user?.name ||
+    row.user?.email ||
+    row.user?.phone ||
+    row.id
+  );
 }
 
 function addressValue(detail: Detail, key: string) {

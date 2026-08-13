@@ -52,7 +52,8 @@ describe('PropertyInquiryService workflow guards', () => {
             fixer: {
               status: 'APPROVED',
               verified: true,
-              verifiedCompanyName: null,
+              publicDisplayName: 'Construction Blue',
+              verifiedCompanyName: 'Construction Blue',
               qualificationEligibilityStatus: 'ELIGIBLE',
               kycValidUntil: new Date('2030-12-31T00:00:00.000Z'),
               kycReverificationRequiredAt: null,
@@ -66,7 +67,14 @@ describe('PropertyInquiryService workflow guards', () => {
       user: {
         findUnique: jest
           .fn()
-          .mockResolvedValueOnce({ id: 'lister-1', name: 'Lister' })
+          .mockResolvedValueOnce({
+            id: 'lister-1',
+            name: 'Lister',
+            fixer: {
+              publicDisplayName: 'Construction Blue',
+              verifiedCompanyName: 'Construction Blue',
+            },
+          })
           .mockResolvedValueOnce({
             id: 'customer-1',
             name: 'Customer',
@@ -96,6 +104,7 @@ describe('PropertyInquiryService workflow guards', () => {
         data: expect.objectContaining({
           status: PropertyInquiryStatus.NOTIFY_SENT,
           step: 4,
+          listerName: 'Construction Blue',
           workflowEvents: {
             create: expect.objectContaining({
               action: 'partner-notified',

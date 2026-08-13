@@ -9,6 +9,7 @@ import {
 import { randomUUID } from 'crypto';
 import { PropertyInquiryStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { providerDisplayName } from '../../common/provider-display-name';
 import {
   CreatePropertyInquiryDto,
   UpdatePropertyInquiryDto,
@@ -369,6 +370,7 @@ export class PropertyInquiryService {
               select: {
                 status: true,
                 verified: true,
+                publicDisplayName: true,
                 verifiedCompanyName: true,
                 qualificationEligibilityStatus: true,
                 kycValidUntil: true,
@@ -397,7 +399,16 @@ export class PropertyInquiryService {
     // Always derive lister from the property owner for workflow consistency.
     const lister = await this.prisma.user.findUnique({
       where: { id: property.userId },
-      select: { id: true, name: true },
+      select: {
+        id: true,
+        name: true,
+        fixer: {
+          select: {
+            publicDisplayName: true,
+            verifiedCompanyName: true,
+          },
+        },
+      },
     });
     if (!lister) {
       throw new NotFoundException('Lister user not found');
@@ -425,7 +436,11 @@ export class PropertyInquiryService {
         listerUserId: property.userId,
         customerName: dto.customerName || customer.name || '',
         customerEmail: this.normalizeEmail(dto.customerEmail || customer.email),
-        listerName: dto.listerName || lister.name || property.contactName || '',
+        listerName:
+          providerDisplayName(lister.fixer, '') ||
+          lister.name ||
+          property.contactName ||
+          '',
         status: PropertyInquiryStatus.NOTIFY_SENT,
         step: 4,
         workflowEvents: {

@@ -38,6 +38,7 @@ describe('QualificationReviewService', () => {
     tierQualification: { create: jest.fn() },
     fixer: { update: jest.fn() },
     user: { update: jest.fn() },
+    property: { updateMany: jest.fn() },
     kycSubmission: { update: jest.fn() },
     kycDocument: { findMany: jest.fn() },
     qualificationAuditLog: { create: jest.fn() },
@@ -509,7 +510,7 @@ describe('QualificationReviewService', () => {
     );
   });
 
-  it('publishes a verified company provider under the verified company name', async () => {
+  it('forces validated company evidence to publish the verified company name', async () => {
     tx.qualificationReviewTask.findUnique.mockResolvedValue({
       id: 'task-1',
       kind: 'KYC',
@@ -523,6 +524,7 @@ describe('QualificationReviewService', () => {
         evaluations: [],
         fixer: {
           id: 'fixer-1',
+          userId: 'user-1',
           status: 'PENDING',
           tier: 'ECONOMY',
           verified: false,
@@ -581,8 +583,7 @@ describe('QualificationReviewService', () => {
     await expect(
       service.decideTask('admin-1', 'task-1', {
         decision: QualificationReviewDecision.APPROVE,
-        providerIdentityType: QualificationProviderIdentityType.COMPANY,
-        approvedProviderName: 'Construction Blue',
+        providerIdentityType: QualificationProviderIdentityType.PERSONAL,
         reason: 'Identity and company authority evidence are verified.',
       }),
     ).resolves.toEqual(expect.objectContaining({ applied: true }));
@@ -597,6 +598,14 @@ describe('QualificationReviewService', () => {
         }),
       }),
     );
+    expect(tx.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { company: 'Construction Blue' },
+    });
+    expect(tx.property.updateMany).toHaveBeenCalledWith({
+      where: { userId: 'user-1' },
+      data: { contactName: 'Construction Blue' },
+    });
   });
 
   it('accepts company identity with a validated director authorization letter', async () => {

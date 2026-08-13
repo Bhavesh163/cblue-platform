@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma, UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { normalizeThaiGpsLocation } from '../../common/thai-gps-location';
+import { providerDisplayName } from '../../common/provider-display-name';
 import type { BlueWorkflowDetailResponse } from './blue-bridge.controller';
 
 interface WorkflowDetailInput {
@@ -139,6 +140,8 @@ export class BlueBridgeService {
         fixer: {
           select: {
             userId: true,
+            publicDisplayName: true,
+            verifiedCompanyName: true,
             user: { select: { id: true, name: true, email: true } },
           },
         },
@@ -195,6 +198,8 @@ export class BlueBridgeService {
         fixer: {
           select: {
             userId: true,
+            publicDisplayName: true,
+            verifiedCompanyName: true,
             user: { select: { id: true, name: true, email: true } },
           },
         },
@@ -341,8 +346,8 @@ export class BlueBridgeService {
       workflowEvents: persistedFixerWorkflowEvents(order),
       title: String(order.serviceCategory || '').replace(/_/g, ' ').trim(),
       serviceCategory: order.serviceCategory,
-      customer: identity(order.user),
-      partner: identity(order.fixer?.user),
+      customer: userIdentity(order.user),
+      partner: providerIdentity(order.fixer),
       location: order.address ? formatLocation(order.address) : '',
       meeting: projectPersistedFixerMeeting(order),
       siteSubdistrict: persistedSubdistrict(order.address),
@@ -373,6 +378,8 @@ export class BlueBridgeService {
         fixer: {
           select: {
             userId: true,
+            publicDisplayName: true,
+            verifiedCompanyName: true,
             user: { select: { id: true, name: true, email: true } },
           },
         },
@@ -389,7 +396,20 @@ export class BlueBridgeService {
           orderBy: { createdAt: 'asc' },
         },
         chatMessages: {
-          include: { senderUser: { select: { name: true, email: true } } },
+          include: {
+            senderUser: {
+              select: {
+                name: true,
+                email: true,
+                fixer: {
+                  select: {
+                    publicDisplayName: true,
+                    verifiedCompanyName: true,
+                  },
+                },
+              },
+            },
+          },
           orderBy: { createdAt: 'asc' },
           take: 50,
         },
@@ -569,6 +589,8 @@ export class BlueBridgeService {
         fixer: {
           select: {
             userId: true,
+            publicDisplayName: true,
+            verifiedCompanyName: true,
             user: { select: { id: true, name: true, email: true } },
           },
         },
@@ -583,7 +605,20 @@ export class BlueBridgeService {
           orderBy: { createdAt: 'asc' },
         },
         chatMessages: {
-          include: { senderUser: { select: { name: true, email: true } } },
+          include: {
+            senderUser: {
+              select: {
+                name: true,
+                email: true,
+                fixer: {
+                  select: {
+                    publicDisplayName: true,
+                    verifiedCompanyName: true,
+                  },
+                },
+              },
+            },
+          },
           orderBy: { createdAt: 'asc' },
           take: 50,
         },
@@ -687,8 +722,8 @@ export class BlueBridgeService {
       createdAt: toIsoTimestamp(order.createdAt),
       updatedAt: toIsoTimestamp(order.updatedAt),
       location: order.address ? formatLocation(order.address) : '',
-      customer: identity(order.user),
-      partner: identity(order.fixer?.user),
+      customer: userIdentity(order.user),
+      partner: providerIdentity(order.fixer),
       actions: workflow.actions,
       availableActions: workflow.availableActions,
       actionNeeded: workflow.actionNeeded,
@@ -998,7 +1033,7 @@ function persistedFixerWorkflowEvents(order: any): Array<{
   });
 }
 
-function identity(
+function userIdentity(
   user:
     | { id?: string; name?: string | null; email?: string | null }
     | null
@@ -1011,20 +1046,47 @@ function identity(
   };
 }
 
+function providerIdentity(
+  fixer:
+    | {
+        publicDisplayName?: string | null;
+        verifiedCompanyName?: string | null;
+        user?: { id?: string; name?: string | null; email?: string | null } | null;
+      }
+    | null
+    | undefined,
+) {
+  if (!fixer?.user) return null;
+  return {
+    id: String(fixer.user.id || ''),
+    displayName: providerDisplayName(fixer),
+  };
+}
+
 function messageItem(message: {
   id?: string;
   senderUserId?: string;
   senderRole?: string | null;
   text?: string;
   createdAt?: Date | string | null;
-  senderUser?: { name?: string | null; email?: string | null } | null;
+  senderUser?: {
+    name?: string | null;
+    email?: string | null;
+    fixer?: {
+      publicDisplayName?: string | null;
+      verifiedCompanyName?: string | null;
+    } | null;
+  } | null;
 }) {
   return {
     id: String(message.id || ''),
     senderUserId: String(message.senderUserId || ''),
     senderRole: message.senderRole || null,
     senderName: String(
-      message.senderUser?.name || message.senderUser?.email || 'User',
+      providerDisplayName(message.senderUser?.fixer, '') ||
+        message.senderUser?.name ||
+        message.senderUser?.email ||
+        'User',
     ).trim(),
     text: String(message.text || ''),
     createdAt: toIsoTimestamp(message.createdAt),

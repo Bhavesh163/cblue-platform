@@ -709,17 +709,6 @@ export class QualificationReviewService {
         }
         if (
           approved &&
-          task.kind === 'KYC' &&
-          directDecision.providerIdentityType ===
-            QualificationProviderIdentityType.COMPANY &&
-          !directDecision.approvedProviderName
-        ) {
-          throw new ConflictException(
-            'An approved company provider name is required',
-          );
-        }
-        if (
-          approved &&
           task.kind !== QualificationReviewKind.KYC &&
           directDecision.approvedTier &&
           (!recommendedTier ||
@@ -848,6 +837,8 @@ export class QualificationReviewService {
 
       const reviewDecision = parseReviewDecision(task.proposedDecision);
       let verifiedCompanyName: string | null = null;
+      let approvedProviderIdentityType =
+        QualificationProviderIdentityType.PERSONAL;
       let approvedKycExpiry: Date | null = null;
       if (
         dto.acceptProposal &&
@@ -873,6 +864,22 @@ export class QualificationReviewService {
           },
           orderBy: { createdAt: 'desc' },
         });
+        const companyEvidenceSubmitted = documents.some((document) =>
+          ['company-affidavit', 'company-letter-of-intent'].includes(
+            document.documentType,
+          ),
+        );
+        const existingCompanyIdentity = Boolean(
+          task.submission.fixer.verifiedCompanyName ||
+            task.submission.fixer.companyIdentityVerifiedAt,
+        );
+        approvedProviderIdentityType =
+          directDecision?.providerIdentityType ===
+            QualificationProviderIdentityType.COMPANY ||
+          companyEvidenceSubmitted ||
+          existingCompanyIdentity
+            ? QualificationProviderIdentityType.COMPANY
+            : QualificationProviderIdentityType.PERSONAL;
         const allValidated = REQUIRED_KYC_DOCUMENT_TYPES.every((type) =>
           documents.some(
             (document) =>
@@ -928,7 +935,7 @@ export class QualificationReviewService {
         }
         approvedKycExpiry = identityExpiryDate;
         if (
-          directDecision?.providerIdentityType ===
+          approvedProviderIdentityType ===
           QualificationProviderIdentityType.COMPANY
         ) {
           const affidavit = documents.find(
@@ -960,8 +967,9 @@ export class QualificationReviewService {
             );
           }
           if (
+            directDecision?.approvedProviderName &&
             normalizedCompanyName(evidenceCompanyName) !==
-            normalizedCompanyName(directDecision.approvedProviderName || '')
+              normalizedCompanyName(directDecision.approvedProviderName || '')
           ) {
             throw new ConflictException(
               'The approved company name must match the validated company evidence',
@@ -1107,22 +1115,22 @@ export class QualificationReviewService {
             verified: true,
             tier: FixerTier.ECONOMY,
             publicDisplayName:
-              directDecision?.providerIdentityType ===
+              approvedProviderIdentityType ===
               QualificationProviderIdentityType.COMPANY
                 ? verifiedCompanyName
                 : null,
             verifiedCompanyName:
-              directDecision?.providerIdentityType ===
+              approvedProviderIdentityType ===
               QualificationProviderIdentityType.COMPANY
                 ? verifiedCompanyName
                 : null,
             companyIdentityVerifiedAt:
-              directDecision?.providerIdentityType ===
+              approvedProviderIdentityType ===
               QualificationProviderIdentityType.COMPANY
                 ? checkedAt
                 : null,
             companyIdentityVerifiedBy:
-              directDecision?.providerIdentityType ===
+              approvedProviderIdentityType ===
               QualificationProviderIdentityType.COMPANY
                 ? checkerId
                 : null,
@@ -1134,6 +1142,20 @@ export class QualificationReviewService {
           },
           select: { id: true, status: true, tier: true, verified: true },
         });
+        if (
+          approvedProviderIdentityType ===
+            QualificationProviderIdentityType.COMPANY &&
+          verifiedCompanyName
+        ) {
+          await tx.user.update({
+            where: { id: task.submission.fixer.userId },
+            data: { company: verifiedCompanyName },
+          });
+          await tx.property.updateMany({
+            where: { userId: task.submission.fixer.userId },
+            data: { contactName: verifiedCompanyName },
+          });
+        }
         await tx.kycSubmission.update({
           where: { id: task.submissionId },
           data: {
@@ -1167,9 +1189,7 @@ export class QualificationReviewService {
             metadata: {
               makerId: task.proposedBy,
               approvedTier: FixerTier.ECONOMY,
-              providerIdentityType:
-                directDecision?.providerIdentityType ||
-                QualificationProviderIdentityType.PERSONAL,
+              providerIdentityType: approvedProviderIdentityType,
               approvedProviderName: verifiedCompanyName,
             },
           },
