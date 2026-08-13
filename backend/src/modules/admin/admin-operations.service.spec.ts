@@ -46,16 +46,39 @@ describe('AdminOperationsService', () => {
           fixer: { user: { id: 'partner-1', name: 'Partner', email: null } },
         },
       },
+      {
+        id: 'payment-pending',
+        orderId: 'order-2',
+        amount: 250,
+        method: 'BANK_TRANSFER',
+        status: PaymentStatus.PENDING,
+        transactionRef: null,
+        paidAt: null,
+        createdAt: new Date('2026-07-20T21:00:00.000Z'),
+        order: {
+          orderType: 'PROJECT',
+          serviceCategory: 'FITOUT',
+          user: { id: 'customer-2', name: 'Customer 2', email: null },
+          fixer: { user: { id: 'partner-2', name: 'Partner 2', email: null } },
+        },
+      },
     ]);
 
     const result = await service.getOverview(90);
 
     expect(prisma.payment.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ status: PaymentStatus.COMPLETED }),
+        where: expect.objectContaining({ OR: expect.any(Array) }),
       }),
     );
     expect(result.revenue.total).toBe(100);
+    expect(result.revenue.paymentRecords).toBe(2);
+    expect(result.revenue.statusCounts).toEqual({
+      completed: 1,
+      pending: 1,
+      failed: 0,
+      refunded: 0,
+    });
     expect(result.revenue.daily).toEqual([
       { period: '2026-07-21', amount: 100, count: 1 },
     ]);
@@ -234,6 +257,17 @@ describe('AdminOperationsService', () => {
     await expect(
       service.updateDemandGap('gap-1', 'admin-1', {
         status: DemandGapStatus.RESOLVED,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.unmatchedServiceDemand.update).not.toHaveBeenCalled();
+  });
+
+  it('requires an auditable note before assigning an unmatched demand gap', async () => {
+    prisma.unmatchedServiceDemand.findUnique.mockResolvedValue({ id: 'gap-1' });
+
+    await expect(
+      service.updateDemandGap('gap-1', 'admin-1', {
+        status: DemandGapStatus.IN_PROGRESS,
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(prisma.unmatchedServiceDemand.update).not.toHaveBeenCalled();

@@ -211,6 +211,12 @@ describe('SubscriptionService', () => {
     it('should throw conflict error if subscriber exists', async () => {
       prismaService.subscriber.findUnique.mockResolvedValue({ id: 'sub-1' });
       prismaService.subscriber.findFirst.mockResolvedValue({ id: 'sub-1' });
+      prismaService.user.findUnique.mockResolvedValue({
+        id: 'user-1',
+        email: 'test@example.com',
+        name: 'Test',
+        isActive: true,
+      });
 
       await expect(
         service.register({
@@ -219,6 +225,91 @@ describe('SubscriptionService', () => {
           name: 'Test',
         }),
       ).rejects.toThrow('Email already registered');
+    });
+
+    it('creates a fresh account when a deleted account tombstone retains the email', async () => {
+      prismaService.subscriber.findUnique.mockResolvedValue({
+        id: 'sub-deleted',
+        email: 'person@example.com',
+        status: 'CANCELLED',
+      });
+      prismaService.user.findUnique.mockResolvedValue({
+        id: 'user-deleted',
+        email: 'deleted_user-deleted_1@cblue.co.th',
+        name: 'Deleted User',
+        isActive: false,
+      });
+      prismaService.subscriber.create.mockResolvedValue({
+        id: 'sub-new',
+        email: 'person@example.com',
+        phone: '0812345678',
+        name: 'New Person',
+        status: 'ACTIVE',
+      });
+      prismaService.user.findFirst.mockResolvedValue(null);
+      prismaService.user.create.mockResolvedValue({ id: 'user-new' });
+
+      const result = await service.register({
+        email: 'person@example.com',
+        password: 'new-password',
+        name: 'New Person',
+        phone: '0812345678',
+      });
+
+      expect(prismaService.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-deleted' },
+        data: { email: expect.stringMatching(/^deleted_user-deleted_/) },
+      });
+      expect(prismaService.subscriber.update).toHaveBeenCalledWith({
+        where: { id: 'sub-deleted' },
+        data: expect.objectContaining({
+          email: expect.stringMatching(/^deleted_subscriber_sub-deleted_/),
+          status: 'CANCELLED',
+        }),
+      });
+      expect(prismaService.subscriber.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ email: 'person@example.com' }),
+      });
+      expect(prismaService.user.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          email: 'person@example.com',
+          subscriberId: 'sub-new',
+        }),
+      });
+      expect(result.subscriber.id).toBe('sub-new');
+    });
+
+    it('reclaims a cancelled orphan subscriber left by legacy account deletion', async () => {
+      prismaService.subscriber.findUnique.mockResolvedValue({
+        id: 'sub-orphan',
+        email: 'legacy@example.com',
+        status: 'CANCELLED',
+      });
+      prismaService.user.findUnique.mockResolvedValue(null);
+      prismaService.user.findFirst.mockResolvedValue(null);
+      prismaService.subscriber.create.mockResolvedValue({
+        id: 'sub-fresh',
+        email: 'legacy@example.com',
+        phone: '',
+        name: 'Legacy User',
+        status: 'ACTIVE',
+      });
+      prismaService.user.create.mockResolvedValue({ id: 'user-fresh' });
+
+      await service.register({
+        email: 'legacy@example.com',
+        password: 'new-password',
+        name: 'Legacy User',
+      });
+
+      expect(prismaService.user.update).not.toHaveBeenCalled();
+      expect(prismaService.subscriber.update).toHaveBeenCalledWith({
+        where: { id: 'sub-orphan' },
+        data: expect.objectContaining({ status: 'CANCELLED' }),
+      });
+      expect(prismaService.subscriber.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ email: 'legacy@example.com' }),
+      });
     });
   });
 
@@ -322,7 +413,7 @@ describe('SubscriptionService', () => {
 
     it('should recover login when subscriber email has stored whitespace and password input has surrounding whitespace', async () => {
       (bcrypt.compare as jest.Mock).mockImplementation(
-        async (password) => password === 'correct-password',
+        (password) => password === 'correct-password',
       );
       prismaService.subscriber.findUnique.mockResolvedValue(null);
       prismaService.subscriber.findFirst

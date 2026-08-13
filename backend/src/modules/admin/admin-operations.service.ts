@@ -49,13 +49,19 @@ export class AdminOperationsService {
       orderStatusEvents,
     ] = await Promise.all([
       this.prisma.payment.findMany({
-        where: { status: PaymentStatus.COMPLETED, paidAt: { gte: since } },
-        orderBy: { paidAt: 'desc' },
+        where: {
+          OR: [
+            { paidAt: { gte: since } },
+            { paidAt: null, createdAt: { gte: since } },
+          ],
+        },
+        orderBy: [{ paidAt: 'desc' }, { createdAt: 'desc' }],
         take: 5000,
         select: {
           id: true,
           orderId: true,
           amount: true,
+          status: true,
           method: true,
           transactionRef: true,
           paidAt: true,
@@ -273,7 +279,10 @@ export class AdminOperationsService {
       ),
     ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
-    const revenueDetails = payments.map((payment) => ({
+    const completedPayments = payments.filter(
+      (payment) => payment.status === PaymentStatus.COMPLETED,
+    );
+    const revenueDetails = completedPayments.map((payment) => ({
       id: payment.id,
       orderId: payment.orderId,
       sourceType: 'ORDER_PAYMENT' as const,
@@ -304,6 +313,19 @@ export class AdminOperationsService {
       demandOccurrences,
       revenue: {
         currency: 'THB',
+        paymentRecords: payments.length,
+        statusCounts: {
+          completed: completedPayments.length,
+          pending: payments.filter(
+            (payment) => payment.status === PaymentStatus.PENDING,
+          ).length,
+          failed: payments.filter(
+            (payment) => payment.status === PaymentStatus.FAILED,
+          ).length,
+          refunded: payments.filter(
+            (payment) => payment.status === PaymentStatus.REFUNDED,
+          ).length,
+        },
         total: revenueDetails.reduce((sum, item) => sum + item.amount, 0),
         daily: this.groupRevenue(revenueDetails, 'daily'),
         weekly: this.groupRevenue(revenueDetails, 'weekly'),
@@ -319,9 +341,9 @@ export class AdminOperationsService {
     const closesGap =
       status === DemandGapStatus.RESOLVED ||
       status === DemandGapStatus.DISMISSED;
-    if (closesGap && !note) {
+    if (status !== DemandGapStatus.OPEN && !note) {
       throw new BadRequestException(
-        'A resolution note is required when closing a demand gap',
+        'An assignment or resolution note is required for this demand gap action',
       );
     }
     const existing = await this.prisma.unmatchedServiceDemand.findUnique({

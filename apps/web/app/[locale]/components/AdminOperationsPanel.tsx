@@ -20,7 +20,9 @@ type DemandGap = {
   status: string;
   occurrenceCount: number;
   lastSeenAt: string;
+  assignedAdminId?: string | null;
   resolutionNote?: string | null;
+  resolvedAt?: string | null;
 };
 type Incident = {
   id: string;
@@ -79,6 +81,13 @@ type Overview = {
   }>;
   revenue: {
     currency: string;
+    paymentRecords?: number;
+    statusCounts?: {
+      completed: number;
+      pending: number;
+      failed: number;
+      refunded: number;
+    };
     total: number;
     daily: RevenuePoint[];
     weekly: RevenuePoint[];
@@ -101,6 +110,7 @@ export default function AdminOperationsPanel() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [grain, setGrain] = useState<"daily" | "weekly" | "monthly">("daily");
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [updating, setUpdating] = useState("");
@@ -137,7 +147,10 @@ export default function AdminOperationsPanel() {
     void load();
   }, [load]);
 
-  const series = overview?.revenue[grain] || [];
+  const series = useMemo(
+    () => overview?.revenue[grain] || [],
+    [grain, overview?.revenue],
+  );
   const maxAmount = useMemo(
     () => Math.max(1, ...series.map((point) => point.amount)),
     [series],
@@ -155,15 +168,30 @@ export default function AdminOperationsPanel() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 12);
   }, [overview?.demandOccurrences]);
+  const activeDemandGaps = useMemo(
+    () =>
+      (overview?.demandGaps || []).filter((gap) =>
+        ["OPEN", "IN_PROGRESS"].includes(gap.status),
+      ),
+    [overview?.demandGaps],
+  );
+  const recentDemandOutcomes = useMemo(
+    () =>
+      (overview?.demandGaps || [])
+        .filter((gap) => ["RESOLVED", "DISMISSED"].includes(gap.status))
+        .slice(0, 20),
+    [overview?.demandGaps],
+  );
 
   async function updateGap(gap: DemandGap, status: string) {
     const note = notes[gap.id]?.trim() || "";
-    if (["RESOLVED", "DISMISSED"].includes(status) && note.length < 5) {
-      setError("Enter a short resolution note before closing a demand gap.");
+    if (status !== "OPEN" && note.length < 5) {
+      setError("Enter a short assignment or resolution note first.");
       return;
     }
     setUpdating(gap.id);
     setError("");
+    setNotice("");
     try {
       const response = await adminFetchResponse(
         getApiUrl("/admin/demand-gaps/" + gap.id),
@@ -181,7 +209,25 @@ export default function AdminOperationsPanel() {
           ),
         );
       }
-      await load();
+      const updated = (await response.json()) as DemandGap;
+      setOverview((current) =>
+        current
+          ? {
+              ...current,
+              demandGaps: current.demandGaps.map((item) =>
+                item.id === updated.id ? updated : item,
+              ),
+            }
+          : current,
+      );
+      setNotes((current) => ({ ...current, [gap.id]: "" }));
+      setNotice(
+        status === "IN_PROGRESS"
+          ? "Demand review assigned and saved."
+          : status === "RESOLVED"
+            ? "Demand gap resolved and saved."
+            : "Demand gap dismissed and saved.",
+      );
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -222,6 +268,15 @@ export default function AdminOperationsPanel() {
           {error}
         </p>
       )}
+      {notice && (
+        <p
+          role="status"
+          aria-live="polite"
+          className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800"
+        >
+          {notice}
+        </p>
+      )}
 
       <div className="rounded-lg border border-slate-200 bg-white p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -252,6 +307,38 @@ export default function AdminOperationsPanel() {
         <p className="mt-4 text-2xl font-bold text-slate-950">
           {money.format(overview?.revenue.total || 0)}
         </p>
+        <div className="mt-4 grid gap-3 border-y border-slate-200 py-3 sm:grid-cols-2 xl:grid-cols-5">
+          <p className="text-sm text-slate-600">
+            Payment records
+            <strong className="ml-2 text-slate-950">
+              {overview?.revenue.paymentRecords || 0}
+            </strong>
+          </p>
+          <p className="text-sm text-slate-600">
+            Completed
+            <strong className="ml-2 text-slate-950">
+              {overview?.revenue.statusCounts?.completed || 0}
+            </strong>
+          </p>
+          <p className="text-sm text-slate-600">
+            Pending
+            <strong className="ml-2 text-slate-950">
+              {overview?.revenue.statusCounts?.pending || 0}
+            </strong>
+          </p>
+          <p className="text-sm text-slate-600">
+            Failed
+            <strong className="ml-2 text-slate-950">
+              {overview?.revenue.statusCounts?.failed || 0}
+            </strong>
+          </p>
+          <p className="text-sm text-slate-600">
+            Refunded
+            <strong className="ml-2 text-slate-950">
+              {overview?.revenue.statusCounts?.refunded || 0}
+            </strong>
+          </p>
+        </div>
         <div
           className="mt-5 flex min-h-44 items-end gap-2 overflow-x-auto border-b border-slate-200 pb-2"
           aria-label={`${grain} revenue chart`}
@@ -368,7 +455,7 @@ export default function AdminOperationsPanel() {
             })}
           </div>
         )}
-        {overview?.demandGaps.length ? (
+        {activeDemandGaps.length ? (
           <div className="max-h-[560px] overflow-auto">
             <table className="min-w-[1180px] w-full text-left text-sm">
               <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
@@ -381,7 +468,7 @@ export default function AdminOperationsPanel() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {overview.demandGaps.map((gap) => (
+                {activeDemandGaps.map((gap) => (
                   <tr key={gap.id}>
                     <td className="max-w-xl py-3 pr-4 align-top">
                       <p className="font-semibold text-slate-900">
@@ -403,6 +490,11 @@ export default function AdminOperationsPanel() {
                       <p className="text-xs text-slate-500">
                         {gap.status.replaceAll("_", " ")}
                       </p>
+                      {gap.resolutionNote && (
+                        <p className="mt-1 max-w-64 text-xs text-slate-600">
+                          {gap.resolutionNote}
+                        </p>
+                      )}
                     </td>
                     <td className="whitespace-nowrap py-3 pr-4 align-top text-slate-600">
                       {dateTime.format(new Date(gap.lastSeenAt))}
@@ -422,11 +514,15 @@ export default function AdminOperationsPanel() {
                       <div className="mt-2 flex flex-wrap gap-2">
                         <button
                           type="button"
-                          disabled={updating === gap.id}
+                          disabled={
+                            updating === gap.id || gap.status === "IN_PROGRESS"
+                          }
                           onClick={() => void updateGap(gap, "IN_PROGRESS")}
                           className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700"
                         >
-                          Assign review
+                          {gap.status === "IN_PROGRESS"
+                            ? "Review assigned"
+                            : "Assign review"}
                         </button>
                         <button
                           type="button"
@@ -455,6 +551,43 @@ export default function AdminOperationsPanel() {
           <p className="rounded-lg bg-slate-50 px-4 py-6 text-center text-sm text-slate-600">
             No unmatched service demand is currently open.
           </p>
+        )}
+        {recentDemandOutcomes.length > 0 && (
+          <div className="mt-6 border-t border-slate-200 pt-5">
+            <h4 className="font-bold text-slate-900">Recent outcomes</h4>
+            <div className="mt-3 max-h-72 overflow-auto">
+              <table className="min-w-[880px] w-full text-left text-sm">
+                <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="py-2 pr-4">Request</th>
+                    <th className="py-2 pr-4">Location</th>
+                    <th className="py-2 pr-4">Outcome</th>
+                    <th className="py-2">Saved note</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {recentDemandOutcomes.map((gap) => (
+                    <tr key={gap.id}>
+                      <td className="py-3 pr-4 font-semibold text-slate-900">
+                        {gap.service}
+                      </td>
+                      <td className="py-3 pr-4 text-slate-700">
+                        {[gap.district, gap.province, gap.postalCode]
+                          .filter(Boolean)
+                          .join(", ") || "Not supplied"}
+                      </td>
+                      <td className="py-3 pr-4 text-slate-700">
+                        {gap.status.replaceAll("_", " ")}
+                      </td>
+                      <td className="py-3 text-slate-700">
+                        {gap.resolutionNote || "No note recorded"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         )}
       </div>
 

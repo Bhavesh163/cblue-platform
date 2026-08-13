@@ -32,6 +32,13 @@ type BridgeSubscriber = {
   company: string | null;
 };
 
+type DeletedAccountOwner = {
+  id: string | null;
+  email: string | null;
+  name: string | null;
+  isActive: boolean;
+};
+
 type ResetEmailDeliveryPath =
   | 'mailjet_v31'
   | 'mailjet_v3'
@@ -122,11 +129,41 @@ export class SubscriptionService {
     });
   }
 
+  private async findDeletedAccountOwner(
+    subscriberId: string,
+    subscriberStatus: string,
+    email: string,
+  ): Promise<DeletedAccountOwner | null> {
+    const linkedOwner = await this.prisma.user.findUnique({
+      where: { subscriberId },
+      select: { id: true, email: true, name: true, isActive: true },
+    });
+    const owner = linkedOwner || (await this.findUserByEmail(email));
+    if (!owner) {
+      return subscriberStatus === 'CANCELLED'
+        ? { id: null, email: null, name: 'Deleted User', isActive: false }
+        : null;
+    }
+    if (owner.isActive) return null;
+
+    const tombstoned =
+      owner.name === 'Deleted User' ||
+      this.normalizeEmail(owner.email).startsWith('deleted_');
+    return tombstoned ? owner : null;
+  }
+
   async register(dto: CreateSubscriberDto) {
     const normalizedEmail = this.normalizeEmail(dto.email);
     const existing = await this.findSubscriberByEmail(normalizedEmail);
+    const deletedOwner = existing
+      ? await this.findDeletedAccountOwner(
+          existing.id,
+          existing.status,
+          normalizedEmail,
+        )
+      : null;
 
-    if (existing) {
+    if (existing && !deletedOwner) {
       throw new ConflictException('Email already registered');
     }
 
@@ -134,6 +171,27 @@ export class SubscriptionService {
 
     // Use transaction to ensure Subscriber + User are created atomically
     const { subscriber, user } = await this.prisma.$transaction(async (tx) => {
+      if (existing && deletedOwner) {
+        const tombstone = `${Date.now()}_${crypto.randomUUID()}`;
+        if (deletedOwner.id) {
+          await tx.user.update({
+            where: { id: deletedOwner.id },
+            data: {
+              email: `deleted_${deletedOwner.id}_${tombstone}@cblue.co.th`,
+            },
+          });
+        }
+        await tx.subscriber.update({
+          where: { id: existing.id },
+          data: {
+            email: `deleted_subscriber_${existing.id}_${tombstone}@cblue.co.th`,
+            status: 'CANCELLED',
+            resetToken: null,
+            resetTokenExpiry: null,
+          },
+        });
+      }
+
       const subscriber = await tx.subscriber.create({
         data: {
           email: normalizedEmail,
