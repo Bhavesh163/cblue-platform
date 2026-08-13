@@ -178,11 +178,14 @@ test("all three booking forms resolve GPS address fields during submit", () => {
   }
 });
 
-test("embedded fixer and booking authentication exposes accessible password visibility controls", () => {
+test("embedded fixer, booking, and property authentication exposes visible password controls", () => {
   assert.match(passwordInput, /aria-label=\{label\}/);
   assert.match(passwordInput, /aria-pressed=\{visible\}/);
+  assert.match(passwordInput, /data-password-visibility/);
+  assert.match(passwordInput, /border-l border-gray-300 bg-gray-50 text-sky-900/);
   assert.match(passwordInput, /type=\{visible \? "text" : "password"\}/);
   assert.ok((fixerRegisterPage.match(/<PasswordInput/g) || []).length >= 2);
+  assert.ok((propertyRegisterPage.match(/<PasswordInput/g) || []).length >= 2);
 
   for (const relativePath of [
     "../app/[locale]/booking/household/page.tsx",
@@ -197,13 +200,19 @@ test("embedded fixer and booking authentication exposes accessible password visi
 test("logged-in property contact fields use the authoritative profile and remain read-only", () => {
   assert.match(propertyRegisterPage, /fetchWithSubscriberSession\(/);
   assert.match(propertyRegisterPage, /["']\/api\/v1\/users\/me["']/);
+  assert.doesNotMatch(propertyRegisterPage, /if \(!stored \|\| !token\)/);
+  assert.match(propertyRegisterPage, /setProfileSessionState\("authenticated"\)/);
+  assert.match(propertyRegisterPage, /submissionContact\?\.phone \|\| form\.contactPhone/);
   assert.match(propertyRegisterPage, /contactPhone: profile\.phone/);
   assert.equal(
-    (propertyRegisterPage.match(/readOnly=\{Boolean\(subscriber\)\}/g) || [])
-      .length,
+    (propertyRegisterPage.match(/readOnly=\{profileSessionState !== "anonymous"\}/g) || []).length,
     3,
   );
-  assert.match(propertyRegisterPage, /These contact details come from your profile/);
+  assert.equal(
+    (propertyRegisterPage.match(/aria-readonly=\{profileSessionState !== "anonymous"\}/g) || []).length,
+    3,
+  );
+  assert.match(propertyRegisterPage, /These contact details come from your account profile and cannot be changed in this listing/);
 });
 
 test("partner meeting confirmation awaits the authoritative action snapshot", () => {

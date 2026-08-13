@@ -28,15 +28,17 @@ export default function PasswordInput({
       <input
         {...inputProps}
         type={visible ? "text" : "password"}
-        className={`${className} pr-12`}
+        className={`${className} pr-14`}
       />
       <button
         type="button"
         onClick={() => setVisible((current) => !current)}
         aria-label={label}
         aria-pressed={visible}
+        aria-controls={inputProps.id}
         title={label}
-        className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-gray-500 hover:text-sky-700 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-sky-600"
+        data-password-visibility
+        className="absolute inset-y-px right-px flex w-12 items-center justify-center rounded-r-lg border-l border-gray-300 bg-gray-50 text-sky-900 transition-colors hover:bg-sky-50 hover:text-sky-800 focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-sky-600"
       >
         {visible ? (
           <svg

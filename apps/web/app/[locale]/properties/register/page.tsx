@@ -9,16 +9,19 @@ import { getDistrictsForProvince } from "../../lib/thai-address-data";
 import { getSubdistrictsForDistrict, lookupByPostalCode } from "../../lib/thai-subdistrict-data";
 import GpsDetectButton from "../../components/GpsDetectButton";
 import GpsResolvedLocation from "../../components/GpsResolvedLocation";
+import PasswordInput from "../../components/PasswordInput";
 import { normalizeGpsAddressForSubmit } from "../../lib/gps-location-normalization";
 import { clearSubscriberSession, fetchWithSubscriberSession, refreshSubscriberSession } from "../../../../lib/subscriberSession";
 const PROPERTY_TYPES = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "APARTMENT", "OFFICE", "WAREHOUSE", "SHOPHOUSE"] as const;
 
 type AuthenticatedContact = {
   name: string;
-  email?: string;
-  phone?: string;
+  email: string;
+  phone: string;
   role?: string;
 };
+
+type ProfileSessionState = "checking" | "authenticated" | "anonymous" | "unavailable";
 
 function readContactProfile(value: unknown): AuthenticatedContact | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -27,8 +30,17 @@ function readContactProfile(value: unknown): AuthenticatedContact | null {
   const email = typeof record.email === "string" ? record.email.trim() : "";
   const phone = typeof record.phone === "string" ? record.phone.trim() : "";
   const role = typeof record.role === "string" ? record.role : undefined;
-  if (!name || !email) return null;
+  if (!name || !email || !phone) return null;
   return { name, email, phone, role };
+}
+
+function readCachedContactProfile(raw: string | null): AuthenticatedContact | null {
+  if (!raw) return null;
+  try {
+    return readContactProfile(JSON.parse(raw) as unknown);
+  } catch {
+    return null;
+  }
 }
 
 
@@ -46,6 +58,8 @@ export default function PropertyRegisterPage() {
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locationType, setLocationType] = useState<"gps" | "dropdown" | "address">("dropdown");
   const [subscriber, setSubscriber] = useState<AuthenticatedContact | null>(null);
+  const [profileSessionState, setProfileSessionState] = useState<ProfileSessionState>("checking");
+  const [profileRetryKey, setProfileRetryKey] = useState(0);
   const [authMode, setAuthMode] = useState<"login" | "register">("register");
   const [propImages, setPropImages] = useState<File[]>([]);
   const sessionExpiredMessage = locale === "th"
@@ -178,29 +192,28 @@ export default function PropertyRegisterPage() {
   useEffect(() => {
     let active = true;
     async function syncStoredSession() {
+      setProfileSessionState("checking");
       try {
         const stored = localStorage.getItem("subscriber");
         const token = localStorage.getItem("subscriber_token");
-        if (!stored || !token) {
-          if (stored || token) clearSubscriberSession();
-          if (active) setSubscriber(null);
+        if (!token) {
+          if (stored) clearSubscriberSession();
+          if (active) {
+            setSubscriber(null);
+            setProfileSessionState("anonymous");
+          }
           return;
         }
 
-        const parsed = readContactProfile(JSON.parse(stored) as unknown);
-        if (!parsed) {
-          clearSubscriberSession();
-          if (active) setSubscriber(null);
-          return;
+        const cachedProfile = readCachedContactProfile(stored);
+        if (active && cachedProfile) {
+          setForm((prev) => ({
+            ...prev,
+            contactName: cachedProfile.name,
+            contactPhone: cachedProfile.phone || "",
+            contactEmail: cachedProfile.email || "",
+          }));
         }
-        if (!active) return;
-        setSubscriber(parsed);
-        setForm((prev) => ({
-          ...prev,
-          contactName: parsed.name,
-          contactPhone: parsed.phone || "",
-          contactEmail: parsed.email || "",
-        }));
 
         const profileResponse = await fetchWithSubscriberSession(
           "/api/v1/users/me",
@@ -209,10 +222,14 @@ export default function PropertyRegisterPage() {
         );
         if (!active) return;
         if (!profileResponse?.ok) {
-          if (profileResponse?.status === 401 || profileResponse?.status === 403) {
+          if (!profileResponse || profileResponse.status === 401 || profileResponse.status === 403) {
             clearSubscriberSession();
             setSubscriber(null);
+            setProfileSessionState("anonymous");
+            setForm((prev) => ({ ...prev, contactName: "", contactPhone: "", contactEmail: "" }));
           } else {
+            setSubscriber(null);
+            setProfileSessionState("unavailable");
             setError(
               locale === "th"
                 ? "ไม่สามารถโหลดข้อมูลติดต่อจากโปรไฟล์ได้ กรุณาลองใหม่อีกครั้ง"
@@ -226,8 +243,21 @@ export default function PropertyRegisterPage() {
         const profile = readContactProfile(
           (await profileResponse.json().catch(() => null)) as unknown,
         );
-        if (!profile) throw new Error("Invalid profile response");
+        if (!profile) {
+          setSubscriber(null);
+          setProfileSessionState("unavailable");
+          setError(
+            locale === "th"
+              ? "ข้อมูลติดต่อในโปรไฟล์ยังไม่ครบ กรุณาอัปเดตชื่อ อีเมล และเบอร์โทรศัพท์ในโปรไฟล์"
+              : locale === "zh"
+                ? "个人资料中的联系信息不完整。请在个人资料中更新姓名、电子邮件和电话号码。"
+                : "Your profile contact details are incomplete. Update your name, email, and phone in your profile.",
+          );
+          return;
+        }
         setSubscriber(profile);
+        setProfileSessionState("authenticated");
+        setError("");
         setForm((prev) => ({
           ...prev,
           contactName: profile.name,
@@ -235,8 +265,17 @@ export default function PropertyRegisterPage() {
           contactEmail: profile.email || "",
         }));
       } catch {
-        clearSubscriberSession();
-        if (active) setSubscriber(null);
+        if (active) {
+          setSubscriber(null);
+          setProfileSessionState("unavailable");
+          setError(
+            locale === "th"
+              ? "ไม่สามารถโหลดข้อมูลติดต่อจากโปรไฟล์ได้ กรุณาลองใหม่อีกครั้ง"
+              : locale === "zh"
+                ? "无法从个人资料加载联系信息，请重试。"
+                : "We could not load contact details from your profile. Please try again.",
+          );
+        }
       }
     }
 
@@ -244,7 +283,7 @@ export default function PropertyRegisterPage() {
     return () => {
       active = false;
     };
-  }, [locale]);
+  }, [locale, profileRetryKey]);
 
   const [form, setForm] = useState({
     propertyType: "",
@@ -342,8 +381,21 @@ export default function PropertyRegisterPage() {
       return;
     }
 
+    if (profileSessionState === "checking" || profileSessionState === "unavailable") {
+      setError(
+        locale === "th"
+          ? "กรุณารอให้โหลดข้อมูลโปรไฟล์ หรือลองโหลดข้อมูลอีกครั้ง"
+          : locale === "zh"
+            ? "请等待个人资料加载完成，或重试加载。"
+            : "Wait for your profile to load, or try loading it again.",
+      );
+      return;
+    }
+
+    let submissionContact = subscriber;
+
     // Inline auth — if not logged in, validate & create/login account via backend
-    if (!subscriber) {
+    if (profileSessionState === "anonymous") {
       if (!form.contactEmail || !/\S+@\S+\.\S+/.test(form.contactEmail)) {
         setError(locale === "th" ? "กรุณากรอกอีเมลที่ถูกต้อง" : locale === "zh" ? "请输入有效的电子邮件" : "Please enter a valid email address");
         return;
@@ -375,18 +427,46 @@ export default function PropertyRegisterPage() {
         const authData = await authRes.json();
         localStorage.setItem("subscriber_token", authData.accessToken);
         localStorage.setItem("subscriber", JSON.stringify(authData.subscriber));
-        const authenticatedContact = readContactProfile(authData.subscriber);
-        setSubscriber(authenticatedContact);
-        if (authenticatedContact) {
-          setForm((prev) => ({
-            ...prev,
-            contactName: authenticatedContact.name,
-            contactPhone: authenticatedContact.phone || prev.contactPhone,
-            contactEmail: authenticatedContact.email || prev.contactEmail,
-          }));
+        const profileResponse = await fetchWithSubscriberSession(
+          "/api/v1/users/me",
+          { cache: "no-store" },
+          authData.accessToken,
+        );
+        if (!profileResponse || profileResponse.status === 401 || profileResponse.status === 403) {
+          clearSubscriberSession();
+          setSubscriber(null);
+          setProfileSessionState("anonymous");
+          setError(sessionExpiredMessage);
+          return;
         }
+        const authenticatedContact = profileResponse.ok
+          ? readContactProfile((await profileResponse.json().catch(() => null)) as unknown)
+          : null;
+        if (!authenticatedContact) {
+          setProfileSessionState("unavailable");
+          setError(
+            locale === "th"
+              ? "เข้าสู่ระบบสำเร็จ แต่ไม่สามารถโหลดข้อมูลติดต่อจากโปรไฟล์ได้ กรุณาลองใหม่อีกครั้ง"
+              : locale === "zh"
+                ? "登录成功，但无法加载个人资料中的联系信息。请重试。"
+                : "You are logged in, but we could not load contact details from your profile. Please try again.",
+          );
+          return;
+        }
+        submissionContact = authenticatedContact;
+        setSubscriber(authenticatedContact);
+        setProfileSessionState("authenticated");
+        setForm((prev) => ({
+          ...prev,
+          contactName: authenticatedContact.name,
+          contactPhone: authenticatedContact.phone || "",
+          contactEmail: authenticatedContact.email || "",
+        }));
         window.dispatchEvent(new Event("storage"));
       } catch {
+        if (localStorage.getItem("subscriber_token")) {
+          setProfileSessionState("unavailable");
+        }
         setError(locale === "th" ? "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้" : locale === "zh" ? "无法连接服务器" : "Cannot connect to server");
         return;
       }
@@ -435,9 +515,9 @@ export default function PropertyRegisterPage() {
         latitude: locationType === "gps" ? gpsCoords?.lat : undefined,
         longitude: locationType === "gps" ? gpsCoords?.lng : undefined,
         locationMode: locationType === "gps" ? "GPS" : "ADMINISTRATIVE",
-        contactName: form.contactName,
-        contactPhone: form.contactPhone,
-        contactEmail: form.contactEmail,
+        contactName: submissionContact?.name || form.contactName,
+        contactPhone: submissionContact?.phone || form.contactPhone,
+        contactEmail: submissionContact?.email || form.contactEmail,
       };
 
       // Compress and attach property images
@@ -570,14 +650,27 @@ export default function PropertyRegisterPage() {
               <legend className="text-lg font-semibold text-gray-900 px-2">
                 {locale === "th" ? "🔐 เข้าสู่ระบบ / สร้างบัญชี (จำเป็น)" : locale === "zh" ? "🔐 登录/创建账户（必填）" : "🔐 Login / Create Account (Required)"}
               </legend>
-              {subscriber ? (
+              {profileSessionState === "checking" ? (
+                <p className="mt-3 text-sm font-medium text-green-800" role="status">
+                  {locale === "th" ? "กำลังโหลดข้อมูลบัญชีของคุณ" : locale === "zh" ? "正在加载您的账户信息" : "Loading your account details"}
+                </p>
+              ) : profileSessionState === "unavailable" ? (
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <p className="text-sm font-medium text-red-700">
+                    {locale === "th" ? "ไม่สามารถโหลดข้อมูลบัญชีของคุณได้" : locale === "zh" ? "无法加载您的账户信息" : "We could not load your account details"}
+                  </p>
+                  <button type="button" onClick={() => setProfileRetryKey((current) => current + 1)} className="rounded-lg border border-green-700 bg-white px-4 py-2 text-sm font-semibold text-green-800 hover:bg-green-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-700">
+                    {locale === "th" ? "ลองอีกครั้ง" : locale === "zh" ? "重试" : "Try again"}
+                  </button>
+                </div>
+              ) : profileSessionState === "authenticated" && subscriber ? (
                 <div className="flex items-center gap-3 mt-2">
                   <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600 text-lg font-bold">✓</div>
                   <div>
                     <p className="font-semibold text-green-700">{locale === "th" ? "เข้าสู่ระบบแล้ว" : locale === "zh" ? "已登录" : "Logged In"}</p>
                     <p className="text-sm text-gray-500">{subscriber.name}{subscriber.email ? ` (${subscriber.email})` : ""}</p>
                   </div>
-                  <button type="button" onClick={() => { clearSubscriberSession(); setSubscriber(null); setForm((prev) => ({ ...prev, contactName: "", contactPhone: "", contactEmail: "" })); }} className="ml-auto text-xs text-gray-400 hover:text-red-500">
+                  <button type="button" onClick={() => { clearSubscriberSession(); setSubscriber(null); setProfileSessionState("anonymous"); setForm((prev) => ({ ...prev, contactName: "", contactPhone: "", contactEmail: "" })); }} className="ml-auto text-xs text-gray-400 hover:text-red-500">
                     {locale === "th" ? "ออกจากระบบ" : locale === "zh" ? "退出" : "Log Out"}
                   </button>
                 </div>
@@ -599,14 +692,14 @@ export default function PropertyRegisterPage() {
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         {locale === "th" ? "รหัสผ่าน" : locale === "zh" ? "密码" : "Password"} <span className="text-red-500">*</span>
                       </label>
-                      <input type="password" name="password" value={form.password} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500" placeholder="••••••••" />
+                      <PasswordInput id="propertyAccountPassword" locale={locale} name="password" value={form.password} onChange={handleChange} autoComplete={authMode === "login" ? "current-password" : "new-password"} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500" placeholder="••••••••" />
                     </div>
                     {authMode === "register" && (
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           {locale === "th" ? "ยืนยันรหัสผ่าน" : locale === "zh" ? "确认密码" : "Confirm Password"} <span className="text-red-500">*</span>
                         </label>
-                        <input type="password" name="confirmPassword" value={form.confirmPassword} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500" placeholder="••••••••" />
+                        <PasswordInput id="propertyAccountConfirmPassword" locale={locale} name="confirmPassword" value={form.confirmPassword} onChange={handleChange} autoComplete="new-password" className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500" placeholder="••••••••" />
                       </div>
                     )}
                   </div>
@@ -982,12 +1075,9 @@ export default function PropertyRegisterPage() {
               </legend>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                {subscriber ? (
+                {profileSessionState === "authenticated" && subscriber ? (
                   <p className="sm:col-span-2 text-xs text-gray-600">
-                    {locale === "th" ? "ข้อมูลติดต่อนี้มาจากโปรไฟล์ของคุณ" : locale === "zh" ? "这些联系信息来自您的个人资料。" : "These contact details come from your profile."}{" "}
-                    <Link href={`${prefix}/dashboard`} className="font-semibold text-green-700 hover:underline">
-                      {locale === "th" ? "แก้ไขในโปรไฟล์" : locale === "zh" ? "在个人资料中编辑" : "Edit in profile"}
-                    </Link>
+                    {locale === "th" ? "ข้อมูลติดต่อนี้มาจากโปรไฟล์บัญชีของคุณและไม่สามารถแก้ไขได้ในประกาศนี้" : locale === "zh" ? "这些联系信息来自您的账户资料，无法在此房源表单中更改。" : "These contact details come from your account profile and cannot be changed in this listing."}
                   </p>
                 ) : null}
                 <div>
@@ -997,8 +1087,9 @@ export default function PropertyRegisterPage() {
                     name="contactName" required
                     value={form.contactName}
                     onChange={handleChange}
-                    readOnly={Boolean(subscriber)}
-                    className={`w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500 ${subscriber ? "bg-gray-50 text-gray-700" : ""}`}
+                    readOnly={profileSessionState !== "anonymous"}
+                    aria-readonly={profileSessionState !== "anonymous"}
+                    className={`w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500 ${profileSessionState !== "anonymous" ? "bg-gray-50 text-gray-700" : ""}`}
                   />
                 </div>
                 <div>
@@ -1009,8 +1100,9 @@ export default function PropertyRegisterPage() {
                     name="contactPhone" required
                     value={form.contactPhone}
                     onChange={handleChange}
-                    readOnly={Boolean(subscriber)}
-                    className={`w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500 ${subscriber ? "bg-gray-50 text-gray-700" : ""}`}
+                    readOnly={profileSessionState !== "anonymous"}
+                    aria-readonly={profileSessionState !== "anonymous"}
+                    className={`w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500 ${profileSessionState !== "anonymous" ? "bg-gray-50 text-gray-700" : ""}`}
                   />
                 </div>
                 <div>
@@ -1021,8 +1113,9 @@ export default function PropertyRegisterPage() {
                     name="contactEmail" required
                     value={form.contactEmail}
                     onChange={handleChange}
-                    readOnly={Boolean(subscriber)}
-                    className={`w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500 ${subscriber ? "bg-gray-50 text-gray-700" : ""}`}
+                    readOnly={profileSessionState !== "anonymous"}
+                    aria-readonly={profileSessionState !== "anonymous"}
+                    className={`w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-green-500 ${profileSessionState !== "anonymous" ? "bg-gray-50 text-gray-700" : ""}`}
                   />
                 </div>
               </div>
@@ -1082,7 +1175,7 @@ export default function PropertyRegisterPage() {
 
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || profileSessionState === "checking" || profileSessionState === "unavailable"}
                 className="mt-5 w-full py-3 px-6 text-sm font-semibold text-white bg-green-700 hover:bg-green-800 disabled:bg-gray-400 rounded-xl transition-colors"
               >
                 {submitting ? tb("submitting") : t("submitListing")}
