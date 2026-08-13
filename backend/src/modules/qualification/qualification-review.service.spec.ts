@@ -334,6 +334,62 @@ describe('QualificationReviewService', () => {
     );
   });
 
+  it('approves personal KYC with identity and selfie evidence only', async () => {
+    tx.qualificationReviewTask.findUnique.mockResolvedValue({
+      id: 'task-1',
+      kind: 'KYC',
+      status: 'ASSIGNED',
+      assignedTo: 'admin-1',
+      proposedAt: null,
+      submissionId: 'submission-1',
+      submission: {
+        ...submission,
+        status: 'NEEDS_REVIEW',
+        evaluations: [],
+        fixer: {
+          id: 'fixer-1',
+          status: 'PENDING',
+          tier: 'ECONOMY',
+          verified: false,
+          userId: 'user-1',
+          user: { name: 'Applicant Person' },
+        },
+      },
+    });
+    tx.kycDocument.findMany.mockResolvedValue([
+      {
+        documentType: 'id-front',
+        evidenceStatus: 'VALIDATED',
+        ...validatedIdentityReview,
+        subjectNameHash: identityNameHash('Applicant Person'),
+      },
+      {
+        documentType: 'selfie-with-id',
+        evidenceStatus: 'VALIDATED',
+        ...validatedSelfieReview,
+      },
+    ]);
+
+    await expect(
+      service.decideTask('admin-1', 'task-1', {
+        decision: QualificationReviewDecision.APPROVE,
+        providerIdentityType: QualificationProviderIdentityType.PERSONAL,
+        reason: 'Identity and selfie evidence were verified for this person.',
+      }),
+    ).resolves.toEqual(expect.objectContaining({ applied: true }));
+
+    expect(tx.fixer.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'APPROVED',
+          verified: true,
+          verifiedCompanyName: null,
+          companyIdentityVerifiedAt: null,
+        }),
+      }),
+    );
+  });
+
   it('atomically assigns only an open task to the maker', async () => {
     prisma.qualificationReviewTask.findUnique.mockResolvedValue({
       id: 'task-1',
@@ -470,7 +526,7 @@ describe('QualificationReviewService', () => {
           status: 'PENDING',
           tier: 'ECONOMY',
           verified: false,
-          user: { name: 'Changed Profile Name' },
+          user: { name: 'Bhavesh Fungprasertsuk' },
         },
       },
     });
@@ -479,7 +535,7 @@ describe('QualificationReviewService', () => {
         documentType: 'id-front',
         evidenceStatus: 'VALIDATED',
         ...validatedIdentityReview,
-        subjectNameHash: identityNameHash('Registered Person'),
+        subjectNameHash: identityNameHash('Bhavesh Fungprasertsuk'),
       },
       {
         documentType: 'selfie-with-id',
@@ -496,8 +552,8 @@ describe('QualificationReviewService', () => {
           'ADMIN_COMPANY_AUTHORITY_CONFIRMED',
         ],
         extractedFields: {
-          companyName: 'Example Company Limited',
-          directorNames: ['Registered Person'],
+          companyName: 'Construction Blue',
+          directorNames: ['Bhavesh Fungprasertsuk'],
         },
       },
       {
@@ -509,14 +565,15 @@ describe('QualificationReviewService', () => {
           'ADMIN_COMPANY_NAME_CONFIRMED',
           'ADMIN_COMPANY_AUTHORITY_CONFIRMED',
           'ADMIN_COMPANY_INTENT_CONFIRMED',
+          'ADMIN_COMPANY_APPLICANT_IDENTITY_CONFIRMED',
         ],
         extractedFields: {
-          documentName: 'Registered Person',
-          authorityHolderName: 'Registered Person',
-          companyName: 'Example Company Limited',
+          documentName: 'Bhavesh Fungprasertsuk',
+          authorityHolderName: 'Bhavesh Fungprasertsuk',
+          companyName: 'Construction Blue',
           contactEmail: 'director@example.com',
           intentToJoinCblue: true,
-          authorizedApplicantName: 'Registered Person',
+          authorizedApplicantName: 'Bhavesh Fungprasertsuk',
         },
       },
     ]);
@@ -525,7 +582,7 @@ describe('QualificationReviewService', () => {
       service.decideTask('admin-1', 'task-1', {
         decision: QualificationReviewDecision.APPROVE,
         providerIdentityType: QualificationProviderIdentityType.COMPANY,
-        approvedProviderName: 'Example Company Limited',
+        approvedProviderName: 'Construction Blue',
         reason: 'Identity and company authority evidence are verified.',
       }),
     ).resolves.toEqual(expect.objectContaining({ applied: true }));
@@ -533,8 +590,8 @@ describe('QualificationReviewService', () => {
     expect(tx.fixer.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          publicDisplayName: 'Example Company Limited',
-          verifiedCompanyName: 'Example Company Limited',
+          publicDisplayName: 'Construction Blue',
+          verifiedCompanyName: 'Construction Blue',
           companyIdentityVerifiedAt: expect.any(Date),
           companyIdentityVerifiedBy: 'admin-1',
         }),
@@ -601,6 +658,7 @@ describe('QualificationReviewService', () => {
           'ADMIN_COMPANY_NAME_CONFIRMED',
           'ADMIN_COMPANY_AUTHORITY_CONFIRMED',
           'ADMIN_COMPANY_INTENT_CONFIRMED',
+          'ADMIN_COMPANY_APPLICANT_IDENTITY_CONFIRMED',
         ],
         extractedFields: {
           fields: {

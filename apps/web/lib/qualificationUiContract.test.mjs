@@ -51,6 +51,7 @@ test("admin evidence review captures structured identity facts without exposing 
   assert.match(source, /Administrator director authorization review/);
   assert.match(source, /Company contact email/);
   assert.match(source, /Application intent is explicit/);
+  assert.match(source, /Authorized applicant matches the verified identity/);
   assert.match(source, /Save affidavit review/);
   assert.match(source, /Save authorization review/);
   assert.doesNotMatch(source, /identityNumberHash/);

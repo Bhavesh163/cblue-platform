@@ -69,6 +69,7 @@ const ADMIN_EVIDENCE_REASON_CODES = new Set([
   'ADMIN_COMPANY_NAME_CONFIRMED',
   'ADMIN_COMPANY_AUTHORITY_CONFIRMED',
   'ADMIN_COMPANY_INTENT_CONFIRMED',
+  'ADMIN_COMPANY_APPLICANT_IDENTITY_CONFIRMED',
 ]);
 const TRANSIENT_PERSISTENCE_ERROR_CODES = new Set([
   'P1001',
@@ -2166,6 +2167,7 @@ export class QualificationService {
         dto.contactEmail ||
         dto.intentToJoinCblue !== undefined ||
         dto.authorizedApplicantName ||
+        dto.authorizedApplicantMatchesIdentity !== undefined ||
         dto.companyNameMatches !== undefined ||
         dto.companyAuthorityConfirmed !== undefined,
       );
@@ -2185,8 +2187,12 @@ export class QualificationService {
       );
       const authorityHolderName = dto.authorityHolderName?.trim() || null;
       const contactEmail = dto.contactEmail?.trim().toLowerCase() || null;
-      const authorizedApplicantName =
-        dto.authorizedApplicantName?.trim() || null;
+      const submittedApplicantName = isCompanyLetter
+        ? document.submission?.fixer?.user?.name?.trim() || null
+        : null;
+      const authorizedApplicantName = dto.authorizedApplicantMatchesIdentity
+        ? submittedApplicantName
+        : dto.authorizedApplicantName?.trim() || null;
       if (contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) {
         throw new BadRequestException('Company contact email is invalid');
       }
@@ -2215,6 +2221,7 @@ export class QualificationService {
           !authorityHolderName ||
           !contactEmail ||
           dto.intentToJoinCblue !== true ||
+          dto.authorizedApplicantMatchesIdentity !== true ||
           !authorizedApplicantName)
       ) {
         throw new ConflictException(
@@ -2334,6 +2341,10 @@ export class QualificationService {
         'ADMIN_COMPANY_AUTHORITY_CONFIRMED',
       );
       addManualCode(dto.intentToJoinCblue, 'ADMIN_COMPANY_INTENT_CONFIRMED');
+      addManualCode(
+        dto.authorizedApplicantMatchesIdentity,
+        'ADMIN_COMPANY_APPLICANT_IDENTITY_CONFIRMED',
+      );
 
       const currentExtractedRoot =
         document.extractedFields &&

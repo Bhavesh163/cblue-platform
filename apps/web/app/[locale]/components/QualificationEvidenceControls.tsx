@@ -65,6 +65,7 @@ type ManualReviewChecks = {
   selfieReviewCompleted: boolean;
   companyNameMatches: boolean;
   companyAuthorityConfirmed: boolean;
+  companyApplicantIdentityConfirmed: boolean;
 };
 type CompanyEvidenceFields = {
   companyName: string;
@@ -82,6 +83,7 @@ type Props = {
   findings?: AutomatedFinding[];
   onChanged: () => Promise<void>;
   readOnly?: boolean;
+  applicantLegalName?: string | null;
 };
 
 const STATUSES: EvidenceStatus[] = [
@@ -182,6 +184,7 @@ export default function QualificationEvidenceControls({
   findings = [],
   onChanged,
   readOnly = false,
+  applicantLegalName,
 }: Props) {
   const [status, setStatus] = useState<Record<string, EvidenceStatus>>({});
   const [reason, setReason] = useState<Record<string, string>>({});
@@ -282,6 +285,9 @@ export default function QualificationEvidenceControls({
               companyNameMatches: codes.has("ADMIN_COMPANY_NAME_CONFIRMED"),
               companyAuthorityConfirmed: codes.has(
                 "ADMIN_COMPANY_AUTHORITY_CONFIRMED",
+              ),
+              companyApplicantIdentityConfirmed: codes.has(
+                "ADMIN_COMPANY_APPLICANT_IDENTITY_CONFIRMED",
               ),
             },
           ];
@@ -480,6 +486,7 @@ export default function QualificationEvidenceControls({
         selfieReviewCompleted: false,
         companyNameMatches: false,
         companyAuthorityConfirmed: false,
+        companyApplicantIdentityConfirmed: false,
         ...current[documentId],
         [key]: checked,
       },
@@ -531,6 +538,7 @@ export default function QualificationEvidenceControls({
       selfieReviewCompleted: false,
       companyNameMatches: false,
       companyAuthorityConfirmed: false,
+      companyApplicantIdentityConfirmed: false,
     };
     const company = companyEvidence[documentId] || {
       companyName: "",
@@ -595,6 +603,7 @@ export default function QualificationEvidenceControls({
         !company.contactEmail.trim() ||
         !company.intentToJoinCblue ||
         !company.authorizedApplicantName.trim() ||
+        !checks.companyApplicantIdentityConfirmed ||
         !checks.documentTypeConfirmed ||
         !checks.documentReadable ||
         !checks.companyNameMatches ||
@@ -662,6 +671,8 @@ export default function QualificationEvidenceControls({
                   intentToJoinCblue: company.intentToJoinCblue,
                   authorizedApplicantName:
                     company.authorizedApplicantName.trim() || undefined,
+                  authorizedApplicantMatchesIdentity:
+                    checks.companyApplicantIdentityConfirmed,
                   documentTypeConfirmed: checks.documentTypeConfirmed,
                   documentReadable: checks.documentReadable,
                   companyNameMatches: checks.companyNameMatches,
@@ -790,6 +801,7 @@ export default function QualificationEvidenceControls({
           selfieReviewCompleted: false,
           companyNameMatches: false,
           companyAuthorityConfirmed: false,
+          companyApplicantIdentityConfirmed: false,
         };
         const company = companyEvidence[document.id] || {
           companyName: "",
@@ -1241,6 +1253,10 @@ export default function QualificationEvidenceControls({
                     ["documentReadable", "Document is clear and readable"],
                     ["companyNameMatches", "Company name matches the affidavit"],
                     ["companyAuthorityConfirmed", "Signatory authority matches the affidavit"],
+                    [
+                      "companyApplicantIdentityConfirmed",
+                      `Authorized applicant matches the verified identity: ${applicantLegalName || "Not recorded"}`,
+                    ],
                   ].map(([key, label]) => (
                     <label key={key} className="flex items-center gap-2 text-xs text-slate-700">
                       <input

@@ -102,6 +102,10 @@ export class QualificationEvidenceDecisionDto {
 
   @IsOptional()
   @IsBoolean()
+  authorizedApplicantMatchesIdentity?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   companyNameMatches?: boolean;
 
   @IsOptional()

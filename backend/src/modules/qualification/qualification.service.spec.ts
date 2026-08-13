@@ -447,6 +447,69 @@ describe('QualificationService', () => {
     );
   });
 
+  it('persists the canonical applicant identity after authorization review', async () => {
+    tx.qualificationReviewTask.findFirst.mockResolvedValue({
+      id: 'task-1',
+      kind: 'KYC',
+    });
+    tx.kycDocument.findFirst.mockResolvedValue({
+      id: 'authorization-document',
+      documentType: 'company-letter-of-intent',
+      checksumSha256: 'checksum',
+      evidenceStatus: 'UNCHECKED',
+      assessmentReasonCodes: ['PROVIDER_UNAVAILABLE'],
+      identityNumberLast4: null,
+      identityNumberHash: null,
+      identityExpiryDate: null,
+      subjectNameHash: null,
+      extractedFields: {
+        fields: { authorizedApplicantName: 'Applicant' },
+      },
+      submission: { fixer: { user: { name: 'Applicant Person' } } },
+    });
+    tx.kycDocument.update.mockImplementation(({ data }: any) => ({
+      id: 'authorization-document',
+      documentType: 'company-letter-of-intent',
+      ...data,
+    }));
+    tx.qualificationAuditLog.create.mockResolvedValue({ id: 'audit-1' });
+
+    await service.reviewDocumentEvidence(
+      'admin-1',
+      'submission-1',
+      'authorization-document',
+      {
+        evidenceStatus: 'VALIDATED',
+        reason: 'Authorization and applicant identity were manually verified.',
+        documentTypeConfirmed: true,
+        documentReadable: true,
+        companyName: 'Example Company Limited',
+        authorityHolderName: 'Director One',
+        contactEmail: 'director@example.com',
+        intentToJoinCblue: true,
+        authorizedApplicantName: 'Applicant',
+        authorizedApplicantMatchesIdentity: true,
+        companyNameMatches: true,
+        companyAuthorityConfirmed: true,
+      },
+    );
+
+    expect(tx.kycDocument.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          assessmentReasonCodes: expect.arrayContaining([
+            'ADMIN_COMPANY_APPLICANT_IDENTITY_CONFIRMED',
+          ]),
+          extractedFields: expect.objectContaining({
+            fields: expect.objectContaining({
+              authorizedApplicantName: 'Applicant Person',
+            }),
+          }),
+        }),
+      }),
+    );
+  });
+
   it.each([
     ['KYC', 'professional-certificate'],
     ['TIER', 'id-front'],

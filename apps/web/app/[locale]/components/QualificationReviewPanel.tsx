@@ -767,6 +767,9 @@ export default function QualificationReviewPanel({ token, adminId }: Props) {
                                     findings={evaluation?.findings || []}
                                     onChanged={load}
                                     readOnly={Boolean(task.proposedAt)}
+                                    applicantLegalName={
+                                      task.submission?.fixer?.user?.name
+                                    }
                                   />
                                 </section>
                               ) : null}

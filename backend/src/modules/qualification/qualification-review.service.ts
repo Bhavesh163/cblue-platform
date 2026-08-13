@@ -54,6 +54,7 @@ const REQUIRED_COMPANY_AFFIDAVIT_REVIEW_CODES = [
 const REQUIRED_COMPANY_LETTER_REVIEW_CODES = [
   ...REQUIRED_COMPANY_AFFIDAVIT_REVIEW_CODES,
   'ADMIN_COMPANY_INTENT_CONFIRMED',
+  'ADMIN_COMPANY_APPLICANT_IDENTITY_CONFIRMED',
 ] as const;
 
 type ReviewReadinessDocument = {
@@ -1028,7 +1029,7 @@ export class QualificationReviewService {
           );
           if (!letterAuthorized) {
             throw new ConflictException(
-              'Company approval requires a validated company affidavit and director letter of intent with a contact email',
+              'Company authorization review must confirm the company, signatory, contact email, application intent, and authorized applicant identity',
             );
           }
           verifiedCompanyName = evidenceCompanyName;
