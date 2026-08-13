@@ -1435,6 +1435,7 @@ describe('QualificationService', () => {
       assessmentReasonCodes: ['DOCUMENT_VALID', 'HUMAN_REVIEW_REQUIRED'],
       extractedFields: null,
       assessedAt: new Date('2026-07-30T00:00:00.000Z'),
+      isActive: true,
       extractionProvider: 'TYPHOON_OCR',
       extractionModel: 'typhoon-model',
       createdAt: new Date('2026-07-30T00:00:00.000Z'),
@@ -1484,6 +1485,7 @@ describe('QualificationService', () => {
       assessmentReasonCodes: [],
       extractedFields: null,
       assessedAt: null,
+      isActive: false,
       extractionProvider: null,
       extractionModel: null,
       createdAt: new Date('2026-07-30T00:00:00.000Z'),
@@ -1634,9 +1636,15 @@ describe('QualificationService', () => {
       where: {
         submissionId: 'submission-1',
         checksumSha256: expect.any(String),
-        lifecycleState: {
-          in: ['PENDING_UPLOAD', 'UPLOADED', 'ASSESSING', 'READY'],
-        },
+        OR: [
+          { isActive: true, lifecycleState: 'READY' },
+          {
+            isActive: false,
+            lifecycleState: {
+              in: ['PENDING_UPLOAD', 'UPLOADED', 'ASSESSING'],
+            },
+          },
+        ],
       },
       select: { id: true },
     });
@@ -2051,6 +2059,74 @@ describe('QualificationService', () => {
     },
   );
 
+  it('keeps company evidence active when cleanup completion is temporarily unavailable', async () => {
+    prisma.kycSubmission.findFirst.mockResolvedValue({
+      id: 'submission-1',
+      fixerId: 'fixer-1',
+      status: 'DRAFT',
+      failedAttempts: 0,
+      lockedUntil: null,
+      fixer: {
+        verified: false,
+        verifiedCompanyName: null,
+        qualificationEligibilityStatus: 'PENDING',
+        kycReverificationReasons: null,
+        user: {
+          name: 'Annova',
+          company: 'Annova Development',
+        },
+      },
+    });
+    tx.kycDocument.findFirst.mockResolvedValue(null);
+    tx.kycDocument.create.mockImplementation(({ data }: any) => ({
+      id: data.id,
+      documentType: data.documentType,
+      contentType: data.contentType,
+      sizeBytes: data.sizeBytes,
+      evidenceStatus: 'UNCHECKED',
+      expiresAt: null,
+      createdAt: new Date('2026-08-13T00:00:00.000Z'),
+    }));
+    tx.kycDocument.findUnique.mockResolvedValue({
+      id: 'company-letter-document',
+      isActive: false,
+      lifecycleState: 'UPLOADED',
+    });
+    prisma.qualificationStorageCleanupIntent.updateMany.mockRejectedValueOnce(
+      new Error('cleanup service unavailable'),
+    );
+
+    const body = Buffer.from('%PDF-1.4\ndirector authorization');
+    await expect(
+      service.uploadDocumentForUser(
+        'user-1',
+        'submission-1',
+        'company-letter-of-intent',
+        {
+          originalname: 'director-letter.pdf',
+          mimetype: 'application/pdf',
+          size: body.length,
+          buffer: body,
+        } as Express.Multer.File,
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        assessmentPending: true,
+      }),
+    );
+
+    expect(storage.putPrivateObject).toHaveBeenCalled();
+    expect(tx.qualificationStorageCleanupIntent.deleteMany).not.toHaveBeenCalled();
+    expect(tx.kycDocument.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          isActive: true,
+          lifecycleState: 'READY',
+        }),
+      }),
+    );
+  });
+
   it.each(['company-letter-of-intent'])(
     'rejects %s evidence above 0.3 MB before private storage',
     async (documentType) => {
@@ -2426,7 +2502,19 @@ describe('QualificationService', () => {
     ).resolves.toEqual(expect.objectContaining({ assessmentPending: true }));
 
     expect(tx.qualificationEvidenceAssessmentJob.create).not.toHaveBeenCalled();
-    expect(tx.qualificationStorageCleanupIntent.deleteMany).toHaveBeenCalled();
+    expect(
+      prisma.qualificationStorageCleanupIntent.updateMany,
+    ).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        status: 'PENDING',
+        claimedBy: expect.any(String),
+      }),
+      data: expect.objectContaining({
+        status: 'COMPLETED',
+        claimedAt: null,
+        claimedBy: null,
+      }),
+    });
     expect(tx.qualificationAuditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         action: 'EVIDENCE_STAGED_FOR_SUBMISSION',

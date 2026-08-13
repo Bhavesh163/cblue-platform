@@ -588,13 +588,20 @@ export class QualificationService {
       where: {
         submissionId: submission.id,
         checksumSha256,
-        lifecycleState: {
-          in: ['PENDING_UPLOAD', 'UPLOADED', 'ASSESSING', 'READY'],
-        },
+        OR: [
+          { isActive: true, lifecycleState: 'READY' },
+          {
+            isActive: false,
+            lifecycleState: {
+              in: ['PENDING_UPLOAD', 'UPLOADED', 'ASSESSING'],
+            },
+          },
+        ],
       },
       select: {
         id: true,
         documentType: true,
+        isActive: true,
         contentType: true,
         sizeBytes: true,
         evidenceStatus: true,
@@ -615,7 +622,7 @@ export class QualificationService {
             'The same evidence file cannot be used for two different document types',
         });
       }
-      if (existingEvidence.lifecycleState !== 'READY') {
+      if (!existingEvidence.isActive || existingEvidence.lifecycleState !== 'READY') {
         throw new ConflictException({
           code: 'EVIDENCE_UPLOAD_IN_PROGRESS',
           message: 'This evidence upload is already being processed',
@@ -710,9 +717,15 @@ export class QualificationService {
           where: {
             submissionId: submission.id,
             checksumSha256,
-            lifecycleState: {
-              in: ['PENDING_UPLOAD', 'UPLOADED', 'ASSESSING', 'READY'],
-            },
+            OR: [
+              { isActive: true, lifecycleState: 'READY' },
+              {
+                isActive: false,
+                lifecycleState: {
+                  in: ['PENDING_UPLOAD', 'UPLOADED', 'ASSESSING'],
+                },
+              },
+            ],
           },
           select: { id: true },
         });
@@ -935,20 +948,6 @@ export class QualificationService {
               },
             });
           }
-          const resolvedCleanupIntent =
-            await tx.qualificationStorageCleanupIntent.deleteMany({
-              where: {
-                id: reservedCleanupIntent.id,
-                storageKey,
-                status: 'PENDING',
-                claimedBy: cleanupReservation,
-              },
-            });
-          if (resolvedCleanupIntent.count !== 1) {
-            throw new ConflictException(
-              'Qualification storage ownership changed during promotion',
-            );
-          }
           await tx.qualificationAuditLog.create({
             data: {
               submissionId: submission.id,
@@ -969,6 +968,11 @@ export class QualificationService {
             },
           });
         });
+        await this.completeStorageCleanupIntentAfterPromotion(
+          reservedCleanupIntent.id,
+          storageKey,
+          cleanupReservation,
+        );
         return { ...document, assessment: null, assessmentPending: true };
       }
 
@@ -1275,6 +1279,38 @@ export class QualificationService {
     if (lockedUntil && lockedUntil.getTime() > Date.now()) {
       throw new ConflictException(
         'Qualification evidence replacement is temporarily locked',
+      );
+    }
+  }
+
+  private async completeStorageCleanupIntentAfterPromotion(
+    cleanupId: string,
+    storageKey: string,
+    cleanupReservation: string,
+  ): Promise<void> {
+    try {
+      await this.prisma.qualificationStorageCleanupIntent.updateMany({
+        where: {
+          id: cleanupId,
+          storageKey,
+          status: 'PENDING',
+          claimedBy: cleanupReservation,
+        },
+        data: {
+          status: 'COMPLETED',
+          completedAt: new Date(),
+          errorCode: null,
+          nextAttemptAt: null,
+          claimedAt: null,
+          claimedBy: null,
+        },
+      });
+    } catch (error) {
+      this.logger.error(
+        'Qualification cleanup completion deferred cleanup=' +
+          cleanupId +
+          ' code=CLEANUP_COMPLETION_DEFERRED',
+        error instanceof Error ? error.name : 'UnknownError',
       );
     }
   }

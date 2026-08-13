@@ -305,6 +305,7 @@ function companyEvidenceUploadError(
     (normalizedMessage.includes("content") ||
       normalizedMessage.includes("supported") ||
       normalizedMessage.includes("non-empty"));
+  const isTemporarilyUnavailable = status >= 500 && status <= 599;
 
   if (locale === "th") {
     if (isProcessing) {
@@ -332,6 +333,15 @@ function companyEvidenceUploadError(
         " (" +
         fileName +
         ") ไม่ใช่ไฟล์ PDF หรือรูปภาพที่อ่านได้ กรุณาเลือกไฟล์ใหม่"
+      );
+    }
+    if (isTemporarilyUnavailable) {
+      return (
+        "\u0e02\u0e13\u0e30\u0e19\u0e35\u0e49\u0e44\u0e21\u0e48\u0e2a\u0e32\u0e21\u0e32\u0e23\u0e16\u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01" +
+        label +
+        " (" +
+        fileName +
+        ") \u0e44\u0e14\u0e49\u0e0a\u0e31\u0e48\u0e27\u0e04\u0e23\u0e32\u0e27 \u0e01\u0e23\u0e38\u0e13\u0e32\u0e25\u0e2d\u0e07\u0e2d\u0e35\u0e01\u0e04\u0e23\u0e31\u0e49\u0e07\u0e43\u0e19\u0e2d\u0e35\u0e01\u0e2a\u0e31\u0e01\u0e04\u0e23\u0e39\u0e48"
       );
     }
     return (
@@ -362,6 +372,9 @@ function companyEvidenceUploadError(
         label + "（" + fileName + "）不是可读取的 PDF 或图片，请选择其他文件。"
       );
     }
+    if (isTemporarilyUnavailable) {
+      return label + "\uff08" + fileName + "\uff09\u6682\u65f6\u65e0\u6cd5\u4fdd\u5b58\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002";
+    }
     return "无法保存" + label + "（" + fileName + "），请重新提交此文件。";
   }
   if (isProcessing) {
@@ -389,6 +402,14 @@ function companyEvidenceUploadError(
       " (" +
       fileName +
       ") is not a readable PDF or image. Select another file."
+    );
+  }
+  if (isTemporarilyUnavailable) {
+    return (
+      label +
+      " (" +
+      fileName +
+      ") is temporarily unavailable. Please try again shortly."
     );
   }
   return (

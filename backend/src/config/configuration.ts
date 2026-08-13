@@ -32,11 +32,27 @@ export default () => ({
     minimumScore: Number(process.env.RECAPTCHA_MINIMUM_SCORE ?? '0') || 0,
   },
   spaces: {
-    endpoint: process.env.SPACES_ENDPOINT,
-    key: process.env.SPACES_KEY,
-    secret: process.env.SPACES_SECRET,
-    bucket: process.env.SPACES_BUCKET,
-    region: process.env.SPACES_REGION || 'us-east-1',
+    endpoint:
+      process.env.SPACES_ENDPOINT ||
+      process.env.DO_SPACES_ENDPOINT ||
+      process.env.DIGITALOCEAN_SPACES_ENDPOINT,
+    key:
+      process.env.SPACES_KEY ||
+      process.env.DO_SPACES_KEY ||
+      process.env.DIGITALOCEAN_SPACES_KEY,
+    secret:
+      process.env.SPACES_SECRET ||
+      process.env.DO_SPACES_SECRET ||
+      process.env.DIGITALOCEAN_SPACES_SECRET,
+    bucket:
+      process.env.SPACES_BUCKET ||
+      process.env.DO_SPACES_BUCKET ||
+      process.env.DIGITALOCEAN_SPACES_BUCKET,
+    region:
+      process.env.SPACES_REGION ||
+      process.env.DO_SPACES_REGION ||
+      process.env.DIGITALOCEAN_SPACES_REGION ||
+      'us-east-1',
   },
   mailjet: {
     apiKey:
